@@ -22,6 +22,7 @@ import logging
 import time
 from typing import Any
 
+from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
@@ -210,6 +211,7 @@ async def _hybrid_retrieve(
     embeddings: Any | None = None,
     colbert_query: list[list[float]] | None = None,
     sparse_embedding: Any = None,
+    topic_hint: str | None = None,
     top_k: int = 20,
     latency_stages: dict[str, float],
 ) -> dict[str, Any]:
@@ -224,6 +226,7 @@ async def _hybrid_retrieve(
             "query_len": len(query),
             "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
             "top_k": top_k,
+            "topic_hint": topic_hint,
         }
     )
 
@@ -316,12 +319,15 @@ async def _hybrid_retrieve(
     # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     colbert_search_used = False
+    filters = {"topic": topic_hint} if topic_hint else None
+
     if colbert_query and _has_colbert_search:
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
         qdrant_result = await qdrant.hybrid_search_rrf_colbert(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
+            filters=filters,
             top_k=top_k,
             return_meta=True,
         )
@@ -330,6 +336,7 @@ async def _hybrid_retrieve(
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
+            filters=filters,
             top_k=top_k,
             return_meta=True,
         )
@@ -338,6 +345,34 @@ async def _hybrid_retrieve(
     else:
         results = qdrant_result
         search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+
+    if filters and len(results) < 3:
+        logger.info(
+            "metric",
+            extra={"metric_name": "topic_filter_fallback", "value": 1},
+        )
+        if colbert_query and _has_colbert_search:
+            qdrant_result = await qdrant.hybrid_search_rrf_colbert(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                colbert_query=colbert_query,
+                filters=None,
+                top_k=top_k,
+                return_meta=True,
+            )
+        else:
+            qdrant_result = await qdrant.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=None,
+                top_k=top_k,
+                return_meta=True,
+            )
+        if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
+            results, search_meta = qdrant_result
+        else:
+            results = qdrant_result
+            search_meta = {"backend_error": False, "error_type": None, "error_message": None}
 
     if not results:
         logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
@@ -424,6 +459,7 @@ async def _grade_documents(
         }
 
     top_score = max(scores)
+    score_gap = detect_score_gap(sorted(scores, reverse=True))
 
     from telegram_bot.graph.config import GraphConfig
 
@@ -448,12 +484,17 @@ async def _grade_documents(
         len(documents),
         elapsed,
     )
+    logger.info(
+        "metric",
+        extra={"metric_name": "score_gap_confident", "value": 1 if score_gap["confident"] else 0},
+    )
 
     return {
         "documents_relevant": relevant,
         "grade_confidence": top_score,
         "skip_rerank": skip_rerank,
         "score_improved": score_improved,
+        "score_gap_confident": score_gap["confident"],
         "latency_stages": {**latency_stages, "grade": elapsed},
     }
 
@@ -712,6 +753,7 @@ async def rag_pipeline(
     grade_confidence = 0.0
     current_query = query
     query_embedding: list[float] | None = None
+    topic_hint = get_query_topic_hint(query)
 
     # Step 1: Cache check (use cache_key = original user query)
     # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
@@ -797,6 +839,7 @@ async def rag_pipeline(
             embeddings=embeddings,
             colbert_query=colbert_query,
             sparse_embedding=query_sparse,
+            topic_hint=topic_hint,
             latency_stages=latency_stages,
         )
         latency_stages = retrieve_result["latency_stages"]
@@ -835,6 +878,12 @@ async def rag_pipeline(
                 final_docs = rerank_result["documents"]
                 rerank_applied = rerank_result["rerank_applied"]
                 rerank_cache_hit = rerank_result["rerank_cache_hit"]
+            final_gap = detect_score_gap(
+                [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
+            )
+            final_gap_confident = bool(final_gap["confident"])
+            if not final_gap_confident and len(final_docs) > 1:
+                final_docs = final_docs[:1]
 
             result = _assemble_context(
                 query=current_query,
@@ -855,6 +904,8 @@ async def rag_pipeline(
                 retrieved_context=retrieve_result.get("retrieved_context", []),
                 retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
                 retrieval_error_type=retrieve_result.get("retrieval_error_type"),
+                topic_hint=topic_hint,
+                score_gap_confident=final_gap_confident,
             )
             result["skip_rewrite"] = skip_rewrite
             lf.update_current_span(
@@ -888,6 +939,7 @@ async def rag_pipeline(
         current_query = rewrite_result["rewritten_query"]
         rewrite_count = rewrite_result["rewrite_count"]
         rewrite_effective = rewrite_result["rewrite_effective"]
+        topic_hint = get_query_topic_hint(current_query)
         query_embedding = None  # Force re-embed on next retrieve
         colbert_query = None  # Force re-encode ColBERT on next retrieve
         query_sparse = None  # Force re-compute sparse on next retrieve (query changed)
@@ -913,6 +965,12 @@ async def rag_pipeline(
         final_docs = rerank_result["documents"]
         rerank_applied = rerank_result["rerank_applied"]
         rerank_cache_hit = rerank_result["rerank_cache_hit"]
+    final_gap = detect_score_gap(
+        [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
+    )
+    final_gap_confident = bool(final_gap["confident"])
+    if not final_gap_confident and len(final_docs) > 1:
+        final_docs = final_docs[:1]
 
     result = _assemble_context(
         query=current_query,
@@ -933,6 +991,8 @@ async def rag_pipeline(
         retrieved_context=retrieve_result.get("retrieved_context", []),
         retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
         retrieval_error_type=retrieve_result.get("retrieval_error_type"),
+        topic_hint=topic_hint,
+        score_gap_confident=final_gap_confident,
     )
     result["skip_rewrite"] = skip_rewrite
     lf.update_current_span(
@@ -967,6 +1027,8 @@ def _assemble_context(
     retrieved_context: list[dict[str, Any]],
     retrieval_backend_error: bool = False,
     retrieval_error_type: str | None = None,
+    topic_hint: str | None = None,
+    score_gap_confident: bool | None = None,
 ) -> dict[str, Any]:
     """Assemble context dict from pipeline results."""
     return {
@@ -988,6 +1050,8 @@ def _assemble_context(
         "retrieved_context": retrieved_context,
         "retrieval_backend_error": retrieval_backend_error,
         "retrieval_error_type": retrieval_error_type,
+        "topic_hint": topic_hint,
+        "score_gap_confident": score_gap_confident,
         "embedding_error": False,
         "embedding_error_type": None,
     }

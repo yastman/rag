@@ -21,7 +21,26 @@ DEFAULT_CACHE_TTL = 3600
 
 # Module-level TTL caches for prompt existence
 _missing_prompts_until: dict[str, float] = {}
-_known_prompts_until: dict[str, float] = {}
+
+
+def _update_prompt_span_output(
+    client: Any,
+    *,
+    name: str,
+    source: str,
+    prompt_version: Any | None = None,
+) -> None:
+    """Attach safe prompt fetch metadata to the current Langfuse span."""
+    output: dict[str, Any] = {
+        "prompt_name": name,
+        "prompt_source": source,
+    }
+    if prompt_version is not None:
+        output["prompt_version"] = prompt_version
+    try:
+        client.update_current_span(output=output)
+    except Exception:
+        logger.debug("Failed to update prompt span output", exc_info=True)
 
 
 def get_prompt_with_config(
@@ -76,32 +95,30 @@ def _fetch_prompt_core(
     vars_ = variables or {}
 
     def _fallback_result() -> tuple[str, dict[str, Any]]:
+        _update_prompt_span_output(client, name=name, source="fallback")
         return _apply_fallback_vars(fallback, vars_), {}
 
     client = get_client()
     if client is None:
-        return _fallback_result()
+        return _apply_fallback_vars(fallback, vars_), {}
 
     if _is_temporarily_missing(name):
         return _fallback_result()
 
-    if not _is_temporarily_known(name):
-        available = _probe_prompt_available(client, name)
-        if available is False:
-            _missing_prompts_until[name] = time.monotonic() + cache_ttl
-            logger.debug(
-                "Prompt '%s' not found in Langfuse API, using fallback for %ds",
-                name,
-                cache_ttl,
-            )
-            return _fallback_result()
-        if available is True:
-            _known_prompts_until[name] = time.monotonic() + cache_ttl
-
     try:
-        prompt = client.get_prompt(name, cache_ttl_seconds=cache_ttl)
+        prompt_kwargs: dict[str, Any] = {"cache_ttl_seconds": cache_ttl}
+        label = os.getenv("LANGFUSE_PROMPT_LABEL", "").strip()
+        if label:
+            prompt_kwargs["label"] = label
+        prompt = client.get_prompt(name, **prompt_kwargs)
         _missing_prompts_until.pop(name, None)
         config: dict[str, Any] = getattr(prompt, "config", None) or {}
+        _update_prompt_span_output(
+            client,
+            name=name,
+            source="langfuse",
+            prompt_version=getattr(prompt, "version", None),
+        )
         if vars_:
             return str(prompt.compile(**vars_)), config
         return str(prompt.compile()), config
@@ -148,37 +165,6 @@ def _is_temporarily_missing(name: str) -> bool:
     return False
 
 
-def _is_temporarily_known(name: str) -> bool:
-    """True when prompt is in local known-available TTL window."""
-    until = _known_prompts_until.get(name)
-    if until is None:
-        return False
-    if until > time.monotonic():
-        return True
-    _known_prompts_until.pop(name, None)
-    return False
-
-
-def _probe_prompt_available(client: Any, name: str) -> bool | None:
-    """Probe prompt existence via Langfuse API without triggering SDK warning logs."""
-    api = getattr(client, "api", None)
-    if api is None or not hasattr(api, "prompts"):
-        return None
-
-    label = os.getenv("LANGFUSE_PROMPT_LABEL", "production")
-
-    try:
-        api.prompts.get(prompt_name=name, label=label)
-        return True
-    except Exception as e:
-        status = getattr(e, "status_code", None)
-        if status == 404 or _is_prompt_not_found(e):
-            return False
-        logger.debug("Prompt availability probe failed for '%s': %s", name, e)
-        return None
-
-
 def _reset_client() -> None:
     """Reset the prompt TTL caches (for testing)."""
     _missing_prompts_until.clear()
-    _known_prompts_until.clear()

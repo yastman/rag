@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
+from uuid import UUID
 
 from qdrant_client import models
 
@@ -200,13 +202,14 @@ class ApartmentsService:
 
         # Дедупликация: исключить уже показанные ID на границе цены
         if exclude_ids:
-            has_id_cond = models.HasIdCondition(has_id=exclude_ids)
+            exclude_ids_typed: list[int | str | UUID] = list(exclude_ids)
+            has_id_cond = models.HasIdCondition(has_id=exclude_ids_typed)
             if qdrant_filter is None:
                 qdrant_filter = models.Filter(must_not=[has_id_cond])
             else:
                 existing_must_not = list(qdrant_filter.must_not or [])
                 existing_must_not.append(has_id_cond)
-                qdrant_filter.must_not = existing_must_not
+                qdrant_filter.must_not = cast(list[models.Condition], existing_must_not)
 
         records, _ = await self._qdrant.client.scroll(
             collection_name=self._qdrant.collection_name,

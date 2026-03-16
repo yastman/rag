@@ -20,6 +20,11 @@ Minimum env for bot profile:
 - `LITELLM_MASTER_KEY`
 - at least one provider key: `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 
+Secret model by compose file:
+- `compose.yml` is the secure baseline: no predictable built-in secret defaults.
+- `compose.dev.yml` may provide local-only defaults for development convenience (`pk-lf-dev`, `sk-lf-dev`, `clickhouse`, `miniosecret`, `langfuseredis`, `devkey`).
+- Production/VPS stacks must set real secret values via environment management or file-backed secret patterns (`*_FILE` / `secrets:`) when available.
+
 ## 2. Start Services
 
 ```bash
