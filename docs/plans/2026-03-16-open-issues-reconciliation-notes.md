@@ -10,7 +10,7 @@ Evidence timestamp: 2026-03-16 (UTC)
 - Current test evidence:
   - `tests/unit/test_agent_streaming.py` contains dedicated tests for `_stream_agent_to_draft`.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/952
+  - CLOSED - https://github.com/yastman/rag/issues/952
 - Verdict: close
 
 ## #901
@@ -18,11 +18,11 @@ Evidence timestamp: 2026-03-16 (UTC)
 - Current code evidence:
   - `scripts/index_services.py` includes `index_services(...)`.
   - `Makefile:822` defines `ingest-services`.
-  - `Makefile:824` executes `uv run python scripts/index_services.py`.
+  - `Makefile:824` executes `uv run python -m scripts.index_services`.
 - Current test evidence:
   - `tests/unit/test_index_services.py` has direct unit coverage for writer contract and idempotency.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/901
+  - CLOSED - https://github.com/yastman/rag/issues/901
 - Verdict: close
 
 ## #855
@@ -33,38 +33,43 @@ Evidence timestamp: 2026-03-16 (UTC)
 - Current test evidence:
   - `rg` output confirms dedicated files and test functions are present.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/855
+  - CLOSED - https://github.com/yastman/rag/issues/855
 - Verdict: close
 
 ## #857
 - Issue claim: missing dedicated coverage for search/manager/dialog/ingestion/voice modules.
 - Current code evidence:
-  - Dedicated test files are present for named surfaces (to validate in Task 6 run).
+  - Dedicated test files exist for all named surfaces:
+    `test_search_engines.py`, `test_manager_tools.py`, `test_crm_cards.py`,
+    `test_gdrive_flow.py`, `test_gdrive_indexer.py`, `test_qdrant_hybrid_target.py`,
+    `test_voice_schemas.py`, `test_voice_observability.py`.
 - Current test evidence:
-  - Targeted suite pending execution in Task 6.
+  - `uv run pytest ...` targeted Task 6 suite passed (`138 passed, 2 skipped`).
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/857
-- Verdict: patch
+  - CLOSED - https://github.com/yastman/rag/issues/857
+- Verdict: close
 
 ## #978
 - Issue claim: pre-main audit findings need fresh proof on current `dev`.
 - Current code evidence:
   - Audit report exists: `docs/plans/2026-03-16-pre-pr-pre-main-audit-report.md`.
 - Current test evidence:
-  - Fresh verification rerun pending in Task 7.
+  - Re-ran `ruff`, `mypy`, and `pytest tests/unit -q` and updated stale count in report.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/978
-- Verdict: patch
+  - CLOSED - https://github.com/yastman/rag/issues/978
+- Verdict: close
 
 ## #981
 - Issue claim: remaining Bandit/Vulture findings after audit.
 - Current code evidence:
-  - Residual findings are tracked in issue and covered by Tasks 8-10.
+  - Removed pseudo-random draft IDs (`secrets` helper).
+  - Removed B105 placeholder-token false positives in Kommo seed payloads.
+  - Cleared B112 keyboard `except/continue` path and vulture-unused callback noise.
 - Current test evidence:
-  - Regression tests to be added/executed in Tasks 8-10.
+  - Targeted pytest + bandit + vulture reruns completed during Tasks 8-10.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/981
-- Verdict: patch
+  - CLOSED - https://github.com/yastman/rag/issues/981
+- Verdict: close
 
 ## #858
 - Issue claim: `ignore_errors=true` masks mypy in core modules.
@@ -95,12 +100,20 @@ Evidence timestamp: 2026-03-16 (UTC)
 ## #956
 - Issue claim: retrieval quality upgrades (short-query handling, policy shaping, tail-cut).
 - Current code evidence:
-  - No equivalent completed implementation identified in this initial reconciliation pass.
+  - Added retrieval-quality fixture:
+    `tests/fixtures/retrieval/retrieval_quality_cases.yaml`.
+  - Added deterministic short finance-query expansion in
+    `telegram_bot/services/query_preprocessor.py` + `_rewrite_query(...)`.
+  - Added topic/doc-type-aware retrieval shaping for short finance queries in
+    `_hybrid_retrieve(...)`.
+  - Added post-rerank weak-tail trimming guard in `_rerank(...)`.
 - Current test evidence:
-  - New fixture and TDD tasks planned in Tasks 13-16.
+  - Added/updated regression tests in:
+    `tests/unit/retrieval/test_topic_classifier.py` and
+    `tests/unit/agents/test_rag_pipeline.py`.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/956
-- Verdict: patch
+  - CLOSED - https://github.com/yastman/rag/issues/956
+- Verdict: close
 
 ## Command Evidence
 
@@ -126,12 +139,20 @@ for n in 978 981 855 857 858 728 952 956 901; do gh issue view "$n" --json numbe
 ```
 
 Result snapshot:
-- #978 OPEN https://github.com/yastman/rag/issues/978
-- #981 OPEN https://github.com/yastman/rag/issues/981
-- #855 OPEN https://github.com/yastman/rag/issues/855
-- #857 OPEN https://github.com/yastman/rag/issues/857
+- #978 CLOSED https://github.com/yastman/rag/issues/978
+- #981 CLOSED https://github.com/yastman/rag/issues/981
+- #855 CLOSED https://github.com/yastman/rag/issues/855
+- #857 CLOSED https://github.com/yastman/rag/issues/857
 - #858 OPEN https://github.com/yastman/rag/issues/858
-- #728 OPEN https://github.com/yastman/rag/issues/728
-- #952 OPEN https://github.com/yastman/rag/issues/952
-- #956 OPEN https://github.com/yastman/rag/issues/956
-- #901 OPEN https://github.com/yastman/rag/issues/901
+- #728 CLOSED https://github.com/yastman/rag/issues/728
+- #952 CLOSED https://github.com/yastman/rag/issues/952
+- #956 CLOSED https://github.com/yastman/rag/issues/956
+- #901 CLOSED https://github.com/yastman/rag/issues/901
+
+## Final Verification Matrix
+
+- `make check`: PASS
+- `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`: PASS (`5330 passed, 20 skipped`)
+- `uv run bandit -r src/ telegram_bot/ -c pyproject.toml`: only 3 low B311 findings in untouched
+  `telegram_bot/graph/nodes/classify.py`
+- `uv run vulture telegram_bot/dialogs telegram_bot/services/vectorizers.py telegram_bot/services/generate_response.py telegram_bot/services/draft_streamer.py --min-confidence 80`: PASS
