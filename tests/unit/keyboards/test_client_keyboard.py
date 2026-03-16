@@ -7,6 +7,7 @@ from telegram_bot.keyboards.client_keyboard import (
     _ACTION_IDS,
     MENU_BUTTONS,
     build_client_keyboard,
+    collect_client_menu_texts,
     get_menu_button_texts,
     parse_menu_button,
 )
@@ -95,6 +96,16 @@ def test_build_with_i18n_calls_all_keys():
     called_keys = [call.args[0] for call in i18n.get.call_args_list]
     for key in _ACTION_IDS:
         assert key in called_keys
+
+
+def test_collect_client_menu_texts_skips_bad_button_without_bare_continue(caplog):
+    class BadLabel(str):
+        def __hash__(self) -> int:
+            raise TypeError("broken hash")
+
+    caplog.set_level("DEBUG")
+    texts = collect_client_menu_texts([BadLabel("bad"), "Hello"])
+    assert "Hello" in texts
 
 
 # --- parse_menu_button tests ---
