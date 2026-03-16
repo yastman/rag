@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 
 if TYPE_CHECKING:
@@ -58,6 +58,6 @@ class TopicService:
             return existing
 
         forum_topic = await bot.create_forum_topic(chat_id=chat_id, name=topic_name)
-        thread_id = forum_topic.message_thread_id
+        thread_id = cast(int, forum_topic.message_thread_id)
         await self.save_thread(user_id, expert_id, thread_id)
         return thread_id
