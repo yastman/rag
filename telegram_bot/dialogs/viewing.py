@@ -75,7 +75,7 @@ async def on_cancel_to_manager(
 
 async def on_date_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
