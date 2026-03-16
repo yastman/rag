@@ -93,7 +93,8 @@ async def _on_contact_chat(
     manager: DialogManager,
 ) -> None:
     """Complete qualification with chat — trigger handoff via PropertyBot."""
-    goal = manager.dialog_data.get("goal") or (manager.start_data or {}).get("goal", "")
+    start_data = manager.start_data if isinstance(manager.start_data, dict) else {}
+    goal = manager.dialog_data.get("goal") or start_data.get("goal", "")
     qualification = {"goal": goal, "contact": "chat"}
 
     # Grab refs BEFORE done() destroys dialog context.

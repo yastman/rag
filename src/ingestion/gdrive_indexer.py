@@ -85,7 +85,10 @@ class GDriveIndexer:
         """
         self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
         self.qdrant_api_key = qdrant_api_key or os.getenv("QDRANT_API_KEY")
-        self.voyage_api_key = voyage_api_key or os.getenv("VOYAGE_API_KEY", "")
+        api_key = voyage_api_key or os.getenv("VOYAGE_API_KEY")
+        if not api_key:
+            raise ValueError("VOYAGE_API_KEY is required")
+        self.voyage_api_key = api_key
 
         # Qdrant client
         if self.qdrant_api_key:

@@ -63,8 +63,9 @@ class TestApartmentLlmExtractor:
         assert result.meta.source == "hybrid"
 
     async def test_invalid_city_cleared(self) -> None:
-        bad_result = ApartmentSearchFilters(
-            hard=HardFilters(city="Бургас", rooms=2),
+        # Bypass Literal validation to emulate malformed LLM output.
+        bad_result = ApartmentSearchFilters.model_construct(
+            hard=HardFilters.model_construct(city="Бургас", rooms=2),
             meta=ExtractionMeta(source="llm"),
         )
         extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)

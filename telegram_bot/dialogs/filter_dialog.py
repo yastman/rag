@@ -288,7 +288,8 @@ async def on_filter_dialog_start(
         if value is not None:
             with contextlib.suppress(Exception):
                 radio_widget = manager.find(radio_id)
-                await radio_widget.set_checked(str(value))
+                if radio_widget is not None:
+                    await radio_widget.set_checked(str(value))
 
 
 # ============================================================
@@ -399,7 +400,8 @@ async def on_reset(
     for radio_id in _FIELD_TO_RADIO_ID.values():
         with contextlib.suppress(Exception):
             radio_widget = manager.find(radio_id)
-            await radio_widget.set_checked(None)
+            if radio_widget is not None:
+                await radio_widget.set_checked(None)
 
 
 # ============================================================

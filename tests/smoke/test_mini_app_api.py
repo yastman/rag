@@ -69,23 +69,15 @@ class TestMiniAppApi:
 
     @pytest.mark.asyncio
     @_skip_if_unavailable
-    async def test_chat_endpoint_streams(self) -> None:
-        """POST /api/chat returns SSE stream with at least one data event."""
-        payload = {"message": "Привет", "user_id": 999999}
+    async def test_start_expert_endpoint_exists(self) -> None:
+        """POST /api/start-expert is reachable and returns domain-level 404 for unknown expert."""
+        payload = {"user_id": 999999, "expert_id": "__missing_expert__", "message": "Привет"}
         async with httpx.AsyncClient(base_url=_api_url(), timeout=30.0) as client:
-            async with client.stream("POST", "/api/chat", json=payload) as response:
-                assert response.status_code == 200
-                content_type = response.headers.get("content-type", "")
-                assert "text/event-stream" in content_type, (
-                    f"Expected SSE content-type, got: {content_type}"
-                )
-                # Read at least one chunk to confirm streaming works
-                got_data = False
-                async for line in response.aiter_lines():
-                    if line.startswith("data:"):
-                        got_data = True
-                        break
-                assert got_data, "Expected at least one 'data:' SSE event"
+            response = await client.post("/api/start-expert", json=payload)
+
+        assert response.status_code == 404
+        detail = response.json().get("detail")
+        assert detail == "Expert not found"
 
     @pytest.mark.asyncio
     @_skip_if_unavailable
