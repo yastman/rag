@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import telegram_bot.services as services
 from telegram_bot.services.generate_response import generate_response
 
 
@@ -117,6 +118,11 @@ async def test_generate_response_non_streaming_returns_llm_answer() -> None:
     assert result["llm_call_count"] == 1
     assert "generate" in result["latency_stages"]
     client.chat.completions.create.assert_awaited_once()
+
+
+def test_services_package_exports_generate_response() -> None:
+    assert "generate_response" in services.__all__
+    assert services.generate_response is generate_response
 
 
 @pytest.mark.asyncio
