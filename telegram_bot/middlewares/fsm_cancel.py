@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from aiogram import BaseMiddleware
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, TelegramObject
 
 from telegram_bot.keyboards.client_keyboard import build_client_keyboard
 
@@ -20,15 +20,26 @@ class FSMCancelMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Message,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        msg: Message | None
+        if isinstance(event, Message):
+            msg = event
+        elif hasattr(event, "text") and hasattr(event, "answer"):
+            msg = cast(Message, event)
+        else:
+            msg = None
+
+        if msg is None:
+            return await handler(event, data)
+
         state: FSMContext | None = data.get("state")
         if not state:
             return await handler(event, data)
 
-        text = (event.text or "").strip().lower()
+        text = (msg.text or "").strip().lower()
         if text not in _CANCEL_TRIGGERS:
             return await handler(event, data)
 
@@ -37,7 +48,7 @@ class FSMCancelMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         await state.clear()
-        await event.answer(
+        await msg.answer(
             "😊 Заявка отменена. Когда будете готовы — мы на связи!",
             reply_markup=build_client_keyboard(),
         )
