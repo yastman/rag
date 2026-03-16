@@ -1,9 +1,0 @@
-Exception ignored error evaluating path:
-Traceback (most recent call last):
-  File "<frozen getpath>", line 660, in <module>
-OSError: failed to make path absolute
-Fatal Python error: error evaluating path
-Python runtime state: core initialized
-
-Current thread 0x00007028bd8df080 (most recent call first):
-  <no Python frame>

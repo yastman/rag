@@ -100,17 +100,14 @@ async def test_voice_tool_propagates_langfuse_trace_id_to_api_payload():
         langfuse_trace_id="trace-123",
     )
 
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {"response": "OK"}
+    mock_rag_client = MagicMock()
+    mock_rag_client.search_knowledge_base = AsyncMock(return_value="OK")
 
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock(return_value=mock_response)
-
-    with patch("src.voice.agent._get_http_client", return_value=mock_client):
+    with patch("src.voice.agent._get_rag_api_client", return_value=mock_rag_client):
         await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
 
-    payload = mock_client.post.await_args.kwargs["json"]
+    request = mock_rag_client.search_knowledge_base.await_args.args[0]
+    payload = request.to_payload()
     assert payload["langfuse_trace_id"] == "trace-123"
     assert payload["channel"] == "voice"
 
@@ -121,17 +118,14 @@ async def test_search_tool_omits_langfuse_trace_id_when_none():
 
     agent = VoiceBot(call_id="22222222-2222-2222-2222-222222222222")
 
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {"response": "OK"}
+    mock_rag_client = MagicMock()
+    mock_rag_client.search_knowledge_base = AsyncMock(return_value="OK")
 
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock(return_value=mock_response)
-
-    with patch("src.voice.agent._get_http_client", return_value=mock_client):
+    with patch("src.voice.agent._get_rag_api_client", return_value=mock_rag_client):
         await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
 
-    payload = mock_client.post.await_args.kwargs["json"]
+    request = mock_rag_client.search_knowledge_base.await_args.args[0]
+    payload = request.to_payload()
     assert "langfuse_trace_id" not in payload
 
 
@@ -143,14 +137,10 @@ async def test_search_tool_appends_transcript_entries_with_store():
 
     agent = VoiceBot(call_id="22222222-2222-2222-2222-222222222222", transcript_store=store)
 
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {"response": "Найдено 3 варианта."}
+    mock_rag_client = MagicMock()
+    mock_rag_client.search_knowledge_base = AsyncMock(return_value="Найдено 3 варианта.")
 
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock(return_value=mock_response)
-
-    with patch("src.voice.agent._get_http_client", return_value=mock_client):
+    with patch("src.voice.agent._get_rag_api_client", return_value=mock_rag_client):
         result = await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "что есть в Несебре")
 
     assert result == "Найдено 3 варианта."
@@ -166,56 +156,56 @@ def test_get_http_client_returns_shared_instance():
     """_get_http_client returns the same AsyncClient on repeated calls (#369)."""
     import src.voice.agent as mod
 
-    original = mod._http_client
+    original = mod._rag_api_client
     try:
-        mod._http_client = None
+        mod._rag_api_client = None
         first = mod._get_http_client()
         second = mod._get_http_client()
         assert first is second
         assert isinstance(first, httpx.AsyncClient)
     finally:
-        mod._http_client = original
+        mod._rag_api_client = original
 
 
 def test_get_http_client_has_pool_limits():
     """Shared httpx client uses connection pool limits (#369)."""
     import src.voice.agent as mod
 
-    original = mod._http_client
+    original = mod._rag_api_client
     try:
-        mod._http_client = None
+        mod._rag_api_client = None
         client = mod._get_http_client()
         pool = client._transport._pool
         assert pool._max_connections == 10
         assert pool._max_keepalive_connections == 5
     finally:
-        mod._http_client = original
+        mod._rag_api_client = original
 
 
 async def test_close_http_client():
     """_close_http_client closes the client and resets the global (#369)."""
     import src.voice.agent as mod
 
-    original = mod._http_client
+    original = mod._rag_api_client
     try:
-        mod._http_client = None
+        mod._rag_api_client = None
         mod._get_http_client()
-        assert mod._http_client is not None
+        assert mod._rag_api_client is not None
         await mod._close_http_client()
-        assert mod._http_client is None
+        assert mod._rag_api_client is None
     finally:
-        mod._http_client = original
+        mod._rag_api_client = original
 
 
 async def test_mark_job_finished_closes_http_client_when_last_job():
     """Last finished job should close shared HTTP client."""
     import src.voice.agent as mod
 
-    original_client = mod._http_client
+    original_client = mod._rag_api_client
     original_jobs = mod._active_jobs
     original_lock = mod._jobs_lock
     try:
-        mod._http_client = None
+        mod._rag_api_client = None
         mod._active_jobs = 0
         mod._jobs_lock = None
         mod._get_http_client()
@@ -225,11 +215,11 @@ async def test_mark_job_finished_closes_http_client_when_last_job():
         await mod._mark_job_finished()
 
         assert mod._active_jobs == 0
-        assert mod._http_client is None
+        assert mod._rag_api_client is None
     finally:
-        if mod._http_client is not None:
+        if mod._rag_api_client is not None:
             await mod._close_http_client()
-        mod._http_client = original_client
+        mod._rag_api_client = original_client
         mod._active_jobs = original_jobs
         mod._jobs_lock = original_lock
 
@@ -238,11 +228,11 @@ async def test_mark_job_finished_keeps_client_while_other_jobs_active():
     """Shared HTTP client stays open until the last active job finishes."""
     import src.voice.agent as mod
 
-    original_client = mod._http_client
+    original_client = mod._rag_api_client
     original_jobs = mod._active_jobs
     original_lock = mod._jobs_lock
     try:
-        mod._http_client = None
+        mod._rag_api_client = None
         mod._active_jobs = 0
         mod._jobs_lock = None
         mod._get_http_client()
@@ -253,14 +243,14 @@ async def test_mark_job_finished_keeps_client_while_other_jobs_active():
         await mod._mark_job_finished()
 
         assert mod._active_jobs == 1
-        assert mod._http_client is not None
+        assert mod._rag_api_client is not None
 
         await mod._mark_job_finished()
         assert mod._active_jobs == 0
-        assert mod._http_client is None
+        assert mod._rag_api_client is None
     finally:
-        if mod._http_client is not None:
+        if mod._rag_api_client is not None:
             await mod._close_http_client()
-        mod._http_client = original_client
+        mod._rag_api_client = original_client
         mod._active_jobs = original_jobs
         mod._jobs_lock = original_lock

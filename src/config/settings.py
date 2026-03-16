@@ -17,6 +17,7 @@ from .constants import (
     RetrievalStages,
     SearchEngine,
 )
+from .qdrant_policy import resolve_collection_name
 
 
 class Settings:
@@ -236,17 +237,7 @@ class Settings:
             - QuantizationMode.SCALAR: base_scalar
             - QuantizationMode.BINARY: base_binary
         """
-        base = self.collection_name
-        # Strip existing suffixes
-        for suffix in ["_binary", "_scalar"]:
-            base = base.removesuffix(suffix)
-
-        if self.quantization_mode == QuantizationMode.SCALAR:
-            return f"{base}_scalar"
-        if self.quantization_mode == QuantizationMode.BINARY:
-            return f"{base}_binary"
-        # OFF
-        return base
+        return resolve_collection_name(self.collection_name, self.quantization_mode.value)
 
     def to_dict(self) -> dict[str, Any]:
         """Export settings as dictionary (excluding sensitive data)."""
