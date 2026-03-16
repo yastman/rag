@@ -1,0 +1,8 @@
+- query: "рассрочки"
+  expected_topic: finance
+  should_include_doc_types: ["faq"]
+  should_exclude_topics_from_top3: ["legal"]
+
+- query: "виды ВНЖ в Болгарии"
+  expected_topic: legal
+  should_include_topics_in_top3: ["legal"]
