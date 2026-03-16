@@ -6,6 +6,7 @@ import logging
 import sys
 import time
 import types
+from types import SimpleNamespace
 
 import pytest
 
@@ -2434,6 +2435,44 @@ class TestClientDirectPipeline:
 
 class TestStreamingCoordination:
     """Test response_sent flag prevents double-sending after streaming (#428)."""
+
+    async def test_ainvoke_uses_graph_streaming_flag(self, mock_config):
+        """Streaming gate must read GraphConfig, not BotConfig."""
+        bot, _ = _create_bot(mock_config)
+        bot._graph_config.streaming_enabled = True
+        message = _make_text_message("квартиры")
+        message.bot.send_message_draft = AsyncMock()
+
+        async def _astream(*args, **kwargs):
+            yield (
+                "messages",
+                (
+                    SimpleNamespace(content="first token", tool_calls=None),
+                    {"langgraph_node": "agent"},
+                ),
+            )
+            yield ("values", {"response": "final"})
+
+        agent = MagicMock()
+        agent.astream = _astream
+        agent.ainvoke = AsyncMock()
+
+        result = await bot._ainvoke_supervisor_with_recovery(
+            agent=agent,
+            tools=[],
+            role="client",
+            user_text="квартиры",
+            chat_id=message.chat.id,
+            callbacks=[],
+            bot_context=SimpleNamespace(telegram_user_id=message.from_user.id, session_id="s"),
+            rag_result_store={},
+            forum_thread_id=None,
+            message=message,
+        )
+
+        assert result == {"response": "final"}
+        message.bot.send_message_draft.assert_awaited_once()
+        agent.ainvoke.assert_not_called()
 
     async def test_handle_query_skips_send_when_response_sent_flagged(self, mock_config):
         """When ctx.response_sent=True, bot.py must NOT send again (#428)."""
