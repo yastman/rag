@@ -210,3 +210,25 @@ class TestVpsSecurityBaseline:
         assert "/tmp" in tmpfs, (
             f"vps:{svc_name} missing tmpfs: [/tmp] (needed with read_only: true)"
         )
+
+
+def _duration_to_seconds(raw: str) -> int:
+    match = re.fullmatch(r"(\d+)([smh])", str(raw).strip())
+    assert match, f"Unsupported duration format: {raw!r}"
+    value = int(match.group(1))
+    unit = match.group(2)
+    return value if unit == "s" else value * 60 if unit == "m" else value * 3600
+
+
+class TestModelServiceHealthcheckGrace:
+    """Model services need enough healthcheck grace period for cold starts."""
+
+    @pytest.mark.parametrize("svc_name", ["bge-m3", "user-base"])
+    def test_model_service_start_period_is_sufficient(self, vps: dict, svc_name: str) -> None:
+        svc = vps["services"][svc_name]
+        start_period = svc.get("healthcheck", {}).get("start_period")
+        assert start_period, f"{svc_name}.healthcheck.start_period is required"
+        assert _duration_to_seconds(start_period) >= 300, (
+            f"{svc_name}.healthcheck.start_period must be >=300s for cold model downloads; "
+            f"got {start_period!r}"
+        )

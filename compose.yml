@@ -109,7 +109,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      # Cold-start model download can take several minutes on first run.
+      start_period: 420s
     deploy:
       resources:
         limits:
@@ -134,7 +135,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      # Cold-start model download can take several minutes on first run.
+      start_period: 420s
     deploy:
       resources:
         limits:
