@@ -579,6 +579,13 @@ async def _rerank(
         rerank_applied = False
         rerank_cache_hit = False
 
+    if len(reranked_docs) >= 3:
+        top_scores = [float(doc.get("score", 0.0)) for doc in reranked_docs[:3]]
+        lead_gap = detect_score_gap(top_scores[:2])
+        tail_gap = detect_score_gap(top_scores[1:3])
+        if not bool(lead_gap["confident"]) and bool(tail_gap["confident"]):
+            reranked_docs = reranked_docs[:2]
+
     elapsed = time.perf_counter() - t0
     logger.info(
         "rerank: %d → %d docs, applied=%s cache_hit=%s (%.3fs)",
