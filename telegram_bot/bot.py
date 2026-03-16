@@ -3425,7 +3425,7 @@ class PropertyBot:
         }
 
         # --- Streaming path (#952) ---
-        streaming_enabled = bool(getattr(self.config, "streaming_enabled", False))
+        streaming_enabled = bool(getattr(self._graph_config, "streaming_enabled", False))
         if message is not None and streaming_enabled:
             bot = getattr(message, "bot", None)
             if bot is not None:
