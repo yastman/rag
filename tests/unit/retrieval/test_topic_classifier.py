@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import yaml  # type: ignore[import-untyped]
+
 from src.retrieval.topic_classifier import (
     DocType,
     TopicLabel,
@@ -54,3 +58,20 @@ def test_detect_score_gap_marks_clear_winner_confident() -> None:
     result = detect_score_gap([0.62, 0.40, 0.39])
 
     assert result["confident"] is True
+
+
+def test_query_topic_hints_match_retrieval_quality_fixture() -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures"
+        / "retrieval"
+        / "retrieval_quality_cases.yaml"
+    )
+    cases = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
+    assert isinstance(cases, list)
+
+    topic_by_label = {label.value: label for label in TopicLabel}
+    for case in cases:
+        query = case["query"]
+        expected_topic = topic_by_label[case["expected_topic"]]
+        assert get_query_topic_hint(query) == expected_topic
