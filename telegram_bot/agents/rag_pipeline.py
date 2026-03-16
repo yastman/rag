@@ -320,7 +320,14 @@ async def _hybrid_retrieve(
     # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     colbert_search_used = False
+    normalized_query = query.strip().lower()
+    query_word_count = len(normalized_query.split()) if normalized_query else 0
+    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
     filters = {"topic": topic_hint} if topic_hint else None
+    relaxed_filters: dict[str, str] | None = None
+    if prefer_faq_doc_type and topic_hint:
+        filters = {"topic": topic_hint, "doc_type": "faq"}
+        relaxed_filters = {"topic": topic_hint}
 
     if colbert_query and _has_colbert_search:
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
@@ -352,6 +359,31 @@ async def _hybrid_retrieve(
             "metric",
             extra={"metric_name": "topic_filter_fallback", "value": 1},
         )
+        fallback_filters = relaxed_filters if relaxed_filters is not None else None
+        if colbert_query and _has_colbert_search:
+            qdrant_result = await qdrant.hybrid_search_rrf_colbert(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                colbert_query=colbert_query,
+                filters=fallback_filters,
+                top_k=top_k,
+                return_meta=True,
+            )
+        else:
+            qdrant_result = await qdrant.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=fallback_filters,
+                top_k=top_k,
+                return_meta=True,
+            )
+        if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
+            results, search_meta = qdrant_result
+        else:
+            results = qdrant_result
+            search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+
+    if relaxed_filters is not None and len(results) < 3:
         if colbert_query and _has_colbert_search:
             qdrant_result = await qdrant.hybrid_search_rrf_colbert(
                 dense_vector=dense_vector,
