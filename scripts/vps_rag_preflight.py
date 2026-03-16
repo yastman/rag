@@ -4,14 +4,7 @@ import argparse
 import subprocess
 
 
-REQUIRED_SERVICES = (
-    "vps-postgres",
-    "vps-redis",
-    "vps-qdrant",
-    "vps-bge-m3",
-    "vps-litellm",
-    "vps-bot",
-)
+LOGICAL_SERVICES = ("postgres", "redis", "qdrant", "bge-m3", "litellm", "bot")
 
 
 def run_ssh(host: str, remote_cmd: str, *, check: bool = False) -> subprocess.CompletedProcess[str]:
@@ -33,12 +26,28 @@ def _parse_docker_ps(raw: str) -> dict[str, str]:
     return rows
 
 
+def _service_variants(service: str) -> tuple[str, ...]:
+    return (
+        f"vps-{service}",
+        f"vps_{service}_1",
+        f"vps-{service}-1",
+    )
+
+
+def _status_for_service(services: dict[str, str], service: str) -> str:
+    for candidate in _service_variants(service):
+        status = services.get(candidate, "")
+        if status:
+            return status
+    return ""
+
+
 def _missing_or_unhealthy(services: dict[str, str]) -> list[str]:
     failed: list[str] = []
-    for name in REQUIRED_SERVICES:
-        status = services.get(name, "")
+    for service in LOGICAL_SERVICES:
+        status = _status_for_service(services, service)
         if not status or "Up" not in status:
-            failed.append(name)
+            failed.append(f"vps-{service}")
     return failed
 
 
