@@ -104,12 +104,13 @@ async def _stream_agent_to_draft(
     Only streams content-only chunks (not tool-call chunks). Returns final state dict.
     """
     import contextlib
-    import random
+
+    from telegram_bot.services.draft_streamer import _new_draft_id
 
     accumulated = ""
     last_draft = 0.0
     final_state: dict[str, Any] = {}
-    draft_id = random.randint(1, 2**31 - 1)
+    draft_id = _new_draft_id()
 
     async for mode, data in agent.astream(
         payload, config=config, stream_mode=["messages", "values"]
@@ -393,8 +394,6 @@ async def _seed_kommo_access_token(
         REDIS_KEY,
         mapping={
             "access_token": access_token,
-            "refresh_token": "",
-            "expires_at": "0",
             "subdomain": subdomain,
         },
     )

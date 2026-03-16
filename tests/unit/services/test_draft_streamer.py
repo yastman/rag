@@ -3,6 +3,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 
+def test_new_draft_id_returns_positive_31bit_int() -> None:
+    from telegram_bot.services.draft_streamer import _new_draft_id
+
+    draft_id = _new_draft_id()
+    assert 1 <= draft_id < 2**31
+
+
 @pytest.mark.asyncio
 async def test_draft_streamer_sends_drafts():
     """DraftStreamer should call send_message_draft for each chunk."""
