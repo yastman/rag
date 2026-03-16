@@ -37,6 +37,8 @@ class TestCollectionVerify:
             "metadata.file_id": MagicMock(data_type="keyword"),
             "metadata.doc_id": MagicMock(data_type="keyword"),
             "metadata.source": MagicMock(data_type="keyword"),
+            "metadata.topic": MagicMock(data_type="keyword"),
+            "metadata.doc_type": MagicMock(data_type="keyword"),
             "metadata.order": MagicMock(data_type="integer"),
             "metadata.chunk_order": MagicMock(data_type="integer"),
         }
@@ -57,6 +59,8 @@ class TestCollectionVerify:
             "metadata.file_id": MagicMock(data_type="keyword"),
             "metadata.doc_id": MagicMock(data_type="keyword"),
             "metadata.source": MagicMock(data_type="keyword"),
+            "metadata.topic": MagicMock(data_type="keyword"),
+            "metadata.doc_type": MagicMock(data_type="keyword"),
             "metadata.order": MagicMock(data_type="keyword"),  # Wrong! Should be integer
             "metadata.chunk_order": MagicMock(data_type="integer"),
         }
