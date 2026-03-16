@@ -231,10 +231,10 @@ class QdrantHybridWriter:
             "modified_time": file_metadata.get("modified_time"),
             "content_hash": file_metadata.get("content_hash"),
         }
-        metadata["topic"] = classify_chunk_topic(getattr(chunk, "text", ""))
+        metadata["topic"] = classify_chunk_topic(getattr(chunk, "text", "")).value
         metadata["doc_type"] = classify_doc_type(
             source_path, str(file_metadata.get("mime_type", ""))
-        )
+        ).value
 
         # Clean None values
         metadata = {k: v for k, v in metadata.items() if v is not None}
