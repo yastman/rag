@@ -81,6 +81,7 @@ async def test_manager_service_chain_includes_history_and_crm_tools():
     message.answer = AsyncMock()
 
     created_agent = MagicMock()
+    created_agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content="ok")]})
     with (
         patch("telegram_bot.bot.propagate_attributes", return_value=nullcontext()),
         patch("telegram_bot.bot.get_client", return_value=MagicMock()),
