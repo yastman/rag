@@ -441,6 +441,22 @@ async def test_rewrite_query_llm_fails():
     assert result["rewrite_count"] == 1
 
 
+async def test_short_finance_query_expands_before_rewrite_loop():
+    from telegram_bot.agents.rag_pipeline import _rewrite_query
+
+    fake_llm = MagicMock()
+    fake_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM should not be used"))
+
+    result = await _rewrite_query(
+        "рассрочки",
+        0,
+        llm=fake_llm,
+        latency_stages={},
+    )
+
+    assert result["rewritten_query"] != "рассрочки"
+
+
 # ---------------------------------------------------------------------------
 # _cache_store tests
 # ---------------------------------------------------------------------------
