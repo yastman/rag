@@ -222,7 +222,7 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
 
     await _hybrid_retrieve(
-        "рассрочка",
+        "какие есть варианты рассрочки",
         [0.1] * 1024,
         cache=mock_cache,
         sparse_embeddings=mock_sparse,
@@ -233,6 +233,34 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
 
     first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
     assert first_call["filters"] == {"topic": "finance"}
+
+
+async def test_hybrid_retrieve_prefers_faq_candidates_for_short_finance_query(
+    mock_cache, mock_sparse
+):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "FAQ рассрочка", "score": 0.9, "metadata": {"doc_type": "faq"}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    result = await _hybrid_retrieve(
+        "рассрочки",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    assert result["search_results_count"] > 0
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    assert first_call["filters"] == {"topic": "finance", "doc_type": "faq"}
 
 
 async def test_hybrid_retrieve_omits_topic_filter_by_default(mock_cache, mock_sparse, mock_qdrant):
@@ -271,7 +299,7 @@ async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_sma
     )
 
     result = await _hybrid_retrieve(
-        "рассрочка",
+        "какие есть варианты рассрочки",
         [0.1] * 1024,
         cache=mock_cache,
         sparse_embeddings=mock_sparse,
