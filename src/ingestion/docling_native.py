@@ -1,77 +1,122 @@
-"""Optional native Docling adapter (feature-flagged)."""
+"""Feature-flagged native Docling adapter for unified ingestion."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
 from pathlib import Path
+from typing import Any
 
-from src.ingestion.docling_client import DoclingChunk
-
-
-def _chunk_text(text: str, *, max_tokens: int) -> list[str]:
-    """Split markdown text into bounded chunks by word count."""
-    words = text.split()
-    if not words:
-        return []
-
-    chunks: list[str] = []
-    cursor = 0
-    while cursor < len(words):
-        window = words[cursor : cursor + max_tokens]
-        chunks.append(" ".join(window))
-        cursor += max_tokens
-    return chunks
+from src.ingestion.docling_client import DoclingChunk, DoclingClient, DoclingConfig
 
 
-@dataclass
-class DoclingNativeConfig:
-    """Runtime config for native Docling adapter."""
+logger = logging.getLogger(__name__)
 
-    max_tokens: int = 512
+try:
+    from docling.document_converter import DocumentConverter
+except ModuleNotFoundError:  # pragma: no cover - exercised in unit tests via injected converter
+    DocumentConverter = Any  # type: ignore[assignment]
 
 
-class DoclingNativeConverter:
-    """Narrow wrapper around Docling `DocumentConverter` for spike usage."""
+class NativeDoclingAdapter(DoclingClient):
+    """Native Docling adapter with the same chunk contract as DoclingClient."""
 
-    def __init__(self, config: DoclingNativeConfig | None = None) -> None:
-        self.config = config or DoclingNativeConfig()
+    def __init__(
+        self,
+        *,
+        max_tokens: int = 512,
+        converter: DocumentConverter | Any | None = None,
+    ) -> None:
+        super().__init__(DoclingConfig(max_tokens=max_tokens))
+        self._converter = converter
+        self._max_tokens = max_tokens
 
-    @staticmethod
-    def is_available() -> bool:
-        """Return True when native docling package is installed."""
-        try:
-            from docling.document_converter import DocumentConverter  # noqa: F401
-        except Exception:
-            return False
-        return True
+    def _get_converter(self) -> DocumentConverter | Any:
+        if self._converter is None:
+            if DocumentConverter is Any:
+                raise RuntimeError(
+                    "docling is not installed; docling_native backend requires the optional "
+                    "docling dependency"
+                )
+            self._converter = DocumentConverter()
+        return self._converter
 
-    @staticmethod
-    def _create_document_converter():
-        from docling.document_converter import DocumentConverter
+    def chunk_file_sync(
+        self,
+        file_path: Path,
+        contextualize: bool = True,
+    ) -> list[DoclingChunk]:
+        """Convert document natively and normalize it into DoclingChunk objects."""
+        del contextualize  # Native path already emits the final chunk text.
 
-        return DocumentConverter()
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
 
-    def chunk_file_sync(self, file_path: Path) -> list[DoclingChunk]:
-        """Convert file with native Docling and return normalized chunks."""
-        try:
-            converter = self._create_document_converter()
-        except Exception as exc:  # pragma: no cover - environment dependent
-            raise RuntimeError("Native docling is not installed") from exc
+        suffix = file_path.suffix.lower()
+        if suffix not in self.SUPPORTED_FORMATS:
+            raise ValueError(f"Unsupported format: {suffix}")
 
-        result = converter.convert(str(file_path))
-        document = result.document
-        markdown = document.export_to_markdown()
-        raw_chunks = _chunk_text(markdown, max_tokens=self.config.max_tokens)
+        result = self._get_converter().convert(file_path)
+        markdown = result.document.export_to_markdown()
+        chunks = self._chunk_markdown(markdown)
+        logger.info("Chunked (native) %s: %d chunks", file_path.name, len(chunks))
+        return chunks
 
-        chunks: list[DoclingChunk] = []
-        for idx, text in enumerate(raw_chunks):
-            chunks.append(
+    def _chunk_markdown(self, markdown: str) -> list[DoclingChunk]:
+        sections: list[tuple[list[str], str]] = []
+        current_heading: list[str] = []
+        current_lines: list[str] = []
+
+        def flush() -> None:
+            text = "\n".join(current_lines).strip()
+            if not text:
+                return
+            for chunk_text in self._split_text(text):
+                sections.append((current_heading.copy(), chunk_text))
+
+        for raw_line in markdown.splitlines():
+            line = raw_line.rstrip()
+            if line.startswith("#"):
+                flush()
+                current_lines = []
+                heading = line.lstrip("#").strip()
+                current_heading = [heading] if heading else []
+                continue
+
+            current_lines.append(line)
+
+        flush()
+
+        if not sections and markdown.strip():
+            sections.append(([], markdown.strip()))
+
+        normalized: list[DoclingChunk] = []
+        for idx, (headings, text) in enumerate(sections):
+            normalized.append(
                 DoclingChunk(
                     text=text,
                     seq_no=idx,
-                    headings=[],
+                    headings=headings,
                     page_range=None,
-                    metadata={"backend": "docling-native", "offset": idx},
+                    metadata={"parser": "docling_native"},
                 )
             )
-        return chunks
+        return normalized
+
+    def _split_text(self, text: str) -> list[str]:
+        if len(text) <= self._max_tokens:
+            return [text]
+
+        chunks: list[str] = []
+        current = ""
+        for paragraph in [part.strip() for part in text.split("\n\n") if part.strip()]:
+            candidate = f"{current}\n\n{paragraph}".strip() if current else paragraph
+            if current and len(candidate) > self._max_tokens:
+                chunks.append(current)
+                current = paragraph
+            else:
+                current = candidate
+
+        if current:
+            chunks.append(current)
+
+        return chunks or [text]
