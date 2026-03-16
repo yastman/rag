@@ -143,7 +143,7 @@ async def get_note_summary(dialog_manager: DialogManager, **kwargs: Any) -> dict
 
 async def on_note_text_entered(
     message: Message,
-    widget: ManagedTextInput,
+    _widget: ManagedTextInput,
     manager: DialogManager,
     value: str,
 ) -> None:
@@ -154,7 +154,7 @@ async def on_note_text_entered(
 
 async def on_entity_type_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -170,7 +170,7 @@ async def on_entity_type_selected(
 
 async def on_entity_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
