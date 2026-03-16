@@ -31,8 +31,6 @@ class TestKommoAccessTokenSeed:
             REDIS_KEY,
             mapping={
                 "access_token": "eyJ0eXA...",
-                "refresh_token": "",
-                "expires_at": "0",
                 "subdomain": "testdomain",
             },
         )

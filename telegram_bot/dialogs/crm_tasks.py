@@ -324,7 +324,7 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
 
 async def on_task_text_entered(
     message: Message,
-    widget: ManagedTextInput,
+    _widget: ManagedTextInput,
     manager: DialogManager,
     value: str,
 ) -> None:
@@ -335,7 +335,7 @@ async def on_task_text_entered(
 
 async def on_task_type_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -349,7 +349,7 @@ async def on_task_type_selected(
 
 async def on_lead_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -362,7 +362,7 @@ async def on_lead_selected(
 
 async def on_due_date_entered(
     message: Message,
-    widget: ManagedTextInput,
+    _widget: ManagedTextInput,
     manager: DialogManager,
     value: str,
 ) -> None:
@@ -382,7 +382,7 @@ async def on_due_date_entered(
 
 async def on_due_date_error(
     message: Message,
-    widget: ManagedTextInput,
+    _widget: ManagedTextInput,
     manager: DialogManager,
     error: ValueError,
 ) -> None:
@@ -436,7 +436,7 @@ async def on_task_confirm(
 
 async def on_filter_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -468,7 +468,7 @@ async def on_next_page(
 
 async def on_task_edit_from_list(
     callback: CallbackQuery,
-    widget: Any,
+    _widget: Any,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -486,7 +486,7 @@ async def on_task_edit_from_list(
 
 async def on_task_complete(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
