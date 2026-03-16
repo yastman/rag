@@ -417,9 +417,18 @@ class PropertyBot:
         # Apartment extraction pipeline: LLM first → regex fallback
         from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
         from .services.apartment_filter_extractor import ApartmentFilterExtractor
-        from .services.apartment_llm_extractor import ApartmentLlmExtractor
 
-        _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
+        _apt_llm = None
+        try:
+            from .services.apartment_llm_extractor import ApartmentLlmExtractor
+
+            _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
+        except (ImportError, ModuleNotFoundError):
+            logger.warning(
+                "ApartmentLlmExtractor unavailable, falling back to regex-only extraction",
+                exc_info=True,
+            )
+
         self._apartment_pipeline = ApartmentExtractionPipeline(
             regex_extractor=ApartmentFilterExtractor(),
             llm_extractor=_apt_llm,
