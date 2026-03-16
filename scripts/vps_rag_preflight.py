@@ -99,7 +99,7 @@ def _docker_network_health_cmd(project_dir: str) -> str:
         "    except Exception:\n"
         "        print(f'FAIL: LLM endpoint not responding at {llm_url}')\n"
         "        raise SystemExit(1)\n"
-        'PY"'
+        'PY\n"'
     )
 
 
