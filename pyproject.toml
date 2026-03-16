@@ -304,6 +304,10 @@ explicit_package_bases = true  ***REMOVED*** Resolve duplicate module names in s
 module = "FlagEmbedding.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "src.retrieval.topic_classifier"
+disallow_untyped_defs = true
+
 ***REMOVED*** =============================================================================
 ***REMOVED*** BANDIT CONFIGURATION (Security Linting)
 ***REMOVED*** =============================================================================
