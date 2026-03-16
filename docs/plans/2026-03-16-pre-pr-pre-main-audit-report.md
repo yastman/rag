@@ -65,7 +65,7 @@
   - `uv run bandit -r src/ telegram_bot/ -c pyproject.toml`
   - `uv run vulture src/ telegram_bot/ --min-confidence 80`
 - Test verification:
-  - `uv run pytest tests/unit -q` → `5349 passed, 20 skipped`
+  - `uv run pytest tests/unit -q` → `5360 passed, 20 skipped`
   - `uv run pytest tests/integration -q` → `97 passed, 41 skipped`
   - `uv run pytest tests/contract -q` → `354 passed`
   - `uv run pytest tests/smoke -q` → `48 passed, 14 skipped`
