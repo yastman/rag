@@ -47,6 +47,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# Pre-create model cache paths with appuser ownership.
+# This avoids permission errors when a fresh named volume is initialized from image contents.
+RUN mkdir -p /models/hf /models/sentence-transformers && \
+    chown -R appuser:appgroup /models
+
 USER appuser
 
 EXPOSE 8000
