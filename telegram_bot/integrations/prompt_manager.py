@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
@@ -76,11 +77,14 @@ def _fetch_prompt_core(
         return _fallback_result()
 
     try:
-        prompt = client.get_prompt(
-            name,
-            cache_ttl_seconds=cache_ttl,
-            fallback=fallback,
-        )
+        prompt_kwargs: dict[str, Any] = {
+            "cache_ttl_seconds": cache_ttl,
+            "fallback": fallback,
+        }
+        label = os.getenv("LANGFUSE_PROMPT_LABEL", "").strip()
+        if label:
+            prompt_kwargs["label"] = label
+        prompt = client.get_prompt(name, **prompt_kwargs)
         config: dict[str, Any] = getattr(prompt, "config", None) or {}
         prompt_version = getattr(prompt, "version", None)
         client.update_current_span(output={"prompt_version": prompt_version})
