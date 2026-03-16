@@ -5,6 +5,8 @@ from typing import Annotated
 from pydantic import AliasChoices, BeforeValidator, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from src.config.qdrant_policy import resolve_collection_name
+
 
 def _empty_str_to_false(v: object) -> object:
     """Convert empty string to False (env vars with no value)."""
@@ -613,13 +615,4 @@ class BotConfig(BaseSettings):
             - 'scalar': base_scalar
             - 'binary': base_binary
         """
-        base = self.qdrant_collection
-        for suffix in ["_binary", "_scalar"]:
-            base = base.removesuffix(suffix)
-
-        mode = self.qdrant_quantization_mode.lower()
-        if mode == "scalar":
-            return f"{base}_scalar"
-        if mode == "binary":
-            return f"{base}_binary"
-        return base
+        return resolve_collection_name(self.qdrant_collection, self.qdrant_quantization_mode)

@@ -53,7 +53,7 @@ async def test_get_valid_token_refreshes_when_expired(mock_redis):
         redirect_uri="https://example.com/callback",
     )
 
-    with patch("telegram_bot.services.kommo_token_store.httpx.AsyncClient") as mock_httpx:
+    with patch("telegram_bot.services.kommo_tokens.httpx.AsyncClient") as mock_httpx:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -113,7 +113,7 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
         call_log.append("http_end")
         return resp
 
-    with patch("telegram_bot.services.kommo_token_store.httpx.AsyncClient") as mock_httpx:
+    with patch("telegram_bot.services.kommo_tokens.httpx.AsyncClient") as mock_httpx:
         mock_httpx.return_value.__aenter__ = AsyncMock(return_value=mock_httpx.return_value)
         mock_httpx.return_value.__aexit__ = AsyncMock()
         mock_httpx.return_value.post = controlled_post
@@ -134,3 +134,29 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
 
     # Both calls completed, second one also made HTTP request after first finished
     assert "http_end" in call_log
+
+
+async def test_legacy_store_tokens_method_still_available(mock_redis):
+    """Compatibility shim must preserve _store_tokens for legacy callers/scripts."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.services.kommo_token_store import KommoTokenStore
+
+    storage: dict[str, str] = {}
+
+    async def hset(_key, *, mapping):
+        storage.update({str(k): str(v) for k, v in mapping.items()})
+
+    async def hgetall(_key):
+        return {k.encode(): v.encode() for k, v in storage.items()}
+
+    redis = AsyncMock()
+    redis.hset.side_effect = hset
+    redis.hgetall.side_effect = hgetall
+
+    store = KommoTokenStore(redis=redis, subdomain="test")
+
+    await store._store_tokens("seed-token", "", 3600)
+
+    token = await store.get_valid_token()
+    assert token == "seed-token"

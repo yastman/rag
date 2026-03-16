@@ -398,7 +398,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         try:
             if group_by:
-                response = self.client.query_points_groups(
+                grouped_response = self.client.query_points_groups(
                     collection_name=self.collection_name,
                     prefetch=prefetch,
                     query=rrf_query,
@@ -407,9 +407,9 @@ class HybridRRFSearchEngine(BaseSearchEngine):
                     limit=top_k,
                     with_payload=True,
                 )
-                return self._parse_group_results(response)
+                return self._parse_group_results(grouped_response)
 
-            response = self.client.query_points(
+            query_response = self.client.query_points(
                 collection_name=self.collection_name,
                 prefetch=prefetch,
                 query=rrf_query,
@@ -426,7 +426,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
                     score=point.score,
                     metadata=(point.payload or {}).get("metadata", {}),
                 )
-                for point in response.points
+                for point in query_response.points
             ]
 
         except Exception as e:
@@ -574,7 +574,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
         try:
             if group_by:
-                response = self.client.query_points_groups(
+                grouped_response = self.client.query_points_groups(
                     collection_name=self.collection_name,
                     prefetch=[rrf_prefetch],
                     query=colbert_vectors,
@@ -584,9 +584,9 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
                     limit=top_k,
                     with_payload=True,
                 )
-                return self._parse_group_results(response)
+                return self._parse_group_results(grouped_response)
 
-            response = self.client.query_points(
+            query_response = self.client.query_points(
                 collection_name=self.collection_name,
                 prefetch=[rrf_prefetch],
                 query=colbert_vectors,
@@ -605,7 +605,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
                         "search_method": "hybrid_rrf_colbert",
                     },
                 )
-                for point in response.points
+                for point in query_response.points
             ]
 
         except Exception as e:
@@ -748,7 +748,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
         try:
             if group_by:
-                response = self.client.query_points_groups(
+                grouped_response = self.client.query_points_groups(
                     collection_name=self.collection_name,
                     prefetch=[dbsf_prefetch],
                     query=colbert_vectors,
@@ -758,9 +758,9 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
                     limit=top_k,
                     with_payload=True,
                 )
-                return self._parse_group_results(response)
+                return self._parse_group_results(grouped_response)
 
-            response = self.client.query_points(
+            query_response = self.client.query_points(
                 collection_name=self.collection_name,
                 prefetch=[dbsf_prefetch],
                 query=colbert_vectors,
@@ -779,7 +779,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
                         "search_method": "dbsf_colbert",
                     },
                 )
-                for point in response.points
+                for point in query_response.points
             ]
 
         except Exception as e:

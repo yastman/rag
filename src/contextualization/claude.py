@@ -1,6 +1,6 @@
 """Claude-based contextualization provider."""
 
-from typing import Any
+from typing import Any, cast
 
 from anthropic import Anthropic, APIStatusError, AsyncAnthropic, RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
@@ -8,6 +8,16 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ra
 from src.config import Settings
 
 from .base import ContextualizedChunk, ContextualizeProvider
+
+
+def _extract_claude_text(content_blocks: Any) -> str:
+    """Extract plain text from Anthropic content blocks."""
+    parts: list[str] = []
+    for block in content_blocks:
+        block_text = getattr(block, "text", None)
+        if isinstance(block_text, str):
+            parts.append(block_text)
+    return "".join(parts)
 
 
 class ClaudeContextualizer(ContextualizeProvider):
@@ -26,7 +36,7 @@ class ClaudeContextualizer(ContextualizeProvider):
     - Quality: Highest among available providers
     """
 
-    def __init__(self, settings: Settings | None = None, use_cache: bool = True):
+    def __init__(self, settings: Settings | None = None, use_cache: bool = True) -> None:
         """Initialize Claude contextualizer.
 
         Args:
@@ -88,6 +98,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         """
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
+        model_name = self.settings.model_name or "claude-3-5-haiku-latest"
 
         # Build system param with optional prompt caching
         system_content: str | list[dict[str, Any]]
@@ -99,9 +110,9 @@ class ClaudeContextualizer(ContextualizeProvider):
             system_content = system_prompt
 
         response = await self.client.messages.create(
-            model=self.settings.model_name,
+            model=model_name,
             max_tokens=256,
-            system=system_content,
+            system=cast(Any, system_content),
             messages=[{"role": "user", "content": user_prompt}],
         )
 
@@ -112,9 +123,13 @@ class ClaudeContextualizer(ContextualizeProvider):
             response.usage.input_tokens * 5 + response.usage.output_tokens * 15
         ) / 1_000_000
 
+        summary = _extract_claude_text(response.content)
+        if not summary.strip():
+            raise ValueError("Empty Claude response content")
+
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=response.content[0].text,
+            contextual_summary=summary,
             article_number=article_number,
             context_method="claude",
         )
@@ -133,9 +148,10 @@ class ClaudeContextualizer(ContextualizeProvider):
         """Synchronous contextualization (blocking)."""
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
+        model_name = self.settings.model_name or "claude-3-5-haiku-latest"
 
         response = self.sync_client.messages.create(
-            model=self.settings.model_name,
+            model=model_name,
             max_tokens=256,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
@@ -146,12 +162,12 @@ class ClaudeContextualizer(ContextualizeProvider):
 
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=response.content[0].text,
+            contextual_summary=_extract_claude_text(response.content),
             article_number=article_number,
             context_method="claude",
         )
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, int | float]:
         """Get contextualization statistics."""
         return {
             "total_tokens": self.total_tokens,

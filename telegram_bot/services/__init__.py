@@ -7,13 +7,15 @@ Import specific services directly for best performance:
 
 from typing import TYPE_CHECKING
 
+from .generate_response import generate_response
+
 
 if TYPE_CHECKING:
     from .bge_m3_client import BGEM3Client, BGEM3SyncClient
     from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
     from .lead_scoring_store import LeadScoringStore
-    from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
+    from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
@@ -38,8 +40,6 @@ __all__ = [
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
-    # LLMService is deprecated — use generate_response() instead
-    "LLMService",
     "LeadScoringStore",
     "PipelineMetrics",
     "QdrantService",
@@ -51,6 +51,7 @@ __all__ = [
     "VoyageService",
     "check_responses_parse_compat",
     "format_summary_as_note",
+    "generate_response",
     "generate_summary",
 ]
 
@@ -66,7 +67,7 @@ _IMPORT_MAP = {
     "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
-    # LLMService is deprecated — kept for backward compatibility only
+    # Compatibility-only export: deprecated, intentionally not in __all__.
     "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "PipelineMetrics": ".metrics",

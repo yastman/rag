@@ -331,7 +331,7 @@ class DoclingClient:
         result = response.json()
 
         # Parse chunks
-        chunks = []
+        chunks: list[DoclingChunk] = []
         raw_chunks = result.get("chunks", [])
 
         if raw_chunks == []:
@@ -402,7 +402,7 @@ class DoclingClient:
             result = response.json()
 
         # Parse chunks
-        chunks = []
+        chunks: list[DoclingChunk] = []
         raw_chunks = result.get("chunks", [])
 
         if raw_chunks == []:

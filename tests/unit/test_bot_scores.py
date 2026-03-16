@@ -127,14 +127,29 @@ def _mock_agent_result(**overrides):
     return base
 
 
-async def _run_handle_query_supervisor(mock_config, mock_lf_client, *, history_service=None):
+async def _run_handle_query_supervisor(
+    mock_config, mock_lf_client, *, history_service=None, streaming=False
+):
     """Run handle_query through SDK agent path with mocked agent (#413)."""
+    from langchain_core.messages import AIMessageChunk
+
     bot = _create_bot(mock_config)
     if history_service is not None:
         bot._history_service = history_service
 
     mock_agent = AsyncMock()
-    mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+    if streaming:
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+        bot.bot.send_message = AsyncMock(return_value=MagicMock())
+
+        async def _agent_stream(*args, **kwargs):
+            yield AIMessageChunk(content="Supervisor "), {"langgraph_node": "model"}
+            yield AIMessageChunk(content="response"), {"langgraph_node": "model"}
+
+        mock_agent.astream = _agent_stream
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+    else:
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
     with (
         patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
@@ -143,6 +158,8 @@ async def _run_handle_query_supervisor(mock_config, mock_lf_client, *, history_s
         patch("telegram_bot.bot.create_callback_handler", return_value=None),
     ):
         message = _make_message()
+        if streaming:
+            message.chat.type = "private"
         with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
@@ -677,6 +694,31 @@ class TestHistoryScores:
         assert "supervisor_model" in scores
         assert scores["supervisor_model"]["value"] == "gpt-4o-mini"
         assert scores["supervisor_model"]["data_type"] == "CATEGORICAL"
+
+    async def test_supervisor_streaming_still_writes_wall_metadata(self, mock_config):
+        """Streaming sdk_agent path still writes pipeline wall-time metadata."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-stream-1")
+        history_svc = AsyncMock()
+        history_svc.save_turn = AsyncMock(return_value=True)
+
+        await _run_handle_query_supervisor(
+            mock_config,
+            mock_lf,
+            history_service=history_svc,
+            streaming=True,
+        )
+
+        metadata_payloads = [
+            c.kwargs.get("metadata", {})
+            for c in mock_lf.update_current_trace.call_args_list
+            if "metadata" in c.kwargs
+        ]
+        assert any(m.get("pipeline_mode") == "sdk_agent" for m in metadata_payloads)
+        assert any(m.get("pipeline_wall_ms") is not None for m in metadata_payloads)
+        assert any(m.get("pre_agent_ms") is not None for m in metadata_payloads)
 
 
 class TestCheckpointerOverheadScore:
