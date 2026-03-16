@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, cast
 
 import instructor
 from openai import AsyncOpenAI
@@ -110,7 +111,7 @@ class ApartmentLlmExtractor:
 
         result: ApartmentSearchFilters = await self._client.chat.completions.create(
             model=self._model,
-            messages=messages,
+            messages=cast(Any, messages),
             response_model=ApartmentSearchFilters,
             max_retries=2,
         )

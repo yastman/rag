@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from .services.history_service import HistoryService
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
-HistoryService: Any = None
+HistoryService: Any = None  # type: ignore[no-redef]
 
 
 logger = logging.getLogger(__name__)
@@ -2616,8 +2616,12 @@ class PropertyBot:
                 apartment_filters=None,
             )
             page = results[:_APARTMENT_PAGE_SIZE]
-            for result in page:
-                await self._send_property_card(message, result, message.from_user.id)  # type: ignore[union-attr]
+            for card_result in page:
+                await self._send_property_card(
+                    message,
+                    card_result,
+                    message.from_user.id,  # type: ignore[union-attr]
+                )
             shown = len(page)
             total = len(results)
             _has_more = total > _APARTMENT_PAGE_SIZE
@@ -3342,11 +3346,12 @@ class PropertyBot:
                     score(lf, tid, name="sources_count", value=float(sources_count_actual))
 
             # Persist Q&A to history (fire-and-forget — response already sent)
-            if self._history_service and response_text:
+            history_service = self._history_service
+            if history_service and response_text:
 
                 async def _bg_save_history() -> None:
                     try:
-                        saved = await self._history_service.save_turn(
+                        saved = await history_service.save_turn(
                             user_id=user_id,
                             session_id=session_id,
                             query=message.text or "",

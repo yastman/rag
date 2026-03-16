@@ -78,7 +78,14 @@ class ApartmentExtractionPipeline:
         )
         return ApartmentSearchFilters(
             hard=hard,
-            soft=SoftPreferences(),
+            soft=SoftPreferences(
+                near_sea=False,
+                spacious=False,
+                budget_friendly=False,
+                high_floor=False,
+                quiet=False,
+                sort_bias="relevance",
+            ),
             meta=ExtractionMeta(
                 source="regex",
                 confidence=getattr(parsed, "confidence", "LOW"),

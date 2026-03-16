@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 from collections.abc import Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from typing import Self
 
 T = TypeVar("T")
+_PG_IDENTIFIER_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
 class _SyncContext:
@@ -90,8 +92,15 @@ class UnifiedStateManager:
         self._database_url = database_url
         self._owns_pool = pool is None
         # Tables are in public schema of cocoindex database
-        self._table = "ingestion_state"
-        self._dlq_table = "ingestion_dead_letter"
+        self._table = self._safe_identifier("ingestion_state")
+        self._dlq_table = self._safe_identifier("ingestion_dead_letter")
+
+    @staticmethod
+    def _safe_identifier(value: str) -> str:
+        """Validate SQL identifier used in interpolated table names."""
+        if not _PG_IDENTIFIER_RE.fullmatch(value):
+            raise ValueError(f"Unsafe SQL identifier: {value}")
+        return value
 
     async def _get_pool(self) -> asyncpg.Pool:
         if self._pool is None:
@@ -107,14 +116,14 @@ class UnifiedStateManager:
 
     async def get_state(self, file_id: str) -> FileState | None:
         pool = await self._get_pool()
-        row = await pool.fetchrow(f"SELECT * FROM {self._table} WHERE file_id = $1", file_id)
+        row = await pool.fetchrow("SELECT * FROM ingestion_state WHERE file_id = $1", file_id)
         return FileState.from_row(row) if row else None
 
     async def upsert_state(self, state: FileState) -> None:
         pool = await self._get_pool()
         await pool.execute(
-            f"""
-            INSERT INTO {self._table} (
+            """
+            INSERT INTO ingestion_state (
                 file_id, source_path, file_name, mime_type, file_size,
                 modified_time, content_hash, parser_version, chunker_version,
                 embedding_model, chunk_count, collection_name, pipeline_version,
@@ -163,8 +172,8 @@ class UnifiedStateManager:
     async def mark_processing(self, file_id: str) -> None:
         pool = await self._get_pool()
         await pool.execute(
-            f"""
-            INSERT INTO {self._table} (file_id, status, updated_at)
+            """
+            INSERT INTO ingestion_state (file_id, status, updated_at)
             VALUES ($1, 'processing', NOW())
             ON CONFLICT (file_id) DO UPDATE SET status = 'processing', updated_at = NOW()
             """,
@@ -174,8 +183,8 @@ class UnifiedStateManager:
     async def mark_indexed(self, file_id: str, chunk_count: int, content_hash: str) -> None:
         pool = await self._get_pool()
         await pool.execute(
-            f"""
-            INSERT INTO {self._table} (file_id, status, chunk_count, content_hash, indexed_at, updated_at)
+            """
+            INSERT INTO ingestion_state (file_id, status, chunk_count, content_hash, indexed_at, updated_at)
             VALUES ($1, 'indexed', $2, $3, NOW(), NOW())
             ON CONFLICT (file_id) DO UPDATE SET
                 status = 'indexed', chunk_count = $2, content_hash = $3,
@@ -191,8 +200,8 @@ class UnifiedStateManager:
         pool = await self._get_pool()
         # Exponential backoff: 1min, 5min, 30min
         await pool.execute(
-            f"""
-            UPDATE {self._table}
+            """
+            UPDATE ingestion_state
             SET status = 'error',
                 error_message = $2,
                 retry_count = retry_count + 1,
@@ -207,7 +216,7 @@ class UnifiedStateManager:
     async def mark_deleted(self, file_id: str) -> None:
         pool = await self._get_pool()
         await pool.execute(
-            f"UPDATE {self._table} SET status = 'deleted', updated_at = NOW() WHERE file_id = $1",
+            "UPDATE ingestion_state SET status = 'deleted', updated_at = NOW() WHERE file_id = $1",
             file_id,
         )
 
@@ -225,7 +234,7 @@ class UnifiedStateManager:
 
     async def get_all_indexed_file_ids(self) -> set[str]:
         pool = await self._get_pool()
-        rows = await pool.fetch(f"SELECT file_id FROM {self._table} WHERE status = 'indexed'")
+        rows = await pool.fetch("SELECT file_id FROM ingestion_state WHERE status = 'indexed'")
         return {row["file_id"] for row in rows}
 
     async def add_to_dlq(
@@ -237,8 +246,8 @@ class UnifiedStateManager:
     ) -> int:
         pool = await self._get_pool()
         row = await pool.fetchrow(
-            f"""
-            INSERT INTO {self._dlq_table} (file_id, error_type, error_message, payload)
+            """
+            INSERT INTO ingestion_dead_letter (file_id, error_type, error_message, payload)
             VALUES ($1, $2, $3, $4::jsonb) RETURNING id
             """,
             file_id,
@@ -253,13 +262,13 @@ class UnifiedStateManager:
     async def get_stats(self) -> dict[str, int]:
         pool = await self._get_pool()
         rows = await pool.fetch(
-            f"SELECT status, COUNT(*) as count FROM {self._table} GROUP BY status"
+            "SELECT status, COUNT(*) as count FROM ingestion_state GROUP BY status"
         )
         return {str(row["status"]): int(row["count"]) for row in rows}
 
     async def get_dlq_count(self) -> int:
         pool = await self._get_pool()
-        row = await pool.fetchrow(f"SELECT COUNT(*) as count FROM {self._dlq_table}")
+        row = await pool.fetchrow("SELECT COUNT(*) as count FROM ingestion_dead_letter")
         if row is None:
             return 0
         return int(row["count"])
