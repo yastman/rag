@@ -16,6 +16,23 @@ from telegram_bot.integrations.prompt_manager import get_prompt
 
 logger = logging.getLogger(__name__)
 
+_SHORT_FINANCE_QUERY_EXPANSIONS: dict[str, str] = {
+    "рассрочки": "какие варианты рассрочки при покупке квартиры",
+    "рассрочка": "какие варианты рассрочки при покупке квартиры",
+}
+
+
+def expand_short_query(query: str, *, topic_hint: str | None = None) -> str:
+    """Expand short intent queries using deterministic templates."""
+    normalized = query.strip().lower()
+    if not normalized:
+        return query
+    if topic_hint != "finance":
+        return query
+    if len(normalized.split()) > 2:
+        return query
+    return _SHORT_FINANCE_QUERY_EXPANSIONS.get(normalized, query)
+
 
 class HyDEGenerator:
     """Hypothetical Document Embeddings (HyDE) generator.
