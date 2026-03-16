@@ -145,7 +145,7 @@ async def get_lead_summary_data(dialog_manager: DialogManager, **kwargs: Any) ->
 
 async def on_lead_name_entered(
     message: Message,
-    widget: TextInput,
+    _widget: TextInput,
     manager: DialogManager,
     text: str,
 ) -> None:
@@ -156,7 +156,7 @@ async def on_lead_name_entered(
 
 async def on_lead_budget_entered(
     message: Message,
-    widget: TextInput,
+    _widget: TextInput,
     manager: DialogManager,
     text: str,
 ) -> None:
@@ -174,7 +174,7 @@ async def on_lead_budget_entered(
 
 async def on_pipeline_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -449,7 +449,7 @@ async def get_search_leads_results(dialog_manager: DialogManager, **kwargs: Any)
 
 async def on_search_leads_query(
     message: Message,
-    widget: MessageInput,
+    _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
     """Save search query and switch to results."""

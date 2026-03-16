@@ -379,7 +379,7 @@ async def generate_response(
     max_context_docs: int = _MAX_CONTEXT_DOCS,
     format_context: Callable[[list[dict[str, Any]], int], str] = _format_context,
     select_recent_history: Callable[[list[Any], int], list[Any]] = _select_recent_history,
-    build_system_prompt: Callable[[str], str] = _build_system_prompt,
+    _build_system_prompt: Callable[[str], str] = _build_system_prompt,
     ensure_history_instruction: Callable[[str], str] = _ensure_history_instruction,
     build_fallback_response: Callable[[list[dict[str, Any]]], str] = _build_fallback_response,
     generate_streaming: Callable[..., Any] = _generate_streaming,
