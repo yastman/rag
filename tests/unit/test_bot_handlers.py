@@ -3948,6 +3948,26 @@ class TestPropertyBotApartmentPipeline:
         assert hasattr(bot, "_apartment_pipeline")
         assert bot._apartment_pipeline is not None
 
+    def test_init_falls_back_when_apartment_llm_extractor_unavailable(self, mock_config):
+        """Missing optional apartment LLM deps should not crash bot initialization."""
+        with (
+            patch("telegram_bot.bot.Bot"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch.dict(
+                sys.modules,
+                {"telegram_bot.services.apartment_llm_extractor": None},
+            ),
+        ):
+            bot = PropertyBot(mock_config)
+
+        assert bot._apartment_pipeline is not None
+        assert bot._apartment_pipeline._llm is None
+
     async def test_apartment_fast_path_uses_pipeline(self, mock_config):
         """_handle_apartment_fast_path calls pipeline.extract and passes filters to search."""
         from unittest.mock import patch as _patch

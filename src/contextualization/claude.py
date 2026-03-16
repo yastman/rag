@@ -123,9 +123,13 @@ class ClaudeContextualizer(ContextualizeProvider):
             response.usage.input_tokens * 5 + response.usage.output_tokens * 15
         ) / 1_000_000
 
+        summary = _extract_claude_text(response.content)
+        if not summary.strip():
+            raise ValueError("Empty Claude response content")
+
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=_extract_claude_text(response.content),
+            contextual_summary=summary,
             article_number=article_number,
             context_method="claude",
         )
