@@ -135,7 +135,7 @@ async def get_contact_summary_data(dialog_manager: DialogManager, **kwargs: Any)
 
 async def on_first_name_entered(
     message: Message,
-    widget: TextInput,
+    _widget: TextInput,
     manager: DialogManager,
     text: str,
 ) -> None:
@@ -146,7 +146,7 @@ async def on_first_name_entered(
 
 async def on_last_name_entered(
     message: Message,
-    widget: TextInput,
+    _widget: TextInput,
     manager: DialogManager,
     text: str,
 ) -> None:
@@ -157,7 +157,7 @@ async def on_last_name_entered(
 
 async def on_phone_entered(
     message: Message,
-    widget: TextInput,
+    _widget: TextInput,
     manager: DialogManager,
     text: str,
 ) -> None:
@@ -168,7 +168,7 @@ async def on_phone_entered(
 
 async def on_email_entered(
     message: Message,
-    widget: TextInput,
+    _widget: TextInput,
     manager: DialogManager,
     text: str,
 ) -> None:
@@ -330,7 +330,7 @@ async def get_search_contacts_results(
 
 async def on_search_contacts_query(
     message: Message,
-    widget: MessageInput,
+    _widget: MessageInput,
     manager: DialogManager,
 ) -> None:
     """Save search query and switch to results."""
