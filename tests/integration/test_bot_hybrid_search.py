@@ -42,7 +42,7 @@ class TestBotHybridSearch:
         with (
             patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
-            patch("telegram_bot.bot.setup_error_middleware"),
+            patch("telegram_bot.bot.setup_error_handler"),
             patch.object(PropertyBot, "_register_handlers"),
             patch("telegram_bot.integrations.cache.CacheLayerManager"),
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
@@ -65,7 +65,7 @@ class TestBotHybridSearch:
         with (
             patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
-            patch("telegram_bot.bot.setup_error_middleware"),
+            patch("telegram_bot.bot.setup_error_handler"),
             patch.object(PropertyBot, "_register_handlers"),
             patch("telegram_bot.integrations.cache.CacheLayerManager"),
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
@@ -82,7 +82,7 @@ class TestBotHybridSearch:
         with (
             patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
-            patch("telegram_bot.bot.setup_error_middleware"),
+            patch("telegram_bot.bot.setup_error_handler"),
             patch.object(PropertyBot, "_register_handlers"),
             patch("telegram_bot.integrations.cache.CacheLayerManager"),
             patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_hybrid,
