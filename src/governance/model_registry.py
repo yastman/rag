@@ -20,7 +20,7 @@ class RAGModelRegistry:
     3. Production → Promote to production after acceptance criteria met
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Model Registry client."""
         self.client = MlflowClient()
         self.model_name = "contextual-rag-pipeline"
@@ -74,9 +74,9 @@ class RAGModelRegistry:
         print(f"✅ Registered model version: {model_version.version}")
         print(f"   Config version: {config_version}")
 
-        return model_version.version
+        return str(model_version.version)
 
-    def promote_to_staging(self, version: str):
+    def promote_to_staging(self, version: str) -> None:
         """Promote config to Staging via alias."""
         self.client.set_registered_model_alias(
             name=self.model_name, alias="challenger", version=version
@@ -84,7 +84,7 @@ class RAGModelRegistry:
 
         print(f"✅ Promoted version {version} to Staging (alias: challenger)")
 
-    def promote_to_production(self, version: str, archive_previous: bool = True):
+    def promote_to_production(self, version: str, archive_previous: bool = True) -> None:
         """
         Promote config to Production.
 
@@ -118,7 +118,7 @@ class RAGModelRegistry:
 
         print(f"🚀 Promoted version {version} to Production (alias: champion)")
 
-    def rollback_production(self, to_version: str):
+    def rollback_production(self, to_version: str) -> None:
         """Rollback production to specific version."""
         print(f"⚠️  Rolling back production to version {to_version}")
 
@@ -126,7 +126,7 @@ class RAGModelRegistry:
 
         print("✅ Rollback complete")
 
-    def get_production_config(self) -> dict:
+    def get_production_config(self) -> dict[str, object] | None:
         """Get current production config."""
         try:
             prod_version = self.client.get_model_version_by_alias(

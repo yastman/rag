@@ -36,7 +36,7 @@ from telegram_bot.services.kommo_models import (
 
 
 if TYPE_CHECKING:
-    from telegram_bot.services.kommo_token_store import KommoTokenStore
+    from telegram_bot.services.kommo_tokens import KommoTokenStoreProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ _kommo_retry = retry(
 class KommoClient:
     """Async Kommo CRM API adapter with auto-refresh OAuth2."""
 
-    def __init__(self, *, subdomain: str, token_store: KommoTokenStore):
+    def __init__(self, *, subdomain: str, token_store: KommoTokenStoreProtocol):
         subdomain = subdomain.removesuffix(".kommo.com")
         self._base_url = f"https://{subdomain}.kommo.com/api/v4"
         self._token_store = token_store
