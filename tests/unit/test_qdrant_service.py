@@ -69,6 +69,22 @@ class TestQdrantServiceQuantization:
         call_kwargs = service._client.query_points.call_args.kwargs
         assert call_kwargs.get("search_params") is None
 
+    async def test_hybrid_search_builds_topic_and_doc_type_filters(self, service):
+        """Hybrid search maps topic/doc_type filters to metadata payload keys."""
+        mock_point = _make_mock_point()
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        await service.hybrid_search_rrf(
+            dense_vector=[0.1] * 1024,
+            filters={"topic": "finance", "doc_type": "faq"},
+        )
+
+        query_filter = service._client.query_points.call_args.kwargs["query_filter"]
+        assert query_filter is not None
+        must_keys = [condition.key for condition in query_filter.must]
+        assert "metadata.topic" in must_keys
+        assert "metadata.doc_type" in must_keys
+
     async def test_quantization_params_values(self, service):
         """Test that ignore/rescore/oversampling values are correctly set."""
         mock_point = _make_mock_point()
