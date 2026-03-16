@@ -69,12 +69,17 @@ Evidence timestamp: 2026-03-16 (UTC)
 ## #858
 - Issue claim: `ignore_errors=true` masks mypy in core modules.
 - Current code evidence:
-  - Current `pyproject.toml` no longer matches old issue wording; strictness work remains.
+  - Current `pyproject.toml` no longer contains `ignore_errors = true`.
+  - Added narrow strictness pilot override:
+    - `[[tool.mypy.overrides]]`
+    - `module = "src.retrieval.topic_classifier"`
+    - `disallow_untyped_defs = true`
 - Current test evidence:
-  - Narrow mypy pilot and tests are planned in Task 11.
+  - `uv run mypy src/retrieval/topic_classifier.py src/ingestion/unified/qdrant_writer.py --ignore-missing-imports --no-error-summary` passes.
+  - `uv run pytest tests/unit/retrieval/test_topic_classifier.py -q` passes.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/858
-- Verdict: split
+  - OPEN with re-baseline comment: https://github.com/yastman/rag/issues/858#issuecomment-4067553370
+- Verdict: patch
 
 ## #728
 - Issue claim: SDK migration closure still required.
