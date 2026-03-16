@@ -394,8 +394,6 @@ async def _seed_kommo_access_token(
         REDIS_KEY,
         mapping={
             "access_token": access_token,
-            "refresh_token": "",
-            "expires_at": "0",
             "subdomain": subdomain,
         },
     )

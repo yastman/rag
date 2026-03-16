@@ -32,6 +32,13 @@ def token_store(mock_redis):
 
 
 class TestKommoTokenStore:
+    def test_seeded_kommo_token_store_accepts_missing_refresh_fields(self, token_store):
+        payload = token_store._normalize_seed_payload({"access_token": "tok"})
+
+        assert payload["access_token"] == "tok"
+        assert "refresh_token" not in payload
+        assert "expires_at" not in payload
+
     async def test_get_valid_token_from_cache(self, token_store, mock_redis):
         """Return cached token when not expired."""
         future_ts = str(int(time.time()) + 3600)
@@ -146,16 +153,16 @@ class TestKommoTokenStore:
     # --- #678 Task 3: seed_env_token method ---
 
     async def test_seed_env_token_writes_correct_mapping_to_redis(self, token_store, mock_redis):
-        """#678 Task 3: seed_env_token writes access_token, empty refresh, expires_at=0."""
+        """#678 Task 3: seed_env_token writes required access fields only."""
         await token_store.seed_env_token("env_access_token_abc")
         mock_redis.hset.assert_called_once()
         call_args = mock_redis.hset.call_args
         assert call_args[0][0] == "kommo:oauth:tokens"
         mapping = call_args[1]["mapping"]
         assert mapping["access_token"] == "env_access_token_abc"
-        assert mapping["refresh_token"] == ""
-        assert mapping["expires_at"] == "0"
         assert mapping["subdomain"] == "testcompany"
+        assert "refresh_token" not in mapping
+        assert "expires_at" not in mapping
 
     async def test_get_valid_token_after_seed_env_token_returns_seeded_token(
         self, token_store, mock_redis
