@@ -6,10 +6,10 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 
 | File | Scope | Typical use |
 | --- | --- | --- |
-| `docker-compose.dev.yml` | Full development stack with profiles | Local development and integration testing |
-| `docker-compose.vps.yml` | VPS production-like stack | Server deployment and operations |
+| `compose.dev.yml` | Full development stack with profiles | Local development and integration testing |
+| `compose.vps.yml` | VPS production-like stack | Server deployment and operations |
 
-## Compose Profiles (`docker-compose.dev.yml`)
+## Compose Profiles (`compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:
 - `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `docling`
@@ -109,11 +109,11 @@ curl -fsS http://localhost:9093/-/healthy
 ```bash
 # Logs
 make monitoring-logs
-docker compose --compatibility -f docker-compose.dev.yml logs -f bot litellm qdrant
+docker compose --compatibility -f compose.dev.yml logs -f bot litellm qdrant
 
 # Rebuild selected services
-docker compose --compatibility -f docker-compose.dev.yml build bot litellm bge-m3
-docker compose --compatibility -f docker-compose.dev.yml up -d --force-recreate bot litellm bge-m3
+docker compose --compatibility -f compose.dev.yml build bot litellm bge-m3
+docker compose --compatibility -f compose.dev.yml up -d --force-recreate bot litellm bge-m3
 
 # Image drift check against compose-pinned images
 make verify-compose-images
@@ -123,4 +123,5 @@ make verify-compose-images
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
-- Local and profile workflows use the same canonical file: `docker-compose.dev.yml`.
+- Local and profile workflows use the same canonical file: `compose.dev.yml`.
+- VPS rehearsal/cutover flow is documented in `docs/runbooks/vps-rag-ready.md`.
