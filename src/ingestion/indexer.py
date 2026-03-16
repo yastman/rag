@@ -15,10 +15,12 @@ from qdrant_client.models import (
     MultiVectorComparator,
     MultiVectorConfig,
     OptimizersConfigDiff,
+    PayloadSchemaType,
     PointStruct,
     ScalarQuantization,
     ScalarQuantizationConfig,
     ScalarType,
+    SparseVector,
     SparseVectorParams,
     VectorParams,
 )
@@ -163,13 +165,13 @@ class DocumentIndexer:
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.article_number",
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
 
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.document_name",
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
 
             # CSV structured data indexes (for filtering apartments)
@@ -177,20 +179,20 @@ class DocumentIndexer:
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.city",
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
 
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.source_type",
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
 
             # Small-to-big: index order field for neighbor chunk queries
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.order",
-                field_schema="integer",
+                field_schema=PayloadSchemaType.INTEGER,
             )
 
             # Numeric fields - enable range filtering (price < 100000, rooms >= 2, etc.)
@@ -206,7 +208,7 @@ class DocumentIndexer:
                 self.client.create_payload_index(
                     collection_name=collection_name,
                     field_name=f"metadata.{field}",
-                    field_schema="integer",
+                    field_schema=PayloadSchemaType.INTEGER,
                 )
 
             # Boolean fields
@@ -214,7 +216,7 @@ class DocumentIndexer:
                 self.client.create_payload_index(
                     collection_name=collection_name,
                     field_name=f"metadata.{field}",
-                    field_schema="bool",
+                    field_schema=PayloadSchemaType.BOOL,
                 )
 
             print(f"✓ Created payload indexes for {collection_name}")
@@ -280,6 +282,8 @@ class DocumentIndexer:
                 # Convert sparse dict to lists for Qdrant
                 sparse_indices = list(emb["lexical_weights"].keys())
                 sparse_values = list(emb["lexical_weights"].values())
+                dense_vector = [float(v) for v in emb["dense_vecs"].tolist()]
+                colbert_vector = [[float(v) for v in row] for row in emb["colbert_vecs"].tolist()]
 
                 # Build metadata dict
                 # doc_id and chunk_order are explicit aliases for small-to-big retrieval
@@ -301,12 +305,12 @@ class DocumentIndexer:
                 point = PointStruct(
                     id=str(uuid.uuid4()),
                     vector={
-                        "dense": emb["dense_vecs"].tolist(),
-                        "colbert": emb["colbert_vecs"].tolist(),
-                        "bm42": {  # BGE-M3 sparse (learned, better than BM25)
-                            "indices": sparse_indices,
-                            "values": sparse_values,
-                        },
+                        "dense": dense_vector,
+                        "colbert": colbert_vector,
+                        "bm42": SparseVector(
+                            indices=[int(v) for v in sparse_indices],
+                            values=[float(v) for v in sparse_values],
+                        ),
                     },
                     payload={
                         "page_content": chunk.text,  # n8n expects this field
@@ -386,7 +390,7 @@ class DocumentIndexer:
             return {
                 "name": collection_name,
                 "points_count": info.points_count,
-                "vectors_count": info.vectors_count,
+                "vectors_count": getattr(info, "vectors_count", info.indexed_vectors_count),
                 "indexed_vectors_count": info.indexed_vectors_count,
                 "segment_count": len(info.segments) if hasattr(info, "segments") else 0,
             }
