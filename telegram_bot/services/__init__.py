@@ -67,6 +67,8 @@ _IMPORT_MAP = {
     "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
+    # Compatibility-only export: deprecated, intentionally not in __all__.
+    "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "PipelineMetrics": ".metrics",
     "QdrantService": ".qdrant",
