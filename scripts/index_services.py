@@ -19,7 +19,9 @@ DEFAULT_SERVICES_PATH = Path("telegram_bot/config/services.yaml")
 def load_services(services_path: Path) -> list[tuple[str, dict]]:
     data = yaml.safe_load(services_path.read_text(encoding="utf-8")) or {}
     services = data.get("services", {})
-    return [(key, value) for key, value in services.items() if value.get("card_text")]
+    return [
+        (key, value) for key, value in services.items() if str(value.get("card_text", "")).strip()
+    ]
 
 
 def build_service_chunks(services_path: Path) -> list[tuple[str, Chunk]]:
