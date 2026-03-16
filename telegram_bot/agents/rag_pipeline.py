@@ -24,6 +24,7 @@ from typing import Any
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.query_preprocessor import expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
     check_semantic_cache,
@@ -581,6 +582,26 @@ async def _rewrite_query(
     Returns dict with rewritten_query, rewrite_count, rewrite_effective, and latency.
     """
     t0 = time.perf_counter()
+    topic_hint = get_query_topic_hint(query)
+    expanded_query = expand_short_query(
+        query,
+        topic_hint=topic_hint.value if topic_hint is not None else None,
+    )
+    if expanded_query != query:
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            "rewrite: deterministic expansion '%s' → '%s' (%.3fs)",
+            query,
+            expanded_query,
+            elapsed,
+        )
+        return {
+            "rewritten_query": expanded_query,
+            "rewrite_count": rewrite_count + 1,
+            "rewrite_effective": True,
+            "rewrite_provider_model": "deterministic_short_query_expansion",
+            "latency_stages": {**latency_stages, "rewrite": elapsed},
+        }
 
     try:
         from telegram_bot.graph.config import GraphConfig
