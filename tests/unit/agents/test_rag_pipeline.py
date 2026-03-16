@@ -424,6 +424,20 @@ async def test_rerank_uses_cache_hit(mock_reranker):
     mock_reranker.rerank.assert_not_awaited()
 
 
+async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
+    from telegram_bot.agents.rag_pipeline import _rerank
+
+    docs = [
+        {"score": 1.0, "text": "finance faq"},
+        {"score": 0.95, "text": "finance note"},
+        {"score": 0.52, "text": "ВНЖ"},
+    ]
+    result = await _rerank("рассрочки", docs, reranker=None, latency_stages={})
+
+    assert len(result["documents"]) == 2
+    assert all("ВНЖ" not in d["text"] for d in result["documents"])
+
+
 # ---------------------------------------------------------------------------
 # _rewrite_query tests
 # ---------------------------------------------------------------------------
