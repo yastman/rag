@@ -81,19 +81,29 @@ class KommoTokenStore:
         """Seed Redis with a manually-provided access token when no OAuth flow ran yet.
 
         Used on first startup when only KOMMO_ACCESS_TOKEN env var is available.
-        Stores empty refresh_token and expires_at=0 so get_valid_token() returns
-        the token as-is (no refresh attempted) until a proper OAuth exchange occurs.
+        Stores only required fields so get_valid_token() can return the token as-is
+        (no refresh attempted) until a proper OAuth exchange occurs.
         """
+        payload = self._normalize_seed_payload({"access_token": access_token})
         await self._redis.hset(
             REDIS_KEY,
-            mapping={
-                "access_token": access_token,
-                "refresh_token": "",
-                "expires_at": "0",
-                "subdomain": self._subdomain,
-            },
+            mapping=payload,
         )
         logger.info("Kommo access token seeded from env var (subdomain=%s)", self._subdomain)
+
+    def _normalize_seed_payload(self, payload: dict[str, str]) -> dict[str, str]:
+        access_token = str(payload.get("access_token", "")).strip()
+        if not access_token:
+            msg = "Kommo seed payload requires non-empty access_token."
+            raise RuntimeError(msg)
+        normalized: dict[str, str] = {"access_token": access_token, "subdomain": self._subdomain}
+        refresh_token = str(payload.get("refresh_token", "")).strip()
+        if refresh_token:
+            normalized["refresh_token"] = refresh_token
+        expires_at = str(payload.get("expires_at", "")).strip()
+        if expires_at:
+            normalized["expires_at"] = expires_at
+        return normalized
 
     async def force_refresh(self) -> str:
         """Force token refresh (e.g. after 401)."""

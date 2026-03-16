@@ -291,7 +291,7 @@ class BGEM3Client:
             }
         )
         if not texts:
-            lf.update_current_span(output={"colbert_count": 0, "token_vectors": 0})
+            lf.update_current_span(output={"colbert_count": 0, "colbert_vector_count": 0})
             return ColbertResult(colbert_vecs=[])
         client = self._get_client()
         resp = await client.post(
@@ -307,7 +307,7 @@ class BGEM3Client:
         lf.update_current_span(
             output={
                 "colbert_count": len(result.colbert_vecs),
-                "token_vectors": len(result.colbert_vecs[0]) if result.colbert_vecs else 0,
+                "colbert_vector_count": len(result.colbert_vecs[0]) if result.colbert_vecs else 0,
                 "processing_time": result.processing_time,
             }
         )
