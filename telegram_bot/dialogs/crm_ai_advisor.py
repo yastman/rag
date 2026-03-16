@@ -69,7 +69,7 @@ async def _fetch_advisor_result(
 
 async def on_advisor_action(
     callback: CallbackQuery,
-    widget: Any,
+    _widget: Any,
     manager: DialogManager,
     item_id: str,
 ) -> None:
