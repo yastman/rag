@@ -37,14 +37,13 @@ class UnifiedConfig:
     )
 
     # Docling
+    docling_backend: str = field(
+        default_factory=lambda: os.getenv("DOCLING_BACKEND", "docling_http")
+    )
     docling_url: str = field(
         default_factory=lambda: os.getenv("DOCLING_URL", "http://localhost:5001")
     )
     docling_timeout: float = 300.0
-    docling_backend: str = field(default_factory=lambda: os.getenv("DOCLING_BACKEND", "http"))
-    docling_native_enabled: bool = field(
-        default_factory=lambda: os.getenv("DOCLING_NATIVE_ENABLED", "false").lower() == "true"
-    )
     max_tokens_per_chunk: int = 512
 
     # Voyage
@@ -73,6 +72,14 @@ class UnifiedConfig:
     supported_extensions: frozenset[str] = frozenset(
         {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
     )
+
+    def __post_init__(self) -> None:
+        """Validate config values that must stay within known rollout paths."""
+        if self.docling_backend not in {"docling_http", "docling_native"}:
+            raise ValueError(
+                "DOCLING_BACKEND must be 'docling_http' or 'docling_native', "
+                f"got {self.docling_backend!r}"
+            )
 
     def effective_manifest_dir(self) -> Path:
         """Return writable directory for manifest storage.
