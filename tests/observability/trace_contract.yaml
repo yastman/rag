@@ -130,7 +130,6 @@ spans:
     - service-generate-response
     - detect-response-style
     - get-prompt
-    - kommo-token-get
     - kommo-token-refresh
     - colbert-rerank
     - session-summary-check
@@ -143,6 +142,48 @@ spans:
     - search-event-append
     - search-event-get-user
     - demo-search
+
+  runtime_coverage:
+    - apartments-count
+    - apartments-scroll
+    - apartment-filter-parse
+    - advisor-llm-call
+    - session-summary-generate
+    - nurturing-llm-generate
+    - cmd-start
+    - cmd-clear
+    - cmd-clearcache
+    - cmd-call
+    - menu-router
+    - menu-search
+    - menu-services
+    - menu-viewing
+    - menu-bookmarks
+    - menu-ask
+    - menu-manager
+    - cb-ask
+    - cb-service
+    - cb-cta
+    - cb-favorite
+    - cb-results
+    - cb-card
+    - cb-feedback
+    - cb-feedback-reason
+    - cb-clearcache
+    - edge-route-cache
+    - edge-route-grade
+    - edge-route-guard
+    - edge-route-query-type
+    - edge-route-start
+    - dialog-crm-create-note
+    - dialog-crm-create-contact
+    - dialog-crm-create-task
+    - dialog-crm-create-lead
+    - dialog-funnel-search
+    - phone-lead-capture
+    - demo-transcribe-voice
+    - crm-quick-complete
+    - crm-quick-note
 
   kommo_client:
     - kommo-create-lead
@@ -243,9 +284,46 @@ sensitive_spans:
   - service-generate-response
   - detect-response-style
   - get-prompt
-  - kommo-token-get
   - kommo-token-refresh
   - apartments-hybrid-search
+  - apartments-scroll
+  - apartment-filter-parse
+  - apartment-extraction-pipeline
+  - apartment-llm-extract
+  - advisor-llm-call
+  - session-summary-generate
+  - nurturing-llm-generate
+  # bot command/menu/callback flows
+  - cmd-start
+  - cmd-clear
+  - cmd-clearcache
+  - cmd-call
+  - menu-router
+  - menu-search
+  - menu-services
+  - menu-viewing
+  - menu-bookmarks
+  - menu-ask
+  - menu-manager
+  - cb-ask
+  - cb-service
+  - cb-cta
+  - cb-favorite
+  - cb-results
+  - cb-card
+  - cb-feedback
+  - cb-feedback-reason
+  - cb-clearcache
+  # dialog/handler spans with capture disabled
+  - dialog-crm-create-note
+  - dialog-crm-create-contact
+  - dialog-funnel-search
+  - dialog-crm-create-task
+  - dialog-crm-create-lead
+  - phone-lead-capture
+  - demo-search
+  - crm-quick-complete
+  - crm-quick-note
   # voice + api entry points
   - voice-session
   - rag-api-query
