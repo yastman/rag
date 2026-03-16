@@ -17,6 +17,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pymupdf  # PyMuPDF 1.26+ (NOT fitz!)
 from docling.document_converter import DocumentConverter
@@ -33,9 +34,9 @@ class ParsedDocument:
     title: str
     content: str
     num_pages: int | None = None
-    metadata: dict = None
+    metadata: dict[str, Any] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Initialize metadata if None."""
         if self.metadata is None:
             self.metadata = {}
@@ -50,8 +51,8 @@ class ParserCache:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_file_hash(self, filepath: Path) -> str:
-        """Calculate MD5 hash of file."""
-        md5 = hashlib.md5()
+        """Calculate a non-cryptographic MD5 hash for parser cache keys."""
+        md5 = hashlib.md5(usedforsecurity=False)
         with open(filepath, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
                 md5.update(chunk)
@@ -136,7 +137,7 @@ class UniversalDocumentParser:
             raise FileNotFoundError(f"File not found: {filepath}")
 
         # Check cache first
-        if self.use_cache:
+        if self.use_cache and self.cache is not None:
             cached_content = self.cache.get(filepath)
             if cached_content:
                 return ParsedDocument(
@@ -157,7 +158,7 @@ class UniversalDocumentParser:
             raise ValueError(f"Unsupported format: {ext}. Supported: PDF, DOCX, CSV, XLSX")
 
         # Cache result
-        if self.use_cache:
+        if self.use_cache and self.cache is not None:
             self.cache.set(filepath, doc.content)
 
         return doc

@@ -113,6 +113,33 @@ class TestHandleError:
         # Neither path should have triggered answer()
         mock_answer.assert_not_called()
 
+    async def test_updates_langfuse_span_status_when_trace_active(self) -> None:
+        """Active traces should mark the current span as failed for observability."""
+        from telegram_bot.middlewares.error_handler import handle_error
+
+        mock_update = MagicMock()
+        mock_update.message = None
+        mock_update.callback_query = None
+
+        mock_event = MagicMock()
+        mock_event.exception = RuntimeError("span failure")
+        mock_event.update = mock_update
+
+        mock_lf = MagicMock(spec=["get_current_trace_id", "update_current_span"])
+        mock_lf.get_current_trace_id.return_value = "trace-123"
+        mock_lf.update_current_span = MagicMock()
+
+        with (
+            patch("telegram_bot.observability.get_client", return_value=mock_lf),
+            patch("telegram_bot.middlewares.error_handler.logger"),
+        ):
+            await handle_error(mock_event)
+
+        mock_lf.update_current_span.assert_called_once()
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
+        assert call_kwargs["level"] == "ERROR"
+        assert call_kwargs["status_message"] == "RuntimeError: span failure"
+
 
 class TestSetupErrorHandler:
     """Tests for setup_error_handler registration."""
