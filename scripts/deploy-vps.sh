@@ -8,11 +8,15 @@
 #   --dry-run       Show what would happen, no changes made
 #   --clean         Full reinstall: down -v, prune images/builder, then deploy
 #   --skip-checks   Skip pre-deploy make check validation
+#   --core-only     Deploy only core RAG services (postgres/redis/qdrant/bge-m3/litellm/bot)
+#   --verify        Run VPS RAG preflight after deploy
 #   -h, --help      Show this help message
 #
 # Examples:
 #   ./scripts/deploy-vps.sh                    # Standard deploy
 #   ./scripts/deploy-vps.sh --clean            # Full reinstall from scratch
+#   ./scripts/deploy-vps.sh --core-only        # Deploy only core services
+#   ./scripts/deploy-vps.sh --core-only --verify
 #   ./scripts/deploy-vps.sh --dry-run          # Show what would happen
 #   ./scripts/deploy-vps.sh --skip-checks      # Skip lint/type checks
 
@@ -50,7 +54,7 @@ info()  { echo -e "${CYAN}[INFO]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
 usage() {
-    sed -n '3,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
 }
 
@@ -65,12 +69,16 @@ ssh_cmd() {
 DRY_RUN=false
 CLEAN=false
 SKIP_CHECKS=false
+CORE_ONLY=false
+VERIFY=false
 
 for arg in "$@"; do
     case "$arg" in
         --dry-run)      DRY_RUN=true ;;
         --clean)        CLEAN=true ;;
         --skip-checks)  SKIP_CHECKS=true ;;
+        --core-only)    CORE_ONLY=true ;;
+        --verify)       VERIFY=true ;;
         -h|--help)      usage ;;
         *) error "Unknown argument: $arg. Use --help for usage." ;;
     esac
@@ -78,6 +86,8 @@ done
 
 $DRY_RUN  && warn "Dry run mode — no changes will be made"
 $CLEAN    && warn "Clean mode — full reinstall (down -v + image prune)"
+$CORE_ONLY && warn "Core-only mode — deploying: postgres redis qdrant bge-m3 litellm bot"
+$VERIFY   && warn "Verify mode — will run scripts/vps_rag_preflight.py after deploy"
 
 # =============================================================================
 # Pre-flight checks
@@ -85,9 +95,9 @@ $CLEAN    && warn "Clean mode — full reinstall (down -v + image prune)"
 [[ -f "$VPS_KEY" ]] || error "SSH key not found: $VPS_KEY"
 
 # Verify VPS has COMPOSE_FILE in .env
-log "Checking VPS .env for COMPOSE_FILE..."
-if ! ssh_cmd "grep -q '^COMPOSE_FILE=' ${VPS_DIR}/.env 2>/dev/null"; then
-    error "VPS .env missing COMPOSE_FILE. Add: COMPOSE_FILE=compose.yml:compose.vps.yml"
+log "Checking VPS .env for COMPOSE_FILE=compose.yml:compose.vps.yml..."
+if ! ssh_cmd "grep -q '^COMPOSE_FILE=compose.yml:compose.vps.yml$' ${VPS_DIR}/.env 2>/dev/null"; then
+    error "VPS .env must contain exact value: COMPOSE_FILE=compose.yml:compose.vps.yml"
 fi
 
 # =============================================================================
@@ -171,27 +181,55 @@ if $CLEAN; then
 fi
 
 # =============================================================================
-# Step 4: Build images on VPS
+# Step 4: Validate docker compose config on VPS
 # =============================================================================
-log "Building Docker images on VPS..."
+log "Validating docker compose config on VPS..."
 if ! $DRY_RUN; then
-    ssh_cmd "cd ${VPS_DIR} && docker compose build"
+    ssh_cmd "cd ${VPS_DIR} && docker compose config >/dev/null"
 else
-    info "[dry-run] Would run: docker compose build"
+    info "[dry-run] Would run: docker compose config >/dev/null"
 fi
 
 # =============================================================================
-# Step 5: Start services
+# Step 5: Build images on VPS
+# =============================================================================
+log "Building Docker images on VPS..."
+CORE_SERVICES=(postgres redis qdrant bge-m3 litellm bot)
+CORE_SERVICES_ARGS="${CORE_SERVICES[*]}"
+if ! $DRY_RUN; then
+    if $CORE_ONLY; then
+        ssh_cmd "cd ${VPS_DIR} && docker compose build ${CORE_SERVICES_ARGS}"
+    else
+        ssh_cmd "cd ${VPS_DIR} && docker compose build"
+    fi
+else
+    if $CORE_ONLY; then
+        info "[dry-run] Would run: docker compose build ${CORE_SERVICES_ARGS}"
+    else
+        info "[dry-run] Would run: docker compose build"
+    fi
+fi
+
+# =============================================================================
+# Step 6: Start services
 # =============================================================================
 log "Starting services..."
 if ! $DRY_RUN; then
-    ssh_cmd "cd ${VPS_DIR} && docker compose --compatibility up -d"
+    if $CORE_ONLY; then
+        ssh_cmd "cd ${VPS_DIR} && docker compose --compatibility up -d ${CORE_SERVICES_ARGS}"
+    else
+        ssh_cmd "cd ${VPS_DIR} && docker compose --compatibility up -d"
+    fi
 else
-    info "[dry-run] Would run: docker compose --compatibility up -d"
+    if $CORE_ONLY; then
+        info "[dry-run] Would run: docker compose --compatibility up -d ${CORE_SERVICES_ARGS}"
+    else
+        info "[dry-run] Would run: docker compose --compatibility up -d"
+    fi
 fi
 
 # =============================================================================
-# Step 6: Health check
+# Step 7: Health check
 # =============================================================================
 log "Verifying running containers..."
 if ! $DRY_RUN; then
@@ -200,6 +238,18 @@ if ! $DRY_RUN; then
         || warn "No VPS containers found in docker ps output"
 else
     info "[dry-run] Would run: docker ps --format 'table ...' | grep vps"
+fi
+
+# =============================================================================
+# Step 8: Optional VPS preflight verification
+# =============================================================================
+if $VERIFY; then
+    log "Running VPS RAG preflight verification..."
+    if ! $DRY_RUN; then
+        uv run python scripts/vps_rag_preflight.py --host vps --project-dir /opt/rag-fresh
+    else
+        info "[dry-run] Would run: uv run python scripts/vps_rag_preflight.py --host vps --project-dir /opt/rag-fresh"
+    fi
 fi
 
 log "Deploy complete!"

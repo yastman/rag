@@ -506,7 +506,7 @@ local-build:  ## Rebuild local Docker services
 # Deployment
 # =============================================================================
 
-.PHONY: deploy-code deploy-release deploy-bot
+.PHONY: deploy-code deploy-release deploy-bot deploy-vps-core deploy-vps-verify
 
 deploy-code:  ## Quick deploy (git pull only)
 	git tag -d deploy-code 2>/dev/null || true
@@ -531,6 +531,12 @@ deploy-bot:  ## Deploy all services to VPS (git push + SSH rebuild)
 	@sleep 20
 	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep -E 'vps-.*(Up|healthy)'"
 	@echo "$(GREEN)✓ Deploy complete$(NC)"
+
+deploy-vps-core: ## Manual VPS deploy for core RAG services only
+	@./scripts/deploy-vps.sh --core-only
+
+deploy-vps-verify: ## Manual VPS deploy for core services + remote preflight
+	@./scripts/deploy-vps.sh --core-only --verify
 
 # =============================================================================
 # E2E TESTING
