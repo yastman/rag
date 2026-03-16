@@ -240,6 +240,8 @@ make test-unit   # Unit tests (parallel via pytest-xdist)
 | [Local Development](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation guide |
 | [Qdrant Stack](docs/QDRANT_STACK.md) | Vector collections, schema, operations |
 | [Ingestion Runbook](docs/INGESTION.md) | Unified ingestion guide and troubleshooting |
+| [SDK Migration Audit](docs/SDK_MIGRATION_AUDIT_2026-03-13.md) | Canonical SDK keeper stack and bounded follow-up work |
+| [SDK Migration Roadmap](docs/SDK_MIGRATION_ROADMAP_2026-03-13.md) | Post-audit execution order and guardrails |
 | [Alerting](docs/ALERTING.md) | Loki/Alertmanager setup |
 
 ---
