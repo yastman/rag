@@ -4,6 +4,11 @@ Date: 2026-03-15
 Branch: `review/project-dev`
 Status: canonical execution plan derived from repository review plus historical local SDK plan artifacts
 
+## Status Note (2026-03-16)
+
+PR #972 merged the active SDK realignment work into `dev`. Remaining work is issue-state
+reconciliation and follow-up decomposition, not another broad migration stream.
+
 ## Precedence
 
 This file is the canonical execution plan for SDK-first cleanup and bounded SDK adoption on this branch.
