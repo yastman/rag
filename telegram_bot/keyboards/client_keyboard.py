@@ -62,15 +62,17 @@ def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
         translator = None
         try:
             translator = i18n_hub.get_translator_by_locale(locale)
-        except (AttributeError, TypeError):
+        except Exception:
             logger.debug("Failed to load translator for locale=%s", locale, exc_info=True)
         if translator is None:
             continue
         for ftl_key in _ACTION_IDS:
             try:
                 translated_labels.append(translator.get(ftl_key))
-            except (AttributeError, TypeError):
-                logger.debug("Malformed translation for locale=%s key=%s", locale, ftl_key)
+            except Exception:
+                logger.debug(
+                    "Malformed translation for locale=%s key=%s", locale, ftl_key, exc_info=True
+                )
     texts.update(collect_client_menu_texts(translated_labels))
     return texts
 
