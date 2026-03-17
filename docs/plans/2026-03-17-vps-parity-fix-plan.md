@@ -522,6 +522,8 @@ Run it manually on VPS first and confirm the current workflow does not yet provi
 
 Update `.github/workflows/ci.yml` so deploy verification executes the stronger smoke check after `docker compose up -d`.
 
+Use strict mini-app smoke in release-critical callers (`REQUIRE_MINI_APP_ENDPOINT=true`) so deploy reports fail until VPS parity is fixed.
+
 **Step 3: Verify the workflow logic locally where possible**
 
 Run shell commands equivalent to the workflow’s SSH script against VPS.
