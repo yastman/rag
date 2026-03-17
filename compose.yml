@@ -319,7 +319,6 @@ services:
     build:
       context: .
       dockerfile: mini_app/Dockerfile
-    profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -362,7 +361,6 @@ services:
     build:
       context: ./mini_app/frontend
       dockerfile: Dockerfile
-    profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
     depends_on:
