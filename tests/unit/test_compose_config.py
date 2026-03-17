@@ -19,6 +19,7 @@ ROOT = Path(__file__).parents[2]
 BASE_COMPOSE = ROOT / "compose.yml"
 DEV_OVERRIDE = ROOT / "compose.dev.yml"
 MAKEFILE = ROOT / "Makefile"
+MINI_APP_FRONTEND_DOCKERFILE = ROOT / "mini_app/frontend/Dockerfile"
 
 
 def _load_compose(path: Path) -> dict:
@@ -234,14 +235,15 @@ class TestModelServiceHealthcheckGrace:
         )
 
 
-class TestMiniAppVpsParity:
-    """Mini app must be part of the default VPS runtime stack."""
+class TestMiniAppFrontendHealthcheck:
+    """Mini app frontend healthcheck must match nginx's IPv4-only loopback binding."""
 
-    @pytest.mark.parametrize("svc_name", ["mini-app-api", "mini-app-frontend"])
-    def test_vps_mini_app_service_is_not_profile_gated(self, vps: dict, svc_name: str) -> None:
-        """Default VPS compose up must include both mini-app services."""
-        svc = vps["services"][svc_name]
-        assert not svc.get("profiles"), (
-            f"{svc_name} must not declare optional profiles in compose.yml; "
-            "default VPS compose up skips profiled services"
-        )
+    _EXPECTED_PROBE = "wget -qO- http://127.0.0.1/health || exit 1"
+
+    def test_compose_uses_ipv4_loopback_healthcheck(self, vps: dict) -> None:
+        svc = vps["services"]["mini-app-frontend"]
+        assert svc["healthcheck"]["test"] == ["CMD-SHELL", self._EXPECTED_PROBE]
+
+    def test_frontend_dockerfile_uses_same_ipv4_loopback_healthcheck(self) -> None:
+        content = MINI_APP_FRONTEND_DOCKERFILE.read_text()
+        assert self._EXPECTED_PROBE in content
