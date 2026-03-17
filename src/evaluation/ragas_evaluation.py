@@ -31,11 +31,12 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from datasets import Dataset
 from openai import OpenAI
 from ragas import evaluate
+from ragas.dataset_schema import EvaluationResult
 from ragas.llms import llm_factory
 
 # RAGAS v0.4+ API - use ragas.metrics.collections instead of deprecated ragas.metrics
@@ -45,8 +46,6 @@ from ragas.metrics.collections import (
     ContextRecall,
     Faithfulness,
 )
-
-from src.evaluation.mlflow_integration import MLflowRAGLogger
 
 
 # Expose metric factories for testing (patched in unit tests)
@@ -74,6 +73,20 @@ CONTEXT_PRECISION_THRESHOLD = 0.80
 CONTEXT_RECALL_THRESHOLD = 0.90
 ANSWER_RELEVANCY_THRESHOLD = 0.80
 MAX_EVAL_SAMPLES = 50
+
+
+def _metric_mean(result: EvaluationResult, metric_name: str) -> float:
+    """Return mean value for a RAGAS metric over evaluated samples."""
+    values = result[metric_name]
+    if values is None:
+        return 0.0
+    if isinstance(values, (int, float)):
+        return float(values)
+
+    value_list = [float(v) for v in values]
+    if not value_list:
+        return 0.0
+    return float(sum(value_list) / len(value_list))
 
 
 def _get_evaluator_llm():
@@ -218,12 +231,11 @@ class RAGASEvaluator:
 
     def __init__(self, experiment_name: str = "ragas_quality_baseline"):
         """
-        Initialize RAGAS evaluator with MLflow and Langfuse tracking.
+        Initialize RAGAS evaluator with Langfuse tracking.
 
         Args:
-            experiment_name: MLflow experiment name
+            experiment_name: Reserved for backward compatibility
         """
-        self.mlflow_logger = MLflowRAGLogger(experiment_name=experiment_name)
         self.langfuse_client = _get_langfuse_client()
 
         # Get evaluator LLM via LiteLLM
@@ -307,15 +319,15 @@ class RAGASEvaluator:
         # Run RAGAS evaluation
         print("   Running RAGAS evaluation...")
         start_time = datetime.now()
-        ragas_results = evaluate(dataset, metrics=self.metrics)
+        ragas_results = cast(EvaluationResult, evaluate(dataset, metrics=self.metrics))
         eval_duration = (datetime.now() - start_time).total_seconds()
 
         # Extract metrics
         metrics = {
-            "faithfulness": float(ragas_results["faithfulness"]),
-            "context_precision": float(ragas_results["context_precision"]),
-            "context_recall": float(ragas_results["context_recall"]),
-            "answer_relevancy": float(ragas_results["answer_relevancy"]),
+            "faithfulness": _metric_mean(ragas_results, "faithfulness"),
+            "context_precision": _metric_mean(ragas_results, "context_precision"),
+            "context_recall": _metric_mean(ragas_results, "context_recall"),
+            "answer_relevancy": _metric_mean(ragas_results, "answer_relevancy"),
             "eval_duration_seconds": eval_duration,
             "queries_evaluated": len(results),
         }
@@ -328,20 +340,6 @@ class RAGASEvaluator:
         trace_id = _log_ragas_scores_to_langfuse(self.langfuse_client, metrics, session_id)
         if trace_id:
             print(f"   Langfuse trace: {trace_id}")
-
-        # Log to MLflow
-        run_name = f"ragas_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        with self.mlflow_logger.start_run(
-            run_name=run_name,
-            tags={"evaluation_type": "ragas", "dataset": dataset_path.name},
-        ):
-            self.mlflow_logger.log_metrics(metrics)
-            self.mlflow_logger.log_dict_artifact(
-                {"results": results, "metrics": metrics},
-                "ragas_evaluation.json",
-                artifact_path="ragas",
-            )
-            print(f"   MLflow run: {self.mlflow_logger.get_run_url()}")
 
         # Check acceptance criteria
         self._check_acceptance(metrics)

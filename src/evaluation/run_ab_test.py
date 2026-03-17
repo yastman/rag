@@ -23,16 +23,6 @@ from src.evaluation.evaluator import SearchEvaluator
 from src.evaluation.search_engines import create_search_engine
 
 
-# MLflow integration (optional - gracefully handles if not available)
-try:
-    from mlflow_integration import MLflowRAGLogger
-
-    MLFLOW_AVAILABLE = True
-except ImportError:
-    MLFLOW_AVAILABLE = False
-    print("⚠️  MLflow integration not available (install mlflow to enable)")
-
-
 def run_ab_test(
     queries_file: str,
     ground_truth_file: str,
@@ -333,99 +323,6 @@ def run_ab_test(
     )
     print(f"   ✓ Markdown report: {markdown_file}")
     print()
-
-    # Log to MLflow (if available)
-    if MLFLOW_AVAILABLE:
-        print("=" * 80)
-        print("📊 PHASE 9: Logging to MLflow")
-        print("=" * 80)
-        try:
-            logger = MLflowRAGLogger(experiment_name="contextual_rag_ab_tests")
-
-            # Create run name from timestamp
-            run_name = f"ab_test_{timestamp}"
-
-            with logger.start_run(
-                run_name=run_name, tags={"type": "ab_test", "collection": collection_name}
-            ):
-                # Log common config
-                common_config = {
-                    "collection": collection_name,
-                    "total_queries": len(queries),
-                    "model": "BAAI/bge-m3",
-                    "model_load_time_sec": load_time,
-                }
-                logger.log_config(common_config, prefix="experiment.")
-
-                # Log baseline metrics
-                baseline_metrics = {
-                    "baseline.recall_at_1": baseline_eval["metrics"].get("recall@1", 0),
-                    "baseline.recall_at_10": baseline_eval["metrics"].get("recall@10", 0),
-                    "baseline.ndcg_at_10": baseline_eval["metrics"].get("ndcg@10", 0),
-                    "baseline.mrr": baseline_eval["metrics"].get("mrr", 0),
-                    "baseline.failure_rate": baseline_eval["metrics"].get("failure_rate", 0),
-                    "baseline.search_time_total_sec": baseline_time,
-                    "baseline.search_time_avg_sec": baseline_time / len(queries),
-                }
-
-                # Log hybrid metrics
-                hybrid_metrics = {
-                    "hybrid.recall_at_1": hybrid_eval["metrics"].get("recall@1", 0),
-                    "hybrid.recall_at_10": hybrid_eval["metrics"].get("recall@10", 0),
-                    "hybrid.ndcg_at_10": hybrid_eval["metrics"].get("ndcg@10", 0),
-                    "hybrid.mrr": hybrid_eval["metrics"].get("mrr", 0),
-                    "hybrid.failure_rate": hybrid_eval["metrics"].get("failure_rate", 0),
-                    "hybrid.search_time_total_sec": hybrid_time,
-                    "hybrid.search_time_avg_sec": hybrid_time / len(queries),
-                }
-
-                # Log DBSF+ColBERT metrics
-                dbsf_metrics = {
-                    "dbsf_colbert.recall_at_1": dbsf_eval["metrics"].get("recall@1", 0),
-                    "dbsf_colbert.recall_at_10": dbsf_eval["metrics"].get("recall@10", 0),
-                    "dbsf_colbert.ndcg_at_10": dbsf_eval["metrics"].get("ndcg@10", 0),
-                    "dbsf_colbert.mrr": dbsf_eval["metrics"].get("mrr", 0),
-                    "dbsf_colbert.failure_rate": dbsf_eval["metrics"].get("failure_rate", 0),
-                    "dbsf_colbert.search_time_total_sec": dbsf_time,
-                    "dbsf_colbert.search_time_avg_sec": dbsf_time / len(queries),
-                }
-
-                # Log comparison improvements (DBSF vs Baseline)
-                improvement_metrics = {
-                    "improvement.recall_at_1_pct": comparison_dbsf["improvements"]["recall@1"][
-                        "relative_improvement_pct"
-                    ],
-                    "improvement.recall_at_10_pct": comparison_dbsf["improvements"]["recall@10"][
-                        "relative_improvement_pct"
-                    ],
-                    "improvement.ndcg_at_10_pct": comparison_dbsf["improvements"]["ndcg@10"][
-                        "relative_improvement_pct"
-                    ],
-                    "improvement.mrr_pct": comparison_dbsf["improvements"]["mrr"][
-                        "relative_improvement_pct"
-                    ],
-                }
-
-                # Log all metrics
-                logger.log_metrics(
-                    {**baseline_metrics, **hybrid_metrics, **dbsf_metrics, **improvement_metrics}
-                )
-
-                # Log markdown report as artifact
-                try:
-                    logger.log_artifact(markdown_file, artifact_path="reports")
-                    print("   ✓ Logged markdown report to MLflow")
-                except Exception as e:
-                    print(f"   ⚠️  Could not log artifact: {e}")
-
-                run_url = logger.get_run_url()
-                print(f"   ✓ MLflow run URL: {run_url}")
-
-        except Exception as e:
-            print(f"   ⚠️  MLflow logging failed: {e}")
-            print("   Continuing without MLflow logging...")
-
-        print()
 
     print("=" * 80)
     print("✅ A/B TEST COMPLETED SUCCESSFULLY")
