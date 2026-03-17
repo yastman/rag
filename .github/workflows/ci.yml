@@ -82,7 +82,8 @@ jobs:
             echo "=== Wait for startup ==="
             sleep 20
 
-            echo "=== Health check ==="
-            docker ps --format '{{.Names}} {{.Status}}' | grep -E 'vps-.*(Up|healthy)'
+            echo "=== Release smoke ==="
+            chmod +x ./scripts/test_release_health_vps.sh
+            REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh
 
             echo "=== Deploy complete $(date -Iseconds) ==="
