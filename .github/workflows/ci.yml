@@ -84,6 +84,6 @@ jobs:
 
             echo "=== Release smoke ==="
             chmod +x ./scripts/test_release_health_vps.sh
-            REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh
+            REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh
 
             echo "=== Deploy complete $(date -Iseconds) ==="
