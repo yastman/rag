@@ -28,7 +28,6 @@ def mock_evaluation_imports():
     mock_datasets = MagicMock()
     mock_ragas = MagicMock()
     mock_ragas_metrics = MagicMock()
-    mock_mlflow_integration = MagicMock()
     mock_search_engines = MagicMock()
 
     # Setup mock classes — use instances, NOT the MagicMock class itself.
@@ -39,25 +38,11 @@ def mock_evaluation_imports():
     mock_search_engines.HybridSearchEngine = MagicMock()
     mock_search_engines.HybridDBSFColBERTSearchEngine = MagicMock()
 
-    # Mock MLflow logger
-    mock_logger = MagicMock()
-    mock_logger.tracking_uri = "http://localhost:5000"
-    # Use standard MagicMock context-manager configuration instead of replacing
-    # dunder methods directly — assigning __enter__/__exit__ on a MagicMock
-    # instance corrupts the MagicMock CLASS property descriptors (return_value)
-    # and breaks `patch(..., return_value=X)` in all subsequent tests.
-    mock_logger.start_run.return_value.__enter__.return_value = mock_logger
-    mock_logger.start_run.return_value.__exit__.return_value = False
-    mock_logger.get_run_url.return_value = "http://localhost:5000/runs/123"
-    mock_mlflow_integration.MLflowRAGLogger.return_value = mock_logger
-
     return {
         "datasets": mock_datasets,
         "ragas": mock_ragas,
         "ragas_metrics": mock_ragas_metrics,
-        "mlflow_integration": mock_mlflow_integration,
         "search_engines": mock_search_engines,
-        "mlflow_logger": mock_logger,
     }
 
 
@@ -258,31 +243,6 @@ class TestEvaluateWithRagas:
         assert len(ragas_data["question"]) == 1
         assert len(ragas_data["contexts"]) == 1
         assert isinstance(ragas_data["contexts"][0], list)
-
-    def test_mlflow_logging_disabled(self, mock_evaluation_imports):
-        """Test that MLflow is not initialized when use_mlflow=False."""
-        use_mlflow = False
-        mlflow_logger = None if not use_mlflow else MagicMock()
-
-        assert mlflow_logger is None
-
-    def test_mlflow_logging_enabled(self, mock_evaluation_imports):
-        """Test MLflow logging when enabled.
-
-        Note: Uses mocked MLflowRAGLogger to avoid importing real mlflow which
-        causes test pollution affecting async code in other test modules.
-        """
-        mock_logger = mock_evaluation_imports["mlflow_logger"]
-        mock_mlflow_integration = mock_evaluation_imports["mlflow_integration"]
-        mock_mlflow_integration.MLflowRAGLogger.return_value = mock_logger
-
-        # Simulate enabling MLflow using mock (no real import)
-        use_mlflow = True
-        if use_mlflow:
-            logger = mock_mlflow_integration.MLflowRAGLogger(experiment_name="test")
-
-            assert logger is not None
-            assert logger.tracking_uri == "http://localhost:5000"
 
     def test_output_file_creation(self, tmp_path):
         """Test results are saved to output file."""

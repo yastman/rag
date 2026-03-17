@@ -47,8 +47,7 @@
       "description": "ML Platform - group together",
       "matchDatasources": ["docker"],
       "matchPackageNames": [
-        "ghcr.io/berriai/litellm",
-        "ghcr.io/mlflow/mlflow"
+        "ghcr.io/berriai/litellm"
       ],
       "groupName": "ml-platform"
     },
