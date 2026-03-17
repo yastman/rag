@@ -584,37 +584,6 @@ services:
           memory: 1024M
 
   # =============================================================================
-  # ML PLATFORM (dev-only services — profile-gated, not started on VPS)
-  # =============================================================================
-
-  mlflow:
-    build:
-      context: ./docker/mlflow
-      dockerfile: Dockerfile
-    profiles: ["eval", "ml", "full"]
-    restart: unless-stopped
-    environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/mlflow
-      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
-    volumes:
-      - mlflow_artifacts:/mlflow/artifacts
-    entrypoint: >
-      mlflow server
-      --backend-store-uri postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/mlflow
-      --default-artifact-root /mlflow/artifacts
-      --host 0.0.0.0
-      --port 5000
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # =============================================================================
   # MONITORING & ALERTING (dev-only)
   # =============================================================================
 
@@ -848,7 +817,6 @@ volumes:
   qdrant_data:
   hf_cache:
   docling_cache:
-  mlflow_artifacts:
   clickhouse_data:
   clickhouse_logs:
   minio_data:

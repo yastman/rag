@@ -367,7 +367,7 @@ clean: ## Clean up cache files and build artifacts
 # Common compose command with --compatibility to enforce deploy.resources.limits
 COMPOSE_CMD := docker compose --compatibility
 
-.PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
+.PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
 docker-core-up: ## Start core services (postgres, qdrant, redis, docling)
 	@echo "$(BLUE)Starting core services...$(NC)"
@@ -384,7 +384,7 @@ docker-obs-up: ## Start core + observability (loki, promtail, alertmanager)
 	$(COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Observability services started$(NC)"
 
-docker-ml-up: ## Start core + ML platform (langfuse, mlflow, clickhouse, minio)
+docker-ml-up: ## Start core + ML platform (langfuse, clickhouse, minio)
 	@echo "$(BLUE)Starting ML platform services...$(NC)"
 	$(COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
