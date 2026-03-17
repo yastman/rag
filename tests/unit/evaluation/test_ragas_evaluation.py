@@ -15,34 +15,28 @@ class TestRAGASEvaluatorInit:
     """Tests for RAGASEvaluator initialization."""
 
     @patch("src.evaluation.ragas_evaluation._get_evaluator_llm")
-    @patch("src.evaluation.ragas_evaluation.MLflowRAGLogger")
     @patch("src.evaluation.ragas_evaluation.faithfulness")
     @patch("src.evaluation.ragas_evaluation.context_precision")
     @patch("src.evaluation.ragas_evaluation.context_recall")
     @patch("src.evaluation.ragas_evaluation.answer_relevancy")
-    def test_init_creates_mlflow_logger(
+    def test_init_creates_metrics(
         self,
         mock_answer_rel,
         mock_ctx_recall,
         mock_ctx_prec,
         mock_faith,
-        mock_logger_class,
         mock_get_llm,
     ):
-        """Test evaluator creates MLflow logger."""
+        """Test evaluator initializes metrics."""
         from src.evaluation.ragas_evaluation import RAGASEvaluator
 
         mock_get_llm.return_value = MagicMock()
-        mock_logger = MagicMock()
-        mock_logger_class.return_value = mock_logger
 
         evaluator = RAGASEvaluator()
 
-        mock_logger_class.assert_called_once_with(experiment_name="ragas_quality_baseline")
-        assert evaluator.mlflow_logger == mock_logger
+        assert len(evaluator.metrics) == 4
 
     @patch("src.evaluation.ragas_evaluation._get_evaluator_llm")
-    @patch("src.evaluation.ragas_evaluation.MLflowRAGLogger")
     @patch("src.evaluation.ragas_evaluation.faithfulness")
     @patch("src.evaluation.ragas_evaluation.context_precision")
     @patch("src.evaluation.ragas_evaluation.context_recall")
@@ -53,14 +47,12 @@ class TestRAGASEvaluatorInit:
         mock_ctx_recall,
         mock_ctx_prec,
         mock_faith,
-        mock_logger_class,
         mock_get_llm,
     ):
         """Test evaluator initializes with RAGAS metrics."""
         from src.evaluation.ragas_evaluation import RAGASEvaluator
 
         mock_get_llm.return_value = MagicMock()
-        mock_logger_class.return_value = MagicMock()
 
         evaluator = RAGASEvaluator()
 
@@ -77,24 +69,15 @@ class TestEvaluatePipeline:
     @pytest.fixture
     def evaluator(self):
         """Create evaluator with mocked dependencies."""
-        with patch("src.evaluation.ragas_evaluation.MLflowRAGLogger") as mock_logger_class:
-            with patch("src.evaluation.ragas_evaluation._get_evaluator_llm") as mock_get_llm:
-                with patch("src.evaluation.ragas_evaluation.faithfulness"):
-                    with patch("src.evaluation.ragas_evaluation.context_precision"):
-                        with patch("src.evaluation.ragas_evaluation.context_recall"):
-                            with patch("src.evaluation.ragas_evaluation.answer_relevancy"):
-                                mock_get_llm.return_value = MagicMock()
-                                mock_logger = MagicMock()
-                                mock_logger.start_run.return_value.__enter__ = MagicMock()
-                                mock_logger.start_run.return_value.__exit__ = MagicMock(
-                                    return_value=False
-                                )
-                                mock_logger.get_run_url.return_value = "http://mlflow/run/123"
-                                mock_logger_class.return_value = mock_logger
+        with patch("src.evaluation.ragas_evaluation._get_evaluator_llm") as mock_get_llm:
+            with patch("src.evaluation.ragas_evaluation.faithfulness"):
+                with patch("src.evaluation.ragas_evaluation.context_precision"):
+                    with patch("src.evaluation.ragas_evaluation.context_recall"):
+                        with patch("src.evaluation.ragas_evaluation.answer_relevancy"):
+                            mock_get_llm.return_value = MagicMock()
+                            from src.evaluation.ragas_evaluation import RAGASEvaluator
 
-                                from src.evaluation.ragas_evaluation import RAGASEvaluator
-
-                                yield RAGASEvaluator()
+                            yield RAGASEvaluator()
 
     async def test_evaluate_pipeline_loads_test_set(self, evaluator):
         """Test evaluate_pipeline loads golden test set."""
@@ -207,29 +190,6 @@ class TestEvaluatePipeline:
                     assert result["answer_relevancy"] == 0.88
                     assert "eval_duration_seconds" in result
                     assert "queries_evaluated" in result
-
-    async def test_evaluate_pipeline_logs_to_mlflow(self, evaluator):
-        """Test evaluate_pipeline logs metrics to MLflow."""
-        mock_pipeline = AsyncMock()
-        mock_pipeline.query.return_value = {"answer": "test", "results": []}
-
-        test_data = {"queries": [{"query": "test"}]}
-
-        with patch("builtins.open", mock_open(read_data=json.dumps(test_data))):
-            with patch("src.evaluation.ragas_evaluation.Dataset") as mock_dataset:
-                with patch("src.evaluation.ragas_evaluation.evaluate") as mock_evaluate:
-                    mock_evaluate.return_value = {
-                        "faithfulness": 0.90,
-                        "context_precision": 0.85,
-                        "context_recall": 0.92,
-                        "answer_relevancy": 0.88,
-                    }
-                    mock_dataset.from_list.return_value = MagicMock()
-
-                    await evaluator.evaluate_pipeline(mock_pipeline)
-
-                    evaluator.mlflow_logger.log_metrics.assert_called_once()
-                    evaluator.mlflow_logger.log_dict_artifact.assert_called_once()
 
     async def test_evaluate_pipeline_prints_acceptance_passed(self, evaluator, capsys):
         """Test acceptance criteria passed message."""
