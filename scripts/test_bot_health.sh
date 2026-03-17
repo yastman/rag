@@ -45,6 +45,10 @@ fail() {
   exit 1
 }
 
+strip_trailing_slash() {
+  printf '%s' "${1%/}"
+}
+
 if ! command -v curl >/dev/null 2>&1; then
   fail "curl is required"
 fi
@@ -67,12 +71,17 @@ fi
 echo "✓ Qdrant collection exists: $collection_to_check (mode=$QDRANT_QUANTIZATION_MODE)"
 
 # LiteLLM/LLM connectivity
-if curl -fsS "$LLM_BASE_URL/health/liveliness" >/dev/null; then
-  echo "✓ LLM health OK: $LLM_BASE_URL/health/liveliness"
+normalized_llm_base_url="$(strip_trailing_slash "$LLM_BASE_URL")"
+health_base_url="${normalized_llm_base_url%/v1}"
+models_url="$normalized_llm_base_url/models"
+health_url="$health_base_url/health/liveliness"
+
+if curl -fsS "$health_url" >/dev/null; then
+  echo "✓ LLM health OK: $health_url"
 else
-  # Fallback for OpenAI-compatible endpoints
-  curl -fsS "$LLM_BASE_URL/v1/models" >/dev/null || fail "LLM endpoint not responding at $LLM_BASE_URL"
-  echo "✓ LLM models OK: $LLM_BASE_URL/v1/models"
+  # Fallback for OpenAI-compatible endpoints.
+  curl -fsS "$models_url" >/dev/null || fail "LLM endpoint not responding at $LLM_BASE_URL"
+  echo "✓ LLM models OK: $models_url"
 fi
 
 exit 0
