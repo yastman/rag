@@ -1,8 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+
+resolve_qdrant_collection() {
+  local dotenv_value compose_default
+
+  if [ -n "${QDRANT_COLLECTION:-}" ]; then
+    printf '%s\n' "$QDRANT_COLLECTION"
+    return 0
+  fi
+
+  if [ -f "$PROJECT_ROOT/.env" ]; then
+    dotenv_value=$(
+      sed -nE "s/^[[:space:]]*(export[[:space:]]+)?QDRANT_COLLECTION[[:space:]]*=[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?.*$/\\2/p" "$PROJECT_ROOT/.env" \
+        | tail -n1
+    )
+    if [ -n "$dotenv_value" ]; then
+      printf '%s\n' "$dotenv_value"
+      return 0
+    fi
+  fi
+
+  compose_default=$(
+    sed -nE "s/^[[:space:]]*QDRANT_COLLECTION:[[:space:]]*\\$\\{QDRANT_COLLECTION:-([^}]+)\\}[[:space:]]*$/\\1/p" "$PROJECT_ROOT/compose.yml" \
+      | head -n1
+  )
+  if [ -n "$compose_default" ]; then
+    printf '%s\n' "$compose_default"
+    return 0
+  fi
+
+  printf '%s\n' "gdrive_documents_bge"
+}
+
 QDRANT_URL=${QDRANT_URL:-http://localhost:6333}
-QDRANT_COLLECTION=${QDRANT_COLLECTION:-contextual_bulgaria_voyage}
+QDRANT_COLLECTION=$(resolve_qdrant_collection)
 QDRANT_QUANTIZATION_MODE=${QDRANT_QUANTIZATION_MODE:-off}
 LLM_BASE_URL=${LLM_BASE_URL:-${LITELLM_BASE_URL:-http://localhost:4000}}
 
