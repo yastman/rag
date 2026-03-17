@@ -22,14 +22,24 @@ Local reference facts were captured from rendered compose using synthetic non-se
 - VPS `.env` includes `COMPOSE_FILE=compose.yml:compose.vps.yml` and `QDRANT_COLLECTION=gdrive_documents_bge`.
 - VPS `.env` does not define `COMPOSE_PROFILES`; `docker compose config --services` excludes `mini-app-api` and `mini-app-frontend`.
 - Current CI deploy check command (`docker ps ... | grep -E 'vps-.*(Up|healthy)'`) returns healthy output while mini-app host endpoint check fails (`127.0.0.1:8091/health` unreachable).
-- Canonical local release contract merged in PR #989 does not require mini-app startup or a mini-app endpoint check.
+- Issue #991 and the blocking PR #990 review establish that VPS release success requires mini-app parity as part of the full release surface.
 - Current VPS default service set excludes mini-app services because they are not part of the effective compose config without an explicit profile.
 
 ## Findings
 
 ### P0
 
-- None verified in this audit slice.
+#### F-002: Mini-app parity is part of the VPS release contract, but the current VPS default service set omits mini-app services
+- Scope: config/runtime/functional
+- Observed state:
+  - `compose.yml` declares `mini-app-api` and `mini-app-frontend` behind the `bot`/`full` profiles.
+  - VPS `.env` does not define `COMPOSE_PROFILES`, and `docker compose config --services` excludes both mini-app services.
+  - Strict smoke (`REQUIRE_MINI_APP_ENDPOINT=true`) fails with `mini-app-frontend is not running`.
+  - PR #990 blocking review and issue #991 require release-critical smoke to fail honestly until mini-app parity is restored.
+- Impact: the current VPS default stack cannot satisfy the required release contract, so any deploy path that reports success without strict mini-app smoke is a false green.
+- Root cause hypothesis: the effective VPS compose config omits release-critical mini-app services while the deploy gate previously used a profile-aware downgrade path.
+- Fix area: release gate now; compose/runtime parity follow-up remains required outside this worker scope.
+- Severity: P0
 
 ### P1
 
@@ -43,24 +53,13 @@ Local reference facts were captured from rendered compose using synthetic non-se
 - Fix area: workflow + reusable smoke script
 - Severity: Resolved by this PR
 
-#### F-002: Mini-app remains outside the current canonical release contract and must be enabled explicitly before it can become a parity gate
-- Scope: config/runtime
-- Observed state:
-  - `compose.yml` declares `mini-app-api` and `mini-app-frontend` behind the `bot`/`full` profiles.
-  - The canonical local release contract merged in PR #989 does not require mini-app startup or a mini-app endpoint check.
-  - VPS default compose service set excludes mini-app services; strict smoke (`REQUIRE_MINI_APP_ENDPOINT=true`) fails with `mini-app-frontend is not running`, while profile-aware smoke passes because the effective VPS config does not declare mini-app services.
-- Impact: mini-app parity is still an open product/runtime question, but it is not a blocker for the currently documented release path.
-- Root cause hypothesis: the repository does not yet define mini-app as a mandatory release surface in the frozen local reference.
-- Fix area: future scope decision. If mini-app becomes mandatory, enable it in the effective compose config and switch smoke to strict mode.
-- Severity: P2
-
 ### P2
 
 #### F-003: `scripts/deploy-vps.sh` post-deploy verification was container-presence-only before this fix
 - Scope: runtime/operational
 - Observed state:
   - Script ends with `docker ps ... | grep vps` snapshot and does not assert bot health, in-network reachability, or mini-app endpoint contract.
-- Impact: resolved by this PR; manual deploy now reuses the same functional smoke contract as CI.
+- Impact: resolved by this PR; manual deploy now reuses the same strict functional smoke contract as CI.
 - Root cause hypothesis: historical script optimized for transport/restart flow, not release contract verification.
 - Fix area: deploy script reuse of shared smoke contract
 - Severity: Resolved by this PR
@@ -81,7 +80,7 @@ Verified live on VPS:
 - Qdrant collection visibility used by bot-health preflight
 - Bot reachability to Qdrant/LiteLLM/Postgres/Redis
 - CI-contract gap demonstration (old check passes while mini-app endpoint fails)
-- Canonical local release contract from merged PR #989 excludes mini-app checks
+- Strict mini-app smoke fails against the current VPS default service set
 
 Not fully verified in this worker slice:
-- Future decision to make mini-app part of the mandatory release contract
+- Compose/runtime changes needed to restore mini-app parity on VPS

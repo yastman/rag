@@ -112,7 +112,7 @@ Verify actual product behavior, not just infrastructure:
 - bot can see the intended Qdrant collection
 - LiteLLM responds correctly
 - mini app frontend is reachable and usable
-- mini app backend responds correctly if required
+- mini app backend responds correctly
 - ingestion can write to the expected target collection if part of the required stack
 - observability path is not silently broken if Langfuse is required
 
@@ -157,7 +157,7 @@ Fix all local release blockers in `dev`:
 - restore green `make check`
 - restore green `make test-unit`
 - restore green `make test-bot-health`
-- fix or explain `mini-app-frontend` unhealthy state if mini app is part of the required stack
+- fix `mini-app-frontend` unhealthy state because mini app is part of the required stack
 
 This phase is mandatory because local runtime is the source of truth.
 
@@ -204,7 +204,7 @@ Required post-deploy checks:
 
 - `docker compose ps`
 - `make test-bot-health-vps`
-- mini app endpoint verification if required
+- mini app endpoint verification
 - targeted log scan for `bot`, `litellm`, `mini-app-frontend`, `mini-app-api`, `ingestion`
 
 ## 7. Release Policy
@@ -224,13 +224,14 @@ Local release-gate should include:
 - `make check`
 - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 - `make test-bot-health`
-- required local functional smoke
+- required local functional smoke, including mini app parity when the full release surface is claimed
 
 VPS release-gate should include:
 
 - `docker compose ps`
 - `make test-bot-health-vps`
-- required VPS functional smoke
+- mini app frontend and API smoke
+- targeted VPS functional smoke for other release-critical services
 
 ## 8. Required Repo Changes
 
