@@ -235,6 +235,19 @@ class TestModelServiceHealthcheckGrace:
         )
 
 
+class TestMiniAppVpsParity:
+    """Mini app must be part of the default VPS runtime stack."""
+
+    @pytest.mark.parametrize("svc_name", ["mini-app-api", "mini-app-frontend"])
+    def test_vps_mini_app_service_is_not_profile_gated(self, vps: dict, svc_name: str) -> None:
+        """Default VPS compose up must include both mini-app services."""
+        svc = vps["services"][svc_name]
+        assert not svc.get("profiles"), (
+            f"{svc_name} must not declare optional profiles in compose.yml; "
+            "default VPS compose up skips profiled services"
+        )
+
+
 class TestMiniAppFrontendHealthcheck:
     """Mini app frontend healthcheck must match nginx's IPv4-only loopback binding."""
 
