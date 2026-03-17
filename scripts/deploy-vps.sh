@@ -8,6 +8,7 @@
 ***REMOVED***   --dry-run       Show what would happen, no changes made
 ***REMOVED***   --clean         Full reinstall: down -v, prune images/builder, then deploy
 ***REMOVED***   --skip-checks   Skip pre-deploy make check validation
+***REMOVED***   --skip-smoke    Skip post-deploy release smoke checks
 ***REMOVED***   -h, --help      Show this help message
 ***REMOVED***
 ***REMOVED*** Examples:
@@ -15,6 +16,7 @@
 ***REMOVED***   ./scripts/deploy-vps.sh --clean            ***REMOVED*** Full reinstall from scratch
 ***REMOVED***   ./scripts/deploy-vps.sh --dry-run          ***REMOVED*** Show what would happen
 ***REMOVED***   ./scripts/deploy-vps.sh --skip-checks      ***REMOVED*** Skip lint/type checks
+***REMOVED***   ./scripts/deploy-vps.sh --skip-smoke       ***REMOVED*** Skip post-deploy smoke checks
 
 set -euo pipefail
 
@@ -65,12 +67,14 @@ ssh_cmd() {
 DRY_RUN=false
 CLEAN=false
 SKIP_CHECKS=false
+SKIP_SMOKE=false
 
 for arg in "$@"; do
     case "$arg" in
         --dry-run)      DRY_RUN=true ;;
         --clean)        CLEAN=true ;;
         --skip-checks)  SKIP_CHECKS=true ;;
+        --skip-smoke)   SKIP_SMOKE=true ;;
         -h|--help)      usage ;;
         *) error "Unknown argument: $arg. Use --help for usage." ;;
     esac
@@ -191,7 +195,7 @@ else
 fi
 
 ***REMOVED*** =============================================================================
-***REMOVED*** Step 6: Health check
+***REMOVED*** Step 6: Container status snapshot
 ***REMOVED*** =============================================================================
 log "Verifying running containers..."
 if ! $DRY_RUN; then
@@ -200,6 +204,23 @@ if ! $DRY_RUN; then
         || warn "No VPS containers found in docker ps output"
 else
     info "[dry-run] Would run: docker ps --format 'table ...' | grep vps"
+fi
+
+***REMOVED*** =============================================================================
+***REMOVED*** Step 7: Post-deploy release smoke
+***REMOVED*** =============================================================================
+if ! $SKIP_SMOKE; then
+    log "Running release smoke checks on VPS..."
+    if ! $DRY_RUN; then
+        ***REMOVED*** Mirror the current canonical release contract from dev: mini app is
+        ***REMOVED*** only checked when it is part of the effective VPS compose config.
+        ssh_cmd "cd ${VPS_DIR} && chmod +x ./scripts/test_release_health_vps.sh && REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh" \
+            || error "Post-deploy release smoke checks failed"
+    else
+        info "[dry-run] Would run: cd ${VPS_DIR} && REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh"
+    fi
+else
+    warn "Skipping post-deploy smoke checks (--skip-smoke)"
 fi
 
 log "Deploy complete!"
