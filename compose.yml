@@ -319,6 +319,7 @@ services:
     build:
       context: .
       dockerfile: mini_app/Dockerfile
+    profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -361,13 +362,14 @@ services:
     build:
       context: ./mini_app/frontend
       dockerfile: Dockerfile
+    profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
     depends_on:
       mini-app-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
