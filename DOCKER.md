@@ -119,6 +119,15 @@ PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 make test-bot-health
 ```
 
+## Source Of Truth
+
+- `main` in Git is the official deployment source of truth for VPS.
+- Standard flow: work locally, push to `dev` or a feature branch, open a PR to `main`, and merge the PR.
+- Only merges to `main` should trigger VPS auto-deploy through GitHub Actions.
+- `make deploy-bot` prints the official PR-based deploy flow; it does not push directly to `main`.
+- Use `make deploy-vps-local` or `./scripts/deploy-vps.sh` only as fallback/manual recovery when GitHub-driven deploy is unavailable.
+- Do not treat `/opt/rag-fresh` on the server as an editable working copy; it is a deployment target.
+
 ## Common Operations
 
 ```bash
