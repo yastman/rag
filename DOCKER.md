@@ -6,10 +6,11 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 
 | File | Scope | Typical use |
 | --- | --- | --- |
-| `docker-compose.dev.yml` | Full development stack with profiles | Local development and integration testing |
-| `docker-compose.vps.yml` | VPS production-like stack | Server deployment and operations |
+| `compose.yml` | Secure baseline for all services | Shared base for local and VPS |
+| `compose.dev.yml` | Development overrides (ports, profile gating, local defaults) | Local development and integration testing |
+| `compose.vps.yml` | VPS production-like overrides | Server deployment and operations |
 
-## Compose Profiles (`docker-compose.dev.yml`)
+## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:
 - `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `docling`
@@ -23,7 +24,6 @@ Optional profiles add scoped services:
 | `voice` | `rag-api`, `livekit-server`, `livekit-sip`, `voice-agent`, `litellm` |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
 | `obs` | `loki`, `promtail`, `alertmanager` |
-| `security` | `llm-guard` |
 | `full` | all profile-gated services |
 
 ## Makefile Shortcuts
@@ -101,6 +101,22 @@ curl -fsS http://localhost:5001/health
 curl -fsS http://localhost:4000/health/liveliness
 curl -fsS http://localhost:3100/ready
 curl -fsS http://localhost:9093/-/healthy
+
+# Preflight gate for retrieval + LLM connectivity
+make test-bot-health
+```
+
+`make test-bot-health` resolves `QDRANT_COLLECTION` in the same order as local Docker runtime intent:
+1. exported shell env (`QDRANT_COLLECTION`)
+2. `.env` value (`QDRANT_COLLECTION=...`)
+3. compose default from `compose.yml` (currently `gdrive_documents_bge`)
+
+## Local Release Gate
+
+```bash
+make check
+PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
+make test-bot-health
 ```
 
 ## Common Operations
@@ -108,11 +124,11 @@ curl -fsS http://localhost:9093/-/healthy
 ```bash
 # Logs
 make monitoring-logs
-docker compose --compatibility -f docker-compose.dev.yml logs -f bot litellm qdrant
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility logs -f bot litellm qdrant
 
 # Rebuild selected services
-docker compose --compatibility -f docker-compose.dev.yml build bot litellm bge-m3
-docker compose --compatibility -f docker-compose.dev.yml up -d --force-recreate bot litellm bge-m3
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility build bot litellm bge-m3
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility up -d --force-recreate bot litellm bge-m3
 
 # Image drift check against compose-pinned images
 make verify-compose-images
@@ -122,4 +138,4 @@ make verify-compose-images
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
-- Local and profile workflows use the same canonical file: `docker-compose.dev.yml`.
+- Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
