@@ -98,19 +98,6 @@ async def test_lightrag_health():
 
 
 @pytest.mark.asyncio
-async def test_mlflow_health():
-    """Test MLflow tracking server health."""
-    if not _check_tcp("localhost", 5000):
-        pytest.skip("MLflow not running on localhost:5000")
-
-    import aiohttp
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:5000/health") as resp:
-            assert resp.status == 200
-
-
-@pytest.mark.asyncio
 async def test_docling_health():
     """Test Docling document parsing service health."""
     if not _check_tcp("localhost", 5001):

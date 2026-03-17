@@ -71,17 +71,6 @@ class TestSmokeServices:
         pytest.skip(f"Redis requires authentication (set REDIS_PASSWORD): {last_error}")
 
     @pytest.mark.skipif(
-        not _is_port_open("localhost", 5000), reason="MLflow not running (port 5000)"
-    )
-    @pytest.mark.asyncio
-    async def test_mlflow_health(self):
-        """MLflow responds to health check."""
-        url = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{url}/health")
-            assert response.status_code == 200
-
-    @pytest.mark.skipif(
         not _is_port_open("localhost", 3001), reason="Langfuse not running (port 3001)"
     )
     @pytest.mark.asyncio

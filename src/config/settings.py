@@ -144,7 +144,6 @@ class Settings:
         # === FEATURES ===
         self.enable_caching = os.getenv("ENABLE_CACHING", "true").lower() == "true"
         self.enable_query_expansion = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
-        self.enable_mlflow = os.getenv("ENABLE_MLFLOW", "true").lower() == "true"
         self.enable_langfuse = os.getenv("ENABLE_LANGFUSE", "true").lower() == "true"
 
         # === QUANTIZATION ===
@@ -255,7 +254,6 @@ class Settings:
             "batch_size_documents": self.batch_size_documents,
             "enable_caching": self.enable_caching,
             "enable_query_expansion": self.enable_query_expansion,
-            "enable_mlflow": self.enable_mlflow,
             "enable_langfuse": self.enable_langfuse,
             "quantization_mode": self.quantization_mode.value,
             "quantization_rescore": self.quantization_rescore,

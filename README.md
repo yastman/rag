@@ -158,7 +158,7 @@ make docker-full-up    # All 23 services
 
 | Stack | Command | Services |
 |-------|---------|----------|
-| ML/Observability | `make docker-ml-up` | Langfuse, MLflow, ClickHouse, MinIO |
+| ML/Observability | `make docker-ml-up` | Langfuse, ClickHouse, MinIO |
 | Monitoring | `make monitoring-up` | Loki, Promtail, Alertmanager |
 | Ingestion | `make docker-ingest-up` | Unified ingestion service |
 | Voice | `make docker-voice-up` | RAG API, LiveKit, SIP, Voice Agent |
@@ -227,6 +227,10 @@ src/evaluation/            # RAG evaluation (RAGAS, A/B testing)
 make check       # Ruff lint + MyPy strict type checking
 make test-unit   # Unit tests (parallel via pytest-xdist)
 ```
+
+Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `main` or deploying to VPS.
+
+CI is intentionally lightweight. It should stay fast and is used as a guardrail for lint, format, type-check, security, and other short checks, not as the authoritative full-suite signal.
 
 ---
 

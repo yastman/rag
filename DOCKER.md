@@ -21,7 +21,7 @@ Optional profiles add scoped services:
 | `bot` | `litellm`, `bot` |
 | `ingest` | `ingestion` |
 | `voice` | `rag-api`, `livekit-server`, `livekit-sip`, `voice-agent`, `litellm` |
-| `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse`, `mlflow` |
+| `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
 | `obs` | `loki`, `promtail`, `alertmanager` |
 | `security` | `llm-guard` |
 | `full` | all profile-gated services |
@@ -60,7 +60,6 @@ make local-down
 | Docling | `http://localhost:5001` |
 | LiteLLM | `http://localhost:4000` |
 | Langfuse | `http://localhost:3001` |
-| MLflow | `http://localhost:5000` |
 | Loki | `http://localhost:3100` |
 | Alertmanager | `http://localhost:9093` |
 | RAG API (voice path) | `http://localhost:8080` |
