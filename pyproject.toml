@@ -89,9 +89,8 @@ ingest = [
     "fastembed>=0.7.4",
 ]
 
-# Evaluation tools (RAGAS, MLflow, dataset generation)
+# Evaluation tools (RAGAS, dataset generation)
 eval = [
-    "mlflow>=3.9.0",
     "ragas>=0.4.3",
     "datasets>=3.0.0",
     "pandas>=2.0.0",
@@ -412,7 +411,6 @@ omit = [
     "src/evaluation/generate_test_queries.py",
     "src/evaluation/run_ab_test.py",
     "src/evaluation/smoke_test.py",
-    "src/evaluation/test_mlflow_ab.py",
     "src/evaluation/search_engines_rerank.py",
     "src/evaluation/evaluate_with_ragas.py",
     "src/evaluation/langfuse_integration.py",

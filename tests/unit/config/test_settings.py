@@ -92,7 +92,6 @@ class TestSettingsInit:
         # Feature flags default to True
         assert settings.enable_caching is True
         assert settings.enable_query_expansion is True
-        assert settings.enable_mlflow is True
         assert settings.enable_langfuse is True
 
     @patch.dict(
@@ -101,7 +100,6 @@ class TestSettingsInit:
             "ANTHROPIC_API_KEY": "test-key",
             "ENABLE_CACHING": "false",
             "ENABLE_QUERY_EXPANSION": "FALSE",
-            "ENABLE_MLFLOW": "False",
             "ENABLE_LANGFUSE": "false",
         },
         clear=True,
@@ -112,7 +110,6 @@ class TestSettingsInit:
 
         assert settings.enable_caching is False
         assert settings.enable_query_expansion is False
-        assert settings.enable_mlflow is False
         assert settings.enable_langfuse is False
 
     @patch.dict(
@@ -382,7 +379,6 @@ class TestSettingsToDict:
             "batch_size_documents",
             "enable_caching",
             "enable_query_expansion",
-            "enable_mlflow",
             "enable_langfuse",
             "quantization_mode",
             "quantization_rescore",

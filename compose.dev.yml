@@ -113,10 +113,6 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
-  mlflow:
-    ports:
-      - "127.0.0.1:5000:5000"
-
   loki:
     ports:
       - "127.0.0.1:3100:3100"

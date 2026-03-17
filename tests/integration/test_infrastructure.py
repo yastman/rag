@@ -200,25 +200,6 @@ class TestRedisInfrastructure:
         await redis_client.delete(test_key)
 
 
-class TestMLflowInfrastructure:
-    """MLflow tracking server tests."""
-
-    async def test_experiments_list(self):
-        """Can list experiments."""
-        url = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-        if not _check_tcp("localhost", 5000):
-            pytest.skip("MLflow not running on localhost:5000")
-
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"{url}/api/2.0/mlflow/experiments/search",
-                json={"max_results": 10},
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert "experiments" in data
-
-
 class TestLangfuseInfrastructure:
     """Langfuse tracing tests."""
 

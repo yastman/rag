@@ -1,5 +1,5 @@
 # Alert Rules for Extended Services
-# Monitors: docling, minio, mlflow, redis-langfuse, lightrag
+# Monitors: docling, minio, redis-langfuse, lightrag
 
 groups:
   - name: extended-services
@@ -111,43 +111,6 @@ groups:
         annotations:
           summary: "MinIO errors detected"
           description: "Multiple errors in MinIO logs"
-
-      # =========================================================================
-      # DEV-MLFLOW (Critical - Experiment Tracking)
-      # =========================================================================
-
-      - alert: MLflowDown
-        expr: |
-          count_over_time({container="dev-mlflow"} [5m]) == 0
-        for: 2m
-        labels:
-          severity: critical
-          service: mlflow
-        annotations:
-          summary: "MLflow is down"
-          description: "No logs from dev-mlflow - experiment tracking unavailable"
-
-      - alert: MLflowDBError
-        expr: |
-          count_over_time({container="dev-mlflow"} |~ "(?i)OperationalError|migration|failed to connect|psycopg" [5m]) > 0
-        for: 1m
-        labels:
-          severity: critical
-          service: mlflow
-        annotations:
-          summary: "MLflow database error"
-          description: "MLflow cannot connect to PostgreSQL"
-
-      - alert: MLflowError
-        expr: |
-          count_over_time({container="dev-mlflow"} |~ "(?i)error|exception|traceback" [5m]) > 3
-        for: 3m
-        labels:
-          severity: warning
-          service: mlflow
-        annotations:
-          summary: "MLflow errors detected"
-          description: "Multiple errors in MLflow logs"
 
       # =========================================================================
       # DEV-REDIS-LANGFUSE (Critical - Langfuse Queue)
