@@ -19,6 +19,7 @@ Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
 - `LITELLM_MASTER_KEY`
 - at least one provider key: `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
+- optional `QDRANT_COLLECTION` (defaults to `gdrive_documents_bge` from `compose.yml` if unset)
 
 Secret model by compose file:
 - `compose.yml` is the secure baseline: no predictable built-in secret defaults.
@@ -56,11 +57,19 @@ Bot preflight:
 make test-bot-health
 ```
 
+`make test-bot-health` resolves `QDRANT_COLLECTION` in this order:
+1. exported shell env (`QDRANT_COLLECTION`)
+2. `.env` value
+3. compose default from `compose.yml` (`gdrive_documents_bge`)
+
 ## 4. Development Gates
+
+Local release gate:
 
 ```bash
 make check
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
+make test-bot-health
 ```
 
 Optional broader gates:
@@ -97,7 +106,7 @@ uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 
 ## 6. Minimal Stack (Fast Iteration)
 
-Use the `local-*` shortcuts (they now run a minimal subset from `docker-compose.dev.yml`) when full dev stack is unnecessary:
+Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
 
 ```bash
 make local-up
