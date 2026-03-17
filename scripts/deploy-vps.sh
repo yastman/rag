@@ -212,12 +212,11 @@ fi
 if ! $SKIP_SMOKE; then
     log "Running release smoke checks on VPS..."
     if ! $DRY_RUN; then
-        ***REMOVED*** Mirror the current canonical release contract from dev: mini app is
-        ***REMOVED*** only checked when it is part of the effective VPS compose config.
-        ssh_cmd "cd ${VPS_DIR} && chmod +x ./scripts/test_release_health_vps.sh && REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh" \
+        ***REMOVED*** Release-critical deploy smoke must fail if mini-app parity is broken.
+        ssh_cmd "cd ${VPS_DIR} && chmod +x ./scripts/test_release_health_vps.sh && REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" \
             || error "Post-deploy release smoke checks failed"
     else
-        info "[dry-run] Would run: cd ${VPS_DIR} && REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh"
+        info "[dry-run] Would run: cd ${VPS_DIR} && REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh"
     fi
 else
     warn "Skipping post-deploy smoke checks (--skip-smoke)"
