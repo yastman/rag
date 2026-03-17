@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false|profile
+REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false
 MINI_APP_FRONTEND_URL="${MINI_APP_FRONTEND_URL:-http://127.0.0.1:8091/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
 
@@ -26,9 +26,9 @@ if ! command -v make >/dev/null 2>&1; then
 fi
 
 case "$REQUIRE_MINI_APP_ENDPOINT" in
-  auto|true|false|profile) ;;
+  auto|true|false) ;;
   *)
-    fail "REQUIRE_MINI_APP_ENDPOINT must be one of: auto,true,false,profile"
+    fail "REQUIRE_MINI_APP_ENDPOINT must be one of: auto,true,false"
     ;;
 esac
 
@@ -92,17 +92,10 @@ if failed:
     sys.exit(1)
 PY
 
-mini_declared="$(docker compose config --services 2>/dev/null | grep -E '^mini-app-(api|frontend)$' || true)"
 mini_running="$(docker compose ps mini-app-api mini-app-frontend --status running --services 2>/dev/null || true)"
 mini_expected=false
 if [ "$REQUIRE_MINI_APP_ENDPOINT" = "true" ]; then
   mini_expected=true
-elif [ "$REQUIRE_MINI_APP_ENDPOINT" = "profile" ]; then
-  # Enforce the mini app only when the effective compose config declares it.
-  if printf '%s\n' "$mini_declared" | grep -Eq '^mini-app-frontend$' \
-    && printf '%s\n' "$mini_declared" | grep -Eq '^mini-app-api$'; then
-    mini_expected=true
-  fi
 elif [ "$REQUIRE_MINI_APP_ENDPOINT" = "auto" ] && [ -n "$mini_running" ]; then
   mini_expected=true
 fi
