@@ -98,6 +98,7 @@ mini_expected=false
 if [ "$REQUIRE_MINI_APP_ENDPOINT" = "true" ]; then
   mini_expected=true
 elif [ "$REQUIRE_MINI_APP_ENDPOINT" = "profile" ]; then
+  # Enforce the mini app only when the effective compose config declares it.
   if printf '%s\n' "$mini_declared" | grep -Eq '^mini-app-frontend$' \
     && printf '%s\n' "$mini_declared" | grep -Eq '^mini-app-api$'; then
     mini_expected=true

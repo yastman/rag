@@ -212,6 +212,8 @@ fi
 if ! $SKIP_SMOKE; then
     log "Running release smoke checks on VPS..."
     if ! $DRY_RUN; then
+        # Mirror the current canonical release contract from dev: mini app is
+        # only checked when it is part of the effective VPS compose config.
         ssh_cmd "cd ${VPS_DIR} && chmod +x ./scripts/test_release_health_vps.sh && REQUIRE_MINI_APP_ENDPOINT=profile ./scripts/test_release_health_vps.sh" \
             || error "Post-deploy release smoke checks failed"
     else
