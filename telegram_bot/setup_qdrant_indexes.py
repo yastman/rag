@@ -36,6 +36,21 @@ def setup_indexes():
             "description": "Source type (csv_row, docx_chunk)",
         },
         {
+            "field_name": "metadata.jurisdiction",
+            "field_schema": models.PayloadSchemaType.KEYWORD,
+            "description": "Jurisdiction code (bg, ua, eu)",
+        },
+        {
+            "field_name": "metadata.audience",
+            "field_schema": models.PayloadSchemaType.KEYWORD,
+            "description": "Target audience (client, internal)",
+        },
+        {
+            "field_name": "metadata.language",
+            "field_schema": models.PayloadSchemaType.KEYWORD,
+            "description": "Document language",
+        },
+        {
             "field_name": "metadata.city",
             "field_schema": models.PayloadSchemaType.KEYWORD,
             "description": "City name (Солнечный берег, Несебр)",
@@ -120,6 +135,7 @@ def setup_indexes():
     print(f"✅ Created {success_count}/{len(indexes)} indexes successfully!")
     print("\nIndexes enable fast filtering on:")
     print("  • City (keyword match)")
+    print("  • Jurisdiction, audience, language (keyword match)")
     print("  • Price, rooms, area (range filters)")
     print("  • Distance to sea (range filter)")
     print("  • Maintenance cost (range filter)")
