@@ -20,7 +20,7 @@ import asyncio
 import hashlib
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from telegram_bot.observability import get_client, observe
@@ -894,6 +894,7 @@ async def rag_pipeline(
 
     # Step 1: Cache check (use cache_key = original user query)
     # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
+    cache_result: dict[str, Any]
     if (
         state_contract is not None
         and state_contract.get("cache_checked") is True
@@ -928,10 +929,11 @@ async def rag_pipeline(
         )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
-    cache_embedding: list[float] | None = cache_result.get("query_embedding")
+    cache_embedding = cast(list[float] | None, cache_result.get("query_embedding"))
     cache_sparse: Any = cache_result.get("sparse_embedding")
-    latency_stages = cache_result["latency_stages"]
-    colbert_query: list[list[float]] | None = cache_result.get("colbert_query")
+    latency_stages = cast(dict[str, float], cache_result["latency_stages"])
+    colbert_query = cast(list[list[float]] | None, cache_result.get("colbert_query"))
+    embeddings_cache_hit = bool(cache_result.get("embeddings_cache_hit", False))
 
     if cache_result.get("embedding_error"):
         return {
@@ -961,7 +963,7 @@ async def rag_pipeline(
             "rerank_applied": False,
             "rerank_cache_hit": False,
             "grade_confidence": 0.0,
-            "embeddings_cache_hit": cache_result["embeddings_cache_hit"],
+            "embeddings_cache_hit": embeddings_cache_hit,
             "embedding_error": False,
             "embedding_error_type": None,
             "latency_stages": latency_stages,
@@ -1051,7 +1053,7 @@ async def rag_pipeline(
                 documents=final_docs,
                 latency_stages=latency_stages,
                 cache_hit=False,
-                embeddings_cache_hit=cache_result["embeddings_cache_hit"],
+                embeddings_cache_hit=embeddings_cache_hit,
                 search_cache_hit=retrieve_result.get("search_cache_hit", False),
                 search_results_count=retrieve_result["search_results_count"],
                 rerank_applied=rerank_applied,
@@ -1139,7 +1141,7 @@ async def rag_pipeline(
         documents=final_docs,
         latency_stages=latency_stages,
         cache_hit=False,
-        embeddings_cache_hit=cache_result["embeddings_cache_hit"],
+        embeddings_cache_hit=embeddings_cache_hit,
         search_cache_hit=retrieve_result.get("search_cache_hit", False),
         search_results_count=retrieve_result["search_results_count"],
         rerank_applied=rerank_applied,
