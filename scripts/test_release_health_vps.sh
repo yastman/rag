@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+if [ -f "${REPO_ROOT}/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "${REPO_ROOT}/.env"
+  set +a
+fi
+
 REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false
 MINI_APP_FRONTEND_URL="${MINI_APP_FRONTEND_URL:-http://127.0.0.1:8091/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
+HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"
 export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
 
 log() {
@@ -124,6 +135,23 @@ PY
   log "Mini app endpoint OK: $MINI_APP_FRONTEND_URL"
 else
   warn "mini app endpoint check skipped (REQUIRE_MINI_APP_ENDPOINT=${REQUIRE_MINI_APP_ENDPOINT})"
+fi
+
+if [ "$HANDOFF_ENABLED" = "true" ]; then
+  log "Handoff release smoke"
+  docker compose exec -T bot python - <<'PY'
+import os
+import sys
+
+handoff_enabled = os.getenv("HANDOFF_ENABLED", "false")
+managers_group_id = os.getenv("MANAGERS_GROUP_ID", "")
+
+assert handoff_enabled == "true", "HANDOFF_ENABLED is not true in bot container"
+assert managers_group_id, "MANAGERS_GROUP_ID missing in bot container"
+print("  ok: handoff env contract present in bot container")
+PY
+else
+  warn "handoff smoke skipped (HANDOFF_ENABLED=${HANDOFF_ENABLED})"
 fi
 
 log "Release smoke passed"
