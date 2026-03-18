@@ -26,15 +26,26 @@ _GOAL_OPTIONS: list[tuple[str, str]] = [
 ]
 
 
+def _resolve_i18n_context(
+    dialog_manager: DialogManager,
+    kwargs: dict[str, Any],
+) -> tuple[Any | None, str | None]:
+    """Prefer the current getter context over potentially stale manager middleware data."""
+    current_middleware = kwargs.get("middleware_data") or {}
+    manager_middleware = getattr(dialog_manager, "middleware_data", None) or {}
+    middleware = current_middleware or manager_middleware
+
+    i18n = kwargs.get("i18n") or middleware.get("i18n")
+    locale = kwargs.get("locale") or middleware.get("locale")
+    return i18n, locale
+
+
 # ── Getters ──────────────────────────────────────────────────────
 
 
 async def _goal_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
     """Provide goal options with i18n support."""
-    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
-        "middleware_data", {}
-    )
-    i18n = middleware.get("i18n")
+    i18n, _locale = _resolve_i18n_context(dialog_manager, kwargs)
     if i18n:
         items = [
             (i18n.get("handoff-goal-search"), "search"),
@@ -51,10 +62,7 @@ async def _goal_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
 
 async def _contact_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
     """Provide contact prompt with i18n support."""
-    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
-        "middleware_data", {}
-    )
-    i18n = middleware.get("i18n")
+    i18n, _locale = _resolve_i18n_context(dialog_manager, kwargs)
     if i18n:
         prompt = i18n.get("handoff-contact-prompt")
         btn_chat = i18n.get("handoff-contact-chat")
@@ -89,7 +97,7 @@ async def _on_goal_selected(
 
 async def _on_contact_chat(
     callback: CallbackQuery,
-    button: Button,
+    _button: Button,
     manager: DialogManager,
 ) -> None:
     """Complete qualification with chat — trigger handoff via PropertyBot."""
@@ -105,6 +113,12 @@ async def _on_contact_chat(
     display_name = callback.from_user.full_name or "User"
     username = callback.from_user.username
     locale = manager.middleware_data.get("locale", "ru")
+    i18n = manager.middleware_data.get("i18n")
+    if i18n is None and property_bot is not None:
+        hub = getattr(property_bot, "_i18n_hub", None)
+        if hub is not None:
+            with contextlib.suppress(Exception):
+                i18n = hub.get_translator_by_locale(locale)
 
     # Tell aiogram-dialog NOT to touch the message after done().
     manager.show_mode = ShowMode.NO_UPDATE
@@ -113,7 +127,12 @@ async def _on_contact_chat(
     # Replace dialog message with status text (removes inline buttons).
     if msg and hasattr(msg, "edit_text"):
         with contextlib.suppress(Exception):
-            await msg.edit_text("💬 Соединяю с менеджером...")
+            connecting_text = (
+                i18n.get("handoff-connecting")
+                if i18n is not None
+                else "💬 Соединяю с менеджером..."
+            )
+            await msg.edit_text(connecting_text)
 
     if property_bot is None:
         logger.warning("property_bot not in middleware_data, cannot complete handoff")
