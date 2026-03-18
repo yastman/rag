@@ -349,7 +349,8 @@ async def run_client_pipeline(
 
     sources_text = ""
     documents_list: list[Any] = result.get("documents", [])
-    if getattr(config, "show_sources", False) and documents_list:
+    sources_required = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    if sources_required and documents_list:
         sources_text = format_sources(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
 
