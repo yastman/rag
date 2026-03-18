@@ -909,7 +909,7 @@ class TestTextPathFeedbackButtons:
         answer_calls = message.answer.call_args_list
         assert len(answer_calls) > 0
         last_call = answer_calls[-1]
-        assert last_call.kwargs.get("parse_mode") == "Markdown"
+        assert last_call.kwargs.get("parse_mode") == "HTML"
 
     async def test_chitchat_response_no_feedback_keyboard(self, mock_config):
         """CHITCHAT response should NOT include feedback keyboard."""
