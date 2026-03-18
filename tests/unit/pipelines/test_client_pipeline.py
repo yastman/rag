@@ -592,6 +592,64 @@ class TestPipelineFullFlow:
         assert captured_kwargs["grounding_mode"] == "strict"
         assert result.answer == "Нужна проверка менеджером."
 
+    async def test_pipeline_shows_sources_for_strict_grounding_even_when_global_sources_disabled(
+        self,
+    ):
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"text": "Документ", "score": 0.82, "metadata": {"title": "ВНЖ"}}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "topic_hint": "legal",
+        }
+        gen_result = {
+            "response": "Подтвержденный ответ.",
+            "response_sent": False,
+            "llm_call_count": 1,
+            "grounding_mode": "strict",
+            "safe_fallback_used": False,
+            "grounded": True,
+        }
+        send_chunks = AsyncMock()
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client._send_markdown_chunks", send_chunks),
+            patch(
+                "telegram_bot.pipelines.client.format_sources",
+                return_value="\n\nИсточники:\n[1] ВНЖ",
+            ),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            result = await run_client_pipeline(
+                user_text="Какие документы нужны для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(show_sources=False),
+                query_type="FAQ",
+            )
+
+        assert result.answer == "Подтвержденный ответ."
+        send_text = send_chunks.await_args.args[1]
+        assert "Подтвержденный ответ." in send_text
+        assert "Источники:" in send_text
+
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""
         msg = _make_message()
@@ -671,7 +729,7 @@ class TestPipelineFullFlow:
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",
+                user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
                 message=msg,
@@ -1563,7 +1621,7 @@ class TestStreamingFeedbackKeyboard:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",
+                user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
                 message=msg,
@@ -1619,7 +1677,7 @@ class TestStreamingFeedbackKeyboard:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",
+                user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
                 message=msg,
