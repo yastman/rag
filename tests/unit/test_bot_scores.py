@@ -301,13 +301,17 @@ class TestScoreWriting:
             # Source attribution (#225)
             "sources_shown",
             "sources_count",
+            "grounded",
+            "legal_answer_safe",
+            "semantic_cache_safe_reuse",
+            "safe_fallback_used",
             # Conversation memory (#159)
             "memory_messages_count",
             "summarization_triggered",
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.create_score.call_count == 32
+        assert mock_lf.create_score.call_count == 36
 
     def test_score_values_full_pipeline(self):
         """Score values should match the graph result state."""
@@ -587,6 +591,28 @@ class TestVoiceScores:
         assert "input_type" in score_names
         assert "stt_duration_ms" not in score_names
         assert "voice_duration_s" not in score_names
+
+
+class TestGroundingScores:
+    def test_grounding_and_safety_scores_written(self):
+        mock_lf = MagicMock()
+        result = {
+            **FULL_PIPELINE_RESULT,
+            "grounded": False,
+            "legal_answer_safe": False,
+            "semantic_cache_safe_reuse": False,
+            "safe_fallback_used": True,
+            "sources_count": 0,
+        }
+
+        _run_score_writer(result, mock_lf)
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.create_score.call_args_list}
+        assert scores["grounded"]["value"] == 0
+        assert scores["grounded"]["data_type"] == "BOOLEAN"
+        assert scores["legal_answer_safe"]["value"] == 0
+        assert scores["semantic_cache_safe_reuse"]["value"] == 0
+        assert scores["safe_fallback_used"]["value"] == 1
 
 
 class TestMemoryScores:

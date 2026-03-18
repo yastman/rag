@@ -45,6 +45,10 @@ _FULL_RESULT: dict = {
     "response_policy_mode": "enforced",
     "response_style": "balanced",
     "sources_count": 3,
+    "grounded": True,
+    "legal_answer_safe": True,
+    "semantic_cache_safe_reuse": True,
+    "safe_fallback_used": False,
     "messages": [{"role": "user"}, {"role": "assistant"}],
     "input_type": "text",
 }
@@ -129,6 +133,10 @@ def test_core_rag_score_value_is_numeric(score_name: str, all_rag_scores: dict) 
         "bge_embed_error",
         "security_alert",
         "summarization_triggered",
+        "grounded",
+        "legal_answer_safe",
+        "semantic_cache_safe_reuse",
+        "safe_fallback_used",
     ],
 )
 def test_boolean_score_has_boolean_data_type(score_name: str, all_rag_scores: dict) -> None:
