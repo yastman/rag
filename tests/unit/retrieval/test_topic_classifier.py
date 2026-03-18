@@ -14,6 +14,7 @@ from src.retrieval.topic_classifier import (
     detect_score_gap,
     get_query_topic_hint,
 )
+from telegram_bot.services.grounding_policy import get_grounding_mode
 
 
 def test_classify_chunk_topic_finance() -> None:
@@ -44,8 +45,20 @@ def test_get_query_topic_hint_legal() -> None:
     assert get_query_topic_hint("какие документы нужны для внж") == TopicLabel.LEGAL
 
 
+def test_get_query_topic_hint_legal_english() -> None:
+    assert get_query_topic_hint("bulgaria residence permit categories") == TopicLabel.LEGAL
+
+
 def test_get_query_topic_hint_returns_none_for_property_query() -> None:
     assert get_query_topic_hint("подбери квартиру у моря") is None
+
+
+def test_grounding_mode_is_strict_for_legal_query() -> None:
+    assert get_grounding_mode(query_type="FAQ", topic_hint="legal") == "strict"
+
+
+def test_grounding_mode_is_normal_for_generic_property_query() -> None:
+    assert get_grounding_mode(query_type="GENERAL", topic_hint=None) == "normal"
 
 
 def test_detect_score_gap_marks_dense_cluster_not_confident() -> None:
