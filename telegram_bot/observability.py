@@ -439,6 +439,7 @@ def traced_pipeline(
     session_id: str,
     user_id: str,
     tags: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
 ):
     """Context manager for pipeline-level trace propagation.
 
@@ -449,6 +450,7 @@ def traced_pipeline(
         session_id=session_id,
         user_id=user_id,
         tags=tags or [],
+        metadata=metadata or {},
     )
 
 
