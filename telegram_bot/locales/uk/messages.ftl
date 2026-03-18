@@ -158,6 +158,7 @@ kb-viewing = 📅 Запис на огляд
 kb-manager = 👤 Зв'язатися з менеджером
 kb-ask = 💬 Задати питання
 kb-bookmarks = 📌 Мої закладки
+kb-demo = 🎯 Демонстрація
 
 ***REMOVED*** Welcome (***REMOVED***660)
 welcome-text =
