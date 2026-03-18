@@ -771,7 +771,7 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
     assert message.answer.await_count == 1
     sent_msg.edit_text.assert_awaited_once_with(
         "Полный ответ после recovery",
-        parse_mode="Markdown",
+        parse_mode="HTML",
     )
 
 
