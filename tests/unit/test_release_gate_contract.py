@@ -32,10 +32,28 @@ def test_ci_deploy_runs_prod_env_preflight_before_build() -> None:
     assert workflow.index("./scripts/validate_prod_env.sh") < workflow.index("docker compose build")
 
 
+def test_ci_deploy_force_recreates_services_after_build() -> None:
+    """CI deploy must recreate services so rebuilt images actually reach runtime."""
+    workflow = CI_WORKFLOW.read_text()
+    assert "docker compose --compatibility up -d --force-recreate" in workflow
+    assert workflow.index("docker compose build") < workflow.index(
+        "docker compose --compatibility up -d --force-recreate"
+    )
+
+
 def test_manual_deploy_uses_strict_mini_app_release_smoke() -> None:
     """Manual VPS deploy must use the same strict release contract as CI."""
     script = DEPLOY_SCRIPT.read_text()
     assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" in script
+
+
+def test_manual_deploy_force_recreates_services_after_build() -> None:
+    """Manual deploy must recreate services so rebuilt images replace stale containers."""
+    script = DEPLOY_SCRIPT.read_text()
+    assert "docker compose --compatibility up -d --force-recreate" in script
+    assert script.index("docker compose build") < script.index(
+        "docker compose --compatibility up -d --force-recreate"
+    )
 
 
 def test_release_gate_script_contains_handoff_contract() -> None:
