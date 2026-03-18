@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 import re
 import time
+from secrets import choice
 from typing import Any
 
 from langgraph.runtime import Runtime
@@ -240,9 +240,9 @@ def _get_chitchat_response(query: str) -> str:
         (farewell_re, "farewell"),
     ]:
         if any(re.match(p, q) for p in patterns):
-            return random.choice(CHITCHAT_RESPONSES[category])
+            return choice(CHITCHAT_RESPONSES[category])
 
-    return random.choice(CHITCHAT_RESPONSES["greeting"])
+    return choice(CHITCHAT_RESPONSES["greeting"])
 
 
 @observe(name="classify-query", capture_input=False, capture_output=False)
@@ -316,6 +316,6 @@ async def classify_node(
     if query_type == CHITCHAT:
         result["response"] = _get_chitchat_response(query)
     elif query_type == OFF_TOPIC:
-        result["response"] = random.choice(OFF_TOPIC_RESPONSES)
+        result["response"] = choice(OFF_TOPIC_RESPONSES)
 
     return result
