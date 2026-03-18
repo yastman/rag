@@ -20,6 +20,7 @@ from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.grounding_policy import get_grounding_mode
 from telegram_bot.services.history_service import HistoryService
+from telegram_bot.services.telegram_formatting import send_html_messages
 from telegram_bot.services.types import PipelineResult
 
 
@@ -147,26 +148,36 @@ def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) ->
     return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
+async def _send_html_chunks(
+    message: Any,
+    text: str,
+    *,
+    reply_markup: Any | None = None,
+    reply_to_user_text: str | None = None,
+) -> None:
+    """Send response in chunks with Telegram HTML formatting."""
+    await send_html_messages(
+        message,
+        text,
+        reply_markup=reply_markup,
+        reply_to_user_text=reply_to_user_text,
+    )
+
+
 async def _send_markdown_chunks(
     message: Any,
     text: str,
     *,
     reply_markup: Any | None = None,
+    reply_to_user_text: str | None = None,
 ) -> None:
-    """Send response in chunks with Markdown parse_mode fallback."""
-    chunks = _split_telegram_response(text)
-    for i, chunk in enumerate(chunks):
-        is_last = i == len(chunks) - 1
-        markup = reply_markup if is_last else None
-        try:
-            await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
-        except Exception:
-            logger.warning("Markdown parse failed in client pipeline, falling back")
-            try:
-                await message.answer(chunk, reply_markup=markup)
-            except Exception:
-                logger.exception("Failed to send response chunk in client pipeline")
-                await message.answer(chunk)
+    """Backward-compatible alias for the old sender name."""
+    await _send_html_chunks(
+        message,
+        text,
+        reply_markup=reply_markup,
+        reply_to_user_text=reply_to_user_text,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +240,7 @@ async def run_client_pipeline(
     # --- Step a) Classify gate ---
     if query_type in _NO_RAG_QUERY_TYPES:
         response_text = _build_non_rag_response(query_type)
-        await _send_markdown_chunks(message, response_text)
+        await _send_html_chunks(message, response_text, reply_to_user_text=user_text)
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
         return PipelineResult(
             answer=response_text,
@@ -349,18 +360,20 @@ async def run_client_pipeline(
 
         reply_markup = build_feedback_keyboard(trace_id)
 
-    sources_text = ""
+    sources_html = ""
     documents_list: list[Any] = result.get("documents", [])
     sources_required = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
     if sources_required and documents_list:
-        sources_text = format_sources(documents_list)
+        sources_html = format_sources(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
 
     response_already_sent = result.get("response_sent", False)
     if response_already_sent:
         # Streaming already delivered the main response; only send sources if applicable.
-        if sources_text:
-            await _send_markdown_chunks(message, sources_text, reply_markup=reply_markup)
+        if sources_html:
+            await send_html_messages(
+                message, "", sources_html=sources_html, reply_markup=reply_markup
+            )
         elif reply_markup:
             # Attach feedback keyboard to the streamed message (#745).
             ref = result.get("sent_message")
@@ -377,8 +390,13 @@ async def run_client_pipeline(
                         exc_info=True,
                     )
     else:
-        full_response = response_text + sources_text if sources_text else response_text
-        await _send_markdown_chunks(message, full_response, reply_markup=reply_markup)
+        await send_html_messages(
+            message,
+            response_text,
+            sources_html=sources_html,
+            reply_markup=reply_markup,
+            reply_to_user_text=user_text,
+        )
 
     # --- Step f) Post-process ---
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
