@@ -129,22 +129,22 @@ async def cache_check_node(
 
     # ColBERT vectors are only needed after semantic miss.
     if colbert_query is None:
-        _has_colbert_only = callable(
-            getattr(embeddings, "aembed_colbert_query", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
         _has_hybrid_colbert = callable(
             getattr(embeddings, "aembed_hybrid_with_colbert", None)
         ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+        _has_colbert_only = callable(
+            getattr(embeddings, "aembed_colbert_query", None)
+        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
 
-        if _has_colbert_only:
-            try:
-                colbert_query = await embeddings.aembed_colbert_query(query)
-            except Exception:
-                logger.debug("ColBERT query encode failed (non-critical), skipping")
-        elif _has_hybrid_colbert:
+        if _has_hybrid_colbert:
             try:
                 _, sparse, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
                 await cache.store_sparse_embedding(query, sparse)
+            except Exception:
+                logger.debug("ColBERT query encode failed (non-critical), skipping")
+        elif _has_colbert_only:
+            try:
+                colbert_query = await embeddings.aembed_colbert_query(query)
             except Exception:
                 logger.debug("ColBERT query encode failed (non-critical), skipping")
 

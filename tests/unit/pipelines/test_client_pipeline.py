@@ -526,6 +526,45 @@ class TestPipelineFullFlow:
         call_kwargs = mock_gen.call_args.kwargs
         assert call_kwargs.get("message") is msg, "message not forwarded to generate_response"
 
+    async def test_pipeline_passes_semantic_cache_already_checked_to_rag_pipeline(self):
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "Cached-ish",
+            "cache_hit": False,
+            "documents": [],
+            "grade_confidence": 0.0,
+            "llm_call_count": 0,
+            "latency_stages": {},
+        }
+        rag_store = {"semantic_cache_already_checked": True}
+
+        mock_rag = AsyncMock(return_value=rag_result)
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline", mock_rag),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в центре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store=rag_store,
+            )
+
+        assert mock_rag.await_args.kwargs["semantic_cache_already_checked"] is True
+
     async def test_pipeline_no_double_send_when_streaming_delivers(self):
         """When streaming delivers the response (response_sent=True), _send_markdown_chunks
         must NOT send the main body again (#571)."""
