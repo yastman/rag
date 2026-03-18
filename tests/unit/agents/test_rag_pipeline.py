@@ -113,6 +113,26 @@ async def test_cache_check_hit(mock_cache, mock_embeddings):
     mock_embeddings.aembed_colbert_query.assert_not_awaited()
 
 
+async def test_cache_check_skips_semantic_when_already_checked(mock_cache, mock_embeddings):
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value="should not be used")
+
+    result = await _cache_check(
+        "квартиры",
+        "FAQ",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        semantic_cache_already_checked=True,
+    )
+
+    assert result["cache_hit"] is False
+    mock_cache.check_semantic.assert_not_awaited()
+
+
 async def test_cache_check_embedding_error(mock_cache, mock_embeddings):
     from telegram_bot.agents.rag_pipeline import _cache_check
 
@@ -314,6 +334,62 @@ async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_sma
     second_call = mock_qdrant.hybrid_search_rrf.await_args_list[1].kwargs
     assert first_call["filters"] == {"topic": "finance"}
     assert second_call["filters"] is None
+
+
+async def test_hybrid_retrieve_emits_topic_relax_trace_markers(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        side_effect=[
+            (
+                [{"text": "narrow", "score": 0.9, "metadata": {"topic": "legal"}}],
+                {"backend_error": False, "error_type": None, "error_message": None},
+            ),
+            (
+                [
+                    {"text": "broad-1", "score": 0.95, "metadata": {}},
+                    {"text": "broad-2", "score": 0.85, "metadata": {}},
+                    {"text": "broad-3", "score": 0.75, "metadata": {}},
+                ],
+                {"backend_error": False, "error_type": None, "error_message": None},
+            ),
+        ]
+    )
+    mock_lf = MagicMock()
+
+    with patch("telegram_bot.agents.rag_pipeline.get_client", return_value=mock_lf):
+        result = await _hybrid_retrieve(
+            "виды внж в болгарии?",
+            [0.1] * 1024,
+            cache=mock_cache,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+            colbert_query=[[0.2] * 1024] * 4,
+            topic_hint="legal",
+            latency_stages={},
+        )
+
+    assert len(result["documents"]) == 3
+    assert mock_qdrant.hybrid_search_rrf_colbert.await_count == 2
+    first_call = mock_qdrant.hybrid_search_rrf_colbert.await_args_list[0].kwargs
+    second_call = mock_qdrant.hybrid_search_rrf_colbert.await_args_list[1].kwargs
+    assert first_call["filters"] == {"topic": "legal"}
+    assert second_call["filters"] is None
+
+    output_calls = [
+        call.kwargs["output"]
+        for call in mock_lf.update_current_span.call_args_list
+        if "output" in call.kwargs
+    ]
+    assert output_calls
+    final_output = output_calls[-1]
+    assert final_output["initial_filters"] == {"topic": "legal"}
+    assert final_output["final_filters"] is None
+    assert final_output["initial_results_count"] == 1
+    assert final_output["retrieval_relaxed_from_topic_filter"] is True
+    assert final_output["retrieval_relax_stage"] == "topic_to_none"
+    assert final_output["qdrant_search_attempts"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -1374,6 +1450,35 @@ async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
     assert result["colbert_query"] == colbert
     # Must NOT call aembed_hybrid_with_colbert since colbert was pre-computed
     mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
+
+
+async def test_cache_check_prefers_hybrid_colbert_over_standalone(mock_cache):
+    """When both APIs exist, prefer one-pass hybrid_with_colbert."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [2], "values": [0.9]}
+    colbert = [[0.2] * 1024]
+
+    mock_cache.get_embedding = AsyncMock(return_value=dense)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(return_value=(dense, sparse, colbert))
+    mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.7] * 1024])
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["colbert_query"] == colbert
+    mock_embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+    mock_embeddings.aembed_colbert_query.assert_not_awaited()
 
 
 async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mock_cache):
