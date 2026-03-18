@@ -126,4 +126,22 @@ else
   warn "mini app endpoint check skipped (REQUIRE_MINI_APP_ENDPOINT=${REQUIRE_MINI_APP_ENDPOINT})"
 fi
 
+HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"
+
+if [ "$HANDOFF_ENABLED" = "true" ]; then
+  log "Handoff release smoke"
+  docker compose exec -T bot python - <<'PY'
+import os
+
+handoff_enabled = os.getenv("HANDOFF_ENABLED", "false")
+managers_group_id = os.getenv("MANAGERS_GROUP_ID", "")
+
+assert handoff_enabled == "true", "HANDOFF_ENABLED is not true in bot container"
+assert managers_group_id, "MANAGERS_GROUP_ID missing in bot container"
+print("  ok: handoff env contract present in bot container")
+PY
+else
+  warn "handoff smoke skipped (HANDOFF_ENABLED=${HANDOFF_ENABLED})"
+fi
+
 log "Release smoke passed"
