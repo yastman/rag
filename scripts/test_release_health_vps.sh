@@ -111,7 +111,7 @@ if [ "$mini_expected" = "true" ]; then
     fail "mini-app-api is not running"
   fi
 
-  docker compose exec -T mini-app-frontend wget -qO- http://localhost/health >/dev/null \
+  docker compose exec -T mini-app-frontend wget -qO- http://127.0.0.1/health >/dev/null \
     || fail "mini-app-frontend internal /health failed"
   docker compose exec -T mini-app-api python - <<'PY'
 import urllib.request
