@@ -203,11 +203,11 @@ fi
 # =============================================================================
 # Step 5: Start services
 # =============================================================================
-log "Starting services..."
+log "Starting services from rebuilt images..."
 if ! $DRY_RUN; then
-    ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && docker compose --compatibility up -d"
+    ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && docker compose --compatibility up -d --force-recreate"
 else
-    info "[dry-run] Would run: docker compose --compatibility up -d"
+    info "[dry-run] Would run: docker compose --compatibility up -d --force-recreate"
 fi
 
 # =============================================================================
