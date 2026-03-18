@@ -158,6 +158,7 @@ kb-viewing = 📅 Book a Viewing
 kb-manager = 👤 Contact manager
 kb-ask = 💬 Ask a Question
 kb-bookmarks = 📌 My Bookmarks
+kb-demo = 🎯 Demo
 
 # Welcome (#660)
 welcome-text =

@@ -11,6 +11,7 @@ from telegram_bot.keyboards.client_keyboard import (
     get_menu_button_texts,
     parse_menu_button,
 )
+from telegram_bot.middlewares.i18n import create_translator_hub
 
 
 # --- Fallback (no i18n) tests ---
@@ -143,6 +144,7 @@ def test_parse_with_i18n_hub():
         "kb-manager": "👤 Менеджер",
         "kb-ask": "💬 Задати питання",
         "kb-bookmarks": "📌 Мої закладки",
+        "kb-demo": "🎯 Демонстрація",
     }.get(key, key)
     mock_hub.get_translator_by_locale.return_value = mock_translator
 
@@ -247,6 +249,7 @@ def test_get_menu_button_texts_includes_localized_labels():
                 "kb-manager": "👤 Менеджер",
                 "kb-ask": "💬 Задать вопрос",
                 "kb-bookmarks": "📌 Мои закладки",
+                "kb-demo": "🎯 Демонстрация",
             },
             "uk": {
                 "kb-search": "🏠 Підібрати квартиру",
@@ -255,6 +258,7 @@ def test_get_menu_button_texts_includes_localized_labels():
                 "kb-manager": "👤 Менеджер",
                 "kb-ask": "💬 Задати питання",
                 "kb-bookmarks": "📌 Мої закладки",
+                "kb-demo": "🎯 Демонстрація",
             },
             "en": {
                 "kb-search": "🏠 Find Apartment",
@@ -263,6 +267,7 @@ def test_get_menu_button_texts_includes_localized_labels():
                 "kb-manager": "👤 Manager",
                 "kb-ask": "💬 Ask a Question",
                 "kb-bookmarks": "📌 My Bookmarks",
+                "kb-demo": "🎯 Demo",
             },
         }[locale]
         translator.get.side_effect = lambda key, **_kw: mapping.get(key, key)
@@ -274,3 +279,14 @@ def test_get_menu_button_texts_includes_localized_labels():
     assert "🔑 Послуги" in texts
     assert "🏠 Find Apartment" in texts
     assert "🔑 Услуги" in texts
+    assert "🎯 Demo" in texts
+
+
+def test_client_keyboard_keys_exist_in_all_locales():
+    hub = create_translator_hub()
+
+    for locale in ("ru", "en", "uk"):
+        translator = hub.get_translator_by_locale(locale)
+        for key in _ACTION_IDS:
+            result = translator.get(key)
+            assert result != key, f"Missing key '{key}' in locale '{locale}'"
