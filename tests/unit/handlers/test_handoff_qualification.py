@@ -7,6 +7,8 @@ import pytest
 
 from telegram_bot.dialogs.handoff import (
     _GOAL_OPTIONS,
+    _contact_getter,
+    _goal_getter,
     _on_contact_chat,
     handoff_dialog,
 )
@@ -16,6 +18,7 @@ from telegram_bot.handlers.handoff import (
     parse_qual_callback,
     start_qualification,
 )
+from telegram_bot.middlewares.i18n import create_translator_hub
 
 
 def test_parse_qual_callback_goal():
@@ -113,6 +116,43 @@ def test_start_qualification_accepts_dialog_manager():
 
 
 @pytest.mark.asyncio
+async def test_goal_getter_prefers_current_middleware_context():
+    hub = create_translator_hub()
+    ru_i18n = hub.get_translator_by_locale("ru")
+    en_i18n = hub.get_translator_by_locale("en")
+
+    manager = MagicMock()
+    manager.middleware_data = {"i18n": ru_i18n, "locale": "ru"}
+
+    result = await _goal_getter(
+        manager,
+        middleware_data={"i18n": en_i18n, "locale": "en"},
+    )
+
+    assert result["prompt"] == "📋 What topic are you interested in?"
+    assert result["goals"][2][0] == "💬 Consultation"
+
+
+@pytest.mark.asyncio
+async def test_contact_getter_prefers_current_middleware_context():
+    hub = create_translator_hub()
+    ru_i18n = hub.get_translator_by_locale("ru")
+    en_i18n = hub.get_translator_by_locale("en")
+
+    manager = MagicMock()
+    manager.middleware_data = {"i18n": ru_i18n, "locale": "ru"}
+
+    result = await _contact_getter(
+        manager,
+        middleware_data={"i18n": en_i18n, "locale": "en"},
+    )
+
+    assert result["prompt"] == "How would you prefer to be contacted?"
+    assert result["btn_chat"] == "💬 Chat with manager"
+    assert result["btn_back"] == "Back"
+
+
+@pytest.mark.asyncio
 async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
     property_bot = MagicMock()
     property_bot._complete_handoff = AsyncMock()
@@ -137,3 +177,33 @@ async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
 
     kwargs = property_bot._complete_handoff.await_args.kwargs
     assert kwargs["locale"] == "en"
+
+
+@pytest.mark.asyncio
+async def test_on_contact_chat_localizes_connecting_message():
+    hub = create_translator_hub()
+    property_bot = MagicMock()
+    property_bot._complete_handoff = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = SimpleNamespace(id=7, full_name="Test User", username="tester")
+    callback.message = AsyncMock()
+    callback.message.edit_text = AsyncMock()
+
+    manager = MagicMock()
+    manager.start_data = {}
+    manager.dialog_data = {"goal": "consult"}
+    manager.middleware_data = {
+        "property_bot": property_bot,
+        "state": AsyncMock(),
+        "locale": "en",
+        "i18n": hub.get_translator_by_locale("en"),
+    }
+    manager.done = AsyncMock()
+    manager.show_mode = None
+
+    await _on_contact_chat(callback, MagicMock(), manager)
+
+    callback.message.edit_text.assert_awaited_once_with(
+        "Connecting you with a manager. While you wait — I can answer questions!"
+    )
