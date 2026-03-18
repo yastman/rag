@@ -25,6 +25,10 @@ class TestCollectionVerify:
         assert "metadata.file_id" in missing
         assert "metadata.doc_id" in missing
         assert "metadata.order" in missing
+        assert "metadata.source_type" in missing
+        assert "metadata.jurisdiction" in missing
+        assert "metadata.audience" in missing
+        assert "metadata.language" in missing
 
     def test_verify_returns_empty_when_complete(self):
         """verify_collection should return empty list when all indexes present."""
@@ -37,8 +41,12 @@ class TestCollectionVerify:
             "metadata.file_id": MagicMock(data_type="keyword"),
             "metadata.doc_id": MagicMock(data_type="keyword"),
             "metadata.source": MagicMock(data_type="keyword"),
+            "metadata.source_type": MagicMock(data_type="keyword"),
             "metadata.topic": MagicMock(data_type="keyword"),
             "metadata.doc_type": MagicMock(data_type="keyword"),
+            "metadata.jurisdiction": MagicMock(data_type="keyword"),
+            "metadata.audience": MagicMock(data_type="keyword"),
+            "metadata.language": MagicMock(data_type="keyword"),
             "metadata.order": MagicMock(data_type="integer"),
             "metadata.chunk_order": MagicMock(data_type="integer"),
         }
