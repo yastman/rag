@@ -181,6 +181,16 @@ if $CLEAN; then
 fi
 
 # =============================================================================
+# Step 3a: Normalize bind-mounted config permissions on VPS
+# =============================================================================
+log "Normalizing bind-mounted config permissions..."
+if ! $DRY_RUN; then
+    ssh_cmd "chmod 644 ${VPS_DIR}/docker/litellm/config.yaml"
+else
+    info "[dry-run] Would run: chmod 644 ${VPS_DIR}/docker/litellm/config.yaml"
+fi
+
+# =============================================================================
 # Step 4: Build images on VPS
 # =============================================================================
 log "Building Docker images on VPS..."
