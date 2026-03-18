@@ -60,6 +60,7 @@ def build_reply_parameters(message: Any, user_text: str) -> Any | None:
     """Build Telegram reply quote params for long/complex user questions."""
     if not isinstance(user_text, str):
         return None
+    original_text = user_text
     text = user_text.strip()
     message_id = getattr(message, "message_id", None)
     if not isinstance(message_id, int):
@@ -72,13 +73,15 @@ def build_reply_parameters(message: Any, user_text: str) -> Any | None:
     except Exception:
         return None
 
-    normalized = " ".join(text.split())
-    if len(normalized) > _QUOTE_MAX_LEN:
-        normalized = normalized[: _QUOTE_MAX_LEN - 3].rstrip() + "..."
+    # Telegram requires `quote` to be an exact substring of the original message.
+    # Keep the original whitespace and truncate by prefix only, without adding ellipsis.
+    quote_text = original_text
+    if len(quote_text) > _QUOTE_MAX_LEN:
+        quote_text = quote_text[:_QUOTE_MAX_LEN]
 
     return ReplyParameters(
         message_id=message_id,
-        quote=_escape_html(normalized),
+        quote=_escape_html(quote_text),
         quote_parse_mode="HTML",
     )
 
