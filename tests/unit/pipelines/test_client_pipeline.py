@@ -622,7 +622,7 @@ class TestPipelineFullFlow:
             _patch_observability(lf),
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
-            patch("telegram_bot.pipelines.client._send_markdown_chunks", send_chunks),
+            patch("telegram_bot.pipelines.client.send_html_messages", send_chunks),
             patch(
                 "telegram_bot.pipelines.client.format_sources",
                 return_value="\n\nИсточники:\n[1] ВНЖ",
@@ -648,7 +648,8 @@ class TestPipelineFullFlow:
         assert result.answer == "Подтвержденный ответ."
         send_text = send_chunks.await_args.args[1]
         assert "Подтвержденный ответ." in send_text
-        assert "Источники:" in send_text
+        assert "Источники:" not in send_text
+        assert send_chunks.await_args.kwargs["sources_html"] == "\n\nИсточники:\n[1] ВНЖ"
 
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""

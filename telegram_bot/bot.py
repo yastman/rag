@@ -2573,20 +2573,10 @@ class PropertyBot:
         *,
         reply_markup: Any | None = None,
     ) -> None:
-        """Send long Telegram response in chunks with Markdown fallback."""
-        chunks = list(_split_telegram_response(text))
-        for i, chunk in enumerate(chunks):
-            is_last = i == len(chunks) - 1
-            markup = reply_markup if is_last else None
-            try:
-                await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
-            except Exception:
-                logger.warning("Markdown parse failed in text path, falling back")
-                try:
-                    await message.answer(chunk, reply_markup=markup)
-                except Exception:
-                    logger.exception("Failed to send text response chunk")
-                    await message.answer(chunk)
+        """Send long Telegram response in chunks with Telegram HTML formatting."""
+        from telegram_bot.services.telegram_formatting import send_html_messages
+
+        await send_html_messages(message, text, reply_markup=reply_markup)
 
     async def _handle_apartment_fast_path(
         self,
@@ -3296,7 +3286,7 @@ class PropertyBot:
                     reply_markup = ctx.history_reply_markup
 
                 # Build source attribution
-                sources_text = ""
+                sources_html = ""
                 documents = rag_result_store.get("documents", [])
                 if (
                     self._graph_config.show_sources
@@ -3309,58 +3299,64 @@ class PropertyBot:
                 ):
                     from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
 
-                    sources_text = format_sources(documents)
+                    sources_html = format_sources(documents)
                     rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
-
-                full_response = response_text + sources_text if sources_text else response_text
 
                 # Send via DraftStreamer (supports forum thread routing)
                 from telegram_bot.services.draft_streamer import DraftStreamer
+                from telegram_bot.services.telegram_formatting import (
+                    build_html_messages,
+                    send_html_messages,
+                )
+
+                html_messages = build_html_messages(response_text, sources_html=sources_html)
 
                 if message.chat.type == "private":
                     draft_streamer = rag_result_store.get("_draft_streamer")
                     try:
-                        if draft_streamer is None:
+                        if draft_streamer is None and len(html_messages) == 1:
                             draft_streamer = DraftStreamer(
                                 bot=self.bot,
                                 chat_id=message.chat.id,
                                 thread_id=forum_thread_id,
                             )
-                        await draft_streamer.finalize(
-                            full_response,
-                            parse_mode="Markdown",
-                            reply_markup=reply_markup,
-                        )
+                        if draft_streamer is not None and len(html_messages) == 1:
+                            await draft_streamer.finalize(
+                                html_messages[0],
+                                parse_mode="HTML",
+                                reply_markup=reply_markup,
+                            )
+                        else:
+                            await send_html_messages(
+                                message,
+                                response_text,
+                                sources_html=sources_html,
+                                reply_markup=reply_markup,
+                            )
                         ctx.response_sent = True
                     except Exception:
                         logger.warning("DraftStreamer failed, falling back to message.answer")
                         try:
-                            await message.answer(
-                                full_response,
-                                parse_mode="Markdown",
+                            await send_html_messages(
+                                message,
+                                response_text,
+                                sources_html=sources_html,
                                 reply_markup=reply_markup,
                             )
                             ctx.response_sent = True
                         except Exception:
                             logger.exception("Failed to send text response")
-                            await message.answer(full_response)
+                            if response_text:
+                                await message.answer(response_text)
                             ctx.response_sent = True
                 else:
-                    # Send with Markdown, fallback to plain text
-                    chunks = list(_split_telegram_response(full_response))
-                    for i, chunk in enumerate(chunks):
-                        is_last = i == len(chunks) - 1
-                        markup = reply_markup if is_last else None
-                        try:
-                            await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
-                        except Exception:
-                            logger.warning("Markdown parse failed in text path, falling back")
-                            try:
-                                await message.answer(chunk, reply_markup=markup)
-                            except Exception:
-                                logger.exception("Failed to send text response chunk")
-                                await message.answer(chunk)
-                    if chunks:
+                    await send_html_messages(
+                        message,
+                        response_text,
+                        sources_html=sources_html,
+                        reply_markup=reply_markup,
+                    )
+                    if html_messages:
                         ctx.response_sent = True
 
             # Store final agent response in semantic cache for cacheable query types.
