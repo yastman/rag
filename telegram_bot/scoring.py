@@ -223,6 +223,34 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         value=1 if summarize_ms > 0 else 0,
         data_type="BOOLEAN",
     )
+    score(
+        lf,
+        trace_id,
+        name="grounded",
+        value=1 if result.get("grounded", True) else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="legal_answer_safe",
+        value=1 if result.get("legal_answer_safe", True) else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="semantic_cache_safe_reuse",
+        value=1 if result.get("semantic_cache_safe_reuse", True) else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="safe_fallback_used",
+        value=1 if result.get("safe_fallback_used") else 0,
+        data_type="BOOLEAN",
+    )
 
     # Checkpointer overhead proxy (#159)
     if "checkpointer_overhead_proxy_ms" in result:

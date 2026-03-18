@@ -85,6 +85,21 @@ class TestQdrantServiceQuantization:
         assert "metadata.topic" in must_keys
         assert "metadata.doc_type" in must_keys
 
+    async def test_build_filter_maps_jurisdiction_and_audience(self, service):
+        """Hybrid search maps jurisdiction/audience filters to metadata payload keys."""
+        mock_point = _make_mock_point()
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        await service.hybrid_search_rrf(
+            dense_vector=[0.1] * 1024,
+            filters={"jurisdiction": "bg", "audience": "client"},
+        )
+
+        query_filter = service._client.query_points.call_args.kwargs["query_filter"]
+        must_keys = [condition.key for condition in query_filter.must]
+        assert "metadata.jurisdiction" in must_keys
+        assert "metadata.audience" in must_keys
+
     async def test_quantization_params_values(self, service):
         """Test that ignore/rescore/oversampling values are correctly set."""
         mock_point = _make_mock_point()

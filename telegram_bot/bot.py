@@ -2789,10 +2789,13 @@ class PropertyBot:
         expert_id: str | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
+        from src.retrieval.topic_classifier import get_query_topic_hint
+
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
+        from .pipelines.state_contract import build_pre_agent_miss_contract
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -2885,6 +2888,7 @@ class PropertyBot:
                     embedding = await self._cache.get_embedding(user_text)
                     sparse = await self._cache.get_sparse_embedding(user_text)
                     colbert = None
+                    embedding_bundle_cached = embedding is not None and sparse is not None
                     if embedding is None:
                         _has_hybrid_colbert = callable(
                             getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
@@ -3014,7 +3018,7 @@ class PropertyBot:
                     rag_result_store["cache_key_sparse"] = sparse
                     rag_result_store["query_type"] = query_type
                     # Compute colbert if not yet available to avoid double embed in rag_pipeline (#634)
-                    if colbert is None:
+                    if colbert is None and not embedding_bundle_cached:
                         _has_colbert_only = callable(
                             getattr(self._embeddings, "aembed_colbert_query", None)
                         ) and asyncio.iscoroutinefunction(self._embeddings.aembed_colbert_query)
@@ -3024,6 +3028,15 @@ class PropertyBot:
                             except Exception:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
+                    topic_hint = get_query_topic_hint(user_text)
+                    rag_result_store["state_contract"] = build_pre_agent_miss_contract(
+                        query_type=query_type,
+                        topic_hint=topic_hint.value if topic_hint is not None else None,
+                        dense_vector=embedding,
+                        sparse_vector=sparse if isinstance(sparse, dict) else None,
+                        colbert_query=colbert,
+                        grounding_mode="normal",
+                    )
                 except Exception:
                     logger.warning(
                         "Pre-agent cache check failed, proceeding to agent", exc_info=True
@@ -3042,7 +3055,9 @@ class PropertyBot:
                         if root_trace_metadata is not None:
                             root_trace_metadata.update(
                                 {
+                                    "route": "client_direct",
                                     "pipeline_mode": "client_direct",
+                                    "query_type": query_type,
                                     "pre_agent_ms": rag_result_store["pre_agent_ms"],
                                 }
                             )
@@ -3060,6 +3075,19 @@ class PropertyBot:
                             if root_trace_metadata is not None:
                                 root_trace_metadata.update(
                                     {
+                                        "route": rag_result_store.get("route", "client_direct"),
+                                        "pipeline_mode": rag_result_store.get(
+                                            "pipeline_mode", "client_direct"
+                                        ),
+                                        "query_type": rag_result_store.get(
+                                            "query_type", query_type
+                                        ),
+                                        "topic_hint": rag_result_store.get("topic_hint", ""),
+                                        "grounding_mode": rag_result_store.get(
+                                            "grounding_mode", ""
+                                        ),
+                                        "collection": rag_result_store.get("collection", ""),
+                                        "environment": rag_result_store.get("environment", ""),
                                         "pipeline_wall_ms": rag_result_store.get(
                                             "pipeline_wall_ms"
                                         ),
