@@ -74,7 +74,13 @@ async def rag_search(
     ctx = configurable.get("bot_context")
 
     lf = get_client()
-    lf.update_current_span(input={"query_preview": query[:120]})
+    lf.update_current_span(
+        input={
+            "query_preview": query[:120],
+            "property_type": property_type,
+            "budget_range": budget_range,
+        }
+    )
 
     try:
         query_type = classify_query(query)

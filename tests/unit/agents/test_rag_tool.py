@@ -75,6 +75,35 @@ async def test_rag_search_calls_pipeline(bot_context):
     assert "Квартира 50м2" in result
 
 
+async def test_rag_search_records_optional_filter_inputs(bot_context):
+    """rag_search preserves optional tool args in observability metadata."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    mock_lf = MagicMock()
+
+    with (
+        patch(
+            "telegram_bot.agents.rag_tool.rag_pipeline",
+            new_callable=AsyncMock,
+            return_value=_pipeline_result(),
+        ),
+        patch("telegram_bot.agents.rag_tool.get_client", return_value=mock_lf),
+    ):
+        await rag_search.ainvoke(
+            {
+                "query": "цены на квартиры",
+                "property_type": "apartment",
+                "budget_range": "50000-80000",
+            },
+            config=_make_config(bot_context),
+        )
+
+    assert mock_lf.update_current_span.call_count >= 1
+    first_call = mock_lf.update_current_span.call_args_list[0]
+    assert first_call.kwargs["input"]["property_type"] == "apartment"
+    assert first_call.kwargs["input"]["budget_range"] == "50000-80000"
+
+
 async def test_rag_search_returns_fallback_on_empty(bot_context):
     """rag_search returns fallback when pipeline returns no documents."""
     from telegram_bot.agents.rag_tool import rag_search
