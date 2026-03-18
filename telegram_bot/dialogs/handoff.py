@@ -104,7 +104,7 @@ async def _on_contact_chat(
     user_id = callback.from_user.id
     display_name = callback.from_user.full_name or "User"
     username = callback.from_user.username
-    locale = "ru"
+    locale = manager.middleware_data.get("locale", "ru")
 
     # Tell aiogram-dialog NOT to touch the message after done().
     manager.show_mode = ShowMode.NO_UPDATE
