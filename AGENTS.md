@@ -13,6 +13,7 @@
 
 ## MCP Priority And Fallbacks
 - `grepai` is the default entry point for code discovery, semantic search, and call-graph tracing.
+- In this repo, prefer `grepai` project-local mode by default: call `grepai_search` and `grepai_trace_*` without `workspace` unless a named workspace has been explicitly configured.
 - Use `rg` instead of `grepai` only for exact strings, imports, symbols, or file path patterns.
 - `context-mode` is the default entry point for high-output command exploration, external docs, and large-file analysis.
 - Use direct shell or file reads when you need exact file contents for editing, the output is small, or MCP adds no value.
@@ -30,6 +31,7 @@
 
 ## Working Rules
 - Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
+- Do not pass `workspace` or `projects` to `grepai` MCP calls in this repo unless `grepai_list_workspaces` confirms the workspace exists; otherwise use workspace-less local-project queries.
 - Use `mcp__context-mode__ctx_batch_execute` for multi-command repo exploration.
 - Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
 - Use direct shell/file reads when you need exact contents for editing or the output is small.
