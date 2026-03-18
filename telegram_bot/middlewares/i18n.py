@@ -20,6 +20,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _resolve_event_user(event: Any, data: dict[str, Any]) -> Any | None:
+    """Resolve the acting Telegram user from middleware data or the event itself."""
+    user = data.get("event_from_user")
+    if user is not None:
+        return user
+    return getattr(event, "from_user", None)
+
+
 def create_translator_hub(
     *,
     locales_dir: Path | None = None,
@@ -84,7 +92,7 @@ class I18nMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        user = data.get("event_from_user")
+        user = _resolve_event_user(event, data)
         locale = self._default_locale
         locale_loaded_from_storage = False
 

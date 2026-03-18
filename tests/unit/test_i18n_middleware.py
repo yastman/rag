@@ -193,6 +193,31 @@ class TestI18nMiddlewareCall:
 
         assert data["locale"] == "en"
 
+    async def test_falls_back_to_event_from_user_when_data_key_missing(self):
+        hub = self._make_hub()
+        user_service = MagicMock()
+        user_service.get_or_create = AsyncMock(return_value=MagicMock(locale="ru"))
+        mw = I18nMiddleware(hub=hub, user_service=user_service, default_locale="en")
+
+        user = MagicMock(spec=User)
+        user.id = 321
+        user.language_code = "en"
+        user.first_name = "Test"
+
+        event = MagicMock(spec=Message)
+        event.from_user = user
+        handler = AsyncMock(return_value=None)
+        data: dict = {}
+
+        await mw(handler, event, data)
+
+        assert data["locale"] == "ru"
+        user_service.get_or_create.assert_called_once_with(
+            telegram_id=321,
+            first_name="Test",
+            language_code="en",
+        )
+
 
 class TestSetupI18nMiddleware:
     """Test that setup_i18n_middleware accepts only 3 params."""
