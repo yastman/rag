@@ -242,6 +242,7 @@ async def run_client_pipeline(
     pre_computed = _store.get("cache_key_embedding")
     pre_computed_sparse = _store.get("cache_key_sparse")
     pre_computed_colbert = _store.get("cache_key_colbert")
+    semantic_cache_already_checked = bool(_store.get("semantic_cache_already_checked"))
     pre_agent_ms = float(_store.get("pre_agent_ms", 0.0) or 0.0)
     pre_agent_embed_ms = _store.get("pre_agent_embed_ms")
     pre_agent_cache_check_ms = _store.get("pre_agent_cache_check_ms")
@@ -268,6 +269,7 @@ async def run_client_pipeline(
         pre_computed_embedding=pre_computed,
         pre_computed_sparse=pre_computed_sparse,
         pre_computed_colbert=pre_computed_colbert,
+        semantic_cache_already_checked=semantic_cache_already_checked,
     )
     result.update(pipeline_result)
     response_text = str(pipeline_result.get("response", "") or "")
