@@ -391,3 +391,35 @@ This design is complete when:
 - strict grounded mode and safe fallback are live
 - knowledge schema supports legal and relocation retrieval with measurable coverage
 - Langfuse datasets and experiments exist for the main failure classes
+
+## Execution Notes
+
+Implemented on issue branch `wt/issue-1002-grounded-rag` on 2026-03-18.
+
+Final trace contract shipped:
+
+- root metadata now propagates `route`, `pipeline_mode`, `query_type`, `topic_hint`, `grounding_mode`, `collection`, and `environment`
+- `pre_agent` miss now emits a typed downstream `state_contract`
+- retrieval spans now expose `retrieval.initial` and `retrieval.relax`
+- retrieval metadata now records `initial_filters`, `final_filters`, `qdrant_search_attempts`, and `retrieval_relaxed_from_topic_filter`
+
+Final score additions shipped:
+
+- `grounded`
+- `legal_answer_safe`
+- `semantic_cache_safe_reuse`
+- `safe_fallback_used`
+
+Final payload schema additions shipped:
+
+- `metadata.jurisdiction`
+- `metadata.language`
+- `metadata.source_type`
+- `metadata.audience`
+
+Validation status:
+
+- targeted unit suites passed for pipeline, retrieval, generation, ingestion, observability, and score coverage
+- repo-wide `make check` and `make test-unit` were added as rollout gates in execution
+- legal grounding audit harness currently runs in `offline_fixture_only` mode and confirms strict-topic classification plus safe fallback behavior for the sample fixture set
+- live-stack corpus validation traces were not captured in this execution note, so corpus sufficiency in production still requires a follow-up trace capture against the running stack

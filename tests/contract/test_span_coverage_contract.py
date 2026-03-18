@@ -32,6 +32,8 @@ SENSITIVE_SPANS = [
     "rag-pipeline",
     "cache-check",
     "hybrid-retrieve",
+    "retrieval.initial",
+    "retrieval.relax",
     "cache-store",
     # Agent tools
     "tool-rag-search",
@@ -223,6 +225,11 @@ def test_sensitive_spans_have_capture_disabled(
         f"Span '{span_name}' at {info['file']}:{info['line']} "
         f"must have capture_output=False (got {info['capture_output']!r})"
     )
+
+
+def test_required_retrieval_stage_spans_present(observed_spans: dict[str, dict]) -> None:
+    assert "retrieval.initial" in observed_spans
+    assert "retrieval.relax" in observed_spans
 
 
 @pytest.mark.parametrize("span_name", LIGHT_SPANS)
