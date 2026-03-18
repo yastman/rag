@@ -62,6 +62,28 @@ class TestRAGASEvaluatorInit:
         assert mock_ctx_recall in evaluator.metrics
         assert mock_answer_rel in evaluator.metrics
 
+    @patch("src.evaluation.ragas_evaluation._get_evaluator_llm")
+    @patch("src.evaluation.ragas_evaluation.faithfulness")
+    @patch("src.evaluation.ragas_evaluation.context_precision")
+    @patch("src.evaluation.ragas_evaluation.context_recall")
+    @patch("src.evaluation.ragas_evaluation.answer_relevancy")
+    def test_init_preserves_experiment_name(
+        self,
+        mock_answer_rel,
+        mock_ctx_recall,
+        mock_ctx_prec,
+        mock_faith,
+        mock_get_llm,
+    ):
+        """Explicit experiment_name stays available for backward-compatible callers."""
+        from src.evaluation.ragas_evaluation import RAGASEvaluator
+
+        mock_get_llm.return_value = MagicMock()
+
+        evaluator = RAGASEvaluator(experiment_name="custom-eval")
+
+        assert evaluator.experiment_name == "custom-eval"
+
 
 class TestEvaluatePipeline:
     """Tests for evaluate_pipeline method."""
