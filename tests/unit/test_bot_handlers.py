@@ -89,6 +89,30 @@ def _make_typing_cm():
     return mock_cm
 
 
+class TestPreAgentStateContract:
+    def test_build_pre_agent_miss_contract_sets_required_fields(self):
+        from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
+
+        contract = build_pre_agent_miss_contract(
+            query_type="FAQ",
+            topic_hint="legal",
+            dense_vector=[0.1, 0.2],
+            sparse_vector={"indices": [1], "values": [0.5]},
+            colbert_query=[[0.2] * 4],
+            grounding_mode="strict",
+        )
+
+        assert contract["cache_checked"] is True
+        assert contract["cache_hit"] is False
+        assert contract["cache_scope"] == "rag"
+        assert contract["embedding_bundle_ready"] is True
+        assert contract["embedding_bundle_version"] == "bge_m3_hybrid_colbert"
+        assert contract["retrieval_policy"] == "topic_then_relax"
+        assert contract["query_type"] == "FAQ"
+        assert contract["topic_hint"] == "legal"
+        assert contract["grounding_mode"] == "strict"
+
+
 class TestPropertyBotInit:
     """Test PropertyBot initialization."""
 

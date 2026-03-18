@@ -11,11 +11,14 @@ import time
 from numbers import Real
 from typing import Any
 
+from src.retrieval.topic_classifier import get_query_topic_hint
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
 from telegram_bot.observability import get_client, observe
+from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.generate_response import generate_response
+from telegram_bot.services.grounding_policy import get_grounding_mode
 from telegram_bot.services.history_service import HistoryService
 from telegram_bot.services.types import PipelineResult
 
@@ -102,6 +105,22 @@ def _build_non_rag_response(query_type: str) -> str:
             "Сформулируйте вопрос по объектам, ценам, районам или процессу покупки."
         )
     return ""
+
+
+def _safe_collection_name(config: Any) -> str:
+    getter = getattr(config, "get_collection_name", None)
+    if not callable(getter):
+        return ""
+    try:
+        value = getter()
+    except Exception:
+        return ""
+    return value if isinstance(value, str) else ""
+
+
+def _safe_langfuse_env(config: Any) -> str:
+    value = getattr(config, "langfuse_env", "")
+    return value if isinstance(value, str) else ""
 
 
 # ---------------------------------------------------------------------------
@@ -239,10 +258,39 @@ async def run_client_pipeline(
     }
 
     _store = rag_result_store or {}
-    pre_computed = _store.get("cache_key_embedding")
-    pre_computed_sparse = _store.get("cache_key_sparse")
-    pre_computed_colbert = _store.get("cache_key_colbert")
     semantic_cache_already_checked = bool(_store.get("semantic_cache_already_checked"))
+    contract_topic_hint = _store.get("state_contract", {}).get("topic_hint")
+    if not isinstance(contract_topic_hint, str):
+        topic_hint_label = get_query_topic_hint(user_text)
+        contract_topic_hint = topic_hint_label.value if topic_hint_label is not None else None
+    grounding_mode = get_grounding_mode(query_type=query_type, topic_hint=contract_topic_hint)
+    state_contract = coerce_pre_agent_state_contract(
+        _store,
+        query_type=query_type,
+        topic_hint=contract_topic_hint,
+        grounding_mode=grounding_mode,
+    )
+    if state_contract is not None:
+        state_contract["grounding_mode"] = grounding_mode
+        state_contract["topic_hint"] = contract_topic_hint
+        _store["state_contract"] = state_contract
+    result["topic_hint"] = contract_topic_hint
+    result["grounding_mode"] = grounding_mode
+    pre_computed = (
+        state_contract.get("dense_vector")
+        if state_contract is not None
+        else _store.get("cache_key_embedding")
+    )
+    pre_computed_sparse = (
+        state_contract.get("sparse_vector")
+        if state_contract is not None
+        else _store.get("cache_key_sparse")
+    )
+    pre_computed_colbert = (
+        state_contract.get("colbert_query")
+        if state_contract is not None
+        else _store.get("cache_key_colbert")
+    )
     pre_agent_ms = float(_store.get("pre_agent_ms", 0.0) or 0.0)
     pre_agent_embed_ms = _store.get("pre_agent_embed_ms")
     pre_agent_cache_check_ms = _store.get("pre_agent_cache_check_ms")
@@ -266,6 +314,7 @@ async def run_client_pipeline(
         reranker=reranker,
         llm=llm,
         agent_role=role,
+        state_contract=state_contract,
         pre_computed_embedding=pre_computed,
         pre_computed_sparse=pre_computed_sparse,
         pre_computed_colbert=pre_computed_colbert,
@@ -283,6 +332,7 @@ async def run_client_pipeline(
             raw_messages=[{"role": "user", "content": user_text}],
             latency_stages=result.get("latency_stages", {}),
             llm_call_count=int(result.get("llm_call_count", 0) or 0),
+            grounding_mode=grounding_mode,
             config=config,
             message=message,
         )
@@ -301,7 +351,8 @@ async def run_client_pipeline(
 
     sources_text = ""
     documents_list: list[Any] = result.get("documents", [])
-    if getattr(config, "show_sources", False) and documents_list:
+    sources_required = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    if sources_required and documents_list:
         sources_text = format_sources(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
 
@@ -332,6 +383,23 @@ async def run_client_pipeline(
     # --- Step f) Post-process ---
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
     e2e_wall_ms = wall_ms + pre_agent_ms
+    topic_hint = result.get("topic_hint")
+    topic_hint_value = topic_hint if isinstance(topic_hint, str) else ""
+    grounding_mode = result.get("grounding_mode")
+    grounding_mode_value = grounding_mode if isinstance(grounding_mode, str) else ""
+    trace_metadata = {
+        "route": "client_direct",
+        "pipeline_mode": "client_direct",
+        "query_type": query_type,
+        "topic_hint": topic_hint_value,
+        "grounding_mode": grounding_mode_value,
+        "collection": _safe_collection_name(config),
+        "environment": _safe_langfuse_env(config),
+        "pipeline_wall_ms": wall_ms,
+        "pre_agent_ms": pre_agent_ms,
+        "e2e_latency_ms": e2e_wall_ms,
+    }
+    _store.update(trace_metadata)
 
     # Cache store — apply guards: type, contextual, confidence, source presence.
     store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
@@ -371,16 +439,9 @@ async def run_client_pipeline(
         input={"query": user_text},
         output={"response": response_text},
         tags=["telegram", "rag", "client_direct"],
-        metadata={
-            "pipeline_mode": "client_direct",
-            "pipeline_wall_ms": wall_ms,
-            "pre_agent_ms": pre_agent_ms,
-            "e2e_latency_ms": e2e_wall_ms,
-        },
+        metadata=trace_metadata,
     )
     tid = trace_id or (lf.get_current_trace_id() or "")
-    _store["pipeline_wall_ms"] = wall_ms
-    _store["e2e_latency_ms"] = e2e_wall_ms
     if tid:
         score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
         result.update(

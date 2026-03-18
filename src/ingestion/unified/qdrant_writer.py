@@ -190,6 +190,41 @@ class QdrantHybridWriter:
             result = self._bge_client.encode_dense(texts)
         return result.vectors
 
+    @staticmethod
+    def _infer_language(source_path: str, file_metadata: dict[str, Any]) -> str:
+        value = file_metadata.get("language")
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+
+        normalized = source_path.lower()
+        if "/en/" in normalized or normalized.endswith(("-en.pdf", "-en.docx")):
+            return "en"
+        if "/uk/" in normalized or normalized.endswith(("-uk.pdf", "-uk.docx")):
+            return "uk"
+        return "ru"
+
+    @staticmethod
+    def _infer_source_type(source_path: str, file_metadata: dict[str, Any]) -> str:
+        value = file_metadata.get("source_type")
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+
+        normalized = source_path.lower()
+        if "gdrive" in normalized:
+            return "gdrive"
+        if normalized.endswith(".docx"):
+            return "docx"
+        if normalized.endswith(".pdf"):
+            return "pdf"
+        return "file"
+
+    @staticmethod
+    def _infer_audience(source_path: str, text: str) -> str:
+        normalized = f"{source_path} {text}".lower()
+        if any(token in normalized for token in ("client", "клиент", "внж", "покуп", "сделк")):
+            return "client"
+        return "client"
+
     def build_payload(
         self,
         chunk: Any,
@@ -235,6 +270,10 @@ class QdrantHybridWriter:
         metadata["doc_type"] = classify_doc_type(
             source_path, str(file_metadata.get("mime_type", ""))
         ).value
+        metadata["jurisdiction"] = str(file_metadata.get("jurisdiction", "bg")).lower()
+        metadata["language"] = self._infer_language(source_path, file_metadata)
+        metadata["source_type"] = self._infer_source_type(source_path, file_metadata)
+        metadata["audience"] = self._infer_audience(source_path, getattr(chunk, "text", ""))
 
         # Clean None values
         metadata = {k: v for k, v in metadata.items() if v is not None}
