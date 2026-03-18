@@ -1,5 +1,9 @@
 """Tests for validation query definitions."""
 
+from pathlib import Path
+
+import yaml
+
 from scripts.validate_queries import (
     EDGE_CASE_QUERIES,
     GDRIVE_BGE_QUERIES,
@@ -74,3 +78,15 @@ class TestValidationQueries:
     def test_edge_case_rewrite_query_flagged(self):
         rewrite_queries = [q for q in EDGE_CASE_QUERIES if q.expect_rewrite]
         assert len(rewrite_queries) >= 1
+
+    def test_legal_grounding_fixture_has_required_keys(self):
+        fixture_path = (
+            Path(__file__).resolve().parents[1]
+            / "fixtures"
+            / "retrieval"
+            / "legal_grounding_cases.yaml"
+        )
+        cases = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
+        assert all(
+            {"query", "expected_topic", "expected_grounding_mode"} <= set(case) for case in cases
+        )
