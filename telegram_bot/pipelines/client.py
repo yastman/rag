@@ -385,8 +385,8 @@ async def run_client_pipeline(
     e2e_wall_ms = wall_ms + pre_agent_ms
     topic_hint = result.get("topic_hint")
     topic_hint_value = topic_hint if isinstance(topic_hint, str) else ""
-    grounding_mode = result.get("grounding_mode")
-    grounding_mode_value = grounding_mode if isinstance(grounding_mode, str) else ""
+    result_grounding_mode: Any = result.get("grounding_mode")
+    grounding_mode_value = result_grounding_mode if isinstance(result_grounding_mode, str) else ""
     trace_metadata = {
         "route": "client_direct",
         "pipeline_mode": "client_direct",
