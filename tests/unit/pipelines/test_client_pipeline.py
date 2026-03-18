@@ -478,6 +478,178 @@ class TestPipelineFullFlow:
         assert metadata["e2e_latency_ms"] >= metadata["pipeline_wall_ms"]
         assert rag_store["e2e_latency_ms"] >= rag_store["pipeline_wall_ms"]
 
+    async def test_pipeline_metadata_includes_route_topic_and_grounding_contract(self):
+        """Client-direct trace metadata should expose route/topic/grounding fields early."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+            "topic_hint": "legal",
+        }
+        gen_result = {
+            "response": "Generated answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+            "grounding_mode": "strict",
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы нужны для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        trace_calls = lf.update_current_trace.call_args_list
+        pipeline_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert pipeline_call is not None
+        metadata = pipeline_call.kwargs["metadata"]
+        assert metadata["route"] == "client_direct"
+        assert metadata["pipeline_mode"] == "client_direct"
+        assert metadata["query_type"] == "FAQ"
+        assert metadata["topic_hint"] == "legal"
+        assert metadata["grounding_mode"] == "strict"
+
+    async def test_pipeline_passes_strict_grounding_mode_to_generate_response(self):
+        """Legal topic should force strict grounding mode in generation step."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+            "topic_hint": "legal",
+        }
+        gen_result = {
+            "response": "Нужна проверка менеджером.",
+            "response_sent": False,
+            "llm_call_count": 0,
+            "grounding_mode": "strict",
+            "safe_fallback_used": True,
+            "grounded": False,
+        }
+
+        captured_kwargs: dict = {}
+
+        async def _capture_generate(**kwargs):
+            captured_kwargs.update(kwargs)
+            return gen_result
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            patch("telegram_bot.pipelines.client.generate_response", side_effect=_capture_generate),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            result = await run_client_pipeline(
+                user_text="Какие документы нужны для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        assert captured_kwargs["grounding_mode"] == "strict"
+        assert result.answer == "Нужна проверка менеджером."
+
+    async def test_pipeline_shows_sources_for_strict_grounding_even_when_global_sources_disabled(
+        self,
+    ):
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"text": "Документ", "score": 0.82, "metadata": {"title": "ВНЖ"}}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "topic_hint": "legal",
+        }
+        gen_result = {
+            "response": "Подтвержденный ответ.",
+            "response_sent": False,
+            "llm_call_count": 1,
+            "grounding_mode": "strict",
+            "safe_fallback_used": False,
+            "grounded": True,
+        }
+        send_chunks = AsyncMock()
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client._send_markdown_chunks", send_chunks),
+            patch(
+                "telegram_bot.pipelines.client.format_sources",
+                return_value="\n\nИсточники:\n[1] ВНЖ",
+            ),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            result = await run_client_pipeline(
+                user_text="Какие документы нужны для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(show_sources=False),
+                query_type="FAQ",
+            )
+
+        assert result.answer == "Подтвержденный ответ."
+        send_text = send_chunks.await_args.args[1]
+        assert "Подтвержденный ответ." in send_text
+        assert "Источники:" in send_text
+
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""
         msg = _make_message()
@@ -596,7 +768,7 @@ class TestPipelineFullFlow:
             patch("telegram_bot.pipelines.client.score"),
         ):
             result = await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",
+                user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
                 message=msg,
@@ -1109,6 +1281,64 @@ class TestPreComputedEmbeddingPassthrough:
         assert captured_kwargs.get("pre_computed_sparse") == sparse
         assert captured_kwargs.get("pre_computed_colbert") == colbert
 
+    async def test_passes_state_contract_from_rag_result_store(self):
+        """run_client_pipeline should pass shared pre-agent state_contract downstream."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        state_contract = {
+            "cache_checked": True,
+            "cache_hit": False,
+            "cache_scope": "rag",
+            "embedding_bundle_ready": True,
+            "embedding_bundle_version": "bge_m3_hybrid_colbert",
+            "dense_vector": [0.1] * 3,
+            "sparse_vector": {"indices": [1], "values": [0.5]},
+            "colbert_query": [[0.2] * 3],
+            "query_type": "GENERAL",
+            "topic_hint": "legal",
+            "retrieval_policy": "topic_then_relax",
+            "grounding_mode": "strict",
+        }
+        rag_result = {
+            "response": "Есть студии",
+            "cache_hit": False,
+            "documents": [],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+        }
+
+        captured_kwargs: dict = {}
+
+        async def _capture_rag(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return rag_result
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы нужны?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store={"state_contract": state_contract},
+            )
+
+        assert captured_kwargs.get("state_contract") == state_contract
+
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""
         msg = _make_message()
@@ -1430,7 +1660,7 @@ class TestStreamingFeedbackKeyboard:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",
+                user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
                 message=msg,
@@ -1486,7 +1716,7 @@ class TestStreamingFeedbackKeyboard:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",
+                user_text="Какие квартиры в Несебре?",
                 user_id=1,
                 session_id="s1",
                 message=msg,
