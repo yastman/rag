@@ -41,6 +41,12 @@ _LEGAL_PATTERNS = [
         r"вид на жительств",
         r"\bпмж\b",
         r"\bгражданств\w*",
+        r"residence permit",
+        r"residency permit",
+        r"immigration",
+        r"\bvisa\b",
+        r"\bcitizenship\b",
+        r"\blegali[sz]ation\b",
         r"\bнотари\w*",
         r"\bдокумент\w*",
         r"\bлегализац\w*",
@@ -61,6 +67,9 @@ _RELOCATION_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
         r"\bпереезд\w*",
+        r"\bрелокац\w*",
+        r"\bиммиграц\w*",
+        r"\bвиз\w*",
         r"\bинфотур\w*",
         r"\bадаптац\w*",
     )
