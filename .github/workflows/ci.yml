@@ -85,8 +85,8 @@ jobs:
             echo "=== Rebuild changed images ==="
             docker compose build
 
-            echo "=== Restart changed services ==="
-            docker compose --compatibility up -d
+            echo "=== Restart services from rebuilt images ==="
+            docker compose --compatibility up -d --force-recreate
 
             echo "=== Wait for startup ==="
             sleep 20
