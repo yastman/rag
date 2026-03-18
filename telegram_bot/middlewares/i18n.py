@@ -86,17 +86,30 @@ class I18nMiddleware(BaseMiddleware):
     ) -> Any:
         user = data.get("event_from_user")
         locale = self._default_locale
+        locale_loaded_from_storage = False
 
         if user is not None:
-            # Try loading from DB/cache via UserService
+            # Resolve locale from the persisted user record when available.
+            # This keeps message and callback flows on the same language path.
             if self._user_service is not None:
                 try:
-                    locale = await self._user_service.get_locale(telegram_id=user.id)
+                    stored_user = await self._user_service.get_or_create(
+                        telegram_id=user.id,
+                        first_name=getattr(user, "first_name", None),
+                        language_code=getattr(user, "language_code", None),
+                    )
+                    if stored_user is not None and stored_user.locale:
+                        locale = stored_user.locale
+                        locale_loaded_from_storage = True
                 except Exception:
                     logger.debug("Failed to get locale for user %s", user.id, exc_info=True)
 
             # Fallback: detect from Telegram language_code
-            if locale == self._default_locale and user.language_code:
+            if (
+                not locale_loaded_from_storage
+                and locale == self._default_locale
+                and user.language_code
+            ):
                 from telegram_bot.services.user_service import detect_locale
 
                 locale = detect_locale(user.language_code)
