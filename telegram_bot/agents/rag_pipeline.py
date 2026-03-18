@@ -61,6 +61,7 @@ async def _cache_check(
     pre_computed_embedding: list[float] | None = None,
     pre_computed_sparse: Any = None,
     pre_computed_colbert: list[list[float]] | None = None,
+    semantic_cache_already_checked: bool = False,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -120,9 +121,12 @@ async def _cache_check(
         }
 
     # Step 2: Check semantic cache via shared core
-    hit, cached = await check_semantic_cache(
-        query, embedding, query_type, cache=cache, agent_role=agent_role
-    )
+    if semantic_cache_already_checked:
+        hit, cached = False, None
+    else:
+        hit, cached = await check_semantic_cache(
+            query, embedding, query_type, cache=cache, agent_role=agent_role
+        )
 
     latency = time.perf_counter() - start
 
@@ -150,19 +154,14 @@ async def _cache_check(
 
     # ColBERT query vectors are only needed on semantic miss.
     if colbert_query is None:
-        _has_colbert_only = callable(
-            getattr(embeddings, "aembed_colbert_query", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
         _has_hybrid_colbert = callable(
             getattr(embeddings, "aembed_hybrid_with_colbert", None)
         ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+        _has_colbert_only = callable(
+            getattr(embeddings, "aembed_colbert_query", None)
+        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
 
-        if _has_colbert_only:
-            try:
-                colbert_query = await embeddings.aembed_colbert_query(query)
-            except Exception:
-                logger.debug("ColBERT query encode failed (non-critical), skipping")
-        elif _has_hybrid_colbert:
+        if _has_hybrid_colbert:
             try:
                 _, sparse_from_hybrid, colbert_query = await embeddings.aembed_hybrid_with_colbert(
                     query
@@ -173,6 +172,11 @@ async def _cache_check(
                         await cache.store_sparse_embedding(query, sparse_from_hybrid)
             except Exception:
                 logger.debug("ColBERT query encode failed (non-critical), skipping")
+        elif _has_colbert_only:
+            try:
+                colbert_query = await embeddings.aembed_colbert_query(query)
+            except Exception:
+                logger.debug("ColBERT query encode failed (non-critical), skipping")
 
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
     lf.update_current_span(
@@ -180,6 +184,7 @@ async def _cache_check(
             "cache_hit": False,
             "embeddings_cache_hit": embeddings_cache_hit,
             "hit_layer": "none",
+            "semantic_cache_prechecked": semantic_cache_already_checked,
             "duration_ms": round(latency * 1000, 1),
         }
     )
@@ -325,12 +330,21 @@ async def _hybrid_retrieve(
     prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
     filters = {"topic": topic_hint} if topic_hint else None
     relaxed_filters: dict[str, str] | None = None
+    initial_filters = dict(filters) if isinstance(filters, dict) else None
+    final_filters = dict(filters) if isinstance(filters, dict) else None
+    initial_results_count: int | None = None
+    retrieval_relaxed_from_topic_filter = False
+    retrieval_relax_stage: str | None = None
+    qdrant_search_attempts = 0
     if prefer_faq_doc_type and topic_hint:
         filters = {"topic": topic_hint, "doc_type": "faq"}
         relaxed_filters = {"topic": topic_hint}
+        initial_filters = dict(filters)
+        final_filters = dict(filters)
 
     if colbert_query and _has_colbert_search:
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
+        qdrant_search_attempts += 1
         qdrant_result = await qdrant.hybrid_search_rrf_colbert(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -341,6 +355,7 @@ async def _hybrid_retrieve(
         )
         colbert_search_used = True
     else:
+        qdrant_search_attempts += 1
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -353,6 +368,7 @@ async def _hybrid_retrieve(
     else:
         results = qdrant_result
         search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    initial_results_count = len(results)
 
     if filters and len(results) < 3:
         logger.info(
@@ -360,7 +376,13 @@ async def _hybrid_retrieve(
             extra={"metric_name": "topic_filter_fallback", "value": 1},
         )
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
+        retrieval_relaxed_from_topic_filter = True
+        retrieval_relax_stage = (
+            "topic_and_doc_type_to_topic" if relaxed_filters is not None else "topic_to_none"
+        )
+        final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
         if colbert_query and _has_colbert_search:
+            qdrant_search_attempts += 1
             qdrant_result = await qdrant.hybrid_search_rrf_colbert(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
@@ -370,6 +392,7 @@ async def _hybrid_retrieve(
                 return_meta=True,
             )
         else:
+            qdrant_search_attempts += 1
             qdrant_result = await qdrant.hybrid_search_rrf(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
@@ -384,7 +407,11 @@ async def _hybrid_retrieve(
             search_meta = {"backend_error": False, "error_type": None, "error_message": None}
 
     if relaxed_filters is not None and len(results) < 3:
+        retrieval_relaxed_from_topic_filter = True
+        retrieval_relax_stage = "topic_to_none"
+        final_filters = None
         if colbert_query and _has_colbert_search:
+            qdrant_search_attempts += 1
             qdrant_result = await qdrant.hybrid_search_rrf_colbert(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
@@ -394,6 +421,7 @@ async def _hybrid_retrieve(
                 return_meta=True,
             )
         else:
+            qdrant_search_attempts += 1
             qdrant_result = await qdrant.hybrid_search_rrf(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
@@ -428,6 +456,12 @@ async def _hybrid_retrieve(
             "retrieval_backend_error": search_meta.get("backend_error", False),
             "retrieval_error_type": search_meta.get("error_type"),
             "duration_ms": round(latency * 1000, 1),
+            "initial_filters": initial_filters,
+            "final_filters": final_filters,
+            "initial_results_count": initial_results_count,
+            "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
+            "retrieval_relax_stage": retrieval_relax_stage,
+            "qdrant_search_attempts": qdrant_search_attempts,
             "eval_query": query[:2000],
             "eval_docs": "\n\n".join(
                 f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
@@ -774,6 +808,7 @@ async def rag_pipeline(
     pre_computed_embedding: list[float] | None = None,
     pre_computed_sparse: Any = None,
     pre_computed_colbert: list[list[float]] | None = None,
+    semantic_cache_already_checked: bool = False,
     skip_rewrite: bool = False,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
@@ -828,6 +863,7 @@ async def rag_pipeline(
         pre_computed_embedding=pre_computed_embedding,
         pre_computed_sparse=pre_computed_sparse,
         pre_computed_colbert=pre_computed_colbert,
+        semantic_cache_already_checked=semantic_cache_already_checked,
     )
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding: list[float] | None = cache_result.get("query_embedding")
