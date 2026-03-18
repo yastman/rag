@@ -126,22 +126,23 @@ else
   warn "mini app endpoint check skipped (REQUIRE_MINI_APP_ENDPOINT=${REQUIRE_MINI_APP_ENDPOINT})"
 fi
 
-HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"
-
-if [ "$HANDOFF_ENABLED" = "true" ]; then
-  log "Handoff release smoke"
+handoff_runtime_env="$(
   docker compose exec -T bot python - <<'PY'
 import os
 
-handoff_enabled = os.getenv("HANDOFF_ENABLED", "false")
-managers_group_id = os.getenv("MANAGERS_GROUP_ID", "")
-
-assert handoff_enabled == "true", "HANDOFF_ENABLED is not true in bot container"
-assert managers_group_id, "MANAGERS_GROUP_ID missing in bot container"
-print("  ok: handoff env contract present in bot container")
+print(f"HANDOFF_ENABLED={os.getenv('HANDOFF_ENABLED', 'false')}")
+print(f"MANAGERS_GROUP_ID={os.getenv('MANAGERS_GROUP_ID', '')}")
 PY
+)"
+handoff_enabled_runtime="$(printf '%s\n' "$handoff_runtime_env" | awk -F= '/^HANDOFF_ENABLED=/{print $2}')"
+managers_group_id_runtime="$(printf '%s\n' "$handoff_runtime_env" | awk -F= '/^MANAGERS_GROUP_ID=/{print $2}')"
+
+if [ "$handoff_enabled_runtime" = "true" ]; then
+  log "Handoff release smoke"
+  [ -n "$managers_group_id_runtime" ] || fail "MANAGERS_GROUP_ID missing in bot container"
+  printf '  ok: handoff env contract present in bot container\n'
 else
-  warn "handoff smoke skipped (HANDOFF_ENABLED=${HANDOFF_ENABLED})"
+  warn "handoff smoke skipped (HANDOFF_ENABLED=${handoff_enabled_runtime})"
 fi
 
 log "Release smoke passed"

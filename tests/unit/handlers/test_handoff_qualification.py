@@ -1,7 +1,13 @@
 """Tests for handoff qualification dialog (aiogram-dialog migration)."""
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from telegram_bot.dialogs.handoff import (
     _GOAL_OPTIONS,
+    _on_contact_chat,
     handoff_dialog,
 )
 from telegram_bot.dialogs.states import HandoffSG
@@ -104,3 +110,30 @@ def test_start_qualification_accepts_dialog_manager():
 
     sig = inspect.signature(start_qualification)
     assert "dialog_manager" in sig.parameters
+
+
+@pytest.mark.asyncio
+async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
+    property_bot = MagicMock()
+    property_bot._complete_handoff = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = SimpleNamespace(id=7, full_name="Test User", username="tester")
+    callback.message = AsyncMock()
+    callback.message.edit_text = AsyncMock()
+
+    manager = MagicMock()
+    manager.start_data = {}
+    manager.dialog_data = {"goal": "consult"}
+    manager.middleware_data = {
+        "property_bot": property_bot,
+        "state": AsyncMock(),
+        "locale": "en",
+    }
+    manager.done = AsyncMock()
+    manager.show_mode = None
+
+    await _on_contact_chat(callback, MagicMock(), manager)
+
+    kwargs = property_bot._complete_handoff.await_args.kwargs
+    assert kwargs["locale"] == "en"

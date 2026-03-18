@@ -99,12 +99,13 @@ class TestI18nMiddlewareCall:
     async def test_uses_user_service_for_locale(self):
         hub = self._make_hub()
         user_service = MagicMock()
-        user_service.get_locale = AsyncMock(return_value="uk")
+        user_service.get_or_create = AsyncMock(return_value=MagicMock(locale="uk"))
         mw = I18nMiddleware(hub=hub, user_service=user_service)
 
         user = MagicMock(spec=User)
         user.id = 42
         user.language_code = "uk"
+        user.first_name = "Test"
 
         handler = AsyncMock(return_value=None)
         event = MagicMock(spec=Message)
@@ -113,17 +114,22 @@ class TestI18nMiddlewareCall:
         await mw(handler, event, data)
 
         assert data["locale"] == "uk"
-        user_service.get_locale.assert_called_once_with(telegram_id=42)
+        user_service.get_or_create.assert_called_once_with(
+            telegram_id=42,
+            first_name="Test",
+            language_code="uk",
+        )
 
     async def test_fallback_to_language_code(self):
         hub = self._make_hub()
         user_service = MagicMock()
-        user_service.get_locale = AsyncMock(return_value="ru")  # returns default
+        user_service.get_or_create = AsyncMock(return_value=None)
         mw = I18nMiddleware(hub=hub, user_service=user_service, default_locale="ru")
 
         user = MagicMock(spec=User)
         user.id = 99
         user.language_code = "en"
+        user.first_name = "Test"
 
         handler = AsyncMock(return_value=None)
         event = MagicMock(spec=Message)
@@ -141,12 +147,13 @@ class TestI18nMiddlewareCall:
     async def test_user_service_exception_fallback(self):
         hub = self._make_hub()
         user_service = MagicMock()
-        user_service.get_locale = AsyncMock(side_effect=RuntimeError("db down"))
+        user_service.get_or_create = AsyncMock(side_effect=RuntimeError("db down"))
         mw = I18nMiddleware(hub=hub, user_service=user_service, default_locale="ru")
 
         user = MagicMock(spec=User)
         user.id = 7
         user.language_code = None
+        user.first_name = "Test"
 
         handler = AsyncMock(return_value=None)
         event = MagicMock(spec=Message)
@@ -154,6 +161,25 @@ class TestI18nMiddlewareCall:
 
         # Should not raise; fall back to default locale
         await mw(handler, event, data)
+        assert data["locale"] == "ru"
+
+    async def test_existing_user_locale_beats_telegram_language_code(self):
+        hub = self._make_hub()
+        user_service = MagicMock()
+        user_service.get_or_create = AsyncMock(return_value=MagicMock(locale="ru"))
+        mw = I18nMiddleware(hub=hub, user_service=user_service, default_locale="ru")
+
+        user = MagicMock(spec=User)
+        user.id = 123
+        user.language_code = "en"
+        user.first_name = "Test"
+
+        handler = AsyncMock(return_value=None)
+        event = MagicMock(spec=Message)
+        data: dict = {"event_from_user": user}
+
+        await mw(handler, event, data)
+
         assert data["locale"] == "ru"
 
     async def test_no_user_uses_default_locale(self):
