@@ -78,6 +78,10 @@ jobs:
             echo "=== Normalize bind-mounted config permissions ==="
             chmod 644 ./docker/litellm/config.yaml
 
+            echo "=== Validate production env ==="
+            chmod +x ./scripts/validate_prod_env.sh
+            ./scripts/validate_prod_env.sh
+
             echo "=== Rebuild changed images ==="
             docker compose build
 
