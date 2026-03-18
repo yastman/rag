@@ -188,6 +188,19 @@ class DocumentIndexer:
                 field_schema=PayloadSchemaType.KEYWORD,
             )
 
+            for field in [
+                "metadata.topic",
+                "metadata.doc_type",
+                "metadata.jurisdiction",
+                "metadata.audience",
+                "metadata.language",
+            ]:
+                self.client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name=field,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+
             # Small-to-big: index order field for neighbor chunk queries
             self.client.create_payload_index(
                 collection_name=collection_name,
