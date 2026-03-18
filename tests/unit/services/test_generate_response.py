@@ -175,6 +175,49 @@ async def test_generate_response_fallback_on_llm_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak_context() -> None:
+    config, client = _make_non_streaming_config()
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="виды внж в болгарии",
+        documents=[],
+        grounding_mode="strict",
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
+    )
+
+    assert result["safe_fallback_used"] is True
+    assert result["grounded"] is False
+    assert result["legal_answer_safe"] is False
+    client.chat.completions.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_strict_mode_does_not_degrade_only_because_show_sources_disabled() -> (
+    None
+):
+    config, client = _make_non_streaming_config(answer="Подтвержденный ответ по документам.")
+    config.show_sources = False
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Какие документы нужны для ВНЖ?",
+        documents=[{"text": "Список документов", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
+        grounding_mode="strict",
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Какие документы нужны для ВНЖ?"}],
+    )
+
+    assert result["response"] == "Подтвержденный ответ по документам."
+    assert result["safe_fallback_used"] is False
+    assert result["grounded"] is True
+    client.chat.completions.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_generate_response_streaming_sets_response_sent_and_message_ref() -> None:
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True

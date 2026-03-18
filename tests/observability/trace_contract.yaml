@@ -33,6 +33,8 @@ spans:
     - rag-pipeline
     - cache-check
     - hybrid-retrieve
+    - retrieval.initial
+    - retrieval.relax
     - grade-documents
     - rerank
     - query-rewrite
@@ -236,6 +238,8 @@ sensitive_spans:
   - rag-pipeline
   - cache-check
   - hybrid-retrieve
+  - retrieval.initial
+  - retrieval.relax
   - cache-store
   # agent_tools
   - tool-rag-search
