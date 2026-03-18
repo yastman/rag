@@ -260,3 +260,17 @@ class TestMiniAppFrontendHealthcheck:
     def test_frontend_dockerfile_uses_same_ipv4_loopback_healthcheck(self) -> None:
         content = MINI_APP_FRONTEND_DOCKERFILE.read_text()
         assert self._EXPECTED_PROBE in content
+
+
+class TestHandoffComposeContract:
+    """Bot compose env must expose the production handoff contract."""
+
+    def test_vps_bot_compose_includes_handoff_flag(self, vps: dict) -> None:
+        bot_env = vps["services"]["bot"]["environment"]
+        assert "HANDOFF_ENABLED" in bot_env
+        assert bot_env["HANDOFF_ENABLED"] == "${HANDOFF_ENABLED:-false}"
+
+    def test_vps_bot_compose_includes_handoff_contract_env(self, vps: dict) -> None:
+        bot_env = vps["services"]["bot"]["environment"]
+        assert "HANDOFF_ENABLED" in bot_env
+        assert "MANAGERS_GROUP_ID" in bot_env
