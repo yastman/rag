@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.classify import (
     CHITCHAT,
+    CHITCHAT_RESPONSES,
     ENTITY,
     FAQ,
     GENERAL,
     OFF_TOPIC,
+    OFF_TOPIC_RESPONSES,
     STRUCTURED,
+    _get_chitchat_response,
     classify_node,
     classify_query,
 )
@@ -111,6 +114,25 @@ class TestClassifyNode:
         result = await classify_node(state, _make_runtime())
         assert result["latency_stages"]["prev"] == 0.5
         assert "classify" in result["latency_stages"]
+
+    def test_chitchat_response_uses_secrets_choice(self):
+        with patch("telegram_bot.graph.nodes.classify.choice", return_value="secure hi") as mocked:
+            response = _get_chitchat_response("Привет!")
+
+        assert response == "secure hi"
+        mocked.assert_called_once_with(CHITCHAT_RESPONSES["greeting"])
+
+    async def test_off_topic_response_uses_secrets_choice(self):
+        state = make_initial_state(user_id=1, session_id="s", query="как написать код на python")
+
+        with patch(
+            "telegram_bot.graph.nodes.classify.choice", return_value="secure off-topic"
+        ) as mocked:
+            result = await classify_node(state, _make_runtime())
+
+        assert result["query_type"] == OFF_TOPIC
+        assert result["response"] == "secure off-topic"
+        mocked.assert_called_once_with(OFF_TOPIC_RESPONSES)
 
 
 class TestClassifyNodeSemanticMode:
