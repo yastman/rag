@@ -2789,10 +2789,13 @@ class PropertyBot:
         expert_id: str | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
+        from src.retrieval.topic_classifier import get_query_topic_hint
+
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
+        from .pipelines.state_contract import build_pre_agent_miss_contract
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -2945,6 +2948,7 @@ class PropertyBot:
                     rag_result_store["pre_agent_cache_check_ms"] = (
                         time.perf_counter() - check_start
                     ) * 1000
+                    rag_result_store["semantic_cache_already_checked"] = True
                     if cached:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
@@ -3013,17 +3017,51 @@ class PropertyBot:
                     rag_result_store["cache_key_embedding"] = embedding
                     rag_result_store["cache_key_sparse"] = sparse
                     rag_result_store["query_type"] = query_type
-                    # Compute colbert if not yet available to avoid double embed in rag_pipeline (#634)
+                    # Prefer the hybrid endpoint so BGE-M3 can return all query
+                    # representations from one request when supported.
                     if colbert is None:
+                        _has_hybrid_colbert = callable(
+                            getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
+                        ) and asyncio.iscoroutinefunction(
+                            self._embeddings.aembed_hybrid_with_colbert
+                        )
                         _has_colbert_only = callable(
                             getattr(self._embeddings, "aembed_colbert_query", None)
                         ) and asyncio.iscoroutinefunction(self._embeddings.aembed_colbert_query)
-                        if _has_colbert_only:
+                        # Use the one-pass hybrid endpoint only when it can still
+                        # fill in missing query representations. If dense+sparse
+                        # are already cached, prefer standalone ColBERT to avoid
+                        # recomputing embeddings we already have.
+                        if _has_hybrid_colbert and (embedding is None or sparse is None):
+                            try:
+                                (
+                                    _,
+                                    sparse_from_hybrid,
+                                    colbert,
+                                ) = await self._embeddings.aembed_hybrid_with_colbert(user_text)
+                                if sparse is None and sparse_from_hybrid is not None:
+                                    sparse = sparse_from_hybrid
+                                    await self._cache.store_sparse_embedding(
+                                        user_text, sparse_from_hybrid
+                                    )
+                                    rag_result_store["cache_key_sparse"] = sparse_from_hybrid
+                            except Exception:
+                                logger.debug("Pre-agent hybrid ColBERT encode failed, skipping")
+                        elif _has_colbert_only:
                             try:
                                 colbert = await self._embeddings.aembed_colbert_query(user_text)
                             except Exception:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
+                    topic_hint = get_query_topic_hint(user_text)
+                    rag_result_store["state_contract"] = build_pre_agent_miss_contract(
+                        query_type=query_type,
+                        topic_hint=topic_hint.value if topic_hint is not None else None,
+                        dense_vector=embedding,
+                        sparse_vector=sparse if isinstance(sparse, dict) else None,
+                        colbert_query=colbert,
+                        grounding_mode="normal",
+                    )
                 except Exception:
                     logger.warning(
                         "Pre-agent cache check failed, proceeding to agent", exc_info=True
@@ -3042,7 +3080,9 @@ class PropertyBot:
                         if root_trace_metadata is not None:
                             root_trace_metadata.update(
                                 {
+                                    "route": "client_direct",
                                     "pipeline_mode": "client_direct",
+                                    "query_type": query_type,
                                     "pre_agent_ms": rag_result_store["pre_agent_ms"],
                                 }
                             )
@@ -3060,6 +3100,19 @@ class PropertyBot:
                             if root_trace_metadata is not None:
                                 root_trace_metadata.update(
                                     {
+                                        "route": rag_result_store.get("route", "client_direct"),
+                                        "pipeline_mode": rag_result_store.get(
+                                            "pipeline_mode", "client_direct"
+                                        ),
+                                        "query_type": rag_result_store.get(
+                                            "query_type", query_type
+                                        ),
+                                        "topic_hint": rag_result_store.get("topic_hint", ""),
+                                        "grounding_mode": rag_result_store.get(
+                                            "grounding_mode", ""
+                                        ),
+                                        "collection": rag_result_store.get("collection", ""),
+                                        "environment": rag_result_store.get("environment", ""),
                                         "pipeline_wall_ms": rag_result_store.get(
                                             "pipeline_wall_ms"
                                         ),

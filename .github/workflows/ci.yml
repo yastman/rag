@@ -69,9 +69,11 @@ jobs:
           script: |
             set -e
             cd /opt/rag-fresh
+            export COMPOSE_FILE=compose.yml:compose.vps.yml
 
             echo "=== Pull latest code ==="
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "=== Rebuild changed images ==="
             docker compose build

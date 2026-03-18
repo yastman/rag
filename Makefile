@@ -501,7 +501,7 @@ local-build:  ## Rebuild local Docker services
 # Deployment
 # =============================================================================
 
-.PHONY: deploy-code deploy-release deploy-bot
+.PHONY: deploy-code deploy-release deploy-bot deploy-vps-local
 
 deploy-code:  ## Quick deploy (git pull only)
 	git tag -d deploy-code 2>/dev/null || true
@@ -515,16 +515,18 @@ endif
 	git tag v$(VERSION)
 	git push origin v$(VERSION)
 
-deploy-bot:  ## Deploy all services to VPS (git push + SSH rebuild)
-	@echo "$(CYAN)Pushing to origin...$(NC)"
-	git push origin main
-	@echo "$(CYAN)Deploying on VPS...$(NC)"
-	ssh vps "cd /opt/rag-fresh && git pull origin main && \
-		docker compose build && \
-		docker compose --compatibility up -d"
-	@echo "$(GREEN)Deployed. Waiting for startup...$(NC)"
-	@sleep 20
-	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep -E 'vps-.*(Up|healthy)'"
+deploy-bot:  ## Show official deploy flow: push dev/feature, open PR, merge to main for auto-deploy
+	@echo "$(CYAN)Official deploy flow:$(NC)"
+	@echo "  1. Commit locally"
+	@echo "  2. Push your work branch or dev"
+	@echo "  3. Open PR to main"
+	@echo "  4. Merge PR into main"
+	@echo "  5. GitHub Actions auto-deploys main to VPS"
+	@echo "$(GREEN)No direct push to main is performed by this target.$(NC)"
+
+deploy-vps-local:  ## Fallback/manual deploy: sync local workspace to VPS via rsync + rebuild
+	@echo "$(CYAN)Deploying local workspace to VPS via fallback rsync flow...$(NC)"
+	./scripts/deploy-vps.sh
 	@echo "$(GREEN)✓ Deploy complete$(NC)"
 
 # =============================================================================
