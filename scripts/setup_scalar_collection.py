@@ -188,6 +188,9 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         "metadata.source",
         "metadata.topic",
         "metadata.doc_type",
+        "metadata.jurisdiction",
+        "metadata.audience",
+        "metadata.language",
     ]
 
     for field in keyword_fields:
@@ -240,6 +243,9 @@ def verify_collection_indexes(client: QdrantClient, collection_name: str) -> lis
         "metadata.source": "keyword",
         "metadata.topic": "keyword",
         "metadata.doc_type": "keyword",
+        "metadata.jurisdiction": "keyword",
+        "metadata.audience": "keyword",
+        "metadata.language": "keyword",
         # Integer indexes (required for small-to-big)
         "metadata.order": "integer",
         "metadata.chunk_order": "integer",
