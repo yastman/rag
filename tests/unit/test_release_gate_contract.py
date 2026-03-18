@@ -25,7 +25,35 @@ def test_ci_deploy_uses_strict_mini_app_release_smoke() -> None:
     assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" in workflow
 
 
+def test_ci_deploy_runs_prod_env_preflight_before_build() -> None:
+    """CI deploy must validate the production env contract before docker compose build."""
+    workflow = CI_WORKFLOW.read_text()
+    assert "./scripts/validate_prod_env.sh" in workflow
+    assert workflow.index("./scripts/validate_prod_env.sh") < workflow.index("docker compose build")
+
+
 def test_manual_deploy_uses_strict_mini_app_release_smoke() -> None:
     """Manual VPS deploy must use the same strict release contract as CI."""
     script = DEPLOY_SCRIPT.read_text()
     assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" in script
+
+
+def test_release_gate_script_contains_handoff_contract() -> None:
+    """The production env preflight script must enforce the handoff contract."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert "HANDOFF_ENABLED" in script
+    assert "MANAGERS_GROUP_ID" in script
+    assert "docker compose --env-file .env -f compose.yml -f compose.vps.yml config" in script
+
+
+def test_release_smoke_checks_handoff_contract_when_enabled() -> None:
+    """Release smoke must validate handoff env presence when the feature is enabled."""
+    script = RELEASE_SMOKE_SCRIPT.read_text()
+    assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' in script
+    assert "MANAGERS_GROUP_ID" in script
+
+
+def test_release_smoke_logs_when_handoff_smoke_is_skipped() -> None:
+    """Release smoke must log when the handoff-specific branch is skipped."""
+    script = RELEASE_SMOKE_SCRIPT.read_text()
+    assert "handoff smoke skipped" in script
