@@ -11,7 +11,7 @@ Contracts tested:
 from __future__ import annotations
 
 from contextlib import nullcontext
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -207,6 +207,22 @@ class TestWriteLangfuseScoresContract:
         scores = self._written_scores(result)
         assert scores["llm_used"]["value"] == 0.0
 
+    def test_grounding_scores_written_for_strict_legal_result(self):
+        scores = self._written_scores(
+            {
+                **_MINIMAL_RESULT,
+                "grounded": False,
+                "sources_count": 0,
+                "safe_fallback_used": True,
+                "legal_answer_safe": False,
+                "semantic_cache_safe_reuse": False,
+            }
+        )
+        assert "grounded" in scores
+        assert "legal_answer_safe" in scores
+        assert "semantic_cache_safe_reuse" in scores
+        assert "safe_fallback_used" in scores
+
 
 # ---------------------------------------------------------------------------
 # write_history_scores: 4 history scores contract
@@ -299,6 +315,28 @@ class TestWriteCrmScoresContract:
         scores = self._written([])
         for name in ["crm_tools_count", "crm_tools_success", "crm_tools_error"]:
             assert isinstance(scores[name]["value"], float), f"{name} value should be float"
+
+
+class TestTracedPipelineContract:
+    """traced_pipeline must propagate root tags and metadata contract."""
+
+    def test_traced_pipeline_propagates_metadata_and_tags(self):
+        from telegram_bot.observability import traced_pipeline
+
+        with patch("telegram_bot.observability.propagate_attributes") as propagate:
+            traced_pipeline(
+                session_id="chat-1",
+                user_id="42",
+                tags=["telegram", "rag", "client_direct"],
+                metadata={"route": "client_direct", "grounding_mode": "strict"},
+            )
+
+        propagate.assert_called_once_with(
+            session_id="chat-1",
+            user_id="42",
+            tags=["telegram", "rag", "client_direct"],
+            metadata={"route": "client_direct", "grounding_mode": "strict"},
+        )
 
 
 # ---------------------------------------------------------------------------
