@@ -24,6 +24,7 @@ from typing import Any
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from telegram_bot.observability import get_client, observe
+from telegram_bot.pipelines.state_contract import PreAgentStateContract
 from telegram_bot.services.query_preprocessor import expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
@@ -41,6 +42,84 @@ logger = logging.getLogger(__name__)
 
 # top_k=3 for reranking. Saves ~20ms vs top_k=5 while capturing most relevant docs via ColBERT semantic similarity.
 _DEFAULT_RERANK_TOP_K = 3
+
+
+async def _execute_qdrant_retrieval(
+    *,
+    qdrant: Any,
+    dense_vector: list[float],
+    sparse_vector: Any,
+    colbert_query: list[list[float]] | None,
+    filters: dict[str, str] | None,
+    top_k: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
+    if colbert_query and has_colbert_search:
+        result = await qdrant.hybrid_search_rrf_colbert(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            filters=filters,
+            top_k=top_k,
+            return_meta=True,
+        )
+        colbert_used = True
+    else:
+        result = await qdrant.hybrid_search_rrf(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            filters=filters,
+            top_k=top_k,
+            return_meta=True,
+        )
+        colbert_used = False
+
+    if isinstance(result, tuple) and len(result) == 2:
+        results, search_meta = result
+    else:
+        results = result
+        search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    return results, search_meta, colbert_used
+
+
+@observe(name="retrieval.initial", capture_input=False, capture_output=False)
+async def _run_initial_retrieval(
+    *,
+    qdrant: Any,
+    dense_vector: list[float],
+    sparse_vector: Any,
+    colbert_query: list[list[float]] | None,
+    filters: dict[str, str] | None,
+    top_k: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    return await _execute_qdrant_retrieval(
+        qdrant=qdrant,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        filters=filters,
+        top_k=top_k,
+    )
+
+
+@observe(name="retrieval.relax", capture_input=False, capture_output=False)
+async def _run_relaxed_retrieval(
+    *,
+    qdrant: Any,
+    dense_vector: list[float],
+    sparse_vector: Any,
+    colbert_query: list[list[float]] | None,
+    filters: dict[str, str] | None,
+    top_k: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    return await _execute_qdrant_retrieval(
+        qdrant=qdrant,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        filters=filters,
+        top_k=top_k,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -318,94 +397,66 @@ async def _hybrid_retrieve(
             await cache.store_sparse_embedding(query, sparse_vector)
 
     # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
-    _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     colbert_search_used = False
     normalized_query = query.strip().lower()
     query_word_count = len(normalized_query.split()) if normalized_query else 0
     prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
     filters = {"topic": topic_hint} if topic_hint else None
     relaxed_filters: dict[str, str] | None = None
+    initial_filters = dict(filters) if isinstance(filters, dict) else None
+    final_filters = dict(filters) if isinstance(filters, dict) else None
+    qdrant_search_attempts = 0
+    retrieval_relaxed_from_topic_filter = False
     if prefer_faq_doc_type and topic_hint:
         filters = {"topic": topic_hint, "doc_type": "faq"}
         relaxed_filters = {"topic": topic_hint}
+        initial_filters = dict(filters)
+        final_filters = dict(filters)
 
-    if colbert_query and _has_colbert_search:
+    if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
-        qdrant_result = await qdrant.hybrid_search_rrf_colbert(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            filters=filters,
-            top_k=top_k,
-            return_meta=True,
-        )
-        colbert_search_used = True
-    else:
-        qdrant_result = await qdrant.hybrid_search_rrf(
-            dense_vector=dense_vector,
-            sparse_vector=sparse_vector,
-            filters=filters,
-            top_k=top_k,
-            return_meta=True,
-        )
-    if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
-        results, search_meta = qdrant_result
-    else:
-        results = qdrant_result
-        search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    results, search_meta, colbert_used = await _run_initial_retrieval(
+        qdrant=qdrant,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        filters=filters,
+        top_k=top_k,
+    )
+    colbert_search_used = colbert_search_used or colbert_used
+    qdrant_search_attempts += 1
 
     if filters and len(results) < 3:
         logger.info(
             "metric",
             extra={"metric_name": "topic_filter_fallback", "value": 1},
         )
+        retrieval_relaxed_from_topic_filter = True
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        if colbert_query and _has_colbert_search:
-            qdrant_result = await qdrant.hybrid_search_rrf_colbert(
-                dense_vector=dense_vector,
-                sparse_vector=sparse_vector,
-                colbert_query=colbert_query,
-                filters=fallback_filters,
-                top_k=top_k,
-                return_meta=True,
-            )
-        else:
-            qdrant_result = await qdrant.hybrid_search_rrf(
-                dense_vector=dense_vector,
-                sparse_vector=sparse_vector,
-                filters=fallback_filters,
-                top_k=top_k,
-                return_meta=True,
-            )
-        if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
-            results, search_meta = qdrant_result
-        else:
-            results = qdrant_result
-            search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+        results, search_meta, colbert_used = await _run_relaxed_retrieval(
+            qdrant=qdrant,
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            filters=fallback_filters,
+            top_k=top_k,
+        )
+        colbert_search_used = colbert_search_used or colbert_used
+        qdrant_search_attempts += 1
+        final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
 
     if relaxed_filters is not None and len(results) < 3:
-        if colbert_query and _has_colbert_search:
-            qdrant_result = await qdrant.hybrid_search_rrf_colbert(
-                dense_vector=dense_vector,
-                sparse_vector=sparse_vector,
-                colbert_query=colbert_query,
-                filters=None,
-                top_k=top_k,
-                return_meta=True,
-            )
-        else:
-            qdrant_result = await qdrant.hybrid_search_rrf(
-                dense_vector=dense_vector,
-                sparse_vector=sparse_vector,
-                filters=None,
-                top_k=top_k,
-                return_meta=True,
-            )
-        if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
-            results, search_meta = qdrant_result
-        else:
-            results = qdrant_result
-            search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+        results, search_meta, colbert_used = await _run_relaxed_retrieval(
+            qdrant=qdrant,
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            filters=None,
+            top_k=top_k,
+        )
+        colbert_search_used = colbert_search_used or colbert_used
+        qdrant_search_attempts += 1
+        final_filters = None
 
     if not results:
         logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
@@ -427,6 +478,10 @@ async def _hybrid_retrieve(
             "search_cache_hit": False,
             "retrieval_backend_error": search_meta.get("backend_error", False),
             "retrieval_error_type": search_meta.get("error_type"),
+            "qdrant_search_attempts": qdrant_search_attempts,
+            "initial_filters": initial_filters,
+            "final_filters": final_filters,
+            "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
             "duration_ms": round(latency * 1000, 1),
             "eval_query": query[:2000],
             "eval_docs": "\n\n".join(
@@ -447,6 +502,10 @@ async def _hybrid_retrieve(
         "retrieved_context": result_ctx,
         "rerank_applied": colbert_search_used,
         "colbert_query": colbert_query,
+        "qdrant_search_attempts": qdrant_search_attempts,
+        "initial_filters": initial_filters,
+        "final_filters": final_filters,
+        "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
     }
 
 
@@ -771,6 +830,7 @@ async def rag_pipeline(
     reranker: Any | None = None,
     llm: Any | None = None,
     agent_role: str | None = None,
+    state_contract: PreAgentStateContract | None = None,
     pre_computed_embedding: list[float] | None = None,
     pre_computed_sparse: Any = None,
     pre_computed_colbert: list[list[float]] | None = None,
@@ -813,22 +873,43 @@ async def rag_pipeline(
     grade_confidence = 0.0
     current_query = query
     query_embedding: list[float] | None = None
-    topic_hint = get_query_topic_hint(query)
+    contract_topic_hint = state_contract.get("topic_hint") if state_contract is not None else None
+    topic_hint = contract_topic_hint or get_query_topic_hint(query)
+    semantic_cache_already_checked = False
 
     # Step 1: Cache check (use cache_key = original user query)
     # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
-    cache_result = await _cache_check(
-        cache_key,
-        query_type,
-        user_id,
-        cache=cache,
-        embeddings=embeddings,
-        latency_stages=latency_stages,
-        agent_role=agent_role,
-        pre_computed_embedding=pre_computed_embedding,
-        pre_computed_sparse=pre_computed_sparse,
-        pre_computed_colbert=pre_computed_colbert,
-    )
+    if (
+        state_contract is not None
+        and state_contract.get("cache_checked") is True
+        and state_contract.get("cache_hit") is False
+        and state_contract.get("embedding_bundle_ready") is True
+    ):
+        semantic_cache_already_checked = True
+        cache_result = {
+            "cache_hit": False,
+            "cached_response": None,
+            "query_embedding": state_contract.get("dense_vector"),
+            "sparse_embedding": state_contract.get("sparse_vector"),
+            "embeddings_cache_hit": False,
+            "embedding_error": False,
+            "embedding_error_type": None,
+            "colbert_query": state_contract.get("colbert_query"),
+            "latency_stages": latency_stages,
+        }
+    else:
+        cache_result = await _cache_check(
+            cache_key,
+            query_type,
+            user_id,
+            cache=cache,
+            embeddings=embeddings,
+            latency_stages=latency_stages,
+            agent_role=agent_role,
+            pre_computed_embedding=pre_computed_embedding,
+            pre_computed_sparse=pre_computed_sparse,
+            pre_computed_colbert=pre_computed_colbert,
+        )
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding: list[float] | None = cache_result.get("query_embedding")
     cache_sparse: Any = cache_result.get("sparse_embedding")
@@ -851,6 +932,7 @@ async def rag_pipeline(
             "rewrite_count": 0,
             "query_type": query_type,
             "retrieved_context": [],
+            "semantic_cache_already_checked": semantic_cache_already_checked,
         }
 
     if cache_result["cache_hit"]:
@@ -869,6 +951,7 @@ async def rag_pipeline(
             "rewrite_count": 0,
             "query_type": query_type,
             "retrieved_context": [],
+            "semantic_cache_already_checked": semantic_cache_already_checked,
         }
 
     # For retrieval, use reformulated query embedding.
@@ -968,6 +1051,7 @@ async def rag_pipeline(
                 score_gap_confident=final_gap_confident,
             )
             result["skip_rewrite"] = skip_rewrite
+            result["semantic_cache_already_checked"] = semantic_cache_already_checked
             lf.update_current_span(
                 output={
                     "cache_hit": False,
@@ -1055,6 +1139,7 @@ async def rag_pipeline(
         score_gap_confident=final_gap_confident,
     )
     result["skip_rewrite"] = skip_rewrite
+    result["semantic_cache_already_checked"] = semantic_cache_already_checked
     lf.update_current_span(
         output={
             "cache_hit": False,
