@@ -75,6 +75,9 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            echo "=== Normalize bind-mounted config permissions ==="
+            chmod 644 ./docker/litellm/config.yaml
+
             echo "=== Rebuild changed images ==="
             docker compose build
 
