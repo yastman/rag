@@ -129,6 +129,12 @@ def test_all_contract_spans_exist_in_codebase(all_contract_spans):
     )
 
 
+def test_retrieval_stage_family_spans_exist() -> None:
+    code_spans = collect_observe_names(_SCAN_DIRS)
+    assert "retrieval.initial" in code_spans
+    assert "retrieval.relax" in code_spans
+
+
 # ---------------------------------------------------------------------------
 # e) No undocumented @observe spans (reverse check)
 # ---------------------------------------------------------------------------
