@@ -55,7 +55,7 @@ def test_translator_uk(hub):
 
 def test_translator_menu_keys(hub):
     """All menu keys exist in all locales."""
-    keys = ["menu-search", "menu-settings", "menu-faq", "back", "close"]
+    keys = ["menu-search", "menu-settings", "menu-faq", "back", "close", "kb-demo"]
     for locale in ("ru", "en", "uk"):
         t = hub.get_translator_by_locale(locale)
         for key in keys:
