@@ -236,6 +236,7 @@ class RAGASEvaluator:
         Args:
             experiment_name: Reserved for backward compatibility
         """
+        self.experiment_name = experiment_name
         self.langfuse_client = _get_langfuse_client()
 
         # Get evaluator LLM via LiteLLM

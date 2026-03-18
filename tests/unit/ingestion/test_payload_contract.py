@@ -57,6 +57,36 @@ class TestPayloadContract:
         assert payload["metadata"]["topic"] == "general"
         assert payload["metadata"]["doc_type"] == "legal"
 
+    def test_payload_has_grounding_metadata_fields(self):
+        writer = QdrantHybridWriter.__new__(QdrantHybridWriter)
+
+        chunk = MagicMock()
+        chunk.text = "Документы для ВНЖ в Болгарии"
+        chunk.chunk_id = 0
+        chunk.order = 0
+        chunk.document_name = "legal-ru.pdf"
+        chunk.section = "Introduction"
+        chunk.page_range = None
+        chunk.extra_metadata = {"headings": ["Title"], "chunk_order": 0}
+
+        payload = writer.build_payload(
+            chunk=chunk,
+            file_id="file123",
+            source_path="gdrive/legal-ru.pdf",
+            chunk_location="page_1_offset_0",
+            file_metadata={
+                "file_name": "legal-ru.pdf",
+                "mime_type": "application/pdf",
+                "language": "ru",
+                "jurisdiction": "bg",
+            },
+        )
+
+        assert payload["metadata"]["jurisdiction"] == "bg"
+        assert payload["metadata"]["language"] == "ru"
+        assert payload["metadata"]["source_type"] in {"pdf", "docx", "gdrive"}
+        assert payload["metadata"]["audience"] == "client"
+
     def test_chunk_location_stability(self):
         """chunk_location should be stable for same input."""
         chunk1 = MagicMock()
