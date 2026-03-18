@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import inspect
 import logging
+import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -23,6 +24,10 @@ from telegram_bot.services.grounding_policy import (
 )
 from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.response_style_detector import ResponseStyleDetector
+from telegram_bot.services.telegram_formatting import (
+    build_reply_parameters,
+    format_answer_html,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -122,6 +127,16 @@ def _build_system_prompt_with_config(domain: str) -> tuple[str, dict[str, Any]]:
 
 def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEXT_DOCS) -> str:
     """Format top-N retrieved documents into LLM context string."""
+    return _format_context_for_mode(documents, max_docs=max_docs, sources_enabled=True)
+
+
+def _format_context_for_mode(
+    documents: list[dict[str, Any]],
+    max_docs: int = _MAX_CONTEXT_DOCS,
+    *,
+    sources_enabled: bool,
+) -> str:
+    """Format top-N retrieved documents into LLM context string for current source mode."""
     if not documents:
         return "Релевантной информации не найдено."
 
@@ -139,9 +154,35 @@ def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEX
         if "price" in metadata:
             meta_str += f"Цена: {metadata['price']:,}€\n"
 
-        parts.append(f"[Объект {i}] (релевантность: {score:.2f})\n{meta_str}{text}")
+        if sources_enabled:
+            header = f"[Объект {i}] (релевантность: {score:.2f})"
+        else:
+            header = "Фрагмент контекста"
+        parts.append(f"{header}\n{meta_str}{text}")
 
     return "\n\n---\n\n".join(parts)
+
+
+_INLINE_CITATION_RE = re.compile(r"\s*\[(?:\d{1,2}(?:\s*,\s*\d{1,2})*)\]")
+_OBJECT_LABEL_RE = re.compile(r"\s*\[Объект\s+\d+\]")
+_TRAILING_CITATION_SUFFIX_RE = re.compile(r"\s+(?:\d{1,2})(?:\.)?\s*$")
+
+
+def _sanitize_response_text(answer: str, *, sources_enabled: bool) -> str:
+    """Strip citation-like artifacts from user-visible text when sources are disabled."""
+    if sources_enabled or not answer:
+        return answer
+
+    sanitized_lines: list[str] = []
+    for raw_line in answer.splitlines():
+        line = _OBJECT_LABEL_RE.sub("", raw_line)
+        line = _INLINE_CITATION_RE.sub("", line)
+        if not re.match(r"^\s*\d+\.\s", line):
+            line = _TRAILING_CITATION_SUFFIX_RE.sub("", line)
+        sanitized_lines.append(line.rstrip())
+
+    sanitized = "\n".join(sanitized_lines).strip()
+    return sanitized or answer.strip()
 
 
 def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
@@ -268,6 +309,7 @@ async def _generate_streaming(
     max_tokens: int = 0,
     lf_client: Any | None = None,
     temperature: float = 0.7,
+    sanitize_response: Callable[[str], str] | None = None,
 ) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
     """Stream LLM response to Telegram via native sendMessageDraft (Bot API 9.5).
 
@@ -351,27 +393,42 @@ async def _generate_streaming(
     except Exception:
         if accumulated:
             # Draft showed partial text — try to finalize as real message
+            final_text = sanitize_response(accumulated) if sanitize_response else accumulated
             sent_msg = None
             with contextlib.suppress(Exception):
-                sent_msg = await message.answer(accumulated)
-            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
+                sent_msg = await message.answer(
+                    format_answer_html(final_text),
+                    parse_mode="HTML",
+                    reply_parameters=build_reply_parameters(
+                        message,
+                        getattr(message, "text", "") or "",
+                    ),
+                )
+            raise StreamingPartialDeliveryError(sent_msg, final_text) from None
         raise
 
     if not accumulated:
         raise ValueError("Streaming produced empty response")
 
+    final_text = sanitize_response(accumulated) if sanitize_response else accumulated
+    reply_parameters = build_reply_parameters(message, getattr(message, "text", "") or "")
+
     # Final message — persisted in chat history
     try:
-        sent_msg = await message.answer(accumulated, parse_mode="Markdown")
+        sent_msg = await message.answer(
+            format_answer_html(final_text),
+            parse_mode="HTML",
+            reply_parameters=reply_parameters,
+        )
     except Exception:
         try:
-            sent_msg = await message.answer(accumulated)
+            sent_msg = await message.answer(final_text, reply_parameters=reply_parameters)
         except Exception:
             logger.warning("Failed to send final streaming message")
             sent_msg = None
 
     return (
-        accumulated,
+        final_text,
         actual_model,
         ttft_ms,
         completion_tokens,
@@ -402,7 +459,7 @@ async def generate_response(
     lf_client: Any | None = None,
     get_lf_client: Callable[[], Any] | None = None,
     max_context_docs: int = _MAX_CONTEXT_DOCS,
-    format_context: Callable[[list[dict[str, Any]], int], str] = _format_context,
+    format_context: Callable[..., str] = _format_context,
     select_recent_history: Callable[[list[Any], int], list[Any]] = _select_recent_history,
     build_system_prompt: Callable[[str], str] = _build_system_prompt,
     ensure_history_instruction: Callable[[str], str] = _ensure_history_instruction,
@@ -430,7 +487,6 @@ async def generate_response(
     docs = documents or []
     raw_history = raw_messages or []
     messages = select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
-    context = format_context(docs, max_context_docs)
 
     # Derive query from last message if caller didn't pass explicit query.
     effective_query = query
@@ -445,6 +501,11 @@ async def generate_response(
     detector = style_detector or _detector
     style_info = detector.detect(effective_query)
     sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    format_params = inspect.signature(format_context).parameters
+    if "sources_enabled" in format_params:
+        context = format_context(docs, max_context_docs, sources_enabled=sources_enabled)
+    else:
+        context = format_context(docs, max_context_docs)
 
     # Curated span metadata
     lf_client.update_current_span(
@@ -579,6 +640,11 @@ async def generate_response(
                     stream_kwargs["lf_client"] = lf_client
                 if "temperature" in params:
                     stream_kwargs["temperature"] = effective_temperature
+                if "sanitize_response" in params:
+                    stream_kwargs["sanitize_response"] = lambda text: _sanitize_response_text(
+                        text,
+                        sources_enabled=sources_enabled,
+                    )
                 stream_result = await generate_streaming(
                     llm,
                     config,
@@ -639,6 +705,7 @@ async def generate_response(
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
+                    answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
                     actual_model = (
                         getattr(response_obj, "model", config.llm_model) or config.llm_model
                     )
@@ -653,7 +720,7 @@ async def generate_response(
                     delivered = False
                     if sent_msg is not None:
                         try:
-                            await sent_msg.edit_text(answer, parse_mode="Markdown")
+                            await sent_msg.edit_text(format_answer_html(answer), parse_mode="HTML")
                             delivered = True
                         except Exception:
                             try:
@@ -667,7 +734,14 @@ async def generate_response(
                                 )
                     if not delivered:
                         try:
-                            sent_msg = await message.answer(answer, parse_mode="Markdown")
+                            sent_msg = await message.answer(
+                                format_answer_html(answer),
+                                parse_mode="HTML",
+                                reply_parameters=build_reply_parameters(
+                                    message,
+                                    getattr(message, "text", "") or effective_query,
+                                ),
+                            )
                             delivered = True
                         except Exception:
                             try:
@@ -698,6 +772,7 @@ async def generate_response(
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
+                    answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
                     actual_model = (
                         getattr(response_obj, "model", config.llm_model) or config.llm_model
                     )
@@ -723,6 +798,7 @@ async def generate_response(
             )
             t_llm_end = time.monotonic()
             answer = response_obj.choices[0].message.content or ""
+            answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
             actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
             # For non-streaming: TTFT = entire call duration (one-shot completion)
             ttft_ms = (t_llm_end - t_llm_start) * 1000

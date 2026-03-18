@@ -1,8 +1,4 @@
-"""respond_node — sends the final response to the user via Telegram.
-
-Sends with Markdown parse_mode, falls back to plain text on parse error.
-Attaches feedback buttons when trace_id is available (#229).
-"""
+"""respond_node — sends the final response to the user via Telegram."""
 
 from __future__ import annotations
 
@@ -11,6 +7,11 @@ import time
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.telegram_formatting import (
+    format_answer_html,
+    format_sources_html,
+    send_html_messages,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -43,23 +44,8 @@ def _extract_sent_message_ref(state: dict[str, Any]) -> tuple[int, int] | None:
 
 
 def format_sources(documents: list[dict[str, Any]], max_sources: int = _MAX_SOURCES) -> str:
-    """Format source documents as Telegram Markdown footnotes (#225)."""
-    if not documents:
-        return ""
-
-    parts: list[str] = []
-    for i, doc in enumerate(documents[:max_sources], 1):
-        meta = doc.get("metadata", {})
-        title = meta.get("title", "Документ")
-        city = meta.get("city", "")
-        score = doc.get("score", 0)
-        line = f"`[{i}]` {title}"
-        if city:
-            line += f" — {city}"
-        line += f" _(рел: {score:.2f})_"
-        parts.append(line)
-
-    return "\n\n\U0001f4ce *Источники:*\n" + "\n".join(parts)
+    """Format source documents as Telegram HTML attribution."""
+    return format_sources_html(documents, max_sources=max_sources)
 
 
 @observe(name="node-respond", capture_input=False, capture_output=False)
@@ -114,13 +100,13 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
         if sent_ref is not None and bot is not None:
             chat_id, message_id = sent_ref
             if sources_text:
-                full_text = response + sources_text
+                full_text = format_answer_html(response) + sources_text
                 try:
                     await bot.edit_message_text(
                         text=full_text,
                         chat_id=chat_id,
                         message_id=message_id,
-                        parse_mode="Markdown",
+                        parse_mode="HTML",
                         reply_markup=reply_markup,
                     )
                 except Exception:
@@ -170,26 +156,23 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
         }
 
     # Non-streaming path: append sources to response before sending
-    full_response = response + sources_text if sources_text else response
-
     delivered = False
     used_markdown = False
     if message is not None:
         try:
-            await message.answer(full_response, parse_mode="Markdown", reply_markup=reply_markup)
-            delivered = True
-            used_markdown = True
-        except Exception:
-            logger.warning("Markdown parse failed, falling back to plain text")
-            try:
-                await message.answer(full_response, reply_markup=reply_markup)
-                delivered = True
-            except Exception as e:
-                logger.exception("Failed to send response")
-                lf.update_current_span(
-                    level="ERROR",
-                    status_message=f"Telegram send failed: {str(e)[:200]}",
-                )
+            delivered = await send_html_messages(
+                message,
+                response,
+                sources_html=sources_text,
+                reply_markup=reply_markup,
+                reply_to_user_text=state.get("query", ""),
+            )
+        except Exception as e:
+            logger.exception("Failed to send response")
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"Telegram send failed: {str(e)[:200]}",
+            )
 
     elapsed = time.perf_counter() - t0
     lf.update_current_span(
