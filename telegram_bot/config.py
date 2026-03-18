@@ -1,8 +1,16 @@
 """Bot configuration."""
 
+import os
 from typing import Annotated
 
-from pydantic import AliasChoices, BeforeValidator, Field, SecretStr, field_validator
+from pydantic import (
+    AliasChoices,
+    BeforeValidator,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from src.config.qdrant_policy import resolve_collection_name
@@ -566,6 +574,10 @@ class BotConfig(BaseSettings):
     )
 
     # ── Handoff (Forum Topics) ──────────────────────────────────────
+    handoff_enabled: EmptyStrBool = Field(
+        default=False,
+        validation_alias=AliasChoices("handoff_enabled", "HANDOFF_ENABLED"),
+    )
     managers_group_id: int | None = Field(
         default=None,
         validation_alias=AliasChoices("managers_group_id", "MANAGERS_GROUP_ID"),
@@ -605,6 +617,22 @@ class BotConfig(BaseSettings):
         if isinstance(v, list):
             return [int(x) for x in v]
         return []
+
+    @model_validator(mode="after")
+    def validate_handoff_contract(self) -> "BotConfig":
+        handoff_flag = os.getenv("HANDOFF_ENABLED")
+
+        if handoff_flag is None and self.managers_group_id is not None:
+            self.handoff_enabled = True
+            return self
+
+        if not self.handoff_enabled:
+            self.managers_group_id = None
+            return self
+
+        if self.managers_group_id is None:
+            raise ValueError("HANDOFF_ENABLED=true but MANAGERS_GROUP_ID is missing")
+        return self
 
     def get_collection_name(self) -> str:
         """Get collection name based on quantization mode.
