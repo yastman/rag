@@ -23,7 +23,7 @@ _SAMPLE_DOCS = [
 
 
 class TestRespondNode:
-    async def test_sends_markdown(self):
+    async def test_sends_html(self):
         message = AsyncMock()
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "**Bold** answer"
@@ -32,13 +32,13 @@ class TestRespondNode:
         result = await respond_node(state)
 
         message.answer.assert_awaited_once_with(
-            "**Bold** answer", parse_mode="Markdown", reply_markup=None
+            "**Bold** answer", parse_mode="HTML", reply_markup=None
         )
         assert "respond" in result["latency_stages"]
 
     async def test_fallback_to_plain_text(self):
         message = AsyncMock()
-        # First call (Markdown) raises, second call (plain) succeeds
+        # First call (HTML) raises, second call (plain) succeeds
         message.answer.side_effect = [Exception("parse error"), None]
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "bad *markdown"
@@ -200,9 +200,9 @@ class TestFormatSources:
 
     def test_formats_sources_with_city(self):
         result = format_sources(_SAMPLE_DOCS)
-        assert "*Источники:*" in result
-        assert "`[1]` Апартамент Несебр — Несебр" in result
-        assert "`[2]` Студия с видом — Равда" in result
+        assert "<b>Источники:</b>" in result
+        assert "[1] Апартамент Несебр — Несебр" in result
+        assert "[2] Студия с видом — Равда" in result
         assert "0.92" in result
         assert "0.87" in result
 
@@ -214,8 +214,8 @@ class TestFormatSources:
             {"text": f"Doc {i}", "score": 0.5, "metadata": {"title": f"Doc {i}"}} for i in range(10)
         ]
         result = format_sources(docs, max_sources=3)
-        assert "`[3]`" in result
-        assert "`[4]`" not in result
+        assert "[3] Doc 2" in result
+        assert "[4]" not in result
 
     def test_missing_city(self):
         docs = [{"text": "t", "score": 0.5, "metadata": {"title": "NoCity"}}]
@@ -241,7 +241,7 @@ class TestRespondNodeSourceAttribution:
 
         sent_text = message.answer.call_args[0][0]
         assert "Answer text" in sent_text
-        assert "*Источники:*" in sent_text
+        assert "<b>Источники:</b>" in sent_text
         assert "Апартамент Несебр" in sent_text
         assert result["sources_count"] == 2
 
@@ -263,7 +263,7 @@ class TestRespondNodeSourceAttribution:
         message.bot.edit_message_text.assert_awaited_once()
         edit_kwargs = message.bot.edit_message_text.call_args.kwargs
         assert "Streamed answer" in edit_kwargs["text"]
-        assert "*Источники:*" in edit_kwargs["text"]
+        assert "<b>Источники:</b>" in edit_kwargs["text"]
         assert result["sources_count"] == 2
 
     async def test_no_sources_for_chitchat(self):
