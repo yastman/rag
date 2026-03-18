@@ -25,6 +25,7 @@ class TestCollectionVerify:
         assert "metadata.file_id" in missing
         assert "metadata.doc_id" in missing
         assert "metadata.order" in missing
+        assert "metadata.source_type" in missing
         assert "metadata.jurisdiction" in missing
         assert "metadata.audience" in missing
         assert "metadata.language" in missing
@@ -40,6 +41,7 @@ class TestCollectionVerify:
             "metadata.file_id": MagicMock(data_type="keyword"),
             "metadata.doc_id": MagicMock(data_type="keyword"),
             "metadata.source": MagicMock(data_type="keyword"),
+            "metadata.source_type": MagicMock(data_type="keyword"),
             "metadata.topic": MagicMock(data_type="keyword"),
             "metadata.doc_type": MagicMock(data_type="keyword"),
             "metadata.jurisdiction": MagicMock(data_type="keyword"),

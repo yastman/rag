@@ -241,6 +241,7 @@ def verify_collection_indexes(client: QdrantClient, collection_name: str) -> lis
         "metadata.file_id": "keyword",
         "metadata.doc_id": "keyword",
         "metadata.source": "keyword",
+        "metadata.source_type": "keyword",
         "metadata.topic": "keyword",
         "metadata.doc_type": "keyword",
         "metadata.jurisdiction": "keyword",
