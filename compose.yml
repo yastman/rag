@@ -91,6 +91,7 @@ services:
 
   bge-m3:
     <<: *security-defaults
+    image: "${COMPOSE_PROJECT_NAME:-dev}_bge-m3"
     build:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
@@ -119,6 +120,7 @@ services:
 
   user-base:
     <<: *security-defaults
+    image: "${COMPOSE_PROJECT_NAME:-dev}_user-base"
     build:
       context: ./services/user-base
       dockerfile: Dockerfile
@@ -145,6 +147,7 @@ services:
 
   docling:
     <<: *security-defaults
+    image: "${COMPOSE_PROJECT_NAME:-dev}_docling"
     build:
       context: ./services/docling
       dockerfile: Dockerfile
@@ -220,6 +223,7 @@ services:
 
   bot:
     <<: *security-defaults
+    image: "${COMPOSE_PROJECT_NAME:-dev}_bot"
     build:
       context: .
       dockerfile: telegram_bot/Dockerfile
@@ -324,6 +328,7 @@ services:
 
   mini-app-api:
     <<: *security-defaults
+    image: "${COMPOSE_PROJECT_NAME:-dev}_mini-app-api"
     build:
       context: .
       dockerfile: mini_app/Dockerfile
@@ -366,6 +371,7 @@ services:
           memory: 256M
 
   mini-app-frontend:
+    image: "${COMPOSE_PROJECT_NAME:-dev}_mini-app-frontend"
     build:
       context: ./mini_app/frontend
       dockerfile: Dockerfile
@@ -390,6 +396,7 @@ services:
   # =============================================================================
 
   ingestion:
+    image: "${COMPOSE_PROJECT_NAME:-dev}_ingestion"
     build:
       context: .
       dockerfile: Dockerfile.ingestion
