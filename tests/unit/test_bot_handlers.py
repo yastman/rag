@@ -89,6 +89,30 @@ def _make_typing_cm():
     return mock_cm
 
 
+class TestPreAgentStateContract:
+    def test_build_pre_agent_miss_contract_sets_required_fields(self):
+        from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
+
+        contract = build_pre_agent_miss_contract(
+            query_type="FAQ",
+            topic_hint="legal",
+            dense_vector=[0.1, 0.2],
+            sparse_vector={"indices": [1], "values": [0.5]},
+            colbert_query=[[0.2] * 4],
+            grounding_mode="strict",
+        )
+
+        assert contract["cache_checked"] is True
+        assert contract["cache_hit"] is False
+        assert contract["cache_scope"] == "rag"
+        assert contract["embedding_bundle_ready"] is True
+        assert contract["embedding_bundle_version"] == "bge_m3_hybrid_colbert"
+        assert contract["retrieval_policy"] == "topic_then_relax"
+        assert contract["query_type"] == "FAQ"
+        assert contract["topic_hint"] == "legal"
+        assert contract["grounding_mode"] == "strict"
+
+
 class TestPropertyBotInit:
     """Test PropertyBot initialization."""
 
@@ -3659,8 +3683,54 @@ class TestPreAgentCacheCheck:
         bot._cache.store_sparse_embedding.assert_not_awaited()
         bot._cache.store_embedding.assert_not_awaited()
 
-    async def test_pre_agent_miss_computes_colbert_via_colbert_query(self, mock_config):
-        """On MISS path, colbert is computed via lightweight aembed_colbert_query (#634)."""
+    async def test_pre_agent_miss_prefers_hybrid_colbert(self, mock_config):
+        """On MISS path, prefer hybrid_with_colbert over standalone ColBERT encode."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+        colbert_result = [[0.2] * 10]
+
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=(dense, sparse, colbert_result)
+        )
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.9] * 10])
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+        bot._embeddings.aembed_colbert_query.assert_not_awaited()
+        assert stashed_store.get("cache_key_colbert") == colbert_result
+
+    async def test_pre_agent_miss_falls_back_to_colbert_query_when_hybrid_unavailable(
+        self, mock_config
+    ):
+        """Standalone ColBERT encode remains the fallback when hybrid_colbert is unavailable."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10

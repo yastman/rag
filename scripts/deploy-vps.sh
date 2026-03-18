@@ -33,6 +33,7 @@ VPS_PORT="1654"
 VPS_USER="admin"
 VPS_KEY="$HOME/.ssh/vps_access_key"
 VPS_DIR="/opt/rag-fresh"
+VPS_COMPOSE_FILE="compose.yml:compose.vps.yml"
 
 SSH_OPTS="-i ${VPS_KEY} -p ${VPS_PORT} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
 RSYNC_SSH_OPTS="${SSH_OPTS}"
@@ -88,10 +89,15 @@ $CLEAN    && warn "Clean mode — full reinstall (down -v + image prune)"
 # =============================================================================
 [[ -f "$VPS_KEY" ]] || error "SSH key not found: $VPS_KEY"
 
-# Verify VPS has COMPOSE_FILE in .env
-log "Checking VPS .env for COMPOSE_FILE..."
-if ! ssh_cmd "grep -q '^COMPOSE_FILE=' ${VPS_DIR}/.env 2>/dev/null"; then
-    error "VPS .env missing COMPOSE_FILE. Add: COMPOSE_FILE=compose.yml:compose.vps.yml"
+# Verify VPS directory and env exist
+log "Checking VPS deploy directory..."
+if ! ssh_cmd "test -d ${VPS_DIR}"; then
+    error "VPS deploy directory missing: ${VPS_DIR}"
+fi
+
+log "Checking VPS .env presence..."
+if ! ssh_cmd "test -f ${VPS_DIR}/.env"; then
+    error "VPS .env missing: ${VPS_DIR}/.env"
 fi
 
 # =============================================================================
@@ -167,7 +173,7 @@ fi
 if $CLEAN; then
     log "Cleaning up old containers, volumes, and images..."
     if ! $DRY_RUN; then
-        ssh_cmd "cd ${VPS_DIR} && docker compose down -v"
+        ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && docker compose down -v"
         ssh_cmd "docker image prune -af && docker builder prune -af"
     else
         info "[dry-run] Would run: docker compose down -v && image/builder prune"
@@ -179,7 +185,7 @@ fi
 # =============================================================================
 log "Building Docker images on VPS..."
 if ! $DRY_RUN; then
-    ssh_cmd "cd ${VPS_DIR} && docker compose build"
+    ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && docker compose build"
 else
     info "[dry-run] Would run: docker compose build"
 fi
@@ -189,7 +195,7 @@ fi
 # =============================================================================
 log "Starting services..."
 if ! $DRY_RUN; then
-    ssh_cmd "cd ${VPS_DIR} && docker compose --compatibility up -d"
+    ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && docker compose --compatibility up -d"
 else
     info "[dry-run] Would run: docker compose --compatibility up -d"
 fi
@@ -213,7 +219,7 @@ if ! $SKIP_SMOKE; then
     log "Running release smoke checks on VPS..."
     if ! $DRY_RUN; then
         # Release-critical deploy smoke must fail if mini-app parity is broken.
-        ssh_cmd "cd ${VPS_DIR} && chmod +x ./scripts/test_release_health_vps.sh && REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" \
+        ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && chmod +x ./scripts/test_release_health_vps.sh && REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" \
             || error "Post-deploy release smoke checks failed"
     else
         info "[dry-run] Would run: cd ${VPS_DIR} && REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh"

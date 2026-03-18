@@ -4,6 +4,7 @@ set -euo pipefail
 REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false
 MINI_APP_FRONTEND_URL="${MINI_APP_FRONTEND_URL:-http://127.0.0.1:8091/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
+export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
 
 log() {
   printf '[release-smoke] %s\n' "$1"
