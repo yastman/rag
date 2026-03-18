@@ -49,7 +49,8 @@ def test_release_gate_script_contains_handoff_contract() -> None:
 def test_release_smoke_checks_handoff_contract_when_enabled() -> None:
     """Release smoke must validate handoff env presence when the feature is enabled."""
     script = RELEASE_SMOKE_SCRIPT.read_text()
-    assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' in script
+    assert "HANDOFF_ENABLED={os.getenv('HANDOFF_ENABLED', 'false')}" in script
+    assert "handoff_enabled_runtime" in script
     assert "MANAGERS_GROUP_ID" in script
 
 
@@ -57,3 +58,10 @@ def test_release_smoke_logs_when_handoff_smoke_is_skipped() -> None:
     """Release smoke must log when the handoff-specific branch is skipped."""
     script = RELEASE_SMOKE_SCRIPT.read_text()
     assert "handoff smoke skipped" in script
+
+
+def test_release_smoke_reads_handoff_gate_from_bot_runtime_env() -> None:
+    """Release smoke must key off container runtime env, not the host shell env."""
+    script = RELEASE_SMOKE_SCRIPT.read_text()
+    assert "docker compose exec -T bot python - <<'PY'" in script
+    assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' not in script
