@@ -688,7 +688,7 @@ class TestGenerateNodeStreaming:
         assert message.answer.await_args_list[0].args[0] == "Квартира в Несебре "
         sent_msg.edit_text.assert_awaited_once_with(
             "Fallback complete answer.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
 
     async def test_stream_error_partial_and_final_delivery_fails_falls_back_to_respond_node(
