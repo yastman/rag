@@ -62,3 +62,25 @@ async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> No
         data={"filters": {"city": "Варна"}},
         mode=StartMode.RESET_STACK,
     )
+
+
+@pytest.mark.asyncio
+async def test_render_catalog_results_with_keyboard_list_mode_attaches_keyboard() -> None:
+    from telegram_bot.dialogs.catalog_transport import render_catalog_results_with_keyboard
+
+    message = MagicMock()
+    message.answer = AsyncMock()
+
+    await render_catalog_results_with_keyboard(
+        message=message,
+        property_bot=None,
+        results=[{"id": "apt-1"}],
+        total_count=12,
+        view_mode="list",
+        shown_start=1,
+        shown_count=10,
+        telegram_id=123,
+    )
+
+    reply_markup = message.answer.await_args.kwargs["reply_markup"]
+    assert reply_markup is not None
