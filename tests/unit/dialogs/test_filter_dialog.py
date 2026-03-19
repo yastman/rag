@@ -200,19 +200,30 @@ class TestGetHubData:
 # ============================================================
 
 
-def _make_apply_mocks(dialog_data=None):
+def _make_apply_mocks(
+    dialog_data=None,
+    *,
+    fsm_data=None,
+    apartments_service=None,
+    property_bot=None,
+):
     """Create callback + manager mocks for on_apply tests."""
     state = AsyncMock()
-    state.get_data = AsyncMock(return_value={})
+    state.get_data = AsyncMock(return_value=fsm_data or {})
     state.update_data = AsyncMock()
 
     callback = MagicMock()
     callback.message = MagicMock()
     callback.message.answer = AsyncMock()
+    callback.message.delete = AsyncMock()
 
     manager = AsyncMock()
     manager.dialog_data = dialog_data or {}
-    manager.middleware_data = {"state": state, "apartments_service": None}
+    manager.middleware_data = {
+        "state": state,
+        "apartments_service": apartments_service,
+        "property_bot": property_bot,
+    }
     manager.done = AsyncMock()
     manager.start = AsyncMock()
 
@@ -265,6 +276,29 @@ class TestOnApply:
         await on_apply(callback, MagicMock(), manager)
 
         manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
+
+    async def test_closes_and_deletes_filter_shell_before_catalog_results(self):
+        from aiogram_dialog import ShowMode, StartMode
+
+        from telegram_bot.dialogs.filter_dialog import on_apply
+        from telegram_bot.dialogs.states import CatalogSG
+
+        svc = AsyncMock()
+        svc.scroll_with_filters = AsyncMock(
+            return_value=([{"id": "apt-1", "payload": {}}], 1, None, ["apt-1"])
+        )
+        callback, _state, manager = _make_apply_mocks(
+            {"city": "Варна"},
+            fsm_data={"catalog_runtime": {"view_mode": "list"}},
+            apartments_service=svc,
+        )
+
+        await on_apply(callback, MagicMock(), manager)
+
+        assert manager.show_mode == ShowMode.NO_UPDATE
+        manager.done.assert_awaited_once()
+        callback.message.delete.assert_awaited_once()
+        manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
 
 
 # ============================================================
