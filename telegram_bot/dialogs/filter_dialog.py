@@ -282,16 +282,22 @@ async def on_filter_dialog_start(
         manager.dialog_data.pop(field, None)
     manager.dialog_data.update(dialog_data)
 
+    # aiogram-dialog Radio stores selection in widget_data and does not support
+    # clearing via set_checked(None): it serializes None to the string "None".
+    with contextlib.suppress(Exception):
+        widget_data = manager.current_context().widget_data
+        for radio_id in _FIELD_TO_RADIO_ID.values():
+            widget_data.pop(radio_id, None)
+
     # Sync Radio widget checked states with dialog_data
     for field, radio_id in _FIELD_TO_RADIO_ID.items():
         value = dialog_data.get(field)
+        if value is None:
+            continue
         with contextlib.suppress(Exception):
             radio_widget = manager.find(radio_id)
             if radio_widget is not None:
-                if value is None:
-                    await radio_widget.set_checked(None)
-                else:
-                    await radio_widget.set_checked(str(value))
+                await radio_widget.set_checked(str(value))
 
 
 # ============================================================
