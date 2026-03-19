@@ -1,9 +1,9 @@
-"""Tests for dialog-owned catalog controls and legacy path removal."""
+"""Tests for catalog reply-keyboard routing and legacy path removal."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,7 +18,9 @@ def _make_state(data: dict) -> MagicMock:
 def _make_callback() -> MagicMock:
     callback = MagicMock()
     callback.message = MagicMock()
-    callback.message.answer = AsyncMock()
+    callback.message.answer = AsyncMock(return_value=MagicMock(delete=AsyncMock()))
+    callback.message.chat = MagicMock(id=456)
+    callback.message.bot = MagicMock(delete_message=AsyncMock())
     callback.from_user = MagicMock(id=123)
     return callback
 
@@ -37,7 +39,10 @@ def test_bot_no_longer_registers_catalog_reply_keyboard_path() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
+    from aiogram_dialog import ShowMode, StartMode
+
     from telegram_bot.dialogs.catalog import on_catalog_more
+    from telegram_bot.dialogs.states import CatalogSG
 
     state = _make_state(
         {
@@ -65,6 +70,11 @@ async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
     svc.scroll_with_filters.assert_awaited_once()
     update_kwargs = state.update_data.call_args.kwargs
     assert update_kwargs["catalog_runtime"]["shown_count"] == 20
+    manager.start.assert_awaited_once_with(
+        CatalogSG.results,
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.NO_UPDATE,
+    )
 
 
 @pytest.mark.asyncio
@@ -102,7 +112,8 @@ async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog() -> None:
-    from aiogram_dialog import ShowMode, StartMode
+    from aiogram.types import ReplyKeyboardRemove
+    from aiogram_dialog import StartMode
 
     from telegram_bot.dialogs.catalog import on_catalog_filters
     from telegram_bot.dialogs.states import FilterSG
@@ -110,15 +121,12 @@ async def test_catalog_filters_starts_filter_dialog() -> None:
     state = _make_state({"catalog_runtime": {"filters": {"city": "Варна"}}})
     manager = AsyncMock()
     manager.middleware_data = {"state": state}
-    manager.done = AsyncMock()
     callback = _make_callback()
-    callback.message.delete = AsyncMock()
 
     await on_catalog_filters(callback, MagicMock(), manager)
 
-    assert manager.show_mode == ShowMode.NO_UPDATE
-    manager.done.assert_awaited_once()
-    callback.message.delete.assert_awaited_once()
+    reply_markup = callback.message.answer.await_args.kwargs["reply_markup"]
+    assert isinstance(reply_markup, ReplyKeyboardRemove)
     manager.start.assert_awaited_once_with(
         FilterSG.hub,
         data={"filters": {"city": "Варна"}},
@@ -172,3 +180,23 @@ async def test_catalog_manager_delegates_to_existing_handler() -> None:
     await on_catalog_manager(callback, MagicMock(), manager)
 
     property_bot._handle_manager.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_catalog_text_input_routes_actions_before_search() -> None:
+    from telegram_bot.dialogs.catalog import on_catalog_text_input
+
+    message = MagicMock()
+    message.text = "🔍 Фильтры"
+    message.answer = AsyncMock(return_value=MagicMock(delete=AsyncMock()))
+    message.chat = MagicMock(id=456)
+    message.bot = MagicMock(delete_message=AsyncMock())
+    manager = AsyncMock()
+    manager.middleware_data = {"state": _make_state({"catalog_runtime": {"filters": {}}})}
+
+    with patch(
+        "telegram_bot.handlers.demo_handler._run_demo_search", new=AsyncMock()
+    ) as search_mock:
+        await on_catalog_text_input(message, MagicMock(), manager)
+
+    search_mock.assert_not_awaited()

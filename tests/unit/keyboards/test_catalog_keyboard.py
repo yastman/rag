@@ -1,14 +1,36 @@
-"""Tests for the dedicated catalog reply keyboard."""
+"""Catalog reply-keyboard contracts."""
 
-from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard, parse_catalog_button
-
-
-def test_build_catalog_keyboard_shows_more_button_when_more_results_exist() -> None:
-    kb = build_catalog_keyboard(shown=10, total=47)
-    first_row = [button.text for button in kb.keyboard[0]]
-    assert first_row == ["📥 Показать ещё (10 из 47)"]
+from aiogram.types import ReplyKeyboardMarkup
 
 
-def test_parse_catalog_button_maps_static_actions() -> None:
+def test_build_catalog_keyboard_returns_reply_markup() -> None:
+    from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
+
+    kb = build_catalog_keyboard(shown=10, total=25)
+
+    assert isinstance(kb, ReplyKeyboardMarkup)
+    texts = [button.text for row in kb.keyboard for button in row]
+    assert "🔄 Показать ещё" in texts
+    assert "🔍 Фильтры" in texts
+    assert "📌 Избранное" in texts
+    assert "🏠 Главное меню" in texts
+
+
+def test_build_catalog_keyboard_hides_show_more_on_last_page() -> None:
+    from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
+
+    kb = build_catalog_keyboard(shown=25, total=25)
+
+    texts = [button.text for row in kb.keyboard for button in row]
+    assert "🔄 Показать ещё" not in texts
+
+
+def test_parse_catalog_button_maps_known_actions() -> None:
+    from telegram_bot.keyboards.catalog_keyboard import parse_catalog_button
+
+    assert parse_catalog_button("🔄 Показать ещё") == "catalog_more"
     assert parse_catalog_button("🔍 Фильтры") == "catalog_filters"
-    assert parse_catalog_button("🏠 Главное меню") == "catalog_exit"
+    assert parse_catalog_button("📌 Избранное") == "catalog_bookmarks"
+    assert parse_catalog_button("📅 Запись на осмотр") == "catalog_viewing"
+    assert parse_catalog_button("👤 Написать менеджеру") == "catalog_manager"
+    assert parse_catalog_button("🏠 Главное меню") == "catalog_home"
