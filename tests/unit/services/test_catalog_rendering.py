@@ -32,8 +32,11 @@ async def test_send_catalog_results_cards_uses_property_card_sender() -> None:
 
 @pytest.mark.asyncio
 async def test_send_catalog_results_list_mode_sends_formatted_text() -> None:
+    from aiogram.types import ReplyKeyboardMarkup
+
     message = MagicMock()
     message.answer = AsyncMock()
+    reply_markup = ReplyKeyboardMarkup(keyboard=[])
 
     with patch(
         "telegram_bot.services.catalog_rendering.format_apartment_list", return_value="LIST"
@@ -46,9 +49,10 @@ async def test_send_catalog_results_list_mode_sends_formatted_text() -> None:
             view_mode="list",
             shown_start=1,
             telegram_id=42,
+            reply_markup=reply_markup,
         )
 
-    message.answer.assert_awaited_once_with("LIST", parse_mode="HTML")
+    message.answer.assert_awaited_once_with("LIST", parse_mode="HTML", reply_markup=reply_markup)
 
 
 @pytest.mark.asyncio
