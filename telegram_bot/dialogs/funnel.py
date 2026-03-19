@@ -28,6 +28,7 @@ from telegram_bot.dialogs.root_nav import (
     get_main_menu_label,
     root_menu_button,
 )
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.observability import observe
 
 from .filter_constants import (
@@ -916,6 +917,7 @@ async def on_summary_search(
         return
 
     telegram_id = callback.from_user.id if callback.from_user else 0
+    i18n = manager.middleware_data.get("i18n")
     await send_catalog_results(
         message=callback.message,
         property_bot=property_bot,
@@ -924,6 +926,11 @@ async def on_summary_search(
         view_mode=view_mode,
         shown_start=1,
         telegram_id=telegram_id,
+        reply_markup=(
+            build_catalog_keyboard(shown=len(results), total=total_count, i18n=i18n)
+            if view_mode == "list"
+            else None
+        ),
     )
     await show_catalog_controls(message=callback.message, dialog_manager=manager, runtime=runtime)
     await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
