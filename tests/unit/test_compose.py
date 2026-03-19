@@ -72,6 +72,24 @@ def test_compose_yml_has_no_ports():
         )
 
 
+def test_custom_build_services_have_stable_explicit_image_names():
+    """Custom build services must pin image names to COMPOSE_PROJECT_NAME with underscores."""
+    data = load_yaml("compose.yml")
+    expected = {
+        "bge-m3": "${COMPOSE_PROJECT_NAME:-dev}_bge-m3",
+        "user-base": "${COMPOSE_PROJECT_NAME:-dev}_user-base",
+        "docling": "${COMPOSE_PROJECT_NAME:-dev}_docling",
+        "bot": "${COMPOSE_PROJECT_NAME:-dev}_bot",
+        "mini-app-api": "${COMPOSE_PROJECT_NAME:-dev}_mini-app-api",
+        "mini-app-frontend": "${COMPOSE_PROJECT_NAME:-dev}_mini-app-frontend",
+        "ingestion": "${COMPOSE_PROJECT_NAME:-dev}_ingestion",
+    }
+    for svc_name, image in expected.items():
+        assert data["services"][svc_name]["image"] == image, (
+            f"{svc_name} image must be pinned to {image!r} to avoid build/runtime tag drift"
+        )
+
+
 def test_compose_dev_has_colbert_rerank():
     """Dev override must enable ColBERT reranking."""
     data = load_yaml("compose.dev.yml")
