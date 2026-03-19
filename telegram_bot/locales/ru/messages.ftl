@@ -21,6 +21,7 @@ lang-uk = Українська
 ***REMOVED*** Навигация
 back = Назад
 close = Закрыть
+main-menu = 🏠 Главное меню
 
 ***REMOVED*** Воронка
 funnel-what-looking = Что вас интересует?
