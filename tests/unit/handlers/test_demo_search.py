@@ -54,6 +54,8 @@ class TestDemoSearchText:
         )
         pipeline.extract.assert_awaited_once_with("двушка до 100к")
         message.answer.assert_awaited()
+        kwargs = state.update_data.await_args.kwargs
+        assert kwargs["catalog_runtime"]["total"] == 1
 
     @pytest.mark.asyncio
     async def test_low_confidence_still_searches(self) -> None:

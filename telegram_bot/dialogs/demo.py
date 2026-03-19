@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import operator
 from typing import Any
 
 from aiogram.enums import ContentType
 from aiogram.types import CallbackQuery, Message
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Column, Select
 from aiogram_dialog.widgets.text import Format
 
-from telegram_bot.dialogs.states import CatalogBrowsingSG, DemoSG
+from telegram_bot.dialogs.states import CatalogSG, DemoSG
 from telegram_bot.handlers.demo_handler import transcribe_voice
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
+from telegram_bot.services.catalog_rendering import send_catalog_results
+from telegram_bot.services.catalog_session import CATALOG_RUNTIME_DATA_KEY, build_catalog_runtime
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +104,7 @@ async def results_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[s
 
 
 async def _dialog_search(query: str, message: Message, manager: DialogManager) -> None:
-    """LLM extraction → scroll_with_filters → catalog browsing mode."""
+    """LLM extraction → scroll_with_filters → catalog dialog."""
     from aiogram.fsm.context import FSMContext
 
     pipeline = manager.middleware_data.get("pipeline")
@@ -144,27 +147,31 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
         )
         return
 
-    from telegram_bot.dialogs.funnel import format_apartment_list
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
-    text = format_apartment_list(results, shown_start=1, total=total_count)
-    catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
-    await message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
-
-    # Transition to CatalogBrowsingSG.browsing
+    runtime = build_catalog_runtime(
+        query=query,
+        source="demo",
+        filters=filters if isinstance(filters, dict) else {},
+        view_mode="list",
+        results=results,
+        total=total_count,
+        next_offset=next_start,
+        shown_item_ids=page_ids,
+    )
     if state is not None:
-        await state.set_state(CatalogBrowsingSG.browsing)
-        await state.update_data(
-            apartment_filters=filters if isinstance(filters, dict) else {},
-            apartment_offset=len(results),
-            apartment_total=total_count,
-            apartment_next_offset=next_start,
-            apartment_scroll_seen_ids=page_ids,
-            apartment_query=query,
-        )
+        await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
-    # Close demo dialog
-    await manager.done()
+    await send_catalog_results(
+        message=message,
+        property_bot=manager.middleware_data.get("property_bot"),
+        results=results,
+        total_count=total_count,
+        view_mode="list",
+        shown_start=1,
+        telegram_id=message.from_user.id if message.from_user else 0,
+    )
+    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
+    if inspect.isawaitable(maybe_start):
+        await maybe_start
 
 
 # ---------------------------------------------------------------------------
