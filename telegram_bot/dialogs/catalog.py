@@ -247,7 +247,6 @@ async def _handle_catalog_filters_message(
     manager: DialogManager,
 ) -> None:
     runtime = await clear_catalog_controls(message=message, dialog_manager=manager)
-    await _remove_reply_keyboard(message)
     from telegram_bot.dialogs.states import FilterSG
 
     await manager.start(
