@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 import operator
 from typing import Any
 
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import (
     Back,
     Button,
@@ -818,8 +819,13 @@ async def on_summary_search(
     button: Button,
     manager: DialogManager,
 ) -> None:
-    """Search, send photo cards, close dialog, show catalog keyboard."""
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+    """Search, send results as ordinary messages, then hand off to CatalogSG."""
+    from telegram_bot.dialogs.states import CatalogSG
+    from telegram_bot.services.catalog_rendering import send_catalog_results
+    from telegram_bot.services.catalog_session import (
+        CATALOG_RUNTIME_DATA_KEY,
+        build_catalog_runtime,
+    )
 
     data = manager.dialog_data
     data.pop("scroll_start_from", None)
@@ -872,54 +878,50 @@ async def on_summary_search(
         await manager.done()
         return
 
-    # Close dialog before sending cards
+    # Avoid leaving the stale inline dialog message above catalog ReplyKeyboard.
+    manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
+    with contextlib.suppress(Exception):
+        await callback.message.delete()
 
     # Determine view mode from button id
     view_mode = "list" if button.widget_id == "search_list" else "cards"
 
-    # Store results in FSMContext for pagination
     state = manager.middleware_data.get("state")
+    runtime = build_catalog_runtime(
+        query=f"funnel:{data.get('city', 'any')}",
+        source="funnel",
+        filters=filters,
+        view_mode=view_mode,
+        results=results,
+        total=total_count,
+        next_offset=_next_start,
+        shown_item_ids=_page_ids,
+        bookmarks_context=False,
+        origin_context={"funnel_data": dict(data)},
+    )
     if state is not None:
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
-
-        await state.set_state(CatalogBrowsingSG.browsing)
-        await state.update_data(
-            apartment_results=results,
-            apartment_query=f"funnel:{data.get('city', 'any')}",
-            apartment_offset=len(results),
-            bookmarks_context=False,
-            apartment_total=total_count,
-            apartment_next_offset=_next_start,
-            apartment_scroll_seen_ids=_page_ids,
-            apartment_filters=filters,
-            funnel_data=dict(data),
-            catalog_view_mode=view_mode,
-        )
+        await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
     if not results:
-        await callback.message.answer(
-            "К сожалению, по вашим критериям ничего не найдено.\n"
-            "Попробуйте изменить параметры поиска."
-        )
+        maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        if inspect.isawaitable(maybe_start):
+            await maybe_start
         return
 
-    if view_mode == "list":
-        # Send compact text list as one message
-        text = format_apartment_list(results, shown_start=1, total=total_count)
-        catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
-    else:
-        # Send photo cards
-        if property_bot is not None:
-            for result in results:
-                telegram_id = callback.from_user.id if callback.from_user else 0
-                await property_bot._send_property_card(callback.message, result, telegram_id)
-        # Attach catalog keyboard to a short status message after cards
-        shown = len(results)
-        catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
-        status = f"Показано {shown} из {total_count}"
-        await callback.message.answer(status, reply_markup=catalog_kb)
+    telegram_id = callback.from_user.id if callback.from_user else 0
+    await send_catalog_results(
+        message=callback.message,
+        property_bot=property_bot,
+        results=results,
+        total_count=total_count,
+        view_mode=view_mode,
+        shown_start=1,
+        telegram_id=telegram_id,
+    )
+    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
+    if inspect.isawaitable(maybe_start):
+        await maybe_start
 
 
 async def on_change_filter_selected(

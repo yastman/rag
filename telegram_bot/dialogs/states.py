@@ -195,10 +195,12 @@ class FilterSG(StatesGroup):
     promotion = State()  # Promotion sub-menu
 
 
-class CatalogBrowsingSG(StatesGroup):
-    """Catalog browsing mode (ReplyKeyboard pagination)."""
+class CatalogSG(StatesGroup):
+    """Dialog-owned catalog flow."""
 
-    browsing = State()
+    results = State()
+    empty = State()
+    details = State()
 
 
 class DemoSG(StatesGroup):
