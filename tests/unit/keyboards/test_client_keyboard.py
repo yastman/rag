@@ -187,44 +187,20 @@ def test_parse_menu_button_empty_returns_none():
     assert parse_menu_button("") is None
 
 
-# --- Task 1: Catalog button routing ---
-
-
 def test_get_menu_button_texts_catalog_handled_by_router():
-    """Catalog buttons are handled by catalog_router (StateFilter), not main menu texts."""
+    """Catalog dialog controls must not leak into main menu button texts."""
     from telegram_bot.keyboards.client_keyboard import get_menu_button_texts
 
     texts = get_menu_button_texts()
-    # Catalog-specific buttons NOT in main menu texts (handled by CatalogBrowsingSG state)
     assert "🔍 Фильтры" not in texts
     assert "🏠 Главное меню" not in texts
 
 
-def test_parse_catalog_button_show_more_dynamic_format():
-    """Dynamic 'Показать ещё (N из M)' text parses to catalog_more."""
-    from telegram_bot.keyboards.client_keyboard import parse_catalog_button
+def test_legacy_catalog_keyboard_helpers_are_removed():
+    import telegram_bot.keyboards.client_keyboard as mod
 
-    assert parse_catalog_button("📥 Показать ещё (10 из 47)") == "catalog_more"
-    assert parse_catalog_button("📥 Показать ещё (20 из 47)") == "catalog_more"
-
-
-# --- Task 2: Catalog keyboard favorites ---
-
-
-def test_catalog_keyboard_has_favorites_button():
-    """Catalog keyboard must include Избранное button."""
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
-    kb = build_catalog_keyboard(shown=10, total=50)
-    all_texts = [btn.text for row in kb.keyboard for btn in row]
-    assert "📌 Избранное" in all_texts
-
-
-def test_parse_catalog_button_bookmarks():
-    """Favorites button parses to catalog_bookmarks action."""
-    from telegram_bot.keyboards.client_keyboard import parse_catalog_button
-
-    assert parse_catalog_button("📌 Избранное") == "catalog_bookmarks"
+    assert not hasattr(mod, "build_catalog_keyboard")
+    assert not hasattr(mod, "parse_catalog_button")
 
 
 # --- MENU_BUTTONS key verification tests ---
