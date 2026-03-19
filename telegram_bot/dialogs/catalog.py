@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
-from aiogram_dialog.widgets.kbd import Button, Group
+from aiogram_dialog.widgets.kbd import Button
 from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.dialogs.root_nav import get_main_menu_label
@@ -269,17 +269,6 @@ async def on_catalog_voice_input(
 catalog_dialog = Dialog(
     Window(
         Format("{control_text}"),
-        Group(
-            Button(Const("📥 Показать ещё"), id="catalog_more", on_click=on_catalog_more),
-            Button(Const("🔍 Фильтры"), id="catalog_filters", on_click=on_catalog_filters),
-            Button(Const("📌 Избранное"), id="catalog_bookmarks", on_click=on_catalog_bookmarks),
-            Button(Const("📅 Запись на осмотр"), id="catalog_viewing", on_click=on_catalog_viewing),
-            Button(
-                Const("👤 Написать менеджеру"), id="catalog_manager", on_click=on_catalog_manager
-            ),
-            Button(Format("{btn_main_menu}"), id="catalog_home", on_click=on_catalog_home),
-            width=2,
-        ),
         MessageInput(on_catalog_text_input, content_types=[ContentType.TEXT]),
         MessageInput(on_catalog_voice_input, content_types=[ContentType.VOICE]),
         getter=get_catalog_data,
@@ -287,11 +276,6 @@ catalog_dialog = Dialog(
     ),
     Window(
         Const("Ничего не найдено. Измените фильтры или отправьте новый запрос."),
-        Group(
-            Button(Const("🔍 Фильтры"), id="catalog_filters_empty", on_click=on_catalog_filters),
-            Button(Format("{btn_main_menu}"), id="catalog_home_empty", on_click=on_catalog_home),
-            width=2,
-        ),
         MessageInput(on_catalog_text_input, content_types=[ContentType.TEXT]),
         MessageInput(on_catalog_voice_input, content_types=[ContentType.VOICE]),
         getter=get_catalog_data,
