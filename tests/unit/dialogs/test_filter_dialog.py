@@ -292,6 +292,11 @@ class TestOnFilterDialogStart:
             "rooms": "3",
             "budget": "mid",
         }
+        widget_data = {
+            "r_city": "Бургас",
+            "r_rooms": "3",
+            "r_budget": "mid",
+        }
 
         radio_widgets = {
             radio_id: AsyncMock(set_checked=AsyncMock())
@@ -307,19 +312,26 @@ class TestOnFilterDialogStart:
                 "r_promotion",
             )
         }
+        manager.current_context = MagicMock(return_value=SimpleNamespace(widget_data=widget_data))
         manager.find = MagicMock(side_effect=lambda radio_id: radio_widgets[radio_id])
 
         await on_filter_dialog_start({"filters": {}}, manager)
 
         assert manager.dialog_data == {}
+        assert widget_data == {}
         for widget in radio_widgets.values():
-            widget.set_checked.assert_awaited_once_with(None)
+            widget.set_checked.assert_not_awaited()
 
     async def test_populates_dialog_data_from_existing_filters(self):
         from telegram_bot.dialogs.filter_dialog import on_filter_dialog_start
 
         manager = MagicMock()
         manager.dialog_data = {"city": "stale"}
+        widget_data = {
+            "r_city": "stale",
+            "r_rooms": "stale",
+            "r_budget": "stale",
+        }
 
         radio_widgets = {
             radio_id: AsyncMock(set_checked=AsyncMock())
@@ -335,14 +347,17 @@ class TestOnFilterDialogStart:
                 "r_promotion",
             )
         }
+        manager.current_context = MagicMock(return_value=SimpleNamespace(widget_data=widget_data))
         manager.find = MagicMock(side_effect=lambda radio_id: radio_widgets[radio_id])
 
         await on_filter_dialog_start({"filters": {"city": "Несебр", "rooms": 2}}, manager)
 
         assert manager.dialog_data["city"] == "Несебр"
         assert manager.dialog_data["rooms"] == "2"
+        assert widget_data == {}
         radio_widgets["r_city"].set_checked.assert_awaited_once_with("Несебр")
         radio_widgets["r_rooms"].set_checked.assert_awaited_once_with("2")
+        radio_widgets["r_budget"].set_checked.assert_not_awaited()
 
 
 # ============================================================
