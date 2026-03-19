@@ -59,16 +59,16 @@ wheels = [
 
 [[package]]
 name = "aiogram-dialog"
-version = "2.4.0"
+version = "2.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiogram" },
     { name = "cachetools" },
     { name = "jinja2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/b9/cfadb823578f9aff44f10928f8020dc4abda82078fba62295aae8869e894/aiogram_dialog-2.4.0.tar.gz", hash = "sha256:e8f0a811be3a58d1e48dfb9dd79108fd0e25c8ab7f8067c31c49f2f583ba4ecc", size = 80359, upload-time = "2025-07-08T22:41:41.078Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/6e/3d38f6d8207bcb13547534f31bd1d0a4f58f8b1463e1c434662e877a6d79/aiogram_dialog-2.5.0.tar.gz", hash = "sha256:b2deaec90091562aa0d6e606c54ac4abd7eefd4ec17cdb8058738b94b2c17235", size = 2058286, upload-time = "2026-02-24T23:02:52.32Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/50/d0/1c6511eb6840d06efbfba12cf6e59f688f9e314ab90af34027fa8069af75/aiogram_dialog-2.4.0-py3-none-any.whl", hash = "sha256:4e5fd8f7db66b6d252983c4025968b379069f4a2022db60bde36e5b91268b6ad", size = 112911, upload-time = "2025-07-08T22:41:47.61Z" },
+    { url = "https://files.pythonhosted.org/packages/44/10/60655e2c12b2cb26fa4d7311eb4f5ddd0e9a37330a162da78885509a3b19/aiogram_dialog-2.5.0-py3-none-any.whl", hash = "sha256:9d5aedb1603da813aab3c8d734383abee3e84c1186b07b7dc188289b3ea048db", size = 119679, upload-time = "2026-02-24T23:02:50.889Z" },
 ]
 
 [[package]]
@@ -834,8 +834,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiogram", specifier = ">=3.26.0" },
-    { name = "aiogram-dialog", specifier = ">=2.4.0" },
+    { name = "aiogram", specifier = "==3.26.0" },
+    { name = "aiogram-dialog", specifier = "==2.5.0" },
     { name = "aiohttp" },
     { name = "anthropic" },
     { name = "apscheduler", specifier = ">=3.11.2,<4.0" },

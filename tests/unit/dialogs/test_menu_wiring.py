@@ -100,6 +100,8 @@ async def test_handle_menu_button_no_clear_for_unrelated_state():
 async def test_handle_search_starts_funnel_dialog():
     """_handle_search starts FunnelSG.city dialog when dialog_manager available (#658, #697, #712)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
+        from aiogram_dialog import StartMode
+
         from telegram_bot.bot import PropertyBot
         from telegram_bot.dialogs.states import FunnelSG
 
@@ -114,6 +116,7 @@ async def test_handle_search_starts_funnel_dialog():
         dialog_manager.start.assert_called_once()
         call_args = dialog_manager.start.call_args
         assert call_args[0][0] == FunnelSG.city
+        assert call_args.kwargs["mode"] == StartMode.RESET_STACK
 
 
 async def test_handle_search_fallback_without_dialog_manager():
@@ -198,29 +201,25 @@ def test_handoff_dialog_registered():
     assert found, "handoff_dialog is not registered via dp.include_router()"
 
 
-def test_client_menu_dialog_not_in_register_handlers():
-    """client_menu_dialog should NOT be registered on the dispatcher (#658)."""
+def test_client_menu_dialog_is_registered():
+    """client_menu_dialog should be registered on the dispatcher for SDK root navigation."""
     import ast
     from pathlib import Path
 
     bot_py = Path("telegram_bot/bot.py").read_text()
     tree = ast.parse(bot_py)
 
+    found = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == ".dialogs.client_menu":
-            # If import exists, check it's not used in include_router
-            for name in node.names:
-                if name.name == "client_menu_dialog":
-                    # Search for include_router(client_menu_dialog) call
-                    for call_node in ast.walk(tree):
-                        if (
-                            isinstance(call_node, ast.Call)
-                            and isinstance(call_node.func, ast.Attribute)
-                            and call_node.func.attr == "include_router"
-                            and call_node.args
-                            and isinstance(call_node.args[0], ast.Name)
-                            and call_node.args[0].id == "client_menu_dialog"
-                        ):
-                            raise AssertionError(
-                                "client_menu_dialog is still registered via include_router"
-                            )
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "include_router"
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "client_menu_dialog"
+        ):
+            found = True
+            break
+
+    assert found, "client_menu_dialog is not registered via dp.include_router()"

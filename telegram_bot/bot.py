@@ -165,6 +165,21 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
     return merged
 
 
+def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read cached apartment payloads from legacy or dialog-owned state."""
+    raw_results = state_data.get("apartment_results")
+    if isinstance(raw_results, list):
+        return [item for item in raw_results if isinstance(item, dict)]
+
+    runtime = state_data.get("catalog_runtime")
+    if isinstance(runtime, dict):
+        runtime_results = runtime.get("results")
+        if isinstance(runtime_results, list):
+            return [item for item in runtime_results if isinstance(item, dict)]
+
+    return []
+
+
 def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
     """Split text into Telegram-safe chunks without importing the full client pipeline."""
     if not text:
@@ -810,14 +825,10 @@ class PropertyBot:
             F.voice,
             flags={"rate_limit": {"rate": 3.5, "key": "voice"}},
         )(self.handle_voice)
-        # ReplyKeyboard buttons — registered before catch-all F.text (#628)
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
-
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
         self.dp.message(
-            ~StateFilter(CatalogBrowsingSG.browsing),
             F.text.in_(menu_button_texts),
             flags={"rate_limit": {"rate": 0.6, "key": "menu"}},
         )(self.handle_menu_button)
@@ -889,7 +900,7 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ):
-        """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
+        """Handle /start command with SDK-native root menus when available."""
         assert message.from_user is not None
 
         role = await self._resolve_user_role(message.from_user.id)
@@ -901,8 +912,14 @@ class PropertyBot:
             from .dialogs.states import ManagerMenuSG
 
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
+        elif dialog_manager is not None:
+            from aiogram_dialog import StartMode
+
+            from .dialogs.states import ClientMenuSG
+
+            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
-            # Client: persistent ReplyKeyboard (#628)
+            # ReplyKeyboard remains only as a no-dialog fallback path.
             name = message.from_user.first_name or ""
             if i18n is not None:
                 welcome = i18n.get("welcome-text", name=name)
@@ -1415,7 +1432,6 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        # Catalog browsing is handled by catalog_router (StateFilter-based)
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
@@ -1990,8 +2006,7 @@ class PropertyBot:
             return
 
         state_data = await state.get_data()
-        raw_results = state_data.get("apartment_results")
-        apt_results = raw_results if isinstance(raw_results, list) else []
+        apt_results = _state_apartment_results(state_data)
         matched = next(
             (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
             None,
@@ -2053,8 +2068,7 @@ class PropertyBot:
 
         await favorites_service.remove(telegram_id=callback.from_user.id, property_id=property_id)
         state_data = await state.get_data()
-        raw_results = state_data.get("apartment_results")
-        apt_results = raw_results if isinstance(raw_results, list) else []
+        apt_results = _state_apartment_results(state_data)
         in_search_results = any(
             isinstance(r, dict) and r.get("id") == property_id for r in apt_results
         )
@@ -2428,8 +2442,7 @@ class PropertyBot:
         property_id = parts[2]
 
         state_data = await state.get_data()
-        raw_results = state_data.get("apartment_results")
-        apt_results = raw_results if isinstance(raw_results, list) else []
+        apt_results = _state_apartment_results(state_data)
         matched = next(
             (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
             None,
@@ -4730,9 +4743,11 @@ class PropertyBot:
         setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
         logger.info("i18n middleware ready")
 
-        # Setup aiogram-dialog (#658: removed dead client_menu_dialog)
+        # Setup aiogram-dialog routers, including the client root shell.
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
+        from .dialogs.catalog import catalog_dialog
+        from .dialogs.client_menu import client_menu_dialog
         from .dialogs.crm_ai_advisor import advisor_dialog
         from .dialogs.crm_contacts import (
             contacts_menu_dialog,
@@ -4760,6 +4775,8 @@ class PropertyBot:
         # CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (#697)
         self.dp.include_router(create_crm_router())
 
+        self.dp.include_router(client_menu_dialog)
+        self.dp.include_router(catalog_dialog)
         self.dp.include_router(manager_menu_dialog)
         self.dp.include_router(leads_menu_dialog)
         self.dp.include_router(create_lead_dialog)
@@ -4785,12 +4802,6 @@ class PropertyBot:
         # MessageInput (e.g. viewing phone input) is resolved first.
         # aiogram SDK: handlers match in registration order, first-match wins.
         from aiogram import Router as _Router
-
-        # Catalog browsing router — SDK StateFilter-based, intercepts text
-        # in CatalogBrowsingSG.browsing state. Registered BEFORE catch-all.
-        from telegram_bot.handlers.catalog_router import catalog_router
-
-        self.dp.include_router(catalog_router)
 
         self._catch_all_router = _Router(name="catch_all_query")
         self._catch_all_router.message(

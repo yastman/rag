@@ -207,7 +207,7 @@ def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """
     result: dict[str, Any] = {}
     for field, value in raw.items():
-        if value is None or value == "" or value == "any":
+        if value is None or value == "" or value == "any" or value == "None":
             continue
         # Coerce string item_ids from Radio widgets; passthrough typed values
         coerced = coerce_filter_value(field, value) if isinstance(value, str) else value

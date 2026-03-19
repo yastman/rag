@@ -5,21 +5,22 @@ telegram_bot/keyboards/filter_panel.py (290 LOC) with SDK-native
 Dialog/Window/Radio/SwitchTo widgets.
 
 Flow:
-    CatalogBrowsingSG.browsing → manager.start(FilterSG.hub)
+    CatalogSG.results/empty → manager.start(FilterSG.hub)
     → user selects filters via Windows (Radio widgets with ✓ indicator)
-    → on_apply: saves to FSMContext, manager.done()
-    → returns to CatalogBrowsingSG.browsing
+    → on_apply: writes updated catalog_runtime
+    → returns to CatalogSG.results or CatalogSG.empty
 """
 
 from __future__ import annotations
 
 import contextlib
+import inspect
 import logging
 from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
@@ -33,7 +34,13 @@ from telegram_bot.dialogs.filter_constants import (
     VIEW_OPTIONS,
     build_filters_dict,
 )
-from telegram_bot.dialogs.states import FilterSG
+from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
+from telegram_bot.dialogs.states import CatalogSG, FilterSG
+from telegram_bot.services.catalog_rendering import send_catalog_results
+from telegram_bot.services.catalog_session import (
+    CATALOG_RUNTIME_DATA_KEY,
+    build_catalog_runtime,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +48,19 @@ logger = logging.getLogger(__name__)
 # "Любой" option used in every filter sub-menu to clear that filter.
 # IMPORTANT: use "any" (not "") — aiogram-dialog widgets skip empty item_ids.
 _ANY_OPTION = ("Любой", "any")
+
+
+def _has_filter_value(value: Any) -> bool:
+    """Return True only for meaningful filter values used by the dialog."""
+    return value not in (None, "", "any", "None")
+
+
+def _main_menu_label_for(dialog_manager: DialogManager) -> str:
+    """Return main-menu label even when tests provide a minimal dialog_manager stub."""
+    middleware = getattr(dialog_manager, "middleware_data", None) or {}
+    i18n = middleware.get("i18n") if isinstance(middleware, dict) else None
+    return get_main_menu_label(i18n)
+
 
 # ============================================================
 # Hub getter
@@ -72,11 +92,11 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     lines: list[str] = []
 
     city_val = dd.get("city")
-    if city_val:
+    if _has_filter_value(city_val):
         lines.append(f"📍 Город: {city_val}")
 
     rooms_val = dd.get("rooms")
-    if rooms_val is not None:
+    if _has_filter_value(rooms_val):
         try:
             label = ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val))
         except (ValueError, TypeError):
@@ -84,27 +104,27 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         lines.append(f"🛏 Комнаты: {label}")
 
     budget_val = dd.get("budget")
-    if budget_val:
+    if _has_filter_value(budget_val):
         lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(str(budget_val), str(budget_val))}")
 
     view_val = dd.get("view")
-    if view_val:
+    if _has_filter_value(view_val):
         lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(view_val, view_val)}")
 
     area_val = dd.get("area")
-    if area_val:
+    if _has_filter_value(area_val):
         lines.append(f"📐 Площадь: {AREA_DISPLAY.get(area_val, area_val)}")
 
     floor_val = dd.get("floor")
-    if floor_val:
+    if _has_filter_value(floor_val):
         lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(floor_val, floor_val)}")
 
     complex_val = dd.get("complex")
-    if complex_val:
+    if _has_filter_value(complex_val):
         lines.append(f"🏘 Комплекс: {complex_val}")
 
     furnished_val = dd.get("furnished")
-    if furnished_val:
+    if _has_filter_value(furnished_val):
         label = {"true": "Да", "false": "Нет"}.get(furnished_val, furnished_val)
         lines.append(f"🛋 Мебель: {label}")
 
@@ -117,6 +137,7 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     return {
         "count": count,
         "active_filters": active_filters,
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
     }
 
 
@@ -126,27 +147,45 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
 
 
 async def get_city_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"city_options": [_ANY_OPTION, *CITY_OPTIONS]}
+    return {
+        "city_options": [_ANY_OPTION, *CITY_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_rooms_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"rooms_options": [_ANY_OPTION] + [(lbl, str(val)) for lbl, val in ROOMS_OPTIONS]}
+    return {
+        "rooms_options": [_ANY_OPTION] + [(lbl, str(val)) for lbl, val in ROOMS_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_budget_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"budget_options": [_ANY_OPTION, *BUDGET_OPTIONS]}
+    return {
+        "budget_options": [_ANY_OPTION, *BUDGET_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_view_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"view_options": [_ANY_OPTION, *VIEW_OPTIONS]}
+    return {
+        "view_options": [_ANY_OPTION, *VIEW_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_area_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"area_options": [_ANY_OPTION, *AREA_OPTIONS]}
+    return {
+        "area_options": [_ANY_OPTION, *AREA_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_floor_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"floor_options": [_ANY_OPTION, *FLOOR_OPTIONS]}
+    return {
+        "floor_options": [_ANY_OPTION, *FLOOR_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_complex_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -158,15 +197,24 @@ async def get_complex_data(dialog_manager: DialogManager, **kwargs: Any) -> dict
             stats = await svc.get_collection_stats()
             complexes = stats.get("complexes") or []
     options: list[tuple[str, str]] = [_ANY_OPTION] + [(c, c) for c in complexes]
-    return {"complex_options": options}
+    return {
+        "complex_options": options,
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_furnished_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"furnished_options": [("Любое", "any"), ("Да", "true"), ("Нет", "false")]}
+    return {
+        "furnished_options": [("Любое", "any"), ("Да", "true"), ("Нет", "false")],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_promotion_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"promotion_options": [("Любое", "any"), ("Только акции", "true")]}
+    return {
+        "promotion_options": [("Любое", "any"), ("Только акции", "true")],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 # ============================================================
@@ -276,20 +324,28 @@ async def on_filter_dialog_start(
     manager: DialogManager,
 ) -> None:
     """Pre-populate dialog_data and Radio checked states from existing filters."""
-    if not start_data:
-        return
-    filters = start_data.get("filters") or {}
+    filters = (start_data or {}).get("filters") or {}
     dialog_data = _filters_to_dialog_data(filters)
+    for field in _FIELD_TO_RADIO_ID:
+        manager.dialog_data.pop(field, None)
     manager.dialog_data.update(dialog_data)
+
+    # aiogram-dialog Radio stores selection in widget_data and does not support
+    # clearing via set_checked(None): it serializes None to the string "None".
+    with contextlib.suppress(Exception):
+        widget_data = manager.current_context().widget_data
+        for radio_id in _FIELD_TO_RADIO_ID.values():
+            widget_data.pop(radio_id, None)
 
     # Sync Radio widget checked states with dialog_data
     for field, radio_id in _FIELD_TO_RADIO_ID.items():
         value = dialog_data.get(field)
-        if value is not None:
-            with contextlib.suppress(Exception):
-                radio_widget = manager.find(radio_id)
-                if radio_widget is not None:
-                    await radio_widget.set_checked(str(value))
+        if value is None:
+            continue
+        with contextlib.suppress(Exception):
+            radio_widget = manager.find(radio_id)
+            if radio_widget is not None:
+                await radio_widget.set_checked(str(value))
 
 
 # ============================================================
@@ -302,11 +358,15 @@ async def on_apply(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    """Apply current filters: fetch first page, show cards, close dialog."""
+    """Apply filters and return to the catalog dialog flow."""
     state: FSMContext = manager.middleware_data["state"]
     dd = manager.dialog_data
     raw_filters = {k: v for k, v in dd.items() if k in FIELD_TO_FILTER_KEY}
     filters = build_filters_dict(raw_filters)
+    fsm_data = await state.get_data()
+    current_runtime = (
+        fsm_data.get(CATALOG_RUNTIME_DATA_KEY) if isinstance(fsm_data, dict) else {}
+    ) or {}
 
     # Fetch first page with new filters
     svc = manager.middleware_data.get("apartments_service")
@@ -321,14 +381,19 @@ async def on_apply(
                 limit=10,
             )
 
-    await state.update_data(
-        apartment_filters=filters,
-        apartment_offset=len(results),
-        apartment_total=total_count,
-        apartment_next_offset=next_start,
-        apartment_scroll_seen_ids=page_ids,
+    runtime = build_catalog_runtime(
+        query=current_runtime.get("query", ""),
+        source=current_runtime.get("source", "catalog"),
+        filters=filters,
+        view_mode=current_runtime.get("view_mode", "cards"),
+        results=results,
+        total=total_count,
+        next_offset=next_start,
+        shown_item_ids=page_ids,
+        bookmarks_context=bool(current_runtime.get("bookmarks_context", False)),
+        origin_context=current_runtime.get("origin_context", {}),
     )
-    await manager.done()
+    await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
     # Show apartment results respecting view mode
     msg = callback.message
@@ -336,39 +401,23 @@ async def on_apply(
         return
 
     if not results:
-        await msg.answer("По заданным фильтрам ничего не найдено")
+        maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        if inspect.isawaitable(maybe_start):
+            await maybe_start
         return
 
-    fsm_data = await state.get_data()
-    view_mode = fsm_data.get("catalog_view_mode", "cards")
-
-    if view_mode == "list":
-        from telegram_bot.dialogs.funnel import format_apartment_list
-        from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
-        kb = (
-            build_catalog_keyboard(shown=len(results), total=total_count)
-            if len(results) < total_count
-            else None
-        )
-        text = format_apartment_list(results, shown_start=1, total=total_count)
-        await msg.answer(text, parse_mode="HTML", reply_markup=kb)
-    else:
-        property_bot = manager.middleware_data.get("property_bot")
-        if property_bot is not None:
-            telegram_id = callback.from_user.id if callback.from_user else 0
-            for result in results:
-                with contextlib.suppress(Exception):
-                    await property_bot._send_property_card(msg, result, telegram_id)
-
-        if len(results) < total_count:
-            from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
-            kb = build_catalog_keyboard(shown=len(results), total=total_count)
-            await msg.answer(
-                f"Показано {len(results)} из {total_count}",
-                reply_markup=kb,
-            )
+    await send_catalog_results(
+        message=msg,
+        property_bot=manager.middleware_data.get("property_bot"),
+        results=results,
+        total_count=total_count,
+        view_mode=runtime.get("view_mode", "cards"),
+        shown_start=1,
+        telegram_id=callback.from_user.id if callback.from_user else 0,
+    )
+    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
+    if inspect.isawaitable(maybe_start):
+        await maybe_start
 
 
 # ============================================================
@@ -396,12 +445,12 @@ async def on_reset(
         "promotion",
     ):
         manager.dialog_data.pop(key, None)
-    # Reset all Radio widgets to unchecked
-    for radio_id in _FIELD_TO_RADIO_ID.values():
-        with contextlib.suppress(Exception):
-            radio_widget = manager.find(radio_id)
-            if radio_widget is not None:
-                await radio_widget.set_checked(None)
+    # Clear Radio widget state directly: aiogram-dialog does not support
+    # unchecking Radio via set_checked(None) and stores state in widget_data.
+    with contextlib.suppress(Exception):
+        widget_data = manager.current_context().widget_data
+        for radio_id in _FIELD_TO_RADIO_ID.values():
+            widget_data.pop(radio_id, None)
 
 
 # ============================================================
@@ -439,6 +488,7 @@ filter_dialog = Dialog(
                 on_click=on_reset,
             ),
         ),
+        root_menu_button(),
         getter=get_hub_data,
         state=FilterSG.hub,
     ),
@@ -455,6 +505,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_city,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_city", state=FilterSG.hub),
         getter=get_city_data,
         state=FilterSG.city,
@@ -472,6 +523,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_rooms,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_rooms", state=FilterSG.hub),
         getter=get_rooms_data,
         state=FilterSG.rooms,
@@ -489,6 +541,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_budget,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_budget", state=FilterSG.hub),
         getter=get_budget_data,
         state=FilterSG.budget,
@@ -506,6 +559,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_view,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_view", state=FilterSG.hub),
         getter=get_view_data,
         state=FilterSG.view,
@@ -523,6 +577,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_area,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_area", state=FilterSG.hub),
         getter=get_area_data,
         state=FilterSG.area,
@@ -540,6 +595,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_floor,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_floor", state=FilterSG.hub),
         getter=get_floor_data,
         state=FilterSG.floor,
@@ -557,6 +613,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_complex,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_complex", state=FilterSG.hub),
         getter=get_complex_data,
         state=FilterSG.complex_name,
@@ -574,6 +631,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_furnished,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_furnished", state=FilterSG.hub),
         getter=get_furnished_data,
         state=FilterSG.furnished,
@@ -591,6 +649,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_promotion,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_promotion", state=FilterSG.hub),
         getter=get_promotion_data,
         state=FilterSG.promotion,
