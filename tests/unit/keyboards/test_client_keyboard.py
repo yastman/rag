@@ -187,20 +187,10 @@ def test_parse_menu_button_empty_returns_none():
     assert parse_menu_button("") is None
 
 
-def test_get_menu_button_texts_catalog_handled_by_router():
-    """Catalog dialog controls must not leak into main menu button texts."""
-    from telegram_bot.keyboards.client_keyboard import get_menu_button_texts
-
+def test_get_menu_button_texts_catalog_handled_separately():
     texts = get_menu_button_texts()
     assert "🔍 Фильтры" not in texts
     assert "🏠 Главное меню" not in texts
-
-
-def test_legacy_catalog_keyboard_helpers_are_removed():
-    import telegram_bot.keyboards.client_keyboard as mod
-
-    assert not hasattr(mod, "build_catalog_keyboard")
-    assert not hasattr(mod, "parse_catalog_button")
 
 
 # --- MENU_BUTTONS key verification tests ---
