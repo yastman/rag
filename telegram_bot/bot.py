@@ -1444,6 +1444,16 @@ class PropertyBot:
         if isinstance(current, str) and current.startswith("PhoneCollectorStates:"):
             await state.clear()
 
+        if dialog_manager is not None:
+            from .dialogs.catalog import dispatch_catalog_text_action, is_catalog_state
+
+            if is_catalog_state(current) and await dispatch_catalog_text_action(
+                message=message,
+                manager=dialog_manager,
+                i18n_hub=getattr(self, "_i18n_hub", None),
+            ):
+                return
+
         handlers: dict[str, Any] = {
             "search": self._handle_search,
             "services": self._handle_services,
