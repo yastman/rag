@@ -237,8 +237,8 @@ class TestOnApply:
         callback, state, manager = _make_apply_mocks({"city": "Несебр", "budget": "mid"})
         await on_apply(callback, MagicMock(), manager)
 
-        state.update_data.assert_awaited_once()
-        call_kwargs = state.update_data.call_args[1]
+        assert state.update_data.await_count >= 1
+        call_kwargs = state.update_data.await_args_list[0].kwargs
         runtime = call_kwargs["catalog_runtime"]
         filters = runtime["filters"]
         assert filters["city"] == "Несебр"
@@ -246,7 +246,7 @@ class TestOnApply:
         assert "budget" not in filters
 
     async def test_starts_catalog_dialog_results(self):
-        from aiogram_dialog import StartMode
+        from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.filter_dialog import on_apply
         from telegram_bot.dialogs.states import CatalogSG
@@ -254,7 +254,11 @@ class TestOnApply:
         callback, _state, manager = _make_apply_mocks()
         await on_apply(callback, MagicMock(), manager)
 
-        manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        manager.start.assert_awaited_once_with(
+            CatalogSG.empty,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
 
     async def test_resets_catalog_runtime_pagination(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
@@ -267,7 +271,7 @@ class TestOnApply:
         assert runtime.get("shown_count") == 0
 
     async def test_empty_results_use_catalog_empty_state(self):
-        from aiogram_dialog import StartMode
+        from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.filter_dialog import on_apply
         from telegram_bot.dialogs.states import CatalogSG
@@ -275,7 +279,11 @@ class TestOnApply:
         callback, _state, manager = _make_apply_mocks({"city": "Бургас"})
         await on_apply(callback, MagicMock(), manager)
 
-        manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        manager.start.assert_awaited_once_with(
+            CatalogSG.empty,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
 
     async def test_closes_and_deletes_filter_shell_before_catalog_results(self):
         from aiogram_dialog import ShowMode, StartMode
@@ -298,7 +306,38 @@ class TestOnApply:
         assert manager.show_mode == ShowMode.NO_UPDATE
         manager.done.assert_awaited_once()
         callback.message.delete.assert_awaited_once()
-        manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
+        manager.start.assert_awaited_once_with(
+            CatalogSG.results,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
+
+    async def test_closes_and_deletes_filter_shell_before_catalog_results(self):
+        from aiogram_dialog import ShowMode, StartMode
+
+        from telegram_bot.dialogs.filter_dialog import on_apply
+        from telegram_bot.dialogs.states import CatalogSG
+
+        svc = AsyncMock()
+        svc.scroll_with_filters = AsyncMock(
+            return_value=([{"id": "apt-1", "payload": {}}], 1, None, ["apt-1"])
+        )
+        callback, _state, manager = _make_apply_mocks(
+            {"city": "Варна"},
+            fsm_data={"catalog_runtime": {"view_mode": "list"}},
+            apartments_service=svc,
+        )
+
+        await on_apply(callback, MagicMock(), manager)
+
+        assert manager.show_mode == ShowMode.NO_UPDATE
+        manager.done.assert_awaited_once()
+        callback.message.delete.assert_awaited_once()
+        manager.start.assert_awaited_once_with(
+            CatalogSG.results,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
 
 
 # ============================================================

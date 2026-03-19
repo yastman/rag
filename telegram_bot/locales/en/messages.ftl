@@ -212,6 +212,9 @@ results-found-range = Found { $total } apartments (showing { $start }–{ $end }
 results-service-unavailable = Search service is unavailable.
 results-refine = ⚙️ Change filters
 results-book-viewing = 📅 Book a viewing
+catalog-filters = 🔍 Filters
+catalog-bookmarks = 📌 Favorites
+catalog-manager = 👤 Message manager
 results-no-results =
     Unfortunately, no results match your criteria.
     Try adjusting your search parameters.
