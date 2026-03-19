@@ -23,7 +23,11 @@ from aiogram_dialog.widgets.kbd import (
 )
 from aiogram_dialog.widgets.text import Format
 
-from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
+from telegram_bot.dialogs.root_nav import (
+    back_to_main_menu_button,
+    get_main_menu_label,
+    root_menu_button,
+)
 from telegram_bot.observability import observe
 
 from .filter_constants import (
@@ -1003,7 +1007,7 @@ funnel_dialog = Dialog(
             ),
         ),
         root_menu_button(),
-        Cancel(Format("{btn_back}")),
+        back_to_main_menu_button(widget_id="funnel_back"),
         getter=get_city_options,
         state=FunnelSG.city,
     ),

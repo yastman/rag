@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from aiogram_dialog import Dialog, Window
-from aiogram_dialog.widgets.kbd import Cancel
 from aiogram_dialog.widgets.text import Format
 
-from .root_nav import get_main_menu_label, root_menu_button
+from .root_nav import back_to_main_menu_button, get_main_menu_label, root_menu_button
 from .states import FaqSG
 
 
@@ -31,7 +30,7 @@ faq_dialog = Dialog(
     Window(
         Format("{title}"),
         root_menu_button(),
-        Cancel(Format("{btn_back}")),
+        back_to_main_menu_button(widget_id="faq_back"),
         getter=get_faq_data,
         state=FaqSG.main,
     ),

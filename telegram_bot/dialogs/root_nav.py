@@ -8,7 +8,7 @@ from typing import Any
 from aiogram.types import CallbackQuery
 from aiogram_dialog import DialogManager, StartMode
 from aiogram_dialog.widgets.kbd import Button
-from aiogram_dialog.widgets.text import Format
+from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.dialogs.states import ClientMenuSG
 
@@ -38,3 +38,13 @@ async def on_back_to_main_menu(
 def root_menu_button(widget_id: str = "main_menu") -> Button:
     """Build a shared root-navigation button for client dialogs."""
     return Button(Format("{btn_main_menu}"), id=widget_id, on_click=on_back_to_main_menu)
+
+
+def back_to_main_menu_button(
+    *,
+    widget_id: str = "back_to_main_menu",
+    text: str | None = None,
+) -> Button:
+    """Build a back button that safely returns to the client root dialog."""
+    button_text = Const(text) if text is not None else Format("{btn_back}")
+    return Button(button_text, id=widget_id, on_click=on_back_to_main_menu)
