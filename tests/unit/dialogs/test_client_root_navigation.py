@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+from aiogram_dialog.widgets.kbd import Cancel
+
 
 def _iter_widgets(window):
     if hasattr(window, "keyboard") and window.keyboard is not None:
@@ -40,3 +42,20 @@ def test_filter_dialog_contains_main_menu_button():
         for widget in _iter_widgets(window)
     }
     assert "main_menu" in button_ids
+
+
+def test_reset_stack_roots_do_not_use_cancel_to_leave_root():
+    from telegram_bot.dialogs.faq import faq_dialog
+    from telegram_bot.dialogs.funnel import funnel_dialog
+    from telegram_bot.dialogs.settings import settings_dialog
+    from telegram_bot.dialogs.states import FaqSG, FunnelSG, SettingsSG
+
+    windows = (
+        faq_dialog.windows[FaqSG.main],
+        settings_dialog.windows[SettingsSG.main],
+        funnel_dialog.windows[FunnelSG.city],
+    )
+
+    for window in windows:
+        widgets = list(_iter_widgets(window))
+        assert not any(isinstance(widget, Cancel) for widget in widgets)

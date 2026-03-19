@@ -7,11 +7,11 @@ import logging
 from typing import Any
 
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, Window
-from aiogram_dialog.widgets.kbd import Button, Cancel, Column, SwitchTo
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog.widgets.kbd import Button, Column, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
-from .root_nav import get_main_menu_label, root_menu_button
+from .root_nav import back_to_main_menu_button, get_main_menu_label, root_menu_button
 from .states import SettingsSG
 
 
@@ -120,8 +120,8 @@ async def on_language_selected(
             logger.warning(
                 "Failed to save locale for user %s", callback.from_user.id, exc_info=True
             )
-    # Restart dialog to apply new locale
-    await manager.done()
+    # Restart the settings root instead of closing the stack entirely.
+    await manager.start(SettingsSG.main, mode=StartMode.RESET_STACK)
 
 
 # --- CRM settings window getters/handlers ---
@@ -235,7 +235,7 @@ settings_dialog = Dialog(
             ),
         ),
         root_menu_button(),
-        Cancel(Format("{btn_back}")),
+        back_to_main_menu_button(widget_id="settings_back"),
         getter=get_settings_data,
         state=SettingsSG.main,
     ),
