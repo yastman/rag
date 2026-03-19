@@ -33,6 +33,7 @@ from telegram_bot.dialogs.filter_constants import (
     VIEW_OPTIONS,
     build_filters_dict,
 )
+from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
 from telegram_bot.dialogs.states import FilterSG
 
 
@@ -46,6 +47,13 @@ _ANY_OPTION = ("Любой", "any")
 def _has_filter_value(value: Any) -> bool:
     """Return True only for meaningful filter values used by the dialog."""
     return value not in (None, "", "any", "None")
+
+
+def _main_menu_label_for(dialog_manager: DialogManager) -> str:
+    """Return main-menu label even when tests provide a minimal dialog_manager stub."""
+    middleware = getattr(dialog_manager, "middleware_data", None) or {}
+    i18n = middleware.get("i18n") if isinstance(middleware, dict) else None
+    return get_main_menu_label(i18n)
 
 
 # ============================================================
@@ -123,6 +131,7 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     return {
         "count": count,
         "active_filters": active_filters,
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
     }
 
 
@@ -132,27 +141,45 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
 
 
 async def get_city_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"city_options": [_ANY_OPTION, *CITY_OPTIONS]}
+    return {
+        "city_options": [_ANY_OPTION, *CITY_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_rooms_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"rooms_options": [_ANY_OPTION] + [(lbl, str(val)) for lbl, val in ROOMS_OPTIONS]}
+    return {
+        "rooms_options": [_ANY_OPTION] + [(lbl, str(val)) for lbl, val in ROOMS_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_budget_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"budget_options": [_ANY_OPTION, *BUDGET_OPTIONS]}
+    return {
+        "budget_options": [_ANY_OPTION, *BUDGET_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_view_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"view_options": [_ANY_OPTION, *VIEW_OPTIONS]}
+    return {
+        "view_options": [_ANY_OPTION, *VIEW_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_area_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"area_options": [_ANY_OPTION, *AREA_OPTIONS]}
+    return {
+        "area_options": [_ANY_OPTION, *AREA_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_floor_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"floor_options": [_ANY_OPTION, *FLOOR_OPTIONS]}
+    return {
+        "floor_options": [_ANY_OPTION, *FLOOR_OPTIONS],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_complex_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -164,15 +191,24 @@ async def get_complex_data(dialog_manager: DialogManager, **kwargs: Any) -> dict
             stats = await svc.get_collection_stats()
             complexes = stats.get("complexes") or []
     options: list[tuple[str, str]] = [_ANY_OPTION] + [(c, c) for c in complexes]
-    return {"complex_options": options}
+    return {
+        "complex_options": options,
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_furnished_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"furnished_options": [("Любое", "any"), ("Да", "true"), ("Нет", "false")]}
+    return {
+        "furnished_options": [("Любое", "any"), ("Да", "true"), ("Нет", "false")],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 async def get_promotion_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"promotion_options": [("Любое", "any"), ("Только акции", "true")]}
+    return {
+        "promotion_options": [("Любое", "any"), ("Только акции", "true")],
+        "btn_main_menu": _main_menu_label_for(dialog_manager),
+    }
 
 
 # ============================================================
@@ -453,6 +489,7 @@ filter_dialog = Dialog(
                 on_click=on_reset,
             ),
         ),
+        root_menu_button(),
         getter=get_hub_data,
         state=FilterSG.hub,
     ),
@@ -469,6 +506,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_city,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_city", state=FilterSG.hub),
         getter=get_city_data,
         state=FilterSG.city,
@@ -486,6 +524,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_rooms,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_rooms", state=FilterSG.hub),
         getter=get_rooms_data,
         state=FilterSG.rooms,
@@ -503,6 +542,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_budget,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_budget", state=FilterSG.hub),
         getter=get_budget_data,
         state=FilterSG.budget,
@@ -520,6 +560,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_view,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_view", state=FilterSG.hub),
         getter=get_view_data,
         state=FilterSG.view,
@@ -537,6 +578,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_area,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_area", state=FilterSG.hub),
         getter=get_area_data,
         state=FilterSG.area,
@@ -554,6 +596,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_floor,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_floor", state=FilterSG.hub),
         getter=get_floor_data,
         state=FilterSG.floor,
@@ -571,6 +614,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_complex,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_complex", state=FilterSG.hub),
         getter=get_complex_data,
         state=FilterSG.complex_name,
@@ -588,6 +632,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_furnished,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_furnished", state=FilterSG.hub),
         getter=get_furnished_data,
         state=FilterSG.furnished,
@@ -605,6 +650,7 @@ filter_dialog = Dialog(
                 on_state_changed=on_radio_promotion,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Const("← Назад"), id="back_promotion", state=FilterSG.hub),
         getter=get_promotion_data,
         state=FilterSG.promotion,
