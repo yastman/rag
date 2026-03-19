@@ -230,6 +230,7 @@ async def _handle_catalog_filters_message(
         FilterSG.hub,
         data={"filters": runtime.get("filters", {})},
         mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND,
     )
 
 
