@@ -193,6 +193,11 @@ def test_get_menu_button_texts_catalog_handled_separately():
     assert "🏠 Главное меню" not in texts
 
 
+def test_client_keyboard_does_not_own_catalog_helpers():
+    import telegram_bot.keyboards.client_keyboard as mod
+
+    assert not hasattr(mod, "build_catalog_keyboard")
+    assert not hasattr(mod, "parse_catalog_button")
 # --- MENU_BUTTONS key verification tests ---
 
 

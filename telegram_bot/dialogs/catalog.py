@@ -1,20 +1,21 @@
-"""Dialog-owned catalog control shell."""
+"""Catalog state owner with reply-keyboard navigation."""
 
 from __future__ import annotations
 
 import contextlib
+import inspect
 from typing import Any
 
 from aiogram.enums import ContentType
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
-from aiogram_dialog.widgets.kbd import Button
-from aiogram_dialog.widgets.text import Const, Format
+from aiogram_dialog.widgets.text import Const
 
-from telegram_bot.dialogs.root_nav import get_main_menu_label
-from telegram_bot.dialogs.states import CatalogSG, ClientMenuSG, FilterSG
+from telegram_bot.dialogs.states import CatalogSG
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard, parse_catalog_button
+from telegram_bot.keyboards.client_keyboard import build_client_keyboard
 from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
@@ -51,6 +52,10 @@ async def _update_catalog_runtime(dialog_manager: DialogManager, runtime: Catalo
     await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
 
+def is_catalog_state(state_name: str | None) -> bool:
+    return isinstance(state_name, str) and state_name.startswith("CatalogSG:")
+
+
 def _control_text(runtime: CatalogRuntime) -> str:
     total = int(runtime.get("total", 0) or 0)
     shown = int(runtime.get("shown_count", 0) or 0)
@@ -69,15 +74,73 @@ def _control_text(runtime: CatalogRuntime) -> str:
     return "\n".join(lines)
 
 
-async def get_catalog_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    runtime = await _get_catalog_runtime(dialog_manager)
+async def clear_catalog_controls(
+    *,
+    message: Message,
+    dialog_manager: DialogManager,
+) -> CatalogRuntime:
+    runtime = dict(await _get_catalog_runtime(dialog_manager))
+    control_message_id = runtime.pop("control_message_id", None)
+    if control_message_id and message.bot is not None:
+        with contextlib.suppress(Exception):
+            await message.bot.delete_message(
+                chat_id=message.chat.id,
+                message_id=int(control_message_id),
+            )
+    await _update_catalog_runtime(dialog_manager, runtime)
+    return runtime
+
+
+async def show_catalog_controls(
+    *,
+    message: Message,
+    dialog_manager: DialogManager,
+    runtime: CatalogRuntime | None = None,
+    text: str | None = None,
+) -> CatalogRuntime:
+    current_runtime = dict(runtime or await _get_catalog_runtime(dialog_manager))
+    control_message_id = current_runtime.pop("control_message_id", None)
+    if control_message_id and message.bot is not None:
+        with contextlib.suppress(Exception):
+            await message.bot.delete_message(
+                chat_id=message.chat.id,
+                message_id=int(control_message_id),
+            )
     i18n = dialog_manager.middleware_data.get("i18n")
-    return {
-        "control_text": _control_text(runtime),
-        "btn_main_menu": get_main_menu_label(i18n),
-        "has_more": bool(runtime.get("next_offset"))
-        and (int(runtime.get("shown_count", 0) or 0) < int(runtime.get("total", 0) or 0)),
-    }
+    sent = await message.answer(
+        text or _control_text(current_runtime),
+        reply_markup=build_catalog_keyboard(
+            shown=int(current_runtime.get("shown_count", 0) or 0),
+            total=int(current_runtime.get("total", 0) or 0),
+            i18n=i18n,
+        ),
+    )
+    message_id = getattr(sent, "message_id", None)
+    if isinstance(message_id, int):
+        current_runtime["control_message_id"] = message_id
+    await _update_catalog_runtime(dialog_manager, current_runtime)
+    return current_runtime
+
+
+async def activate_catalog_state(
+    *,
+    dialog_manager: DialogManager,
+    state: Any,
+) -> None:
+    maybe_start = dialog_manager.start(
+        state,
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.NO_UPDATE,
+    )
+    if inspect.isawaitable(maybe_start):
+        await maybe_start
+
+
+async def _remove_reply_keyboard(message: Message) -> None:
+    sent = await message.answer(".", reply_markup=ReplyKeyboardRemove())
+    if hasattr(sent, "delete"):
+        with contextlib.suppress(Exception):
+            await sent.delete()
 
 
 async def load_next_catalog_page(
@@ -137,34 +200,32 @@ async def load_next_catalog_page(
     return updated
 
 
-async def on_catalog_more(
-    callback: CallbackQuery,
-    button: Any,
+async def _handle_catalog_more_message(
+    *,
+    message: Message,
     manager: DialogManager,
+    telegram_id: int | None = None,
 ) -> None:
-    if callback.message is None:
-        return
-    await load_next_catalog_page(
-        message=callback.message,
+    updated = await load_next_catalog_page(
+        message=message,
         dialog_manager=manager,
-        telegram_id=callback.from_user.id if callback.from_user else None,
+        telegram_id=telegram_id
+        if telegram_id is not None
+        else (message.from_user.id if message.from_user else None),
     )
-    manager.show_mode = ShowMode.EDIT
-    await manager.switch_to(CatalogSG.results)
+    await show_catalog_controls(message=message, dialog_manager=manager, runtime=updated)
+    await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
 
 
-async def on_catalog_filters(
-    callback: CallbackQuery,
-    button: Any,
+async def _handle_catalog_filters_message(
+    *,
+    message: Message,
     manager: DialogManager,
 ) -> None:
-    msg = callback.message
-    runtime = await _get_catalog_runtime(manager)
-    manager.show_mode = ShowMode.NO_UPDATE
-    await manager.done()
-    if msg is not None and hasattr(msg, "delete"):
-        with contextlib.suppress(Exception):
-            await msg.delete()
+    runtime = await clear_catalog_controls(message=message, dialog_manager=manager)
+    await _remove_reply_keyboard(message)
+    from telegram_bot.dialogs.states import FilterSG
+
     await manager.start(
         FilterSG.hub,
         data={"filters": runtime.get("filters", {})},
@@ -172,12 +233,123 @@ async def on_catalog_filters(
     )
 
 
+async def _handle_catalog_home_message(
+    *,
+    message: Message,
+    manager: DialogManager,
+) -> None:
+    await clear_catalog_controls(message=message, dialog_manager=manager)
+    manager.show_mode = ShowMode.NO_UPDATE
+    with contextlib.suppress(Exception):
+        await manager.done()
+    i18n = manager.middleware_data.get("i18n")
+    name = getattr(message.from_user, "first_name", "") or ""
+    text = i18n.get("welcome-text", name=name) if i18n is not None else "Выберите действие внизу."
+    await message.answer(text, reply_markup=build_client_keyboard(i18n=i18n))
+
+
+async def _handle_catalog_manager_message(
+    *,
+    message: Message,
+    manager: DialogManager,
+) -> None:
+    property_bot = manager.middleware_data.get("property_bot")
+    state = await _get_state(manager)
+    if property_bot is not None and state is not None:
+        await property_bot._handle_manager(
+            message,
+            state=state,
+            dialog_manager=manager,
+            i18n=manager.middleware_data.get("i18n"),
+        )
+
+
+async def _handle_catalog_viewing_message(
+    *,
+    message: Message,
+    manager: DialogManager,
+) -> None:
+    property_bot = manager.middleware_data.get("property_bot")
+    state = await _get_state(manager)
+    if property_bot is not None and state is not None:
+        await property_bot._handle_viewing(message, state, manager)
+
+
+async def _handle_catalog_bookmarks_message(
+    *,
+    message: Message,
+    manager: DialogManager,
+) -> None:
+    property_bot = manager.middleware_data.get("property_bot")
+    state = await _get_state(manager)
+    if property_bot is not None and state is not None:
+        await property_bot._handle_bookmarks(message, state=state)
+
+
+async def dispatch_catalog_text_action(
+    *,
+    message: Message,
+    manager: DialogManager,
+    i18n_hub: Any = None,
+) -> bool:
+    action_id = parse_catalog_button(
+        message.text or "",
+        i18n_hub=i18n_hub,
+        i18n=manager.middleware_data.get("i18n"),
+    )
+    if action_id is None:
+        return False
+
+    manager.show_mode = ShowMode.NO_UPDATE
+    if action_id == "catalog_more":
+        await _handle_catalog_more_message(message=message, manager=manager)
+    elif action_id == "catalog_filters":
+        await _handle_catalog_filters_message(message=message, manager=manager)
+    elif action_id == "catalog_bookmarks":
+        await _handle_catalog_bookmarks_message(message=message, manager=manager)
+    elif action_id == "catalog_viewing":
+        await _handle_catalog_viewing_message(message=message, manager=manager)
+    elif action_id == "catalog_manager":
+        await _handle_catalog_manager_message(message=message, manager=manager)
+    elif action_id == "catalog_home":
+        await _handle_catalog_home_message(message=message, manager=manager)
+    else:
+        return False
+    return True
+
+
+async def on_catalog_more(
+    callback: CallbackQuery,
+    button: Any,
+    manager: DialogManager,
+) -> None:
+    if callback.message is None:
+        return
+    await _handle_catalog_more_message(
+        message=callback.message,
+        manager=manager,
+        telegram_id=callback.from_user.id if callback.from_user else None,
+    )
+
+
+async def on_catalog_filters(
+    callback: CallbackQuery,
+    button: Any,
+    manager: DialogManager,
+) -> None:
+    if callback.message is None:
+        return
+    await _handle_catalog_filters_message(message=callback.message, manager=manager)
+
+
 async def on_catalog_home(
     callback: CallbackQuery,
     button: Any,
     manager: DialogManager,
 ) -> None:
-    await manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+    if callback.message is None:
+        return
+    await _handle_catalog_home_message(message=callback.message, manager=manager)
 
 
 async def on_catalog_manager(
@@ -187,15 +359,7 @@ async def on_catalog_manager(
 ) -> None:
     if callback.message is None:
         return
-    property_bot = manager.middleware_data.get("property_bot")
-    state = await _get_state(manager)
-    if property_bot is not None and state is not None:
-        await property_bot._handle_manager(
-            callback.message,
-            state=state,
-            dialog_manager=manager,
-            i18n=manager.middleware_data.get("i18n"),
-        )
+    await _handle_catalog_manager_message(message=callback.message, manager=manager)
 
 
 async def on_catalog_viewing(
@@ -205,10 +369,7 @@ async def on_catalog_viewing(
 ) -> None:
     if callback.message is None:
         return
-    property_bot = manager.middleware_data.get("property_bot")
-    state = await _get_state(manager)
-    if property_bot is not None and state is not None:
-        await property_bot._handle_viewing(callback.message, state, manager)
+    await _handle_catalog_viewing_message(message=callback.message, manager=manager)
 
 
 async def on_catalog_bookmarks(
@@ -218,10 +379,7 @@ async def on_catalog_bookmarks(
 ) -> None:
     if callback.message is None:
         return
-    property_bot = manager.middleware_data.get("property_bot")
-    state = await _get_state(manager)
-    if property_bot is not None and state is not None:
-        await property_bot._handle_bookmarks(callback.message, state=state)
+    await _handle_catalog_bookmarks_message(message=callback.message, manager=manager)
 
 
 async def on_catalog_text_input(
@@ -231,6 +389,10 @@ async def on_catalog_text_input(
 ) -> None:
     if not message.text:
         return
+    if await dispatch_catalog_text_action(message=message, manager=manager):
+        return
+
+    manager.show_mode = ShowMode.NO_UPDATE
     from telegram_bot.handlers.demo_handler import _run_demo_search
 
     state = await _get_state(manager)
@@ -251,6 +413,7 @@ async def on_catalog_voice_input(
     widget: MessageInput,
     manager: DialogManager,
 ) -> None:
+    manager.show_mode = ShowMode.NO_UPDATE
     from telegram_bot.handlers.demo_handler import handle_demo_search_voice
 
     state = await _get_state(manager)
@@ -268,23 +431,19 @@ async def on_catalog_voice_input(
 
 catalog_dialog = Dialog(
     Window(
-        Format("{control_text}"),
+        Const("Каталог активен."),
         MessageInput(on_catalog_text_input, content_types=[ContentType.TEXT]),
         MessageInput(on_catalog_voice_input, content_types=[ContentType.VOICE]),
-        getter=get_catalog_data,
         state=CatalogSG.results,
     ),
     Window(
-        Const("Ничего не найдено. Измените фильтры или отправьте новый запрос."),
+        Const("Каталог активен."),
         MessageInput(on_catalog_text_input, content_types=[ContentType.TEXT]),
         MessageInput(on_catalog_voice_input, content_types=[ContentType.VOICE]),
-        getter=get_catalog_data,
         state=CatalogSG.empty,
     ),
     Window(
         Const("Детали объекта скоро будут доступны."),
-        Button(Format("{btn_main_menu}"), id="catalog_home_details", on_click=on_catalog_home),
-        getter=get_catalog_data,
         state=CatalogSG.details,
     ),
     launch_mode=LaunchMode.ROOT,

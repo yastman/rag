@@ -21,6 +21,7 @@ class CatalogRuntime(TypedDict, total=False):
     current_item_id: str | None
     bookmarks_context: bool
     origin_context: dict[str, Any]
+    control_message_id: int | None
 
 
 def _dedupe_ids(item_ids: list[str]) -> list[str]:
