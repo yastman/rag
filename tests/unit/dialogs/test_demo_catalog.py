@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.dialogs.states import CatalogBrowsingSG
+from telegram_bot.dialogs.states import CatalogSG, ClientMenuSG
 
 
 def _make_message() -> MagicMock:
@@ -70,13 +70,13 @@ def _make_svc(results: list | None = None, total: int = 42) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# Task 1: _dialog_search → CatalogBrowsingSG
+# Task 1: _dialog_search → CatalogSG
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_dialog_search_transitions_to_catalog_browsing() -> None:
-    """After search, FSM state should be CatalogBrowsingSG.browsing."""
+async def test_dialog_search_starts_catalog_results() -> None:
+    """After search, dialog should hand off to CatalogSG.results."""
     from telegram_bot.dialogs.demo import _dialog_search
 
     msg = _make_message()
@@ -92,12 +92,14 @@ async def test_dialog_search_transitions_to_catalog_browsing() -> None:
 
     await _dialog_search("двушка", msg, manager)
 
-    state.set_state.assert_awaited_once_with(CatalogBrowsingSG.browsing)
+    from aiogram_dialog import StartMode
+
+    manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
 
 
 @pytest.mark.asyncio
 async def test_dialog_search_saves_pagination_data() -> None:
-    """Pagination data should be stored in FSM state."""
+    """catalog_runtime should be stored in FSM state."""
     from telegram_bot.dialogs.demo import _dialog_search
 
     msg = _make_message()
@@ -116,8 +118,8 @@ async def test_dialog_search_saves_pagination_data() -> None:
     update_call = state.update_data.call_args
     assert update_call is not None
     kwargs = update_call[1] or update_call[0][0]
-    assert kwargs["apartment_total"] == 42
-    assert kwargs["apartment_offset"] == 10
+    assert kwargs["catalog_runtime"]["total"] == 42
+    assert kwargs["catalog_runtime"]["shown_count"] == 10
 
 
 @pytest.mark.asyncio
@@ -143,8 +145,8 @@ async def test_dialog_search_uses_scroll_not_vector() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dialog_search_shows_catalog_keyboard() -> None:
-    """Results message should include ReplyKeyboard."""
+async def test_dialog_search_sends_results_as_regular_messages() -> None:
+    """Results should still be sent as normal chat messages."""
     from telegram_bot.dialogs.demo import _dialog_search
 
     msg = _make_message()
@@ -160,13 +162,13 @@ async def test_dialog_search_shows_catalog_keyboard() -> None:
 
     await _dialog_search("апартаменты", msg, manager)
 
-    answer_calls = [c for c in msg.answer.call_args_list if c[1].get("reply_markup")]
-    assert len(answer_calls) >= 1, "Should send message with ReplyKeyboard"
+    answer_calls = [c for c in msg.answer.call_args_list if c.args]
+    assert any("Premier Fort Beach" in str(c.args[0]) for c in answer_calls)
 
 
 @pytest.mark.asyncio
-async def test_dialog_search_closes_demo_dialog() -> None:
-    """After transition, demo dialog should be closed via manager.done()."""
+async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
+    """After transition, demo dialog should be replaced by CatalogSG."""
     from telegram_bot.dialogs.demo import _dialog_search
 
     msg = _make_message()
@@ -182,17 +184,19 @@ async def test_dialog_search_closes_demo_dialog() -> None:
 
     await _dialog_search("двушка", msg, manager)
 
-    manager.done.assert_awaited_once()
+    from aiogram_dialog import StartMode
+
+    manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
 
 
 # ---------------------------------------------------------------------------
-# Task 2: _run_demo_search (FSM handler) → CatalogBrowsingSG
+# Task 2: _run_demo_search (FSM handler) → CatalogSG
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_handler_run_demo_search_transitions_to_catalog() -> None:
-    """FSM handler should transition to CatalogBrowsingSG.browsing."""
+    """FSM handler should store catalog_runtime for CatalogSG."""
     from telegram_bot.handlers.demo_handler import _run_demo_search
 
     msg = _make_message()
@@ -206,7 +210,9 @@ async def test_handler_run_demo_search_transitions_to_catalog() -> None:
         apartments_service=_make_svc(results=[_APT] * 5, total=15),
     )
 
-    state.set_state.assert_awaited_once_with(CatalogBrowsingSG.browsing)
+    kwargs = state.update_data.await_args.kwargs
+    assert "catalog_runtime" in kwargs
+    assert kwargs["catalog_runtime"]["source"] == "demo"
 
 
 @pytest.mark.asyncio
@@ -236,7 +242,7 @@ async def test_handler_run_demo_search_uses_scroll() -> None:
 
 @pytest.mark.asyncio
 async def test_voice_input_triggers_search_and_catalog() -> None:
-    """Voice → STT → extraction → scroll → catalog browsing."""
+    """Voice → STT → extraction → scroll → catalog dialog flow."""
     from telegram_bot.dialogs.demo import on_voice_input
 
     msg = _make_message()
@@ -266,7 +272,7 @@ async def test_voice_input_triggers_search_and_catalog() -> None:
 
 @pytest.mark.asyncio
 async def test_text_input_triggers_search_and_catalog() -> None:
-    """Text input → extraction → scroll → catalog browsing."""
+    """Text input → extraction → scroll → catalog dialog flow."""
     from telegram_bot.dialogs.demo import on_text_input
 
     msg = _make_message()
@@ -295,20 +301,19 @@ async def test_text_input_triggers_search_and_catalog() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_more_works_after_demo_search() -> None:
-    """After demo search, 'Показать ещё' should load next page."""
-    from telegram_bot.handlers.catalog_router import handle_catalog_more
-
-    msg = _make_message()
-    msg.text = "📥 Показать ещё (10 из 42)"
+    """After demo search, dialog-native 'more' should load next page."""
+    from telegram_bot.dialogs.catalog import on_catalog_more
 
     state = _make_state(
         {
-            "apartment_offset": 10,
-            "apartment_total": 42,
-            "apartment_next_offset": 80000.0,
-            "apartment_scroll_seen_ids": ["apt-1"],
-            "apartment_filters": {"rooms": 2},
-            "catalog_view_mode": "list",
+            "catalog_runtime": {
+                "shown_count": 10,
+                "total": 42,
+                "next_offset": 80000.0,
+                "shown_item_ids": ["apt-1"],
+                "filters": {"rooms": 2},
+                "view_mode": "list",
+            }
         }
     )
 
@@ -320,29 +325,27 @@ async def test_catalog_more_works_after_demo_search() -> None:
     property_bot._apartments_service = mock_svc
     property_bot._send_property_card = AsyncMock()
 
-    await handle_catalog_more(msg, state, property_bot=property_bot)
+    manager = AsyncMock()
+    manager.middleware_data = {"state": state, "property_bot": property_bot}
+    callback = MagicMock(message=_make_message(), from_user=MagicMock(id=123))
+
+    await on_catalog_more(callback, MagicMock(), manager)
 
     mock_svc.scroll_with_filters.assert_awaited_once()
     update_kwargs = state.update_data.call_args[1]
-    assert update_kwargs["apartment_offset"] == 20
+    assert update_kwargs["catalog_runtime"]["shown_count"] == 20
 
 
 @pytest.mark.asyncio
 async def test_catalog_exit_returns_to_main_menu() -> None:
     """'Главное меню' should clear state and return to main."""
-    from telegram_bot.handlers.catalog_router import handle_catalog_exit
+    from aiogram_dialog import StartMode
 
-    msg = _make_message()
-    state = _make_state(
-        {
-            "apartment_offset": 10,
-            "apartment_total": 42,
-        }
-    )
+    from telegram_bot.dialogs.catalog import on_catalog_home
 
-    await handle_catalog_exit(msg, state)
-
-    state.clear.assert_called_once()
+    manager = AsyncMock()
+    await on_catalog_home(MagicMock(), MagicMock(), manager)
+    manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +403,7 @@ def test_demo_dialog_has_voice_input() -> None:
 @pytest.mark.asyncio
 async def test_full_demo_flow_text_to_pagination() -> None:
     """Full flow: text → extraction → scroll → catalog → show more."""
-    from telegram_bot.handlers.catalog_router import handle_catalog_more
+    from telegram_bot.dialogs.catalog import on_catalog_more
     from telegram_bot.handlers.demo_handler import _run_demo_search
 
     # Step 1: Initial search
@@ -417,21 +420,20 @@ async def test_full_demo_flow_text_to_pagination() -> None:
         apartments_service=svc,
     )
 
-    state.set_state.assert_awaited_with(CatalogBrowsingSG.browsing)
+    assert "catalog_runtime" in state.update_data.await_args.kwargs
     assert svc.scroll_with_filters.await_count == 1
 
     # Step 2: Show more
-    msg2 = _make_message()
-    msg2.text = "📥 Показать ещё (10 из 25)"
-
     state2 = _make_state(
         {
-            "apartment_offset": 10,
-            "apartment_total": 25,
-            "apartment_next_offset": 80000.0,
-            "apartment_scroll_seen_ids": ["apt-1"],
-            "apartment_filters": {"rooms": 2},
-            "catalog_view_mode": "list",
+            "catalog_runtime": {
+                "shown_count": 10,
+                "total": 25,
+                "next_offset": 80000.0,
+                "shown_item_ids": ["apt-1"],
+                "filters": {"rooms": 2},
+                "view_mode": "list",
+            }
         }
     )
 
@@ -441,8 +443,11 @@ async def test_full_demo_flow_text_to_pagination() -> None:
     )
     property_bot = MagicMock()
     property_bot._apartments_service = svc2
+    manager = AsyncMock()
+    manager.middleware_data = {"state": state2, "property_bot": property_bot}
+    callback = MagicMock(message=_make_message(), from_user=MagicMock(id=123))
 
-    await handle_catalog_more(msg2, state2, property_bot=property_bot)
+    await on_catalog_more(callback, MagicMock(), manager)
 
     update_kwargs = state2.update_data.call_args[1]
-    assert update_kwargs["apartment_offset"] == 20
+    assert update_kwargs["catalog_runtime"]["shown_count"] == 20

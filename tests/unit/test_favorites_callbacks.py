@@ -129,6 +129,21 @@ async def test_fav_add_no_state_fallback() -> None:
     assert call_kwargs["property_data"] == {}
 
 
+async def test_fav_add_uses_catalog_runtime_results() -> None:
+    """Dialog-owned catalog flow should still provide property metadata for favorites."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.add = AsyncMock(return_value={"id": 1, "property_id": "prop-42"})
+
+    state = _make_state({"catalog_runtime": {"results": [_sample_result("prop-42")]}})
+    callback = _make_callback("fav:add:prop-42")
+
+    await bot.handle_favorite_callback(callback, state)
+
+    call_kwargs = bot._favorites_service.add.call_args.kwargs
+    assert call_kwargs["property_data"]["complex_name"] == "Ocean Vista"
+
+
 async def test_fav_add_none_state_fallback() -> None:
     """apartment_results=None in state → property_data={} (no crash)."""
     bot = _create_bot()
@@ -237,6 +252,22 @@ async def test_fav_remove_toggles_reply_markup_in_search_results() -> None:
     kb = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "fav:add:prop-42" in callbacks
+
+
+async def test_fav_remove_toggles_reply_markup_for_catalog_runtime_results() -> None:
+    """Dialog-owned catalog results should be treated as search results, not bookmarks."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.remove = AsyncMock()
+
+    state = _make_state({"catalog_runtime": {"results": [_sample_result("prop-42")]}})
+    callback = _make_callback("fav:remove:prop-42")
+    callback.message.edit_reply_markup = AsyncMock()
+
+    await bot.handle_favorite_callback(callback, state)
+
+    callback.message.edit_reply_markup.assert_awaited_once()
+    callback.message.delete.assert_not_awaited()
 
 
 async def test_fav_remove_deletes_when_message_is_from_bookmarks() -> None:
