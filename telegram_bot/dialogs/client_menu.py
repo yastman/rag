@@ -11,6 +11,8 @@ from aiogram_dialog import Dialog, DialogManager, LaunchMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Group, Start
 from aiogram_dialog.widgets.text import Format
 
+from telegram_bot.services.content_loader import load_services_config
+
 from .states import ClientMenuSG, FunnelSG, ViewingSG
 
 
@@ -45,9 +47,17 @@ async def get_menu_data(
     **kwargs: Any,
 ) -> dict[str, str]:
     """Getter: provide localized menu text."""
+    name = ""
+    if event_from_user is not None:
+        name = getattr(event_from_user, "first_name", "") or ""
+
     if i18n is None:
+        welcome = load_services_config().get("welcome", {}).get("text", "Добро пожаловать!")
+        if name:
+            welcome = welcome.replace("Привет! 👋", f"Привет, {name}! 👋", 1)
         # Fallback if i18n not injected (e.g., tests)
         return {
+            "title": welcome,
             "btn_search": "🏠 Подобрать квартиру",
             "btn_services": "🔑 Услуги",
             "btn_viewing": "📅 Запись на осмотр",
@@ -58,6 +68,7 @@ async def get_menu_data(
         }
 
     return {
+        "title": i18n.get("welcome-text", name=name),
         "btn_search": i18n.get("kb-search"),
         "btn_services": i18n.get("kb-services"),
         "btn_viewing": i18n.get("kb-viewing"),
@@ -108,6 +119,7 @@ async def on_menu_action(
 
 client_menu_dialog = Dialog(
     Window(
+        Format("{title}"),
         Group(
             Start(
                 Format("{btn_search}"),
