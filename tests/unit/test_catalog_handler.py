@@ -15,6 +15,7 @@ def _make_state(data: dict) -> MagicMock:
     state.get_data = AsyncMock(return_value=data)
     state.update_data = AsyncMock()
     state.set_state = AsyncMock()
+    state.clear = AsyncMock()
     return state
 
 
@@ -217,7 +218,7 @@ class TestCatalogMoreHandler:
 
 class TestCatalogExitHandler:
     async def test_exit_clears_state_and_restores_keyboard(self):
-        """'Главное меню' clears FSM state and restores client keyboard."""
+        """Fallback exit clears FSM state and restores client keyboard."""
         from aiogram.types import ReplyKeyboardMarkup
 
         from telegram_bot.handlers.catalog_router import handle_catalog_exit
@@ -227,17 +228,31 @@ class TestCatalogExitHandler:
 
         await handle_catalog_exit(message, state)
 
-        state.set_state.assert_awaited_once_with(None)
-        state.update_data.assert_awaited_once()
-        update_kwargs = state.update_data.call_args.kwargs
-        assert update_kwargs.get("apartment_offset") is None
-        assert update_kwargs.get("apartment_total") is None
-        assert update_kwargs.get("apartment_filters") is None
+        state.clear.assert_awaited_once()
+        state.set_state.assert_not_awaited()
+        state.update_data.assert_not_awaited()
 
         kb = message.answer.call_args.kwargs.get("reply_markup")
         assert isinstance(kb, ReplyKeyboardMarkup)
         button_texts = [btn.text for row in kb.keyboard for btn in row]
         assert "🏠 Подобрать квартиру" in button_texts
+
+    async def test_exit_starts_client_root_with_reset_stack(self):
+        """Catalog exit should rejoin the SDK client root when dialog_manager is available."""
+        from aiogram_dialog import StartMode
+
+        from telegram_bot.dialogs.states import ClientMenuSG
+        from telegram_bot.handlers.catalog_router import handle_catalog_exit
+
+        state = _make_state({})
+        message = _make_message()
+        dialog_manager = AsyncMock()
+
+        await handle_catalog_exit(message, state, dialog_manager=dialog_manager)
+
+        state.clear.assert_awaited_once()
+        dialog_manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+        message.answer.assert_not_awaited()
 
 
 # ============================================================
