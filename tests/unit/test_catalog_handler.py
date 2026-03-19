@@ -128,6 +128,8 @@ async def test_catalog_bookmarks_delegates_to_property_bot() -> None:
     await on_catalog_bookmarks(callback, MagicMock(), manager)
 
     property_bot._handle_bookmarks.assert_awaited_once()
+    passed_message = property_bot._handle_bookmarks.await_args.args[0]
+    assert passed_message.from_user is callback.from_user
 
 
 @pytest.mark.asyncio
@@ -160,3 +162,5 @@ async def test_catalog_manager_delegates_to_existing_handler() -> None:
     await on_catalog_manager(callback, MagicMock(), manager)
 
     property_bot._handle_manager.assert_awaited_once()
+    passed_message = property_bot._handle_manager.await_args.args[0]
+    assert passed_message.from_user is callback.from_user
