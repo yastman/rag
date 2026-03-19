@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any, cast
 
 import instructor
@@ -87,7 +88,13 @@ class ApartmentLlmExtractor:
     """Instructor-based structured extraction from natural language queries."""
 
     def __init__(self, llm: AsyncOpenAI, model: str = "gpt-4o-mini") -> None:
-        self._client = instructor.from_openai(llm)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=("Client should be an instance of openai.OpenAI or openai.AsyncOpenAI.*"),
+                category=UserWarning,
+            )
+            self._client = instructor.from_openai(llm)
         self._model = model
 
     @observe(name="apartment-llm-extract", capture_input=False, capture_output=False)

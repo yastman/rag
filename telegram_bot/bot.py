@@ -9,6 +9,7 @@ import logging
 import re
 import time
 import uuid
+import warnings
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
@@ -27,16 +28,8 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
-from .agents.agent import create_bot_agent
-from .agents.context import BotContext
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
-from .graph.config import GraphConfig
-from .graph.graph import build_graph
-from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
-from .graph.nodes.classify import classify_query
-from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
-from .graph.state import make_initial_state
 from .handlers.handoff import (
     HandoffStates,
     start_qualification,
@@ -70,10 +63,12 @@ from .services.topic_service import TopicService
 
 
 if TYPE_CHECKING:
+    from .agents.context import BotContext
     from .services.history_service import HistoryService
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 HistoryService: Any = None  # type: ignore[no-redef]
+BotContext = Any
 
 
 logger = logging.getLogger(__name__)
@@ -85,6 +80,34 @@ _APARTMENT_PAGE_SIZE = 5
 _TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
+
+
+def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .agents.agent import create_bot_agent as _create_bot_agent
+
+    return _create_bot_agent(*args, **kwargs)
+
+
+def build_graph(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .graph.graph import build_graph as _build_graph
+
+    return _build_graph(*args, **kwargs)
+
+
+def classify_query(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .graph.nodes.classify import classify_query as _classify_query
+
+    return _classify_query(*args, **kwargs)
+
+
+def detect_injection(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .graph.nodes.guard import detect_injection as _detect_injection
+
+    return _detect_injection(*args, **kwargs)
 
 
 async def _stream_agent_to_draft(
@@ -421,6 +444,8 @@ class PropertyBot:
 
     def __init__(self, config: BotConfig):
         """Initialize bot with services."""
+        from .graph.config import GraphConfig
+
         self.config = config
         self.bot = Bot(token=config.telegram_token)
         self.dp = Dispatcher()
@@ -478,7 +503,13 @@ class PropertyBot:
         if config.rerank_provider == "colbert":
             from .services.colbert_reranker import ColbertRerankerService
 
-            self._reranker = ColbertRerankerService(base_url=config.bge_m3_url)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="ColbertRerankerService is deprecated.*",
+                    category=DeprecationWarning,
+                )
+                self._reranker = ColbertRerankerService(base_url=config.bge_m3_url)
             logger.info("Using ColbertRerankerService for reranking")
         elif config.rerank_provider == "none":
             logger.info("Reranking disabled")
@@ -2806,8 +2837,11 @@ class PropertyBot:
 
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
+        from .agents.context import BotContext
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
+        from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
+        from .graph.nodes.guard import _BLOCKED_RESPONSE
         from .pipelines.state_contract import build_pre_agent_miss_contract
 
         assert message.bot is not None
@@ -3723,6 +3757,8 @@ class PropertyBot:
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
         """Handle voice message via Whisper STT + LangGraph RAG pipeline."""
+        from .graph.state import make_initial_state
+
         pipeline_start = time.perf_counter()
         assert message.bot is not None
         assert message.from_user is not None
@@ -3947,6 +3983,8 @@ class PropertyBot:
     @observe(name="telegram-hitl-callback")
     async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
         """Handle HITL approve/cancel button click (#443)."""
+        from .agents.context import BotContext
+
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
@@ -4287,6 +4325,7 @@ class PropertyBot:
         """
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
+        from .agents.context import BotContext
         from .agents.rag_tool import rag_search
 
         if callback.from_user is None or callback.message is None:

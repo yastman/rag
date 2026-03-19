@@ -2,29 +2,26 @@
 
 from __future__ import annotations
 
-import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
 
 
 def test_handle_menu_button_accepts_dialog_manager():
     """handle_menu_button accepts state and optional dialog_manager."""
-    from telegram_bot.bot import PropertyBot
-
-    sig = inspect.signature(PropertyBot.handle_menu_button)
-    params = list(sig.parameters.keys())
+    method = get_property_bot_method("handle_menu_button")
+    params = get_parameter_names(method)
     assert "state" in params
     assert "dialog_manager" in params
-    assert sig.parameters["dialog_manager"].default is None
+    assert get_default_map(method)["dialog_manager"] is None
 
 
 def test_handle_search_accepts_dialog_manager():
     """_handle_search accepts optional dialog_manager."""
-    from telegram_bot.bot import PropertyBot
-
-    sig = inspect.signature(PropertyBot._handle_search)
-    params = list(sig.parameters.keys())
+    method = get_property_bot_method("_handle_search")
+    params = get_parameter_names(method)
     assert "dialog_manager" in params
-    assert sig.parameters["dialog_manager"].default is None
+    assert get_default_map(method)["dialog_manager"] is None
 
 
 async def test_handle_menu_button_clears_stale_fsm_state():
