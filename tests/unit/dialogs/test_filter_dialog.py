@@ -319,7 +319,9 @@ class TestOnApply:
 
 
 class TestOnReset:
-    async def test_clears_all_filter_fields(self):
+    async def test_restarts_filter_dialog_with_empty_filters(self):
+        from aiogram_dialog import StartMode
+
         from telegram_bot.dialogs.filter_dialog import on_reset
 
         manager = AsyncMock()
@@ -330,10 +332,11 @@ class TestOnReset:
 
         await on_reset(MagicMock(), MagicMock(), manager)
 
-        for field in ("city", "budget", "rooms"):
-            assert manager.dialog_data.get(field) is None or field not in manager.dialog_data
-        assert widget_data == {}
-        manager.update.assert_awaited_once_with({})
+        manager.start.assert_awaited_once_with(
+            FilterSG.hub,
+            data={"filters": {}},
+            mode=StartMode.RESET_STACK,
+        )
 
 
 # ============================================================
