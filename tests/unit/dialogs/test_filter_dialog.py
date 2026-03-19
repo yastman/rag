@@ -203,6 +203,7 @@ class TestGetHubData:
 def _make_apply_mocks(dialog_data=None):
     """Create callback + manager mocks for on_apply tests."""
     state = AsyncMock()
+    state.get_data = AsyncMock(return_value={})
     state.update_data = AsyncMock()
 
     callback = MagicMock()
@@ -213,6 +214,7 @@ def _make_apply_mocks(dialog_data=None):
     manager.dialog_data = dialog_data or {}
     manager.middleware_data = {"state": state, "apartments_service": None}
     manager.done = AsyncMock()
+    manager.start = AsyncMock()
 
     return callback, state, manager
 
@@ -226,36 +228,43 @@ class TestOnApply:
 
         state.update_data.assert_awaited_once()
         call_kwargs = state.update_data.call_args[1]
-        filters = call_kwargs["apartment_filters"]
+        runtime = call_kwargs["catalog_runtime"]
+        filters = runtime["filters"]
         assert filters["city"] == "Несебр"
         assert "price_eur" in filters
         assert "budget" not in filters
 
-    async def test_calls_manager_done(self):
+    async def test_starts_catalog_dialog_results(self):
+        from aiogram_dialog import StartMode
+
         from telegram_bot.dialogs.filter_dialog import on_apply
+        from telegram_bot.dialogs.states import CatalogSG
 
         callback, _state, manager = _make_apply_mocks()
         await on_apply(callback, MagicMock(), manager)
-        manager.done.assert_awaited_once()
 
-    async def test_resets_pagination_state(self):
+        manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
+
+    async def test_resets_catalog_runtime_pagination(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
 
         callback, state, manager = _make_apply_mocks({"city": "Варна"})
         await on_apply(callback, MagicMock(), manager)
 
         call_kwargs = state.update_data.call_args[1]
-        assert call_kwargs.get("apartment_offset") == 0
+        runtime = call_kwargs["catalog_runtime"]
+        assert runtime.get("shown_count") == 0
 
-    async def test_sends_empty_results_message(self):
+    async def test_empty_results_use_catalog_empty_state(self):
+        from aiogram_dialog import StartMode
+
         from telegram_bot.dialogs.filter_dialog import on_apply
+        from telegram_bot.dialogs.states import CatalogSG
 
         callback, _state, manager = _make_apply_mocks({"city": "Бургас"})
         await on_apply(callback, MagicMock(), manager)
 
-        callback.message.answer.assert_awaited_once()
-        msg_text = callback.message.answer.call_args[0][0]
-        assert "ничего не найдено" in msg_text
+        manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
 
 
 # ============================================================

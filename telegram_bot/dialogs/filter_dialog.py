@@ -5,21 +5,22 @@ telegram_bot/keyboards/filter_panel.py (290 LOC) with SDK-native
 Dialog/Window/Radio/SwitchTo widgets.
 
 Flow:
-    CatalogBrowsingSG.browsing → manager.start(FilterSG.hub)
+    CatalogSG.results/empty → manager.start(FilterSG.hub)
     → user selects filters via Windows (Radio widgets with ✓ indicator)
-    → on_apply: saves to FSMContext, manager.done()
-    → returns to CatalogBrowsingSG.browsing
+    → on_apply: writes updated catalog_runtime
+    → returns to CatalogSG.results or CatalogSG.empty
 """
 
 from __future__ import annotations
 
 import contextlib
+import inspect
 import logging
 from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
@@ -34,7 +35,12 @@ from telegram_bot.dialogs.filter_constants import (
     build_filters_dict,
 )
 from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
-from telegram_bot.dialogs.states import FilterSG
+from telegram_bot.dialogs.states import CatalogSG, FilterSG
+from telegram_bot.services.catalog_rendering import send_catalog_results
+from telegram_bot.services.catalog_session import (
+    CATALOG_RUNTIME_DATA_KEY,
+    build_catalog_runtime,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -352,11 +358,15 @@ async def on_apply(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    """Apply current filters: fetch first page, show cards, close dialog."""
+    """Apply filters and return to the catalog dialog flow."""
     state: FSMContext = manager.middleware_data["state"]
     dd = manager.dialog_data
     raw_filters = {k: v for k, v in dd.items() if k in FIELD_TO_FILTER_KEY}
     filters = build_filters_dict(raw_filters)
+    fsm_data = await state.get_data()
+    current_runtime = (
+        fsm_data.get(CATALOG_RUNTIME_DATA_KEY) if isinstance(fsm_data, dict) else {}
+    ) or {}
 
     # Fetch first page with new filters
     svc = manager.middleware_data.get("apartments_service")
@@ -371,14 +381,19 @@ async def on_apply(
                 limit=10,
             )
 
-    await state.update_data(
-        apartment_filters=filters,
-        apartment_offset=len(results),
-        apartment_total=total_count,
-        apartment_next_offset=next_start,
-        apartment_scroll_seen_ids=page_ids,
+    runtime = build_catalog_runtime(
+        query=current_runtime.get("query", ""),
+        source=current_runtime.get("source", "catalog"),
+        filters=filters,
+        view_mode=current_runtime.get("view_mode", "cards"),
+        results=results,
+        total=total_count,
+        next_offset=next_start,
+        shown_item_ids=page_ids,
+        bookmarks_context=bool(current_runtime.get("bookmarks_context", False)),
+        origin_context=current_runtime.get("origin_context", {}),
     )
-    await manager.done()
+    await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
     # Show apartment results respecting view mode
     msg = callback.message
@@ -386,39 +401,23 @@ async def on_apply(
         return
 
     if not results:
-        await msg.answer("По заданным фильтрам ничего не найдено")
+        maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        if inspect.isawaitable(maybe_start):
+            await maybe_start
         return
 
-    fsm_data = await state.get_data()
-    view_mode = fsm_data.get("catalog_view_mode", "cards")
-
-    if view_mode == "list":
-        from telegram_bot.dialogs.funnel import format_apartment_list
-        from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
-        kb = (
-            build_catalog_keyboard(shown=len(results), total=total_count)
-            if len(results) < total_count
-            else None
-        )
-        text = format_apartment_list(results, shown_start=1, total=total_count)
-        await msg.answer(text, parse_mode="HTML", reply_markup=kb)
-    else:
-        property_bot = manager.middleware_data.get("property_bot")
-        if property_bot is not None:
-            telegram_id = callback.from_user.id if callback.from_user else 0
-            for result in results:
-                with contextlib.suppress(Exception):
-                    await property_bot._send_property_card(msg, result, telegram_id)
-
-        if len(results) < total_count:
-            from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
-            kb = build_catalog_keyboard(shown=len(results), total=total_count)
-            await msg.answer(
-                f"Показано {len(results)} из {total_count}",
-                reply_markup=kb,
-            )
+    await send_catalog_results(
+        message=msg,
+        property_bot=manager.middleware_data.get("property_bot"),
+        results=results,
+        total_count=total_count,
+        view_mode=runtime.get("view_mode", "cards"),
+        shown_start=1,
+        telegram_id=callback.from_user.id if callback.from_user else 0,
+    )
+    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
+    if inspect.isawaitable(maybe_start):
+        await maybe_start
 
 
 # ============================================================

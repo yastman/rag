@@ -810,14 +810,10 @@ class PropertyBot:
             F.voice,
             flags={"rate_limit": {"rate": 3.5, "key": "voice"}},
         )(self.handle_voice)
-        # ReplyKeyboard buttons — registered before catch-all F.text (#628)
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
-
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
         self.dp.message(
-            ~StateFilter(CatalogBrowsingSG.browsing),
             F.text.in_(menu_button_texts),
             flags={"rate_limit": {"rate": 0.6, "key": "menu"}},
         )(self.handle_menu_button)
@@ -1421,7 +1417,6 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        # Catalog browsing is handled by catalog_router (StateFilter-based)
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
@@ -4739,6 +4734,7 @@ class PropertyBot:
         # Setup aiogram-dialog routers, including the client root shell.
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
+        from .dialogs.catalog import catalog_dialog
         from .dialogs.client_menu import client_menu_dialog
         from .dialogs.crm_ai_advisor import advisor_dialog
         from .dialogs.crm_contacts import (
@@ -4768,6 +4764,7 @@ class PropertyBot:
         self.dp.include_router(create_crm_router())
 
         self.dp.include_router(client_menu_dialog)
+        self.dp.include_router(catalog_dialog)
         self.dp.include_router(manager_menu_dialog)
         self.dp.include_router(leads_menu_dialog)
         self.dp.include_router(create_lead_dialog)
@@ -4793,12 +4790,6 @@ class PropertyBot:
         # MessageInput (e.g. viewing phone input) is resolved first.
         # aiogram SDK: handlers match in registration order, first-match wins.
         from aiogram import Router as _Router
-
-        # Catalog browsing router — SDK StateFilter-based, intercepts text
-        # in CatalogBrowsingSG.browsing state. Registered BEFORE catch-all.
-        from telegram_bot.handlers.catalog_router import catalog_router
-
-        self.dp.include_router(catalog_router)
 
         self._catch_all_router = _Router(name="catch_all_query")
         self._catch_all_router.message(

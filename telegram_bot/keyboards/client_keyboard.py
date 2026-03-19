@@ -53,7 +53,6 @@ def collect_client_menu_texts(labels: list[Any]) -> set[str]:
 def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     """Return all supported menu labels for handler filters."""
     texts = set(MENU_BUTTONS.keys())
-    # CATALOG_BUTTONS handled by catalog_router (StateFilter-based), not here
     if i18n_hub is None:
         return texts
 
@@ -104,43 +103,6 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         is_persistent=True,
     )
-
-
-# --- Catalog mode keyboard ---
-
-CATALOG_BUTTONS: dict[str, str] = {
-    "🔍 Фильтры": "catalog_filters",
-    "📌 Избранное": "catalog_bookmarks",
-    "🏠 Главное меню": "catalog_exit",
-}
-
-
-def build_catalog_keyboard(*, shown: int, total: int) -> ReplyKeyboardMarkup:
-    """Build ReplyKeyboard for catalog browsing mode."""
-    has_more = shown < total
-    rows: list[list[KeyboardButton]] = []
-    if has_more:
-        rows.append(
-            [
-                KeyboardButton(text=f"📥 Показать ещё ({shown} из {total})"),
-            ]
-        )
-    rows.append([KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="📌 Избранное")])
-    rows.append(
-        [
-            KeyboardButton(text="📅 Запись на осмотр"),
-            KeyboardButton(text="👤 Написать менеджеру"),
-        ]
-    )
-    rows.append([KeyboardButton(text="🏠 Главное меню")])
-    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
-
-
-def parse_catalog_button(text: str) -> str | None:
-    """Parse catalog keyboard button text to action ID."""
-    if text.startswith("📥 Показать"):
-        return "catalog_more"
-    return CATALOG_BUTTONS.get(text)
 
 
 def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
