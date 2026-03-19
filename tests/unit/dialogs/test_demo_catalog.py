@@ -342,7 +342,7 @@ async def test_catalog_exit_returns_to_main_menu() -> None:
 
     await handle_catalog_exit(msg, state)
 
-    state.set_state.assert_awaited_once_with(None)
+    state.clear.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
