@@ -77,6 +77,66 @@ class TestHandleError:
         text = mock_message.answer.call_args.args[0]
         assert "❌" in text
 
+    async def test_handles_unknown_intent_as_stale_callback(self) -> None:
+        """Stale aiogram-dialog callbacks should not emit generic user-facing errors."""
+        from aiogram_dialog.api.exceptions import UnknownIntent
+
+        from telegram_bot.middlewares.error_handler import handle_error
+
+        mock_message = MagicMock()
+        mock_message.answer = AsyncMock()
+        mock_message.delete = AsyncMock()
+
+        mock_callback = MagicMock()
+        mock_callback.answer = AsyncMock()
+        mock_callback.message = mock_message
+
+        mock_update = MagicMock()
+        mock_update.message = None
+        mock_update.callback_query = mock_callback
+
+        mock_event = MagicMock()
+        mock_event.exception = UnknownIntent("Context not found for intent id: stale1")
+        mock_event.update = mock_update
+
+        with patch("telegram_bot.middlewares.error_handler.logger") as mock_logger:
+            await handle_error(mock_event)
+
+        mock_logger.warning.assert_called()
+        mock_callback.answer.assert_awaited_once()
+        mock_message.delete.assert_awaited_once()
+        mock_message.answer.assert_not_called()
+
+    async def test_swallows_expired_callback_query_answer_error(self) -> None:
+        """Expired Telegram callback queries should not produce noisy warnings."""
+        from aiogram.exceptions import TelegramBadRequest
+
+        from telegram_bot.middlewares.error_handler import handle_error
+
+        mock_message = AsyncMock()
+        mock_callback = MagicMock()
+        mock_callback.answer = AsyncMock(
+            side_effect=TelegramBadRequest(
+                method=MagicMock(),
+                message="Bad Request: query is too old and response timeout expired or query ID is invalid",
+            )
+        )
+        mock_callback.message = mock_message
+
+        mock_update = MagicMock()
+        mock_update.message = None
+        mock_update.callback_query = mock_callback
+
+        mock_event = MagicMock()
+        mock_event.exception = RuntimeError("callback handler crashed")
+        mock_event.update = mock_update
+
+        with patch("telegram_bot.middlewares.error_handler.logger") as mock_logger:
+            await handle_error(mock_event)
+
+        mock_logger.warning.assert_not_called()
+        mock_message.answer.assert_called_once()
+
     async def test_no_crash_for_inline_or_other_event_types(self) -> None:
         """Handler does not crash when update has no message or callback_query."""
         from telegram_bot.middlewares.error_handler import handle_error
