@@ -855,13 +855,16 @@ async def on_summary_search(
     except Exception:
         logger.exception("Failed to schedule funnel lead score persistence")
 
+    # Grab the current dialog message before closing the dialog context.
+    msg = callback.message
+
     # Resolve services
     svc = manager.middleware_data.get("apartments_service")
     property_bot = manager.middleware_data.get("property_bot")
     if svc is None and property_bot is not None:
         svc = getattr(property_bot, "_apartments_service", None)
 
-    if svc is None or callback.message is None:
+    if svc is None or msg is None:
         await manager.done()
         return
 
@@ -878,11 +881,13 @@ async def on_summary_search(
         await manager.done()
         return
 
-    # Avoid leaving the stale inline dialog message above catalog ReplyKeyboard.
+    # Close dialog and explicitly remove the old dialog shell before sending
+    # the catalog control-message to avoid duplicate control messages in chat.
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
-    with contextlib.suppress(Exception):
-        await callback.message.delete()
+    if hasattr(msg, "delete"):
+        with contextlib.suppress(Exception):
+            await msg.delete()
 
     # Determine view mode from button id
     view_mode = "list" if button.widget_id == "search_list" else "cards"
