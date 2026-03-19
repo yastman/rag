@@ -165,6 +165,21 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
     return merged
 
 
+def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read cached apartment payloads from legacy or dialog-owned state."""
+    raw_results = state_data.get("apartment_results")
+    if isinstance(raw_results, list):
+        return [item for item in raw_results if isinstance(item, dict)]
+
+    runtime = state_data.get("catalog_runtime")
+    if isinstance(runtime, dict):
+        runtime_results = runtime.get("results")
+        if isinstance(runtime_results, list):
+            return [item for item in runtime_results if isinstance(item, dict)]
+
+    return []
+
+
 def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
     """Split text into Telegram-safe chunks without importing the full client pipeline."""
     if not text:
@@ -1991,8 +2006,7 @@ class PropertyBot:
             return
 
         state_data = await state.get_data()
-        raw_results = state_data.get("apartment_results")
-        apt_results = raw_results if isinstance(raw_results, list) else []
+        apt_results = _state_apartment_results(state_data)
         matched = next(
             (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
             None,
@@ -2054,8 +2068,7 @@ class PropertyBot:
 
         await favorites_service.remove(telegram_id=callback.from_user.id, property_id=property_id)
         state_data = await state.get_data()
-        raw_results = state_data.get("apartment_results")
-        apt_results = raw_results if isinstance(raw_results, list) else []
+        apt_results = _state_apartment_results(state_data)
         in_search_results = any(
             isinstance(r, dict) and r.get("id") == property_id for r in apt_results
         )
@@ -2429,8 +2442,7 @@ class PropertyBot:
         property_id = parts[2]
 
         state_data = await state.get_data()
-        raw_results = state_data.get("apartment_results")
-        apt_results = raw_results if isinstance(raw_results, list) else []
+        apt_results = _state_apartment_results(state_data)
         matched = next(
             (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
             None,
