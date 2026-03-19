@@ -56,6 +56,40 @@ def _has_filter_value(value: Any) -> bool:
     return value not in (None, "", "any", "None")
 
 
+def _clear_filter_dialog_state(manager: DialogManager) -> None:
+    """Drop all filter selections from dialog_data and Radio widget state."""
+    for field in FIELD_TO_FILTER_KEY:
+        manager.dialog_data.pop(field, None)
+    for key in (
+        "city",
+        "rooms",
+        "budget",
+        "view",
+        "area",
+        "floor",
+        "complex",
+        "furnished",
+        "promotion",
+    ):
+        manager.dialog_data.pop(key, None)
+    with contextlib.suppress(Exception):
+        widget_data = manager.current_context().widget_data
+        for radio_id in _FIELD_TO_RADIO_ID.values():
+            widget_data.pop(radio_id, None)
+
+
+def _sanitize_filter_dialog_state(manager: DialogManager) -> None:
+    """Remove stale invalid values leaked into dialog_data/widget_data."""
+    for field in list(FIELD_TO_FILTER_KEY):
+        if not _has_filter_value(manager.dialog_data.get(field)):
+            manager.dialog_data.pop(field, None)
+    with contextlib.suppress(Exception):
+        widget_data = manager.current_context().widget_data
+        for radio_id in _FIELD_TO_RADIO_ID.values():
+            if not _has_filter_value(widget_data.get(radio_id)):
+                widget_data.pop(radio_id, None)
+
+
 def _main_menu_label_for(dialog_manager: DialogManager) -> str:
     """Return main-menu label even when tests provide a minimal dialog_manager stub."""
     middleware = getattr(dialog_manager, "middleware_data", None) or {}
@@ -70,6 +104,8 @@ def _main_menu_label_for(dialog_manager: DialogManager) -> str:
 
 async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
     """Getter for the hub window — returns filter options and live count."""
+    _sanitize_filter_dialog_state(dialog_manager)
+
     svc = dialog_manager.middleware_data.get("apartments_service")
     count = 0
     if svc is not None:
@@ -447,26 +483,8 @@ async def on_reset(
     manager: DialogManager,
 ) -> None:
     """Clear all filters from dialog_data and reset Radio widgets."""
-    for field in FIELD_TO_FILTER_KEY:
-        manager.dialog_data.pop(field, None)
-    for key in (
-        "city",
-        "rooms",
-        "budget",
-        "view",
-        "area",
-        "floor",
-        "complex",
-        "furnished",
-        "promotion",
-    ):
-        manager.dialog_data.pop(key, None)
-    # Clear Radio widget state directly: aiogram-dialog does not support
-    # unchecking Radio via set_checked(None) and stores state in widget_data.
-    with contextlib.suppress(Exception):
-        widget_data = manager.current_context().widget_data
-        for radio_id in _FIELD_TO_RADIO_ID.values():
-            widget_data.pop(radio_id, None)
+    _clear_filter_dialog_state(manager)
+    await manager.update({})
 
 
 # ============================================================
