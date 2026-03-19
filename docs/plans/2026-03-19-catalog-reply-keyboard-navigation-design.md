@@ -52,6 +52,29 @@ Contract rules:
 - exit from catalog must restore the ordinary client reply keyboard
 - catalog actions must not depend on callback-only paths
 
+## Historical Baseline
+
+The behavioral reference for the reply-keyboard catalog flow is not the current `origin/main`.
+
+The current `origin/main` already contains the dialog-owned catalog migration:
+
+- `CatalogSG` renders inline controls
+- catalog actions are wired through dialog callbacks
+- free text inside catalog is handled by the dialog flow itself
+- `telegram_bot/handlers/catalog_router.py` is already reduced to a compatibility stub
+
+The working lower-menu baseline lives in the pre-migration catalog path, specifically before commit `e218fb19`.
+
+That historical path is useful as a behavior reference for:
+
+- `build_catalog_keyboard(...)`
+- `parse_catalog_button(...)`
+- explicit `Показать ещё`
+- text-first routing of catalog actions before free-text search
+- reply-keyboard exit back to the main client menu
+
+It is not the implementation target as-is.
+
 ## Design Goals
 
 Primary goals:
@@ -103,6 +126,8 @@ More concretely:
 
 `FilterSG` continues to read from and write to that runtime. `FunnelSG` and other catalog entry points continue to hand off into catalog through SDK state transitions.
 
+This design does not restore `CatalogBrowsingSG.browsing` as the primary catalog owner. The old browsing state is only a historical reference for behavior, not for current state ownership.
+
 ### UI Ownership
 
 `CatalogSG` stops rendering inline controls in `results` and `empty` windows.
@@ -120,6 +145,8 @@ Routing order:
 
 This ordering is mandatory. Without it, reply-keyboard taps like `Фильтры` or `Главное меню` will continue to be misclassified as search text.
 
+The parser and dispatch contract should be borrowed from the pre-migration catalog path, but the active owner remains the current `CatalogSG` runtime rather than the old `CatalogBrowsingSG` plus per-field FSM payload.
+
 ## Module-Level Change Set
 
 ### `telegram_bot/dialogs/catalog.py`
@@ -136,6 +163,8 @@ Required edits:
 
 `on_catalog_more`, `on_catalog_filters`, `on_catalog_home`, and similar functions may remain as internal action handlers, but they should be called from text-action routing rather than widget callbacks.
 
+This file is the primary place to absorb the old reply-keyboard behavior contract. The design should not reintroduce a separate state-owning legacy router if the same routing can be handled against the active `CatalogSG` session.
+
 ### `telegram_bot/keyboards/`
 
 Add a dedicated catalog keyboard module, either by extending [client_keyboard.py](/home/user/projects/rag-fresh/telegram_bot/keyboards/client_keyboard.py) or creating a sibling module.
@@ -148,6 +177,21 @@ Required responsibilities:
 - localized label lookup where needed
 
 This must remain separate from the ordinary client keyboard. Catalog actions are not global client actions.
+
+These functions can be restored conceptually from the pre-migration implementation, but should be adapted to the current dialog-runtime model instead of reviving the full legacy module layout unchanged.
+
+### `telegram_bot/handlers/catalog_router.py`
+
+Do not restore the old router wholesale as the primary catalog implementation.
+
+Two acceptable outcomes:
+
+- keep `catalog_router.py` as a compatibility stub and route catalog reply-keyboard actions inside `CatalogSG`
+- restore only a minimal router layer that delegates into current `CatalogSG` helpers and current catalog runtime
+
+Unacceptable outcome:
+
+- reviving `CatalogBrowsingSG` plus duplicated legacy state fields as a second source of truth alongside `CatalogSG`
 
 ### Catalog Render Path
 
@@ -235,6 +279,20 @@ Primary targets:
 ## Rollout Notes
 
 This design intentionally reverses one part of the earlier catalog migration: dialog no longer owns the catalog control surface. That change is acceptable because the prior design violated the current product UX contract.
+
+It does not reverse the entire migration.
+
+What is reused from history:
+
+- the old reply-keyboard behavior contract
+- the old action taxonomy for catalog controls
+- the old text-first routing order
+
+What is explicitly not restored from history:
+
+- `CatalogBrowsingSG` as the main catalog state owner
+- duplicated legacy FSM keys such as separate `apartment_offset` and related parallel state when `catalog_runtime` already exists
+- a second transport path that competes with the active dialog runtime
 
 What does not change:
 
