@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -16,6 +17,25 @@ from .states import ClientMenuSG, FunnelSG, ViewingSG
 logger = logging.getLogger(__name__)
 
 _DIRECT_ACTIONS = frozenset({"services", "ask", "bookmarks", "demo"})
+
+
+def _message_for_actor(callback: CallbackQuery) -> Any:
+    """Return a message object that reflects the clicking user as from_user."""
+    message = callback.message
+    actor = callback.from_user
+    if message is None or actor is None:
+        return message
+
+    model_copy = getattr(message, "model_copy", None)
+    if callable(model_copy):
+        with contextlib.suppress(Exception):
+            copied = model_copy(update={"from_user": actor})
+            copied.from_user = actor
+            return copied
+
+    with contextlib.suppress(Exception):
+        message.from_user = actor
+    return message
 
 
 async def get_menu_data(
@@ -58,25 +78,26 @@ async def on_menu_action(
     bot_instance = manager.middleware_data.get("property_bot")
     state = manager.middleware_data.get("state")
     i18n = manager.middleware_data.get("i18n")
-    if bot_instance is None or callback.message is None:
+    actor_message = _message_for_actor(callback)
+    if bot_instance is None or actor_message is None:
         return
 
     try:
         if action_id in _DIRECT_ACTIONS:
             await manager.done()
             if action_id == "services":
-                await bot_instance._handle_services(callback.message, i18n=i18n)
+                await bot_instance._handle_services(actor_message, i18n=i18n)
             elif action_id == "ask":
-                await bot_instance._handle_ask(callback.message, i18n=i18n)
+                await bot_instance._handle_ask(actor_message, i18n=i18n)
             elif action_id == "bookmarks":
-                await bot_instance._handle_bookmarks(callback.message, state)
+                await bot_instance._handle_bookmarks(actor_message, state)
             elif action_id == "demo":
-                await bot_instance._handle_demo(callback.message)
+                await bot_instance._handle_demo(actor_message)
             return
 
         if action_id == "manager":
             await bot_instance._handle_manager(
-                callback.message,
+                actor_message,
                 i18n=i18n,
                 state=state,
                 dialog_manager=manager,
