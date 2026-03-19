@@ -13,9 +13,9 @@ from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMod
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.text import Const
 
+from telegram_bot.dialogs.root_nav import show_client_main_menu
 from telegram_bot.dialogs.states import CatalogSG
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard, parse_catalog_button
-from telegram_bot.keyboards.client_keyboard import build_client_keyboard
 from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
@@ -242,10 +242,7 @@ async def _handle_catalog_home_message(
     manager.show_mode = ShowMode.NO_UPDATE
     with contextlib.suppress(Exception):
         await manager.done()
-    i18n = manager.middleware_data.get("i18n")
-    name = getattr(message.from_user, "first_name", "") or ""
-    text = i18n.get("welcome-text", name=name) if i18n is not None else "Выберите действие внизу."
-    await message.answer(text, reply_markup=build_client_keyboard(i18n=i18n))
+    await show_client_main_menu(message, i18n=manager.middleware_data.get("i18n"))
 
 
 async def _handle_catalog_manager_message(
