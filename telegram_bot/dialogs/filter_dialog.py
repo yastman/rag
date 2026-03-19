@@ -20,7 +20,7 @@ from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
@@ -399,6 +399,14 @@ async def on_apply(
     msg = callback.message
     if not msg:
         return
+
+    # Close the filter shell before handing control back to catalog so users
+    # do not interact with a stale filter message after apply.
+    manager.show_mode = ShowMode.NO_UPDATE
+    await manager.done()
+    if hasattr(msg, "delete"):
+        with contextlib.suppress(Exception):
+            await msg.delete()
 
     if not results:
         maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
