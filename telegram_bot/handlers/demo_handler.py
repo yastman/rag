@@ -11,6 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from telegram_bot.callback_data import DemoCB
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.keyboards.demo_keyboard import (
     DEFAULT_EXAMPLES,
     build_demo_examples,
@@ -224,6 +225,11 @@ async def _run_demo_search(
         view_mode="list",
         shown_start=1,
         telegram_id=message.from_user.id if message.from_user else 0,
+        reply_markup=build_catalog_keyboard(
+            shown=len(results),
+            total=total_count,
+            i18n=dialog_manager.middleware_data.get("i18n") if dialog_manager is not None else None,
+        ),
     )
     if dialog_manager is not None:
         await show_catalog_controls(message=message, dialog_manager=dialog_manager, runtime=runtime)
