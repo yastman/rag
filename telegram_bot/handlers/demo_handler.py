@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -9,6 +10,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
+from aiogram_dialog import StartMode
 
 from telegram_bot.callback_data import DemoCB
 from telegram_bot.keyboards.demo_keyboard import (
@@ -73,6 +75,7 @@ async def handle_demo_example(
     state: FSMContext | None = None,
     pipeline: Any = None,
     apartments_service: Any = None,
+    dialog_manager: Any = None,
 ) -> None:
     """Handle example button click — treat as text query."""
     await callback.answer()
@@ -108,6 +111,7 @@ async def handle_demo_example(
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
+        dialog_manager=dialog_manager,
     )
 
 
@@ -116,6 +120,7 @@ async def handle_demo_search_text(
     state: FSMContext,
     pipeline: Any = None,
     apartments_service: Any = None,
+    dialog_manager: Any = None,
     **kwargs: Any,
 ) -> None:
     """Handle text input in demo mode — LLM extraction → search → results."""
@@ -128,6 +133,7 @@ async def handle_demo_search_text(
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
+        dialog_manager=dialog_manager,
         **kwargs,
     )
 
@@ -139,9 +145,10 @@ async def _run_demo_search(
     state: FSMContext,
     pipeline: Any = None,
     apartments_service: Any = None,
+    dialog_manager: Any = None,
     **kwargs: Any,
 ) -> None:
-    """Core search logic: extraction → scroll_with_filters → catalog browsing."""
+    """Core search logic: extraction → scroll_with_filters → catalog dialog."""
     if not pipeline:
         await message.answer("Сервис поиска временно недоступен.")
         return
@@ -158,9 +165,12 @@ async def _run_demo_search(
         )
         return
 
-    # 2. Scroll with extracted filters
-    from telegram_bot.dialogs.funnel import format_apartment_list
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+    from telegram_bot.dialogs.states import CatalogSG
+    from telegram_bot.services.catalog_rendering import send_catalog_results
+    from telegram_bot.services.catalog_session import (
+        CATALOG_RUNTIME_DATA_KEY,
+        build_catalog_runtime,
+    )
 
     filters = extraction.hard.to_filters_dict() or None
     _PAGE_SIZE = 10
@@ -171,30 +181,56 @@ async def _run_demo_search(
     )
 
     if not results:
-        await message.answer(
-            "К сожалению, ничего не найдено по вашему запросу.\n"
-            "Попробуйте изменить параметры или напишите другой запрос."
+        await state.update_data(
+            **{
+                CATALOG_RUNTIME_DATA_KEY: build_catalog_runtime(
+                    query=query,
+                    source="demo",
+                    filters=filters if isinstance(filters, dict) else {},
+                    view_mode="list",
+                    results=[],
+                    total=0,
+                    next_offset=next_start,
+                    shown_item_ids=page_ids,
+                )
+            }
         )
+        if dialog_manager is not None:
+            maybe_start = dialog_manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
+            if inspect.isawaitable(maybe_start):
+                await maybe_start
+        else:
+            await message.answer(
+                "К сожалению, ничего не найдено по вашему запросу.\n"
+                "Попробуйте изменить параметры или напишите другой запрос."
+            )
         return
 
-    # 3. Format and send
-    text = format_apartment_list(results, shown_start=1, total=total_count)
-    catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
-    await message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
-
-    # 4. Transition to catalog browsing
-    from telegram_bot.dialogs.states import CatalogBrowsingSG
-
-    await state.set_state(CatalogBrowsingSG.browsing)
-    await state.update_data(
-        apartment_filters=filters if isinstance(filters, dict) else {},
-        apartment_offset=len(results),
-        apartment_total=total_count,
-        apartment_next_offset=next_start,
-        apartment_scroll_seen_ids=page_ids,
-        apartment_query=query,
-        catalog_view_mode="list",
+    runtime = build_catalog_runtime(
+        query=query,
+        source="demo",
+        filters=filters if isinstance(filters, dict) else {},
+        view_mode="list",
+        results=results,
+        total=total_count,
+        next_offset=next_start,
+        shown_item_ids=page_ids,
     )
+    await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
+
+    await send_catalog_results(
+        message=message,
+        property_bot=kwargs.get("property_bot"),
+        results=results,
+        total_count=total_count,
+        view_mode="list",
+        shown_start=1,
+        telegram_id=message.from_user.id if message.from_user else 0,
+    )
+    if dialog_manager is not None:
+        maybe_start = dialog_manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
+        if inspect.isawaitable(maybe_start):
+            await maybe_start
 
 
 async def handle_demo_search_voice(
@@ -203,6 +239,7 @@ async def handle_demo_search_voice(
     pipeline: Any = None,
     apartments_service: Any = None,
     llm: Any = None,
+    dialog_manager: Any = None,
     **kwargs: Any,
 ) -> None:
     """Handle voice input — STT → LLM extraction → search."""
@@ -221,6 +258,7 @@ async def handle_demo_search_voice(
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
+        dialog_manager=dialog_manager,
     )
 
 

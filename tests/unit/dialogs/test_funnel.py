@@ -569,6 +569,7 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
     callback.message = MagicMock()
     callback.message.chat = MagicMock(id=456)
     callback.message.answer = AsyncMock()
+    callback.message.delete = AsyncMock()
     callback.answer = AsyncMock()
 
     manager = MagicMock()
@@ -579,11 +580,13 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
         "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
+    manager.start = AsyncMock()
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
     mock_bot._send_property_card.assert_awaited_once()
     manager.done.assert_awaited_once()
+    callback.message.delete.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -966,6 +969,7 @@ def _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock):
     callback.message = MagicMock()
     callback.message.chat = MagicMock(id=456)
     callback.message.answer = AsyncMock()
+    callback.message.delete = AsyncMock()
     manager = MagicMock()
     manager.dialog_data = {"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"}
     manager.middleware_data = {
@@ -974,14 +978,71 @@ def _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock):
         "state": state_mock,
     }
     manager.done = AsyncMock()
+    manager.start = AsyncMock()
     return callback, manager
 
 
 class TestOnSummarySearchRedesign:
-    async def test_sends_catalog_keyboard(self, monkeypatch):
-        """on_summary_search заменяет footer на ReplyKeyboardMarkup каталога."""
-        from aiogram.types import ReplyKeyboardMarkup
+    async def test_deletes_old_dialog_message_before_catalog_dialog(self, monkeypatch):
+        """Catalog transition should remove the stale inline client-menu/funnel message."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.get_data = AsyncMock(return_value={})
 
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        callback.message.delete.assert_awaited_once()
+
+    async def test_starts_catalog_dialog_results(self, monkeypatch):
+        """on_summary_search should hand off into CatalogSG.results."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.get_data = AsyncMock(return_value={})
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        from aiogram_dialog import StartMode
+
+        from telegram_bot.dialogs.states import CatalogSG
+
+        manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
+
+    async def test_bootstraps_catalog_runtime(self, monkeypatch):
+        """on_summary_search stores catalog_runtime instead of legacy browsing state."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.get_data = AsyncMock(return_value={})
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        kwargs = state_mock.update_data.await_args.kwargs
+        assert "catalog_runtime" in kwargs
+        assert kwargs["catalog_runtime"]["source"] == "funnel"
+
+    async def test_deletes_old_dialog_message_before_catalog_keyboard(self, monkeypatch):
+        """on_summary_search removes the old dialog shell before sending catalog controls."""
         mock_svc = MagicMock()
         mock_svc.scroll_with_filters = AsyncMock(
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
@@ -995,34 +1056,8 @@ class TestOnSummarySearchRedesign:
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-        last_call = callback.message.answer.call_args_list[-1]
-        reply_markup = last_call.kwargs.get("reply_markup")
-        assert isinstance(reply_markup, ReplyKeyboardMarkup), (
-            "Ожидается ReplyKeyboardMarkup каталога"
-        )
-        button_texts = [btn.text for row in reply_markup.keyboard for btn in row]
-        assert any("Показать ещё" in t or "Все" in t for t in button_texts)
-        assert "🏠 Главное меню" in button_texts
-
-    async def test_sets_catalog_browsing_state(self, monkeypatch):
-        """on_summary_search sets CatalogBrowsingSG.browsing FSM state."""
-        mock_svc = MagicMock()
-        mock_svc.scroll_with_filters = AsyncMock(
-            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
-        )
-        mock_bot = MagicMock()
-        mock_bot._send_property_card = AsyncMock()
-
-        state_mock = MagicMock()
-        state_mock.update_data = AsyncMock()
-        state_mock.set_state = AsyncMock()
-
-        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
-        await funnel_module.on_summary_search(callback, MagicMock(), manager)
-
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
-
-        state_mock.set_state.assert_awaited_once_with(CatalogBrowsingSG.browsing)
+        manager.done.assert_awaited_once()
+        callback.message.delete.assert_awaited_once()
 
     async def test_sends_10_apartments(self, monkeypatch):
         """on_summary_search запрашивает limit=10 карточек."""
@@ -1034,7 +1069,7 @@ class TestOnSummarySearchRedesign:
         mock_bot._send_property_card = AsyncMock()
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
-        state_mock.set_state = AsyncMock()
+        state_mock.get_data = AsyncMock(return_value={})
 
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
@@ -1058,10 +1093,10 @@ def test_summary_has_list_and_cards_buttons():
 
 
 def test_summary_has_no_results_window():
-    """Funnel dialog must NOT have a results window (inline pagination removed)."""
+    """Funnel dialog must NOT have a results window of its own."""
     states = [w.get_state() for w in funnel_dialog.windows.values()]
     assert not any(str(s).endswith("results") for s in states), (
-        "Results window should be removed — inline pagination replaced by ReplyKeyboard"
+        "Results window should be removed — results are owned by CatalogSG"
     )
 
 
@@ -1158,6 +1193,7 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
     callback.message = MagicMock()
     callback.message.chat = MagicMock(id=456)
     callback.message.answer = AsyncMock()
+    callback.message.delete = AsyncMock()
 
     button = MagicMock()
     button.widget_id = "search_list"
@@ -1170,6 +1206,7 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
         "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
+    manager.start = AsyncMock()
 
     await funnel_module.on_summary_search(callback, button, manager)
 
