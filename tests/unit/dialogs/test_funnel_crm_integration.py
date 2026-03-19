@@ -46,7 +46,7 @@ async def test_summary_search_calls_lead_scoring(monkeypatch):
 
 
 async def test_summary_search_stores_filters_in_fsm(monkeypatch):
-    """on_summary_search stores apartment_filters in FSM state."""
+    """on_summary_search stores catalog_runtime in FSM state."""
     monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
 
     mock_svc = MagicMock()
@@ -77,7 +77,7 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
 
     state_mock = MagicMock()
     state_mock.update_data = AsyncMock()
-    state_mock.set_state = AsyncMock()
+    state_mock.get_data = AsyncMock(return_value={})
 
     callback = MagicMock()
     callback.from_user = MagicMock(id=1)
@@ -98,9 +98,9 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
 
     state_mock.update_data.assert_awaited_once()
     call_kwargs = state_mock.update_data.call_args[1]
-    assert "apartment_filters" in call_kwargs
-    assert "funnel_data" in call_kwargs
-    assert call_kwargs["funnel_data"]["city"] == "Элените"
+    assert "catalog_runtime" in call_kwargs
+    assert call_kwargs["catalog_runtime"]["filters"]["city"] == "Элените"
+    assert call_kwargs["catalog_runtime"]["origin_context"]["funnel_data"]["city"] == "Элените"
 
 
 async def test_zero_suggestion_rm_section():
