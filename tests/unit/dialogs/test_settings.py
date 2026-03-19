@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from telegram_bot.dialogs.settings import settings_dialog
 from telegram_bot.dialogs.states import SettingsSG
@@ -112,3 +112,25 @@ def test_crm_settings_key_contains_user_id():
     key = _crm_settings_key(1234)
     assert "1234" in key
     assert key.startswith("user:")
+
+
+async def test_language_selected_restarts_settings_root():
+    """Changing language should restart settings instead of closing the stack."""
+    from aiogram_dialog import StartMode
+
+    from telegram_bot.dialogs.settings import on_language_selected
+
+    callback = MagicMock()
+    callback.from_user.id = 42
+    button = MagicMock(widget_id="en")
+    manager = AsyncMock()
+    manager.middleware_data = {"user_service": AsyncMock()}
+
+    await on_language_selected(callback, button, manager)
+
+    manager.middleware_data["user_service"].set_locale.assert_awaited_once_with(
+        telegram_id=42,
+        locale="en",
+    )
+    manager.start.assert_awaited_once_with(SettingsSG.main, mode=StartMode.RESET_STACK)
+    manager.done.assert_not_called()
