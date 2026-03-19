@@ -144,6 +144,35 @@ def _iter_kbd_widgets(widget):
 
 
 # ============================================================
+# Runtime trace helpers
+# ============================================================
+
+
+class TestRuntimeTraceHelpers:
+    def test_snapshot_filter_context_includes_context_ids(self):
+        from telegram_bot.dialogs.filter_dialog import _snapshot_filter_context
+
+        ctx = SimpleNamespace(
+            state=SimpleNamespace(state="FilterSG:hub"),
+            start_data={"filters": {}},
+            widget_data={"r_city": "Варна"},
+            id="intent-test",
+            stack_id="stack-test",
+        )
+        manager = SimpleNamespace(
+            dialog_data={"city": "Варна"},
+            current_context=MagicMock(return_value=ctx),
+        )
+
+        snapshot = _snapshot_filter_context(manager)
+
+        assert snapshot["intent_id"] == "intent-test"
+        assert snapshot["stack_id"] == "stack-test"
+        assert snapshot["state"] == "FilterSG:hub"
+        assert snapshot["dialog_data"] == {"city": "Варна"}
+
+
+# ============================================================
 # Hub getter — get_hub_data
 # ============================================================
 
@@ -319,8 +348,8 @@ class TestOnApply:
 
 
 class TestOnReset:
-    async def test_restarts_filter_dialog_with_empty_filters(self):
-        from aiogram_dialog import StartMode
+    async def test_reopens_clean_filter_shell_with_empty_filters(self):
+        from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.filter_dialog import on_reset
 
@@ -329,13 +358,20 @@ class TestOnReset:
         widget_data = {"r_city": "Варна", "r_budget": "mid", "r_rooms": "2"}
         manager.current_context = MagicMock(return_value=SimpleNamespace(widget_data=widget_data))
         manager.find = MagicMock(return_value=AsyncMock(set_checked=AsyncMock()))
+        callback = MagicMock()
+        callback.message = MagicMock()
+        callback.message.delete = AsyncMock()
 
-        await on_reset(MagicMock(), MagicMock(), manager)
+        await on_reset(callback, MagicMock(), manager)
 
+        assert manager.show_mode == ShowMode.NO_UPDATE
+        manager.done.assert_awaited_once()
+        callback.message.delete.assert_awaited_once()
         manager.start.assert_awaited_once_with(
             FilterSG.hub,
             data={"filters": {}},
-            mode=StartMode.RESET_STACK,
+            mode=StartMode.NORMAL,
+            show_mode=ShowMode.SEND,
         )
 
 
