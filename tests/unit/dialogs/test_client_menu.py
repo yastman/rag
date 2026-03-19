@@ -77,8 +77,24 @@ def test_client_menu_launch_mode_root():
 
 def test_client_menu_search_starts_funnel_from_complex():
     """Search button must start funnel from the complex selection step (#697)."""
+    from aiogram_dialog import StartMode
+
     window = client_menu_dialog.windows[ClientMenuSG.main]
     buttons = getattr(window.keyboard, "buttons", ())
     funnel_start = next((btn for btn in buttons if getattr(btn, "widget_id", "") == "funnel"), None)
     assert funnel_start is not None
     assert getattr(funnel_start, "state", None) == FunnelSG.city
+    assert getattr(funnel_start, "mode", None) == StartMode.RESET_STACK
+
+
+def test_client_menu_root_starts_use_reset_stack():
+    """FAQ and settings root starts should also reset stale dialog stack."""
+    from aiogram_dialog import StartMode
+
+    window = client_menu_dialog.windows[ClientMenuSG.main]
+    buttons = {
+        getattr(btn, "widget_id", ""): btn for btn in getattr(window.keyboard, "buttons", ())
+    }
+
+    assert getattr(buttons["faq"], "mode", None) == StartMode.RESET_STACK
+    assert getattr(buttons["settings"], "mode", None) == StartMode.RESET_STACK
