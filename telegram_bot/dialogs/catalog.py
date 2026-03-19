@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from aiogram.enums import ContentType
@@ -23,6 +24,25 @@ from telegram_bot.services.catalog_session import (
 
 
 _PAGE_SIZE = 10
+
+
+def _message_for_actor(callback: CallbackQuery) -> Message | Any | None:
+    """Return a message object that reflects the clicking user as from_user."""
+    message = callback.message
+    actor = callback.from_user
+    if message is None or actor is None:
+        return message
+
+    model_copy = getattr(message, "model_copy", None)
+    if callable(model_copy):
+        with contextlib.suppress(Exception):
+            copied = model_copy(update={"from_user": actor})
+            copied.from_user = actor
+            return copied
+
+    with contextlib.suppress(Exception):
+        message.from_user = actor
+    return message
 
 
 async def _get_state(dialog_manager: DialogManager) -> FSMContext | None:
@@ -174,13 +194,14 @@ async def on_catalog_manager(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    if callback.message is None:
+    actor_message = _message_for_actor(callback)
+    if actor_message is None:
         return
     property_bot = manager.middleware_data.get("property_bot")
     state = await _get_state(manager)
     if property_bot is not None and state is not None:
         await property_bot._handle_manager(
-            callback.message,
+            actor_message,
             state=state,
             dialog_manager=manager,
             i18n=manager.middleware_data.get("i18n"),
@@ -192,12 +213,13 @@ async def on_catalog_viewing(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    if callback.message is None:
+    actor_message = _message_for_actor(callback)
+    if actor_message is None:
         return
     property_bot = manager.middleware_data.get("property_bot")
     state = await _get_state(manager)
     if property_bot is not None and state is not None:
-        await property_bot._handle_viewing(callback.message, state, manager)
+        await property_bot._handle_viewing(actor_message, state, manager)
 
 
 async def on_catalog_bookmarks(
@@ -205,12 +227,13 @@ async def on_catalog_bookmarks(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    if callback.message is None:
+    actor_message = _message_for_actor(callback)
+    if actor_message is None:
         return
     property_bot = manager.middleware_data.get("property_bot")
     state = await _get_state(manager)
     if property_bot is not None and state is not None:
-        await property_bot._handle_bookmarks(callback.message, state=state)
+        await property_bot._handle_bookmarks(actor_message, state=state)
 
 
 async def on_catalog_text_input(
