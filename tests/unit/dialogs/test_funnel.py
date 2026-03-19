@@ -1041,6 +1041,24 @@ class TestOnSummarySearchRedesign:
         assert "catalog_runtime" in kwargs
         assert kwargs["catalog_runtime"]["source"] == "funnel"
 
+    async def test_deletes_old_dialog_message_before_catalog_keyboard(self, monkeypatch):
+        """on_summary_search removes the old dialog shell before sending catalog controls."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        manager.done.assert_awaited_once()
+        callback.message.delete.assert_awaited_once()
+
     async def test_sends_10_apartments(self, monkeypatch):
         """on_summary_search запрашивает limit=10 карточек."""
         mock_svc = MagicMock()
