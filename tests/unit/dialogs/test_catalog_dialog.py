@@ -15,14 +15,23 @@ def test_catalog_dialog_has_results_window() -> None:
     assert CatalogSG.results in catalog_dialog.windows
 
 
-def test_catalog_results_window_has_expected_control_buttons() -> None:
+def test_catalog_results_window_has_no_inline_control_buttons() -> None:
     from telegram_bot.dialogs.catalog import catalog_dialog
 
     window = catalog_dialog.windows[CatalogSG.results]
     widget_ids = {getattr(widget, "widget_id", None) for widget in window.keyboard.buttons}
-    assert "catalog_more" in widget_ids
-    assert "catalog_filters" in widget_ids
-    assert "catalog_home" in widget_ids
+    assert "catalog_more" not in widget_ids
+    assert "catalog_filters" not in widget_ids
+    assert "catalog_home" not in widget_ids
+
+
+def test_catalog_results_window_keeps_message_input() -> None:
+    from aiogram_dialog.widgets.input import MessageInput
+
+    from telegram_bot.dialogs.catalog import catalog_dialog
+
+    window = catalog_dialog.windows[CatalogSG.results]
+    assert any(isinstance(widget, MessageInput) for widget in window.on_message.inputs)
 
 
 @pytest.mark.asyncio
