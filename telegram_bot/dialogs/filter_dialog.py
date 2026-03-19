@@ -42,6 +42,12 @@ logger = logging.getLogger(__name__)
 # IMPORTANT: use "any" (not "") — aiogram-dialog widgets skip empty item_ids.
 _ANY_OPTION = ("Любой", "any")
 
+
+def _has_filter_value(value: Any) -> bool:
+    """Return True only for meaningful filter values used by the dialog."""
+    return value not in (None, "", "any", "None")
+
+
 # ============================================================
 # Hub getter
 # ============================================================
@@ -72,11 +78,11 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     lines: list[str] = []
 
     city_val = dd.get("city")
-    if city_val:
+    if _has_filter_value(city_val):
         lines.append(f"📍 Город: {city_val}")
 
     rooms_val = dd.get("rooms")
-    if rooms_val is not None:
+    if _has_filter_value(rooms_val):
         try:
             label = ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val))
         except (ValueError, TypeError):
@@ -84,27 +90,27 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         lines.append(f"🛏 Комнаты: {label}")
 
     budget_val = dd.get("budget")
-    if budget_val:
+    if _has_filter_value(budget_val):
         lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(str(budget_val), str(budget_val))}")
 
     view_val = dd.get("view")
-    if view_val:
+    if _has_filter_value(view_val):
         lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(view_val, view_val)}")
 
     area_val = dd.get("area")
-    if area_val:
+    if _has_filter_value(area_val):
         lines.append(f"📐 Площадь: {AREA_DISPLAY.get(area_val, area_val)}")
 
     floor_val = dd.get("floor")
-    if floor_val:
+    if _has_filter_value(floor_val):
         lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(floor_val, floor_val)}")
 
     complex_val = dd.get("complex")
-    if complex_val:
+    if _has_filter_value(complex_val):
         lines.append(f"🏘 Комплекс: {complex_val}")
 
     furnished_val = dd.get("furnished")
-    if furnished_val:
+    if _has_filter_value(furnished_val):
         label = {"true": "Да", "false": "Нет"}.get(furnished_val, furnished_val)
         lines.append(f"🛋 Мебель: {label}")
 
@@ -404,12 +410,12 @@ async def on_reset(
         "promotion",
     ):
         manager.dialog_data.pop(key, None)
-    # Reset all Radio widgets to unchecked
-    for radio_id in _FIELD_TO_RADIO_ID.values():
-        with contextlib.suppress(Exception):
-            radio_widget = manager.find(radio_id)
-            if radio_widget is not None:
-                await radio_widget.set_checked(None)
+    # Clear Radio widget state directly: aiogram-dialog does not support
+    # unchecking Radio via set_checked(None) and stores state in widget_data.
+    with contextlib.suppress(Exception):
+        widget_data = manager.current_context().widget_data
+        for radio_id in _FIELD_TO_RADIO_ID.values():
+            widget_data.pop(radio_id, None)
 
 
 # ============================================================
