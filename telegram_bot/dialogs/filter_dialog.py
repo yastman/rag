@@ -14,16 +14,16 @@ Flow:
 from __future__ import annotations
 
 import contextlib
-import inspect
 import logging
 from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
+from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
 from telegram_bot.dialogs.filter_constants import (
     AREA_OPTIONS,
     BUDGET_OPTIONS,
@@ -409,9 +409,8 @@ async def on_apply(
             await msg.delete()
 
     if not results:
-        maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
-        if inspect.isawaitable(maybe_start):
-            await maybe_start
+        await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
+        await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
         return
 
     await send_catalog_results(
@@ -423,9 +422,8 @@ async def on_apply(
         shown_start=1,
         telegram_id=callback.from_user.id if callback.from_user else 0,
     )
-    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
-    if inspect.isawaitable(maybe_start):
-        await maybe_start
+    await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
+    await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
 
 
 # ============================================================
