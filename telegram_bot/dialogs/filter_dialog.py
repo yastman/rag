@@ -36,6 +36,7 @@ from telegram_bot.dialogs.filter_constants import (
 )
 from telegram_bot.dialogs.root_nav import get_main_menu_label, root_menu_button
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import (
     CATALOG_RUNTIME_DATA_KEY,
@@ -421,6 +422,15 @@ async def on_apply(
         view_mode=runtime.get("view_mode", "cards"),
         shown_start=1,
         telegram_id=callback.from_user.id if callback.from_user else 0,
+        reply_markup=(
+            build_catalog_keyboard(
+                shown=len(results),
+                total=total_count,
+                i18n=manager.middleware_data.get("i18n"),
+            )
+            if runtime.get("view_mode", "cards") == "list"
+            else None
+        ),
     )
     await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
     await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)

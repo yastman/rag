@@ -74,6 +74,14 @@ def _control_text(runtime: CatalogRuntime) -> str:
     return "\n".join(lines)
 
 
+def _catalog_reply_markup(runtime: CatalogRuntime, *, i18n: Any = None) -> Any:
+    return build_catalog_keyboard(
+        shown=int(runtime.get("shown_count", 0) or 0),
+        total=int(runtime.get("total", 0) or 0),
+        i18n=i18n,
+    )
+
+
 async def clear_catalog_controls(
     *,
     message: Message,
@@ -107,13 +115,16 @@ async def show_catalog_controls(
                 message_id=int(control_message_id),
             )
     i18n = dialog_manager.middleware_data.get("i18n")
+    if (
+        text is None
+        and current_runtime.get("view_mode") == "list"
+        and int(current_runtime.get("total", 0) or 0) > 0
+    ):
+        await _update_catalog_runtime(dialog_manager, current_runtime)
+        return current_runtime
     sent = await message.answer(
         text or _control_text(current_runtime),
-        reply_markup=build_catalog_keyboard(
-            shown=int(current_runtime.get("shown_count", 0) or 0),
-            total=int(current_runtime.get("total", 0) or 0),
-            i18n=i18n,
-        ),
+        reply_markup=_catalog_reply_markup(current_runtime, i18n=i18n),
     )
     message_id = getattr(sent, "message_id", None)
     if isinstance(message_id, int):
@@ -179,6 +190,7 @@ async def load_next_catalog_page(
     effective_telegram_id = telegram_id if telegram_id is not None else 0
     if not effective_telegram_id and message.from_user:
         effective_telegram_id = message.from_user.id
+    i18n = dialog_manager.middleware_data.get("i18n")
     await send_catalog_results(
         message=message,
         property_bot=property_bot,
@@ -187,6 +199,18 @@ async def load_next_catalog_page(
         view_mode=runtime.get("view_mode", "cards"),
         shown_start=shown_count + 1,
         telegram_id=effective_telegram_id,
+        reply_markup=(
+            _catalog_reply_markup(
+                {
+                    **runtime,
+                    "shown_count": shown_count + len(results),
+                    "total": total_count,
+                },
+                i18n=i18n,
+            )
+            if runtime.get("view_mode", "cards") == "list"
+            else None
+        ),
     )
 
     updated = update_catalog_runtime_page(
