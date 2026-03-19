@@ -83,3 +83,30 @@ async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> No
         mode=StartMode.RESET_STACK,
         show_mode=ShowMode.SEND,
     )
+
+
+@pytest.mark.asyncio
+async def test_show_catalog_controls_skips_status_message_for_list_mode() -> None:
+    from telegram_bot.dialogs.catalog import show_catalog_controls
+
+    manager = AsyncMock()
+    state = AsyncMock()
+    state.get_data.return_value = {}
+    manager.middleware_data = {"state": state, "i18n": None}
+    message = MagicMock()
+    message.answer = AsyncMock()
+    message.chat = MagicMock(id=456)
+    message.bot = MagicMock(delete_message=AsyncMock())
+
+    runtime = {
+        "view_mode": "list",
+        "shown_count": 5,
+        "total": 5,
+        "query": "funnel:Солнечный берег",
+        "source": "funnel",
+    }
+
+    updated = await show_catalog_controls(message=message, dialog_manager=manager, runtime=runtime)
+
+    assert updated["view_mode"] == "list"
+    message.answer.assert_not_awaited()

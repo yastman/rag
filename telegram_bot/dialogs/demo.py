@@ -16,6 +16,7 @@ from aiogram_dialog.widgets.text import Format
 from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
 from telegram_bot.dialogs.states import CatalogSG, DemoSG
 from telegram_bot.handlers.demo_handler import transcribe_voice
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
 from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import CATALOG_RUNTIME_DATA_KEY, build_catalog_runtime
@@ -189,6 +190,11 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
         view_mode="list",
         shown_start=1,
         telegram_id=message.from_user.id if message.from_user else 0,
+        reply_markup=build_catalog_keyboard(
+            shown=len(results),
+            total=total_count,
+            i18n=manager.middleware_data.get("i18n"),
+        ),
     )
     await show_catalog_controls(message=message, dialog_manager=manager, runtime=runtime)
     await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
