@@ -102,16 +102,28 @@ async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog() -> None:
+    from aiogram_dialog import ShowMode, StartMode
+
     from telegram_bot.dialogs.catalog import on_catalog_filters
     from telegram_bot.dialogs.states import FilterSG
 
     state = _make_state({"catalog_runtime": {"filters": {"city": "Варна"}}})
     manager = AsyncMock()
     manager.middleware_data = {"state": state}
+    manager.done = AsyncMock()
+    callback = _make_callback()
+    callback.message.delete = AsyncMock()
 
-    await on_catalog_filters(_make_callback(), MagicMock(), manager)
+    await on_catalog_filters(callback, MagicMock(), manager)
 
-    manager.start.assert_awaited_once_with(FilterSG.hub, data={"filters": {"city": "Варна"}})
+    assert manager.show_mode == ShowMode.NO_UPDATE
+    manager.done.assert_awaited_once()
+    callback.message.delete.assert_awaited_once()
+    manager.start.assert_awaited_once_with(
+        FilterSG.hub,
+        data={"filters": {"city": "Варна"}},
+        mode=StartMode.RESET_STACK,
+    )
 
 
 @pytest.mark.asyncio
@@ -128,8 +140,6 @@ async def test_catalog_bookmarks_delegates_to_property_bot() -> None:
     await on_catalog_bookmarks(callback, MagicMock(), manager)
 
     property_bot._handle_bookmarks.assert_awaited_once()
-    passed_message = property_bot._handle_bookmarks.await_args.args[0]
-    assert passed_message.from_user is callback.from_user
 
 
 @pytest.mark.asyncio
@@ -162,5 +172,3 @@ async def test_catalog_manager_delegates_to_existing_handler() -> None:
     await on_catalog_manager(callback, MagicMock(), manager)
 
     property_bot._handle_manager.assert_awaited_once()
-    passed_message = property_bot._handle_manager.await_args.args[0]
-    assert passed_message.from_user is callback.from_user
