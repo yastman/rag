@@ -19,7 +19,7 @@ from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
@@ -483,8 +483,11 @@ async def on_reset(
     manager: DialogManager,
 ) -> None:
     """Clear all filters from dialog_data and reset Radio widgets."""
-    _clear_filter_dialog_state(manager)
-    await manager.update({})
+    await manager.start(
+        FilterSG.hub,
+        data={"filters": {}},
+        mode=StartMode.RESET_STACK,
+    )
 
 
 # ============================================================
