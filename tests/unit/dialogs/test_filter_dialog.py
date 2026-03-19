@@ -269,12 +269,15 @@ class TestOnReset:
 
         manager = AsyncMock()
         manager.dialog_data = {"city": "Варна", "budget": "mid", "rooms": 2}
+        widget_data = {"r_city": "Варна", "r_budget": "mid", "r_rooms": "2"}
+        manager.current_context = MagicMock(return_value=SimpleNamespace(widget_data=widget_data))
         manager.find = MagicMock(return_value=AsyncMock(set_checked=AsyncMock()))
 
         await on_reset(MagicMock(), MagicMock(), manager)
 
         for field in ("city", "budget", "rooms"):
             assert manager.dialog_data.get(field) is None or field not in manager.dialog_data
+        assert widget_data == {}
 
 
 # ============================================================
@@ -604,6 +607,25 @@ class TestHubDisplaysActiveFilters:
 
         manager = SimpleNamespace(
             dialog_data={},
+            middleware_data={"apartments_service": None},
+        )
+        result = await get_hub_data(dialog_manager=manager)
+        assert result["active_filters"] == "Фильтры не заданы"
+
+    async def test_hub_ignores_stale_none_strings(self):
+        from telegram_bot.dialogs.filter_dialog import get_hub_data
+
+        manager = SimpleNamespace(
+            dialog_data={
+                "city": "None",
+                "rooms": "None",
+                "budget": "None",
+                "view": "None",
+                "area": "None",
+                "floor": "None",
+                "complex": "None",
+                "furnished": "None",
+            },
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
