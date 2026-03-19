@@ -54,6 +54,7 @@ def build_catalog_runtime(
     result_items = results or []
     visible_ids = shown_item_ids or _extract_result_ids(result_items)
     deduped_ids = _dedupe_ids(visible_ids)
+    shown_count = len(result_items) if result_items else len(visible_ids)
 
     runtime: CatalogRuntime = {
         "query": query,
@@ -61,7 +62,7 @@ def build_catalog_runtime(
         "filters": dict(filters or {}),
         "view_mode": view_mode,
         "total": total,
-        "shown_count": len(deduped_ids),
+        "shown_count": shown_count,
         "next_offset": next_offset,
         "shown_item_ids": deduped_ids,
         "current_item_id": current_item_id,
@@ -83,9 +84,10 @@ def update_catalog_runtime_page(
     updated: CatalogRuntime = dict(runtime)
     new_ids = shown_item_ids or _extract_result_ids(results or [])
     merged_ids = _dedupe_ids([*(updated.get("shown_item_ids") or []), *new_ids])
+    page_count = len(results or []) if results is not None else len(new_ids)
 
     updated["shown_item_ids"] = merged_ids
-    updated["shown_count"] = len(merged_ids)
+    updated["shown_count"] = int(updated.get("shown_count", 0) or 0) + page_count
 
     if total is not None:
         updated["total"] = total
