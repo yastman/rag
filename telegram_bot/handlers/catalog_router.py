@@ -6,6 +6,7 @@ proper aiogram FSM state routing.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -15,7 +16,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from aiogram_dialog import DialogManager, StartMode
 
-from telegram_bot.dialogs.states import CatalogBrowsingSG, FilterSG
+from telegram_bot.dialogs.states import CatalogBrowsingSG, ClientMenuSG, FilterSG
 from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard, build_client_keyboard
 
 
@@ -166,16 +167,18 @@ async def handle_catalog_manager(
     F.text == "🏠 Главное меню",
     flags={"rate_limit": {"rate": 0.6, "key": "catalog_exit"}},
 )
-async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
-    """Exit catalog mode and restore main keyboard."""
-    await state.set_state(None)
-    await state.update_data(
-        apartment_offset=None,
-        apartment_total=None,
-        apartment_next_offset=None,
-        apartment_scroll_seen_ids=None,
-        apartment_filters=None,
-    )
+async def handle_catalog_exit(
+    message: Message,
+    state: FSMContext,
+    dialog_manager: DialogManager | None = None,
+) -> None:
+    """Exit catalog mode and return through the SDK client root when possible."""
+    maybe_clear = state.clear()
+    if inspect.isawaitable(maybe_clear):
+        await maybe_clear
+    if dialog_manager is not None:
+        await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+        return
     await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
 
 

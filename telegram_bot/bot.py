@@ -889,7 +889,7 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ):
-        """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
+        """Handle /start command with SDK-native root menus when available."""
         assert message.from_user is not None
 
         role = await self._resolve_user_role(message.from_user.id)
@@ -901,8 +901,14 @@ class PropertyBot:
             from .dialogs.states import ManagerMenuSG
 
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
+        elif dialog_manager is not None:
+            from aiogram_dialog import StartMode
+
+            from .dialogs.states import ClientMenuSG
+
+            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
-            # Client: persistent ReplyKeyboard (#628)
+            # ReplyKeyboard remains only as a no-dialog fallback path.
             name = message.from_user.first_name or ""
             if i18n is not None:
                 welcome = i18n.get("welcome-text", name=name)
@@ -4730,9 +4736,10 @@ class PropertyBot:
         setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
         logger.info("i18n middleware ready")
 
-        # Setup aiogram-dialog (#658: removed dead client_menu_dialog)
+        # Setup aiogram-dialog routers, including the client root shell.
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
+        from .dialogs.client_menu import client_menu_dialog
         from .dialogs.crm_ai_advisor import advisor_dialog
         from .dialogs.crm_contacts import (
             contacts_menu_dialog,
@@ -4760,6 +4767,7 @@ class PropertyBot:
         # CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (#697)
         self.dp.include_router(create_crm_router())
 
+        self.dp.include_router(client_menu_dialog)
         self.dp.include_router(manager_menu_dialog)
         self.dp.include_router(leads_menu_dialog)
         self.dp.include_router(create_lead_dialog)
