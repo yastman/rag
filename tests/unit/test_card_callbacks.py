@@ -168,6 +168,20 @@ async def test_card_callback_fallbacks_to_favorites_when_state_missing() -> None
         bot._favorites_service.list.assert_awaited_once_with(telegram_id=12345)
 
 
+async def test_card_callback_uses_catalog_runtime_results() -> None:
+    """Dialog-owned catalog flow should preserve viewing metadata for card callbacks."""
+    bot = _create_bot()
+    state = _make_state({"catalog_runtime": {"results": [_sample_result("prop-42")]}})
+    callback = _make_callback("card:viewing:prop-42")
+
+    _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
+    with patch(_patch, new_callable=AsyncMock) as mock_spc:
+        await bot.handle_card_callback(callback, state)
+
+        call_kwargs = mock_spc.call_args.kwargs
+        assert call_kwargs["viewing_objects"][0]["id"] == "prop-42"
+
+
 async def test_card_callback_unknown_action_answers_empty() -> None:
     """card:unknown:{id} → just answer() without crash."""
     bot = _create_bot()

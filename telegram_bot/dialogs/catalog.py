@@ -83,6 +83,7 @@ async def load_next_catalog_page(
     *,
     message: Message,
     dialog_manager: DialogManager,
+    telegram_id: int | None = None,
 ) -> CatalogRuntime:
     runtime = await _get_catalog_runtime(dialog_manager)
     shown_count = int(runtime.get("shown_count", 0) or 0)
@@ -111,7 +112,9 @@ async def load_next_catalog_page(
         exclude_ids=runtime.get("shown_item_ids") or None,
     )
 
-    telegram_id = message.from_user.id if message.from_user else 0
+    effective_telegram_id = telegram_id if telegram_id is not None else 0
+    if not effective_telegram_id and message.from_user:
+        effective_telegram_id = message.from_user.id
     await send_catalog_results(
         message=message,
         property_bot=property_bot,
@@ -119,7 +122,7 @@ async def load_next_catalog_page(
         total_count=total_count,
         view_mode=runtime.get("view_mode", "cards"),
         shown_start=shown_count + 1,
-        telegram_id=telegram_id,
+        telegram_id=effective_telegram_id,
     )
 
     updated = update_catalog_runtime_page(
@@ -140,7 +143,11 @@ async def on_catalog_more(
 ) -> None:
     if callback.message is None:
         return
-    await load_next_catalog_page(message=callback.message, dialog_manager=manager)
+    await load_next_catalog_page(
+        message=callback.message,
+        dialog_manager=manager,
+        telegram_id=callback.from_user.id if callback.from_user else None,
+    )
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(CatalogSG.results)
 
