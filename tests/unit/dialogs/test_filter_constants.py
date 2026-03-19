@@ -159,6 +159,10 @@ class TestBuildFiltersDict:
         result = build_filters_dict({"city": "any"})
         assert "city" not in result
 
+    def test_string_none_excluded(self):
+        result = build_filters_dict({"city": "None", "rooms": "None"})
+        assert result == {}
+
     def test_complex_maps_to_complex_name(self):
         result = build_filters_dict({"complex": "Premier Fort"})
         assert result == {"complex_name": "Premier Fort"}
