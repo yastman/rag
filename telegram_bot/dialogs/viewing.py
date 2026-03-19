@@ -16,6 +16,7 @@ from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Select
 from aiogram_dialog.widgets.text import Format
 
+from .root_nav import get_main_menu_label, root_menu_button
 from .states import HandoffSG, ViewingSG
 
 
@@ -60,6 +61,11 @@ async def get_date_options(
         "title": "📅 Выберите удобную дату для осмотра апартаментов",
         "items": [(label, key) for key, label in items],
         "btn_cancel": "✉ Написать менеджеру",
+        "btn_main_menu": get_main_menu_label(
+            getattr(dialog_manager, "middleware_data", {}).get("i18n")
+            if dialog_manager is not None
+            else None
+        ),
     }
 
 
@@ -128,6 +134,7 @@ viewing_dialog = Dialog(
                 on_click=on_date_selected,
             ),
         ),
+        root_menu_button(),
         Button(Format("{btn_cancel}"), id="cancel", on_click=on_cancel_to_manager),
         getter=get_date_options,
         state=ViewingSG.date,
