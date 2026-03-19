@@ -35,7 +35,6 @@ from .handlers.handoff import (
     start_qualification,
 )
 from .keyboards.client_keyboard import (
-    build_client_keyboard,
     parse_menu_button,
 )
 from .middlewares import setup_error_handler, setup_throttling_middleware
@@ -931,7 +930,7 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ):
-        """Handle /start command with SDK-native root menus when available."""
+        """Handle /start command with lower-menu client root and SDK dialogs for flows."""
         assert message.from_user is not None
 
         role = await self._resolve_user_role(message.from_user.id)
@@ -943,23 +942,13 @@ class PropertyBot:
             from .dialogs.states import ManagerMenuSG
 
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
-        elif dialog_manager is not None:
-            from aiogram_dialog import StartMode
-
-            from .dialogs.states import ClientMenuSG
-
-            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
-            # ReplyKeyboard remains only as a no-dialog fallback path.
-            name = message.from_user.first_name or ""
-            if i18n is not None:
-                welcome = i18n.get("welcome-text", name=name)
-            else:
-                from .services.content_loader import load_services_config
+            if dialog_manager is not None:
+                with contextlib.suppress(Exception):
+                    await dialog_manager.reset_stack(remove_keyboard=True)
+            from .dialogs.root_nav import show_client_main_menu
 
-                cfg = load_services_config()
-                welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
-            await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
+            await show_client_main_menu(message, i18n=i18n)
 
     async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
         """Handle Mini App deep link: /start q_<uuid>.
