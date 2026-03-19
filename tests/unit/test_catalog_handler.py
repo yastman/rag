@@ -68,6 +68,39 @@ async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
+    from telegram_bot.dialogs.catalog import on_catalog_more
+
+    state = _make_state(
+        {
+            "catalog_runtime": {
+                "shown_count": 0,
+                "total": 1,
+                "next_offset": 1.0,
+                "shown_item_ids": [],
+                "filters": {},
+                "view_mode": "cards",
+            }
+        }
+    )
+    svc = MagicMock()
+    svc.scroll_with_filters = AsyncMock(return_value=([{"id": "apt-2"}], 1, None, ["apt-2"]))
+    property_bot = MagicMock()
+    property_bot._apartments_service = svc
+    property_bot._send_property_card = AsyncMock()
+    manager = AsyncMock()
+    manager.middleware_data = {"state": state, "property_bot": property_bot}
+    callback = _make_callback()
+    callback.message.from_user = MagicMock(id=999999)
+
+    await on_catalog_more(callback, MagicMock(), manager)
+
+    property_bot._send_property_card.assert_awaited_once_with(
+        callback.message, {"id": "apt-2"}, 123
+    )
+
+
+@pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_filters
     from telegram_bot.dialogs.states import FilterSG
