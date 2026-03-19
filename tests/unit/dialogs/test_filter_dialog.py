@@ -278,6 +278,74 @@ class TestOnReset:
 
 
 # ============================================================
+# on_filter_dialog_start — clears stale state on reopen
+# ============================================================
+
+
+class TestOnFilterDialogStart:
+    async def test_clears_stale_dialog_data_when_reopened_without_filters(self):
+        from telegram_bot.dialogs.filter_dialog import on_filter_dialog_start
+
+        manager = MagicMock()
+        manager.dialog_data = {
+            "city": "Бургас",
+            "rooms": "3",
+            "budget": "mid",
+        }
+
+        radio_widgets = {
+            radio_id: AsyncMock(set_checked=AsyncMock())
+            for radio_id in (
+                "r_city",
+                "r_rooms",
+                "r_budget",
+                "r_view",
+                "r_area",
+                "r_floor",
+                "r_complex",
+                "r_furnished",
+                "r_promotion",
+            )
+        }
+        manager.find = MagicMock(side_effect=lambda radio_id: radio_widgets[radio_id])
+
+        await on_filter_dialog_start({"filters": {}}, manager)
+
+        assert manager.dialog_data == {}
+        for widget in radio_widgets.values():
+            widget.set_checked.assert_awaited_once_with(None)
+
+    async def test_populates_dialog_data_from_existing_filters(self):
+        from telegram_bot.dialogs.filter_dialog import on_filter_dialog_start
+
+        manager = MagicMock()
+        manager.dialog_data = {"city": "stale"}
+
+        radio_widgets = {
+            radio_id: AsyncMock(set_checked=AsyncMock())
+            for radio_id in (
+                "r_city",
+                "r_rooms",
+                "r_budget",
+                "r_view",
+                "r_area",
+                "r_floor",
+                "r_complex",
+                "r_furnished",
+                "r_promotion",
+            )
+        }
+        manager.find = MagicMock(side_effect=lambda radio_id: radio_widgets[radio_id])
+
+        await on_filter_dialog_start({"filters": {"city": "Несебр", "rooms": 2}}, manager)
+
+        assert manager.dialog_data["city"] == "Несебр"
+        assert manager.dialog_data["rooms"] == "2"
+        radio_widgets["r_city"].set_checked.assert_awaited_once_with("Несебр")
+        radio_widgets["r_rooms"].set_checked.assert_awaited_once_with("2")
+
+
+# ============================================================
 # Getter tests — all use "any" sentinel
 # ============================================================
 
