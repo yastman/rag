@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, LaunchMode, Window
+from aiogram_dialog import Dialog, DialogManager, LaunchMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Start
 from aiogram_dialog.widgets.text import Format
 
@@ -91,6 +91,7 @@ client_menu_dialog = Dialog(
                 Format("{btn_search}"),
                 id="funnel",
                 state=FunnelSG.city,
+                mode=StartMode.RESET_STACK,
             ),
             Button(
                 Format("{btn_catalog}"),
@@ -121,6 +122,7 @@ client_menu_dialog = Dialog(
                 Format("{btn_faq}"),
                 id="faq",
                 state=FaqSG.main,
+                mode=StartMode.RESET_STACK,
             ),
             Button(
                 Format("{btn_manager}"),
@@ -131,6 +133,7 @@ client_menu_dialog = Dialog(
                 Format("{btn_settings}"),
                 id="settings",
                 state=SettingsSG.main,
+                mode=StartMode.RESET_STACK,
             ),
         ),
         getter=get_menu_data,
