@@ -7,10 +7,11 @@ import logging
 from typing import Any
 
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, Window
-from aiogram_dialog.widgets.kbd import Button, Cancel, Column, SwitchTo
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog.widgets.kbd import Button, Column, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
+from .root_nav import back_to_main_menu_button, get_main_menu_label, root_menu_button
 from .states import SettingsSG
 
 
@@ -71,24 +72,32 @@ async def get_settings_data(i18n: Any = None, **kwargs: Any) -> dict[str, str]:
             "btn_language": "Язык",
             "btn_crm": "🔔 CRM настройки",
             "btn_back": "Назад",
+            "btn_main_menu": get_main_menu_label(),
         }
     return {
         "title": i18n.get("settings-title"),
         "btn_language": i18n.get("settings-language"),
         "btn_crm": "🔔 CRM настройки",
         "btn_back": i18n.get("back"),
+        "btn_main_menu": get_main_menu_label(i18n),
     }
 
 
 async def get_language_data(i18n: Any = None, **kwargs: Any) -> dict[str, Any]:
     """Getter for language selection window."""
     if i18n is None:
-        return {"title": "Язык", "btn_back": "Назад", "languages": _SUPPORTED_LOCALES}
+        return {
+            "title": "Язык",
+            "btn_back": "Назад",
+            "btn_main_menu": get_main_menu_label(),
+            "languages": _SUPPORTED_LOCALES,
+        }
 
     languages = [(code, i18n.get(label_key)) for code, label_key in _SUPPORTED_LOCALES]
     return {
         "title": i18n.get("settings-language"),
         "btn_back": i18n.get("back"),
+        "btn_main_menu": get_main_menu_label(i18n),
         "languages": languages,
     }
 
@@ -111,8 +120,8 @@ async def on_language_selected(
             logger.warning(
                 "Failed to save locale for user %s", callback.from_user.id, exc_info=True
             )
-    # Restart dialog to apply new locale
-    await manager.done()
+    # Restart the settings root instead of closing the stack entirely.
+    await manager.start(SettingsSG.main, mode=StartMode.RESET_STACK)
 
 
 # --- CRM settings window getters/handlers ---
@@ -152,6 +161,7 @@ async def get_crm_settings_data(
         "briefing": f"⏰ Брифинг: {briefing}",
         "card_lang": f"🌐 Язык карточек: {lang}",
         "btn_back": "← Назад",
+        "btn_main_menu": get_main_menu_label(kwargs.get("i18n")),
     }
 
 
@@ -224,7 +234,8 @@ settings_dialog = Dialog(
                 state=SettingsSG.crm,
             ),
         ),
-        Cancel(Format("{btn_back}")),
+        root_menu_button(),
+        back_to_main_menu_button(widget_id="settings_back"),
         getter=get_settings_data,
         state=SettingsSG.main,
     ),
@@ -236,6 +247,7 @@ settings_dialog = Dialog(
             Button(Const("English"), id="en", on_click=on_language_selected),
             Button(Const("Українська"), id="uk", on_click=on_language_selected),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="back_to_settings", state=SettingsSG.main),
         getter=get_language_data,
         state=SettingsSG.language,
@@ -260,6 +272,7 @@ settings_dialog = Dialog(
                 on_click=on_toggle_card_lang,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="crm_back_to_settings", state=SettingsSG.main),
         getter=get_crm_settings_data,
         state=SettingsSG.crm,
