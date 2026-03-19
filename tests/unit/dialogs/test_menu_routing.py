@@ -21,8 +21,10 @@ def mock_config():
 
 
 async def test_cmd_start_client_starts_client_menu(mock_config):
-    """cmd_start sends ReplyKeyboard for client users."""
-    from aiogram.types import ReplyKeyboardMarkup
+    """cmd_start routes client users into the client root dialog."""
+    from aiogram_dialog import StartMode
+
+    from telegram_bot.dialogs.states import ClientMenuSG
 
     dialog_manager = AsyncMock()
     message = MagicMock()
@@ -44,10 +46,8 @@ async def test_cmd_start_client_starts_client_menu(mock_config):
 
         await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_not_called()
-    message.answer.assert_called_once()
-    _, kwargs = message.answer.call_args
-    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
+    dialog_manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+    message.answer.assert_not_called()
 
 
 async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
@@ -80,8 +80,10 @@ async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
 
 
 async def test_cmd_start_manager_without_kommo_starts_client_menu(mock_config):
-    """cmd_start sends ReplyKeyboard for manager when kommo is disabled."""
-    from aiogram.types import ReplyKeyboardMarkup
+    """Managers without CRM mode should also land in the client root dialog."""
+    from aiogram_dialog import StartMode
+
+    from telegram_bot.dialogs.states import ClientMenuSG
 
     mock_config.kommo_enabled = False
     dialog_manager = AsyncMock()
@@ -104,10 +106,8 @@ async def test_cmd_start_manager_without_kommo_starts_client_menu(mock_config):
 
         await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_not_called()
-    message.answer.assert_called_once()
-    _, kwargs = message.answer.call_args
-    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
+    dialog_manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+    message.answer.assert_not_called()
 
 
 async def test_cmd_start_fallback_without_dialog_manager(mock_config):

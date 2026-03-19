@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 import operator
 from typing import Any
 
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import (
     Back,
     Button,
@@ -23,6 +24,11 @@ from aiogram_dialog.widgets.kbd import (
 )
 from aiogram_dialog.widgets.text import Format
 
+from telegram_bot.dialogs.root_nav import (
+    back_to_main_menu_button,
+    get_main_menu_label,
+    root_menu_button,
+)
 from telegram_bot.observability import observe
 
 from .filter_constants import (
@@ -303,6 +309,7 @@ async def get_city_options(**kwargs: Any) -> dict[str, Any]:
         "title": "Выберите город:",
         "items": items,
         "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
     }
 
 
@@ -317,7 +324,12 @@ async def get_property_types(**kwargs: Any) -> dict[str, Any]:
         ("Любой тип", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "Назад"
-    return {"title": "Какой тип жилья?", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Какой тип жилья?",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
@@ -332,7 +344,12 @@ async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
         ("Любой бюджет", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "Назад"
-    return {"title": "Какой бюджет?", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Какой бюджет?",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 def _compute_active_pref_categories(data: dict[str, Any]) -> list[str]:
@@ -380,6 +397,7 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
         "title": "✨ Есть ли дополнительные пожелания?",
         "items": _PREF_ITEMS,
         "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
     }
 
 
@@ -394,7 +412,12 @@ async def get_pref_floor_options(**kwargs: Any) -> dict[str, Any]:
         ("Любой этаж", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Какой этаж предпочитаете?", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Какой этаж предпочитаете?",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_pref_view_options(**kwargs: Any) -> dict[str, Any]:
@@ -408,7 +431,12 @@ async def get_pref_view_options(**kwargs: Any) -> dict[str, Any]:
         ("Любой вид", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Какой вид предпочитаете?",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_pref_furnished_options(**kwargs: Any) -> dict[str, Any]:
@@ -420,7 +448,12 @@ async def get_pref_furnished_options(**kwargs: Any) -> dict[str, Any]:
         ("Не важно", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Меблировка:", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Меблировка:",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_pref_promotion_options(**kwargs: Any) -> dict[str, Any]:
@@ -431,7 +464,12 @@ async def get_pref_promotion_options(**kwargs: Any) -> dict[str, Any]:
         ("Неважно", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Специальные акции:", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Специальные акции:",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_pref_area_options(**kwargs: Any) -> dict[str, Any]:
@@ -446,7 +484,12 @@ async def get_pref_area_options(**kwargs: Any) -> dict[str, Any]:
         ("Любая площадь", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Какую площадь предпочитаете?", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Какую площадь предпочитаете?",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
@@ -471,7 +514,12 @@ async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
         items = list(_COMPLEX_OPTIONS[:-1])
 
     items.append(("Любой комплекс", "any"))
-    return {"title": "Выберите комплекс:", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Выберите комплекс:",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_pref_section_options(**kwargs: Any) -> dict[str, Any]:
@@ -496,7 +544,12 @@ async def get_pref_section_options(**kwargs: Any) -> dict[str, Any]:
         items = list(_SECTION_OPTIONS[:-1])
 
     items.append(("Любая секция", "any"))
-    return {"title": "Выберите секцию:", "items": items, "btn_back": btn_back}
+    return {
+        "title": "Выберите секцию:",
+        "items": items,
+        "btn_back": btn_back,
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
@@ -581,6 +634,11 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     return {
         "summary_text": summary_text,
         "can_search": True,
+        "btn_main_menu": get_main_menu_label(
+            getattr(dialog_manager, "middleware_data", {}).get("i18n")
+            if dialog_manager is not None
+            else None
+        ),
     }
 
 
@@ -591,7 +649,13 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
         ("Тип жилья", "property_type"),
         ("Бюджет", "budget"),
     ]
-    return {"title": "Что хотите изменить?", "items": items, "btn_back": "← Назад"}
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    return {
+        "title": "Что хотите изменить?",
+        "items": items,
+        "btn_back": "← Назад",
+        "btn_main_menu": get_main_menu_label(i18n),
+    }
 
 
 _SCROLL_PAGE_SIZE = 10
@@ -755,8 +819,13 @@ async def on_summary_search(
     button: Button,
     manager: DialogManager,
 ) -> None:
-    """Search, send photo cards, close dialog, show catalog keyboard."""
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+    """Search, send results as ordinary messages, then hand off to CatalogSG."""
+    from telegram_bot.dialogs.states import CatalogSG
+    from telegram_bot.services.catalog_rendering import send_catalog_results
+    from telegram_bot.services.catalog_session import (
+        CATALOG_RUNTIME_DATA_KEY,
+        build_catalog_runtime,
+    )
 
     data = manager.dialog_data
     data.pop("scroll_start_from", None)
@@ -786,13 +855,16 @@ async def on_summary_search(
     except Exception:
         logger.exception("Failed to schedule funnel lead score persistence")
 
+    # Grab the current dialog message before closing the dialog context.
+    msg = callback.message
+
     # Resolve services
     svc = manager.middleware_data.get("apartments_service")
     property_bot = manager.middleware_data.get("property_bot")
     if svc is None and property_bot is not None:
         svc = getattr(property_bot, "_apartments_service", None)
 
-    if svc is None or callback.message is None:
+    if svc is None or msg is None:
         await manager.done()
         return
 
@@ -809,54 +881,52 @@ async def on_summary_search(
         await manager.done()
         return
 
-    # Close dialog before sending cards
+    # Close dialog and explicitly remove the old dialog shell before sending
+    # the catalog control-message to avoid duplicate control messages in chat.
+    manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
+    if hasattr(msg, "delete"):
+        with contextlib.suppress(Exception):
+            await msg.delete()
 
     # Determine view mode from button id
     view_mode = "list" if button.widget_id == "search_list" else "cards"
 
-    # Store results in FSMContext for pagination
     state = manager.middleware_data.get("state")
+    runtime = build_catalog_runtime(
+        query=f"funnel:{data.get('city', 'any')}",
+        source="funnel",
+        filters=filters,
+        view_mode=view_mode,
+        results=results,
+        total=total_count,
+        next_offset=_next_start,
+        shown_item_ids=_page_ids,
+        bookmarks_context=False,
+        origin_context={"funnel_data": dict(data)},
+    )
     if state is not None:
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
-
-        await state.set_state(CatalogBrowsingSG.browsing)
-        await state.update_data(
-            apartment_results=results,
-            apartment_query=f"funnel:{data.get('city', 'any')}",
-            apartment_offset=len(results),
-            bookmarks_context=False,
-            apartment_total=total_count,
-            apartment_next_offset=_next_start,
-            apartment_scroll_seen_ids=_page_ids,
-            apartment_filters=filters,
-            funnel_data=dict(data),
-            catalog_view_mode=view_mode,
-        )
+        await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
     if not results:
-        await callback.message.answer(
-            "К сожалению, по вашим критериям ничего не найдено.\n"
-            "Попробуйте изменить параметры поиска."
-        )
+        maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        if inspect.isawaitable(maybe_start):
+            await maybe_start
         return
 
-    if view_mode == "list":
-        # Send compact text list as one message
-        text = format_apartment_list(results, shown_start=1, total=total_count)
-        catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
-    else:
-        # Send photo cards
-        if property_bot is not None:
-            for result in results:
-                telegram_id = callback.from_user.id if callback.from_user else 0
-                await property_bot._send_property_card(callback.message, result, telegram_id)
-        # Attach catalog keyboard to a short status message after cards
-        shown = len(results)
-        catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
-        status = f"Показано {shown} из {total_count}"
-        await callback.message.answer(status, reply_markup=catalog_kb)
+    telegram_id = callback.from_user.id if callback.from_user else 0
+    await send_catalog_results(
+        message=callback.message,
+        property_bot=property_bot,
+        results=results,
+        total_count=total_count,
+        view_mode=view_mode,
+        shown_start=1,
+        telegram_id=telegram_id,
+    )
+    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
+    if inspect.isawaitable(maybe_start):
+        await maybe_start
 
 
 async def on_change_filter_selected(
@@ -943,7 +1013,8 @@ funnel_dialog = Dialog(
                 on_click=on_city_selected,
             ),
         ),
-        Cancel(Format("{btn_back}")),
+        root_menu_button(),
+        back_to_main_menu_button(widget_id="funnel_back"),
         getter=get_city_options,
         state=FunnelSG.city,
     ),
@@ -959,6 +1030,7 @@ funnel_dialog = Dialog(
                 on_click=on_property_type_selected,
             ),
         ),
+        root_menu_button(),
         Back(Format("{btn_back}")),
         getter=get_property_types,
         state=FunnelSG.property_type,
@@ -975,6 +1047,7 @@ funnel_dialog = Dialog(
                 on_click=on_budget_selected,
             ),
         ),
+        root_menu_button(),
         Back(Format("{btn_back}")),
         getter=get_budget_options,
         state=FunnelSG.budget,
@@ -997,6 +1070,7 @@ funnel_dialog = Dialog(
             id="pref_done",
             on_click=on_pref_done,
         ),
+        root_menu_button(),
         Back(Format("{btn_back}")),
         getter=get_preferences_options,
         state=FunnelSG.preferences,
@@ -1013,6 +1087,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_floor_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_floor_back", state=FunnelSG.preferences),
         getter=get_pref_floor_options,
         state=FunnelSG.pref_floor,
@@ -1029,6 +1104,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_view_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_view_back", state=FunnelSG.preferences),
         getter=get_pref_view_options,
         state=FunnelSG.pref_view,
@@ -1045,6 +1121,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_furnished_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_furn_back", state=FunnelSG.preferences),
         getter=get_pref_furnished_options,
         state=FunnelSG.pref_furnished,
@@ -1061,6 +1138,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_promotion_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_promo_back", state=FunnelSG.preferences),
         getter=get_pref_promotion_options,
         state=FunnelSG.pref_promotion,
@@ -1077,6 +1155,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_area_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_area_back", state=FunnelSG.preferences),
         getter=get_pref_area_options,
         state=FunnelSG.pref_area,
@@ -1093,6 +1172,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_complex_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_cplx_back", state=FunnelSG.preferences),
         getter=get_pref_complex_options,
         state=FunnelSG.pref_complex,
@@ -1109,6 +1189,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_section_selected,
             ),
         ),
+        root_menu_button(),
         SwitchTo(Format("{btn_back}"), id="pref_section_back", state=FunnelSG.preferences),
         getter=get_pref_section_options,
         state=FunnelSG.pref_section,
@@ -1138,6 +1219,7 @@ funnel_dialog = Dialog(
             ),
             Cancel(Format("Отмена")),
         ),
+        root_menu_button(),
         getter=get_summary_data,
         state=FunnelSG.summary,
     ),
@@ -1153,6 +1235,7 @@ funnel_dialog = Dialog(
                 on_click=on_change_filter_selected,
             ),
         ),
+        root_menu_button(),
         Back(Format("{btn_back}")),
         getter=get_change_filter_options,
         state=FunnelSG.change_filter,

@@ -21,6 +21,7 @@ lang-uk = Українська
 # Navigation
 back = Back
 close = Close
+main-menu = 🏠 Main menu
 
 # Funnel
 funnel-what-looking = What are you looking for?
