@@ -113,7 +113,7 @@ async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
 @pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog() -> None:
     from aiogram.types import ReplyKeyboardRemove
-    from aiogram_dialog import StartMode
+    from aiogram_dialog import ShowMode, StartMode
 
     from telegram_bot.dialogs.catalog import on_catalog_filters
     from telegram_bot.dialogs.states import FilterSG
@@ -131,6 +131,7 @@ async def test_catalog_filters_starts_filter_dialog() -> None:
         FilterSG.hub,
         data={"filters": {"city": "Варна"}},
         mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND,
     )
 
 

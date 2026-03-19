@@ -58,7 +58,7 @@ async def test_catalog_home_restores_client_reply_keyboard() -> None:
 @pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> None:
     from aiogram.types import ReplyKeyboardRemove
-    from aiogram_dialog import StartMode
+    from aiogram_dialog import ShowMode, StartMode
 
     from telegram_bot.dialogs.catalog import on_catalog_filters
 
@@ -81,4 +81,5 @@ async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> No
         FilterSG.hub,
         data={"filters": {"city": "Варна"}},
         mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND,
     )
