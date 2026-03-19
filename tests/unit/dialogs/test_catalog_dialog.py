@@ -57,7 +57,6 @@ async def test_catalog_home_restores_client_reply_keyboard() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> None:
-    from aiogram.types import ReplyKeyboardRemove
     from aiogram_dialog import ShowMode, StartMode
 
     from telegram_bot.dialogs.catalog import on_catalog_filters
@@ -74,9 +73,7 @@ async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> No
 
     await on_catalog_filters(callback, MagicMock(), manager)
 
-    callback.message.answer.assert_awaited()
-    reply_markup = callback.message.answer.await_args.kwargs["reply_markup"]
-    assert isinstance(reply_markup, ReplyKeyboardRemove)
+    callback.message.answer.assert_not_awaited()
     manager.start.assert_awaited_once_with(
         FilterSG.hub,
         data={"filters": {"city": "Варна"}},
