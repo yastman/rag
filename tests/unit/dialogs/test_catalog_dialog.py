@@ -39,13 +39,26 @@ async def test_catalog_home_uses_reset_stack_to_client_root() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> None:
+    from aiogram_dialog import ShowMode, StartMode
+
     from telegram_bot.dialogs.catalog import on_catalog_filters
 
     state = AsyncMock()
     state.get_data.return_value = {"catalog_runtime": {"filters": {"city": "Варна"}}}
     manager = AsyncMock()
     manager.middleware_data = {"state": state}
+    manager.done = AsyncMock()
+    callback = MagicMock()
+    callback.message = MagicMock()
+    callback.message.delete = AsyncMock()
 
-    await on_catalog_filters(MagicMock(), MagicMock(), manager)
+    await on_catalog_filters(callback, MagicMock(), manager)
 
-    manager.start.assert_awaited_once_with(FilterSG.hub, data={"filters": {"city": "Варна"}})
+    assert manager.show_mode == ShowMode.NO_UPDATE
+    manager.done.assert_awaited_once()
+    callback.message.delete.assert_awaited_once()
+    manager.start.assert_awaited_once_with(
+        FilterSG.hub,
+        data={"filters": {"city": "Варна"}},
+        mode=StartMode.RESET_STACK,
+    )
