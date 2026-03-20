@@ -37,6 +37,12 @@ def test_bot_no_longer_registers_catalog_reply_keyboard_path() -> None:
     assert "include_router(catalog_router)" not in source
 
 
+def test_results_callback_route_is_compat_only_not_primary_catalog_owner() -> None:
+    source = Path("telegram_bot/bot.py").read_text()
+    assert "handle_results_callback" in source
+    assert "CatalogSG.results" in source
+
+
 @pytest.mark.asyncio
 async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
     from aiogram_dialog import ShowMode, StartMode
