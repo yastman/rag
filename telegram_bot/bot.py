@@ -76,6 +76,7 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
+_STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
 _TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
@@ -2281,176 +2282,11 @@ class PropertyBot:
         dialog_manager: Any = None,
     ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        # Resolve action from CallbackData or legacy string
-        if callback_data is not None:
-            action = callback_data.action
-        else:
-            data = callback.data or ""
-            parts = data.split(":", 1)
-            action = parts[1] if len(parts) > 1 else ""
-
-        if action == "more":
-            state_data = await state.get_data()
-            results = state_data.get("apartment_results")
-            offset = state_data.get("apartment_offset", 0)
-            if not results:
-                await callback.answer("Нет сохранённых результатов")
-                return
-            apartment_total = state_data.get("apartment_total", len(results))
-            apartment_total_value = (
-                apartment_total if isinstance(apartment_total, int) else len(results)
-            )
-            apartment_next_offset = state_data.get("apartment_next_offset")
-            apartment_filters = state_data.get("apartment_filters")
-            apartment_scroll_seen_ids = state_data.get("apartment_scroll_seen_ids")
-            new_offset = offset + _APARTMENT_PAGE_SIZE
-
-            # Funnel flow stores only the first page; lazily append more pages on demand.
-            if new_offset >= len(results):
-                apartments_service = getattr(self, "_apartments_service", None)
-                can_fetch_more = (
-                    apartment_filters is not None
-                    and apartments_service is not None
-                    and len(results) < apartment_total_value
-                )
-                if can_fetch_more:
-                    # Qdrant may return None offset while more rows still exist in count().
-                    # In that case, fetch a wider prefix from start and replace cached list.
-                    backfill_from_start = apartment_next_offset is None
-                    scroll_limit = (
-                        new_offset + _APARTMENT_PAGE_SIZE
-                        if backfill_from_start
-                        else _APARTMENT_PAGE_SIZE
-                    )
-                    scroll_offset = None if backfill_from_start else apartment_next_offset
-                    try:
-                        (
-                            extra_results,
-                            total_count,
-                            next_offset,
-                            page_ids,
-                        ) = await apartments_service.scroll_with_filters(  # type: ignore[union-attr]
-                            filters=apartment_filters,
-                            limit=scroll_limit,
-                            start_from=scroll_offset,
-                            exclude_ids=apartment_scroll_seen_ids or None,
-                        )
-                    except Exception:
-                        logger.exception("Failed to fetch next results page")
-                    else:
-                        if extra_results:
-                            if backfill_from_start and len(extra_results) >= len(results):
-                                results = list(extra_results)
-                            else:
-                                results = _merge_results(results, extra_results)
-                            apartment_total = total_count
-                            apartment_total_value = (
-                                total_count if isinstance(total_count, int) else len(results)
-                            )
-                            apartment_next_offset = next_offset
-                            await state.update_data(
-                                apartment_results=results,
-                                apartment_total=apartment_total,
-                                apartment_next_offset=apartment_next_offset,
-                                apartment_scroll_seen_ids=page_ids,
-                            )
-                if new_offset >= len(results):
-                    await callback.answer("Все результаты уже показаны")
-                    return
-            page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
-            for result in page:
-                if callback.message:
-                    await self._send_property_card(callback.message, result, callback.from_user.id)  # type: ignore[arg-type]
-            shown = len(page)
-            shown_total = new_offset + shown
-            total = apartment_total_value
-            has_more = shown_total < total
-            if callback.message:
-                _footer_rows: list[list[InlineKeyboardButton]] = []
-                if has_more:
-                    _footer_rows.append(
-                        [
-                            InlineKeyboardButton(
-                                text=f"🔄 Показать ещё ({max(total - shown_total, 0)} осталось)",
-                                callback_data=ResultsCB(action="more").pack(),
-                            )
-                        ]
-                    )
-                _footer_rows.append(
-                    [
-                        InlineKeyboardButton(
-                            text="⚙️ Изменить параметры",
-                            callback_data=ResultsCB(action="refine").pack(),
-                        )
-                    ]
-                )
-                _footer_rows.append(
-                    [
-                        InlineKeyboardButton(
-                            text="📅 Запись на осмотр",
-                            callback_data=ResultsCB(action="viewing").pack(),
-                        )
-                    ]
-                )
-                footer_msg = await callback.message.answer(
-                    f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows),
-                )
-                await state.update_data(
-                    apartment_offset=new_offset,
-                    apartment_footer_msg_id=footer_msg.message_id,
-                )
-            else:
-                await state.update_data(apartment_offset=new_offset)
-            await callback.answer()
-        elif action == "refine":
-            await state.update_data(apartment_results=None, apartment_offset=0)
-            if callback.message:
-                await callback.message.answer(
-                    "Опишите, какие апартаменты вы ищете, и я подберу варианты."
-                )
-            await callback.answer()
-        elif action == "viewing":
-            state_data = await state.get_data()
-            results = state_data.get("apartment_results", [])
-            # Первые 5 результатов как контекст для CRM заметки
-            viewing_objs = []
-            for r in results[:5]:
-                if isinstance(r, dict):
-                    p = r.get("payload", {})
-                    viewing_objs.append(
-                        {
-                            "id": r.get("id", ""),
-                            "complex_name": p.get("complex_name", ""),
-                            "property_type": p.get("property_type", ""),
-                            "area_m2": p.get("area_m2", 0),
-                            "price_eur": p.get("price_eur", 0),
-                        }
-                    )
-            if dialog_manager is not None:
-                from aiogram_dialog import ShowMode, StartMode
-
-                from .dialogs.states import ViewingSG
-
-                # Delete footer message to keep chat clean
-                if callback.message:
-                    with contextlib.suppress(Exception):
-                        await callback.message.delete()  # type: ignore[union-attr]
-
-                await dialog_manager.start(
-                    ViewingSG.date,
-                    mode=StartMode.RESET_STACK,
-                    show_mode=ShowMode.DELETE_AND_SEND,
-                    data={"selected_objects": viewing_objs},
-                )
-            else:
-                from .handlers.phone_collector import start_phone_collection
-
-                await start_phone_collection(
-                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-                )
-        else:
-            await callback.answer()
+        if callback.message:
+            with contextlib.suppress(Exception):
+                await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer(_STALE_RESULTS_CALLBACK_TEXT)
+        await callback.answer()
 
     @observe(name="cb-card", capture_input=False, capture_output=False)
     async def handle_card_callback(
