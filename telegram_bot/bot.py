@@ -203,6 +203,19 @@ def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]
     return []
 
 
+def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
+    runtime = state_data.get("catalog_runtime")
+    if isinstance(runtime, dict):
+        control_message_id = runtime.get("control_message_id")
+        if isinstance(control_message_id, int):
+            return control_message_id
+
+    footer_msg_id = state_data.get("apartment_footer_msg_id")
+    if isinstance(footer_msg_id, int):
+        return footer_msg_id
+    return None
+
+
 def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
     """Split text into Telegram-safe chunks without importing the full client pipeline."""
     if not text:
@@ -2349,11 +2362,13 @@ class PropertyBot:
 
                 from .dialogs.states import ViewingSG
 
-                # Delete footer message to avoid visual clutter during dialog
-                footer_msg_id = state_data.get("apartment_footer_msg_id")
-                if footer_msg_id and callback.message and callback.message.chat:
+                control_message_id = _state_control_message_id(state_data)
+                if control_message_id and callback.message and callback.message.chat:
                     with contextlib.suppress(Exception):
-                        await callback.bot.delete_message(callback.message.chat.id, footer_msg_id)  # type: ignore[union-attr]
+                        await callback.bot.delete_message(
+                            callback.message.chat.id,
+                            control_message_id,
+                        )  # type: ignore[union-attr]
 
                 await dialog_manager.start(
                     ViewingSG.date,
@@ -2565,6 +2580,10 @@ class PropertyBot:
                 next_offset=None,
             )
             state_data = await state.get_data()
+            control_message_id = _state_control_message_id(state_data)
+            if control_message_id is not None and message.bot is not None:
+                with contextlib.suppress(Exception):
+                    await message.bot.delete_message(message.chat.id, control_message_id)
             cleaned_state = clear_legacy_catalog_state(state_data)
             cleaned_state["catalog_runtime"] = runtime
 
