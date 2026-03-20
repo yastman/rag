@@ -2544,7 +2544,11 @@ class PropertyBot:
 
     @observe(name="telegram-rag-query")
     async def handle_query(
-        self, message: Message, locale: str = "ru", state: FSMContext | None = None
+        self,
+        message: Message,
+        locale: str = "ru",
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ):
         """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
@@ -2592,6 +2596,7 @@ class PropertyBot:
             state=state,
             forum_thread_id=forum_thread_id,
             expert_id=expert_id,
+            dialog_manager=dialog_manager,
         )
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
@@ -2627,6 +2632,7 @@ class PropertyBot:
         user_text: str,
         message: Message,
         state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ) -> str | None:
         """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
         from .services.apartments_service import check_escalation
@@ -2703,58 +2709,55 @@ class PropertyBot:
         if not generated.get("response_sent"):
             await self._send_markdown_chunks(message, response_text)
 
-        # Store results in FSMContext and send property cards (#654)
+        # Cut over free-text apartment sessions to the shared dialog-owned catalog runtime.
         if state is not None and results:
-            await state.update_data(
-                apartment_results=results,
-                apartment_query=user_text,
-                apartment_offset=0,
-                bookmarks_context=False,
-                apartment_total=len(results),
-                apartment_next_offset=None,
-                apartment_filters=None,
+            from .dialogs.catalog import activate_catalog_state, show_catalog_controls
+            from .dialogs.states import CatalogSG
+            from .services.catalog_rendering import send_catalog_results
+            from .services.catalog_session import (
+                build_catalog_runtime,
+                clear_legacy_catalog_state,
             )
-            page = results[:_APARTMENT_PAGE_SIZE]
-            for card_result in page:
-                await self._send_property_card(
-                    message,
-                    card_result,
-                    message.from_user.id,  # type: ignore[union-attr]
+
+            runtime = build_catalog_runtime(
+                query=user_text,
+                source="free_text",
+                filters=filters or {},
+                view_mode="cards",
+                results=results,
+                total=len(results),
+                next_offset=None,
+            )
+            state_data = await state.get_data()
+            cleaned_state = clear_legacy_catalog_state(state_data)
+            cleaned_state["catalog_runtime"] = runtime
+
+            maybe_set_data = getattr(state, "set_data", None)
+            if inspect.iscoroutinefunction(maybe_set_data):
+                await maybe_set_data(cleaned_state)
+            await state.update_data(**cleaned_state)
+
+            telegram_id = message.from_user.id if message.from_user else 0
+            await send_catalog_results(
+                message=message,
+                property_bot=self,
+                results=results,
+                total_count=len(results),
+                view_mode=runtime.get("view_mode", "cards"),
+                shown_start=1,
+                telegram_id=telegram_id,
+            )
+            if dialog_manager is not None:
+                dialog_manager.middleware_data.setdefault("state", state)
+                await show_catalog_controls(
+                    message=message,
+                    dialog_manager=dialog_manager,
+                    runtime=runtime,
                 )
-            shown = len(page)
-            total = len(results)
-            _has_more = total > _APARTMENT_PAGE_SIZE
-            _footer_rows2: list[list[InlineKeyboardButton]] = []
-            if _has_more:
-                _footer_rows2.append(
-                    [
-                        InlineKeyboardButton(
-                            text=f"🔄 Показать ещё ({max(total - shown, 0)} осталось)",
-                            callback_data=ResultsCB(action="more").pack(),
-                        )
-                    ]
+                await activate_catalog_state(
+                    dialog_manager=dialog_manager,
+                    state=CatalogSG.results,
                 )
-            _footer_rows2.append(
-                [
-                    InlineKeyboardButton(
-                        text="⚙️ Изменить параметры",
-                        callback_data=ResultsCB(action="refine").pack(),
-                    )
-                ]
-            )
-            _footer_rows2.append(
-                [
-                    InlineKeyboardButton(
-                        text="📅 Запись на осмотр",
-                        callback_data=ResultsCB(action="viewing").pack(),
-                    )
-                ]
-            )
-            footer_msg = await message.answer(
-                f"Найдено {total} апартаментов (показаны 1–{shown})",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows2),
-            )
-            await state.update_data(apartment_footer_msg_id=footer_msg.message_id)
 
         return response_text
 
@@ -2769,6 +2772,7 @@ class PropertyBot:
         query_type: str,
         rag_result_store: dict[str, Any],
         state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ) -> str | None:
         """Thin wrapper: delegates to run_client_pipeline (see pipelines/client.py).
 
@@ -2784,6 +2788,7 @@ class PropertyBot:
                 user_text=user_text,
                 message=message,
                 state=state,
+                dialog_manager=dialog_manager,
             )
             if apt_answer is not None:
                 return apt_answer
@@ -2820,6 +2825,7 @@ class PropertyBot:
         state: FSMContext | None = None,
         forum_thread_id: int | None = None,
         expert_id: str | None = None,
+        dialog_manager: Any = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from src.retrieval.topic_classifier import get_query_topic_hint
@@ -3131,6 +3137,7 @@ class PropertyBot:
                             query_type=query_type,
                             rag_result_store=rag_result_store,
                             state=state,
+                            dialog_manager=dialog_manager,
                         )
                         if pipeline_answer is not None:
                             if root_trace_metadata is not None:
