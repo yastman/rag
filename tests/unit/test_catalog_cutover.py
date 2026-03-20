@@ -121,3 +121,45 @@ async def test_apartment_fast_path_bootstraps_catalog_runtime_and_dialog() -> No
     assert runtime["results"][0]["id"] == "apt-1"
     assert "apartment_results" not in update_kwargs
     dialog_manager.start.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_fast_path_deletes_legacy_footer_before_catalog_controls() -> None:
+    bot = _create_bot()
+    bot._cache.store_embedding = AsyncMock()
+    bot._cache.store_sparse_embedding = AsyncMock()
+    bot._apartments_service.search_with_filters = AsyncMock(
+        return_value=([_sample_result("apt-1")], 1)
+    )
+    bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=([0.1], {"indices": [], "values": []}, None)
+    )
+    bot._send_property_card = AsyncMock()
+    bot._apartment_pipeline.extract = AsyncMock(
+        return_value=SimpleNamespace(
+            meta=SimpleNamespace(confidence="HIGH", semantic_remainder=""),
+            hard=SimpleNamespace(to_filters_dict=dict),
+        )
+    )
+
+    state = _make_state({"apartment_footer_msg_id": 888})
+    dialog_manager = AsyncMock()
+    dialog_manager.middleware_data = {"state": state}
+    message = _make_message()
+    message.bot = MagicMock(delete_message=AsyncMock())
+
+    with (
+        patch("telegram_bot.services.apartments_service.check_escalation", return_value=False),
+        patch(
+            "telegram_bot.services.generate_response.generate_response",
+            new=AsyncMock(return_value={"response": "ok", "response_sent": True}),
+        ),
+    ):
+        await bot._handle_apartment_fast_path(
+            user_text="двушка",
+            message=message,
+            state=state,
+            dialog_manager=dialog_manager,
+        )
+
+    message.bot.delete_message.assert_awaited_once_with(message.chat.id, 888)
