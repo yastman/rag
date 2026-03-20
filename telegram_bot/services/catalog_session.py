@@ -6,6 +6,16 @@ from typing import Any, TypedDict
 
 
 CATALOG_RUNTIME_DATA_KEY = "catalog_runtime"
+LEGACY_CATALOG_STATE_KEYS = (
+    "apartment_results",
+    "apartment_query",
+    "apartment_offset",
+    "apartment_total",
+    "apartment_next_offset",
+    "apartment_filters",
+    "apartment_scroll_seen_ids",
+    "apartment_footer_msg_id",
+)
 
 
 class CatalogRuntime(TypedDict, total=False):
@@ -94,6 +104,13 @@ def build_catalog_runtime(
         "origin_context": dict(origin_context or {}),
     }
     return runtime
+
+
+def clear_legacy_catalog_state(state_data: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(state_data)
+    for key in LEGACY_CATALOG_STATE_KEYS:
+        cleaned.pop(key, None)
+    return cleaned
 
 
 def update_catalog_runtime_page(
