@@ -101,6 +101,9 @@ def setup_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("aiogram").setLevel(logging.INFO)
+    logging.getLogger("aiogram_dialog").setLevel(logging.WARNING)
+    logging.getLogger("aiogram_dialog.manager").setLevel(logging.WARNING)
+    logging.getLogger("aiogram_dialog.manager.message_manager").setLevel(logging.WARNING)
     logging.getLogger("qdrant_client").setLevel(logging.WARNING)
 
     logging.info(
