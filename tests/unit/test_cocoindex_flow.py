@@ -171,6 +171,7 @@ class TestSetupAndRunFlow:
             mock_flow = MagicMock()
             with patch.object(cocoindex_flow, "create_document_flow", return_value=mock_flow):
                 mock_cocoindex = MagicMock()
+                mock_cocoindex.update_all_flows_async = AsyncMock(return_value={})
                 with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
                     config = FlowConfig(collection_name="test_collection")
                     result = setup_and_run_flow("/test/path", config=config)
