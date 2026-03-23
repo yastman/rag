@@ -3330,6 +3330,42 @@ class TestPreAgentCacheCheck:
         assert score_map["query_type"]["value"] == "FAQ"
         assert score_map["query_type"]["data_type"] == "CATEGORICAL"
 
+    async def test_pre_agent_cache_hit_includes_strict_grounding_metadata(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
+
+        mock_agent = AsyncMock()
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-strict-cache")
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.score"),
+        ):
+            message = _make_text_message("Какие документы нужны для ВНЖ?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        metadata_payloads = [
+            c.kwargs.get("metadata", {})
+            for c in mock_lf.update_current_trace.call_args_list
+            if "metadata" in c.kwargs
+        ]
+        pre_agent_meta = next(
+            m for m in metadata_payloads if m.get("pipeline_mode") == "pre_agent_cache"
+        )
+        assert pre_agent_meta["topic_hint"] == "legal"
+        assert pre_agent_meta["grounding_mode"] == "strict"
+        assert pre_agent_meta["grounded"] is True
+        assert pre_agent_meta["legal_answer_safe"] is True
+        assert pre_agent_meta["semantic_cache_safe_reuse"] is True
+        assert pre_agent_meta["safe_fallback_used"] is False
+
     async def test_pre_agent_cache_skip_off_topic(self, mock_config):
         """OFF_TOPIC query type skips pre-agent cache entirely (#563)."""
         bot, _ = _create_bot(mock_config)
@@ -3672,6 +3708,29 @@ class TestPreAgentCacheCheck:
         check_calls = bot._cache.check_semantic.call_args_list
         assert len(check_calls) >= 1
         assert check_calls[0].kwargs.get("agent_role") == "client"
+
+    async def test_pre_agent_cache_hit_requires_safe_reuse_for_strict_query(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("Какие документы нужны для ВНЖ?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        kwargs = bot._cache.check_semantic.call_args.kwargs
+        assert kwargs["grounding_mode"] == "strict"
+        assert kwargs["require_safe_reuse"] is True
 
     async def test_pre_agent_ttl_desync_heals_sparse_via_hybrid_colbert(self, mock_config):
         """When embedding cached but sparse expired, heals via aembed_hybrid_with_colbert (#637)."""
