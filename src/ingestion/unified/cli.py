@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -28,6 +29,28 @@ def setup_logging(verbose: bool = False) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("cocoindex").setLevel(logging.INFO)
+
+
+def _inspect_sync_dir(
+    sync_dir: Path, supported_extensions: frozenset[str]
+) -> dict[str, int | bool]:
+    """Inspect ingestion source directory health."""
+    exists = sync_dir.exists()
+    is_dir = sync_dir.is_dir()
+    supported_files = 0
+
+    if exists and is_dir:
+        supported_files = sum(
+            1
+            for path in sync_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in supported_extensions
+        )
+
+    return {
+        "exists": exists,
+        "is_dir": is_dir,
+        "supported_files": supported_files,
+    }
 
 
 @observe(name="ingestion-cli-run", capture_input=False, capture_output=False)
@@ -70,6 +93,7 @@ async def cmd_status(args: argparse.Namespace) -> int:
     try:
         stats = await manager.get_stats()
         dlq_count = await manager.get_dlq_count()
+        sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
 
         print("\n=== Ingestion Status ===")
         total = sum(stats.values())
@@ -80,6 +104,12 @@ async def cmd_status(args: argparse.Namespace) -> int:
         print(f"\n  DLQ: {dlq_count} items")
         print(f"  Collection: {config.collection_name}")
         print(f"  Sync dir: {config.sync_dir}")
+        if sync_info["exists"] and sync_info["is_dir"]:
+            print(f"  Supported files: {sync_info['supported_files']}")
+        elif not sync_info["exists"]:
+            print("  Supported files: n/a (sync dir missing)")
+        else:
+            print("  Supported files: n/a (sync dir is not a directory)")
     finally:
         await manager.close()
 
@@ -97,6 +127,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     try_update_ingestion_trace(command="preflight", status="started")
     timeout = httpx.Timeout(float(os.getenv("BGE_M3_TIMEOUT", "60")))
     results: dict[str, bool] = {}
+    sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         # Qdrant reachable + collection exists
@@ -166,6 +197,18 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     else:
         results["env_vars"] = True
         print("  [OK] All required env vars set")
+
+    if not sync_info["exists"]:
+        results["sync_dir"] = False
+        print(f"  [FAIL] Sync dir missing: {config.sync_dir}")
+    elif not sync_info["is_dir"]:
+        results["sync_dir"] = False
+        print(f"  [FAIL] Sync dir is not a directory: {config.sync_dir}")
+    else:
+        results["sync_dir"] = True
+        print(
+            f"  [OK] Sync dir: {config.sync_dir} ({sync_info['supported_files']} supported files)"
+        )
 
     # Summary
     ok = sum(1 for v in results.values() if v)
