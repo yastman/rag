@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -168,7 +169,13 @@ def _make_config(**overrides):
     config.bge_m3_url = overrides.get("bge_m3_url", "http://bge:8000")
     config.docling_url = overrides.get("docling_url", "http://docling:5001")
     config.database_url = overrides.get("database_url", "postgresql://test@localhost/db")
-    config.sync_dir = overrides.get("sync_dir", "/tmp/sync")
+    config.sync_dir = overrides.get("sync_dir", Path("/tmp/sync"))
+    config.supported_extensions = overrides.get(
+        "supported_extensions",
+        frozenset(
+            {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
+        ),
+    )
     return config
 
 
@@ -313,6 +320,39 @@ class TestCmdPreflight:
         assert "[WARN]" in output
         assert "Missing env vars" in output
 
+    @patch.dict(
+        "os.environ",
+        {
+            "QDRANT_URL": "http://qdrant:6333",
+            "BGE_M3_URL": "http://bge:8000",
+            "DOCLING_URL": "http://docling:5001",
+            "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
+        },
+    )
+    async def test_sync_dir_missing_fails(self, args, capsys, tmp_path):
+        mock_client = AsyncMock()
+        mock_client.get.return_value = _ok_response({"result": {"points_count": 0}})
+        mock_client.post.return_value = _ok_response()
+
+        config = _make_config(sync_dir=tmp_path / "missing-sync")
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("httpx.AsyncClient") as MockClient,
+        ):
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__.return_value = mock_client
+            mock_ctx.__aexit__.return_value = False
+            MockClient.return_value = mock_ctx
+
+            from src.ingestion.unified.cli import cmd_preflight
+
+            result = await cmd_preflight(args)
+
+        assert result == 1
+        output = capsys.readouterr().out
+        assert "Sync dir" in output
+        assert "[FAIL]" in output
+
 
 # ---------------------------------------------------------------------------
 # cmd_status
@@ -393,6 +433,34 @@ class TestCmdStatus:
             await cmd_status(args)
 
         manager.close.assert_awaited_once()
+
+    async def test_status_reports_supported_file_count(self, args, capsys, tmp_path):
+        sync_dir = tmp_path / "sync"
+        sync_dir.mkdir()
+        (sync_dir / "one.pdf").write_text("pdf")
+        (sync_dir / "two.docx").write_text("docx")
+        (sync_dir / "ignored.tmp").write_text("tmp")
+
+        config = _make_config(collection_name="test_col", sync_dir=sync_dir)
+        manager = AsyncMock()
+        manager.get_stats.return_value = {"indexed": 2}
+        manager.get_dlq_count.return_value = 0
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch(
+                "src.ingestion.unified.state_manager.UnifiedStateManager",
+                return_value=manager,
+            ),
+        ):
+            from src.ingestion.unified.cli import cmd_status
+
+            result = await cmd_status(args)
+
+        assert result == 0
+        output = capsys.readouterr().out
+        assert "Sync dir:" in output
+        assert "Supported files: 2" in output
 
 
 # ---------------------------------------------------------------------------
