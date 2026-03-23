@@ -11,6 +11,11 @@
 - Start code discovery with `grepai` MCP tools; use `rg` only for exact text or path matching.
 - Use `context-mode` MCP tools for large-output exploration, external docs, and large-file summarization.
 
+## Instruction Priority
+- The nearest `AGENTS.override.md` takes precedence for files in its scope.
+- Root `Critical Invariants` and `Validation` rules still apply repo-wide unless a local override adds stricter requirements.
+- `Engineering Heuristics` are defaults for ambiguous design choices; they do not justify violating explicit repo rules.
+
 ## MCP Priority And Fallbacks
 - `grepai` is the default entry point for code discovery, semantic search, and call-graph tracing.
 - In this repo, prefer `grepai` project-local mode by default: call `grepai_search` and `grepai_trace_*` without `workspace` unless a named workspace has been explicitly configured.
@@ -31,11 +36,19 @@
 
 ## Working Rules
 - Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
-- Do not pass `workspace` or `projects` to `grepai` MCP calls in this repo unless `grepai_list_workspaces` confirms the workspace exists; otherwise use workspace-less local-project queries.
 - Use `mcp__context-mode__ctx_batch_execute` for multi-command repo exploration.
 - Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
-- Use direct shell/file reads when you need exact contents for editing or the output is small.
 - Before adding a new SDK, API client, or dependency, check `.claude/rules/sdk-registry.md`.
+
+## Engineering Heuristics
+- Prefer the simplest change that solves the current task and keeps the local blast radius small.
+- Do not add abstractions, extension points, wrappers, or interfaces before a real second use case exists.
+- Apply DRY to shared knowledge, rules, validations, and contracts; do not merge code paths that change for different reasons.
+- Extract reuse only after repetition is proven and the shared shape is stable.
+- Prefer composition and focused modules over inheritance-heavy designs.
+- Use SOLID ideas only when they improve testability, replaceability, or change safety for the current code.
+- Favor small, reviewable PRs and incremental code-health improvements.
+- Refactor when it makes the current change simpler, safer, or easier to test.
 
 ## Critical Invariants
 - Preserve service boundaries: transport-layer Telegram code should not absorb retrieval or domain logic.
