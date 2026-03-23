@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CACHE_VERSION = "v5"
+SEMANTIC_CACHE_VERSION = "v6"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
@@ -77,7 +78,7 @@ def _create_semantic_cache(
         from redisvl.extensions.cache.llm import SemanticCache
 
         cache = SemanticCache(
-            name=f"sem:{CACHE_VERSION}:bge1024",
+            name=f"sem:{SEMANTIC_CACHE_VERSION}:bge1024",
             redis_url=redis_url,
             ttl=ttl,
             distance_threshold=distance_threshold,
@@ -765,7 +766,7 @@ class CacheLayerManager:
             elif hasattr(self.semantic_cache, "clear"):
                 self.semantic_cache.clear()
             elif self.redis:
-                pattern = f"sem:{CACHE_VERSION}:*"
+                pattern = f"sem:{SEMANTIC_CACHE_VERSION}:*"
                 keys = [key async for key in self.redis.scan_iter(match=pattern)]
                 if keys:
                     await self.redis.delete(*keys)
