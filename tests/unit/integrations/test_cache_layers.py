@@ -675,6 +675,31 @@ class TestScopeRoleIsolation:
         assert call_kwargs["filters"]["cache_scope"] == "rag"
         assert call_kwargs["filters"]["agent_role"] == "client"
 
+    async def test_store_semantic_includes_strict_grounding_filters_and_metadata(
+        self, _ensure_redisvl_filter_mock
+    ):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            metadata={
+                "grounding_mode": "strict",
+                "semantic_cache_safe_reuse": True,
+            },
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["grounding_mode"] == "strict"
+        assert call_kwargs["filters"]["semantic_cache_safe_reuse"] == "true"
+        assert call_kwargs["metadata"]["grounding_mode"] == "strict"
+
     async def test_check_semantic_passes_scope_filter(self, _ensure_redisvl_filter_mock):
         """check_semantic with cache_scope passes filter_expression."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -692,6 +717,29 @@ class TestScopeRoleIsolation:
         )
 
         assert result == "scoped answer"
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_check_semantic_passes_strict_safe_reuse_filter(
+        self, _ensure_redisvl_filter_mock
+    ):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "strict answer", "vector_distance": 0.02}]
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            grounding_mode="strict",
+            require_safe_reuse=True,
+        )
+
+        assert result == "strict answer"
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 

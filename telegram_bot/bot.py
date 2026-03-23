@@ -28,6 +28,8 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
+from src.retrieval.topic_classifier import get_query_topic_hint
+
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .handlers.handoff import (
@@ -55,6 +57,7 @@ from .scoring import (
 )
 from .services.business_hours import is_business_hours
 from .services.forum_bridge import ForumBridge
+from .services.grounding_policy import get_grounding_mode, semantic_cache_safe_reuse_allowed
 from .services.handoff_state import HandoffData, HandoffState
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
@@ -274,6 +277,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "input_type": result.get("input_type", "text"),
         "query_type": result.get("query_type", ""),
+        "topic_hint": result.get("topic_hint", ""),
+        "grounding_mode": result.get("grounding_mode", ""),
+        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
         "pipeline_wall_ms": result.get("pipeline_wall_ms"),
         "pre_agent_ms": result.get("pre_agent_ms"),
         "e2e_latency_ms": result.get("e2e_latency_ms"),
@@ -289,6 +295,11 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "response_policy_mode": result.get("response_policy_mode"),
         "answer_words": result.get("answer_words"),
         "answer_to_question_ratio": result.get("answer_to_question_ratio"),
+        "sources_count": int(result.get("sources_count", 0) or 0),
+        "grounded": result.get("grounded", True),
+        "legal_answer_safe": result.get("legal_answer_safe", True),
+        "semantic_cache_safe_reuse": result.get("semantic_cache_safe_reuse", True),
+        "safe_fallback_used": result.get("safe_fallback_used", False),
         # Voice transcription (#151)
         "stt_duration_ms": result.get("stt_duration_ms"),
         # Embedding resilience (#210)
@@ -2683,7 +2694,6 @@ class PropertyBot:
         dialog_manager: Any = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
-        from src.retrieval.topic_classifier import get_query_topic_hint
 
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
@@ -2834,6 +2844,12 @@ class PropertyBot:
                     rag_result_store["pre_agent_embed_ms"] = (
                         time.perf_counter() - embed_start
                     ) * 1000
+                    topic_hint_label = get_query_topic_hint(user_text)
+                    topic_hint = topic_hint_label.value if topic_hint_label is not None else None
+                    grounding_mode = get_grounding_mode(
+                        query_type=query_type,
+                        topic_hint=topic_hint,
+                    )
                     check_start = time.perf_counter()
                     cached = await self._cache.check_semantic(
                         query=user_text,
@@ -2841,6 +2857,8 @@ class PropertyBot:
                         query_type=query_type,
                         cache_scope="rag",
                         agent_role=role,
+                        grounding_mode=grounding_mode if grounding_mode == "strict" else None,
+                        require_safe_reuse=grounding_mode == "strict",
                     )
                     rag_result_store["pre_agent_cache_check_ms"] = (
                         time.perf_counter() - check_start
@@ -3283,6 +3301,17 @@ class PropertyBot:
                     and not rag_result_store.get("cache_hit", False)
                     and isinstance(store_vector, list)
                     and bool(store_vector)
+                    and semantic_cache_safe_reuse_allowed(
+                        grounding_mode=str(
+                            rag_result_store.get("grounding_mode", "normal") or "normal"
+                        ),
+                        grounded=bool(rag_result_store.get("grounded", True)),
+                        legal_answer_safe=bool(rag_result_store.get("legal_answer_safe", True)),
+                        semantic_cache_safe_reuse=bool(
+                            rag_result_store.get("semantic_cache_safe_reuse", True)
+                        ),
+                        safe_fallback_used=bool(rag_result_store.get("safe_fallback_used", False)),
+                    )
                 ):
                     try:
                         await self._cache.store_semantic(
@@ -3292,6 +3321,17 @@ class PropertyBot:
                             query_type=query_type,
                             cache_scope="rag",
                             agent_role=role,
+                            metadata={
+                                "grounding_mode": str(
+                                    rag_result_store.get("grounding_mode", "normal") or "normal"
+                                ),
+                                "legal_answer_safe": bool(
+                                    rag_result_store.get("legal_answer_safe", True)
+                                ),
+                                "semantic_cache_safe_reuse": bool(
+                                    rag_result_store.get("semantic_cache_safe_reuse", True)
+                                ),
+                            },
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
@@ -3306,6 +3346,17 @@ class PropertyBot:
                 input={"query": message.text},
                 metadata={
                     "pipeline_mode": "sdk_agent",
+                    "query_type": rag_result_store.get("query_type", ""),
+                    "topic_hint": rag_result_store.get("topic_hint", ""),
+                    "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                    "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                    "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                    "grounded": bool(rag_result_store.get("grounded", True)),
+                    "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+                    "semantic_cache_safe_reuse": bool(
+                        rag_result_store.get("semantic_cache_safe_reuse", True)
+                    ),
+                    "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
                     "pipeline_wall_ms": wall_ms,
                     "pre_agent_ms": pre_agent_ms,
                     "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
@@ -3317,6 +3368,21 @@ class PropertyBot:
                 root_trace_metadata.update(
                     {
                         "pipeline_mode": "sdk_agent",
+                        "query_type": rag_result_store.get("query_type", ""),
+                        "topic_hint": rag_result_store.get("topic_hint", ""),
+                        "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                        "grade_confidence": float(
+                            rag_result_store.get("grade_confidence", 0.0) or 0.0
+                        ),
+                        "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                        "grounded": bool(rag_result_store.get("grounded", True)),
+                        "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+                        "semantic_cache_safe_reuse": bool(
+                            rag_result_store.get("semantic_cache_safe_reuse", True)
+                        ),
+                        "safe_fallback_used": bool(
+                            rag_result_store.get("safe_fallback_used", False)
+                        ),
                         "pipeline_wall_ms": wall_ms,
                         "pre_agent_ms": pre_agent_ms,
                         "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
