@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -14,22 +14,44 @@ class RedisPollingLock:
     redis: Any
     key: str
     ttl_sec: int = 90
+    _lock: Any | None = field(init=False, default=None, repr=False)
 
     async def _call(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        method = getattr(self.redis, method_name)
+        method = getattr(self._lock, method_name)
         result = method(*args, **kwargs)
         if inspect.isawaitable(result):
             return await result
         return result
 
+    async def _create_backend_lock(self) -> Any:
+        result = self.redis.lock(
+            self.key,
+            timeout=self.ttl_sec,
+            blocking=False,
+            thread_local=False,
+        )
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
     async def acquire(self, owner: str) -> None:
-        created = await self._call("set", self.key, owner, ex=self.ttl_sec, nx=True)
+        self._lock = await self._create_backend_lock()
+        created = await self._call("acquire", token=owner)
         if not created:
+            self._lock = None
             raise PollingLockBusy(
                 f"Polling lock {self.key!r} is already held; stop the other bot instance first"
             )
 
-    async def release(self, owner: str) -> None:
-        current = await self._call("get", self.key)
-        if current == owner:
-            await self._call("delete", self.key)
+    async def refresh(self) -> None:
+        if self._lock is None:
+            raise RuntimeError("Polling lock is not acquired")
+        await self._call("reacquire")
+
+    async def release(self) -> None:
+        if self._lock is None:
+            return
+        try:
+            await self._call("release")
+        finally:
+            self._lock = None
