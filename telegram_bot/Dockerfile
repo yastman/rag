@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # ====== RUNTIME STAGE ======
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm@sha256:55e465cb7e50cd1d7217fcb5386aa87d0356ca2cd790872142ef68d9ef6812b4 AS runtime
 
 WORKDIR /app
 
