@@ -3570,6 +3570,29 @@ class TestPreAgentCacheCheck:
         assert len(check_calls) >= 1
         assert check_calls[0].kwargs.get("agent_role") == "client"
 
+    async def test_pre_agent_cache_hit_requires_safe_reuse_for_strict_query(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("Какие документы нужны для ВНЖ?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        kwargs = bot._cache.check_semantic.call_args.kwargs
+        assert kwargs["grounding_mode"] == "strict"
+        assert kwargs["require_safe_reuse"] is True
+
     async def test_pre_agent_ttl_desync_heals_sparse_via_hybrid_colbert(self, mock_config):
         """When embedding cached but sparse expired, heals via aembed_hybrid_with_colbert (#637)."""
         bot, _ = _create_bot(mock_config)
