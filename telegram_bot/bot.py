@@ -2850,6 +2850,15 @@ class PropertyBot:
                         query_type=query_type,
                         topic_hint=topic_hint,
                     )
+                    rag_result_store["topic_hint"] = topic_hint or ""
+                    rag_result_store["grounding_mode"] = grounding_mode
+                    if grounding_mode == "strict":
+                        # Strict-mode cache hits are only allowed for reusable safe answers,
+                        # so keep those observability fields on the early-return path too.
+                        rag_result_store.setdefault("grounded", True)
+                        rag_result_store.setdefault("legal_answer_safe", True)
+                        rag_result_store.setdefault("semantic_cache_safe_reuse", True)
+                        rag_result_store.setdefault("safe_fallback_used", False)
                     check_start = time.perf_counter()
                     cached = await self._cache.check_semantic(
                         query=user_text,
@@ -2887,19 +2896,36 @@ class PropertyBot:
                             reply_markup=reply_markup,
                         )
                         wall_ms = (time.perf_counter() - pipeline_start) * 1000
+                        cache_trace_metadata = {
+                            "pipeline_mode": "pre_agent_cache",
+                            "pipeline_wall_ms": wall_ms,
+                            "pre_agent_ms": pre_agent_ms,
+                            "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                            "pre_agent_cache_check_ms": rag_result_store.get(
+                                "pre_agent_cache_check_ms"
+                            ),
+                            "e2e_latency_ms": wall_ms,
+                            "topic_hint": rag_result_store.get("topic_hint", ""),
+                            "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                            "grade_confidence": float(
+                                rag_result_store.get("grade_confidence", 0.0) or 0.0
+                            ),
+                            "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                            "grounded": bool(rag_result_store.get("grounded", True)),
+                            "legal_answer_safe": bool(
+                                rag_result_store.get("legal_answer_safe", True)
+                            ),
+                            "semantic_cache_safe_reuse": bool(
+                                rag_result_store.get("semantic_cache_safe_reuse", True)
+                            ),
+                            "safe_fallback_used": bool(
+                                rag_result_store.get("safe_fallback_used", False)
+                            ),
+                        }
                         lf.update_current_trace(
                             input={"query": user_text},
                             output={"response": cached},
-                            metadata={
-                                "pipeline_mode": "pre_agent_cache",
-                                "pipeline_wall_ms": wall_ms,
-                                "pre_agent_ms": pre_agent_ms,
-                                "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                                "pre_agent_cache_check_ms": rag_result_store.get(
-                                    "pre_agent_cache_check_ms"
-                                ),
-                                "e2e_latency_ms": wall_ms,
-                            },
+                            metadata=cache_trace_metadata,
                         )
                         if tid:
                             score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
@@ -2912,20 +2938,7 @@ class PropertyBot:
                             )
                             score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
                         if root_trace_metadata is not None:
-                            root_trace_metadata.update(
-                                {
-                                    "pipeline_mode": "pre_agent_cache",
-                                    "pipeline_wall_ms": wall_ms,
-                                    "pre_agent_ms": pre_agent_ms,
-                                    "pre_agent_embed_ms": rag_result_store.get(
-                                        "pre_agent_embed_ms"
-                                    ),
-                                    "pre_agent_cache_check_ms": rag_result_store.get(
-                                        "pre_agent_cache_check_ms"
-                                    ),
-                                    "e2e_latency_ms": wall_ms,
-                                }
-                            )
+                            root_trace_metadata.update(cache_trace_metadata)
                         return cached
                     # MISS: stash all embeddings so rag_pipeline can skip recomputation (#571)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
