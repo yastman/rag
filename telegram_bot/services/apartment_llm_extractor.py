@@ -38,6 +38,8 @@ Crown Fort Club, Green Fort Suites, Premier Fort Suites, Nessebar Fort Residence
   - НЕ ПУТАТЬ: "трехкомнатный"→rooms 3, "трёшка"→rooms 4
   - студия→rooms 1
 - "у моря" = near_sea preference, НЕ view_tags (если не сказано "вид на море")
+- Если вид не указан, верни view_tags=[]
+- Никогда не возвращай null для массивов
 - "недорого"/"бюджетно" = budget_friendly preference + sort_bias="price_asc"
 - "просторная" = spacious preference + min_area_m2 >= 60
 - Если не уверен — оставь None, не выдумывай"""
@@ -123,11 +125,12 @@ class ApartmentLlmExtractor:
             max_retries=2,
         )
 
-        # Post-validation: clear city if not in our valid set
-        if result.hard.city is not None and result.hard.city not in _VALID_CITIES:
-            result = result.model_copy(
-                update={"hard": result.hard.model_copy(update={"city": None})}
-            )
+        # Re-validate hard filters so bypassed test fixtures using model_construct
+        # still go through the same normalization/default contract as runtime payloads.
+        hard_payload = result.hard.model_dump()
+        if hard_payload.get("city") is not None and hard_payload["city"] not in _VALID_CITIES:
+            hard_payload["city"] = None
+        result = result.model_copy(update={"hard": HardFilters.model_validate(hard_payload)})
 
         # Set extraction source
         return result.model_copy(update={"meta": result.meta.model_copy(update={"source": source})})

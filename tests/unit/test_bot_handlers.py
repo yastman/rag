@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
+from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 
 
 @pytest.fixture
@@ -1491,6 +1492,69 @@ class TestBotLifecycle:
 
         bot._cache.initialize.assert_not_called()
 
+    async def test_start_logs_one_final_startup_summary(self, mock_config, caplog):
+        """Startup should emit one final verdict block for degraded startup."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
+
+        result = DependencyCheckResult({"redis": True}, report=StartupReport())
+
+        with (
+            patch(
+                "telegram_bot.preflight.check_dependencies",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            caplog.at_level(logging.INFO),
+        ):
+            await bot.start()
+
+        assert caplog.text.count("Startup verdict:") == 1
+
+    async def test_start_starts_polling_lock_heartbeat_when_redis_available(self, mock_config):
+        """start() should create a polling lock heartbeat task after acquiring the lock."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
+
+        polling_lock = AsyncMock()
+        polling_lock.ttl_sec = 90
+        created_task_names: list[str | None] = []
+
+        def fake_create_task(coro, *, name=None):
+            created_task_names.append(name)
+            coro.close()
+            task = asyncio.Future()
+            task.set_result(None)
+            return task
+
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch("telegram_bot.bot.RedisPollingLock", return_value=polling_lock),
+            patch("telegram_bot.bot.asyncio.create_task", side_effect=fake_create_task),
+        ):
+            await bot.start()
+
+        polling_lock.acquire.assert_awaited_once()
+        assert "polling-lock-heartbeat" in created_task_names
+
     async def test_stop_closes_services(self, mock_config):
         """Test that stop() closes all services."""
         bot, _ = _create_bot(mock_config)
@@ -1588,6 +1652,45 @@ class TestBotLifecycle:
 
         # Should not raise
         await bot.stop()
+
+    async def test_stop_releases_polling_lock(self, mock_config):
+        """stop() releases the polling lock when the current instance owns it."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.close = AsyncMock()
+        bot._qdrant = MagicMock()
+        bot._qdrant.close = AsyncMock()
+        bot._embeddings = MagicMock()
+        bot._embeddings.aclose = AsyncMock()
+        bot._sparse = MagicMock()
+        bot._sparse.aclose = AsyncMock()
+        bot._reranker = None
+        bot.bot = MagicMock()
+        bot.bot.session = MagicMock()
+        bot.bot.session.close = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.stop = AsyncMock()
+        polling_lock = AsyncMock()
+        bot._polling_lock = polling_lock
+        bot._polling_lock_owner = "host:123"
+
+        await bot.stop()
+
+        polling_lock.release.assert_awaited_once_with()
+
+    async def test_polling_lock_heartbeat_stops_polling_on_refresh_failure(self, mock_config):
+        """Heartbeat failures should stop polling so the lease cannot silently expire."""
+        bot, _ = _create_bot(mock_config)
+        bot._polling_lock = AsyncMock()
+        bot._polling_lock.ttl_sec = 90
+        bot._polling_lock.refresh = AsyncMock(side_effect=RuntimeError("redis lost"))
+        bot.dp = MagicMock()
+        bot.dp.stop_polling = AsyncMock()
+
+        with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()):
+            await bot._polling_lock_heartbeat()
+
+        bot.dp.stop_polling.assert_awaited_once_with()
 
 
 class TestAgentCheckpointerLifecycle:
