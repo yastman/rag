@@ -11,6 +11,7 @@ from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationE
 
 from telegram_bot.integrations.cache import (
     CACHE_VERSION,
+    SEMANTIC_CACHE_VERSION,
     CacheLayerManager,
     _normalize_query_for_cache,
 )
@@ -72,9 +73,10 @@ class TestCacheLayerManagerInit:
         assert mgr.cache_thresholds["FAQ"] == 0.15
         assert mgr.cache_thresholds["GENERAL"] == 0.10
 
-    def test_cache_version_bumped_for_scope_role_schema(self):
-        """Schema changed with cache_scope/agent_role tag filters, so index version must be bumped."""
+    def test_cache_versions_reflect_schema_boundaries(self):
+        """Semantic cache schema changed, but exact-cache namespaces stay stable."""
         assert CACHE_VERSION == "v5"
+        assert SEMANTIC_CACHE_VERSION == "v6"
 
 
 class TestCacheLayerManagerInitialize:
