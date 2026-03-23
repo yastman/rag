@@ -1520,6 +1520,41 @@ class TestBotLifecycle:
 
         assert caplog.text.count("Startup verdict:") == 1
 
+    async def test_start_starts_polling_lock_heartbeat_when_redis_available(self, mock_config):
+        """start() should create a polling lock heartbeat task after acquiring the lock."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
+
+        polling_lock = AsyncMock()
+        polling_lock.ttl_sec = 90
+        created_task_names: list[str | None] = []
+
+        def fake_create_task(coro, *, name=None):
+            created_task_names.append(name)
+            coro.close()
+            task = asyncio.Future()
+            task.set_result(None)
+            return task
+
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch("telegram_bot.bot.RedisPollingLock", return_value=polling_lock),
+            patch("telegram_bot.bot.asyncio.create_task", side_effect=fake_create_task),
+        ):
+            await bot.start()
+
+        polling_lock.acquire.assert_awaited_once()
+        assert "polling-lock-heartbeat" in created_task_names
+
     async def test_stop_closes_services(self, mock_config):
         """Test that stop() closes all services."""
         bot, _ = _create_bot(mock_config)
@@ -1641,7 +1676,21 @@ class TestBotLifecycle:
 
         await bot.stop()
 
-        polling_lock.release.assert_awaited_once_with("host:123")
+        polling_lock.release.assert_awaited_once_with()
+
+    async def test_polling_lock_heartbeat_stops_polling_on_refresh_failure(self, mock_config):
+        """Heartbeat failures should stop polling so the lease cannot silently expire."""
+        bot, _ = _create_bot(mock_config)
+        bot._polling_lock = AsyncMock()
+        bot._polling_lock.ttl_sec = 90
+        bot._polling_lock.refresh = AsyncMock(side_effect=RuntimeError("redis lost"))
+        bot.dp = MagicMock()
+        bot.dp.stop_polling = AsyncMock()
+
+        with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()):
+            await bot._polling_lock_heartbeat()
+
+        bot.dp.stop_polling.assert_awaited_once_with()
 
 
 class TestAgentCheckpointerLifecycle:

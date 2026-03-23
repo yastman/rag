@@ -620,6 +620,7 @@ class PropertyBot:
         self._topic_manager: Any = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
         self._polling_lock: RedisPollingLock | None = None
+        self._polling_lock_task: asyncio.Task[None] | None = None
         self._polling_lock_owner: str | None = None
 
         # Track initialization state
@@ -4826,8 +4827,36 @@ class PropertyBot:
             )
             self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
             await self._polling_lock.acquire(self._polling_lock_owner)
+            self._polling_lock_task = asyncio.create_task(
+                self._polling_lock_heartbeat(),
+                name="polling-lock-heartbeat",
+            )
 
-        await self.dp.start_polling(self.bot)
+        try:
+            await self.dp.start_polling(self.bot)
+        finally:
+            if self._polling_lock_task is not None:
+                self._polling_lock_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._polling_lock_task
+                self._polling_lock_task = None
+
+    async def _polling_lock_heartbeat(self) -> None:
+        """Keep the Redis lease alive while polling is active."""
+        if self._polling_lock is None:
+            return
+
+        refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+        try:
+            while True:
+                await asyncio.sleep(refresh_interval)
+                await self._polling_lock.refresh()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Polling lock heartbeat failed; stopping polling")
+            with contextlib.suppress(Exception):
+                await self.dp.stop_polling()
 
     async def stop(self):
         """Stop bot and cleanup."""
@@ -4837,9 +4866,14 @@ class PropertyBot:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._miniapp_subscriber_task
             self._miniapp_subscriber_task = None
+        if self._polling_lock_task is not None:
+            self._polling_lock_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._polling_lock_task
+            self._polling_lock_task = None
         if self._polling_lock is not None and self._polling_lock_owner is not None:
             try:
-                await self._polling_lock.release(self._polling_lock_owner)
+                await self._polling_lock.release()
             except Exception:
                 logger.warning("Failed to release polling lock cleanly", exc_info=True)
             finally:
