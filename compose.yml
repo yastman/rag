@@ -420,7 +420,12 @@ services:
       - BGE_M3_CONCURRENCY=1
       - MANIFEST_DIR=/data/manifest
     volumes:
-      - ${GDRIVE_SYNC_DIR:-~/drive-sync}:/data/drive-sync:ro
+      - type: bind
+        source: ${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}
+        target: /data/drive-sync
+        read_only: true
+        bind:
+          create_host_path: false
       - ingestion-manifest:/data/manifest
     depends_on:
       postgres:
