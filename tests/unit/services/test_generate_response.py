@@ -195,6 +195,29 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak
 
 
 @pytest.mark.asyncio
+async def test_generate_response_returns_safe_fallback_when_strict_mode_has_low_confidence() -> (
+    None
+):
+    config, client = _make_non_streaming_config()
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="виды внж в болгарии",
+        documents=[{"text": "Документ", "score": 0.2, "metadata": {"title": "ВНЖ"}}],
+        grounding_mode="strict",
+        grade_confidence=0.1,
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
+    )
+
+    assert result["safe_fallback_used"] is True
+    assert result["legal_answer_safe"] is False
+    assert result["semantic_cache_safe_reuse"] is False
+    client.chat.completions.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_generate_response_strict_mode_does_not_degrade_only_because_show_sources_disabled() -> (
     None
 ):

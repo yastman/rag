@@ -20,6 +20,7 @@ from telegram_bot.integrations.prompt_templates import (
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.grounding_policy import (
     build_safe_fallback_response,
+    is_strict_grounding_safe,
     should_safe_fallback,
 )
 from telegram_bot.services.metrics import PipelineMetrics
@@ -453,6 +454,7 @@ async def generate_response(
     latency_stages: dict[str, float] | None = None,
     llm_call_count: int = 0,
     grounding_mode: str = "normal",
+    grade_confidence: float | None = None,
     message: Any | None = None,
     config: Any | None = None,
     get_config: Callable[[], Any] | None = None,
@@ -501,6 +503,11 @@ async def generate_response(
     detector = style_detector or _detector
     style_info = detector.detect(effective_query)
     sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    legal_answer_safe = grounding_mode != "strict" or is_strict_grounding_safe(
+        documents=docs,
+        sources_enabled=sources_enabled,
+        grade_confidence=grade_confidence,
+    )
     format_params = inspect.signature(format_context).parameters
     if "sources_enabled" in format_params:
         context = format_context(docs, max_context_docs, sources_enabled=sources_enabled)
@@ -523,6 +530,8 @@ async def generate_response(
         grounding_mode=grounding_mode,
         documents=docs,
         sources_enabled=sources_enabled,
+        grade_confidence=grade_confidence,
+        legal_answer_safe=legal_answer_safe,
     ):
         elapsed = time.monotonic() - t0
         PipelineMetrics.get().record("generate", elapsed * 1000)
@@ -944,6 +953,6 @@ async def generate_response(
         "grounding_mode": grounding_mode,
         "safe_fallback_used": False,
         "grounded": True,
-        "legal_answer_safe": True,
-        "semantic_cache_safe_reuse": True,
+        "legal_answer_safe": legal_answer_safe,
+        "semantic_cache_safe_reuse": legal_answer_safe,
     }

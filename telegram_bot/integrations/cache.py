@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CACHE_VERSION = "v5"
+SEMANTIC_CACHE_VERSION = "v6"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
@@ -77,7 +78,7 @@ def _create_semantic_cache(
         from redisvl.extensions.cache.llm import SemanticCache
 
         cache = SemanticCache(
-            name=f"sem:{CACHE_VERSION}:bge1024",
+            name=f"sem:{SEMANTIC_CACHE_VERSION}:bge1024",
             redis_url=redis_url,
             ttl=ttl,
             distance_threshold=distance_threshold,
@@ -88,6 +89,8 @@ def _create_semantic_cache(
                 {"name": "user_id", "type": "tag"},
                 {"name": "cache_scope", "type": "tag"},
                 {"name": "agent_role", "type": "tag"},
+                {"name": "grounding_mode", "type": "tag"},
+                {"name": "semantic_cache_safe_reuse", "type": "tag"},
             ],
         )
         logger.info("SemanticCache initialized (threshold=%.2f, ttl=%ds)", distance_threshold, ttl)
@@ -236,6 +239,8 @@ class CacheLayerManager:
         user_id: int | None = None,
         cache_scope: str | None = None,
         agent_role: str | None = None,
+        grounding_mode: str | None = None,
+        require_safe_reuse: bool = False,
         cache_timeout: float = 0.3,
     ) -> str | None:
         """Check semantic cache with query-type-specific threshold.
@@ -261,6 +266,8 @@ class CacheLayerManager:
                 "has_user_id": user_id is not None,
                 "has_cache_scope": cache_scope is not None,
                 "has_agent_role": agent_role is not None,
+                "grounding_mode": grounding_mode,
+                "require_safe_reuse": require_safe_reuse,
                 "cache_timeout_s": cache_timeout,
                 "query_length": len(query),
                 "vector_dim": len(vector),
@@ -283,6 +290,10 @@ class CacheLayerManager:
                 filter_expr = filter_expr & (Tag("cache_scope") == cache_scope)
             if agent_role is not None:
                 filter_expr = filter_expr & (Tag("agent_role") == agent_role)
+            if grounding_mode is not None:
+                filter_expr = filter_expr & (Tag("grounding_mode") == grounding_mode)
+            if require_safe_reuse:
+                filter_expr = filter_expr & (Tag("semantic_cache_safe_reuse") == "true")
             start = time.time()
 
             try:
@@ -356,6 +367,7 @@ class CacheLayerManager:
         user_id: int | None = None,
         cache_scope: str | None = None,
         agent_role: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Store query-response pair in semantic cache."""
         lf = get_client()
@@ -366,6 +378,7 @@ class CacheLayerManager:
                 "has_user_id": user_id is not None,
                 "has_cache_scope": cache_scope is not None,
                 "has_agent_role": agent_role is not None,
+                "metadata_keys": sorted((metadata or {}).keys()),
                 "query_length": len(query),
                 "response_length": len(response),
                 "vector_dim": len(vector),
@@ -383,12 +396,21 @@ class CacheLayerManager:
             filters["cache_scope"] = cache_scope
         if agent_role is not None:
             filters["agent_role"] = agent_role
+        if metadata:
+            grounding_mode = metadata.get("grounding_mode")
+            if isinstance(grounding_mode, str) and grounding_mode:
+                filters["grounding_mode"] = grounding_mode
+            if "semantic_cache_safe_reuse" in metadata:
+                filters["semantic_cache_safe_reuse"] = str(
+                    bool(metadata["semantic_cache_safe_reuse"])
+                ).lower()
         try:
             await self.semantic_cache.astore(
                 prompt=query,
                 response=response,
                 vector=vector,
                 filters=filters,
+                metadata=metadata,
                 ttl=ttl,
             )
             logger.debug(
@@ -744,7 +766,7 @@ class CacheLayerManager:
             elif hasattr(self.semantic_cache, "clear"):
                 self.semantic_cache.clear()
             elif self.redis:
-                pattern = f"sem:{CACHE_VERSION}:*"
+                pattern = f"sem:{SEMANTIC_CACHE_VERSION}:*"
                 keys = [key async for key in self.redis.scan_iter(match=pattern)]
                 if keys:
                     await self.redis.delete(*keys)
