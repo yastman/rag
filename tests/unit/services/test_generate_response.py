@@ -218,6 +218,48 @@ async def test_generate_response_strict_mode_does_not_degrade_only_because_show_
 
 
 @pytest.mark.asyncio
+async def test_generate_response_strips_citation_artifacts_when_sources_disabled() -> None:
+    config, client = _make_non_streaming_config(
+        answer="Потребуется также счёт в болгарском банке 1.\nИ подтверждение дохода [2]."
+    )
+    config.show_sources = False
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Что нужно для ВНЖ?",
+        documents=[{"text": "Документ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
+    )
+
+    assert result["response"] == (
+        "Потребуется также счёт в болгарском банке\nИ подтверждение дохода."
+    )
+    client.chat.completions.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
+    config, client = _make_non_streaming_config(
+        answer="Потребуется также счёт в болгарском банке [1]."
+    )
+    config.show_sources = True
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Что нужно для ВНЖ?",
+        documents=[{"text": "Документ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
+    )
+
+    assert result["response"] == "Потребуется также счёт в болгарском банке [1]."
+    client.chat.completions.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_generate_response_streaming_sets_response_sent_and_message_ref() -> None:
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True

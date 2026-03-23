@@ -1255,6 +1255,26 @@ class TestGenerateNodeCitationInstruction:
         system_msg = messages[0]["content"]
         assert "[Объект 1] = [1]" not in system_msg
 
+    async def test_context_omits_object_labels_when_sources_disabled(self) -> None:
+        """Model-visible context must not contain numbered object labels when sources are hidden."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_config.show_sources = False
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        user_msg = messages[-1]["content"]
+        assert "Фрагмент контекста" in user_msg
+        assert "[Объект 1]" not in user_msg
+
     async def test_no_citation_instruction_without_documents(self) -> None:
         """No citation instruction when documents are empty."""
         from telegram_bot.graph.nodes.generate import generate_node
