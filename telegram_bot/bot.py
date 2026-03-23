@@ -6,7 +6,9 @@ import inspect
 import io
 import json
 import logging
+import os
 import re
+import socket
 import time
 import uuid
 import warnings
@@ -34,6 +36,7 @@ from .handlers.handoff import (
     HandoffStates,
     start_qualification,
 )
+from .integrations.polling_lock import RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
 )
@@ -59,6 +62,7 @@ from .services.handoff_state import HandoffData, HandoffState
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
+from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
 if TYPE_CHECKING:
@@ -615,6 +619,9 @@ class PropertyBot:
         self._deeplink_redis: Any | None = None
         self._topic_manager: Any = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
+        self._polling_lock: RedisPollingLock | None = None
+        self._polling_lock_task: asyncio.Task[None] | None = None
+        self._polling_lock_owner: str | None = None
 
         # Track initialization state
         self._cache_initialized = False
@@ -4319,6 +4326,7 @@ class PropertyBot:
     async def start(self):
         """Start bot polling."""
         logger.info("Starting bot...")
+        startup_report = StartupReport()
 
         # Initialize cache at startup
         if not self._cache_initialized:
@@ -4341,6 +4349,14 @@ class PropertyBot:
         except Exception:
             logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
             self._checkpointer = create_fallback_checkpointer()
+            startup_report.add(
+                StartupSignal(
+                    source="conversation_memory",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="Redis checkpointer unavailable, using in-memory fallback",
+                    remediation="restore Redis connectivity for persistent conversation memory",
+                )
+            )
 
         # Agent/voice checkpointer — Redis with TTL for bounded retention (#424).
         try:
@@ -4357,6 +4373,14 @@ class PropertyBot:
         except Exception:
             logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
             self._agent_checkpointer = create_fallback_checkpointer()
+            startup_report.add(
+                StartupSignal(
+                    source="agent_memory",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="Agent Redis checkpointer unavailable, using in-memory fallback",
+                    remediation="restore Redis connectivity for persistent agent state",
+                )
+            )
 
         # Initialize topic service (forum topics mapping — user+expert → thread_id)
         import redis.asyncio as aioredis
@@ -4394,6 +4418,14 @@ class PropertyBot:
         except Exception:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
+            startup_report.add(
+                StartupSignal(
+                    source="history",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="/history disabled because history service initialization failed",
+                    remediation="restore Qdrant history collection and embeddings dependencies",
+                )
+            )
 
         # Initialize Kommo CRM client if enabled (#420: fail-safe, must not block startup)
         if self.config.kommo_enabled and self.config.kommo_subdomain:
@@ -4543,6 +4575,14 @@ class PropertyBot:
                     logger.exception("Failed to start nurturing scheduler")
         except Exception:
             logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+            startup_report.add(
+                StartupSignal(
+                    source="postgres_runtime",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="PostgreSQL pool unavailable, user features disabled",
+                    remediation="restore PostgreSQL connectivity for favorites, search events, and user services",
+                )
+            )
 
         # Initialize session summary worker (#445)
         self._session_summary_worker: Any | None = None
@@ -4715,9 +4755,17 @@ class PropertyBot:
         logger.info("aiogram-dialog setup complete")
 
         # Preflight dependency checks
-        from .preflight import check_dependencies
+        from .preflight import PreflightError, check_dependencies
 
-        await check_dependencies(self.config)
+        try:
+            preflight_result = await check_dependencies(self.config, log_summary=False)
+        except PreflightError as exc:
+            startup_report.merge(exc.report)
+            logger.error(startup_report.render())
+            raise
+        preflight_report = getattr(preflight_result, "report", None)
+        if isinstance(preflight_report, StartupReport):
+            startup_report.merge(preflight_report)
 
         # Start Redis health monitor (background task, every 5 min)
         await self._redis_monitor.start()
@@ -4765,7 +4813,50 @@ class PropertyBot:
                 self._miniapp_subscriber_loop(), name="miniapp-pubsub"
             )
 
-        await self.dp.start_polling(self.bot)
+        if startup_report.final_severity is StartupSeverity.FAILED:
+            logger.error(startup_report.render())
+        elif startup_report.final_severity is StartupSeverity.DEGRADED:
+            logger.warning(startup_report.render())
+        else:
+            logger.info(startup_report.render())
+
+        if self._cache.redis is not None:
+            self._polling_lock = RedisPollingLock(
+                redis=self._cache.redis,
+                key="telegram-bot:polling",
+            )
+            self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
+            await self._polling_lock.acquire(self._polling_lock_owner)
+            self._polling_lock_task = asyncio.create_task(
+                self._polling_lock_heartbeat(),
+                name="polling-lock-heartbeat",
+            )
+
+        try:
+            await self.dp.start_polling(self.bot)
+        finally:
+            if self._polling_lock_task is not None:
+                self._polling_lock_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._polling_lock_task
+                self._polling_lock_task = None
+
+    async def _polling_lock_heartbeat(self) -> None:
+        """Keep the Redis lease alive while polling is active."""
+        if self._polling_lock is None:
+            return
+
+        refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+        try:
+            while True:
+                await asyncio.sleep(refresh_interval)
+                await self._polling_lock.refresh()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Polling lock heartbeat failed; stopping polling")
+            with contextlib.suppress(Exception):
+                await self.dp.stop_polling()
 
     async def stop(self):
         """Stop bot and cleanup."""
@@ -4775,6 +4866,19 @@ class PropertyBot:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._miniapp_subscriber_task
             self._miniapp_subscriber_task = None
+        if self._polling_lock_task is not None:
+            self._polling_lock_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._polling_lock_task
+            self._polling_lock_task = None
+        if self._polling_lock is not None and self._polling_lock_owner is not None:
+            try:
+                await self._polling_lock.release()
+            except Exception:
+                logger.warning("Failed to release polling lock cleanly", exc_info=True)
+            finally:
+                self._polling_lock = None
+                self._polling_lock_owner = None
         await self._redis_monitor.stop()
         await self._cache.close()
         await self._qdrant.close()

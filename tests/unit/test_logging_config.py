@@ -341,6 +341,9 @@ class TestSetupLogging:
         assert logging.getLogger("httpx").level == logging.WARNING
         assert logging.getLogger("httpcore").level == logging.WARNING
         assert logging.getLogger("aiogram").level == logging.INFO
+        assert logging.getLogger("aiogram_dialog").level == logging.WARNING
+        assert logging.getLogger("aiogram_dialog.manager").level == logging.WARNING
+        assert logging.getLogger("aiogram_dialog.manager.message_manager").level == logging.WARNING
         assert logging.getLogger("qdrant_client").level == logging.WARNING
 
     def test_setup_logging_logs_configuration(self):
