@@ -7,10 +7,11 @@
 
 set -euo pipefail
 
-SYNC_DIR="${GDRIVE_SYNC_DIR:-$HOME/drive-sync}"
+SYNC_DIR="${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"
+RCLONE_CONFIG_FILE="${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"
 LOG_FILE="${HOME}/.local/log/rclone-sync.log"
 LOCK_FILE="/tmp/rclone-sync.lock"
-RCLONE_REMOTE="gdrive:RAG"
+RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive:RAG}"
 
 # Ensure log directory exists
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -22,6 +23,7 @@ flock -n 200 || { echo "$(date): Sync already running" >> "$LOG_FILE"; exit 0; }
 echo "$(date): Starting Drive sync" >> "$LOG_FILE"
 
 rclone sync "$RCLONE_REMOTE" "$SYNC_DIR" \
+  --config "$RCLONE_CONFIG_FILE" \
   --drive-export-formats docx,xlsx,pptx \
   --fast-list \
   --delete-after \
