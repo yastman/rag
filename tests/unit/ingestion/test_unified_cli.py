@@ -200,12 +200,16 @@ class TestCmdPreflight:
             "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
         },
     )
-    async def test_all_checks_pass(self, args, capsys):
+    async def test_all_checks_pass(self, args, capsys, tmp_path):
         mock_client = AsyncMock()
         mock_client.get.return_value = _ok_response({"result": {"points_count": 42}})
         mock_client.post.return_value = _ok_response()
 
-        config = _make_config()
+        sync_dir = tmp_path / "sync"
+        sync_dir.mkdir()
+        (sync_dir / "knowledge.md").write_text("# test", encoding="utf-8")
+
+        config = _make_config(sync_dir=sync_dir)
         with (
             patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
             patch("httpx.AsyncClient") as MockClient,
