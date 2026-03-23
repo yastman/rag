@@ -18,7 +18,10 @@ from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.generate_response import generate_response
-from telegram_bot.services.grounding_policy import get_grounding_mode
+from telegram_bot.services.grounding_policy import (
+    get_grounding_mode,
+    semantic_cache_safe_reuse_allowed,
+)
 from telegram_bot.services.history_service import HistoryService
 from telegram_bot.services.telegram_formatting import send_html_messages
 from telegram_bot.services.types import PipelineResult
@@ -132,6 +135,24 @@ def _safe_langfuse_env(config: Any) -> str:
 def _is_contextual_query(user_text: str) -> bool:
     """Return True if query contains follow-up pronouns / contextual references."""
     return bool(_CONTEXTUAL_RE.search(user_text))
+
+
+def _semantic_cache_metadata(result: dict[str, Any], grounding_mode: str) -> dict[str, Any]:
+    return {
+        "grounding_mode": grounding_mode,
+        "legal_answer_safe": bool(result.get("legal_answer_safe", True)),
+        "semantic_cache_safe_reuse": bool(result.get("semantic_cache_safe_reuse", True)),
+    }
+
+
+def _strict_cache_safe_to_store(result: dict[str, Any], grounding_mode: str) -> bool:
+    return semantic_cache_safe_reuse_allowed(
+        grounding_mode=grounding_mode,
+        grounded=bool(result.get("grounded", True)),
+        legal_answer_safe=bool(result.get("legal_answer_safe", True)),
+        semantic_cache_safe_reuse=bool(result.get("semantic_cache_safe_reuse", True)),
+        safe_fallback_used=bool(result.get("safe_fallback_used", False)),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +365,11 @@ async def run_client_pipeline(
             latency_stages=result.get("latency_stages", {}),
             llm_call_count=int(result.get("llm_call_count", 0) or 0),
             grounding_mode=grounding_mode,
+            grade_confidence=(
+                float(result["grade_confidence"])
+                if isinstance(result.get("grade_confidence"), Real)
+                else None
+            ),
             config=config,
             message=message,
         )
@@ -411,6 +437,12 @@ async def run_client_pipeline(
         "query_type": query_type,
         "topic_hint": topic_hint_value,
         "grounding_mode": grounding_mode_value,
+        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
+        "sources_count": int(result.get("sources_count", 0) or 0),
+        "grounded": bool(result.get("grounded", True)),
+        "legal_answer_safe": bool(result.get("legal_answer_safe", True)),
+        "semantic_cache_safe_reuse": bool(result.get("semantic_cache_safe_reuse", True)),
+        "safe_fallback_used": bool(result.get("safe_fallback_used", False)),
         "collection": _safe_collection_name(config),
         "environment": _safe_langfuse_env(config),
         "pipeline_wall_ms": wall_ms,
@@ -437,6 +469,7 @@ async def run_client_pipeline(
         and not _is_contextual_query(user_text)
         and grade_confidence >= confidence_threshold
         and bool(documents_list)
+        and _strict_cache_safe_to_store(result, grounding_mode_value)
     )
 
     if should_store:
@@ -448,6 +481,7 @@ async def run_client_pipeline(
                 query_type=query_type,
                 cache_scope="rag",
                 agent_role=role,
+                metadata=_semantic_cache_metadata(result, grounding_mode_value),
             )
         except Exception:
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
