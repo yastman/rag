@@ -27,7 +27,7 @@ COPY pyproject.toml uv.lock ./
 COPY main.py ./
 
 # ====== RUNTIME STAGE ======
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm@sha256:55e465cb7e50cd1d7217fcb5386aa87d0356ca2cd790872142ef68d9ef6812b4 AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
