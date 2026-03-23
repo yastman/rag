@@ -44,6 +44,7 @@ class TestArgParsing:
         reprocess_p = subparsers.add_parser("reprocess")
         reprocess_p.add_argument("--file-id")
         reprocess_p.add_argument("--errors", action="store_true")
+        reprocess_p.add_argument("--pending", action="store_true")
 
         return parser.parse_args(list(argv))
 
@@ -93,11 +94,19 @@ class TestArgParsing:
         assert args.command == "reprocess"
         assert args.file_id == "abc123"
         assert args.errors is False
+        assert args.pending is False
 
     def test_reprocess_errors(self):
         args = self._parse("reprocess", "--errors")
         assert args.errors is True
         assert args.file_id is None
+        assert args.pending is False
+
+    def test_reprocess_pending(self):
+        args = self._parse("reprocess", "--pending")
+        assert args.pending is True
+        assert args.file_id is None
+        assert args.errors is False
 
     def test_verbose_flag(self):
         args = self._parse("-v", "run")
@@ -294,6 +303,46 @@ class TestCmdPreflight:
         assert result == 1
         output = capsys.readouterr().out
         assert "[FAIL]" in output
+
+    @patch.dict(
+        "os.environ",
+        {
+            "QDRANT_URL": "http://qdrant:6333",
+            "BGE_M3_URL": "http://bge:8000",
+            "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
+        },
+    )
+    async def test_native_docling_backend_skips_http_healthcheck(self, args, capsys, tmp_path):
+        mock_client = AsyncMock()
+        mock_client.get.return_value = _ok_response({"result": {"points_count": 42}})
+        mock_client.post.return_value = _ok_response()
+
+        sync_dir = tmp_path / "sync"
+        sync_dir.mkdir()
+        (sync_dir / "knowledge.md").write_text("# test", encoding="utf-8")
+
+        config = _make_config(sync_dir=sync_dir)
+        config.docling_backend = "docling_native"
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("src.ingestion.docling_native.NativeDoclingAdapter") as MockAdapter,
+            patch("httpx.AsyncClient") as MockClient,
+        ):
+            MockAdapter.return_value._get_converter.return_value = object()
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__.return_value = mock_client
+            mock_ctx.__aexit__.return_value = False
+            MockClient.return_value = mock_ctx
+
+            from src.ingestion.unified.cli import cmd_preflight
+
+            result = await cmd_preflight(args)
+
+        assert result == 0
+        output = capsys.readouterr().out
+        assert "Docling native backend available" in output
+        mock_client.get.assert_called_once()
 
     async def test_missing_env_vars_warned(self, args, capsys):
         mock_client = AsyncMock()
@@ -519,6 +568,11 @@ class TestCmdReprocess:
     async def test_reprocess_file_id(self):
         config = _make_config()
         pool = AsyncMock()
+        pool.fetch.side_effect = [
+            [{"source_path": "drive-sync/Test/abc.md"}],
+            [{"tablename": "unified__ingest_a7bb25__cocoindex_tracking"}],
+        ]
+        pool.execute.side_effect = ["UPDATE 1", "DELETE 1"]
         manager = AsyncMock()
         manager._get_pool.return_value = pool
 
@@ -532,19 +586,30 @@ class TestCmdReprocess:
             from src.ingestion.unified.cli import cmd_reprocess
 
             args = argparse.Namespace(
-                command="reprocess", file_id="abc123", errors=False, verbose=False
+                command="reprocess",
+                file_id="abc123",
+                errors=False,
+                pending=False,
+                verbose=False,
             )
             result = await cmd_reprocess(args)
 
         assert result == 0
-        pool.execute.assert_awaited_once()
-        sql_call = pool.execute.call_args
-        assert "abc123" in sql_call.args
+        assert pool.fetch.await_count == 2
+        assert pool.execute.await_count == 2
+        update_call = pool.execute.await_args_list[0]
+        delete_call = pool.execute.await_args_list[1]
+        assert "abc123" in update_call.args
+        assert "DELETE FROM unified__ingest" in delete_call.args[0]
 
     async def test_reprocess_errors(self):
         config = _make_config()
         pool = AsyncMock()
-        pool.execute.return_value = "UPDATE 5"
+        pool.fetch.side_effect = [
+            [{"source_path": "drive-sync/Test/err.md"}],
+            [{"tablename": "unified__ingest_a7bb25__cocoindex_tracking"}],
+        ]
+        pool.execute.side_effect = ["UPDATE 5", "DELETE 1"]
         manager = AsyncMock()
         manager._get_pool.return_value = pool
 
@@ -557,12 +622,53 @@ class TestCmdReprocess:
         ):
             from src.ingestion.unified.cli import cmd_reprocess
 
-            args = argparse.Namespace(command="reprocess", file_id=None, errors=True, verbose=False)
+            args = argparse.Namespace(
+                command="reprocess",
+                file_id=None,
+                errors=True,
+                pending=False,
+                verbose=False,
+            )
             result = await cmd_reprocess(args)
 
         assert result == 0
-        sql_call = pool.execute.call_args
-        assert "error" in sql_call.args[0]
+        update_call = pool.execute.await_args_list[0]
+        delete_call = pool.execute.await_args_list[1]
+        assert update_call.args[1] == "error"
+        assert "DELETE FROM unified__ingest" in delete_call.args[0]
+
+    async def test_reprocess_pending(self):
+        config = _make_config()
+        pool = AsyncMock()
+        pool.fetch.side_effect = [
+            [{"source_path": "drive-sync/Test/pending.md"}],
+            [{"tablename": "unified__ingest_a7bb25__cocoindex_tracking"}],
+        ]
+        pool.execute.side_effect = ["UPDATE 3", "DELETE 1"]
+        manager = AsyncMock()
+        manager._get_pool.return_value = pool
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch(
+                "src.ingestion.unified.state_manager.UnifiedStateManager",
+                return_value=manager,
+            ),
+        ):
+            from src.ingestion.unified.cli import cmd_reprocess
+
+            args = argparse.Namespace(
+                command="reprocess",
+                file_id=None,
+                errors=False,
+                pending=True,
+                verbose=False,
+            )
+            result = await cmd_reprocess(args)
+
+        assert result == 0
+        update_call = pool.execute.await_args_list[0]
+        assert update_call.args[1] == "pending"
 
     async def test_reprocess_no_args_returns_1(self, capsys):
         config = _make_config()
@@ -579,13 +685,17 @@ class TestCmdReprocess:
             from src.ingestion.unified.cli import cmd_reprocess
 
             args = argparse.Namespace(
-                command="reprocess", file_id=None, errors=False, verbose=False
+                command="reprocess",
+                file_id=None,
+                errors=False,
+                pending=False,
+                verbose=False,
             )
             result = await cmd_reprocess(args)
 
         assert result == 1
         output = capsys.readouterr().out
-        assert "Specify --file-id or --errors" in output
+        assert "Specify --file-id, --errors, or --pending" in output
 
     async def test_reprocess_closes_manager(self):
         config = _make_config()
@@ -601,7 +711,13 @@ class TestCmdReprocess:
         ):
             from src.ingestion.unified.cli import cmd_reprocess
 
-            args = argparse.Namespace(command="reprocess", file_id="x", errors=False, verbose=False)
+            args = argparse.Namespace(
+                command="reprocess",
+                file_id="x",
+                errors=False,
+                pending=False,
+                verbose=False,
+            )
             await cmd_reprocess(args)
 
         manager.close.assert_awaited_once()

@@ -47,11 +47,11 @@ FROM python:3.12-slim-bookworm AS runtime
 
 WORKDIR /app
 
-# Install runtime deps (procps for healthcheck)
+# Install runtime deps (procps for healthcheck, gosu for privilege drop)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && apt-get install -y --no-install-recommends procps
+    apt-get update && apt-get install -y --no-install-recommends procps gosu
 
 # Create non-root user BEFORE copying files
 RUN useradd -m -u 1000 ingestion
@@ -66,10 +66,12 @@ COPY --from=builder --chown=ingestion:ingestion /app/.venv /app/.venv
 COPY --chown=ingestion:ingestion pyproject.toml uv.lock ./
 COPY --chown=ingestion:ingestion src/ ./src/
 COPY --chown=ingestion:ingestion telegram_bot/ ./telegram_bot/
+COPY docker/ingestion/entrypoint.sh /usr/local/bin/ingestion-entrypoint.sh
 
-USER ingestion
+RUN chmod +x /usr/local/bin/ingestion-entrypoint.sh
 
-ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
+ENV PATH="/app/.venv/bin:${PATH}" \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
@@ -78,5 +80,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "src.ingestion.unified.cli"]
+ENTRYPOINT ["/usr/local/bin/ingestion-entrypoint.sh"]
 CMD ["run", "--watch"]
