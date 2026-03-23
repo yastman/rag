@@ -78,6 +78,8 @@ scripts/
 
 ***REMOVED*** Docker configs (not needed in image)
 docker/
+!docker/ingestion/
+!docker/ingestion/entrypoint.sh
 
 ***REMOVED*** Services (separate builds)
 services/

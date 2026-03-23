@@ -443,7 +443,7 @@ class TestUpsertChunksSyncEdgeCases:
     def test_oversized_payload_skipped_with_error(
         self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
     ):
-        """Payload exceeding QDRANT_MAX_PAYLOAD_BYTES is skipped, not sent to Qdrant."""
+        """Single-point requests above the safe limit are skipped, not sent to Qdrant."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
         mock_bge_client.encode_sparse.return_value = MagicMock(
@@ -454,6 +454,63 @@ class TestUpsertChunksSyncEdgeCases:
         huge_text = "x" * (35 * 1024 * 1024)
         chunk = _make_chunk(text=huge_text)
         stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/big.pdf", {}, "col")
+
+        assert stats.errors is not None
+        assert "exceeds" in stats.errors[0]
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
+
+    def test_upsert_is_split_into_multiple_requests_when_batch_is_too_large(
+        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+    ):
+        """Request-size batching should split points into multiple upsert() calls."""
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024] * 3)
+        mock_bge_client.encode_sparse.return_value = MagicMock(
+            weights=[{"indices": [1], "values": [0.5]}] * 3
+        )
+
+        chunks = [_make_chunk(text=f"text {i}", order=i) for i in range(3)]
+        with (
+            patch.object(
+                QdrantHybridWriter,
+                "_estimate_point_request_bytes",
+                side_effect=[300, 300, 300],
+            ),
+            patch(
+                "src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES",
+                700,
+            ),
+        ):
+            stats = writer_voyage.upsert_chunks_sync(chunks, "f", "/split.md", {}, "col")
+
+        assert stats.errors is None
+        assert stats.points_upserted == 3
+        assert mock_qdrant_client.upsert.call_count == 2
+        first_points = mock_qdrant_client.upsert.call_args_list[0].kwargs["points"]
+        second_points = mock_qdrant_client.upsert.call_args_list[1].kwargs["points"]
+        assert len(first_points) == 2
+        assert len(second_points) == 1
+
+    def test_single_point_larger_than_request_limit_is_rejected(
+        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+    ):
+        """A single point larger than the request limit should fail fast."""
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
+        mock_bge_client.encode_sparse.return_value = MagicMock(
+            weights=[{"indices": [1], "values": [0.5]}]
+        )
+
+        chunk = _make_chunk(text="single point", order=0)
+        with (
+            patch.object(QdrantHybridWriter, "_estimate_point_request_bytes", return_value=1024),
+            patch(
+                "src.ingestion.unified.qdrant_writer.QDRANT_UPSERT_MAX_REQUEST_BYTES",
+                512,
+            ),
+        ):
+            stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/big.md", {}, "col")
 
         assert stats.errors is not None
         assert "exceeds" in stats.errors[0]
