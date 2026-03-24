@@ -5,23 +5,20 @@ from __future__ import annotations
 import logging
 from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.ingestion.docling_client import DoclingChunk, DoclingClient, DoclingConfig
 
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from docling.document_converter import DocumentConverter as DocumentConverterType
-else:
-    DocumentConverterType = Any
+DocumentConverterType = Any
 
 
 def _load_runtime_document_converter() -> Any | None:
     try:
         module = import_module("docling.document_converter")
-    except ModuleNotFoundError:  # pragma: no cover - exercised in unit tests via injected converter
+    except Exception:  # pragma: no cover - exercised in unit tests via injected converter
         return None
     return getattr(module, "DocumentConverter", None)
 

@@ -16,14 +16,27 @@ Usage:
 import hashlib
 import logging
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import pymupdf  # PyMuPDF 1.26+ (NOT fitz!)
-from docling.document_converter import DocumentConverter
 
 
 logger = logging.getLogger(__name__)
+
+
+def _load_docling_converter() -> Any | None:
+    """Load Docling lazily so unrelated imports keep working without ingest extras."""
+    try:
+        module = import_module("docling.document_converter")
+    except Exception as exc:  # pragma: no cover - exercised indirectly in full-suite envs
+        logger.warning("Docling converter unavailable at import time: %s", exc)
+        return None
+    return getattr(module, "DocumentConverter", None)
+
+
+DocumentConverter: Any | None = _load_docling_converter()
 
 
 @dataclass
@@ -112,6 +125,11 @@ class UniversalDocumentParser:
         - OCR disabled: For digital documents (CSV, DOCX, XLSX)
         """
         if self.docling_converter is None:
+            if DocumentConverter is None:
+                raise RuntimeError(
+                    "docling is unavailable or broken; install the ingest extras with a working "
+                    "docling package to parse DOCX/CSV/XLSX files"
+                )
             # Simple converter for DOCX/CSV/XLSX (no complex PDF options needed)
             self.docling_converter = DocumentConverter()
 
