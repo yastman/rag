@@ -5,24 +5,16 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import functools
 import json
 import logging
 import os
 import time
+from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 from dotenv import load_dotenv
-from livekit import agents
-from livekit.agents import (
-    Agent,
-    AgentServer,
-    AgentSession,
-    JobProcess,
-    RunContext,
-    cli,
-    function_tool,
-)
-from livekit.plugins import elevenlabs, openai, silero
 
 from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
 from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
@@ -30,8 +22,158 @@ from src.voice.schemas import CallStatus
 from src.voice.transcript_store import TranscriptStore
 
 
+_LIVEKIT_IMPORT_ERROR: Exception | None = None
+agents: Any
+Agent: Any
+AgentServer: Any
+AgentSession: Any
+JobProcess: Any
+RunContext: Any
+cli: Any
+function_tool: Any
+elevenlabs: Any
+openai: Any
+silero: Any
+
+try:
+    from livekit import agents as _livekit_agents
+    from livekit.agents import (
+        Agent as _LivekitAgent,
+    )
+    from livekit.agents import (
+        AgentServer as _LivekitAgentServer,
+    )
+    from livekit.agents import (
+        AgentSession as _LivekitAgentSession,
+    )
+    from livekit.agents import (
+        JobProcess as _LivekitJobProcess,
+    )
+    from livekit.agents import (
+        RunContext as _LivekitRunContext,
+    )
+    from livekit.agents import (
+        cli as _livekit_cli,
+    )
+    from livekit.agents import (
+        function_tool as _livekit_function_tool,
+    )
+    from livekit.plugins import (
+        elevenlabs as _livekit_elevenlabs,
+    )
+    from livekit.plugins import (
+        openai as _livekit_openai,
+    )
+    from livekit.plugins import (
+        silero as _livekit_silero,
+    )
+except Exception as exc:  # pragma: no cover - exercised via tests/import fallback
+    _LIVEKIT_IMPORT_ERROR = exc
+
+    def _raise_livekit_runtime_unavailable() -> None:
+        raise RuntimeError(
+            "LiveKit runtime is unavailable in this environment"
+        ) from _LIVEKIT_IMPORT_ERROR
+
+    class _AgentStub:
+        def __init__(self, *, instructions: str = "") -> None:
+            self.instructions = instructions
+
+    class _AgentServerStub:
+        def __init__(
+            self,
+            *,
+            initialize_process_timeout: float,
+            shutdown_process_timeout: float,
+            num_idle_processes: int,
+            setup_fnc,
+        ) -> None:
+            self._initialize_process_timeout = initialize_process_timeout
+            self._shutdown_process_timeout = shutdown_process_timeout
+            self._num_idle_processes = num_idle_processes
+            self.setup_fnc = setup_fnc
+
+        def rtc_session(self, *, agent_name: str):
+            def decorator(fn):
+                self._agent_name = agent_name
+                self._entrypoint = fn
+                return fn
+
+            return decorator
+
+    class _AgentSessionStub:
+        def __init__(self, *args, **kwargs) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+        async def start(self, *args, **kwargs) -> None:
+            _raise_livekit_runtime_unavailable()
+
+        async def generate_reply(self, *args, **kwargs) -> None:
+            _raise_livekit_runtime_unavailable()
+
+    class _JobProcessStub:
+        def __init__(self) -> None:
+            self.userdata: dict = {}
+
+    class _RunContextStub:
+        pass
+
+    class _CLI:
+        @staticmethod
+        def run_app(*_args, **_kwargs) -> None:
+            _raise_livekit_runtime_unavailable()
+
+    def function_tool():
+        def decorator(fn):
+            @functools.wraps(fn)
+            async def wrapped(*args, **kwargs):
+                return await fn(*args, **kwargs)
+
+            return wrapped
+
+        return decorator
+
+    class _VAD:
+        @staticmethod
+        def load():
+            _raise_livekit_runtime_unavailable()
+
+    class _Factory:
+        def __init__(self, *args, **kwargs) -> None:
+            self.args = args
+            self.kwargs = kwargs
+
+    agents = cast(Any, SimpleNamespace(JobContext=object))
+    Agent = cast(Any, _AgentStub)
+    AgentServer = cast(Any, _AgentServerStub)
+    AgentSession = cast(Any, _AgentSessionStub)
+    JobProcess = cast(Any, _JobProcessStub)
+    RunContext = cast(Any, _RunContextStub)
+    cli = cast(Any, _CLI())
+    function_tool = cast(Any, function_tool)
+    silero = cast(Any, SimpleNamespace(VAD=_VAD))
+    elevenlabs = cast(Any, SimpleNamespace(STT=_Factory, TTS=_Factory))
+    openai = cast(Any, SimpleNamespace(LLM=_Factory))
+else:
+    agents = _livekit_agents
+    Agent = _LivekitAgent
+    AgentServer = _LivekitAgentServer
+    AgentSession = _LivekitAgentSession
+    JobProcess = _LivekitJobProcess
+    RunContext = _LivekitRunContext
+    cli = _livekit_cli
+    function_tool = _livekit_function_tool
+    elevenlabs = _livekit_elevenlabs
+    openai = _livekit_openai
+    silero = _livekit_silero
+
+
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+if _LIVEKIT_IMPORT_ERROR is not None:
+    logger.warning("LiveKit import failed; voice runtime entrypoint is unavailable", exc_info=True)
 
 RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8080")
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("VOICE_DATABASE_URL", "")
@@ -241,6 +383,10 @@ server = AgentServer(
 @server.rtc_session(agent_name="voice-bot")
 async def entrypoint(ctx: agents.JobContext):
     """Entry point for voice bot agent."""
+    if _LIVEKIT_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            "LiveKit runtime is unavailable in this environment"
+        ) from _LIVEKIT_IMPORT_ERROR
     await _mark_job_started()
     # Parse call metadata
     metadata: dict = {}
@@ -353,4 +499,8 @@ async def entrypoint(ctx: agents.JobContext):
 _setup_langfuse()
 
 if __name__ == "__main__":
+    if _LIVEKIT_IMPORT_ERROR is not None:
+        raise RuntimeError(
+            "LiveKit runtime is unavailable in this environment"
+        ) from _LIVEKIT_IMPORT_ERROR
     cli.run_app(server)
