@@ -2,7 +2,7 @@
 # Mini App React frontend — Node build + nginx serve
 
 # ====== BUILD STAGE ======
-FROM node:20-slim@sha256:a82f40540f5959e0003fb7b3c0f80490def2927be8bdbee7e3e0ac65cce3be92 AS builder
+FROM node:20-slim@sha256:17281e8d1dc4d671976c6b89a12f47a44c2f390b63a989e2e327631041f544fd AS builder
 
 WORKDIR /app
 
