@@ -120,6 +120,8 @@ Snapshots are created via `scripts/qdrant_snapshot.py`.
 
 - Empty retrieval results: verify `QDRANT_COLLECTION` matches existing collection.
 - Ingestion writes fail: run `src.ingestion.unified.cli preflight` to confirm reachability.
+- Collection exists but has `0 points`: verify the Google Drive sync directory is populated before treating this as a Qdrant issue.
+- On VPS, host `localhost:6333` may be unavailable when Qdrant is only exposed inside the Docker network; inspect from a sibling container or use `docker compose exec`.
 - ColBERT schema drift: run `src.ingestion.unified.cli schema-check --require-colbert`.
 - Low ColBERT coverage: run `src.ingestion.unified.cli coverage-check --min-ratio 0.995`.
 - Interrupted backfill: rerun `src.ingestion.unified.cli backfill-colbert --resume` to continue from `.colbert_backfill_checkpoint.json`.
