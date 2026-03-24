@@ -5,6 +5,7 @@
     "docker:enableMajor"
   ],
   "mode": "default",
+  "baseBranches": ["dev"],
 
   "schedule": ["before 9am on monday"],
   "timezone": "Europe/Kiev",
@@ -102,6 +103,13 @@
       "matchManagers": ["pre-commit"],
       "groupName": "pre-commit-hooks",
       "automerge": true
+    },
+    {
+      "description": "Mini app build/test toolchain - keep Vite and Vitest majors aligned",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["mini_app/frontend/package.json"],
+      "matchPackageNames": ["vite", "vitest", "@vitejs/plugin-react"],
+      "groupName": "mini-app-vite-toolchain"
     },
     {
       "description": "Python core libs - safe, auto-merge patch",
