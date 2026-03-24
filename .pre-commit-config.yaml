@@ -25,7 +25,7 @@ repos:
   # Best Practice 2025: Run linter BEFORE formatter (lint → format order)
   # Documentation: https://docs.astral.sh/ruff/integrations/
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.6  # Latest: https://github.com/astral-sh/ruff-pre-commit/releases
+    rev: v0.15.7  # Latest: https://github.com/astral-sh/ruff-pre-commit/releases
     hooks:
       # Step 1: Linter - checks code quality (runs FIRST)
       - id: ruff-check
