@@ -2,7 +2,7 @@
 # Voice Agent — uv sync pattern (2026 best practices)
 
 # ====== BUILD STAGE ======
-FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS builder
 
 WORKDIR /app
 
