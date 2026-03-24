@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 # Namespace for deterministic UUID generation
 NAMESPACE_GDRIVE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
-# Qdrant default max payload size (32 MB).  Points exceeding this are skipped.
-QDRANT_MAX_PAYLOAD_BYTES = 32 * 1024 * 1024
+# Keep request bodies below Qdrant's 32MB JSON limit with safety headroom.
+QDRANT_UPSERT_MAX_REQUEST_BYTES = 28 * 1024 * 1024
 
 
 @dataclass
@@ -284,6 +284,90 @@ class QdrantHybridWriter:
             "file_id": file_id,  # Flat for fast delete
         }
 
+    @staticmethod
+    def _point_to_jsonable(point: PointStruct) -> dict[str, Any]:
+        """Convert a PointStruct into a JSON-serializable dict for size estimation."""
+        if hasattr(point, "model_dump"):
+            return point.model_dump(mode="json", exclude_none=True)
+        if hasattr(point, "dict"):
+            return point.dict(exclude_none=True)
+        return {
+            "id": point.id,
+            "vector": point.vector,
+            "payload": point.payload,
+        }
+
+    @classmethod
+    def _estimate_point_request_bytes(cls, point: PointStruct) -> int:
+        """Estimate serialized request bytes for a single point."""
+        return len(
+            _json.dumps(
+                cls._point_to_jsonable(point),
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        )
+
+    def _upsert_points_in_batches(
+        self,
+        *,
+        collection_name: str,
+        points: list[PointStruct],
+        source_path: str,
+    ) -> int:
+        """Upsert points in request-size-safe batches."""
+        if not points:
+            return 0
+
+        total_upserted = 0
+        batch: list[PointStruct] = []
+        batch_bytes = 2  # JSON array brackets
+        batch_index = 1
+
+        for point in points:
+            point_bytes = self._estimate_point_request_bytes(point)
+            if point_bytes > QDRANT_UPSERT_MAX_REQUEST_BYTES:
+                raise ValueError(
+                    f"Single point request {point_bytes / 1024 / 1024:.1f}MB exceeds "
+                    f"safe Qdrant limit {QDRANT_UPSERT_MAX_REQUEST_BYTES / 1024 / 1024:.0f}MB "
+                    f"for {source_path}"
+                )
+
+            separator_bytes = 1 if batch else 0
+            if (
+                batch
+                and batch_bytes + separator_bytes + point_bytes > QDRANT_UPSERT_MAX_REQUEST_BYTES
+            ):
+                self.client.upsert(collection_name=collection_name, points=batch)
+                logger.info(
+                    "Upserted batch %d for %s: %d points (~%.1fMB)",
+                    batch_index,
+                    source_path,
+                    len(batch),
+                    batch_bytes / 1024 / 1024,
+                )
+                total_upserted += len(batch)
+                batch = [point]
+                batch_bytes = 2 + point_bytes
+                batch_index += 1
+                continue
+
+            batch.append(point)
+            batch_bytes += separator_bytes + point_bytes
+
+        if batch:
+            self.client.upsert(collection_name=collection_name, points=batch)
+            logger.info(
+                "Upserted batch %d for %s: %d points (~%.1fMB)",
+                batch_index,
+                source_path,
+                len(batch),
+                batch_bytes / 1024 / 1024,
+            )
+            total_upserted += len(batch)
+
+        return total_upserted
+
     @observe(name="ingestion-qdrant-delete-file", capture_input=False, capture_output=False)
     async def delete_file(self, file_id: str, collection_name: str) -> int:
         """Delete all points for a file.
@@ -394,26 +478,12 @@ class QdrantHybridWriter:
                 )
                 points.append(point)
 
-            # Step 5: Payload size guard
-            payload_size = len(_json.dumps([p.payload for p in points]).encode())
-            if payload_size > QDRANT_MAX_PAYLOAD_BYTES:
-                msg = (
-                    f"Payload {payload_size / 1024 / 1024:.1f}MB exceeds "
-                    f"Qdrant limit {QDRANT_MAX_PAYLOAD_BYTES / 1024 / 1024:.0f}MB "
-                    f"for {source_path} ({len(points)} chunks) — skipping"
-                )
-                logger.warning(msg)
-                stats.errors = [msg]
-                try_update_ingestion_trace(
-                    command="qdrant-upsert-chunks",
-                    status="error",
-                    metadata={"collection": collection_name, "error_type": "PayloadTooLarge"},
-                )
-                return stats
-
-            # Step 6: Upsert
-            self.client.upsert(collection_name=collection_name, points=points)
-            stats.points_upserted = len(points)
+            # Step 5: Upsert in request-size-safe batches
+            stats.points_upserted = self._upsert_points_in_batches(
+                collection_name=collection_name,
+                points=points,
+                source_path=source_path,
+            )
 
             logger.info(
                 f"Upserted {stats.points_upserted} points for {source_path} "
@@ -541,21 +611,12 @@ class QdrantHybridWriter:
                 )
                 points.append(point)
 
-            # Step 5: Payload size guard — skip oversized batches
-            payload_size = len(_json.dumps([p.payload for p in points]).encode())
-            if payload_size > QDRANT_MAX_PAYLOAD_BYTES:
-                msg = (
-                    f"Payload {payload_size / 1024 / 1024:.1f}MB exceeds "
-                    f"Qdrant limit {QDRANT_MAX_PAYLOAD_BYTES / 1024 / 1024:.0f}MB "
-                    f"for {source_path} ({len(points)} chunks) — skipping"
-                )
-                logger.warning(msg)
-                stats.errors = [msg]
-                return stats
-
-            # Step 6: Upsert (sync)
-            self.client.upsert(collection_name=collection_name, points=points)
-            stats.points_upserted = len(points)
+            # Step 5: Upsert in request-size-safe batches
+            stats.points_upserted = self._upsert_points_in_batches(
+                collection_name=collection_name,
+                points=points,
+                source_path=source_path,
+            )
 
             logger.info(
                 f"Upserted {stats.points_upserted} points for {source_path} "

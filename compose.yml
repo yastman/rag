@@ -199,8 +199,8 @@ services:
       # Langfuse v3 OTEL (Docker internal network)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
-      LANGFUSE_OTEL_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      LANGFUSE_OTEL_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       # Database disabled — config.yaml is source of truth for local dev
       # DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/litellm
     command: ["--config", "/app/config.yaml"]
@@ -261,7 +261,7 @@ services:
       # Langfuse observability (optional — bot degrades gracefully)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
@@ -344,7 +344,7 @@ services:
       LLM_MODEL: gpt-4o-mini
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
@@ -359,6 +359,7 @@ services:
         condition: service_healthy
       litellm:
         condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=5)"]
       interval: 30s
@@ -407,7 +408,7 @@ services:
     environment:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
+      - LANGFUSE_HOST=${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -711,7 +712,7 @@ services:
       RERANK_PROVIDER: colbert
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     depends_on:
       redis:
         condition: service_healthy
@@ -806,7 +807,7 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081')\" || exit 1"]
       interval: 15s
