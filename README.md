@@ -226,6 +226,7 @@ src/evaluation/            # RAG evaluation (RAGAS, A/B testing)
 ```bash
 make check       # Ruff lint + MyPy strict type checking
 make test-unit   # Unit tests (parallel via pytest-xdist)
+make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
 Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `main` or deploying to VPS.
