@@ -118,6 +118,8 @@ SENSITIVE_SPANS = [
     "dialog-crm-create-note",
     "dialog-crm-create-contact",
     "dialog-funnel-search",
+    "dialog-filter-hub-data",
+    "dialog-filter-start",
     "dialog-crm-create-task",
     "dialog-crm-create-lead",
     "phone-lead-capture",

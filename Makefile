@@ -26,6 +26,9 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 ENV_LOAD = if [ -f .env ]; then set -a; . ./.env; set +a; fi;
+PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
+PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
+PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 
 help: ## Show this help message
 	@echo "$(BLUE)Contextual RAG v2.0.1 - Development Commands$(NC)"
@@ -142,10 +145,13 @@ test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
-test-full: ## Run full test suite (all tiers)
+test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
-	uv run pytest tests/
+	@echo "$(BLUE)Phase 1/2: parallel-safe suites...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
+	@echo "$(BLUE)Phase 2/2: stateful/live suites sequentially...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
 test-cov: ## Run tests with coverage
