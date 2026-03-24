@@ -106,6 +106,15 @@ class TestLangfuseSecretPosture:
             f"got: {val!r}"
         )
 
+    @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
+    def test_base_compose_uses_docker_specific_host_var(self, compose_base: dict, service: str):
+        env = _get_service_env(compose_base, service)
+        val = str(env.get("LANGFUSE_HOST", ""))
+        assert "LANGFUSE_DOCKER_HOST" in val, (
+            f"compose.yml: {service}.LANGFUSE_HOST must use LANGFUSE_DOCKER_HOST to avoid "
+            f"host localhost values leaking into containers, got: {val!r}"
+        )
+
 
 class TestLitellmCallbacks:
     """LiteLLM config must have langfuse callbacks configured."""
