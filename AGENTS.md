@@ -2,7 +2,7 @@
 
 ## Project At A Glance
 - Production contextual RAG system for real-estate workflows.
-- Main surfaces: `telegram_bot/`, apartment search, CRM automation, voice agent, unified ingestion, local services, and k3s deployment.
+- Main surfaces: `telegram_bot/`, `mini_app/`, apartment search, CRM automation, voice agent, unified ingestion, local services, and k3s deployment.
 - Treat this repo as a multi-system product, not a single bot package.
 
 ## First Pass For New Sessions
@@ -16,6 +16,17 @@
 - Root `Critical Invariants` and `Validation` rules still apply repo-wide unless a local override adds stricter requirements.
 - `Engineering Heuristics` are defaults for ambiguous design choices; they do not justify violating explicit repo rules.
 
+## Workflow Reality
+- Do not assume `main` is the everyday integration branch.
+- Before giving PR, merge, release, or cleanup advice, verify the current workflow using:
+  - `git branch --show-current`
+  - `gh pr list --state merged --limit 8 --json number,baseRefName,headRefName,mergedAt`
+  - `.github/workflows/ci.yml`
+  - `Makefile`
+  - `scripts/git_hygiene.py`
+  - `scripts/repo_cleanup.sh`
+- Treat drift between merged PR history, docs, CI, and cleanup scripts as a real repo issue.
+
 ## MCP Priority And Fallbacks
 - `grepai` is the default entry point for code discovery, semantic search, and call-graph tracing.
 - In this repo, prefer `grepai` project-local mode by default: call `grepai_search` and `grepai_trace_*` without `workspace` unless a named workspace has been explicitly configured.
@@ -25,6 +36,14 @@
 - If `grepai` is unavailable or returns weak results, fall back to `rg` plus direct file reads.
 - If `context-mode` is unavailable, fall back to short shell commands and targeted file reads.
 
+## SDK And Docs Lookup Order
+- For SDK and framework decisions, use this order:
+  - `docs/engineering/sdk-registry.md`
+  - current code usage
+  - official docs / Context7 for version-sensitive behavior
+  - broad web search only as fallback
+- Do not block work on missing MCP tools; use shell and direct file reads when MCP is unavailable.
+
 ## Task Routing
 - `telegram_bot/`: handlers, dialogs, middlewares, agents, business services, orchestration.
 - `telegram_bot/services/` and `src/retrieval/`: search, RAG, cache, reranking, retrieval behavior.
@@ -33,6 +52,14 @@
 - `mini_app/`: Telegram mini app backend and frontend.
 - `services/`: supporting local service containers and helper APIs.
 - `k8s/`, `compose*.yml`, `DOCKER.md`: deploy and environment orchestration.
+
+## Runtime And Compose Contract
+- Treat `compose*.yml`, `docker/**`, `services/**`, `mini_app/**`, `src/api/**`, `src/voice/**`, and ingestion runtime paths as runtime-impacting surfaces.
+- For those changes, validate effective Compose config and service set, not only Python tests.
+- Prefer:
+  - `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services`
+  - `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services`
+  - `make verify-compose-images`
 
 ## Working Rules
 - Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
@@ -56,6 +83,7 @@
 - Preserve LangGraph state contracts, checkpoint assumptions, and routing shapes.
 - Preserve ingestion determinism and resumability; do not casually change manifest identity, hashing, or collection semantics.
 - Do not remove tracing, scoring, or observability hooks without a clear replacement.
+- Treat mini app parity as part of the release surface, not as an optional frontend.
 
 ## Validation
 - Run fresh verification before claiming completion.
