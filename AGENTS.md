@@ -38,7 +38,7 @@
 - Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
 - Use `mcp__context-mode__ctx_batch_execute` for multi-command repo exploration.
 - Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
-- Before adding a new SDK, API client, or dependency, check `.claude/rules/sdk-registry.md`.
+- Before adding a new SDK, API client, or dependency, check `docs/engineering/sdk-registry.md`.
 
 ## Engineering Heuristics
 - Prefer the simplest change that solves the current task and keeps the local blast radius small.
@@ -80,5 +80,5 @@
 
 ## References
 - `README.md`
-- `.claude/rules/sdk-registry.md`
+- `docs/engineering/sdk-registry.md`
 - `DOCKER.md`
