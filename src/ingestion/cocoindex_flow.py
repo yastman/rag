@@ -233,6 +233,38 @@ def create_document_flow(
     return document_ingestion_flow
 
 
+def _run_update_all_flows_blocking(options: Any) -> None:
+    """Run CocoIndex async updates from sync code, even inside a live event loop."""
+
+    async def _update() -> None:
+        await cocoindex.update_all_flows_async(options)
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(_update())
+        return
+
+    result: dict[str, BaseException | None] = {"error": None}
+
+    def _runner() -> None:
+        try:
+            asyncio.run(_update())
+        except BaseException as exc:  # pragma: no cover - exercised via caller error surface
+            result["error"] = exc
+
+    thread = threading.Thread(
+        target=_runner,
+        name="cocoindex-flow-blocking-runner",
+        daemon=False,
+    )
+    thread.start()
+    thread.join()
+
+    if result["error"] is not None:
+        raise result["error"]
+
+
 def setup_and_run_flow(
     source_path: str,
     config: FlowConfig | None = None,
@@ -269,9 +301,7 @@ def setup_and_run_flow(
 
         # Run the flow
         if blocking:
-            asyncio.run(
-                cocoindex.update_all_flows_async(cocoindex.FlowLiveUpdaterOptions(live_mode=False))
-            )
+            _run_update_all_flows_blocking(cocoindex.FlowLiveUpdaterOptions(live_mode=False))
         else:
             threading.Thread(
                 target=lambda: asyncio.run(

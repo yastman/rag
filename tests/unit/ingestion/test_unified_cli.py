@@ -310,7 +310,11 @@ class TestCmdPreflight:
             "QDRANT_URL": "http://qdrant:6333",
             "BGE_M3_URL": "http://bge:8000",
             "INGESTION_DATABASE_URL": "postgresql://test@localhost/db",
+            "RAG_TESTING": "true",
+            "LANGFUSE_TRACING_ENABLED": "false",
+            "OTEL_SDK_DISABLED": "true",
         },
+        clear=True,
     )
     async def test_native_docling_backend_skips_http_healthcheck(self, args, capsys, tmp_path):
         mock_client = AsyncMock()
