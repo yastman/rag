@@ -5,7 +5,7 @@
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
 	ingest-dir ingest-gdrive ingest-status ingest-services \
 	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
-	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
+	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
@@ -24,6 +24,8 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m ***REMOVED*** No Color
+
+ENV_LOAD = if [ -f .env ]; then set -a; . ./.env; set +a; fi;
 
 help: ***REMOVED******REMOVED*** Show this help message
 	@echo "$(BLUE)Contextual RAG v2.0.1 - Development Commands$(NC)"
@@ -764,22 +766,39 @@ rclone-install: ***REMOVED******REMOVED*** Install rclone
 
 sync-drive-install: ***REMOVED******REMOVED*** Install rclone cron job
 	@echo "$(BLUE)Installing rclone cron...$(NC)"
-	sudo mkdir -p /opt/scripts /opt/credentials /data/drive-sync
-	sudo cp docker/rclone/sync-drive.sh /opt/scripts/
-	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/
-	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh
-	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync
+	@$(ENV_LOAD) \
+	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
+	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
+	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
+	sudo mkdir -p /opt/scripts /opt/credentials /etc/rag-fresh "$${GDRIVE_SYNC_DIR}"; \
+	sudo cp docker/rclone/sync-drive.sh /opt/scripts/; \
+	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/; \
+	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh; \
+	printf 'GDRIVE_SYNC_DIR=%s\nRCLONE_CONFIG_FILE=%s\nRCLONE_REMOTE=%s\n' \
+	  "$${GDRIVE_SYNC_DIR}" "$${RCLONE_CONFIG_FILE}" "$${RCLONE_REMOTE:-gdrive:RAG}" | \
+	  sudo tee /etc/rag-fresh/rclone-sync.env >/dev/null; \
+	sudo chmod 600 /etc/rag-fresh/rclone-sync.env; \
+	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync; \
 	sudo chmod 644 /etc/cron.d/rclone-sync
 	@echo "$(GREEN)✓ Cron installed$(NC)"
 
 sync-drive-run: ***REMOVED******REMOVED*** Run Drive sync manually
 	@echo "$(BLUE)Syncing Google Drive...$(NC)"
+	@$(ENV_LOAD) \
+	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
+	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
+	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
 	/opt/scripts/sync-drive.sh
 	@echo "$(GREEN)✓ Sync complete$(NC)"
 
 sync-drive-status: ***REMOVED******REMOVED*** Show sync status and recent files
 	@echo "$(BLUE)Recent synced files:$(NC)"
-	@ls -lt /data/drive-sync 2>/dev/null | head -20 || echo "No files synced yet"
+	@$(ENV_LOAD) \
+	if [ -n "$${GDRIVE_SYNC_DIR:-}" ] && [ -d "$${GDRIVE_SYNC_DIR}" ]; then \
+	  ls -lt "$${GDRIVE_SYNC_DIR}" 2>/dev/null | head -20; \
+	else \
+	  echo "No files synced yet"; \
+	fi
 	@echo ""
 	@echo "$(BLUE)Last sync log:$(NC)"
 	@tail -10 /var/log/rclone-sync.log 2>/dev/null || echo "No logs yet"
@@ -808,13 +827,15 @@ endif
 	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
 	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
 
-ingest-gdrive: ***REMOVED******REMOVED*** [DEPRECATED] Use ingest-gdrive-run instead (rclone + CocoIndex pipeline)
+ingest-gdrive: ***REMOVED******REMOVED*** [DEPRECATED] Use unified ingestion targets instead
 	@echo "$(RED)⚠ make ingest-gdrive is deprecated.$(NC)"
 	@echo "  GDrive ingestion now uses rclone sync + CocoIndex pipeline."
 	@echo "  Use one of:"
-	@echo "    make ingest-gdrive-run    ***REMOVED*** Run ingestion once"
-	@echo "    make ingest-gdrive-watch  ***REMOVED*** Continuous watch mode"
-	@echo "    make ingest-gdrive-status ***REMOVED*** Collection stats"
+	@echo "    make ingest-unified-preflight"
+	@echo "    make ingest-unified-bootstrap"
+	@echo "    make ingest-unified"
+	@echo "    make ingest-unified-watch"
+	@echo "    make ingest-unified-status"
 	@exit 1
 
 ingest-status: ***REMOVED******REMOVED*** Show collection statistics
@@ -827,58 +848,61 @@ ingest-services: ***REMOVED******REMOVED*** Index curated services.yaml content 
 	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
 
 ***REMOVED*** =============================================================================
-***REMOVED*** GOOGLE DRIVE INGESTION (rclone + watcher pipeline)
+***REMOVED*** GOOGLE DRIVE INGESTION COMPATIBILITY ALIASES
 ***REMOVED*** =============================================================================
 
 .PHONY: ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status
 
-ingest-gdrive-setup: ***REMOVED******REMOVED*** Setup GDrive collection in Qdrant (scalar + binary)
-	@echo "$(BLUE)Creating Qdrant collections...$(NC)"
-	uv run python scripts/setup_scalar_collection.py --source gdrive_documents
-	uv run python scripts/setup_binary_collection.py --source gdrive_documents
-	@echo "$(GREEN)✓ Collections ready$(NC)"
+ingest-gdrive-setup: ***REMOVED******REMOVED*** [DEPRECATED] Alias to ingest-unified-bootstrap
+	@echo "$(YELLOW)Deprecated: use make ingest-unified-bootstrap$(NC)"
+	@$(MAKE) ingest-unified-bootstrap
 
-ingest-gdrive-run: ***REMOVED******REMOVED*** Run GDrive ingestion once
-	@echo "$(BLUE)Running GDrive ingestion...$(NC)"
-	uv run python -m src.ingestion.gdrive_flow --once
-	@echo "$(GREEN)✓ Ingestion complete$(NC)"
+ingest-gdrive-run: ***REMOVED******REMOVED*** [DEPRECATED] Alias to ingest-unified
+	@echo "$(YELLOW)Deprecated: use make ingest-unified$(NC)"
+	@$(MAKE) ingest-unified
 
-ingest-gdrive-watch: ***REMOVED******REMOVED*** Run GDrive ingestion continuously (watch mode)
-	@echo "$(BLUE)Starting GDrive watch mode...$(NC)"
-	uv run python -m src.ingestion.gdrive_flow --watch
+ingest-gdrive-watch: ***REMOVED******REMOVED*** [DEPRECATED] Alias to ingest-unified-watch
+	@echo "$(YELLOW)Deprecated: use make ingest-unified-watch$(NC)"
+	@$(MAKE) ingest-unified-watch
 
-ingest-gdrive-status: ***REMOVED******REMOVED*** Show GDrive collection stats
-	@echo "$(BLUE)GDrive collection stats:$(NC)"
-	@uv run python -c "from qdrant_client import QdrantClient; c=QdrantClient('http://localhost:6333'); \
-		[print(f'  {n}: {c.get_collection(n).points_count} points') if c.collection_exists(n) else print(f'  {n}: not found') \
-		for n in ['gdrive_documents_scalar', 'gdrive_documents_binary']]"
+ingest-gdrive-status: ***REMOVED******REMOVED*** [DEPRECATED] Alias to ingest-unified-status
+	@echo "$(YELLOW)Deprecated: use make ingest-unified-status$(NC)"
+	@$(MAKE) ingest-unified-status
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** UNIFIED INGESTION PIPELINE (v3.2.1)
 ***REMOVED*** =============================================================================
 
-.PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+
+ingest-unified-preflight: ***REMOVED******REMOVED*** Check unified ingestion dependencies and source path
+	@echo "$(BLUE)Running unified ingestion preflight...$(NC)"
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli preflight
+
+ingest-unified-bootstrap: ***REMOVED******REMOVED*** Create/validate unified ingestion collection schema
+	@echo "$(BLUE)Bootstrapping unified ingestion collection...$(NC)"
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
 
 ingest-unified: ***REMOVED******REMOVED*** Run unified ingestion once
 	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
 ingest-unified-watch: ***REMOVED******REMOVED*** Run unified ingestion continuously (watch mode)
 	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run --watch
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run --watch
 
 ingest-unified-status: ***REMOVED******REMOVED*** Show unified ingestion status
 	@echo "$(BLUE)Unified ingestion status:$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli status
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli status
 
 ingest-unified-reprocess: ***REMOVED******REMOVED*** Reprocess all error files
 	@echo "$(BLUE)Reprocessing error files...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli reprocess --errors
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli reprocess --errors
 	@echo "$(GREEN)✓ Reprocess queued$(NC)"
 
 ingest-unified-logs: ***REMOVED******REMOVED*** Show ingestion service logs
-	docker logs dev-ingestion -f --tail 100
+	docker compose logs ingestion -f --tail 100
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** QDRANT BACKUP
