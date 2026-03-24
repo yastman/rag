@@ -200,7 +200,9 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
                 print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
 
     # Required env vars
-    required_vars = ["QDRANT_URL", "BGE_M3_URL", "DOCLING_URL", "INGESTION_DATABASE_URL"]
+    required_vars = ["QDRANT_URL", "BGE_M3_URL", "INGESTION_DATABASE_URL"]
+    if config.docling_backend != "docling_native":
+        required_vars.append("DOCLING_URL")
     missing = [v for v in required_vars if not os.getenv(v)]
     if missing:
         results["env_vars"] = False
