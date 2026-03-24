@@ -175,12 +175,12 @@ class UniversalDocumentParser:
         doc = pymupdf.open(filepath)
 
         # Extract text from all pages
+        num_pages = doc.page_count
         text_parts = []
-        for page in doc:
-            text_parts.append(page.get_text())
+        for page_number in range(num_pages):
+            text_parts.append(doc.load_page(page_number).get_text())
 
         content = "\n".join(text_parts)
-        num_pages = len(doc)
 
         # Extract metadata
         metadata = {
