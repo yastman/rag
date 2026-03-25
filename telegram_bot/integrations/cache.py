@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CACHE_VERSION = "v5"
-SEMANTIC_CACHE_VERSION = "v6"
+SEMANTIC_CACHE_VERSION = "v7"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
@@ -91,6 +91,9 @@ def _create_semantic_cache(
                 {"name": "agent_role", "type": "tag"},
                 {"name": "grounding_mode", "type": "tag"},
                 {"name": "semantic_cache_safe_reuse", "type": "tag"},
+                {"name": "response_state", "type": "tag"},
+                {"name": "cache_eligible", "type": "tag"},
+                {"name": "schema_version", "type": "tag"},
             ],
         )
         logger.info("SemanticCache initialized (threshold=%.2f, ttl=%ds)", distance_threshold, ttl)
@@ -288,6 +291,10 @@ class CacheLayerManager:
                 filter_expr = filter_expr & (Tag("user_id") == str(user_id))
             if cache_scope is not None:
                 filter_expr = filter_expr & (Tag("cache_scope") == cache_scope)
+                if cache_scope == "rag":
+                    filter_expr = filter_expr & (Tag("response_state") == "ok")
+                    filter_expr = filter_expr & (Tag("cache_eligible") == "true")
+                    filter_expr = filter_expr & (Tag("schema_version") == SEMANTIC_CACHE_VERSION)
             if agent_role is not None:
                 filter_expr = filter_expr & (Tag("agent_role") == agent_role)
             if grounding_mode is not None:
@@ -404,6 +411,12 @@ class CacheLayerManager:
                 filters["semantic_cache_safe_reuse"] = str(
                     bool(metadata["semantic_cache_safe_reuse"])
                 ).lower()
+            if "response_state" in metadata:
+                filters["response_state"] = str(metadata["response_state"])
+            if "cache_eligible" in metadata:
+                filters["cache_eligible"] = str(bool(metadata["cache_eligible"])).lower()
+            if "schema_version" in metadata:
+                filters["schema_version"] = str(metadata["schema_version"])
         try:
             await self.semantic_cache.astore(
                 prompt=query,
