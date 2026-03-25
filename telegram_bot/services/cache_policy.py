@@ -8,6 +8,7 @@ from telegram_bot.services.grounding_policy import semantic_cache_safe_reuse_all
 
 
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"ENTITY", "FAQ", "GENERAL", "STRUCTURED"}
+SEMANTIC_CACHE_SCHEMA_VERSION = "v7"
 
 
 @dataclass(slots=True, frozen=True)
@@ -53,13 +54,13 @@ def build_cacheability_decision(
     confidence_threshold: float,
     schema_version: str,
 ) -> SemanticCacheDecision:
-    del grade_confidence, confidence_threshold
-
     normalized_query_type = _normalize_query_type(query_type)
     response_state, degraded_reason = _classify_response_state(result)
+    response_text = str(result.get("response", "") or "").strip()
     grounded = bool(result.get("grounded", False))
     legal_answer_safe = bool(result.get("legal_answer_safe", False))
     safe_reuse_flag = bool(result.get("semantic_cache_safe_reuse", False))
+    meets_confidence_gate = grade_confidence >= confidence_threshold
 
     strict_safe_reuse = semantic_cache_safe_reuse_allowed(
         grounding_mode=grounding_mode,
@@ -72,10 +73,12 @@ def build_cacheability_decision(
     cache_eligible = all(
         (
             response_state == "ok",
+            bool(response_text),
             not cache_hit,
             not contextual,
             normalized_query_type in _SEMANTIC_CACHEABLE_QUERY_TYPES,
             bool(documents),
+            meets_confidence_gate,
             strict_safe_reuse,
         )
     )
@@ -85,6 +88,7 @@ def build_cacheability_decision(
         "created_at": int(time()),
         "degraded_reason": degraded_reason,
         "grounding_mode": grounding_mode,
+        "legal_answer_safe": legal_answer_safe,
         "provider_model": str(result.get("llm_provider_model", "") or ""),
         "query_type": normalized_query_type,
         "response_state": response_state,
