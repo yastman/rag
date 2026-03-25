@@ -1069,7 +1069,13 @@ class TestTextPathSemanticCacheStore:
                         "query_type": "FAQ",
                         "query_embedding": [0.1, 0.2, 0.3],
                         "cache_hit": False,
-                        "documents": [],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "grade_confidence": 0.9,
+                        "grounding_mode": "strict",
+                        "grounded": True,
+                        "legal_answer_safe": True,
+                        "semantic_cache_safe_reuse": True,
+                        "safe_fallback_used": False,
                     }
                 )
             return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
@@ -1117,7 +1123,8 @@ class TestTextPathSemanticCacheStore:
                         "query_type": "GENERAL",
                         "query_embedding": [0.1, 0.2, 0.3],
                         "cache_hit": False,
-                        "documents": [],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "grade_confidence": 0.9,
                     }
                 )
             return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
@@ -1209,6 +1216,8 @@ class TestTextPathSemanticCacheStore:
                         "query_type": "FAQ",
                         "query_embedding": [0.1, 0.2, 0.3],
                         "cache_hit": False,
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "grade_confidence": 0.9,
                         "grounding_mode": "strict",
                         "grounded": True,
                         "legal_answer_safe": True,
