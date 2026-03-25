@@ -25,6 +25,11 @@ from typing import Any, cast
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import PreAgentStateContract
+from telegram_bot.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    maybe_store_semantic_response,
+)
 from telegram_bot.services.query_preprocessor import expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
@@ -785,26 +790,48 @@ async def _cache_store(
     start = time.perf_counter()
 
     stored_semantic = False
-    if response and query_embedding:
-        if query_type in CACHEABLE_QUERY_TYPES:
-            try:
-                await cache.store_semantic(
-                    query=query,
-                    response=response,
-                    vector=query_embedding,
-                    query_type=query_type,
-                    cache_scope="rag",
-                    agent_role=agent_role,
-                )
-                stored_semantic = True
-            except Exception as exc:
-                # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
-                # error from store_semantic must never lose the response (#524).
-                logger.warning(
-                    "cache_store: semantic store failed, response preserved: %s: %s",
-                    type(exc).__name__,
-                    exc,
-                )
+    if response and query_embedding and query_type in CACHEABLE_QUERY_TYPES:
+        # Legacy helper kept as a thin delegate so tests and older callsites do not
+        # carry a second cache-policy implementation.
+        decision = build_cacheability_decision(
+            result={
+                "response": response,
+                "grounded": True,
+                "legal_answer_safe": True,
+                "semantic_cache_safe_reuse": True,
+                "fallback_used": False,
+                "safe_fallback_used": False,
+                "llm_provider_model": "",
+                "llm_timeout": False,
+            },
+            query_type=query_type,
+            grounding_mode="normal",
+            documents=[{"text": response}],
+            cache_hit=False,
+            contextual=False,
+            grade_confidence=1.0,
+            confidence_threshold=0.0,
+            schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+        )
+        try:
+            stored_semantic = await maybe_store_semantic_response(
+                cache=cache,
+                query=query,
+                response=response,
+                vector=query_embedding,
+                query_type=query_type,
+                cache_scope="rag",
+                decision=decision,
+                agent_role=agent_role,
+            )
+        except Exception as exc:
+            # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
+            # error from store_semantic must never lose the response (#524).
+            logger.warning(
+                "cache_store: semantic store failed, response preserved: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
 
         if stored_semantic:
             logger.info("cache_store: stored=semantic (type=%s)", query_type)
