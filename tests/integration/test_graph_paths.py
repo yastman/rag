@@ -786,6 +786,64 @@ class TestConversationMemory:
 
 
 # ---------------------------------------------------------------------------
+# Path 8b: GENERAL coverage query → grouped RRF, bypass ColBERT
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_general_coverage_query_uses_grouped_rrf():
+    """Coverage query should force grouped RRF even when ColBERT path is available."""
+    mocks = _make_graph_mocks(
+        qdrant_results=[
+            {
+                "text": "По работе",
+                "score": 0.95,
+                "id": "1",
+                "metadata": {"doc_id": "a"},
+            },
+            {
+                "text": "Digital Nomad",
+                "score": 0.92,
+                "id": "2",
+                "metadata": {"doc_id": "b"},
+            },
+        ],
+        llm_response="Полный список найденных оснований.",
+    )
+    mocks["embeddings"].aembed_hybrid_with_colbert = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1, 5], "values": [0.5, 0.3]}, [[0.2] * 1024] * 4)
+    )
+    mocks["qdrant"].hybrid_search_rrf_colbert = AsyncMock()
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(
+        user_id=1,
+        session_id="coverage-path",
+        query="какие еще есть виды внж в болгарии? напиши полный список",
+    )
+
+    with _patch_graph_configs(mock_gc):
+        result = await graph.ainvoke(state)
+
+    assert result["needs_coverage"] is True
+    kwargs = mocks["qdrant"].hybrid_search_rrf.await_args.kwargs
+    assert kwargs["group_by"] == "metadata.doc_id"
+    assert kwargs["group_size"] == 2
+    mocks["qdrant"].hybrid_search_rrf_colbert.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Path 9: classify → cache_check(ColBERT embed) → retrieve(ColBERT search)
 #        → grade(relevant, rerank_applied=True) → generate → cache_store → respond
 # ---------------------------------------------------------------------------
