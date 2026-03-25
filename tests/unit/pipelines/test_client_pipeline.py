@@ -536,7 +536,7 @@ class TestPipelineFullFlow:
         assert metadata["topic_hint"] == "legal"
         assert metadata["grounding_mode"] == "strict"
         assert metadata["grade_confidence"] == 0.7
-        assert metadata["sources_count"] == 1
+        assert metadata["sources_count"] == 0
         assert metadata["grounded"] is True
         assert metadata["legal_answer_safe"] is True
         assert metadata["semantic_cache_safe_reuse"] is True
@@ -598,9 +598,7 @@ class TestPipelineFullFlow:
         assert captured_kwargs["grounding_mode"] == "strict"
         assert result.answer == "Нужна проверка менеджером."
 
-    async def test_pipeline_shows_sources_for_strict_grounding_even_when_global_sources_disabled(
-        self,
-    ):
+    async def test_pipeline_hides_sources_when_global_sources_disabled_even_in_strict_mode(self):
         msg = _make_message()
         lf = _make_lf_client()
 
@@ -655,7 +653,7 @@ class TestPipelineFullFlow:
         send_text = send_chunks.await_args.args[1]
         assert "Подтвержденный ответ." in send_text
         assert "Источники:" not in send_text
-        assert send_chunks.await_args.kwargs["sources_html"] == "\n\nИсточники:\n[1] ВНЖ"
+        assert send_chunks.await_args.kwargs["sources_html"] == ""
 
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""
