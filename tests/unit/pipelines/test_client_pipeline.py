@@ -1078,11 +1078,63 @@ class TestCacheStoreGuards:
             )
 
         mock_cache.store_semantic.assert_called_once()
-        assert mock_cache.store_semantic.await_args.kwargs["metadata"] == {
-            "grounding_mode": "strict",
-            "legal_answer_safe": True,
-            "semantic_cache_safe_reuse": True,
+        metadata = mock_cache.store_semantic.await_args.kwargs["metadata"]
+        assert metadata["grounding_mode"] == "strict"
+        assert metadata["legal_answer_safe"] is True
+        assert metadata["semantic_cache_safe_reuse"] is True
+        assert metadata["response_state"] == "ok"
+        assert metadata["cache_eligible"] is True
+        assert metadata["schema_version"] == "v7"
+
+    async def test_provider_fallback_skips_cache_store_even_without_safe_fallback(self):
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": _CONFIDENCE_THRESHOLD + 0.1,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
         }
+        gen_result = {
+            "response": "⚠️ fallback text",
+            "response_sent": False,
+            "fallback_used": True,
+            "safe_fallback_used": False,
+            "llm_provider_model": "fallback",
+            "llm_timeout": True,
+            "grounded": False,
+            "legal_answer_safe": False,
+            "semantic_cache_safe_reuse": False,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Расскажи про рынок в Несебре",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+            )
+
+        mock_cache.store_semantic.assert_not_called()
 
     async def test_strict_mode_unsafe_result_skips_cache_store(self):
         msg = _make_message()
@@ -1184,6 +1236,9 @@ class TestCacheStoreGuards:
         metadata = mock_cache.store_semantic.await_args.kwargs["metadata"]
         assert metadata["grounding_mode"] == "strict"
         assert metadata["semantic_cache_safe_reuse"] is True
+        assert metadata["response_state"] == "ok"
+        assert metadata["cache_eligible"] is True
+        assert metadata["schema_version"] == "v7"
 
     async def test_structured_query_type_stores_cache(self):
         """STRUCTURED query type is in _PIPELINE_STORE_TYPES, so cache store is enabled."""
