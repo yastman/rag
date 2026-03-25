@@ -59,8 +59,13 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.business_hours import is_business_hours
+from .services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    maybe_store_semantic_response,
+)
 from .services.forum_bridge import ForumBridge
-from .services.grounding_policy import get_grounding_mode, semantic_cache_safe_reuse_allowed
+from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
@@ -3311,6 +3316,31 @@ class PropertyBot:
             # even when the agent reformulated the query for retrieval (#504).
             if self._cache and response_text:
                 query_type = str(rag_result_store.get("query_type", "") or "")
+                grounding_mode_value = str(
+                    rag_result_store.get("grounding_mode", "normal") or "normal"
+                )
+                raw_threshold = getattr(self.config, "relevance_threshold_rrf", 0.005)
+                confidence_threshold = (
+                    float(raw_threshold) if isinstance(raw_threshold, int | float) else 0.005
+                )
+                decision = build_cacheability_decision(
+                    result={
+                        **rag_result_store,
+                        "response": response_text,
+                    },
+                    query_type=query_type,
+                    grounding_mode=grounding_mode_value,
+                    documents=rag_result_store.get("documents", []),
+                    cache_hit=bool(rag_result_store.get("cache_hit", False)),
+                    contextual=False,
+                    grade_confidence=float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                    confidence_threshold=confidence_threshold,
+                    schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+                )
+                rag_result_store["response_state"] = decision.response_state
+                rag_result_store["degraded_reason"] = decision.degraded_reason
+                rag_result_store["cache_eligible"] = decision.cache_eligible
+                rag_result_store["store_reason"] = decision.store_reason
                 # Prefer cache_key_embedding (original query vector) over query_embedding
                 # (retrieval/rewritten vector) to avoid check/store vector mismatch.
                 store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
@@ -3318,40 +3348,19 @@ class PropertyBot:
                 )
                 if (
                     query_type in CACHEABLE_QUERY_TYPES
-                    and not rag_result_store.get("cache_hit", False)
                     and isinstance(store_vector, list)
                     and bool(store_vector)
-                    and semantic_cache_safe_reuse_allowed(
-                        grounding_mode=str(
-                            rag_result_store.get("grounding_mode", "normal") or "normal"
-                        ),
-                        grounded=bool(rag_result_store.get("grounded", True)),
-                        legal_answer_safe=bool(rag_result_store.get("legal_answer_safe", True)),
-                        semantic_cache_safe_reuse=bool(
-                            rag_result_store.get("semantic_cache_safe_reuse", True)
-                        ),
-                        safe_fallback_used=bool(rag_result_store.get("safe_fallback_used", False)),
-                    )
                 ):
                     try:
-                        await self._cache.store_semantic(
+                        await maybe_store_semantic_response(
+                            cache=self._cache,
                             query=message.text or "",
                             response=response_text,
                             vector=store_vector,
                             query_type=query_type,
                             cache_scope="rag",
+                            decision=decision,
                             agent_role=role,
-                            metadata={
-                                "grounding_mode": str(
-                                    rag_result_store.get("grounding_mode", "normal") or "normal"
-                                ),
-                                "legal_answer_safe": bool(
-                                    rag_result_store.get("legal_answer_safe", True)
-                                ),
-                                "semantic_cache_safe_reuse": bool(
-                                    rag_result_store.get("semantic_cache_safe_reuse", True)
-                                ),
-                            },
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
