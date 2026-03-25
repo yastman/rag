@@ -821,6 +821,8 @@ class TestGenerateNodeProviderMetadata:
             result = await generate_node(state)
 
         assert result["llm_provider_model"] == "fallback"
+        assert result["fallback_used"] is True
+        assert result["safe_fallback_used"] is False
         assert result["llm_ttft_ms"] == 0.0
         assert result["llm_response_duration_ms"] > 0
 
