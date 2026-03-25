@@ -348,15 +348,20 @@ class TestOnApply:
 
 
 class TestOnReset:
-    async def test_reopens_clean_filter_shell_with_empty_filters(self):
-        from aiogram_dialog import ShowMode, StartMode
+    async def test_clears_filters_in_place_without_reopening_message(self):
+        from aiogram_dialog import ShowMode
 
         from telegram_bot.dialogs.filter_dialog import on_reset
 
         manager = AsyncMock()
         manager.dialog_data = {"city": "Варна", "budget": "mid", "rooms": 2}
         widget_data = {"r_city": "Варна", "r_budget": "mid", "r_rooms": "2"}
-        manager.current_context = MagicMock(return_value=SimpleNamespace(widget_data=widget_data))
+        manager.current_context = MagicMock(
+            return_value=SimpleNamespace(
+                widget_data=widget_data,
+                state=SimpleNamespace(state=FilterSG.hub.state),
+            )
+        )
         manager.find = MagicMock(return_value=AsyncMock(set_checked=AsyncMock()))
         callback = MagicMock()
         callback.message = MagicMock()
@@ -364,15 +369,12 @@ class TestOnReset:
 
         await on_reset(callback, MagicMock(), manager)
 
-        assert manager.show_mode == ShowMode.NO_UPDATE
-        manager.done.assert_awaited_once()
-        callback.message.delete.assert_awaited_once()
-        manager.start.assert_awaited_once_with(
-            FilterSG.hub,
-            data={"filters": {}},
-            mode=StartMode.NORMAL,
-            show_mode=ShowMode.SEND,
-        )
+        assert manager.dialog_data == {}
+        assert widget_data == {}
+        manager.update.assert_awaited_once_with({}, show_mode=ShowMode.EDIT)
+        manager.done.assert_not_awaited()
+        manager.start.assert_not_awaited()
+        callback.message.delete.assert_not_awaited()
 
 
 # ============================================================
