@@ -17,6 +17,7 @@ class RAGState(TypedDict):
     user_id: int
     session_id: str
     query_type: str
+    needs_coverage: bool
     cache_hit: bool
     cached_response: str | None
     query_embedding: list[float] | None
@@ -99,6 +100,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "user_id": user_id,
         "session_id": session_id,
         "query_type": "",
+        "needs_coverage": False,
         "cache_hit": False,
         "cached_response": None,
         "query_embedding": None,
