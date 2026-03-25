@@ -4022,6 +4022,111 @@ def _make_cc_callback_query(data: str, user_id: int = 12345):
     return cq
 
 
+class TestTextPathSemanticCachePolicy:
+    async def test_text_path_provider_fallback_skips_semantic_store(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_text_message("расскажи про рынок в Несебре")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "GENERAL",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "cache_hit": False,
+                        "grade_confidence": 0.9,
+                        "grounding_mode": "normal",
+                        "fallback_used": True,
+                        "safe_fallback_used": False,
+                        "llm_provider_model": "fallback",
+                        "llm_timeout": True,
+                        "grounded": False,
+                        "legal_answer_safe": False,
+                        "semantic_cache_safe_reuse": False,
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
+        ):
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_not_awaited()
+
+    async def test_text_path_ok_result_stores_semantic_with_decision_metadata(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_text_message("какие документы нужны для внж")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "FAQ",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "cache_hit": False,
+                        "grade_confidence": 0.9,
+                        "grounding_mode": "strict",
+                        "fallback_used": False,
+                        "safe_fallback_used": False,
+                        "llm_provider_model": "gpt-4.1",
+                        "llm_timeout": False,
+                        "grounded": True,
+                        "legal_answer_safe": True,
+                        "semantic_cache_safe_reuse": True,
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_awaited_once()
+        metadata = bot._cache.store_semantic.await_args.kwargs["metadata"]
+        assert metadata["grounding_mode"] == "strict"
+        assert metadata["response_state"] == "ok"
+        assert metadata["cache_eligible"] is True
+        assert metadata["schema_version"] == "v7"
+
+
 class TestClearCacheCommand:
     """Tests for /clearcache command and callback handler."""
 
