@@ -455,6 +455,7 @@ def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float |
 async def generate_response(
     *,
     query: str,
+    needs_coverage: bool = False,
     documents: list[dict[str, Any]],
     retrieved_context: list[dict[str, Any]] | None = None,
     raw_messages: list[Any] | None = None,
@@ -510,7 +511,10 @@ async def generate_response(
     detector = style_detector or _detector
     style_info = detector.detect(effective_query)
     coverage_decision = detect_coverage_mode(effective_query)
-    needs_coverage = coverage_decision.needs_coverage
+    needs_coverage = bool(needs_coverage) or coverage_decision.needs_coverage
+    coverage_reason = coverage_decision.reason or (
+        "state:needs_coverage" if needs_coverage else None
+    )
     sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
     legal_answer_safe = grounding_mode != "strict" or is_strict_grounding_safe(
         documents=docs,
@@ -518,10 +522,15 @@ async def generate_response(
         grade_confidence=grade_confidence,
     )
     format_params = inspect.signature(format_context).parameters
+    effective_max_context_docs = len(docs) if needs_coverage else max_context_docs
     if "sources_enabled" in format_params:
-        context = format_context(docs, max_context_docs, sources_enabled=sources_enabled)
+        context = format_context(
+            docs,
+            effective_max_context_docs,
+            sources_enabled=sources_enabled,
+        )
     else:
-        context = format_context(docs, max_context_docs)
+        context = format_context(docs, effective_max_context_docs)
 
     # Curated span metadata
     lf_client.update_current_span(
@@ -533,7 +542,7 @@ async def generate_response(
             "streaming_enabled": bool(message is not None and config.streaming_enabled),
             "grounding_mode": grounding_mode,
             "needs_coverage": needs_coverage,
-            "coverage_reason": coverage_decision.reason,
+            "coverage_reason": coverage_reason,
         }
     )
 
@@ -558,7 +567,7 @@ async def generate_response(
                 "response_sent": False,
                 "needs_coverage": needs_coverage,
                 "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-                "coverage_reason": coverage_decision.reason,
+                "coverage_reason": coverage_reason,
             }
         )
         return {
@@ -898,7 +907,7 @@ async def generate_response(
         "eval_context": eval_context,
         "needs_coverage": needs_coverage,
         "coverage_mode": "exhaustive_list" if needs_coverage else "default",
-        "coverage_reason": coverage_decision.reason,
+        "coverage_reason": coverage_reason,
         "prompt_name": prompt_name,
         "documents_count": len(docs),
         "distinct_doc_count": len(
