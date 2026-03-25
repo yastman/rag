@@ -63,6 +63,10 @@ general_settings:
 router_settings:
   retry_policy:
     retry_count: 2
+  # Model-group fallbacks on upstream/provider errors
+  fallbacks:
+    - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
+    - gpt-oss-120b: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
 
 # LiteLLM settings
 litellm_settings:
@@ -74,10 +78,6 @@ litellm_settings:
   # Langfuse observability callbacks
   success_callback: ["langfuse"]
   failure_callback: ["langfuse"]
-  # Model-group fallbacks on upstream/provider errors
-  fallbacks:
-    - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
-    - gpt-oss-120b: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
 
 # Environment variables for Langfuse v3
 environment_variables:
