@@ -53,6 +53,8 @@ class RAGState(TypedDict):
     llm_decode_ms: float | None
     llm_tps: float | None
     llm_queue_ms: float | None
+    fallback_used: bool
+    safe_fallback_used: bool
     llm_timeout: bool
     llm_stream_recovery: bool
     streaming_enabled: bool
@@ -135,6 +137,8 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_decode_ms": None,
         "llm_tps": None,
         "llm_queue_ms": None,
+        "fallback_used": False,
+        "safe_fallback_used": False,
         "llm_timeout": False,
         "llm_stream_recovery": False,
         "streaming_enabled": False,

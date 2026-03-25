@@ -186,6 +186,15 @@ def _sanitize_response_text(answer: str, *, sources_enabled: bool) -> str:
     return sanitized or answer.strip()
 
 
+def _ensure_generation_signal_defaults(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize raw cacheability signals across every generation return path."""
+    llm_provider_model = str(result.get("llm_provider_model", "") or "")
+    result.setdefault("fallback_used", llm_provider_model == "fallback")
+    result.setdefault("safe_fallback_used", False)
+    result.setdefault("llm_timeout", False)
+    return result
+
+
 def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
     """Build fallback response from retrieved documents when LLM fails."""
     if not documents:
@@ -547,36 +556,38 @@ async def generate_response(
                 "response_sent": False,
             }
         )
-        return {
-            "response": answer,
-            "response_sent": False,
-            "sent_message": None,
-            "llm_provider_model": "safe_fallback",
-            "llm_ttft_ms": 0.0,
-            "llm_response_duration_ms": elapsed * 1000,
-            "llm_stream_only_ttft_ms": None,
-            "llm_ttft_drift_ms": None,
-            "llm_call_count": max(0, int(llm_call_count)),
-            "latency_stages": {**current_latency, "generate": elapsed},
-            "llm_decode_ms": None,
-            "llm_tps": None,
-            "llm_queue_ms": None,
-            "llm_timeout": False,
-            "llm_stream_recovery": False,
-            "streaming_enabled": False,
-            "response_style": style_info.style,
-            "response_difficulty": style_info.difficulty,
-            "response_style_reasoning": style_info.reasoning,
-            "answer_words": len(answer.split()),
-            "answer_chars": len(answer),
-            "answer_to_question_ratio": len(answer.split()) / max(style_info.word_count, 1),
-            "response_policy_mode": "safe_fallback",
-            "grounding_mode": grounding_mode,
-            "safe_fallback_used": True,
-            "grounded": False,
-            "legal_answer_safe": False,
-            "semantic_cache_safe_reuse": False,
-        }
+        return _ensure_generation_signal_defaults(
+            {
+                "response": answer,
+                "response_sent": False,
+                "sent_message": None,
+                "llm_provider_model": "safe_fallback",
+                "llm_ttft_ms": 0.0,
+                "llm_response_duration_ms": elapsed * 1000,
+                "llm_stream_only_ttft_ms": None,
+                "llm_ttft_drift_ms": None,
+                "llm_call_count": max(0, int(llm_call_count)),
+                "latency_stages": {**current_latency, "generate": elapsed},
+                "llm_decode_ms": None,
+                "llm_tps": None,
+                "llm_queue_ms": None,
+                "llm_timeout": False,
+                "llm_stream_recovery": False,
+                "streaming_enabled": False,
+                "response_style": style_info.style,
+                "response_difficulty": style_info.difficulty,
+                "response_style_reasoning": style_info.reasoning,
+                "answer_words": len(answer.split()),
+                "answer_chars": len(answer),
+                "answer_to_question_ratio": len(answer.split()) / max(style_info.word_count, 1),
+                "response_policy_mode": "safe_fallback",
+                "grounding_mode": grounding_mode,
+                "safe_fallback_used": True,
+                "grounded": False,
+                "legal_answer_safe": False,
+                "semantic_cache_safe_reuse": False,
+            }
+        )
 
     style_enabled = bool(getattr(config, "response_style_enabled", False))
     shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
@@ -924,35 +935,37 @@ async def generate_response(
     current_latency = latency_stages or {}
     current_llm_calls = max(0, int(llm_call_count))
 
-    return {
-        "response": answer,
-        "response_sent": response_sent,
-        "sent_message": sent_message_ref,
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms,
-        "llm_response_duration_ms": elapsed * 1000,
-        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-        "llm_ttft_drift_ms": llm_ttft_drift_ms,
-        "llm_call_count": current_llm_calls + 1,
-        "latency_stages": {**current_latency, "generate": elapsed},
-        # Latency breakdown (#147)
-        "llm_decode_ms": llm_decode_ms,
-        "llm_tps": llm_tps,
-        "llm_queue_ms": llm_queue_ms,
-        "llm_timeout": hard_timeout,
-        "llm_stream_recovery": stream_recovery,
-        "streaming_enabled": streaming_was_enabled,
-        # Response length control (#129)
-        "response_style": style_info.style,
-        "response_difficulty": style_info.difficulty,
-        "response_style_reasoning": style_info.reasoning,
-        "answer_words": answer_words,
-        "answer_chars": answer_chars,
-        "answer_to_question_ratio": ratio,
-        "response_policy_mode": response_policy_mode,
-        "grounding_mode": grounding_mode,
-        "safe_fallback_used": False,
-        "grounded": True,
-        "legal_answer_safe": legal_answer_safe,
-        "semantic_cache_safe_reuse": legal_answer_safe,
-    }
+    return _ensure_generation_signal_defaults(
+        {
+            "response": answer,
+            "response_sent": response_sent,
+            "sent_message": sent_message_ref,
+            "llm_provider_model": actual_model,
+            "llm_ttft_ms": ttft_ms,
+            "llm_response_duration_ms": elapsed * 1000,
+            "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+            "llm_ttft_drift_ms": llm_ttft_drift_ms,
+            "llm_call_count": current_llm_calls + 1,
+            "latency_stages": {**current_latency, "generate": elapsed},
+            # Latency breakdown (#147)
+            "llm_decode_ms": llm_decode_ms,
+            "llm_tps": llm_tps,
+            "llm_queue_ms": llm_queue_ms,
+            "llm_timeout": hard_timeout,
+            "llm_stream_recovery": stream_recovery,
+            "streaming_enabled": streaming_was_enabled,
+            # Response length control (#129)
+            "response_style": style_info.style,
+            "response_difficulty": style_info.difficulty,
+            "response_style_reasoning": style_info.reasoning,
+            "answer_words": answer_words,
+            "answer_chars": answer_chars,
+            "answer_to_question_ratio": ratio,
+            "response_policy_mode": response_policy_mode,
+            "grounding_mode": grounding_mode,
+            "safe_fallback_used": False,
+            "grounded": True,
+            "legal_answer_safe": legal_answer_safe,
+            "semantic_cache_safe_reuse": legal_answer_safe,
+        }
+    )
