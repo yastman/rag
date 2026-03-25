@@ -1053,7 +1053,17 @@ class TestCacheStoreGuards:
             "latency_stages": {},
             "cache_key_embedding": [0.1, 0.2, 0.3],
         }
-        gen_result = {"response": "Good answer", "response_sent": False}
+        gen_result = {
+            "response": "Good answer",
+            "response_sent": False,
+            "grounded": True,
+            "legal_answer_safe": True,
+            "semantic_cache_safe_reuse": True,
+            "safe_fallback_used": False,
+            "llm_provider_model": "gpt-4.1",
+            "fallback_used": False,
+            "llm_timeout": False,
+        }
 
         with (
             _patch_observability(lf),
