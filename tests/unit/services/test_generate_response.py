@@ -170,6 +170,8 @@ async def test_generate_response_fallback_on_llm_error() -> None:
         )
 
     assert "временно недоступен" in result["response"]
+    assert result["fallback_used"] is True
+    assert result["safe_fallback_used"] is False
     assert result["llm_provider_model"] == "fallback"
     assert result["llm_timeout"] is True
 
@@ -188,7 +190,10 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak
         raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
     )
 
+    assert result["fallback_used"] is False
     assert result["safe_fallback_used"] is True
+    assert result["llm_provider_model"] == "safe_fallback"
+    assert result["llm_timeout"] is False
     assert result["grounded"] is False
     assert result["legal_answer_safe"] is False
     client.chat.completions.create.assert_not_awaited()
