@@ -278,6 +278,23 @@ class TestCuratedSpanPayloads:
             for payload in payloads
         )
 
+    async def test_generate_node_passes_state_coverage_override_to_service(self):
+        from unittest.mock import patch as _patch
+
+        from telegram_bot.graph.nodes.generate import generate_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s1", query="какие еще есть виды внж")
+        state["needs_coverage"] = True
+        state["messages"] = [{"role": "user", "content": "основания для внж в болгарии"}]
+
+        mock_service = AsyncMock(return_value={"response": "ok", "needs_coverage": True})
+
+        with _patch("telegram_bot.graph.nodes.generate._generate_response_service", mock_service):
+            await generate_node(state)
+
+        assert mock_service.await_args.kwargs["needs_coverage"] is True
+
     async def test_cache_check_node_curated_payload(self):
         from telegram_bot.graph.nodes.cache import cache_check_node
         from telegram_bot.graph.state import make_initial_state
