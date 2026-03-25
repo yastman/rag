@@ -25,6 +25,25 @@ from telegram_bot.services.rag_core import build_retrieved_context as _build_ret
 logger = logging.getLogger(__name__)
 
 
+def _build_search_cache_profile(
+    *,
+    needs_coverage: bool,
+    use_colbert: bool,
+    top_k: int,
+) -> dict[str, Any]:
+    if needs_coverage:
+        return {
+            "mode": "coverage",
+            "top_k": 10,
+            "group_by": "metadata.doc_id",
+            "group_size": 2,
+            "prefetch_multiplier": 7,
+        }
+    if use_colbert:
+        return {"mode": "colbert", "top_k": top_k}
+    return {"mode": "rrf", "top_k": top_k}
+
+
 def _distinct_doc_count(results: list[dict[str, Any]]) -> int:
     return len(
         {
@@ -70,6 +89,13 @@ async def retrieve_node(
     coverage_decision = detect_coverage_mode(query)
     needs_coverage = bool(state.get("needs_coverage")) or coverage_decision.needs_coverage
     effective_top_k = 10 if needs_coverage else top_k
+    colbert_query = state.get("colbert_query")
+    _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
+    search_cache_profile = _build_search_cache_profile(
+        needs_coverage=needs_coverage,
+        use_colbert=bool(colbert_query and _has_colbert_search),
+        top_k=effective_top_k,
+    )
 
     # Curated span metadata (replaces auto-captured full state)
     lf = get_client()
@@ -125,7 +151,7 @@ async def retrieve_node(
     start = time.perf_counter()
 
     # Step 1: Check search cache
-    cached_results = await cache.get_search_results(dense_vector)
+    cached_results = await cache.get_search_results(dense_vector, search_cache_profile)
     if cached_results is not None:
         if needs_coverage:
             cached_results = cap_results_per_doc(cached_results, max_per_doc=2)
@@ -141,7 +167,7 @@ async def retrieve_node(
                 "needs_coverage": needs_coverage,
                 "coverage_reason": coverage_decision.reason,
                 "distinct_doc_count": distinct_doc_count,
-                "coverage_grouping_applied": False,
+                "coverage_grouping_applied": needs_coverage,
                 "duration_ms": round(latency * 1000, 1),
                 # Full data for Langfuse managed evaluators (#386)
                 "eval_query": query[:2000],
@@ -172,9 +198,6 @@ async def retrieve_node(
             await cache.store_sparse_embedding(query, sparse_vector)
 
     # Step 3: Hybrid search via Qdrant SDK
-    colbert_query = state.get("colbert_query")
-    _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
-
     if needs_coverage:
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
@@ -217,7 +240,7 @@ async def retrieve_node(
 
     # Step 4: Cache results (only on successful backend response)
     if results and not search_meta.get("backend_error", False):
-        await cache.store_search_results(dense_vector, None, results)
+        await cache.store_search_results(dense_vector, search_cache_profile, results)
 
     latency = time.perf_counter() - start
     PipelineMetrics.get().record("retrieve", latency * 1000)
