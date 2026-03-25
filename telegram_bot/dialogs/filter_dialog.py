@@ -20,7 +20,7 @@ from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.utils import remove_intent_id
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
@@ -692,21 +692,12 @@ async def on_reset(
         callback_data=getattr(callback, "data", None),
         callback_intent_id=_callback_intent_id(getattr(callback, "data", None)),
     ) as observation:
-        # Resetting this dialog via RESET_STACK from inside its own callback can
-        # leave the first redraw attached to stale context. Close the current
-        # filter shell first, then open a clean instance above the catalog.
-        msg = callback.message
-        manager.show_mode = ShowMode.NO_UPDATE
-        await manager.done()
-        if msg and hasattr(msg, "delete"):
-            with contextlib.suppress(Exception):
-                await msg.delete()
-        await manager.start(
-            FilterSG.hub,
-            data={"filters": {}},
-            mode=StartMode.NORMAL,
-            show_mode=ShowMode.SEND,
-        )
+        _clear_filter_dialog_state(manager)
+        state_name = _state_name(manager)
+        if state_name == FilterSG.hub.state:
+            await manager.update({}, show_mode=ShowMode.EDIT)
+        else:
+            await manager.switch_to(FilterSG.hub, show_mode=ShowMode.EDIT)
         _update_filter_observation(
             observation,
             manager=manager,
