@@ -343,6 +343,9 @@ async def test_path_general_uses_semantic_cache():
     mocks["cache"].check_semantic.assert_awaited_once()
     # Semantic cache IS stored after generate
     mocks["cache"].store_semantic.assert_awaited_once()
+    metadata = mocks["cache"].store_semantic.await_args.kwargs["metadata"]
+    assert metadata["response_state"] == "ok"
+    assert metadata["cache_eligible"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +396,41 @@ async def test_path_happy_retrieve_rerank_generate():
 
     # Cache stored (semantic only — memory owned by checkpointer)
     mocks["cache"].store_semantic.assert_awaited_once()
+    metadata = mocks["cache"].store_semantic.await_args.kwargs["metadata"]
+    assert metadata["response_state"] == "ok"
+    assert metadata["cache_eligible"] is True
+
+
+@pytest.mark.integration
+async def test_path_generate_fallback_does_not_store_semantic():
+    """LLM fallback still returns a response, but semantic cache store is skipped."""
+    mocks = _make_graph_mocks()
+    mocks["llm"].chat.completions.create = AsyncMock(side_effect=Exception("LLM unavailable"))
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(
+        user_id=11, session_id="test-fallback-no-store", query="квартира в Несебре у моря"
+    )
+
+    with traced_pipeline(session_id="test-fallback-no-store", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    assert result["response"]
+    assert result["llm_provider_model"] == "fallback"
+    assert result["fallback_used"] is True
+    mocks["cache"].store_semantic.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
