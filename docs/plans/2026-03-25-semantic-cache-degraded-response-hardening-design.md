@@ -53,6 +53,7 @@ This leaves three concrete failure modes:
 Primary goals:
 
 - Define one semantic-cache eligibility policy for all write paths.
+- Define one canonical application-level store entrypoint for `cache_scope="rag"`.
 - Distinguish `successful but reusable` from `successful transport-level delivery`.
 - Add read-side metadata enforcement so bad historical entries are not reused.
 - Preserve the existing service boundaries: generation emits signals, cache policy decides reuse, cache integration enforces storage and lookup constraints.
@@ -71,6 +72,11 @@ Observed repo facts:
 
 - Exact cache namespaces are versioned by `CACHE_VERSION = "v5"`.
 - Semantic cache already has its own schema boundary via `SEMANTIC_CACHE_VERSION = "v6"`.
+- Primary RAG semantic writes currently happen from multiple application paths, including:
+  - `telegram_bot/pipelines/client.py`
+  - `telegram_bot/agents/rag_pipeline.py`
+  - `telegram_bot/graph/nodes/cache.py`
+  - `telegram_bot/bot.py`
 - Semantic cache currently uses RedisVL tag filters for:
   - `query_type`
   - `language`
@@ -80,6 +86,7 @@ Observed repo facts:
   - `grounding_mode`
   - `semantic_cache_safe_reuse`
 - Existing tests currently assume broad store behavior on graph cache-store paths, so the behavioral contract will need to change deliberately.
+- `telegram_bot/agents/history_tool.py` also writes semantic cache entries, but in `cache_scope="history"`. That path is not the primary subject of this hardening and should remain explicitly out of scope unless we choose to extend the same contract to history summaries later.
 
 These findings make a semantic-schema bump an accepted repo-native mechanism, not an exceptional migration.
 
@@ -90,6 +97,7 @@ These findings make a semantic-schema bump an accepted repo-native mechanism, no
 3. Write-side guard prevents new poison; read-side guard protects against old poison.
 4. Cacheability must be decided in one policy function, not re-derived ad hoc in multiple call sites.
 5. Metadata fields must be useful for lookup filtering, targeted purge, and observability.
+6. For `cache_scope="rag"`, application code should have one canonical semantic-store entrypoint above the cache adapter.
 
 ## Target Cacheability Contract
 
@@ -119,9 +127,11 @@ Recommended meanings:
 
 ## Response Classification Rules
 
-The generation layer remains responsible for emitting signals, not for deciding cache writes.
+The generation layer remains responsible for emitting raw degradation signals, not for deciding cache writes.
 
-The generation result should be normalized into `response_state` using the existing signals:
+`response_state`, `degraded_reason`, and `cache_eligible` must be derived from one normalization/decision helper. No other layer should invent `response_state` independently.
+
+The normalization helper should map the existing raw signals into `response_state` using rules such as:
 
 - `safe_fallback_used=True` -> `response_state="safe_fallback"`
 - `fallback_used=True` -> `response_state="fallback"`
@@ -132,14 +142,31 @@ The generation result should be normalized into `response_state` using the exist
 
 `degraded_reason` should be set even when the pipeline continues successfully from the user perspective.
 
+`cache_eligible` must be derived from the same decision object that computes `response_state`. It must not be set independently in call sites or stored as a second hand-maintained truth.
+
 ## Unified Cache Policy
 
-Add a single policy module, preferably `telegram_bot/services/cache_policy.py`, with two public helpers:
+Add a single policy module, preferably `telegram_bot/services/cache_policy.py`, with a decision builder and one canonical RAG store helper:
 
-- `is_cacheable_response(...) -> bool`
-- `build_semantic_cache_metadata(...) -> dict[str, Any]`
+- `build_cacheability_decision(...) -> SemanticCacheDecision`
+- `maybe_store_semantic_response(...) -> bool`
 
-This module should own the full write-side decision.
+Recommended `SemanticCacheDecision` contents:
+
+- `response_state`
+- `degraded_reason`
+- `cache_eligible`
+- `metadata`
+- `store_reason`
+
+This module should own the full write-side decision for the primary RAG path.
+
+For `cache_scope="rag"`, business code should not call `cache.store_semantic(...)` directly. Instead:
+
+- `maybe_store_semantic_response(...)` is the only application-level entrypoint allowed to decide whether a RAG answer is stored
+- `CacheLayerManager.store_semantic(...)` remains the low-level adapter sink once a store is already authorized
+
+This removes the current duplication between `client.py`, `rag_pipeline.py`, `graph/nodes/cache.py`, and `bot.py`.
 
 Semantic cache store is allowed only when all of the following are true:
 
@@ -186,6 +213,8 @@ Extend semantic cache `filterable_fields` to include:
 
 `degraded_reason` may remain metadata-only unless operational querying in Redis search is required.
 
+Because RedisVL `filterable_fields` participate in index initialization/schema shape, expanding these lookup tags should be treated as a schema boundary. In this repo, that means a semantic cache version bump rather than a mixed old/new namespace.
+
 Recommended tag strategy:
 
 - use filterable tags only for fields needed during lookup or broad operational isolation
@@ -197,17 +226,25 @@ Recommended tag strategy:
 
 Responsibilities:
 
-- emit stable degradation signals
-- normalize `response_state` and `degraded_reason` into the result dict
+- emit stable raw degradation signals
 - avoid deciding semantic cache policy directly
+
+### `telegram_bot/services/cache_policy.py`
+
+Responsibilities:
+
+- normalize raw generation signals into `response_state` and `degraded_reason`
+- derive `cache_eligible` from the same decision object
+- build semantic cache metadata
+- provide the single canonical `maybe_store_semantic_response(...)` entrypoint for `cache_scope="rag"`
 
 ### `telegram_bot/pipelines/client.py`
 
 Responsibilities:
 
 - stop owning bespoke semantic-cache policy logic
-- call shared cache policy helper
-- pass normalized metadata into `store_semantic(...)`
+- call shared `maybe_store_semantic_response(...)`
+- stop calling `cache.store_semantic(...)` directly for RAG answers
 
 ### `telegram_bot/agents/rag_pipeline.py`
 
@@ -215,13 +252,22 @@ Responsibilities:
 
 - adopt the same shared cacheability policy as the direct client path
 - stop broad unconditional semantic-store behavior
+- stop calling `cache.store_semantic(...)` directly for RAG answers
 
 ### `telegram_bot/graph/nodes/cache.py`
 
 Responsibilities:
 
-- either consume precomputed cacheability signals from graph state or call the same shared helper before storing
+- either consume a precomputed `SemanticCacheDecision` from graph state or call the same shared helper before storing
 - preserve current graph-node contract shape while tightening store eligibility
+- stop serving as an independent source of semantic-cache policy
+
+### `telegram_bot/bot.py`
+
+Responsibilities:
+
+- remove ad hoc RAG-side semantic store logic
+- delegate to the shared RAG semantic-store helper instead of maintaining its own allowlist and grounding checks
 
 ### `telegram_bot/integrations/cache.py`
 
@@ -234,16 +280,28 @@ Responsibilities:
 
 ## Rollout Strategy
 
-Use a two-step rollout:
+Use a three-step rollout:
 
-1. Stop writing new poisoned entries.
-2. Remove or isolate historical poisoned entries.
+1. Implement the new policy and metadata contract.
+2. Bump the semantic cache namespace as part of the same change.
+3. Clean up old poisoned or obsolete entries opportunistically.
+
+The semantic cache version bump is mandatory for this work, not optional. Reasons:
+
+- new `filterable_fields` change the effective lookup schema
+- the new read contract depends on metadata older entries do not have
+- the repo already uses versioned semantic namespaces for this kind of boundary
+
+Expected effect of the bump:
+
+- old entries without the new metadata become unreadable by design because they live in the old namespace
+- this is a desired isolation outcome, not an accidental cache miss regression
 
 Operational cleanup options:
 
 ### Option A: Targeted purge
 
-Use when there is a small known set of poisoned prompts or entry IDs.
+Use when there is a small known set of poisoned prompts or entry IDs and we want to remove them immediately from the old namespace or reclaim space after the version bump.
 
 Benefits:
 
@@ -257,7 +315,7 @@ Limitations:
 
 ### Option B: Semantic schema/version bump
 
-Increment `SEMANTIC_CACHE_VERSION` when there is uncertainty about the extent of poisoning or when the RedisVL filter schema changes materially.
+Increment `SEMANTIC_CACHE_VERSION` in this change set and treat it as part of the migration, not as a fallback contingency.
 
 Benefits:
 
@@ -271,8 +329,8 @@ Limitations:
 
 Recommendation:
 
-- use targeted purge for immediate known bad entries
-- use semantic version bump if there is any doubt about hidden historical poison or when new lookup tags are introduced
+- always use semantic version bump in this work
+- optionally use targeted purge for known-bad entries or old-namespace cleanup
 
 ## Negative Cache Position
 
@@ -353,13 +411,12 @@ These tradeoffs are acceptable because the current behavior optimizes hit rate a
 ## Implementation Sequence
 
 1. Add cache policy helper and response-state normalization.
-2. Wire policy into `client.py`.
-3. Wire policy into graph/RAG store paths.
-4. Extend RedisVL semantic schema and read filters.
+2. Replace direct RAG semantic-store call sites with the shared canonical helper.
+3. Extend RedisVL semantic schema and read filters.
+4. Bump `SEMANTIC_CACHE_VERSION`.
 5. Add tests for store-block and read-block behavior.
-6. Purge known poisoned entries.
-7. Bump `SEMANTIC_CACHE_VERSION` if schema/filter changes or if historical poisoning scope is uncertain.
-8. Run validation and monitor semantic metrics after rollout.
+6. Purge known poisoned entries or old namespace keys as operational cleanup.
+7. Run validation and monitor semantic metrics after rollout.
 
 ## Acceptance Criteria
 
