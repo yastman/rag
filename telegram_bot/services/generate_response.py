@@ -18,6 +18,7 @@ from telegram_bot.integrations.prompt_templates import (
     get_token_limit,
 )
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.coverage_mode import detect_coverage_mode
 from telegram_bot.services.grounding_policy import (
     build_safe_fallback_response,
     is_strict_grounding_safe,
@@ -94,6 +95,12 @@ _GENERATE_FALLBACK = (
     "ЕСЛИ ИНФОРМАЦИИ НЕ ХВАТАЕТ:\n"
     "Скажи это спокойно и предметно, затем укажи, что именно стоит уточнить. "
     "Например: бюджет, цель покупки, тип объекта, основание ВНЖ, срок рассрочки, статус объекта."
+)
+_EXHAUSTIVE_GENERATE_FALLBACK = (
+    "Ты — консультант по {{domain}}. "
+    "Если вопрос подразумевает множественность, перечисли все найденные в контексте "
+    "релевантные варианты, сгруппируй близкие пункты и убери дубли. "
+    "Если база покрывает не все варианты, скажи, что перечислены только найденные в базе основания."
 )
 
 
@@ -502,6 +509,8 @@ async def generate_response(
 
     detector = style_detector or _detector
     style_info = detector.detect(effective_query)
+    coverage_decision = detect_coverage_mode(effective_query)
+    needs_coverage = coverage_decision.needs_coverage
     sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
     legal_answer_safe = grounding_mode != "strict" or is_strict_grounding_safe(
         documents=docs,
@@ -523,6 +532,8 @@ async def generate_response(
             "context_docs_count": len(docs),
             "streaming_enabled": bool(message is not None and config.streaming_enabled),
             "grounding_mode": grounding_mode,
+            "needs_coverage": needs_coverage,
+            "coverage_reason": coverage_decision.reason,
         }
     )
 
@@ -545,6 +556,9 @@ async def generate_response(
                 "safe_fallback_used": True,
                 "grounded": False,
                 "response_sent": False,
+                "needs_coverage": needs_coverage,
+                "coverage_mode": "exhaustive_list" if needs_coverage else "default",
+                "coverage_reason": coverage_decision.reason,
             }
         )
         return {
@@ -576,15 +590,37 @@ async def generate_response(
             "grounded": False,
             "legal_answer_safe": False,
             "semantic_cache_safe_reuse": False,
+            "needs_coverage": needs_coverage,
         }
 
     style_enabled = bool(getattr(config, "response_style_enabled", False))
     shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
     legacy_max_tokens = int(config.generate_max_tokens)
-    use_style = style_enabled and not shadow_mode
 
     prompt_config: dict[str, Any] = {}
-    if use_style:
+    prompt_name = "generate"
+    use_style = False
+    if needs_coverage:
+        system_prompt, prompt_config = get_prompt_with_config(
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        if "max_tokens" in prompt_config:
+            max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
+        else:
+            max_tokens = legacy_max_tokens
+        response_policy_mode = "coverage"
+        prompt_name = "generate_exhaustive_list"
+    else:
+        use_style = style_enabled and not shadow_mode
+        response_policy_mode = (
+            "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
+        )
+
+    if needs_coverage:
+        pass
+    elif use_style:
         style_system_prompt = style_prompt_builder(
             style=style_info.style,
             difficulty=style_info.difficulty,
@@ -860,6 +896,17 @@ async def generate_response(
         "eval_query": effective_query[:2000],
         "eval_answer": answer[:3000],
         "eval_context": eval_context,
+        "needs_coverage": needs_coverage,
+        "coverage_mode": "exhaustive_list" if needs_coverage else "default",
+        "coverage_reason": coverage_decision.reason,
+        "prompt_name": prompt_name,
+        "documents_count": len(docs),
+        "distinct_doc_count": len(
+            {
+                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
+                for doc in docs
+            }
+        ),
     }
     if usage_details:
         span_output["token_usage"] = {
@@ -916,7 +963,6 @@ async def generate_response(
     answer_chars = len(answer)
     question_words = style_info.word_count
     ratio = answer_words / max(question_words, 1)
-    response_policy_mode = "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
 
     sent_message_ref = (
         extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
@@ -955,4 +1001,5 @@ async def generate_response(
         "grounded": True,
         "legal_answer_safe": legal_answer_safe,
         "semantic_cache_safe_reuse": legal_answer_safe,
+        "needs_coverage": needs_coverage,
     }
