@@ -291,6 +291,61 @@ async def test_generate_response_logs_coverage_prompt_metadata() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_response_honors_explicit_coverage_override() -> None:
+    from unittest.mock import ANY
+
+    config, _client = _make_non_streaming_config(answer="Полный список оснований.")
+    lf = MagicMock()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_config",
+        return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
+    ) as mock_get_prompt:
+        result = await generate_response(
+            query="основания для внж в болгарии",
+            documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "основания для внж в болгарии"}],
+            needs_coverage=True,
+        )
+
+    assert result["needs_coverage"] is True
+    mock_get_prompt.assert_called_once_with(
+        "generate_exhaustive_list",
+        fallback=ANY,
+        variables={"domain": "недвижимость"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_prompt() -> None:
+    config, client = _make_non_streaming_config(answer="Полный список.")
+    lf = MagicMock()
+    docs = [
+        {"text": f"Doc {i}", "score": 0.95 - i * 0.01, "metadata": {"doc_id": str(i)}}
+        for i in range(8)
+    ]
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_config",
+        return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
+    ):
+        result = await generate_response(
+            query="перечисли все основания для внж",
+            documents=docs,
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "перечисли все основания для внж"}],
+        )
+
+    assert result["needs_coverage"] is True
+    user_prompt = client.chat.completions.create.await_args.kwargs["messages"][-1]["content"]
+    assert user_prompt.count("[Объект ") == 8
+    assert "Doc 7" in user_prompt
+
+
+@pytest.mark.asyncio
 async def test_generate_response_strict_mode_does_not_degrade_only_because_show_sources_disabled() -> (
     None
 ):
