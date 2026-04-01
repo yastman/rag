@@ -50,7 +50,7 @@
 - Keep small local fixes in `Quick execution`.
 - Route multi-file or runtime-sensitive work through `Plan needed`.
 - Route structurally ambiguous or contract-changing work through `Design first`.
-- `Plan needed` work routes through `@writing-plans`; `Design first` work routes through `@brainstorming` first.
+- `Plan needed` work routes through `@writing-plans`; `Design first` work routes through `@brainstorming`, then a written spec and user review before planning.
 
 ## Task Routing
 - `telegram_bot/`: handlers, dialogs, middlewares, agents, business services, orchestration.
