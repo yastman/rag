@@ -1,8 +1,8 @@
-# syntax=docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+# syntax=docker/dockerfile:1
 # Voice Agent — uv sync pattern (2026 best practices)
 
 # ====== BUILD STAGE ======
-FROM ghcr.io/astral-sh/uv:0.9-python3.14-bookworm-slim@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1 AS builder
+FROM ghcr.io/astral-sh/uv:0.9-python3.14-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra voice
 
 # ====== RUNTIME STAGE ======
-FROM python:3.14-slim-bookworm@sha256:55e465cb7e50cd1d7217fcb5386aa87d0356ca2cd790872142ef68d9ef6812b4 AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 WORKDIR /app
 
 RUN groupadd -g 1001 appuser && \
