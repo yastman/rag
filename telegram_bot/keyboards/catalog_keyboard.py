@@ -60,10 +60,13 @@ def _collect_show_more_prefixes(i18n_hub: Any = None, i18n: Any = None) -> set[s
     prefixes = {"🔄 Показать ещё", "🔄 Показать еще", "🔄 Show more", "🔄 Показати ще"}
     if i18n is not None:
         for key in _SHOW_MORE_FTL_KEYS:
+            label = None
             try:
                 label = i18n.get(key)
             except Exception:
-                continue
+                logger.debug(
+                    "Failed to resolve show-more label from i18n key=%s", key, exc_info=True
+                )
             if isinstance(label, str) and label:
                 prefixes.add(label)
     if i18n_hub is not None:

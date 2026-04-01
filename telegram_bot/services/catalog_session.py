@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 
 CATALOG_RUNTIME_DATA_KEY = "catalog_runtime"
@@ -122,7 +122,7 @@ def update_catalog_runtime_page(
     shown_item_ids: list[str] | None = None,
     current_item_id: str | None = None,
 ) -> CatalogRuntime:
-    updated: CatalogRuntime = dict(runtime)
+    updated: CatalogRuntime = cast(CatalogRuntime, dict(runtime))
     existing_results = updated.get("results") or []
     merged_results = _merge_result_items(
         [item for item in existing_results if isinstance(item, dict)],
