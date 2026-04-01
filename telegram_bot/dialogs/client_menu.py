@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from typing import Any
+from typing import Any, cast
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 from aiogram_dialog import Dialog, DialogManager, LaunchMode, StartMode, Window
 from aiogram_dialog.widgets.kbd import Button, Group, Start
 from aiogram_dialog.widgets.text import Format
@@ -21,11 +21,13 @@ logger = logging.getLogger(__name__)
 _DIRECT_ACTIONS = frozenset({"services", "ask", "bookmarks", "demo"})
 
 
-def _message_for_actor(callback: CallbackQuery) -> Any:
+def _message_for_actor(callback: CallbackQuery) -> Message | None:
     """Return a message object that reflects the clicking user as from_user."""
     message = callback.message
     actor = callback.from_user
-    if message is None or actor is None:
+    if message is None or isinstance(message, InaccessibleMessage):
+        return None
+    if actor is None:
         return message
 
     model_copy = getattr(message, "model_copy", None)
@@ -33,7 +35,7 @@ def _message_for_actor(callback: CallbackQuery) -> Any:
         with contextlib.suppress(Exception):
             copied = model_copy(update={"from_user": actor})
             copied.from_user = actor
-            return copied
+            return cast(Message, copied)
 
     with contextlib.suppress(Exception):
         message.from_user = actor
