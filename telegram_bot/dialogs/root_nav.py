@@ -6,7 +6,7 @@ import contextlib
 import inspect
 from typing import Any
 
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 from aiogram_dialog import DialogManager
 from aiogram_dialog.widgets.kbd import Button
 from aiogram_dialog.widgets.text import Const, Format
@@ -19,7 +19,8 @@ def get_main_menu_label(i18n: Any | None = None) -> str:
     """Return localized label for the shared client root button."""
     if i18n is None:
         return "🏠 Главное меню"
-    return i18n.get("main-menu")
+    label = i18n.get("main-menu")
+    return str(label) if label is not None else "🏠 Главное меню"
 
 
 async def show_client_main_menu(
@@ -54,7 +55,7 @@ async def on_back_to_main_menu(
     with contextlib.suppress(Exception):
         await manager.reset_stack(remove_keyboard=True)
     message = callback.message
-    if message is not None:
+    if message is not None and not isinstance(message, InaccessibleMessage):
         await show_client_main_menu(message, i18n=i18n)
 
 
