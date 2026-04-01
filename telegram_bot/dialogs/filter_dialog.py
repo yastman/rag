@@ -16,10 +16,10 @@ from __future__ import annotations
 import contextlib
 import inspect
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InaccessibleMessage
 from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.utils import remove_intent_id
 from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
@@ -108,7 +108,8 @@ def _state_name(manager: DialogManager) -> str | None:
         ctx = current_context()
         if inspect.isawaitable(ctx):
             return None
-        return ctx.state.state
+        state_name = getattr(getattr(ctx, "state", None), "state", None)
+        return state_name if isinstance(state_name, str) else None
     return None
 
 
@@ -149,15 +150,18 @@ def _snapshot_filter_context(manager: DialogManager) -> dict[str, Any]:
         start_data = ctx.start_data if isinstance(ctx.start_data, dict) else None
         widget_data = dict(ctx.widget_data)
     intent_id, stack_id = _context_ids(manager)
-    return mask_pii(
-        {
-            "intent_id": intent_id,
-            "stack_id": stack_id,
-            "state": _state_name(manager),
-            "dialog_data": dict(getattr(manager, "dialog_data", {}) or {}),
-            "widget_data": widget_data or {},
-            "start_data": start_data or {},
-        }
+    return cast(
+        dict[str, Any],
+        mask_pii(
+            {
+                "intent_id": intent_id,
+                "stack_id": stack_id,
+                "state": _state_name(manager),
+                "dialog_data": dict(getattr(manager, "dialog_data", {}) or {}),
+                "widget_data": widget_data or {},
+                "start_data": start_data or {},
+            }
+        ),
     )
 
 
@@ -168,7 +172,15 @@ def _trace_filter_output(
     **extra: Any,
 ) -> dict[str, Any]:
     payload = {"action": action, **extra, "context": _snapshot_filter_context(manager)}
-    return mask_pii(payload)
+    return cast(dict[str, Any], mask_pii(payload))
+
+
+def _string_filter_value(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return str(value)
 
 
 def _start_filter_observation(
@@ -276,26 +288,31 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     rooms_val = dd.get("rooms")
     if _has_filter_value(rooms_val):
         try:
-            label = ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val))
+            rooms_key = _string_filter_value(rooms_val)
+            label = ROOMS_DISPLAY.get(int(rooms_key or "0"), str(rooms_key or ""))
         except (ValueError, TypeError):
             label = str(rooms_val)
         lines.append(f"🛏 Комнаты: {label}")
 
     budget_val = dd.get("budget")
     if _has_filter_value(budget_val):
-        lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(str(budget_val), str(budget_val))}")
+        budget_key = _string_filter_value(budget_val) or ""
+        lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(budget_key, budget_key)}")
 
     view_val = dd.get("view")
     if _has_filter_value(view_val):
-        lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(view_val, view_val)}")
+        view_key = _string_filter_value(view_val) or ""
+        lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(view_key, view_key)}")
 
     area_val = dd.get("area")
     if _has_filter_value(area_val):
-        lines.append(f"📐 Площадь: {AREA_DISPLAY.get(area_val, area_val)}")
+        area_key = _string_filter_value(area_val) or ""
+        lines.append(f"📐 Площадь: {AREA_DISPLAY.get(area_key, area_key)}")
 
     floor_val = dd.get("floor")
     if _has_filter_value(floor_val):
-        lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(floor_val, floor_val)}")
+        floor_key = _string_filter_value(floor_val) or ""
+        lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(floor_key, floor_key)}")
 
     complex_val = dd.get("complex")
     if _has_filter_value(complex_val):
@@ -303,7 +320,8 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
 
     furnished_val = dd.get("furnished")
     if _has_filter_value(furnished_val):
-        label = {"true": "Да", "false": "Нет"}.get(furnished_val, furnished_val)
+        furnished_key = _string_filter_value(furnished_val) or ""
+        label = {"true": "Да", "false": "Нет"}.get(furnished_key, furnished_key)
         lines.append(f"🛋 Мебель: {label}")
 
     promotion_val = dd.get("promotion")
@@ -618,7 +636,7 @@ async def on_apply(
 
         # Show apartment results respecting view mode
         msg = callback.message
-        if not msg:
+        if msg is None or isinstance(msg, InaccessibleMessage):
             _update_filter_observation(
                 observation, manager=manager, action="apply", has_message=False
             )
