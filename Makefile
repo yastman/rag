@@ -969,12 +969,14 @@ k3s-down: ## Delete all k3s resources
 	kubectl delete -k k8s/overlays/full/ --ignore-not-found
 
 k3s-secrets: ## Create k8s secrets from k8s/secrets/.env
-	kubectl create secret generic api-keys --from-env-file=k8s/secrets/.env -n rag --dry-run=client -o yaml | kubectl apply -f -
-	kubectl create secret generic db-credentials \
-		--from-literal=POSTGRES_USER=postgres \
-		--from-literal=POSTGRES_PASSWORD=postgres \
-		--from-literal=POSTGRES_DB=postgres \
-		-n rag --dry-run=client -o yaml | kubectl apply -f -
+	@set -a; . k8s/secrets/.env; set +a; \
+		: "$${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in k8s/secrets/.env}"; \
+		kubectl create secret generic api-keys --from-env-file=k8s/secrets/.env -n rag --dry-run=client -o yaml | kubectl apply -f -; \
+		kubectl create secret generic db-credentials \
+			--from-literal=POSTGRES_USER=postgres \
+			--from-literal=POSTGRES_PASSWORD=$$POSTGRES_PASSWORD \
+			--from-literal=POSTGRES_DB=postgres \
+			-n rag --dry-run=client -o yaml | kubectl apply -f -
 
 k3s-ingest-start: ## Scale ingestion to 1 replica
 	kubectl scale deployment ingestion -n rag --replicas=1
