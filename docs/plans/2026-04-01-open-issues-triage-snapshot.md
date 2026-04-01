@@ -11,13 +11,19 @@ Reference spec:
 This file is a dated working snapshot, not canonical backlog policy.
 Lane labels record provisional triage on the retrieval date above, and `Needs discovery / defer` holds open issues that were intentionally left unclassified or deferred instead of force-fit into a lane.
 
+## Execution updates
+
+- [x] `#1075` `audit: remove unused imports in __init__.py files [priority:high]`
+  implemented in `PR #1087`, merged into `dev` at `780f996af465b4506153036b06255185284b27f6`.
+- [ ] Next recommended task: `#1076` `audit: deduplicate convert_to_python_types and create_search_engine [priority:high]`
+  Treat this as `Plan needed`, not `Quick execution`, because it spans shared retrieval/evaluation code paths and test surfaces.
+
 ## Quick execution
-- `#1075` `audit: remove unused imports in __init__.py files [priority:high]`
-- `#1076` `audit: deduplicate convert_to_python_types and create_search_engine [priority:high]`
 - `#1078` `audit: filter extractors — shared base class and constants [priority:medium]`
 - `#1079` `audit: dead code removal`
 
 ## Plan needed
+- `#1076` `audit: deduplicate convert_to_python_types and create_search_engine [priority:high]`
 - `#1071` `fix: sync Docker and k8s image versions + complete k8s secrets template`
 - `#1073` `chore: dependency updates — version audit April 2026`
 - `#1074` `audit: compose.vps.yml — broken overrides and missing BOT_USERNAME`
