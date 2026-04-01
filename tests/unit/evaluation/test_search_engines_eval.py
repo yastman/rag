@@ -7,9 +7,23 @@ import numpy as np
 import pytest
 from qdrant_client import models
 
+from src.retrieval.search_engine_shared import (
+    AbstractSearchEngine,
+)
+from src.retrieval.search_engine_shared import (
+    lexical_weights_to_sparse as shared_sparse,
+)
+from src.utils.serialization import convert_to_python_types as shared_convert
+
 
 class TestConvertToPythonTypes:
     """Tests for convert_to_python_types helper function."""
+
+    def test_evaluation_module_reuses_shared_helper(self):
+        """Test helper is re-exported from shared serialization module."""
+        from src.evaluation.search_engines import convert_to_python_types
+
+        assert convert_to_python_types is shared_convert
 
     def test_convert_numpy_array_to_list(self):
         from src.evaluation.search_engines import convert_to_python_types
@@ -77,6 +91,12 @@ class TestConvertToPythonTypes:
 
 class TestSearchEngineBase:
     """Tests for SearchEngine base class."""
+
+    def test_search_engine_uses_shared_abstract_base(self):
+        """Test evaluation SearchEngine subclasses the shared abstract base."""
+        from src.evaluation.search_engines import SearchEngine
+
+        assert issubclass(SearchEngine, AbstractSearchEngine)
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
@@ -729,6 +749,12 @@ class TestSearchEngineResponseParsing:
 
 class TestLexicalWeightsToSparse:
     """Tests for _lexical_weights_to_sparse helper."""
+
+    def test_evaluation_module_reuses_shared_sparse_helper(self):
+        """Test helper is re-exported from shared sparse conversion module."""
+        from src.evaluation.search_engines import _lexical_weights_to_sparse
+
+        assert _lexical_weights_to_sparse is shared_sparse
 
     def test_dict_format(self):
         """Test converting dict lexical weights to SparseVector."""
