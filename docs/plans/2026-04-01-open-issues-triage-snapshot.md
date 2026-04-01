@@ -5,6 +5,9 @@ Retrieved: `2026-04-01` (UTC)
 Source command:
 `gh issue list --state open --limit 30 --json number,title,labels,assignees,updatedAt,url`
 
+Reference spec:
+`docs/superpowers/specs/2026-04-01-issue-triage-workflow-design.md`
+
 This file is a dated working snapshot, not canonical backlog policy.
 Lane labels record provisional triage on the retrieval date above, and `Needs discovery / defer` holds open issues that were intentionally left unclassified or deferred instead of force-fit into a lane.
 
