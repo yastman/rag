@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+# syntax=docker/dockerfile:1
 # Mini App FastAPI backend — uv sync pattern (2026 best practices)
 
 # ====== BUILD STAGE ======
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra mini-app
 
 # ====== RUNTIME STAGE ======
-FROM python:3.14-slim-bookworm@sha256:55e465cb7e50cd1d7217fcb5386aa87d0356ca2cd790872142ef68d9ef6812b4 AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 
 WORKDIR /app
 

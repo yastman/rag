@@ -1,8 +1,8 @@
-# syntax=docker/dockerfile:1@sha256:4a43a54dd1fedceb30ba47e76cfcf2b47304f4161c0caeac2db1c61804ea3c91
+# syntax=docker/dockerfile:1
 # Mini App React frontend — Node build + nginx serve
 
 # ====== BUILD STAGE ======
-FROM node:20-slim@sha256:17281e8d1dc4d671976c6b89a12f47a44c2f390b63a989e2e327631041f544fd AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # ====== RUNTIME STAGE ======
-FROM nginx:1.29-alpine@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0 AS runtime
+FROM nginx:1.29-alpine AS runtime
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf

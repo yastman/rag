@@ -110,6 +110,12 @@
       "groupName": "uv-base"
     },
     {
+      "description": "Base images - Node.js and nginx",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["node", "nginx"],
+      "groupName": "node-nginx-base"
+    },
+    {
       "description": "Pre-commit hooks - group together",
       "matchManagers": ["pre-commit"],
       "groupName": "pre-commit-hooks",
