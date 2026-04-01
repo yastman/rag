@@ -168,6 +168,7 @@
       "matchDatasources": ["pypi"],
       "matchPackageNames": [
         "pydantic",
+        "pydantic-settings",
         "httpx",
         "uvicorn",
         "python-dotenv",
