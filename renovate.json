@@ -129,6 +129,41 @@
       "groupName": "mini-app-vite-toolchain"
     },
     {
+      "description": "NPM packages - React core and router",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["mini_app/frontend/package.json"],
+      "matchPackageNames": ["react", "react-dom", "react-router-dom"],
+      "groupName": "npm-react"
+    },
+    {
+      "description": "NPM packages - React ecosystem",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["mini_app/frontend/package.json"],
+      "matchPackageNames": ["zustand", "@tma.js/sdk-react", "@types/react", "@types/react-dom"],
+      "groupName": "npm-react-ecosystem"
+    },
+    {
+      "description": "NPM packages - TypeScript and types",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["mini_app/frontend/package.json"],
+      "matchPackageNames": ["typescript"],
+      "groupName": "npm-typescript"
+    },
+    {
+      "description": "NPM packages - Testing libraries",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["mini_app/frontend/package.json"],
+      "matchPackageNames": ["@testing-library/jest-dom", "@testing-library/react", "@testing-library/user-event", "jsdom"],
+      "groupName": "npm-testing"
+    },
+    {
+      "description": "NPM packages - Dev tools",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["mini_app/frontend/package.json"],
+      "matchPackageNames": ["eruda"],
+      "groupName": "npm-dev"
+    },
+    {
       "description": "Python core libs - safe, auto-merge patch",
       "matchDatasources": ["pypi"],
       "matchPackageNames": [
@@ -156,7 +191,9 @@
         "sentence-transformers",
         "FlagEmbedding",
         "torch",
-        "numpy"
+        "numpy",
+        "scipy",
+        "torchvision"
       ],
       "groupName": "python-ml-libs"
     },
@@ -168,6 +205,7 @@
         "langfuse",
         "langchain",
         "langchain-core",
+        "langchain-openai",
         "cocoindex",
         "ragas",
         "deepeval"
@@ -175,11 +213,25 @@
       "groupName": "python-rag-stack"
     },
     {
+      "description": "Python LangGraph - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "langgraph",
+        "langgraph-checkpoint-postgres",
+        "langgraph-checkpoint-redis",
+        "langmem"
+      ],
+      "groupName": "python-langgraph"
+    },
+    {
       "description": "Python bot - group",
       "matchDatasources": ["pypi"],
       "matchPackageNames": [
         "aiogram",
-        "redisvl"
+        "redisvl",
+        "aiogram-dialog",
+        "fluentogram",
+        "fluent-compiler"
       ],
       "groupName": "python-bot"
     },
@@ -189,7 +241,9 @@
       "matchPackageNames": [
         "docling",
         "docling-core",
-        "docling-parse"
+        "docling-parse",
+        "pymupdf",
+        "fastembed"
       ],
       "groupName": "python-docling"
     },
@@ -200,9 +254,83 @@
         "anthropic",
         "openai",
         "groq",
-        "voyageai"
+        "voyageai",
+        "instructor",
+        "aiohttp",
+        "requests",
+        "grpcio"
       ],
       "groupName": "python-api-clients"
+    },
+    {
+      "description": "Python voice/LiveKit - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "livekit",
+        "livekit-agents",
+        "livekit-plugins-elevenlabs",
+        "livekit-plugins-openai"
+      ],
+      "groupName": "python-livekit"
+    },
+    {
+      "description": "Python OpenTelemetry - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "opentelemetry-sdk",
+        "opentelemetry-exporter-otlp-proto-http",
+        "opentelemetry-exporter-otlp-proto-grpc"
+      ],
+      "groupName": "python-opentelemetry"
+    },
+    {
+      "description": "Python async - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "asyncpg",
+        "uvloop",
+        "apscheduler",
+        "phonenumbers",
+        "click"
+      ],
+      "groupName": "python-async"
+    },
+    {
+      "description": "Python FastAPI - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "fastapi"
+      ],
+      "groupName": "python-fastapi"
+    },
+    {
+      "description": "Python data - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "datasets",
+        "pandas"
+      ],
+      "groupName": "python-data"
+    },
+    {
+      "description": "Python docs - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "mkdocs",
+        "mkdocs-material",
+        "mkdocstrings"
+      ],
+      "groupName": "python-docs"
+    },
+    {
+      "description": "Python ML serving - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "onnxruntime",
+        "optimum",
+        "python-multipart"
+      ],
+      "groupName": "python-ml-serving"
     },
     {
       "description": "Dev tools - ruff, mypy, pytest",
@@ -212,9 +340,27 @@
         "mypy",
         "pytest",
         "pytest-httpx",
-        "pre-commit"
+        "pytest-cov",
+        "pytest-asyncio",
+        "pytest-timeout",
+        "pytest-xdist",
+        "pytest-split",
+        "pre-commit",
+        "pylint",
+        "bandit",
+        "vulture",
+        "click",
+        "fakeredis"
       ],
       "groupName": "python-dev-tools"
+    },
+    {
+      "description": "Dev tools - telethon",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "telethon"
+      ],
+      "groupName": "python-telethon"
     },
     {
       "description": "GitHub Actions - group",
