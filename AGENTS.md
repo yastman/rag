@@ -44,6 +44,14 @@
   - broad web search only as fallback
 - Do not block work on missing MCP tools; use shell and direct file reads when MCP is unavailable.
 
+## Issue Triage Workflow
+- Before starting new work, classify it as `Quick execution`, `Plan needed`, or `Design first`.
+- Use `docs/engineering/issue-triage.md` as the detailed operator playbook.
+- Keep small local fixes in `Quick execution`.
+- Route multi-file or runtime-sensitive work through `Plan needed`.
+- Route structurally ambiguous or contract-changing work through `Design first`.
+- `Plan needed` work routes through `@writing-plans`; `Design first` work routes through `@brainstorming` first.
+
 ## Task Routing
 - `telegram_bot/`: handlers, dialogs, middlewares, agents, business services, orchestration.
 - `telegram_bot/services/` and `src/retrieval/`: search, RAG, cache, reranking, retrieval behavior.
