@@ -49,3 +49,27 @@ def test_unified_cli_import_keeps_flow_lazy(monkeypatch: pytest.MonkeyPatch) -> 
     assert module is not None
     assert "src.ingestion.unified.flow" not in sys.modules
     assert "src.ingestion.unified.qdrant_writer" not in sys.modules
+
+
+@pytest.mark.parametrize(
+    ("module_name", "attr_name"),
+    [
+        ("src", "Settings"),
+        ("src.config", "SmallToBigMode"),
+        ("src.contextualization", "ContextualizeProvider"),
+        ("src.ingestion", "DoclingClient"),
+        ("src.ingestion.unified", "UnifiedConfig"),
+    ],
+)
+def test_pruned_package_exports_are_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    module_name: str,
+    attr_name: str,
+) -> None:
+    """Removed package-level exports should stay absent."""
+    _clear_modules_safe(monkeypatch, ("src",))
+
+    module = importlib.import_module(module_name)
+
+    with pytest.raises(AttributeError):
+        getattr(module, attr_name)
