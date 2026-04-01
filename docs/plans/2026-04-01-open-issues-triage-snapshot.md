@@ -30,6 +30,9 @@ Lane labels record provisional triage on the retrieval date above, and `Needs di
 - `#1070` `refactor: split PropertyBot monolith (5000+ lines) into router modules + microservices`
 
 ## Needs discovery / defer
+
+This is a holding bucket, not a fourth execution lane.
+
 - `#1085` `File structure reorganization — cleanup and archival`
 - `#1077` `audit: contextualization providers — extract shared base class [priority:high]`
 - `#1072` `fix: eliminate bare  catches and scattered magic numbers`

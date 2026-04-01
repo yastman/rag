@@ -23,7 +23,7 @@
 
 ### Design first
 - Use this when structure, ownership, or contracts are still ambiguous.
-- Route through `@brainstorming` before planning.
+- Route through `@brainstorming`, write a short spec, get user review, then plan.
 
 ## DRY, SOLID, and Reuse
 - Prefer local fixes when the shared shape is still evolving.
