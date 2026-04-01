@@ -8,7 +8,7 @@ import logging
 import operator
 from typing import Any
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InaccessibleMessage
 from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.widgets.kbd import (
     Back,
@@ -865,7 +865,7 @@ async def on_summary_search(
     if svc is None and property_bot is not None:
         svc = getattr(property_bot, "_apartments_service", None)
 
-    if svc is None or msg is None:
+    if svc is None or msg is None or isinstance(msg, InaccessibleMessage):
         await manager.done()
         return
 
@@ -910,16 +910,14 @@ async def on_summary_search(
         await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
     if not results:
-        await show_catalog_controls(
-            message=callback.message, dialog_manager=manager, runtime=runtime
-        )
+        await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
         await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
         return
 
     telegram_id = callback.from_user.id if callback.from_user else 0
     i18n = manager.middleware_data.get("i18n")
     await send_catalog_results(
-        message=callback.message,
+        message=msg,
         property_bot=property_bot,
         results=results,
         total_count=total_count,
@@ -932,7 +930,7 @@ async def on_summary_search(
             else None
         ),
     )
-    await show_catalog_controls(message=callback.message, dialog_manager=manager, runtime=runtime)
+    await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
     await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
 
 
