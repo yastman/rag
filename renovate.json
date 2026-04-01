@@ -39,10 +39,12 @@
       "groupName": "databases"
     },
     {
-      "description": "Langfuse Docker - pin to 3.150.0 until events table bug fixed (upstream #11924)",
+      "description": "Langfuse Docker - auto-merge minor/patch",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["langfuse/langfuse", "langfuse/langfuse-worker"],
-      "enabled": false
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "groupName": "langfuse"
     },
     {
       "description": "ML Platform - group together",
@@ -78,6 +80,20 @@
         "prom/alertmanager"
       ],
       "groupName": "monitoring"
+    },
+    {
+      "description": "ClickHouse - CalVer versioning (26.3, 26.3.3.20-lts)",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["clickhouse/clickhouse-server"],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)(\\.(?<patch>\\d+)\\.\\d+)?(-(?<compatibility>.*))?$",
+      "groupName": "clickhouse"
+    },
+    {
+      "description": "LiveKit - handle v-prefix tags with loose versioning",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["livekit/livekit-server"],
+      "versioning": "loose",
+      "groupName": "livekit"
     },
     {
       "description": "MinIO - regex versioning for RELEASE.YYYY-MM-DD tags",
