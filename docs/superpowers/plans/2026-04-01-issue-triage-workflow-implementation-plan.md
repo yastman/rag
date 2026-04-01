@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Codify the approved issue-triage workflow into persistent repo guidance and publish one dated backlog snapshot that can drive the next execution session.
+**Goal:** Codify the approved issue-triage workflow into persistent repo guidance, implement it from an isolated git worktree, and finish with a pull request into the repo's active integration branch.
 
-**Architecture:** Keep the implementation documentation-first. Put stable rules in `AGENTS.md`, put the operator-facing decision process in `docs/engineering/issue-triage.md`, and keep the current backlog classification in a dated snapshot document so it can expire cleanly without mutating canonical policy. Do not automate GitHub labels or issue routing until the manual flow proves insufficient.
+**Architecture:** Keep the implementation documentation-first. Start from an isolated worktree rooted off `dev`, put stable rules in `AGENTS.md`, put the operator-facing decision process in `docs/engineering/issue-triage.md`, and keep the current backlog classification in a dated snapshot document so it can expire cleanly without mutating canonical policy. Finish by pushing the worktree branch and opening a PR against `dev`, because recent merged PRs in this repository target `dev` even though deploys happen from `main`.
 
 **Tech Stack:** Markdown, GitHub CLI (`gh`), repo guidance docs, Context7, `rg`
 
@@ -13,16 +13,19 @@
 ## Scope
 
 **In scope**
+- Create and use a dedicated worktree under `.worktrees/` for implementation.
 - Create a reusable issue triage playbook for future sessions.
 - Update root `AGENTS.md` with canonical triage guidance and a pointer to the detailed playbook.
 - Publish a dated backlog snapshot using the approved lanes from the spec.
 - Verify the new docs stay consistent with the approved spec and current backlog command.
+- Push the implementation branch and open a PR against `dev` at the end.
 
 **Out of scope**
 - Implementing or closing any product issue.
 - Adding GitHub automation, scripts, or new labels for triage.
 - Refactoring subsystem code while documenting the workflow.
 - Expanding this into per-subsystem overrides before the root workflow proves useful.
+- Merging directly into `main`.
 
 ## File Map
 
@@ -35,6 +38,15 @@
 - Reference: `docs/superpowers/specs/2026-04-01-issue-triage-workflow-design.md`
   Purpose: approved design source of truth. Do not drift from it during implementation.
 
+## Workflow Reality To Preserve
+
+- Current local integration branch: `dev`
+- Recent merged PR base branch: `dev`
+- CI runs on pull requests to both `main` and `dev`
+- VPS deploy runs only on pushes to `main`
+
+Because of that, this plan should execute in a dedicated branch off `dev` and finish with a PR back into `dev`, not a direct merge to `main`.
+
 ## Verification Strategy
 
 This is a docs/process change, not a product-code change. Use targeted consistency checks and commit-hook hygiene instead of forcing full repo test suites for no-runtime edits.
@@ -43,6 +55,47 @@ This is a docs/process change, not a product-code change. Use targeted consisten
 - Use `gh issue list ... --json ...` to confirm the snapshot still matches the current backlog at write time.
 - Use `git diff --check` before claiming completion.
 - If implementation grows beyond docs/process files, expand verification to the repo-wide checks required by `AGENTS.md`.
+
+### Task 0: Create The Isolated Worktree
+
+**Files:**
+- Reference: `.gitignore`
+- Reference: `AGENTS.md`
+
+- [ ] **Step 1: Confirm the worktree location is the repo default**
+
+Run: `ls -d .worktrees`
+
+Expected: output includes `.worktrees`.
+
+Run: `git check-ignore -v .worktrees`
+
+Expected: output shows `.gitignore:195:.worktrees/	.worktrees` or an equivalent ignore rule confirming the directory is ignored.
+
+- [ ] **Step 2: Create the worktree from the active integration branch**
+
+Run: `git worktree add .worktrees/issue-triage-workflow -b docs/2026-04-01-issue-triage-workflow dev`
+
+Expected: a new worktree is created at `.worktrees/issue-triage-workflow` and the new branch `docs/2026-04-01-issue-triage-workflow` is checked out there.
+
+- [ ] **Step 3: Switch to the worktree and verify branch state**
+
+Run: `cd .worktrees/issue-triage-workflow && git branch --show-current && git status --short`
+
+Expected:
+- current branch is `docs/2026-04-01-issue-triage-workflow`
+- working tree is clean
+
+- [ ] **Step 4: Record the execution contract**
+
+Before changing files, note in the session that:
+- implementation is now running from `.worktrees/issue-triage-workflow`
+- `dev` is the PR base branch for this work
+- final branch completion must use `@finishing-a-development-branch` with the PR option unless the user explicitly chooses another completion path
+
+- [ ] **Step 5: Commit**
+
+No commit in this task. Worktree setup is preparatory only.
 
 ### Task 1: Create The Operator Playbook
 
@@ -303,6 +356,73 @@ git commit -m "docs: normalize issue triage workflow references"
 
 Skip this commit if no files changed during Task 4.
 
+### Task 5: Push The Branch And Create The PR
+
+**Files:**
+- Modify if needed: `AGENTS.md`
+- Modify if needed: `docs/engineering/issue-triage.md`
+- Modify if needed: `docs/plans/2026-04-01-open-issues-triage-snapshot.md`
+
+- [ ] **Step 1: Re-run the final verification from inside the worktree**
+
+Run: `cd .worktrees/issue-triage-workflow && rg -n "Issue Triage Workflow|docs/engineering/issue-triage.md|Quick execution|Plan needed|Design first|Context7" AGENTS.md docs/engineering/issue-triage.md docs/plans/2026-04-01-open-issues-triage-snapshot.md && git diff --check && git status --short`
+
+Expected:
+- the cross-reference matches are present
+- `git diff --check` prints nothing
+- `git status --short` is clean except for any intentional final doc edits that still need a commit
+
+- [ ] **Step 2: Use the branch-finishing workflow**
+
+Invoke `@finishing-a-development-branch` from inside `.worktrees/issue-triage-workflow`.
+
+Because this repository's recent merged PRs target `dev`, choose the PR path unless the user explicitly asks for another option:
+
+```text
+Implementation complete. What would you like to do?
+
+1. Merge back to dev locally
+2. Push and create a Pull Request
+3. Keep the branch as-is (I'll handle it later)
+4. Discard this work
+```
+
+Expected default for this plan: option `2`.
+
+- [ ] **Step 3: Push and create the PR against `dev`**
+
+Run:
+
+```bash
+cd .worktrees/issue-triage-workflow
+git push -u origin docs/2026-04-01-issue-triage-workflow
+gh pr create --base dev --head docs/2026-04-01-issue-triage-workflow --title "docs: codify issue triage workflow" --body "$(cat <<'EOF'
+## Summary
+- add the operator playbook for issue triage
+- codify the triage workflow in AGENTS.md
+- publish a dated backlog triage snapshot
+
+## Test Plan
+- [x] verify required headings and references with rg
+- [x] verify current backlog ids with gh issue list
+- [x] run git diff --check
+EOF
+)"
+```
+
+Expected:
+- branch is pushed with upstream tracking
+- a PR URL is returned
+- the PR targets `dev`
+
+- [ ] **Step 4: Preserve the worktree after PR creation**
+
+Do not remove `.worktrees/issue-triage-workflow` immediately after opening the PR. Keep it available for review feedback unless the user explicitly asks for cleanup after the PR is created or merged.
+
+- [ ] **Step 5: Commit**
+
+No commit in this task. The branch should already contain the task commits above.
+
 ## Guardrails
 
 - Do not let the implementation drift into fixing any of the backlog issues themselves.
@@ -310,3 +430,4 @@ Skip this commit if no files changed during Task 4.
 - Keep `AGENTS.md` concise; detailed operating instructions belong in `docs/engineering/issue-triage.md`.
 - Treat the dated snapshot as disposable evidence, not as timeless source of truth.
 - Before claiming completion, apply `@verification-before-completion` thinking even though this is docs-only work.
+- Use `.worktrees/issue-triage-workflow` for implementation; do not execute this plan directly on the shared `dev` worktree.
