@@ -23,6 +23,7 @@ from aiogram.types import (
     BotCommand,
     CallbackQuery,
     FSInputFile,
+    InaccessibleMessage,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
@@ -74,12 +75,14 @@ from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
 if TYPE_CHECKING:
-    from .agents.context import BotContext
+    from .agents.context import BotContext as BotContextType
     from .services.history_service import HistoryService
+else:
+    BotContextType = Any
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 HistoryService: Any = None  # type: ignore[no-redef]
-BotContext = Any
+BotContext: Any = Any
 
 
 logger = logging.getLogger(__name__)
@@ -2318,10 +2321,11 @@ class PropertyBot:
         dialog_manager: Any = None,
     ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        if callback.message:
+        message = callback.message
+        if message is not None and not isinstance(message, InaccessibleMessage):
             with contextlib.suppress(Exception):
-                await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer(_STALE_RESULTS_CALLBACK_TEXT)
+                await message.edit_reply_markup(reply_markup=None)
+            await message.answer(_STALE_RESULTS_CALLBACK_TEXT)
         await callback.answer()
 
     @observe(name="cb-card", capture_input=False, capture_output=False)
@@ -2386,12 +2390,18 @@ class PropertyBot:
                 from .dialogs.states import ViewingSG
 
                 control_message_id = _state_control_message_id(state_data)
-                if control_message_id and callback.message and callback.message.chat:
+                bot = callback.bot
+                if (
+                    control_message_id
+                    and bot is not None
+                    and callback.message
+                    and callback.message.chat
+                ):
                     with contextlib.suppress(Exception):
-                        await callback.bot.delete_message(
+                        await bot.delete_message(
                             callback.message.chat.id,
                             control_message_id,
-                        )  # type: ignore[union-attr]
+                        )
 
                 await dialog_manager.start(
                     ViewingSG.date,
@@ -3501,7 +3511,7 @@ class PropertyBot:
         user_text: str,
         chat_id: int,
         callbacks: list[Any],
-        bot_context: BotContext,
+        bot_context: BotContextType,
         rag_result_store: dict[str, Any],
         forum_thread_id: int | None = None,
         use_streaming: bool = True,
@@ -3624,7 +3634,7 @@ class PropertyBot:
         user_text: str,
         chat_id: int,
         callbacks: list[Any],
-        bot_context: BotContext,
+        bot_context: BotContextType,
         rag_result_store: dict[str, Any],
         forum_thread_id: int | None = None,
         message: Any | None = None,
