@@ -8,7 +8,7 @@ indicate stale containers running older/different image versions.
 Usage:
     python scripts/check_image_drift.py                         # Human-readable
     python scripts/check_image_drift.py --json                  # JSON output
-    python scripts/check_image_drift.py -f docker-compose.vps.yml  # Custom file
+    python scripts/check_image_drift.py -f compose.vps.yml      # Custom file
     python scripts/check_image_drift.py --fix                   # Show fix commands
 
 Exit codes:
@@ -375,8 +375,8 @@ def main() -> None:
     parser.add_argument(
         "-f",
         "--file",
-        default="docker-compose.dev.yml",
-        help="Compose file to check (default: docker-compose.dev.yml)",
+        default="compose.yml",
+        help="Compose file to check (default: compose.yml)",
     )
     parser.add_argument(
         "--json",
