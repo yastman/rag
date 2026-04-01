@@ -494,8 +494,9 @@ async def cmd_reprocess(args: argparse.Namespace) -> int:
         for table_name in await _tracking_tables(pool):
             if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
                 raise ValueError(f"Unexpected tracking table name: {table_name}")
+            delete_query = f"DELETE FROM {table_name} WHERE source_key = ANY($1::jsonb[])"  # nosec B608
             deleted = await pool.execute(
-                f"DELETE FROM {table_name} WHERE source_key = ANY($1::jsonb[])",
+                delete_query,
                 source_keys,
             )
             total_deleted += int(deleted.split()[-1])
