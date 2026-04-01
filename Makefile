@@ -969,12 +969,21 @@ k3s-down: ## Delete all k3s resources
 	kubectl delete -k k8s/overlays/full/ --ignore-not-found
 
 k3s-secrets: ## Create k8s secrets from k8s/secrets/.env
-	kubectl create secret generic api-keys --from-env-file=k8s/secrets/.env -n rag --dry-run=client -o yaml | kubectl apply -f -
-	kubectl create secret generic db-credentials \
-		--from-literal=POSTGRES_USER=postgres \
-		--from-literal=POSTGRES_PASSWORD=postgres \
-		--from-literal=POSTGRES_DB=postgres \
-		-n rag --dry-run=client -o yaml | kubectl apply -f -
+	@tmp_api_keys=$$(mktemp); \
+		tmp_db_credentials=$$(mktemp); \
+		trap 'rm -f "$$tmp_api_keys" "$$tmp_db_credentials"' EXIT; \
+		grep -v '^POSTGRES_PASSWORD=' k8s/secrets/.env > "$$tmp_api_keys"; \
+		POSTGRES_PASSWORD=$$(awk -F= '/^POSTGRES_PASSWORD=/{sub(/^[^=]*=/,""); print; found=1; exit} END{if(!found) exit 1}' k8s/secrets/.env) || { \
+			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			exit 1; \
+		}; \
+		[ -n "$$POSTGRES_PASSWORD" ] || { \
+			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			exit 1; \
+		}; \
+		printf 'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=postgres\n' "$$POSTGRES_PASSWORD" > "$$tmp_db_credentials"; \
+		kubectl create secret generic api-keys --from-env-file="$$tmp_api_keys" -n rag --dry-run=client -o yaml | kubectl apply -f -; \
+		kubectl create secret generic db-credentials --from-env-file="$$tmp_db_credentials" -n rag --dry-run=client -o yaml | kubectl apply -f -
 
 k3s-ingest-start: ## Scale ingestion to 1 replica
 	kubectl scale deployment ingestion -n rag --replicas=1
