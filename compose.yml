@@ -753,7 +753,7 @@ services:
           memory: 256M
 
   livekit-sip:
-    image: livekit/sip:latest@sha256:96ef59d461e692c43c77bfe2caa8b469e662e2cc1158082e3af5434184225897
+    image: livekit/sip:v1.2
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
