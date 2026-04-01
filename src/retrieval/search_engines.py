@@ -1,6 +1,7 @@
 """Search engine implementations for retrieval."""
 
 from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Union
 
@@ -765,15 +766,18 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         return "dbsf_colbert"
 
 
-def create_search_engine(
-    engine_type: SearchEngine | None = None,
-    settings: Settings | None = None,
-) -> Union[
+RetrievalSearchEngine = Union[
     "BaselineSearchEngine",
     "HybridRRFSearchEngine",
     "HybridRRFColBERTSearchEngine",
     "DBSFColBERTSearchEngine",
-]:
+]
+
+
+def create_search_engine(
+    engine_type: SearchEngine | None = None,
+    settings: Settings | None = None,
+) -> RetrievalSearchEngine:
     """
     Factory function to create search engine.
 
@@ -798,7 +802,7 @@ def create_search_engine(
         else str(requested_engine)
     )
 
-    registry = {
+    registry: dict[str, Callable[[], RetrievalSearchEngine]] = {
         SearchEngine.BASELINE.value: lambda: BaselineSearchEngine(settings),
         SearchEngine.HYBRID_RRF.value: lambda: HybridRRFSearchEngine(settings),
         SearchEngine.HYBRID_RRF_COLBERT.value: lambda: HybridRRFColBERTSearchEngine(settings),
