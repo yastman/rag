@@ -476,7 +476,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
@@ -760,11 +760,11 @@ services:
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
-      LIVEKIT_WS_URL: ws://livekit-server:7880
+      LIVEKIT_WS_URL: ${LIVEKIT_URL:-ws://livekit-server:7880}
       SIP_CONFIG_BODY: |
         api_key: ${LIVEKIT_API_KEY:-}
         api_secret: ${LIVEKIT_API_SECRET:-}
-        ws_url: ws://livekit-server:7880
+        ws_url: ${LIVEKIT_URL:-ws://livekit-server:7880}
         redis:
           address: redis:6379
           password: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -799,7 +799,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      LIVEKIT_URL: ws://livekit-server:7880
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit-server:7880}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
