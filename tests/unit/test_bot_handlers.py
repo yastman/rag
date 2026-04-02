@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
+from telegram_bot.services.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 
 
@@ -90,6 +91,13 @@ def _make_typing_cm():
     return mock_cm
 
 
+def _raise_nested_runtime_error() -> None:
+    def _inner() -> None:
+        raise RuntimeError("boom")
+
+    _inner()
+
+
 class TestPreAgentStateContract:
     def test_build_pre_agent_miss_contract_sets_required_fields(self):
         from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
@@ -112,6 +120,17 @@ class TestPreAgentStateContract:
         assert contract["query_type"] == "FAQ"
         assert contract["topic_hint"] == "legal"
         assert contract["grounding_mode"] == "strict"
+
+
+class TestErrorUtils:
+    def test_walk_traceback_frames_returns_function_names(self):
+        with pytest.raises(RuntimeError) as exc_info:
+            _raise_nested_runtime_error()
+
+        frames = list(walk_traceback_frames(exc_info.value))
+
+        assert any(function_name == "_raise_nested_runtime_error" for _, function_name in frames)
+        assert any(function_name == "_inner" for _, function_name in frames)
 
 
 class TestPropertyBotInit:
