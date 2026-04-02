@@ -32,14 +32,16 @@ Lane labels record provisional triage on the retrieval date above, and `Needs di
 - [x] `#1074` `audit: compose.vps.yml — broken overrides and missing BOT_USERNAME`
   implemented in local branch `issue-1074-compose-vps-audit`, verified with
   compose/runtime checks, and issue closed on `2026-04-02`.
-- [ ] Next recommended task: `#1080` `langfuse не может подключиться к postgres, clickhouse, redis`
+- [x] `#1080` `langfuse не может подключиться к postgres, clickhouse, redis`
+  implemented in local branch `issue-1080-fix`, verified with compose runtime
+  checks, `make check`, and `make test-unit`; issue closed on `2026-04-02`.
+- [ ] Next recommended task: `#1081` `postgres: 7 аварийных остановок, WAL corruption, autovacuum failures`
   Treat this as `Plan needed`; it remains `OPEN`.
 
 ## Quick execution
 
 ## Plan needed
 - `#1073` `chore: dependency updates — version audit April 2026`
-- `#1080` `langfuse не может подключиться к postgres, clickhouse, redis`
 - `#1081` `postgres: 7 аварийных остановок, WAL corruption, autovacuum failures`
 - `#1082` `clickhouse: IPv6 bind failures + lock contention до 200 сек`
 - `#1083` `qdrant: telemetry reporting failed + invalid vector name queries`
