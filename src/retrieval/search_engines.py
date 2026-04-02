@@ -571,7 +571,9 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
             return [
                 SearchResult(
-                    article_number=(point.payload or {}).get("article_number", ""),
+                    article_number=(point.payload or {})
+                    .get("metadata", {})
+                    .get("article_number", ""),
                     text=(point.payload or {}).get("page_content", ""),
                     score=point.score,
                     metadata={
