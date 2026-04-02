@@ -140,8 +140,6 @@ Google Workspace files are exported by `rclone` into Office-compatible formats:
 | `make ingest-unified-status` | Show unified ingestion state |
 | `make ingest-unified-logs` | Tail ingestion container logs |
 
-Legacy `make ingest-gdrive-*` targets still exist only as compatibility aliases and now forward to the unified commands above.
-
 ## Troubleshooting
 
 | Issue | Check |
