@@ -26,31 +26,6 @@ class OpenAIContextualizer(ContextualizeProvider):
         self.total_tokens = 0
         self.total_cost = 0.0
 
-    async def contextualize(
-        self,
-        chunks: list[str],
-        query: str | None = None,
-        context_window: int = 3,
-    ) -> list[ContextualizedChunk]:
-        """Contextualize multiple chunks using OpenAI."""
-        _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
-
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
