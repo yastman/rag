@@ -43,7 +43,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:8.6.1
+    image: redis:8.6.2
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -67,7 +67,7 @@ services:
           memory: 300M
 
   qdrant:
-    image: qdrant/qdrant:v1.17.0
+    image: qdrant/qdrant:v1.17.1
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -495,7 +495,7 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.6.1
+    image: redis:8.6.2
     restart: unless-stopped
     logging: *default-logging
     command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}
