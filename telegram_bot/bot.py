@@ -65,6 +65,7 @@ from .services.cache_policy import (
     build_cacheability_decision,
     maybe_store_semantic_response,
 )
+from .services.error_utils import walk_traceback_frames
 from .services.forum_bridge import ForumBridge
 from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
@@ -378,13 +379,9 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
     if any(m in message for m in cleanup_markers) and any(m in message for m in storage_markers):
         return True
 
-    tb = exc.__traceback__
-    while tb is not None:
-        filename = tb.tb_frame.f_code.co_filename.lower()
-        func = tb.tb_frame.f_code.co_name
+    for filename, func in walk_traceback_frames(exc):
         if "langgraph" in filename and func == "__aexit__":
             return True
-        tb = tb.tb_next
 
     return False
 
@@ -411,12 +408,9 @@ def _is_checkpointer_runtime_error(exc: Exception) -> bool:
     ):
         return True
 
-    tb = exc.__traceback__
-    while tb is not None:
-        filename = tb.tb_frame.f_code.co_filename.lower()
+    for filename, _ in walk_traceback_frames(exc):
         if "langgraph" in filename and "checkpoint" in filename:
             return True
-        tb = tb.tb_next
     return False
 
 
