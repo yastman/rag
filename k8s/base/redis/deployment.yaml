@@ -52,6 +52,11 @@ spec:
               cpu: 25m
             limits:
               memory: 300Mi
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
+            failureThreshold: 60
+            periodSeconds: 10
           livenessProbe:
             exec:
               command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
