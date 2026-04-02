@@ -3,8 +3,7 @@
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
-	ingest-dir ingest-gdrive ingest-status ingest-services \
-	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
+	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
@@ -813,7 +812,7 @@ sync-drive-status: ## Show sync status and recent files
 # DOCUMENT INGESTION (CocoIndex Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-services ingest-test
+.PHONY: ingest-setup ingest-dir ingest-status ingest-services ingest-test
 
 ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
@@ -833,17 +832,6 @@ endif
 	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
 	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
 
-ingest-gdrive: ## [DEPRECATED] Use unified ingestion targets instead
-	@echo "$(RED)⚠ make ingest-gdrive is deprecated.$(NC)"
-	@echo "  GDrive ingestion now uses rclone sync + CocoIndex pipeline."
-	@echo "  Use one of:"
-	@echo "    make ingest-unified-preflight"
-	@echo "    make ingest-unified-bootstrap"
-	@echo "    make ingest-unified"
-	@echo "    make ingest-unified-watch"
-	@echo "    make ingest-unified-status"
-	@exit 1
-
 ingest-status: ## Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
 	uv run python -m telegram_bot.services.ingestion_cocoindex status
@@ -852,28 +840,6 @@ ingest-services: ## Index curated services.yaml content into Qdrant
 	@echo "$(BLUE)Indexing services.yaml content...$(NC)"
 	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m scripts.index_services
 	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
-
-# =============================================================================
-# GOOGLE DRIVE INGESTION COMPATIBILITY ALIASES
-# =============================================================================
-
-.PHONY: ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status
-
-ingest-gdrive-setup: ## [DEPRECATED] Alias to ingest-unified-bootstrap
-	@echo "$(YELLOW)Deprecated: use make ingest-unified-bootstrap$(NC)"
-	@$(MAKE) ingest-unified-bootstrap
-
-ingest-gdrive-run: ## [DEPRECATED] Alias to ingest-unified
-	@echo "$(YELLOW)Deprecated: use make ingest-unified$(NC)"
-	@$(MAKE) ingest-unified
-
-ingest-gdrive-watch: ## [DEPRECATED] Alias to ingest-unified-watch
-	@echo "$(YELLOW)Deprecated: use make ingest-unified-watch$(NC)"
-	@$(MAKE) ingest-unified-watch
-
-ingest-gdrive-status: ## [DEPRECATED] Alias to ingest-unified-status
-	@echo "$(YELLOW)Deprecated: use make ingest-unified-status$(NC)"
-	@$(MAKE) ingest-unified-status
 
 # =============================================================================
 # UNIFIED INGESTION PIPELINE (v3.2.1)

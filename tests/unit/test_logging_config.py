@@ -5,7 +5,7 @@ import logging
 import tempfile
 from unittest.mock import patch
 
-from telegram_bot.logging_config import JSONFormatter, StructuredLogger, setup_logging
+from telegram_bot.logging_config import JSONFormatter, setup_logging
 
 
 class TestJSONFormatter:
@@ -356,77 +356,3 @@ class TestSetupLogging:
             call_args = mock_info.call_args[0][0]
             assert "DEBUG" in call_args
             assert "json_format=False" in call_args
-
-
-class TestStructuredLogger:
-    """Test StructuredLogger class."""
-
-    def test_init_creates_logger(self):
-        """Test that init creates underlying logger."""
-        slogger = StructuredLogger("test.module")
-
-        assert slogger.logger.name == "test.module"
-
-    def test_info_logs_message(self):
-        """Test info method logs message."""
-        slogger = StructuredLogger("test")
-
-        with patch.object(slogger.logger, "info") as mock_info:
-            slogger.info("Test message")
-
-            mock_info.assert_called_once()
-            assert mock_info.call_args[0][0] == "Test message"
-
-    def test_info_with_extra_kwargs(self):
-        """Test info method passes extra kwargs."""
-        slogger = StructuredLogger("test")
-
-        with patch.object(slogger.logger, "info") as mock_info:
-            slogger.info("Message", user_id=123, latency_ms=45.0)
-
-            mock_info.assert_called_once()
-            assert mock_info.call_args[1]["extra"] == {"user_id": 123, "latency_ms": 45.0}
-
-    def test_warning_logs_message(self):
-        """Test warning method logs message."""
-        slogger = StructuredLogger("test")
-
-        with patch.object(slogger.logger, "warning") as mock_warning:
-            slogger.warning("Warning message", service="cache")
-
-            mock_warning.assert_called_once()
-            assert mock_warning.call_args[0][0] == "Warning message"
-            assert mock_warning.call_args[1]["extra"] == {"service": "cache"}
-
-    def test_error_logs_message(self):
-        """Test error method logs message."""
-        slogger = StructuredLogger("test")
-
-        with patch.object(slogger.logger, "error") as mock_error:
-            slogger.error("Error message", cache_hit=False)
-
-            mock_error.assert_called_once()
-            assert mock_error.call_args[0][0] == "Error message"
-            assert mock_error.call_args[1]["exc_info"] is False
-            assert mock_error.call_args[1]["extra"] == {"cache_hit": False}
-
-    def test_error_with_exc_info(self):
-        """Test error method with exc_info=True."""
-        slogger = StructuredLogger("test")
-
-        with patch.object(slogger.logger, "error") as mock_error:
-            slogger.error("Error with trace", exc_info=True)
-
-            mock_error.assert_called_once()
-            assert mock_error.call_args[1]["exc_info"] is True
-
-    def test_debug_logs_message(self):
-        """Test debug method logs message."""
-        slogger = StructuredLogger("test")
-
-        with patch.object(slogger.logger, "debug") as mock_debug:
-            slogger.debug("Debug info", query="test query")
-
-            mock_debug.assert_called_once()
-            assert mock_debug.call_args[0][0] == "Debug info"
-            assert mock_debug.call_args[1]["extra"] == {"query": "test query"}
