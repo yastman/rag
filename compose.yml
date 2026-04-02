@@ -734,7 +734,7 @@ services:
           memory: 512M
 
   livekit-server:
-    image: livekit/livekit-server:v1.9
+    image: livekit/livekit-server:v1.10
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
