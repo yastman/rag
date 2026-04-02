@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from telegram_bot.constants.apartment_constants import APARTMENT_CITY_OPTIONS
 from telegram_bot.dialogs.filter_constants import (
     AREA_MAP,
     BUDGET_DISPLAY,
@@ -26,6 +27,9 @@ from telegram_bot.dialogs.filter_constants import (
 
 
 class TestConstants:
+    def test_city_options_reuse_shared_apartment_constants(self):
+        assert CITY_OPTIONS == APARTMENT_CITY_OPTIONS
+
     def test_city_options_non_empty(self):
         assert len(CITY_OPTIONS) > 0
 
