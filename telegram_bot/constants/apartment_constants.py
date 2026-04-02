@@ -16,6 +16,8 @@ APARTMENT_CITY_OPTIONS: list[tuple[str, str]] = [
 
 APARTMENT_CITY_NAMES: list[str] = [
     "Солнечный берег",
+    "Свети Влас",
+    "Элените",
     "Несебр",
     "Бургас",
     "Варна",
