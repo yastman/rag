@@ -20,7 +20,7 @@ scrape_configs:
         filters:
           - name: name
             values:
-              - dev-.*
+              - ${COMPOSE_PROJECT_NAME:-dev}-.*
     relabel_configs:
       # Extract container name
       - source_labels: ['__meta_docker_container_name']
@@ -34,11 +34,11 @@ scrape_configs:
         target_label: image
       # Set job name based on container
       - source_labels: ['__meta_docker_container_name']
-        regex: '/dev-(.*)'
+        regex: '/${COMPOSE_PROJECT_NAME:-dev}-(.*)'
         target_label: job
       # Add service label for easier filtering
       - source_labels: ['__meta_docker_container_name']
-        regex: '/dev-(.*)'
+        regex: '/${COMPOSE_PROJECT_NAME:-dev}-(.*)'
         target_label: service
     pipeline_stages:
       # Parse JSON logs (common for Python apps)
