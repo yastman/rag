@@ -1051,7 +1051,7 @@ async def rag_pipeline(
             if grade_result["skip_rerank"] or rerank_from_retrieve:
                 # High confidence or server-side ColBERT already applied — skip rerank
                 final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
-                    :_DEFAULT_RERANK_TOP_K
+                    : config.rerank_top_k
                 ]
                 rerank_applied = rerank_from_retrieve  # preserve True from ColBERT path
                 rerank_cache_hit = False
@@ -1061,6 +1061,7 @@ async def rag_pipeline(
                     documents,
                     cache=cache,
                     reranker=reranker,
+                    top_k=config.rerank_top_k,
                     latency_stages=latency_stages,
                 )
                 latency_stages = rerank_result["latency_stages"]
