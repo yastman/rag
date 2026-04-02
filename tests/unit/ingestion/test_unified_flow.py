@@ -12,36 +12,10 @@ pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)"
 pytestmark = pytest.mark.requires_extras
 
 
-class TestComputeFileId:
-    """Test compute_file_id: legacy sha256-based file identity."""
+def test_legacy_compute_file_id_helper_is_not_exported():
+    import src.ingestion.unified.flow as flow_module
 
-    def test_returns_hex_string(self):
-        from src.ingestion.unified.flow import compute_file_id
-
-        result = compute_file_id("docs/test.pdf")
-        assert isinstance(result, str)
-        assert len(result) == 16
-
-    def test_deterministic(self):
-        from src.ingestion.unified.flow import compute_file_id
-
-        id1 = compute_file_id("docs/test.pdf")
-        id2 = compute_file_id("docs/test.pdf")
-        assert id1 == id2
-
-    def test_different_paths_produce_different_ids(self):
-        from src.ingestion.unified.flow import compute_file_id
-
-        id1 = compute_file_id("docs/a.pdf")
-        id2 = compute_file_id("docs/b.pdf")
-        assert id1 != id2
-
-    def test_matches_sha256_prefix(self):
-        from src.ingestion.unified.flow import compute_file_id
-
-        path = "docs/test.pdf"
-        expected = hashlib.sha256(path.encode()).hexdigest()[:16]
-        assert compute_file_id(path) == expected
+    assert not hasattr(flow_module, "compute_file_id")
 
 
 class TestGetMimeType:
@@ -165,7 +139,7 @@ class TestFileIdFromContent:
         try:
             flow_module._manifest = None
             result = flow_module.file_id_from_content("test.pdf", b"content")
-            expected = flow_module.compute_file_id("test.pdf")
+            expected = hashlib.sha256(b"test.pdf").hexdigest()[:16]
             assert result == expected
         finally:
             flow_module._manifest = original
@@ -178,7 +152,7 @@ class TestFileIdFromContent:
         try:
             flow_module._manifest = MagicMock()
             result = flow_module.file_id_from_content("test.pdf", None)
-            expected = flow_module.compute_file_id("test.pdf")
+            expected = hashlib.sha256(b"test.pdf").hexdigest()[:16]
             assert result == expected
         finally:
             flow_module._manifest = original
