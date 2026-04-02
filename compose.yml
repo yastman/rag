@@ -516,12 +516,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       redis-langfuse:
         condition: service_healthy
+        restart: true
       clickhouse:
         condition: service_healthy
+        restart: true
     environment: &langfuse-env
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/langfuse
@@ -575,12 +579,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       redis-langfuse:
         condition: service_healthy
+        restart: true
       clickhouse:
         condition: service_healthy
+        restart: true
       langfuse-worker:
         condition: service_started
     environment:
