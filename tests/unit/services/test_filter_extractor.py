@@ -2,7 +2,7 @@
 
 import pytest
 
-from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES
+from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES, APARTMENT_CITY_OPTIONS
 from telegram_bot.services.filter_extractor import FilterExtractor
 from telegram_bot.services.text_utils import parse_int_with_k_suffix
 
@@ -115,6 +115,11 @@ class TestFilterExtractorCity:
 
     def test_city_list_matches_shared_apartment_constants(self) -> None:
         for city in APARTMENT_CITY_NAMES:
+            result = _ext.extract_filters(f"квартира в {city}")
+            assert result["city"] == city
+
+    def test_city_options_are_all_parsable(self) -> None:
+        for _, city in APARTMENT_CITY_OPTIONS:
             result = _ext.extract_filters(f"квартира в {city}")
             assert result["city"] == city
 
