@@ -100,10 +100,6 @@ make ingest-unified-logs
 The service mounts `GDRIVE_SYNC_DIR` into `/data/drive-sync` with fail-fast bind-mount semantics.
 If the host path is missing, `docker compose` now fails instead of silently creating an empty directory.
 
-## Legacy Commands
-
-`make ingest-gdrive` is deprecated. Use unified ingestion commands above for active development.
-
 ## Troubleshooting
 
 - `preflight` fails on Qdrant: confirm collection exists or run `bootstrap`.
