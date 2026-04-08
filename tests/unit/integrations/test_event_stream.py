@@ -120,6 +120,8 @@ class TestCacheStoreNodeEventStream:
         state["query_type"] = "FAQ"  # Must be cacheable type (FAQ/ENTITY/STRUCTURED)
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()

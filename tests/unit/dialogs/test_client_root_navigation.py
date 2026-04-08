@@ -20,17 +20,22 @@ def _iter_kbd_widgets(widget):
         yield from _iter_kbd_widgets(child)
 
 
-async def test_root_menu_button_from_nested_flow_uses_reset_stack():
-    from aiogram_dialog import StartMode
+async def test_root_menu_button_from_nested_flow_returns_to_reply_keyboard_root():
+    from aiogram.types import ReplyKeyboardMarkup
 
     from telegram_bot.dialogs.root_nav import on_back_to_main_menu
-    from telegram_bot.dialogs.states import ClientMenuSG
 
     manager = AsyncMock()
+    callback = MagicMock()
+    callback.message = MagicMock()
+    callback.message.answer = AsyncMock()
 
-    await on_back_to_main_menu(MagicMock(), MagicMock(), manager)
+    await on_back_to_main_menu(callback, MagicMock(), manager)
 
-    manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+    manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
+    callback.message.answer.assert_called_once()
+    _, kwargs = callback.message.answer.call_args
+    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
 
 
 def test_filter_dialog_contains_main_menu_button():
