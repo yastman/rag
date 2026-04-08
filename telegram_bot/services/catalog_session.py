@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 
 CATALOG_RUNTIME_DATA_KEY = "catalog_runtime"
+LEGACY_CATALOG_STATE_KEYS = (
+    "apartment_results",
+    "apartment_query",
+    "apartment_offset",
+    "apartment_total",
+    "apartment_next_offset",
+    "apartment_filters",
+    "apartment_scroll_seen_ids",
+    "apartment_footer_msg_id",
+)
 
 
 class CatalogRuntime(TypedDict, total=False):
@@ -21,6 +31,7 @@ class CatalogRuntime(TypedDict, total=False):
     current_item_id: str | None
     bookmarks_context: bool
     origin_context: dict[str, Any]
+    control_message_id: int | None
 
 
 def _dedupe_ids(item_ids: list[str]) -> list[str]:
@@ -95,6 +106,13 @@ def build_catalog_runtime(
     return runtime
 
 
+def clear_legacy_catalog_state(state_data: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(state_data)
+    for key in LEGACY_CATALOG_STATE_KEYS:
+        cleaned.pop(key, None)
+    return cleaned
+
+
 def update_catalog_runtime_page(
     runtime: CatalogRuntime,
     *,
@@ -104,7 +122,7 @@ def update_catalog_runtime_page(
     shown_item_ids: list[str] | None = None,
     current_item_id: str | None = None,
 ) -> CatalogRuntime:
-    updated: CatalogRuntime = dict(runtime)
+    updated: CatalogRuntime = cast(CatalogRuntime, dict(runtime))
     existing_results = updated.get("results") or []
     merged_results = _merge_result_items(
         [item for item in existing_results if isinstance(item, dict)],
