@@ -7,21 +7,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from telegram_bot.constants.apartment_constants import APARTMENT_CITY_OPTIONS
+
 
 # ============================================================
 # City options — (label, value) pairs for dialog Select
 # ============================================================
 
-CITY_OPTIONS: list[tuple[str, str]] = [
-    ("Солнечный берег", "Солнечный берег"),
-    ("Свети Влас", "Свети Влас"),
-    ("Элените", "Элените"),
-    ("Несебр", "Несебр"),
-    ("Поморие", "Поморие"),
-    ("Бургас", "Бургас"),
-    ("Варна", "Варна"),
-    ("Созополь", "Созополь"),
-]
+CITY_OPTIONS: list[tuple[str, str]] = APARTMENT_CITY_OPTIONS
 
 # ============================================================
 # Rooms options — (label, int_value) pairs
