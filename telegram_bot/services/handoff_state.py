@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from typing import Any
 
+from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 
@@ -21,17 +22,16 @@ _PREFIX = "handoff"
 _TOPIC_PREFIX = "topic_map"
 
 
-@dataclass
-class HandoffData:
+class HandoffData(BaseModel):
     """State for an active handoff session."""
 
     client_id: int
     topic_id: int
     mode: str = "human_waiting"  # bot | human_waiting | human
     lead_id: int | None = None
-    created_at: float = field(default_factory=time.time)
+    created_at: float = Field(default_factory=time.time)
     manager_joined_at: float | None = None
-    qualification: dict[str, str] = field(default_factory=dict)
+    qualification: dict[str, str] = Field(default_factory=dict)
 
     def to_redis_dict(self) -> dict[str, str]:
         return {
@@ -45,7 +45,7 @@ class HandoffData:
         }
 
     @classmethod
-    def from_redis_dict(cls, raw: dict[str, str]) -> HandoffData:
+    def from_redis_dict(cls, raw: dict[str, Any]) -> HandoffData:
         return cls(
             client_id=int(raw["client_id"]),
             topic_id=int(raw["topic_id"]),
