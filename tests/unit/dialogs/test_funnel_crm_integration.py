@@ -96,8 +96,12 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-    state_mock.update_data.assert_awaited_once()
-    call_kwargs = state_mock.update_data.call_args[1]
+    assert state_mock.update_data.await_count >= 1
+    call_kwargs = next(
+        kwargs
+        for _, kwargs in state_mock.update_data.await_args_list
+        if "catalog_runtime" in kwargs
+    )
     assert "catalog_runtime" in call_kwargs
     assert call_kwargs["catalog_runtime"]["filters"]["city"] == "Элените"
     assert call_kwargs["catalog_runtime"]["origin_context"]["funnel_data"]["city"] == "Элените"

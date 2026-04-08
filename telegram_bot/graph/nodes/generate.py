@@ -120,7 +120,12 @@ def _build_system_prompt(domain: str) -> str:
     return get_prompt("generate", fallback=_GENERATE_FALLBACK, variables={"domain": domain})
 
 
-def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEXT_DOCS) -> str:
+def _format_context(
+    documents: list[dict[str, Any]],
+    max_docs: int = _MAX_CONTEXT_DOCS,
+    *,
+    sources_enabled: bool = True,
+) -> str:
     """Format top-N retrieved documents into LLM context string."""
     if not documents:
         return "Релевантной информации не найдено."
@@ -138,7 +143,8 @@ def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEX
         if "price" in metadata:
             meta_str += f"Цена: {metadata['price']:,}€\n"
 
-        parts.append(f"[Объект {i}]\n{meta_str}{text}")
+        header = f"[Объект {i}]" if sources_enabled else "Фрагмент контекста"
+        parts.append(f"{header}\n{meta_str}{text}")
 
     return "\n\n---\n\n".join(parts)
 
@@ -341,6 +347,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
 
     return await _generate_response_service(
         query=query,
+        needs_coverage=bool(state.get("needs_coverage")),
         documents=documents,
         retrieved_context=state.get("retrieved_context", []),
         raw_messages=raw_messages,
