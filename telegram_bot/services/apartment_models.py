@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # --- View normalization ---
@@ -383,6 +383,14 @@ class HardFilters(BaseModel):
     is_furnished: bool | None = Field(
         default=None, description="С мебелью (true) / без мебели (false). None если не указано."
     )
+
+    @field_validator("view_tags", mode="before")
+    @classmethod
+    def normalize_view_tags(cls, value: object) -> object:
+        """Treat null-like values as an empty list for extractor compatibility."""
+        if value is None:
+            return []
+        return value
 
     @model_validator(mode="after")
     def fix_ranges(self) -> HardFilters:

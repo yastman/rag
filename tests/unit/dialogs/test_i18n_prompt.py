@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
+
 
 def test_locale_to_language_mapping_covers_all_locales():
     """LOCALE_TO_LANGUAGE maps all supported locale codes."""
@@ -83,21 +85,13 @@ def test_manager_role_context_mentions_crm():
 
 def test_handle_query_accepts_locale_parameter():
     """handle_query signature accepts locale kwarg injected by i18n middleware."""
-    import inspect
-
-    from telegram_bot.bot import PropertyBot
-
-    sig = inspect.signature(PropertyBot.handle_query)
-    assert "locale" in sig.parameters
-    assert sig.parameters["locale"].default == "ru"
+    method = get_property_bot_method("handle_query")
+    assert "locale" in get_parameter_names(method)
+    assert get_default_map(method)["locale"] == "ru"
 
 
 def test_handle_query_supervisor_accepts_locale_parameter():
     """_handle_query_supervisor accepts locale kwarg."""
-    import inspect
-
-    from telegram_bot.bot import PropertyBot
-
-    sig = inspect.signature(PropertyBot._handle_query_supervisor)
-    assert "locale" in sig.parameters
-    assert sig.parameters["locale"].default == "ru"
+    method = get_property_bot_method("_handle_query_supervisor")
+    assert "locale" in get_parameter_names(method)
+    assert get_default_map(method)["locale"] == "ru"
