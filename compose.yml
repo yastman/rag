@@ -23,6 +23,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     environment:
       POSTGRES_USER: postgres
