@@ -22,6 +22,12 @@ This project currently uses a unified CocoIndex-based ingestion pipeline as the 
 ***REMOVED******REMOVED*** Core Commands
 
 ```bash
+***REMOVED*** Validate dependencies, env, and source directory
+make ingest-unified-preflight
+
+***REMOVED*** Create or validate the runtime collection schema
+make ingest-unified-bootstrap
+
 ***REMOVED*** One-shot run
 make ingest-unified
 
@@ -33,6 +39,9 @@ make ingest-unified-status
 
 ***REMOVED*** Reprocess files in error state
 make ingest-unified-reprocess
+
+***REMOVED*** Container logs
+make ingest-unified-logs
 ```
 
 Direct CLI equivalents:
@@ -72,6 +81,8 @@ make validate-traces-fast
 Commonly used:
 - `GDRIVE_SYNC_DIR`
 - `GDRIVE_COLLECTION_NAME`
+- `RCLONE_CONFIG_FILE`
+- `RCLONE_REMOTE`
 - `USE_LOCAL_DENSE_EMBEDDINGS`
 - `BGE_M3_TIMEOUT`
 - `BGE_M3_CONCURRENCY`
@@ -86,12 +97,13 @@ make docker-ingest-up
 make ingest-unified-logs
 ```
 
-***REMOVED******REMOVED*** Legacy Commands
-
-`make ingest-gdrive` is deprecated. Use unified ingestion commands above for active development.
+The service mounts `GDRIVE_SYNC_DIR` into `/data/drive-sync` with fail-fast bind-mount semantics.
+If the host path is missing, `docker compose` now fails instead of silently creating an empty directory.
 
 ***REMOVED******REMOVED*** Troubleshooting
 
 - `preflight` fails on Qdrant: confirm collection exists or run `bootstrap`.
+- `preflight` fails on sync dir: confirm `GDRIVE_SYNC_DIR` exists, is a directory, and contains supported files.
 - `status` shows only errors: run `reprocess --errors`, then inspect Docling/BGE-M3 logs.
 - No files processed: verify `GDRIVE_SYNC_DIR` mount/path and allowed file extensions.
+- Collection exists but has `0 points`: verify the Google Drive sync host path is populated before debugging Qdrant.
