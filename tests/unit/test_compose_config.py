@@ -235,6 +235,19 @@ class TestModelServiceHealthcheckGrace:
         )
 
 
+class TestPostgresShutdownSafety:
+    """Stateful Postgres must get enough time to exit cleanly before Docker kills it."""
+
+    def test_postgres_has_explicit_stop_grace_period(self, vps: dict) -> None:
+        postgres = vps["services"]["postgres"]
+        stop_grace_period = postgres.get("stop_grace_period")
+        assert stop_grace_period, "postgres.stop_grace_period is required for graceful WAL flush"
+        assert _duration_to_seconds(stop_grace_period) >= 30, (
+            "postgres.stop_grace_period must be >=30s to avoid forced kills during shutdown; "
+            f"got {stop_grace_period!r}"
+        )
+
+
 class TestMiniAppVpsParity:
     """Mini app must be part of the default VPS runtime stack."""
 
