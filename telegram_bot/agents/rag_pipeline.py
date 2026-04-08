@@ -45,8 +45,8 @@ from telegram_bot.services.rag_core import (
 
 logger = logging.getLogger(__name__)
 
-# top_k=3 for reranking. Saves ~20ms vs top_k=5 while capturing most relevant docs via ColBERT semantic similarity.
-_DEFAULT_RERANK_TOP_K = 3
+# top_k=5 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
+_DEFAULT_RERANK_TOP_K = 5
 
 
 async def _execute_qdrant_retrieval(
