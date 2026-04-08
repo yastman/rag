@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 from typing import Any
 
@@ -10,9 +9,9 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
-from aiogram_dialog import StartMode
 
 from telegram_bot.callback_data import DemoCB
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.keyboards.demo_keyboard import (
     DEFAULT_EXAMPLES,
     build_demo_examples,
@@ -165,6 +164,7 @@ async def _run_demo_search(
         )
         return
 
+    from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
     from telegram_bot.dialogs.states import CatalogSG
     from telegram_bot.services.catalog_rendering import send_catalog_results
     from telegram_bot.services.catalog_session import (
@@ -196,9 +196,8 @@ async def _run_demo_search(
             }
         )
         if dialog_manager is not None:
-            maybe_start = dialog_manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
-            if inspect.isawaitable(maybe_start):
-                await maybe_start
+            await show_catalog_controls(message=message, dialog_manager=dialog_manager)
+            await activate_catalog_state(dialog_manager=dialog_manager, state=CatalogSG.empty)
         else:
             await message.answer(
                 "К сожалению, ничего не найдено по вашему запросу.\n"
@@ -226,11 +225,15 @@ async def _run_demo_search(
         view_mode="list",
         shown_start=1,
         telegram_id=message.from_user.id if message.from_user else 0,
+        reply_markup=build_catalog_keyboard(
+            shown=len(results),
+            total=total_count,
+            i18n=dialog_manager.middleware_data.get("i18n") if dialog_manager is not None else None,
+        ),
     )
     if dialog_manager is not None:
-        maybe_start = dialog_manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
-        if inspect.isawaitable(maybe_start):
-            await maybe_start
+        await show_catalog_controls(message=message, dialog_manager=dialog_manager, runtime=runtime)
+        await activate_catalog_state(dialog_manager=dialog_manager, state=CatalogSG.results)
 
 
 async def handle_demo_search_voice(
