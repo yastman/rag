@@ -1,5 +1,7 @@
 """Tests for client menu dialog."""
 
+from unittest.mock import patch
+
 from telegram_bot.dialogs.client_menu import _DIRECT_ACTIONS, client_menu_dialog, get_menu_data
 from telegram_bot.dialogs.states import ClientMenuSG, FunnelSG, ViewingSG
 
@@ -31,9 +33,16 @@ def test_client_menu_direct_actions_defined():
     assert {"services", "ask", "bookmarks", "demo"} == _DIRECT_ACTIONS
 
 
-async def test_client_menu_fallback_getter_has_7_keys():
-    """Fallback getter (no i18n) returns the legacy 7-button labels."""
-    result = await get_menu_data()
+async def test_client_menu_fallback_getter_has_welcome_text_and_7_keys():
+    """Fallback getter (no i18n) returns a title plus the legacy 7-button labels."""
+    with patch(
+        "telegram_bot.dialogs.client_menu.load_services_config",
+        return_value={"welcome": {"text": "Привет! 👋 FortNoks Estate"}},
+    ):
+        result = await get_menu_data(event_from_user=type("User", (), {"first_name": "Ярослав"})())
+
+    assert "Привет, Ярослав! 👋" in result["title"]
+    assert "FortNoks Estate" in result["title"]
     for key in (
         "btn_search",
         "btn_services",
@@ -53,6 +62,7 @@ async def test_client_menu_i18n_getter_returns_all_keys():
     i18n = MagicMock()
     i18n.get.side_effect = lambda key, **_: f"[{key}]"
     result = await get_menu_data(i18n=i18n)
+    assert result["title"] == "[welcome-text]"
 
     for key in (
         "btn_search",
@@ -114,3 +124,11 @@ def test_client_menu_uses_legacy_2x3_plus_1_layout():
     top_group_ids = [getattr(btn, "widget_id", "") for btn in getattr(rows[0], "buttons", ())]
     assert top_group_ids == ["funnel", "services", "viewing", "manager", "ask", "bookmarks"]
     assert getattr(rows[1], "widget_id", "") == "demo"
+
+
+def test_client_menu_window_has_non_empty_text_widget():
+    """Client root window must send non-empty text before attaching the keyboard."""
+    window = client_menu_dialog.windows[ClientMenuSG.main]
+    text_widget = getattr(window, "text", None)
+
+    assert text_widget is not None

@@ -7,8 +7,10 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware, Dispatcher
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import ExceptionTypeFilter
 from aiogram.types import ErrorEvent, Message, TelegramObject
+from aiogram_dialog.api.exceptions import UnknownIntent
 
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 _ERROR_TEXT = (
     "❌ Произошла ошибка при обработке запроса. Попробуйте позже или обратитесь к администратору."
 )
+_STALE_DIALOG_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
 
 
 class ErrorHandlerMiddleware(BaseMiddleware):
@@ -49,6 +52,37 @@ async def handle_error(event: ErrorEvent) -> None:
     """
     exception = event.exception
     update = event.update
+    callback_query = update.callback_query
+
+    if isinstance(exception, UnknownIntent):
+        logger.warning(
+            "Stale aiogram-dialog callback for update %s: %s",
+            type(update).__name__,
+            exception,
+        )
+
+        if callback_query is not None:
+            try:
+                await callback_query.answer(_STALE_DIALOG_TEXT)
+            except TelegramBadRequest as exc:
+                if "query is too old" in str(exc) or "query ID is invalid" in str(exc):
+                    logger.debug("Skipping stale callback answer for expired query")
+                else:
+                    logger.warning("Failed to answer stale callback query", exc_info=True)
+            except Exception:
+                logger.warning("Failed to answer stale callback query", exc_info=True)
+
+            if callback_query.message is not None and hasattr(callback_query.message, "delete"):
+                try:
+                    await callback_query.message.delete()
+                except TelegramBadRequest:
+                    logger.debug("Failed to delete stale dialog message", exc_info=True)
+                except Exception:
+                    logger.debug(
+                        "Unexpected failure while deleting stale dialog message", exc_info=True
+                    )
+
+        return
 
     logger.error(
         "Error in handler for update %s: %s",
@@ -78,10 +112,14 @@ async def handle_error(event: ErrorEvent) -> None:
     except Exception:
         logger.debug("Failed to report error to Langfuse", exc_info=True)
 
-    callback_query = update.callback_query
     if callback_query is not None:
         try:
             await callback_query.answer()
+        except TelegramBadRequest as exc:
+            if "query is too old" in str(exc) or "query ID is invalid" in str(exc):
+                logger.debug("Skipping expired callback query answer in error handler")
+            else:
+                logger.warning("Failed to answer callback query in error handler", exc_info=True)
         except Exception:
             logger.warning("Failed to answer callback query in error handler", exc_info=True)
 
