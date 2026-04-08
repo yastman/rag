@@ -46,6 +46,11 @@ class TestEnvExampleCompleteness:
 
     REQUIRED_DB_VARS = [
         "REALESTATE_DATABASE_URL",
+        "INGESTION_DATABASE_URL",
+    ]
+
+    REQUIRED_RUNTIME_VARS = [
+        "BOT_USERNAME",
     ]
 
     @pytest.mark.parametrize("var", REQUIRED_CRM_VARS)
@@ -60,5 +65,10 @@ class TestEnvExampleCompleteness:
 
     @pytest.mark.parametrize("var", REQUIRED_DB_VARS)
     def test_db_var_in_env_example(self, var: str):
+        keys = _parse_env_example()
+        assert var in keys, f"{var} missing from .env.example"
+
+    @pytest.mark.parametrize("var", REQUIRED_RUNTIME_VARS)
+    def test_runtime_var_in_env_example(self, var: str):
         keys = _parse_env_example()
         assert var in keys, f"{var} missing from .env.example"
