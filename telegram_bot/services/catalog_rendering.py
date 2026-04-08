@@ -18,10 +18,11 @@ async def send_catalog_results(
     view_mode: str,
     shown_start: int,
     telegram_id: int,
+    reply_markup: Any = None,
 ) -> None:
     if view_mode == "list" or property_bot is None:
         text = format_apartment_list(results, shown_start=shown_start, total=total_count)
-        await message.answer(text, parse_mode="HTML")
+        await message.answer(text, parse_mode="HTML", reply_markup=reply_markup)
         return
 
     for result in results:

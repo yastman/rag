@@ -20,11 +20,9 @@ def mock_config():
     return cfg
 
 
-async def test_cmd_start_client_starts_client_menu(mock_config):
-    """cmd_start routes client users into the client root dialog."""
-    from aiogram_dialog import StartMode
-
-    from telegram_bot.dialogs.states import ClientMenuSG
+async def test_cmd_start_client_shows_reply_keyboard_even_with_dialog_manager(mock_config):
+    """cmd_start routes client users to the lower reply keyboard root."""
+    from aiogram.types import ReplyKeyboardMarkup
 
     dialog_manager = AsyncMock()
     message = MagicMock()
@@ -46,8 +44,10 @@ async def test_cmd_start_client_starts_client_menu(mock_config):
 
         await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
-    message.answer.assert_not_called()
+    dialog_manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
+    message.answer.assert_called_once()
+    _, kwargs = message.answer.call_args
+    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
 
 
 async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
@@ -79,11 +79,9 @@ async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
     assert call_args.args[0] == ManagerMenuSG.main
 
 
-async def test_cmd_start_manager_without_kommo_starts_client_menu(mock_config):
-    """Managers without CRM mode should also land in the client root dialog."""
-    from aiogram_dialog import StartMode
-
-    from telegram_bot.dialogs.states import ClientMenuSG
+async def test_cmd_start_manager_without_kommo_shows_client_reply_keyboard(mock_config):
+    """Managers without CRM mode should also land in the lower client root."""
+    from aiogram.types import ReplyKeyboardMarkup
 
     mock_config.kommo_enabled = False
     dialog_manager = AsyncMock()
@@ -106,8 +104,10 @@ async def test_cmd_start_manager_without_kommo_starts_client_menu(mock_config):
 
         await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
-    message.answer.assert_not_called()
+    dialog_manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
+    message.answer.assert_called_once()
+    _, kwargs = message.answer.call_args
+    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
 
 
 async def test_cmd_start_fallback_without_dialog_manager(mock_config):
