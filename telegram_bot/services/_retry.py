@@ -6,6 +6,8 @@ Consolidates retry logic from kommo_client and bge_m3_client.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import httpx
 from tenacity import (
@@ -19,6 +21,7 @@ from tenacity import (
 
 
 logger = logging.getLogger(__name__)
+RetryWrappedFn = TypeVar("RetryWrappedFn", bound=Callable[..., Any])
 
 # Transient transport errors worth retrying
 RETRYABLE_TRANSPORT_ERRORS = (
@@ -47,7 +50,7 @@ def make_retry_decorator(
     max_: float = 8.0,
     jitter: float = 2.0,
     max_attempts: int = 3,
-) -> type[retry]:
+) -> Callable[[RetryWrappedFn], RetryWrappedFn]:
     """Factory for retry decorators with common configuration.
 
     Args:
@@ -58,7 +61,7 @@ def make_retry_decorator(
         jitter: Maximum jitter in seconds
         max_attempts: Maximum retry attempts
     """
-    retry_predicate = retry_if_exception_type(RETRYABLE_TRANSPORT_ERRORS)
+    retry_predicate: Any = retry_if_exception_type(RETRYABLE_TRANSPORT_ERRORS)
     if retry_on_http_status:
         retry_predicate = retry_predicate | retry_if_exception(_retryable_http_status)
 
