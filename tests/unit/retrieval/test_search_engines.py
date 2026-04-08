@@ -8,6 +8,7 @@ import pytest
 from qdrant_client import models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
+from src.retrieval.search_engine_shared import lexical_weights_to_sparse as shared_sparse
 from src.retrieval.search_engines import (
     BaselineSearchEngine,
     HybridRRFSearchEngine,
@@ -51,6 +52,9 @@ def baseline_engine(mock_settings: Settings) -> BaselineSearchEngine:
 
 
 class TestLexicalWeightsToSparse:
+    def test_retrieval_module_reexports_shared_helper(self) -> None:
+        assert lexical_weights_to_sparse is shared_sparse
+
     def test_empty_dict_returns_empty_sparse(self) -> None:
         result = lexical_weights_to_sparse({})
         assert result.indices == []
@@ -378,3 +382,13 @@ class TestCreateSearchEngine:
         assert engine is not None
         assert hasattr(engine, "search")
         assert hasattr(engine, "get_name")
+
+    def test_unknown_engine_type_falls_back_to_best_engine(self, mock_settings: Settings) -> None:
+        with (
+            patch("src.retrieval.search_engines.QdrantClient"),
+            patch("src.retrieval.search_engines.get_bge_m3_model"),
+        ):
+            engine = create_search_engine("unknown", settings=mock_settings)  # type: ignore[arg-type]
+        from src.retrieval.search_engines import HybridRRFColBERTSearchEngine
+
+        assert isinstance(engine, HybridRRFColBERTSearchEngine)

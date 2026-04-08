@@ -54,9 +54,11 @@ def _make_callback(data: str, user_id: int = 12345) -> MagicMock:
     cb.data = data
     cb.from_user = MagicMock(id=user_id)
     cb.answer = AsyncMock()
+    cb.bot = MagicMock(delete_message=AsyncMock())
     cb.message = MagicMock()
     cb.message.answer = AsyncMock()
     cb.message.answer_media_group = AsyncMock()
+    cb.message.chat = MagicMock(id=456)
     return cb
 
 
@@ -222,3 +224,22 @@ async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
     dialog_manager.start.assert_awaited_once()
     call_kwargs = dialog_manager.start.call_args.kwargs
     assert call_kwargs.get("show_mode") == ShowMode.DELETE_AND_SEND
+
+
+@pytest.mark.asyncio
+async def test_card_viewing_deletes_catalog_control_message_when_runtime_present() -> None:
+    bot = _create_bot()
+    state = _make_state(
+        {
+            "catalog_runtime": {
+                "results": [_sample_result("prop-42")],
+                "control_message_id": 777,
+            }
+        }
+    )
+    callback = _make_callback("card:viewing:prop-42")
+    dialog_manager = AsyncMock()
+
+    await bot.handle_card_callback(callback, state, dialog_manager=dialog_manager)
+
+    callback.bot.delete_message.assert_awaited_once_with(456, 777)

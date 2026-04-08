@@ -144,6 +144,35 @@ def _iter_kbd_widgets(widget):
 
 
 # ============================================================
+# Runtime trace helpers
+# ============================================================
+
+
+class TestRuntimeTraceHelpers:
+    def test_snapshot_filter_context_includes_context_ids(self):
+        from telegram_bot.dialogs.filter_dialog import _snapshot_filter_context
+
+        ctx = SimpleNamespace(
+            state=SimpleNamespace(state="FilterSG:hub"),
+            start_data={"filters": {}},
+            widget_data={"r_city": "Варна"},
+            id="intent-test",
+            stack_id="stack-test",
+        )
+        manager = SimpleNamespace(
+            dialog_data={"city": "Варна"},
+            current_context=MagicMock(return_value=ctx),
+        )
+
+        snapshot = _snapshot_filter_context(manager)
+
+        assert snapshot["intent_id"] == "intent-test"
+        assert snapshot["stack_id"] == "stack-test"
+        assert snapshot["state"] == "FilterSG:hub"
+        assert snapshot["dialog_data"] == {"city": "Варна"}
+
+
+# ============================================================
 # Hub getter — get_hub_data
 # ============================================================
 
@@ -200,19 +229,30 @@ class TestGetHubData:
 # ============================================================
 
 
-def _make_apply_mocks(dialog_data=None):
+def _make_apply_mocks(
+    dialog_data=None,
+    *,
+    fsm_data=None,
+    apartments_service=None,
+    property_bot=None,
+):
     """Create callback + manager mocks for on_apply tests."""
     state = AsyncMock()
-    state.get_data = AsyncMock(return_value={})
+    state.get_data = AsyncMock(return_value=fsm_data or {})
     state.update_data = AsyncMock()
 
     callback = MagicMock()
     callback.message = MagicMock()
     callback.message.answer = AsyncMock()
+    callback.message.delete = AsyncMock()
 
     manager = AsyncMock()
     manager.dialog_data = dialog_data or {}
-    manager.middleware_data = {"state": state, "apartments_service": None}
+    manager.middleware_data = {
+        "state": state,
+        "apartments_service": apartments_service,
+        "property_bot": property_bot,
+    }
     manager.done = AsyncMock()
     manager.start = AsyncMock()
 
@@ -226,8 +266,8 @@ class TestOnApply:
         callback, state, manager = _make_apply_mocks({"city": "Несебр", "budget": "mid"})
         await on_apply(callback, MagicMock(), manager)
 
-        state.update_data.assert_awaited_once()
-        call_kwargs = state.update_data.call_args[1]
+        assert state.update_data.await_count >= 1
+        call_kwargs = state.update_data.await_args_list[0].kwargs
         runtime = call_kwargs["catalog_runtime"]
         filters = runtime["filters"]
         assert filters["city"] == "Несебр"
@@ -235,7 +275,7 @@ class TestOnApply:
         assert "budget" not in filters
 
     async def test_starts_catalog_dialog_results(self):
-        from aiogram_dialog import StartMode
+        from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.filter_dialog import on_apply
         from telegram_bot.dialogs.states import CatalogSG
@@ -243,7 +283,11 @@ class TestOnApply:
         callback, _state, manager = _make_apply_mocks()
         await on_apply(callback, MagicMock(), manager)
 
-        manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        manager.start.assert_awaited_once_with(
+            CatalogSG.empty,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
 
     async def test_resets_catalog_runtime_pagination(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
@@ -256,7 +300,7 @@ class TestOnApply:
         assert runtime.get("shown_count") == 0
 
     async def test_empty_results_use_catalog_empty_state(self):
-        from aiogram_dialog import StartMode
+        from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.filter_dialog import on_apply
         from telegram_bot.dialogs.states import CatalogSG
@@ -264,7 +308,38 @@ class TestOnApply:
         callback, _state, manager = _make_apply_mocks({"city": "Бургас"})
         await on_apply(callback, MagicMock(), manager)
 
-        manager.start.assert_awaited_once_with(CatalogSG.empty, mode=StartMode.RESET_STACK)
+        manager.start.assert_awaited_once_with(
+            CatalogSG.empty,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
+
+    async def test_closes_and_deletes_filter_shell_before_catalog_results(self):
+        from aiogram_dialog import ShowMode, StartMode
+
+        from telegram_bot.dialogs.filter_dialog import on_apply
+        from telegram_bot.dialogs.states import CatalogSG
+
+        svc = AsyncMock()
+        svc.scroll_with_filters = AsyncMock(
+            return_value=([{"id": "apt-1", "payload": {}}], 1, None, ["apt-1"])
+        )
+        callback, _state, manager = _make_apply_mocks(
+            {"city": "Варна"},
+            fsm_data={"catalog_runtime": {"view_mode": "list"}},
+            apartments_service=svc,
+        )
+
+        await on_apply(callback, MagicMock(), manager)
+
+        assert manager.show_mode == ShowMode.NO_UPDATE
+        manager.done.assert_awaited_once()
+        callback.message.delete.assert_awaited_once()
+        manager.start.assert_awaited_once_with(
+            CatalogSG.results,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
 
 
 # ============================================================
@@ -273,20 +348,33 @@ class TestOnApply:
 
 
 class TestOnReset:
-    async def test_clears_all_filter_fields(self):
+    async def test_clears_filters_in_place_without_reopening_message(self):
+        from aiogram_dialog import ShowMode
+
         from telegram_bot.dialogs.filter_dialog import on_reset
 
         manager = AsyncMock()
         manager.dialog_data = {"city": "Варна", "budget": "mid", "rooms": 2}
         widget_data = {"r_city": "Варна", "r_budget": "mid", "r_rooms": "2"}
-        manager.current_context = MagicMock(return_value=SimpleNamespace(widget_data=widget_data))
+        manager.current_context = MagicMock(
+            return_value=SimpleNamespace(
+                widget_data=widget_data,
+                state=SimpleNamespace(state=FilterSG.hub.state),
+            )
+        )
         manager.find = MagicMock(return_value=AsyncMock(set_checked=AsyncMock()))
+        callback = MagicMock()
+        callback.message = MagicMock()
+        callback.message.delete = AsyncMock()
 
-        await on_reset(MagicMock(), MagicMock(), manager)
+        await on_reset(callback, MagicMock(), manager)
 
-        for field in ("city", "budget", "rooms"):
-            assert manager.dialog_data.get(field) is None or field not in manager.dialog_data
+        assert manager.dialog_data == {}
         assert widget_data == {}
+        manager.update.assert_awaited_once_with({}, show_mode=ShowMode.EDIT)
+        manager.done.assert_not_awaited()
+        manager.start.assert_not_awaited()
+        callback.message.delete.assert_not_awaited()
 
 
 # ============================================================
@@ -639,3 +727,24 @@ class TestHubDisplaysActiveFilters:
         )
         result = await get_hub_data(dialog_manager=manager)
         assert result["active_filters"] == "Фильтры не заданы"
+        assert manager.dialog_data == {}
+
+    async def test_hub_sanitizes_stale_none_before_count(self):
+        from telegram_bot.dialogs.filter_dialog import get_hub_data
+
+        apartments_service = AsyncMock()
+        apartments_service.count_with_filters.return_value = 17
+        widget_data = {"r_city": "None", "r_budget": "None"}
+        manager = SimpleNamespace(
+            dialog_data={"city": "None", "budget": "None"},
+            middleware_data={"apartments_service": apartments_service},
+            current_context=MagicMock(return_value=SimpleNamespace(widget_data=widget_data)),
+        )
+
+        result = await get_hub_data(dialog_manager=manager)
+
+        assert result["count"] == 17
+        assert result["active_filters"] == "Фильтры не заданы"
+        assert manager.dialog_data == {}
+        assert widget_data == {}
+        apartments_service.count_with_filters.assert_awaited_once_with(filters={})
