@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, cast
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InaccessibleMessage
 
 from telegram_bot.callback_data import FavoriteCB
 
@@ -19,6 +20,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
+
+
+@dataclass
+class _LegacyFavoriteCB:
+    apartment_id: str
 
 
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -85,11 +91,12 @@ async def handle_fav_add(
     )
     if result:
         await callback.answer("Добавлено в закладки")
-        if callback.message:
+        message = callback.message
+        if message is not None and not isinstance(message, InaccessibleMessage):
             from telegram_bot.keyboards.property_card import build_card_buttons
 
             with contextlib.suppress(Exception):
-                await callback.message.edit_reply_markup(  # type: ignore[union-attr]
+                await message.edit_reply_markup(
                     reply_markup=build_card_buttons(property_id, is_favorited=True)
                 )
     else:
@@ -129,14 +136,22 @@ async def handle_fav_remove(
     is_bookmark_message = (
         isinstance(callback_message_id, int) and callback_message_id in bookmark_message_ids
     )
-    if in_search_results and not is_bookmark_message and callback.message:
+    message = callback.message
+    if (
+        in_search_results
+        and not is_bookmark_message
+        and message is not None
+        and not isinstance(message, InaccessibleMessage)
+    ):
         with contextlib.suppress(Exception):
-            await callback.message.edit_reply_markup(
+            await message.edit_reply_markup(
                 reply_markup=build_card_buttons_for_results(property_id, is_favorited=False)
             )
-    elif is_bookmark_message and callback.message:
+    elif (
+        is_bookmark_message and message is not None and not isinstance(message, InaccessibleMessage)
+    ):
         with contextlib.suppress(Exception):
-            await callback.message.delete()
+            await message.delete()
     await callback.answer("Удалено из закладок")
 
 
@@ -249,39 +264,24 @@ async def handle_favorite_callback(
 
     # Dispatch to specific handlers
     if action == "add":
-        # Build FavoriteCB-like object for handle_fav_add
-        class _FakeFavoriteCB:
-            def __init__(self, apt_id):
-                self.apartment_id = apt_id
-
         await handle_fav_add(
             callback,
             state,
-            callback_data=_FakeFavoriteCB(property_id) if property_id else None,
+            callback_data=cast(FavoriteCB, _LegacyFavoriteCB(property_id)) if property_id else None,
             favorites_service=favorites_service,
         )
     elif action == "remove":
-
-        class _FakeFavoriteCB:
-            def __init__(self, apt_id):
-                self.apartment_id = apt_id
-
         await handle_fav_remove(
             callback,
             state,
-            callback_data=_FakeFavoriteCB(property_id) if property_id else None,
+            callback_data=cast(FavoriteCB, _LegacyFavoriteCB(property_id)) if property_id else None,
             favorites_service=favorites_service,
         )
     elif action == "viewing":
-
-        class _FakeFavoriteCB:
-            def __init__(self, apt_id):
-                self.apartment_id = apt_id
-
         await handle_fav_viewing(
             callback,
             state,
-            callback_data=_FakeFavoriteCB(property_id) if property_id else None,
+            callback_data=cast(FavoriteCB, _LegacyFavoriteCB(property_id)) if property_id else None,
             favorites_service=favorites_service,
         )
     elif action == "viewing_all":
