@@ -42,7 +42,9 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
         return None
     catalog_runtime = state_data.get("catalog_runtime")
     if catalog_runtime and isinstance(catalog_runtime, dict):
-        return catalog_runtime.get("control_message_id")
+        control_message_id = catalog_runtime.get("control_message_id")
+        if isinstance(control_message_id, int):
+            return control_message_id
     return None
 
 
