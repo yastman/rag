@@ -17,6 +17,7 @@ class RAGState(TypedDict):
     user_id: int
     session_id: str
     query_type: str
+    needs_coverage: bool
     cache_hit: bool
     cached_response: str | None
     query_embedding: list[float] | None
@@ -53,6 +54,8 @@ class RAGState(TypedDict):
     llm_decode_ms: float | None
     llm_tps: float | None
     llm_queue_ms: float | None
+    fallback_used: bool
+    safe_fallback_used: bool
     llm_timeout: bool
     llm_stream_recovery: bool
     streaming_enabled: bool
@@ -99,6 +102,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "user_id": user_id,
         "session_id": session_id,
         "query_type": "",
+        "needs_coverage": False,
         "cache_hit": False,
         "cached_response": None,
         "query_embedding": None,
@@ -135,6 +139,8 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_decode_ms": None,
         "llm_tps": None,
         "llm_queue_ms": None,
+        "fallback_used": False,
+        "safe_fallback_used": False,
         "llm_timeout": False,
         "llm_stream_recovery": False,
         "streaming_enabled": False,

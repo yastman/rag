@@ -8,6 +8,7 @@ import pytest
 from telegram_bot.services.apartment_models import (
     ApartmentQueryParseResult,
     ApartmentRecord,
+    HardFilters,
     compute_confidence,
 )
 
@@ -198,6 +199,12 @@ class TestApartmentQueryParseResult:
         assert filters["rooms"] == 2
         assert filters["price_eur"]["lte"] == 200000.0
         assert "area_m2" not in filters
+
+
+class TestHardFilters:
+    def test_view_tags_none_is_normalized_to_empty_list(self) -> None:
+        filters = HardFilters.model_validate({"view_tags": None})
+        assert filters.view_tags == []
 
 
 class TestComputeConfidence:

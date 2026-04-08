@@ -210,8 +210,8 @@ class TestParsePDF:
         mock_page.get_text.return_value = "Page content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda _: iter([mock_page])
-        mock_doc.__len__ = lambda _: 1
+        mock_doc.page_count = 1
+        mock_doc.load_page.return_value = mock_page
         mock_doc.metadata = {"title": "Test PDF", "author": "Author"}
 
         mock_pymupdf.open.return_value = mock_doc
@@ -237,8 +237,8 @@ class TestParsePDF:
         mock_page.get_text.return_value = "Content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda _: iter([mock_page])
-        mock_doc.__len__ = lambda _: 1
+        mock_doc.page_count = 1
+        mock_doc.load_page.return_value = mock_page
         mock_doc.metadata = None
 
         mock_pymupdf.open.return_value = mock_doc
@@ -291,8 +291,8 @@ class TestParseFile:
         mock_page.get_text.return_value = "Content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda _: iter([mock_page])
-        mock_doc.__len__ = lambda _: 1
+        mock_doc.page_count = 1
+        mock_doc.load_page.return_value = mock_page
         mock_doc.metadata = {}
 
         mock_pymupdf.open.return_value = mock_doc
@@ -328,8 +328,8 @@ class TestConvenienceFunction:
         mock_page.get_text.return_value = "Content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda _: iter([mock_page])
-        mock_doc.__len__ = lambda _: 1
+        mock_doc.page_count = 1
+        mock_doc.load_page.return_value = mock_page
         mock_doc.metadata = {}
 
         mock_pymupdf.open.return_value = mock_doc
