@@ -7,11 +7,10 @@ Keys:
 
 from __future__ import annotations
 
-import json
 import logging
 import time
-from dataclasses import dataclass, field
 
+from pydantic import BaseModel, Field, TypeAdapter, field_serializer, field_validator
 from redis.asyncio import Redis
 
 
@@ -19,44 +18,59 @@ logger = logging.getLogger(__name__)
 
 _PREFIX = "handoff"
 _TOPIC_PREFIX = "topic_map"
+_QUALIFICATION_ADAPTER = TypeAdapter(dict[str, str])
 
 
-@dataclass
-class HandoffData:
+class HandoffData(BaseModel):
     """State for an active handoff session."""
 
     client_id: int
     topic_id: int
     mode: str = "human_waiting"  # bot | human_waiting | human
     lead_id: int | None = None
-    created_at: float = field(default_factory=time.time)
+    created_at: float = Field(default_factory=time.time)
     manager_joined_at: float | None = None
-    qualification: dict[str, str] = field(default_factory=dict)
+    qualification: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("lead_id", "manager_joined_at", mode="before")
+    @classmethod
+    def _empty_string_to_none(cls, value: object) -> object:
+        if value == "":
+            return None
+        return value
+
+    @field_validator("qualification", mode="before")
+    @classmethod
+    def _parse_qualification(cls, value: object) -> object:
+        if value in (None, ""):
+            return {}
+        if isinstance(value, str):
+            return _QUALIFICATION_ADAPTER.validate_json(value)
+        return value
+
+    @field_serializer("qualification", when_used="json")
+    def _serialize_qualification(self, value: dict[str, str]) -> str:
+        return _QUALIFICATION_ADAPTER.dump_json(value).decode()
 
     def to_redis_dict(self) -> dict[str, str]:
+        payload = self.model_dump(mode="json")
         return {
-            "client_id": str(self.client_id),
-            "topic_id": str(self.topic_id),
-            "mode": self.mode,
-            "lead_id": str(self.lead_id) if self.lead_id else "",
-            "created_at": str(self.created_at),
-            "manager_joined_at": str(self.manager_joined_at) if self.manager_joined_at else "",
-            "qualification": json.dumps(self.qualification, ensure_ascii=False),
+            "client_id": str(payload["client_id"]),
+            "topic_id": str(payload["topic_id"]),
+            "mode": str(payload["mode"]),
+            "lead_id": str(payload["lead_id"]) if payload["lead_id"] is not None else "",
+            "created_at": str(payload["created_at"]),
+            "manager_joined_at": (
+                str(payload["manager_joined_at"])
+                if payload["manager_joined_at"] is not None
+                else ""
+            ),
+            "qualification": str(payload["qualification"]),
         }
 
     @classmethod
     def from_redis_dict(cls, raw: dict[str, str]) -> HandoffData:
-        return cls(
-            client_id=int(raw["client_id"]),
-            topic_id=int(raw["topic_id"]),
-            mode=raw.get("mode", "human_waiting"),
-            lead_id=int(raw["lead_id"]) if raw.get("lead_id") else None,
-            created_at=float(raw.get("created_at", 0)),
-            manager_joined_at=(
-                float(raw["manager_joined_at"]) if raw.get("manager_joined_at") else None
-            ),
-            qualification=json.loads(raw.get("qualification", "{}")),
-        )
+        return cls.model_validate(raw)
 
 
 class HandoffState:
@@ -88,11 +102,13 @@ class HandoffState:
         return await self.get_by_client(int(client_id))
 
     async def update_mode(self, client_id: int, mode: str) -> None:
-        key = f"{_PREFIX}:{client_id}"
-        updates: dict[str, str] = {"mode": mode}
+        data = await self.get_by_client(client_id)
+        if not data:
+            return
+        data.mode = mode
         if mode == "human":
-            updates["manager_joined_at"] = str(time.time())
-        await self._redis.hset(key, mapping=updates)  # type: ignore[misc]
+            data.manager_joined_at = time.time()
+        await self.set(data)
 
     async def delete(self, client_id: int) -> None:
         data = await self.get_by_client(client_id)
