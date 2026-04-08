@@ -12,22 +12,18 @@ resources:
   - postgres/pvc.yaml
   - postgres/deployment.yaml
   - postgres/service.yaml
-  - postgres/pdb.yaml
   - redis/pvc.yaml
   - redis/deployment.yaml
   - redis/service.yaml
-  - redis/pdb.yaml
   - qdrant/pvc.yaml
   - qdrant/deployment.yaml
   - qdrant/service.yaml
-  - qdrant/pdb.yaml
   # ML Services
   - docling/pvc.yaml
   - docling/deployment.yaml
   - docling/service.yaml
   - bge-m3/deployment.yaml
   - bge-m3/service.yaml
-  - bge-m3/pdb.yaml
   - user-base/deployment.yaml
   - user-base/service.yaml
   # Application

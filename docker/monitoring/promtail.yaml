@@ -18,32 +18,37 @@ scrape_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
         filters:
-          - name: name
+          - name: label
             values:
-              - ${COMPOSE_PROJECT_NAME:-dev}-.*
+              - com.docker.compose.project
     relabel_configs:
       # Extract container name
       - source_labels: ['__meta_docker_container_name']
         regex: '/(.*)'
         target_label: container
+      # Prefer compose labels over hardcoded dev-* container names.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: compose_project
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: service
       # Extract container ID
       - source_labels: ['__meta_docker_container_id']
         target_label: container_id
       # Extract image name
       - source_labels: ['__meta_docker_container_image']
         target_label: image
-      # Set job name based on container
-      - source_labels: ['__meta_docker_container_name']
-        regex: '/${COMPOSE_PROJECT_NAME:-dev}-(.*)'
+      # Set job name based on compose project + service.
+      - source_labels:
+          [
+            '__meta_docker_container_label_com_docker_compose_project',
+            '__meta_docker_container_label_com_docker_compose_service',
+          ]
+        separator: '-'
         target_label: job
-      # Add service label for easier filtering
-      - source_labels: ['__meta_docker_container_name']
-        regex: '/${COMPOSE_PROJECT_NAME:-dev}-(.*)'
-        target_label: service
     pipeline_stages:
       # Parse JSON logs (common for Python apps)
       - match:
-          selector: '{container=~"dev-bot|dev-litellm|dev-langfuse.*"}'
+          selector: '{service=~"bot|litellm|langfuse.*"}'
           stages:
             - json:
                 expressions:
@@ -73,7 +78,7 @@ scrape_configs:
 
       # Detect errors in any log line
       - match:
-          selector: '{container=~"dev-.*"}'
+          selector: '{compose_project=~".+"}'
           stages:
             - regex:
                 expression: '(?i)(error|exception|failed|fatal|panic|critical)'

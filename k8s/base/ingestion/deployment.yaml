@@ -95,10 +95,7 @@ spec:
             failureThreshold: 3
             initialDelaySeconds: 60
       volumes:
-        # ⚠️ IMPORTANT: The host path must exist on the node before deployment.
-        # On VPS: sudo mkdir -p /home/admin/drive-sync && sudo chown 1000:1000 /home/admin/drive-sync
-        # To change this path, edit GDRIVE_SYNC_HOST_PATH in the ingestion-config ConfigMap.
         - name: drive-sync
           hostPath:
             path: /home/admin/drive-sync
-            type: DirectoryOrCreate
+            type: Directory

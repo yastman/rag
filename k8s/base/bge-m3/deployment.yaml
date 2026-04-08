@@ -29,9 +29,9 @@ spec:
             - containerPort: 8000
           env:
             - name: OMP_NUM_THREADS
-              value: "4"
+              value: "2"
             - name: MKL_NUM_THREADS
-              value: "4"
+              value: "2"
             - name: HF_HOME
               value: /models/hf
             - name: TRANSFORMERS_CACHE
