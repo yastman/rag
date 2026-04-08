@@ -101,64 +101,12 @@ def setup_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("aiogram").setLevel(logging.INFO)
+    logging.getLogger("aiogram_dialog").setLevel(logging.WARNING)
+    logging.getLogger("aiogram_dialog.manager").setLevel(logging.WARNING)
+    logging.getLogger("aiogram_dialog.manager.message_manager").setLevel(logging.WARNING)
     logging.getLogger("qdrant_client").setLevel(logging.WARNING)
 
     logging.info(
         f"Logging configured: level={level}, json_format={json_format}, "
         f"log_file={log_file or 'None'}"
     )
-
-
-class StructuredLogger:
-    """
-    Wrapper for logging with structured context.
-
-    Makes it easy to add contextual fields to log messages.
-    """
-
-    def __init__(self, name: str):
-        """
-        Initialize structured logger.
-
-        Args:
-            name: Logger name (usually __name__)
-        """
-        self.logger = logging.getLogger(name)
-
-    def info(self, message: str, **kwargs):
-        """Log info with extra context."""
-        self.logger.info(message, extra=kwargs)
-
-    def warning(self, message: str, **kwargs):
-        """Log warning with extra context."""
-        self.logger.warning(message, extra=kwargs)
-
-    def error(self, message: str, exc_info: bool = False, **kwargs):
-        """Log error with extra context."""
-        self.logger.error(message, exc_info=exc_info, extra=kwargs)
-
-    def debug(self, message: str, **kwargs):
-        """Log debug with extra context."""
-        self.logger.debug(message, extra=kwargs)
-
-
-# Example usage:
-# from telegram_bot.logging_config import setup_logging, StructuredLogger
-#
-# # Setup at application start
-# setup_logging(level="INFO", json_format=True)
-#
-# # Use in modules
-# logger = StructuredLogger(__name__)
-# logger.info("User query received", user_id=123, query="apartments", latency_ms=45.3)
-#
-# Output:
-# {
-#   "timestamp": "2025-01-06T12:34:56.789Z",
-#   "level": "INFO",
-#   "logger": "telegram_bot.bot",
-#   "message": "User query received",
-#   "user_id": 123,
-#   "query": "apartments",
-#   "latency_ms": 45.3
-# }
