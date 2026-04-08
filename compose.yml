@@ -747,6 +747,9 @@ services:
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     volumes:
       - ./docker/livekit:/etc/livekit:ro
     command: --config /etc/livekit/livekit.yaml
