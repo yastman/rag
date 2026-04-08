@@ -154,6 +154,42 @@ class TestCuratedSpanPayloads:
         assert "query_hash" in input_payload
         assert len(input_payload["query_hash"]) == 8
 
+    async def test_retrieve_node_logs_distinct_doc_count_for_coverage_query(self):
+        from telegram_bot.graph.nodes.retrieve import retrieve_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(
+            user_id=1,
+            session_id="s1",
+            query="какие еще есть виды внж в болгарии? напиши полный список",
+        )
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+
+        docs = [
+            {"id": "1", "text": "Doc A1", "score": 0.9, "metadata": {"doc_id": "a"}},
+            {"id": "2", "text": "Doc B1", "score": 0.8, "metadata": {"doc_id": "b"}},
+        ]
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+        cache.store_search_results = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(docs, {"backend_error": False}))
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.graph.nodes.retrieve.get_client", return_value=mock_lf):
+            await retrieve_node(
+                state,
+                _rt(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+            )
+
+        payloads = _extract_span_payloads(mock_lf)
+        _assert_no_forbidden_keys(payloads, "node-retrieve")
+        assert any("distinct_doc_count" in payload for payload in payloads)
+
     async def test_generate_node_curated_payload(self):
         from unittest.mock import patch as _patch
 
@@ -194,6 +230,70 @@ class TestCuratedSpanPayloads:
             "generate_node must call update_current_span for input and output"
         )
         _assert_no_forbidden_keys(payloads, "node-generate")
+
+    async def test_generate_node_logs_coverage_metadata(self):
+        from unittest.mock import patch as _patch
+
+        from telegram_bot.graph.nodes.generate import generate_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(
+            user_id=1,
+            session_id="s1",
+            query="перечисли все виды внж в Болгарии",
+        )
+        state["query_type"] = "GENERAL"
+        state["documents"] = [
+            {"text": "Large doc " * 200, "score": 0.9, "metadata": {"doc_id": "a"}},
+        ]
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Answer."
+        mock_response = MagicMock(choices=[mock_choice])
+        mock_response.model = "gpt-4o-mini"
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        mock_config = MagicMock()
+        mock_config.domain = "test"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = False
+        mock_config.create_llm.return_value = mock_client
+
+        mock_lf = MagicMock()
+        with (
+            _patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+            _patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+        ):
+            await generate_node(state)
+
+        payloads = _extract_span_payloads(mock_lf)
+        _assert_no_forbidden_keys(payloads, "node-generate")
+        assert any(
+            payload.get("needs_coverage") is True
+            or payload.get("coverage_mode") == "exhaustive_list"
+            for payload in payloads
+        )
+
+    async def test_generate_node_passes_state_coverage_override_to_service(self):
+        from unittest.mock import patch as _patch
+
+        from telegram_bot.graph.nodes.generate import generate_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s1", query="какие еще есть виды внж")
+        state["needs_coverage"] = True
+        state["messages"] = [{"role": "user", "content": "основания для внж в болгарии"}]
+
+        mock_service = AsyncMock(return_value={"response": "ok", "needs_coverage": True})
+
+        with _patch("telegram_bot.graph.nodes.generate._generate_response_service", mock_service):
+            await generate_node(state)
+
+        assert mock_service.await_args.kwargs["needs_coverage"] is True
 
     async def test_cache_check_node_curated_payload(self):
         from telegram_bot.graph.nodes.cache import cache_check_node
