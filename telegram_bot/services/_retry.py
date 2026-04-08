@@ -44,7 +44,6 @@ def _retryable_http_status(exc: BaseException) -> bool:
 
 def make_retry_decorator(
     *,
-    retry_on_transport: bool = True,
     retry_on_http_status: bool = False,
     initial: float = 1.0,
     max_: float = 8.0,
@@ -54,7 +53,6 @@ def make_retry_decorator(
     """Factory for retry decorators with common configuration.
 
     Args:
-        retry_on_transport: Include transport errors (ConnectTimeout, etc.)
         retry_on_http_status: Include HTTP 5xx/429 status codes
         initial: Initial wait time in seconds
         max_: Maximum wait time in seconds
@@ -76,7 +74,6 @@ def make_retry_decorator(
 
 # Convenience decorators matching original configurations
 kommo_retry = make_retry_decorator(
-    retry_on_transport=True,
     retry_on_http_status=True,
     initial=1,
     max_=8,
@@ -85,7 +82,6 @@ kommo_retry = make_retry_decorator(
 )
 
 bge_retry = make_retry_decorator(
-    retry_on_transport=True,
     retry_on_http_status=False,
     initial=0.5,
     max_=4,
