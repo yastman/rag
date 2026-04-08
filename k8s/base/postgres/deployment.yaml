@@ -39,11 +39,6 @@ spec:
               cpu: 50m
             limits:
               memory: 512Mi
-          startupProbe:
-            exec:
-              command: ["pg_isready", "-U", "postgres"]
-            failureThreshold: 60
-            periodSeconds: 10
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]
