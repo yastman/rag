@@ -161,8 +161,13 @@ spec:
             - name: MANAGER_HOT_LEAD_DEDUPE_SEC
               value: "3600"
             # Real Estate DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
             - name: REALESTATE_DATABASE_URL
-              value: "postgresql://postgres:postgres@postgres:5432/realestate"
+              value: "postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/realestate"
           resources:
             requests:
               memory: 128Mi

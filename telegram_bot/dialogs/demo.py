@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 import operator
 from typing import Any
 
 from aiogram.enums import ContentType
 from aiogram.types import CallbackQuery, Message
-from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog import Dialog, DialogManager, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Column, Select
 from aiogram_dialog.widgets.text import Format
 
+from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
 from telegram_bot.dialogs.states import CatalogSG, DemoSG
 from telegram_bot.handlers.demo_handler import transcribe_voice
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
 from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import CATALOG_RUNTIME_DATA_KEY, build_catalog_runtime
@@ -141,10 +142,31 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
     )
 
     if not results:
-        await message.answer(
-            "К сожалению, ничего не найдено по вашему запросу.\n"
-            "Попробуйте изменить параметры или напишите другой запрос."
-        )
+        if state is not None:
+            empty_runtime = build_catalog_runtime(
+                query=query,
+                source="demo",
+                filters=filters if isinstance(filters, dict) else {},
+                view_mode="list",
+                results=[],
+                total=0,
+                next_offset=next_start,
+                shown_item_ids=page_ids,
+            )
+            await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: empty_runtime})
+        else:
+            empty_runtime = build_catalog_runtime(
+                query=query,
+                source="demo",
+                filters=filters if isinstance(filters, dict) else {},
+                view_mode="list",
+                results=[],
+                total=0,
+                next_offset=next_start,
+                shown_item_ids=page_ids,
+            )
+        await show_catalog_controls(message=message, dialog_manager=manager, runtime=empty_runtime)
+        await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
         return
 
     runtime = build_catalog_runtime(
@@ -168,10 +190,14 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
         view_mode="list",
         shown_start=1,
         telegram_id=message.from_user.id if message.from_user else 0,
+        reply_markup=build_catalog_keyboard(
+            shown=len(results),
+            total=total_count,
+            i18n=manager.middleware_data.get("i18n"),
+        ),
     )
-    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
-    if inspect.isawaitable(maybe_start):
-        await maybe_start
+    await show_catalog_controls(message=message, dialog_manager=manager, runtime=runtime)
+    await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
 
 
 # ---------------------------------------------------------------------------

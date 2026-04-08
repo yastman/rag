@@ -2,7 +2,9 @@
 
 import pytest
 
+from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES, APARTMENT_CITY_OPTIONS
 from telegram_bot.services.filter_extractor import FilterExtractor
+from telegram_bot.services.text_utils import parse_int_with_k_suffix
 
 
 # Read-only: safe to share across all tests.
@@ -110,6 +112,16 @@ class TestFilterExtractorRooms:
 # ---------------------------------------------------------------------------
 class TestFilterExtractorCity:
     """Tests for city filter extraction."""
+
+    def test_city_list_matches_shared_apartment_constants(self) -> None:
+        for city in APARTMENT_CITY_NAMES:
+            result = _ext.extract_filters(f"квартира в {city}")
+            assert result["city"] == city
+
+    def test_city_options_are_all_parsable(self) -> None:
+        for _, city in APARTMENT_CITY_OPTIONS:
+            result = _ext.extract_filters(f"квартира в {city}")
+            assert result["city"] == city
 
     @pytest.mark.parametrize(
         ("query", "city"),
@@ -412,4 +424,19 @@ class TestParseNumberMethod:
         ],
     )
     def test_parse_number(self, input_str: str, expected: int | None) -> None:
+        assert _ext._parse_number(input_str) == expected
+
+    @pytest.mark.parametrize(
+        ("input_str", "expected"),
+        [
+            ("100", 100),
+            ("100к", 100000),
+            ("100 000", 100000),
+            ("abc", None),
+        ],
+    )
+    def test_parse_number_matches_shared_text_utility(
+        self, input_str: str, expected: int | None
+    ) -> None:
+        assert parse_int_with_k_suffix(input_str) == expected
         assert _ext._parse_number(input_str) == expected

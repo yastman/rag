@@ -1,13 +1,20 @@
 """Search engine implementations for retrieval."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Union
 
-import numpy as np
 from qdrant_client import QdrantClient, models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
+from src.models import get_bge_m3_model
+from src.retrieval.search_engine_shared import (
+    AbstractSearchEngine,
+    create_engine_from_registry,
+    lexical_weights_to_sparse,
+)
+from src.utils.serialization import convert_to_python_types
 
 
 # ACORN: available in qdrant-client SDK (≥1.16.2) but intentionally not connected
@@ -20,24 +27,6 @@ try:
 except ImportError:
     ACORN_AVAILABLE = False
     AcornSearchParams = None  # type: ignore[misc, assignment]
-from src.models import get_bge_m3_model
-
-
-def lexical_weights_to_sparse(lexical_weights: dict) -> models.SparseVector:
-    """Convert BGE-M3 lexical weights to Qdrant SparseVector.
-
-    Args:
-        lexical_weights: Dict with string token IDs as keys, weights as values.
-
-    Returns:
-        Qdrant SparseVector for use in query_points.
-    """
-    if not lexical_weights:
-        return models.SparseVector(indices=[], values=[])
-
-    indices = [int(k) for k in lexical_weights]
-    values = list(lexical_weights.values())
-    return models.SparseVector(indices=indices, values=values)
 
 
 @dataclass
@@ -50,22 +39,7 @@ class SearchResult:
     metadata: dict[str, Any]
 
 
-def convert_to_python_types(obj):
-    """Convert numpy types to native Python types for JSON serialization."""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, (np.float32, np.float64)):
-        return float(obj)
-    if isinstance(obj, (np.int32, np.int64)):
-        return int(obj)
-    if isinstance(obj, dict):
-        return {k: convert_to_python_types(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_to_python_types(item) for item in obj]
-    return obj
-
-
-class BaseSearchEngine(ABC):
+class BaseSearchEngine(AbstractSearchEngine):
     """Abstract base class for search engines."""
 
     def __init__(self, settings: Settings | None = None):
@@ -597,7 +571,9 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
             return [
                 SearchResult(
-                    article_number=(point.payload or {}).get("article_number", ""),
+                    article_number=(point.payload or {})
+                    .get("metadata", {})
+                    .get("article_number", ""),
                     text=(point.payload or {}).get("page_content", ""),
                     score=point.score,
                     metadata={
@@ -792,15 +768,18 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         return "dbsf_colbert"
 
 
-def create_search_engine(
-    engine_type: SearchEngine | None = None,
-    settings: Settings | None = None,
-) -> Union[
+RetrievalSearchEngine = Union[
     "BaselineSearchEngine",
     "HybridRRFSearchEngine",
     "HybridRRFColBERTSearchEngine",
     "DBSFColBERTSearchEngine",
-]:
+]
+
+
+def create_search_engine(
+    engine_type: SearchEngine | None = None,
+    settings: Settings | None = None,
+) -> RetrievalSearchEngine:
     """
     Factory function to create search engine.
 
@@ -818,16 +797,23 @@ def create_search_engine(
         - DBSF_COLBERT: DBSF fusion + ColBERT (experimental)
     """
     settings = settings or Settings()
-    engine_type = engine_type or settings.search_engine
+    requested_engine = engine_type or settings.search_engine
+    requested_key = (
+        requested_engine.value
+        if isinstance(requested_engine, SearchEngine)
+        else str(requested_engine)
+    )
 
-    if engine_type == SearchEngine.BASELINE:
-        return BaselineSearchEngine(settings)
-    if engine_type == SearchEngine.HYBRID_RRF:
-        return HybridRRFSearchEngine(settings)
-    if engine_type == SearchEngine.HYBRID_RRF_COLBERT:
-        return HybridRRFColBERTSearchEngine(settings)
-    if engine_type == SearchEngine.DBSF_COLBERT:
-        return DBSFColBERTSearchEngine(settings)
+    registry: dict[str, Callable[[], RetrievalSearchEngine]] = {
+        SearchEngine.BASELINE.value: lambda: BaselineSearchEngine(settings),
+        SearchEngine.HYBRID_RRF.value: lambda: HybridRRFSearchEngine(settings),
+        SearchEngine.HYBRID_RRF_COLBERT.value: lambda: HybridRRFColBERTSearchEngine(settings),
+        SearchEngine.DBSF_COLBERT.value: lambda: DBSFColBERTSearchEngine(settings),
+    }
 
-    # Default to Variant A (best performance)
-    return HybridRRFColBERTSearchEngine(settings)
+    return create_engine_from_registry(
+        requested_key,
+        registry=registry,
+        default_key=SearchEngine.HYBRID_RRF_COLBERT.value,
+        fallback_on_unknown=True,
+    )

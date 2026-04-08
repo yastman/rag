@@ -11,6 +11,7 @@ from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationE
 
 from telegram_bot.integrations.cache import (
     CACHE_VERSION,
+    SEMANTIC_CACHE_VERSION,
     CacheLayerManager,
     _normalize_query_for_cache,
 )
@@ -72,9 +73,10 @@ class TestCacheLayerManagerInit:
         assert mgr.cache_thresholds["FAQ"] == 0.15
         assert mgr.cache_thresholds["GENERAL"] == 0.10
 
-    def test_cache_version_bumped_for_scope_role_schema(self):
-        """Schema changed with cache_scope/agent_role tag filters, so index version must be bumped."""
+    def test_cache_versions_reflect_schema_boundaries(self):
+        """Semantic cache schema changed, but exact-cache namespaces stay stable."""
         assert CACHE_VERSION == "v5"
+        assert SEMANTIC_CACHE_VERSION == "v7"
 
 
 class TestCacheLayerManagerInitialize:
@@ -675,6 +677,57 @@ class TestScopeRoleIsolation:
         assert call_kwargs["filters"]["cache_scope"] == "rag"
         assert call_kwargs["filters"]["agent_role"] == "client"
 
+    async def test_store_semantic_includes_strict_grounding_filters_and_metadata(
+        self, _ensure_redisvl_filter_mock
+    ):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            metadata={
+                "grounding_mode": "strict",
+                "semantic_cache_safe_reuse": True,
+            },
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["grounding_mode"] == "strict"
+        assert call_kwargs["filters"]["semantic_cache_safe_reuse"] == "true"
+        assert call_kwargs["metadata"]["grounding_mode"] == "strict"
+
+    async def test_store_semantic_includes_response_state_cache_eligible_and_schema_version(
+        self, _ensure_redisvl_filter_mock
+    ):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            metadata={
+                "response_state": "ok",
+                "cache_eligible": True,
+                "schema_version": "v7",
+            },
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["response_state"] == "ok"
+        assert call_kwargs["filters"]["cache_eligible"] == "true"
+        assert call_kwargs["filters"]["schema_version"] == "v7"
+
     async def test_check_semantic_passes_scope_filter(self, _ensure_redisvl_filter_mock):
         """check_semantic with cache_scope passes filter_expression."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -692,6 +745,63 @@ class TestScopeRoleIsolation:
         )
 
         assert result == "scoped answer"
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_check_semantic_rag_scope_requires_ok_eligible_current_schema(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "scoped answer", "vector_distance": 0.05}]
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        seen_tag_names: list[str] = []
+
+        class _SpyTag:
+            def __init__(self, name: str):
+                self.name = name
+                seen_tag_names.append(name)
+
+            def __eq__(self, _other):
+                return self
+
+            def __and__(self, _other):
+                return self
+
+        with patch("redisvl.query.filter.Tag", _SpyTag):
+            result = await mgr.check_semantic(
+                query="test",
+                vector=[0.1] * 1024,
+                query_type="FAQ",
+                cache_scope="rag",
+            )
+
+        assert result == "scoped answer"
+        assert {"response_state", "cache_eligible", "schema_version"}.issubset(set(seen_tag_names))
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_check_semantic_passes_strict_safe_reuse_filter(
+        self, _ensure_redisvl_filter_mock
+    ):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "strict answer", "vector_distance": 0.02}]
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            grounding_mode="strict",
+            require_safe_reuse=True,
+        )
+
+        assert result == "strict answer"
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 

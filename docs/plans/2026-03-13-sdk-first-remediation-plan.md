@@ -38,7 +38,7 @@
 **Files:**
 - Modify: `telegram_bot/integrations/prompt_manager.py`
 - Test: `tests/unit/test_prompt_manager.py`
-- Reference: `.claude/rules/sdk-registry.md`
+- Reference: `docs/engineering/sdk-registry.md`
 
 **Step 1: Write the failing tests**
 
@@ -78,7 +78,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add telegram_bot/integrations/prompt_manager.py tests/unit/test_prompt_manager.py .claude/rules/sdk-registry.md
+git add telegram_bot/integrations/prompt_manager.py tests/unit/test_prompt_manager.py docs/engineering/sdk-registry.md
 git commit -m "refactor: use langfuse sdk prompt cache and fallback"
 ```
 
@@ -247,7 +247,7 @@ git commit -m "refactor: add typed rag api client for voice agent"
 ### Task 5: Refresh SDK Guidance And Audit Docs
 
 **Files:**
-- Modify: `.claude/rules/sdk-registry.md`
+- Modify: `docs/engineering/sdk-registry.md`
 - Modify: `docs/plans/2026-03-02-sdk-migration-audit.md`
 - Modify: `README.md`
 
@@ -259,7 +259,7 @@ There is no unit test here. Use a docs consistency check instead:
 
 **Step 2: Run the check**
 
-Run: `rg -n "kommo_token_store|docling-serve|client.api.prompts.get|Prompt availability probe" .claude/rules/sdk-registry.md README.md docs/plans/2026-03-02-sdk-migration-audit.md telegram_bot src`
+Run: `rg -n "kommo_token_store|docling-serve|client.api.prompts.get|Prompt availability probe" docs/engineering/sdk-registry.md README.md docs/plans/2026-03-02-sdk-migration-audit.md telegram_bot src`
 Expected: reveals stale references before docs updates.
 
 **Step 3: Write minimal implementation**
@@ -271,13 +271,13 @@ Update docs to reflect:
 
 **Step 4: Run the check again**
 
-Run: `rg -n "kommo_token_store|client.api.prompts.get|Prompt availability probe" .claude/rules/sdk-registry.md README.md docs/plans/2026-03-02-sdk-migration-audit.md telegram_bot src`
+Run: `rg -n "kommo_token_store|client.api.prompts.get|Prompt availability probe" docs/engineering/sdk-registry.md README.md docs/plans/2026-03-02-sdk-migration-audit.md telegram_bot src`
 Expected: no stale references, or only intentional compatibility mentions
 
 **Step 5: Commit**
 
 ```bash
-git add .claude/rules/sdk-registry.md docs/plans/2026-03-02-sdk-migration-audit.md README.md
+git add docs/engineering/sdk-registry.md docs/plans/2026-03-02-sdk-migration-audit.md README.md
 git commit -m "docs: refresh sdk-first guidance after integration cleanup"
 ```
 
