@@ -11,9 +11,25 @@ import time
 from typing import Any, Protocol, cast, runtime_checkable
 
 import httpx
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 
 logger = logging.getLogger(__name__)
+
+# Retryable errors for token operations
+_RETRYABLE_TOKEN_ERRORS = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+    httpx.PoolTimeout,
+    httpx.HTTPStatusError,
+)
 
 
 @runtime_checkable
@@ -176,8 +192,15 @@ class KommoTokenStore:
         )
         return access_token
 
+    @retry(
+        retry=retry_if_exception_type(_RETRYABLE_TOKEN_ERRORS),
+        wait=wait_exponential_jitter(initial=1, max=8, jitter=2),
+        stop=stop_after_attempt(3),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def _token_request(self, payload: dict) -> dict:
-        """POST to Kommo OAuth2 token endpoint."""
+        """POST to Kommo OAuth2 token endpoint with retry."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(self._token_url, json=payload)
             response.raise_for_status()
