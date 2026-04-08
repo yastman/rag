@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
+from telegram_bot.constants.apartment_constants import APARTMENT_CITY_ALIASES
 from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.text_utils import parse_int_with_k_suffix
 
 
 _ext = ApartmentFilterExtractor()
@@ -47,6 +49,20 @@ class TestPrice:
     def test_price_conflict_min_gt_max(self) -> None:
         result = _ext.parse("от 300к до 100к")
         assert "price_conflict" in result.conflicts[0]
+
+    @pytest.mark.parametrize(
+        ("query", "expected_max_price"),
+        [
+            ("до 200к", 200000.0),
+            ("до 100 000 евро", 100000.0),
+        ],
+    )
+    def test_price_number_parsing_matches_shared_utility(
+        self, query: str, expected_max_price: float
+    ) -> None:
+        result = _ext.parse(query)
+        assert parse_int_with_k_suffix(query.split()[1]) is not None
+        assert result.max_price_eur == expected_max_price
 
 
 class TestComplex:
@@ -149,6 +165,11 @@ class TestConfidenceIntegration:
 
 
 class TestCity:
+    def test_city_aliases_cover_shared_apartment_city_aliases(self) -> None:
+        for alias, canonical_city in APARTMENT_CITY_ALIASES.items():
+            result = _ext.parse(f"квартира {alias}")
+            assert result.city == canonical_city
+
     @pytest.mark.parametrize(
         ("query", "expected_city"),
         [
