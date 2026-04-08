@@ -23,6 +23,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     environment:
       POSTGRES_USER: postgres
@@ -452,6 +453,9 @@ services:
     restart: unless-stopped
     logging: *default-logging
     user: "101:101"
+    command: >
+      clickhouse-server
+      --listen_host=0.0.0.0
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
@@ -476,7 +480,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
@@ -516,12 +520,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       redis-langfuse:
         condition: service_healthy
+        restart: true
       clickhouse:
         condition: service_healthy
+        restart: true
     environment: &langfuse-env
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/langfuse
@@ -575,12 +583,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       redis-langfuse:
         condition: service_healthy
+        restart: true
       clickhouse:
         condition: service_healthy
+        restart: true
       langfuse-worker:
         condition: service_started
     environment:
@@ -738,6 +750,9 @@ services:
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     volumes:
       - ./docker/livekit:/etc/livekit:ro
     command: --config /etc/livekit/livekit.yaml
@@ -760,11 +775,11 @@ services:
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
-      LIVEKIT_WS_URL: ws://livekit-server:7880
+      LIVEKIT_WS_URL: ${LIVEKIT_URL:-ws://livekit-server:7880}
       SIP_CONFIG_BODY: |
         api_key: ${LIVEKIT_API_KEY:-}
         api_secret: ${LIVEKIT_API_SECRET:-}
-        ws_url: ws://livekit-server:7880
+        ws_url: ${LIVEKIT_URL:-ws://livekit-server:7880}
         redis:
           address: redis:6379
           password: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -799,7 +814,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      LIVEKIT_URL: ws://livekit-server:7880
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit-server:7880}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
