@@ -209,3 +209,46 @@ class TestMainFunction:
 
             mock_property_bot_instance.start.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
+
+    async def test_main_propagates_polling_lock_busy(self):
+        """Polling lock conflicts should fail fast without retry."""
+        from telegram_bot.integrations.polling_lock import PollingLockBusy
+
+        mock_property_bot_instance = AsyncMock()
+        mock_property_bot_instance.start = AsyncMock(side_effect=PollingLockBusy("lock busy"))
+        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
+        mock_bot_config = MagicMock()
+        mock_setup_logging = MagicMock()
+
+        mock_bot_mod = MagicMock()
+        mock_bot_mod.PropertyBot = mock_property_bot
+
+        mock_config_mod = MagicMock()
+        mock_config_mod.BotConfig = mock_bot_config
+
+        mock_logging_config_mod = MagicMock()
+        mock_logging_config_mod.setup_logging = mock_setup_logging
+
+        mock_config_instance = MagicMock()
+        mock_config_instance.telegram_token = "test-token"
+        mock_config_instance.llm_api_key = "test-api-key"
+        mock_bot_config.return_value = mock_config_instance
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "telegram_bot.bot": mock_bot_mod,
+                    "telegram_bot.config": mock_config_mod,
+                    "telegram_bot.logging_config": mock_logging_config_mod,
+                },
+            ),
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+        ):
+            from telegram_bot import main as main_module
+
+            with pytest.raises(PollingLockBusy, match="lock busy"):
+                await main_module.main()
+
+            mock_property_bot_instance.start.assert_awaited_once()
+            mock_property_bot_instance.stop.assert_awaited_once()

@@ -3,8 +3,11 @@
 import re
 from typing import Any
 
+from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES
+from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
 
-class FilterExtractor:
+
+class FilterExtractor(BaseFilterExtractor):
     """Extract structured filters from user queries."""
 
     def extract_filters(self, query: str) -> dict[str, Any]:
@@ -154,17 +157,7 @@ class FilterExtractor:
 
     def _extract_city(self, query: str) -> str | None:
         """Extract city name."""
-        cities = [
-            "Солнечный берег",
-            "Несебр",
-            "Бургас",
-            "Варна",
-            "София",
-            "Поморие",
-            "Созополь",
-        ]
-
-        for city in cities:
+        for city in APARTMENT_CITY_NAMES:
             if city.lower() in query.lower():
                 return city
 
@@ -208,19 +201,6 @@ class FilterExtractor:
                 return int(match.group(1))
 
         return None
-
-    def _parse_number(self, text: str) -> int | None:
-        """Parse number from text, handling spaces and k suffix."""
-        text = text.strip().replace(" ", "").replace("\xa0", "")
-
-        # Handle "100к" -> 100000
-        if text.endswith("к"):
-            text = text[:-1] + "000"
-
-        try:
-            return int(text)
-        except ValueError:
-            return None
 
     def _extract_distance_to_sea(self, query: str) -> dict[str, int] | None:
         """Extract distance to sea filter from query."""
