@@ -627,7 +627,7 @@ class CacheLayerManager:
                 "filters_count": len(filters or {}),
             }
         )
-        key = _hash(str(embedding_prefix[:10]) + json.dumps(filters, sort_keys=True, default=str))
+        key = _hash(str(embedding_prefix) + json.dumps(filters, sort_keys=True, default=str))
         result = await self.get_exact("search", key)
         lf.update_current_span(
             output={"hit": result is not None, "results_count": len(result or [])}
@@ -650,7 +650,7 @@ class CacheLayerManager:
                 "results_count": len(results),
             }
         )
-        key = _hash(str(embedding_prefix[:10]) + json.dumps(filters, sort_keys=True, default=str))
+        key = _hash(str(embedding_prefix) + json.dumps(filters, sort_keys=True, default=str))
         await self.store_exact("search", key, results)
         lf.update_current_span(output={"stored": True, "results_count": len(results)})
 
