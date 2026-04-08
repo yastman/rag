@@ -154,6 +154,11 @@ secrets.yaml
 tmp/
 temp/
 *.tmp
+tmp*.json
+tmp*.csv
+uv-*.lock
+node-compile-cache/
+pytest-of-user/
 
 # Demo data files (but keep README)
 data/demo/*.csv

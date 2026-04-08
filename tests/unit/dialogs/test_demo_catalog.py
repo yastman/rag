@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.dialogs.states import CatalogSG, ClientMenuSG
+from telegram_bot.dialogs.states import CatalogSG
 
 
 def _make_message() -> MagicMock:
@@ -92,9 +92,13 @@ async def test_dialog_search_starts_catalog_results() -> None:
 
     await _dialog_search("двушка", msg, manager)
 
-    from aiogram_dialog import StartMode
+    from aiogram_dialog import ShowMode, StartMode
 
-    manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
+    manager.start.assert_awaited_once_with(
+        CatalogSG.results,
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.NO_UPDATE,
+    )
 
 
 @pytest.mark.asyncio
@@ -184,9 +188,13 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
 
     await _dialog_search("двушка", msg, manager)
 
-    from aiogram_dialog import StartMode
+    from aiogram_dialog import ShowMode, StartMode
 
-    manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
+    manager.start.assert_awaited_once_with(
+        CatalogSG.results,
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.NO_UPDATE,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -339,13 +347,19 @@ async def test_catalog_more_works_after_demo_search() -> None:
 @pytest.mark.asyncio
 async def test_catalog_exit_returns_to_main_menu() -> None:
     """'Главное меню' should clear state and return to main."""
-    from aiogram_dialog import StartMode
-
     from telegram_bot.dialogs.catalog import on_catalog_home
 
     manager = AsyncMock()
-    await on_catalog_home(MagicMock(), MagicMock(), manager)
-    manager.start.assert_awaited_once_with(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+    manager.middleware_data = {"state": _make_state(), "i18n": None}
+    callback = MagicMock()
+    callback.message = _make_message()
+    callback.message.bot = MagicMock(delete_message=AsyncMock())
+    callback.message.from_user = MagicMock(first_name="Test")
+
+    await on_catalog_home(callback, MagicMock(), manager)
+
+    manager.done.assert_awaited_once()
+    callback.message.answer.assert_awaited()
 
 
 # ---------------------------------------------------------------------------
