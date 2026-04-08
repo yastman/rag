@@ -170,6 +170,8 @@ async def test_generate_response_fallback_on_llm_error() -> None:
         )
 
     assert "временно недоступен" in result["response"]
+    assert result["fallback_used"] is True
+    assert result["safe_fallback_used"] is False
     assert result["llm_provider_model"] == "fallback"
     assert result["llm_timeout"] is True
 
@@ -188,10 +190,164 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak
         raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
     )
 
+    assert result["fallback_used"] is False
     assert result["safe_fallback_used"] is True
+    assert result["llm_provider_model"] == "safe_fallback"
+    assert result["llm_timeout"] is False
     assert result["grounded"] is False
     assert result["legal_answer_safe"] is False
     client.chat.completions.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_returns_safe_fallback_when_strict_mode_has_low_confidence() -> (
+    None
+):
+    config, client = _make_non_streaming_config()
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="виды внж в болгарии",
+        documents=[{"text": "Документ", "score": 0.2, "metadata": {"title": "ВНЖ"}}],
+        grounding_mode="strict",
+        grade_confidence=0.1,
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "виды внж в болгарии"}],
+    )
+
+    assert result["safe_fallback_used"] is True
+    assert result["legal_answer_safe"] is False
+    assert result["semantic_cache_safe_reuse"] is False
+    client.chat.completions.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() -> None:
+    from unittest.mock import ANY
+
+    config, _client = _make_non_streaming_config(answer="Полный список оснований.")
+    lf = MagicMock()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_config",
+        side_effect=[
+            ("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
+        ],
+    ) as mock_get_prompt:
+        result = await generate_response(
+            query="какие еще есть виды внж в болгарии? напиши полный список",
+            documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "какие еще есть виды внж"}],
+        )
+
+    assert result["needs_coverage"] is True
+    assert result["response"] == "Полный список оснований."
+    mock_get_prompt.assert_called_once_with(
+        "generate_exhaustive_list",
+        fallback=ANY,
+        variables={"domain": "недвижимость"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_response_coverage_mode_bypasses_style_prompt_builder() -> None:
+    config, _client = _make_non_streaming_config(answer="Развернутый список.")
+    config.response_style_enabled = True
+    lf = MagicMock()
+    style_prompt_builder = MagicMock(side_effect=AssertionError("style builder must be skipped"))
+
+    result = await generate_response(
+        query="перечисли все виды внж",
+        documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
+        config=config,
+        lf_client=lf,
+        style_prompt_builder=style_prompt_builder,
+        raw_messages=[{"role": "user", "content": "перечисли все виды внж"}],
+    )
+
+    assert result["needs_coverage"] is True
+    style_prompt_builder.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_logs_coverage_prompt_metadata() -> None:
+    config, _client = _make_non_streaming_config(answer="Ответ.")
+    lf = MagicMock()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_config",
+        return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
+    ):
+        await generate_response(
+            query="полный список оснований для ВНЖ",
+            documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "полный список оснований для ВНЖ"}],
+        )
+
+    assert any(
+        call.kwargs.get("output", {}).get("prompt_name") == "generate_exhaustive_list"
+        for call in lf.update_current_span.call_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_response_honors_explicit_coverage_override() -> None:
+    from unittest.mock import ANY
+
+    config, _client = _make_non_streaming_config(answer="Полный список оснований.")
+    lf = MagicMock()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_config",
+        return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
+    ) as mock_get_prompt:
+        result = await generate_response(
+            query="основания для внж в болгарии",
+            documents=[{"text": "Контекст", "score": 0.9, "metadata": {"doc_id": "a"}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "основания для внж в болгарии"}],
+            needs_coverage=True,
+        )
+
+    assert result["needs_coverage"] is True
+    mock_get_prompt.assert_called_once_with(
+        "generate_exhaustive_list",
+        fallback=ANY,
+        variables={"domain": "недвижимость"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_prompt() -> None:
+    config, client = _make_non_streaming_config(answer="Полный список.")
+    lf = MagicMock()
+    docs = [
+        {"text": f"Doc {i}", "score": 0.95 - i * 0.01, "metadata": {"doc_id": str(i)}}
+        for i in range(8)
+    ]
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_config",
+        return_value=("EXHAUSTIVE PROMPT", {"temperature": 0.2, "max_tokens": 512}),
+    ):
+        result = await generate_response(
+            query="перечисли все основания для внж",
+            documents=docs,
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "перечисли все основания для внж"}],
+        )
+
+    assert result["needs_coverage"] is True
+    user_prompt = client.chat.completions.create.await_args.kwargs["messages"][-1]["content"]
+    assert user_prompt.count("[Объект ") == 8
+    assert "Doc 7" in user_prompt
 
 
 @pytest.mark.asyncio
@@ -214,6 +370,48 @@ async def test_generate_response_strict_mode_does_not_degrade_only_because_show_
     assert result["response"] == "Подтвержденный ответ по документам."
     assert result["safe_fallback_used"] is False
     assert result["grounded"] is True
+    client.chat.completions.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_strips_citation_artifacts_when_sources_disabled() -> None:
+    config, client = _make_non_streaming_config(
+        answer="Потребуется также счёт в болгарском банке 1.\nИ подтверждение дохода [2]."
+    )
+    config.show_sources = False
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Что нужно для ВНЖ?",
+        documents=[{"text": "Документ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
+    )
+
+    assert result["response"] == (
+        "Потребуется также счёт в болгарском банке\nИ подтверждение дохода."
+    )
+    client.chat.completions.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
+    config, client = _make_non_streaming_config(
+        answer="Потребуется также счёт в болгарском банке [1]."
+    )
+    config.show_sources = True
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Что нужно для ВНЖ?",
+        documents=[{"text": "Документ", "score": 0.91, "metadata": {"title": "ВНЖ"}}],
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Что нужно для ВНЖ?"}],
+    )
+
+    assert result["response"] == "Потребуется также счёт в болгарском банке [1]."
     client.chat.completions.create.assert_awaited_once()
 
 
