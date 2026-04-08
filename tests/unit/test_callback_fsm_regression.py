@@ -122,81 +122,50 @@ def _fav_bot(favorites: list | None = None) -> PropertyBot:
 
 
 # ---------------------------------------------------------------------------
-# 1. Callback-flow: multi-page pagination (results:more)
+# 1. Callback-flow: stale legacy results callbacks
 # ---------------------------------------------------------------------------
 
 
-class TestMultiPagePagination:
-    """Verify pagination across multiple results:more clicks."""
+class TestLegacyResultsCompat:
+    """Legacy results buttons should only show stale compatibility guidance."""
 
-    async def test_page2_of_12_shows_5_cards_and_has_more(self) -> None:
-        """12 results, offset=0 -> page2: 5 cards + footer, has_more=True."""
+    async def test_results_more_is_stale_when_results_exist(self) -> None:
         bot = _create_bot()
         bot._send_property_card = AsyncMock()
-        results = _make_results(12)
-        state = _make_state({"apartment_results": results, "apartment_offset": 0})
+        state = _make_state({"apartment_results": _make_results(12), "apartment_offset": 0})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        assert bot._send_property_card.await_count == 5
-        assert cb.message.answer.await_count == 1
-        state.update_data.assert_awaited_once()
-        update_kwargs = state.update_data.await_args.kwargs
-        assert update_kwargs["apartment_offset"] == _PAGE_SIZE
-        assert "apartment_footer_msg_id" in update_kwargs
-        footer_call = cb.message.answer.call_args
-        assert "показаны 6–10" in footer_call.args[0]
-
-    async def test_page3_of_12_shows_2_cards_no_more(self) -> None:
-        """12 results, offset=5 -> page3: 2 cards + footer, has_more=False."""
-        bot = _create_bot()
-        bot._send_property_card = AsyncMock()
-        results = _make_results(12)
-        state = _make_state({"apartment_results": results, "apartment_offset": 5})
-        cb = _make_callback("results:more")
-
-        await bot.handle_results_callback(cb, state)
-
-        assert bot._send_property_card.await_count == 2
-        assert cb.message.answer.await_count == 1
-        state.update_data.assert_awaited_once()
-        update_kwargs = state.update_data.await_args.kwargs
-        assert update_kwargs["apartment_offset"] == 10
-        assert "apartment_footer_msg_id" in update_kwargs
-        footer_call = cb.message.answer.call_args
-        assert "показаны 11–12" in footer_call.args[0]
-
-    async def test_page4_of_12_exhausted(self) -> None:
-        """12 results, offset=10 -> new_offset=15 >= 12 -> 'all shown'."""
-        bot = _create_bot()
-        bot._send_property_card = AsyncMock()
-        results = _make_results(12)
-        state = _make_state({"apartment_results": results, "apartment_offset": 10})
-        cb = _make_callback("results:more")
-
-        await bot.handle_results_callback(cb, state)
-
-        cb.answer.assert_awaited_once_with(
-            "\u0412\u0441\u0435 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u044b \u0443\u0436\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
-        cb.message.answer.assert_not_called()
+        state.update_data.assert_not_awaited()
         bot._send_property_card.assert_not_awaited()
 
-    async def test_exact_boundary_10_results(self) -> None:
-        """10 results, offset=0 -> page2: 5 cards, has_more=False."""
+    async def test_results_more_is_stale_at_end_of_legacy_state(self) -> None:
         bot = _create_bot()
         bot._send_property_card = AsyncMock()
-        results = _make_results(10)
-        state = _make_state({"apartment_results": results, "apartment_offset": 0})
+        state = _make_state({"apartment_results": _make_results(12), "apartment_offset": 10})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        assert bot._send_property_card.await_count == 5
-        assert cb.message.answer.await_count == 1
-        footer_call = cb.message.answer.call_args
-        assert "показаны 6–10" in footer_call.args[0]
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
+        )
+        bot._send_property_card.assert_not_awaited()
+
+    async def test_results_more_is_stale_without_results(self) -> None:
+        bot = _create_bot()
+        state = _make_state({"apartment_results": None, "apartment_offset": 0})
+        cb = _make_callback("results:more")
+
+        await bot.handle_results_callback(cb, state)
+
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -224,15 +193,15 @@ class TestRefineStaleButton:
         )
 
     async def test_refine_clears_then_more_fails_gracefully(self) -> None:
-        """After refine, results:more -> 'no results' (not crash)."""
+        """After refine, stale more button still gets compat guidance, not old pagination."""
         bot = _create_bot()
         state = _make_state({"apartment_results": None, "apartment_offset": 0})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        cb.answer.assert_awaited_once_with(
-            "\u041d\u0435\u0442 \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d\u043d\u044b\u0445 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u043e\u0432"
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
 
 
@@ -242,10 +211,10 @@ class TestRefineStaleButton:
 
 
 class TestViewingDialog:
-    """Contract: viewing delegates to ViewingSG dialog via dialog_manager."""
+    """Legacy results:viewing should be compat-only; favorites still open ViewingSG."""
 
     async def test_results_viewing_starts_dialog(self) -> None:
-        """results:viewing -> dialog_manager.start(ViewingSG.date, data={selected_objects})."""
+        """results:viewing should no longer enter ViewingSG."""
         bot = _create_bot()
         state = _make_state()
         cb = _make_callback("results:viewing")
@@ -253,13 +222,13 @@ class TestViewingDialog:
 
         await bot.handle_results_callback(cb, state, dialog_manager=dialog_manager)
 
-        dialog_manager.start.assert_awaited_once()
-        from telegram_bot.dialogs.states import ViewingSG
-
-        assert dialog_manager.start.call_args.args[0] == ViewingSG.date
+        dialog_manager.start.assert_not_awaited()
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
+        )
 
     async def test_results_viewing_fallback_no_dialog_manager(self) -> None:
-        """results:viewing without dialog_manager -> fallback to phone_collector."""
+        """results:viewing without dialog_manager should not reach phone_collector anymore."""
         bot = _create_bot()
         state = _make_state()
         cb = _make_callback("results:viewing")
@@ -270,8 +239,9 @@ class TestViewingDialog:
         ) as mock_collect:
             await bot.handle_results_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(
-            cb, state, service_key="viewing", viewing_objects=None
+        mock_collect.assert_not_awaited()
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
 
     async def test_fav_viewing_starts_dialog(self) -> None:
@@ -400,37 +370,18 @@ class TestMalformedStateFavAdd:
 
 
 # ---------------------------------------------------------------------------
-# 5. Footer contract: shown/total/has_more consistency
+# 5. Legacy results footer contract removed
 # ---------------------------------------------------------------------------
 
 
 class TestFooterContract:
-    """Verify correct shown/total/has_more combinations per page."""
+    """Legacy footer flows should now only point users to the fresh catalog controls."""
 
-    @pytest.mark.parametrize(
-        "total,offset,exp_cards,exp_range,exp_has_more",
-        [
-            (12, 0, 5, "показаны 6–10", True),
-            (12, 5, 2, "показаны 11–12", False),
-            (10, 0, 5, "показаны 6–10", False),
-            (6, 0, 1, "показаны 6–6", False),
-            (7, 0, 2, "показаны 6–7", False),
-        ],
-        ids=[
-            "mid-page-has-more",
-            "last-partial-page",
-            "exact-boundary",
-            "single-card-last",
-            "two-cards-last",
-        ],
-    )
-    async def test_footer_text_and_card_count(
+    @pytest.mark.parametrize("total,offset", [(12, 0), (12, 5), (10, 0), (6, 0), (7, 0)])
+    async def test_results_more_always_returns_stale_guidance(
         self,
         total: int,
         offset: int,
-        exp_cards: int,
-        exp_range: str,
-        exp_has_more: bool,
     ) -> None:
         bot = _create_bot()
         bot._send_property_card = AsyncMock()
@@ -440,43 +391,29 @@ class TestFooterContract:
 
         await bot.handle_results_callback(cb, state)
 
-        assert bot._send_property_card.await_count == exp_cards
-        assert cb.message.answer.await_count == 1
-        footer_call = cb.message.answer.call_args
-        assert exp_range in footer_call.args[0]
-        footer_markup = footer_call.kwargs["reply_markup"]
-        callbacks = [btn.callback_data for row in footer_markup.inline_keyboard for btn in row]
-        if exp_has_more:
-            assert "results:more" in callbacks
-        else:
-            assert "results:more" not in callbacks
-
-    async def test_no_duplicate_cards_edge_page(self) -> None:
-        """Each card sent exactly once on partial last page."""
-        bot = _create_bot()
-        bot._send_property_card = AsyncMock()
-        results = _make_results(7)
-        state = _make_state({"apartment_results": results, "apartment_offset": 0})
-        cb = _make_callback("results:more")
-
-        await bot.handle_results_callback(cb, state)
-
-        sent_ids = [call.args[1]["id"] for call in bot._send_property_card.await_args_list]
-        assert sent_ids == ["prop-5", "prop-6"]
-
-    async def test_single_result_no_more_page(self) -> None:
-        """1 total result, offset=0 -> 'all shown' (page 1 was initial display)."""
-        bot = _create_bot()
-        bot._send_property_card = AsyncMock()
-        results = _make_results(1)
-        state = _make_state({"apartment_results": results, "apartment_offset": 0})
-        cb = _make_callback("results:more")
-
-        await bot.handle_results_callback(cb, state)
-
-        cb.answer.assert_awaited_once_with(
-            "\u0412\u0441\u0435 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u044b "
-            "\u0443\u0436\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
         )
-        cb.message.answer.assert_not_called()
         bot._send_property_card.assert_not_awaited()
+
+    async def test_results_more_does_not_emit_partial_page_cards(self) -> None:
+        bot = _create_bot()
+        bot._send_property_card = AsyncMock()
+        state = _make_state({"apartment_results": _make_results(7), "apartment_offset": 0})
+        cb = _make_callback("results:more")
+
+        await bot.handle_results_callback(cb, state)
+
+        assert bot._send_property_card.await_args_list == []
+
+    async def test_single_result_legacy_button_uses_stale_guidance(self) -> None:
+        bot = _create_bot()
+        bot._send_property_card = AsyncMock()
+        state = _make_state({"apartment_results": _make_results(1), "apartment_offset": 0})
+        cb = _make_callback("results:more")
+
+        await bot.handle_results_callback(cb, state)
+
+        cb.message.answer.assert_awaited_once_with(
+            "Это устаревшая кнопка. Используйте актуальное меню ниже."
+        )
