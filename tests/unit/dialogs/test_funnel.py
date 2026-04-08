@@ -1015,11 +1015,15 @@ class TestOnSummarySearchRedesign:
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-        from aiogram_dialog import StartMode
+        from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.states import CatalogSG
 
-        manager.start.assert_awaited_once_with(CatalogSG.results, mode=StartMode.RESET_STACK)
+        manager.start.assert_awaited_once_with(
+            CatalogSG.results,
+            mode=StartMode.RESET_STACK,
+            show_mode=ShowMode.NO_UPDATE,
+        )
 
     async def test_bootstraps_catalog_runtime(self, monkeypatch):
         """on_summary_search stores catalog_runtime instead of legacy browsing state."""

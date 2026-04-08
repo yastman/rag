@@ -4,6 +4,7 @@ metadata:
   name: postgres
 spec:
   replicas: 1
+  progressDeadlineSeconds: 600
   strategy:
     type: Recreate  # PVC is RWO — no rolling update for stateful
   selector:
@@ -14,6 +15,7 @@ spec:
       labels:
         app: postgres
     spec:
+      terminationGracePeriodSeconds: 60
       securityContext:
         seccompProfile:
           type: RuntimeDefault
@@ -39,6 +41,10 @@ spec:
               cpu: 50m
             limits:
               memory: 512Mi
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5 && pg_ctl stop -D /var/lib/postgresql/data -m fast -t 30 || true"]
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "postgres"]

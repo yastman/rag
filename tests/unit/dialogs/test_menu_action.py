@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from ._property_bot_ast import get_default_map, get_parameter_names, get_property_bot_method
+
 
 async def test_on_menu_action_services_closes_dialog_and_calls_handler():
     """Legacy non-dialog buttons should close the root dialog and call existing handlers."""
@@ -166,26 +168,18 @@ def test_crm_submenu_is_navigation_hub():
 
 def test_handle_menu_action_exists_on_property_bot():
     """PropertyBot has a handle_menu_action method."""
-    import inspect
-
-    from telegram_bot.bot import PropertyBot
-
-    assert hasattr(PropertyBot, "handle_menu_action")
-    assert inspect.iscoroutinefunction(PropertyBot.handle_menu_action)
+    method = get_property_bot_method("handle_menu_action")
+    assert method.name == "handle_menu_action"
 
 
 def test_handle_menu_action_signature():
     """handle_menu_action accepts (self, callback, query_text, locale)."""
-    import inspect
-
-    from telegram_bot.bot import PropertyBot
-
-    sig = inspect.signature(PropertyBot.handle_menu_action)
-    params = list(sig.parameters.keys())
+    method = get_property_bot_method("handle_menu_action")
+    params = get_parameter_names(method)
     assert "callback" in params
     assert "query_text" in params
     assert "locale" in params
-    assert sig.parameters["locale"].default == "ru"
+    assert get_default_map(method)["locale"] == "ru"
 
 
 async def test_handle_menu_action_returns_early_if_no_from_user():
