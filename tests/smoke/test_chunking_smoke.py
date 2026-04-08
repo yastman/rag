@@ -18,7 +18,10 @@ import pytest
 
 pytest.importorskip("fitz", reason="PyMuPDF/fitz not installed (ingest extra)")
 
-from legacy.pymupdf_chunker import PyMuPDFChunker
+try:
+    from legacy.pymupdf_chunker import PyMuPDFChunker
+except ModuleNotFoundError as exc:  # pragma: no cover - legacy smoke helper is optional
+    pytest.skip(f"legacy chunking helper unavailable: {exc}", allow_module_level=True)
 
 
 # Test file path

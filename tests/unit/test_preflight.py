@@ -15,6 +15,7 @@ from telegram_bot.preflight import (
     _verify_cache_synthetic,
     check_dependencies,
 )
+from telegram_bot.startup_status import StartupReport
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,10 @@ class TestPreflightError:
     def test_message_mentions_retry_count(self):
         err = PreflightError(["redis"])
         assert str(CRITICAL_RETRIES) in str(err)
+
+    def test_report_attribute_defaults_to_startup_report(self):
+        err = PreflightError(["redis"])
+        assert isinstance(err.report, StartupReport)
 
 
 class TestColbertCoverageWarnThreshold:
@@ -462,6 +467,7 @@ class TestCheckDependencies:
             await check_dependencies(config)
 
         assert "redis" in exc_info.value.failed_deps
+        assert exc_info.value.report.final_severity.name == "FAILED"
 
     async def test_optional_failure_does_not_raise(self):
         config = _make_config()

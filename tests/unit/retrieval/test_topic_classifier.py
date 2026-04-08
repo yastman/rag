@@ -14,7 +14,11 @@ from src.retrieval.topic_classifier import (
     detect_score_gap,
     get_query_topic_hint,
 )
-from telegram_bot.services.grounding_policy import get_grounding_mode
+from telegram_bot.services.grounding_policy import (
+    get_grounding_mode,
+    semantic_cache_safe_reuse_allowed,
+    should_safe_fallback,
+)
 
 
 def test_classify_chunk_topic_finance() -> None:
@@ -59,6 +63,36 @@ def test_grounding_mode_is_strict_for_legal_query() -> None:
 
 def test_grounding_mode_is_normal_for_generic_property_query() -> None:
     assert get_grounding_mode(query_type="GENERAL", topic_hint=None) == "normal"
+
+
+def test_grounding_mode_is_strict_for_explicit_high_risk_query_type() -> None:
+    assert get_grounding_mode(query_type="legal", topic_hint=None) == "strict"
+
+
+def test_should_safe_fallback_when_strict_mode_has_docs_but_low_confidence() -> None:
+    assert (
+        should_safe_fallback(
+            grounding_mode="strict",
+            documents=[{"id": "1"}],
+            sources_enabled=True,
+            grade_confidence=0.1,
+            legal_answer_safe=False,
+        )
+        is True
+    )
+
+
+def test_semantic_cache_safe_reuse_allowed_blocks_unsafe_strict_entry() -> None:
+    assert (
+        semantic_cache_safe_reuse_allowed(
+            grounding_mode="strict",
+            grounded=True,
+            legal_answer_safe=False,
+            semantic_cache_safe_reuse=False,
+            safe_fallback_used=False,
+        )
+        is False
+    )
 
 
 def test_detect_score_gap_marks_dense_cluster_not_confident() -> None:

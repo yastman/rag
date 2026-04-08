@@ -56,8 +56,13 @@ spec:
           env:
             - name: GDRIVE_SYNC_DIR
               value: /data/drive-sync
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
             - name: INGESTION_DATABASE_URL
-              value: postgresql://postgres:postgres@postgres:5432/cocoindex
+              value: postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/cocoindex
             - name: QDRANT_URL
               value: http://qdrant:6333
             - name: DOCLING_URL

@@ -5,8 +5,13 @@ from __future__ import annotations
 
 import re
 
+from telegram_bot.constants.apartment_constants import (
+    APARTMENT_CITY_ALIASES,
+    APARTMENT_CITY_ALIASES_SORTED,
+)
 from telegram_bot.observability import observe
 from telegram_bot.services.apartment_models import ApartmentQueryParseResult, compute_confidence
+from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
 
 
 # All canonical complex names plus RU/EN short aliases — sorted longest-first for greedy match
@@ -42,31 +47,7 @@ _COMPLEX_ALIASES: dict[str, str] = {
 _COMPLEX_ALIASES_SORTED = sorted(_COMPLEX_ALIASES, key=len, reverse=True)
 
 
-# City aliases — sorted longest-first for greedy match
-_CITY_ALIASES: dict[str, str] = {
-    # Солнечный берег — все падежи
-    "солнечный берег": "Солнечный берег",
-    "солнечного берега": "Солнечный берег",
-    "солнечном берегу": "Солнечный берег",
-    "солнечному берегу": "Солнечный берег",
-    "sunny beach": "Солнечный берег",
-    "санни бич": "Солнечный берег",
-    # Свети Влас — все падежи
-    "свети влас": "Свети Влас",
-    "свети власе": "Свети Влас",
-    "свети власа": "Свети Влас",
-    "святой влас": "Свети Влас",
-    "святом власе": "Свети Влас",
-    "святого власа": "Свети Влас",
-    # Элените — не склоняется
-    "элените": "Элените",
-    "elenite": "Элените",
-}
-
-_CITY_ALIASES_SORTED = sorted(_CITY_ALIASES, key=len, reverse=True)
-
-
-class ApartmentFilterExtractor:
+class ApartmentFilterExtractor(BaseFilterExtractor):
     """Extract apartment filters from natural language (regex-only, 0 LLM calls)."""
 
     @observe(name="apartment-filter-parse", capture_input=False, capture_output=False)
@@ -149,16 +130,6 @@ class ApartmentFilterExtractor:
         return None
 
     # --- Price ---
-
-    def _parse_number(self, text: str) -> int | None:
-        """Parse integer from text, handling spaces and 'к' = 1000 suffix."""
-        text = text.strip().replace(" ", "").replace("\xa0", "")
-        if text.endswith("к"):
-            text = text[:-1] + "000"
-        try:
-            return int(text)
-        except ValueError:
-            return None
 
     def _extract_price(
         self, text: str, consumed: list[tuple[int, int]]
@@ -297,11 +268,11 @@ class ApartmentFilterExtractor:
     # --- City ---
 
     def _extract_city(self, text: str, consumed: list[tuple[int, int]]) -> str | None:
-        for alias in _CITY_ALIASES_SORTED:
+        for alias in APARTMENT_CITY_ALIASES_SORTED:
             if alias in text:
                 start = text.index(alias)
                 consumed.append((start, start + len(alias)))
-                return _CITY_ALIASES[alias]
+                return APARTMENT_CITY_ALIASES[alias]
         return None
 
     # --- Semantic query ---

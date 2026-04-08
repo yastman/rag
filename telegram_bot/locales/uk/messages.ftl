@@ -212,6 +212,9 @@ results-found-range = Знайдено { $total } апартаментів (по
 results-service-unavailable = Сервіс пошуку недоступний.
 results-refine = ⚙️ Змінити параметри
 results-book-viewing = 📅 Запис на огляд
+catalog-filters = 🔍 Фільтри
+catalog-bookmarks = 📌 Обране
+catalog-manager = 👤 Написати менеджеру
 results-no-results =
     На жаль, за вашими критеріями нічого не знайдено.
     Спробуйте змінити параметри.

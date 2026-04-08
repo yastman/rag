@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
@@ -11,10 +12,18 @@ from src.ingestion.docling_client import DoclingChunk, DoclingClient, DoclingCon
 
 logger = logging.getLogger(__name__)
 
-try:
-    from docling.document_converter import DocumentConverter
-except ModuleNotFoundError:  # pragma: no cover - exercised in unit tests via injected converter
-    DocumentConverter = Any  # type: ignore[assignment]
+DocumentConverterType = Any
+
+
+def _load_runtime_document_converter() -> Any | None:
+    try:
+        module = import_module("docling.document_converter")
+    except Exception:  # pragma: no cover - exercised in unit tests via injected converter
+        return None
+    return getattr(module, "DocumentConverter", None)
+
+
+RuntimeDocumentConverter: Any | None = _load_runtime_document_converter()
 
 
 class NativeDoclingAdapter(DoclingClient):
@@ -24,20 +33,20 @@ class NativeDoclingAdapter(DoclingClient):
         self,
         *,
         max_tokens: int = 512,
-        converter: DocumentConverter | Any | None = None,
+        converter: DocumentConverterType | None = None,
     ) -> None:
         super().__init__(DoclingConfig(max_tokens=max_tokens))
         self._converter = converter
         self._max_tokens = max_tokens
 
-    def _get_converter(self) -> DocumentConverter | Any:
+    def _get_converter(self) -> DocumentConverterType:
         if self._converter is None:
-            if DocumentConverter is Any:
+            if RuntimeDocumentConverter is None:
                 raise RuntimeError(
                     "docling is not installed; docling_native backend requires the optional "
                     "docling dependency"
                 )
-            self._converter = DocumentConverter()
+            self._converter = RuntimeDocumentConverter()
         return self._converter
 
     def chunk_file_sync(

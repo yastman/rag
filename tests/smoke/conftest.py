@@ -11,7 +11,6 @@ import redis.asyncio as redis
 
 from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.qdrant import QdrantService
-from telegram_bot.services.voyage import VoyageService
 
 
 _THIS_DIR = Path(__file__).parent
@@ -69,6 +68,10 @@ async def voyage_service():
     api_key = os.getenv("VOYAGE_API_KEY")
     if not api_key:
         pytest.skip("VOYAGE_API_KEY not set")
+    try:
+        from telegram_bot.services.voyage import VoyageService
+    except Exception as exc:  # pragma: no cover - depends on optional third-party packages
+        pytest.skip(f"Voyage stack unavailable in this environment: {exc}")
     return VoyageService(api_key=api_key)
 
 

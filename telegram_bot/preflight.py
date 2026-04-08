@@ -13,6 +13,7 @@ from qdrant_client import AsyncQdrantClient, models
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .config import BotConfig
+from .startup_status import DependencyCheckResult, StartupReport, StartupSeverity, StartupSignal
 
 
 logger = logging.getLogger(__name__)
@@ -73,17 +74,48 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "langfuse": DepLevel.OPTIONAL,
 }
 
+_DEP_REMEDIATION: dict[str, str] = {
+    "redis": "start Redis and verify REDIS_PASSWORD / redis_url",
+    "redis_cache": "restore Redis cache write/read path",
+    "qdrant": "start Qdrant and verify collection configuration",
+    "bge_m3": "start BGE-M3 and verify /health and encode endpoints",
+    "postgres": "start PostgreSQL or accept degraded user-feature mode",
+    "litellm": "start LiteLLM or accept degraded generation path",
+    "langfuse": "restore Langfuse credentials/connectivity or accept disabled tracing",
+}
+
 
 class PreflightError(SystemExit):
     """Raised when a CRITICAL dependency is unreachable after retries."""
 
-    def __init__(self, failed_deps: list[str]):
+    def __init__(self, failed_deps: list[str], report: StartupReport | None = None):
         self.failed_deps = failed_deps
+        self.report = report or StartupReport()
         msg = (
             f"CRITICAL preflight failure — cannot start bot. "
             f"Unreachable after {CRITICAL_RETRIES} attempts: {', '.join(failed_deps)}"
         )
         super().__init__(msg)
+
+
+def _build_dependency_report(results: dict[str, bool]) -> StartupReport:
+    report = StartupReport()
+    for dep_name, passed in results.items():
+        if passed:
+            continue
+        level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+        severity = (
+            StartupSeverity.FAILED if level == DepLevel.CRITICAL else StartupSeverity.DEGRADED
+        )
+        report.add(
+            StartupSignal(
+                source=dep_name,
+                severity=severity,
+                summary=f"{level.value} dependency unavailable",
+                remediation=_DEP_REMEDIATION.get(dep_name),
+            )
+        )
+    return report
 
 
 async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
@@ -461,7 +493,11 @@ async def _check_critical_with_retry(
         return False
 
 
-async def check_dependencies(config: BotConfig) -> dict[str, bool]:
+async def check_dependencies(
+    config: BotConfig,
+    *,
+    log_summary: bool = True,
+) -> DependencyCheckResult:
     """Check all bot dependencies with retry logic for CRITICAL ones.
 
     CRITICAL deps (redis, qdrant, bge_m3) are retried up to CRITICAL_RETRIES
@@ -502,11 +538,20 @@ async def check_dependencies(config: BotConfig) -> dict[str, bool]:
                     logger.warning("Preflight WARN: %s [OPTIONAL] — %s", dep_name, e)
                     results[dep_name] = False
 
-    # Log summary
+    # Log per-dependency status
     for dep_name, passed in results.items():
         level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
         status = "OK" if passed else "FAIL"
         logger.info("Preflight %s: %s [%s]", status, dep_name, level.value)
+
+    report = _build_dependency_report(results)
+    if log_summary:
+        if report.final_severity is StartupSeverity.FAILED:
+            logger.error(report.render())
+        elif report.final_severity is StartupSeverity.DEGRADED:
+            logger.warning(report.render())
+        else:
+            logger.info(report.render())
 
     # Enforce critical deps
     critical_failures = [
@@ -515,20 +560,6 @@ async def check_dependencies(config: BotConfig) -> dict[str, bool]:
         if not passed and DEP_CLASSIFICATION.get(name) == DepLevel.CRITICAL
     ]
     if critical_failures:
-        raise PreflightError(critical_failures)
+        raise PreflightError(critical_failures, report=report)
 
-    # Warn about optional failures
-    optional_failures = [
-        name
-        for name, passed in results.items()
-        if not passed and DEP_CLASSIFICATION.get(name) == DepLevel.OPTIONAL
-    ]
-    if optional_failures:
-        logger.warning(
-            "Preflight: optional deps unavailable (bot will continue): %s",
-            optional_failures,
-        )
-    else:
-        logger.info("Preflight: all dependencies OK")
-
-    return results
+    return DependencyCheckResult(results, report=report)

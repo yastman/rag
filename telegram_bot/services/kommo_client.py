@@ -10,16 +10,9 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_exception,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential_jitter,
-)
 
 from telegram_bot.observability import observe
+from telegram_bot.services._retry import kommo_retry
 from telegram_bot.services.kommo_models import (
     Contact,
     ContactCreate,
@@ -40,23 +33,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RETRYABLE = (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout)
-
-
-def _retryable_http_status(exc: BaseException) -> bool:
-    if not isinstance(exc, httpx.HTTPStatusError):
-        return False
-    return exc.response.status_code in {429, 500, 502, 503, 504}
-
-
-_kommo_retry = retry(
-    retry=retry_if_exception_type(RETRYABLE) | retry_if_exception(_retryable_http_status),
-    wait=wait_exponential_jitter(initial=1, max=8, jitter=2),
-    stop=stop_after_attempt(3),
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-    reraise=True,
-)
-
 
 class KommoClient:
     """Async Kommo CRM API adapter with auto-refresh OAuth2."""
@@ -72,7 +48,7 @@ class KommoClient:
             headers={"Content-Type": "application/json"},
         )
 
-    @_kommo_retry
+    @kommo_retry
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
         """Execute request with auto-refresh on 401."""
         token = await self._token_store.get_valid_token()
