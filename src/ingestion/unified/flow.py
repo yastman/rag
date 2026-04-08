@@ -43,21 +43,10 @@ MIME_TYPES = {
 }
 
 
-def compute_file_id(relative_path: str) -> str:
-    """Compute file_id from relative path (legacy fallback)."""
-    return hashlib.sha256(relative_path.encode()).hexdigest()[:16]
-
-
 def get_mime_type(relative_path: str) -> str:
     """Get MIME type from file extension."""
     ext = Path(relative_path).suffix.lower()
     return MIME_TYPES.get(ext, "application/octet-stream")
-
-
-@cocoindex_function()
-def file_id_from_filename(filename: str) -> str:
-    """Legacy path-based file_id (kept for reference, unused in flow)."""
-    return compute_file_id(filename)
 
 
 # Global manifest instance, initialised in build_flow().
@@ -72,7 +61,7 @@ def file_id_from_content(filename: str, content: bytes | None) -> str:
     file_id is returned, preventing duplicates in Qdrant.
     """
     if _manifest is None or content is None:
-        return compute_file_id(filename)
+        return hashlib.sha256(filename.encode()).hexdigest()[:16]
     content_hash = compute_content_hash_from_bytes(content)
     return _manifest.get_or_create_id(filename, content_hash)
 

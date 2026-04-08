@@ -16,10 +16,13 @@ pytest.importorskip("docling", reason="docling not installed (ingest extra)")
 pytest.importorskip("docling_core", reason="docling-core not installed (ingest extra)")
 pytest.importorskip("transformers", reason="transformers not installed (ml-local extra)")
 
-from docling.chunking import HybridChunker
-from docling.document_converter import DocumentConverter
-from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
-from transformers import AutoTokenizer
+try:
+    from docling.chunking import HybridChunker
+    from docling.document_converter import DocumentConverter
+    from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
+    from transformers import AutoTokenizer
+except Exception as exc:  # pragma: no cover - depends on optional third-party packages
+    pytest.skip(f"docling stack unusable in this environment: {exc}", allow_module_level=True)
 
 
 def analyze_docling_document():
