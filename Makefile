@@ -3,9 +3,8 @@
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
-	ingest-dir ingest-gdrive ingest-status ingest-services \
-	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
-	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
+	ingest-dir ingest-status ingest-services \
+	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
@@ -24,6 +23,11 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
+
+ENV_LOAD = if [ -f .env ]; then set -a; . ./.env; set +a; fi;
+PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
+PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
+PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 
 help: ## Show this help message
 	@echo "$(BLUE)Contextual RAG v2.0.1 - Development Commands$(NC)"
@@ -140,10 +144,13 @@ test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
-test-full: ## Run full test suite (all tiers)
+test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
-	uv run pytest tests/
+	@echo "$(BLUE)Phase 1/2: parallel-safe suites...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
+	@echo "$(BLUE)Phase 2/2: stateful/live suites sequentially...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
 test-cov: ## Run tests with coverage
@@ -764,22 +771,39 @@ rclone-install: ## Install rclone
 
 sync-drive-install: ## Install rclone cron job
 	@echo "$(BLUE)Installing rclone cron...$(NC)"
-	sudo mkdir -p /opt/scripts /opt/credentials /data/drive-sync
-	sudo cp docker/rclone/sync-drive.sh /opt/scripts/
-	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/
-	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh
-	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync
+	@$(ENV_LOAD) \
+	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
+	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
+	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
+	sudo mkdir -p /opt/scripts /opt/credentials /etc/rag-fresh "$${GDRIVE_SYNC_DIR}"; \
+	sudo cp docker/rclone/sync-drive.sh /opt/scripts/; \
+	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/; \
+	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh; \
+	printf 'GDRIVE_SYNC_DIR=%s\nRCLONE_CONFIG_FILE=%s\nRCLONE_REMOTE=%s\n' \
+	  "$${GDRIVE_SYNC_DIR}" "$${RCLONE_CONFIG_FILE}" "$${RCLONE_REMOTE:-gdrive:RAG}" | \
+	  sudo tee /etc/rag-fresh/rclone-sync.env >/dev/null; \
+	sudo chmod 600 /etc/rag-fresh/rclone-sync.env; \
+	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync; \
 	sudo chmod 644 /etc/cron.d/rclone-sync
 	@echo "$(GREEN)✓ Cron installed$(NC)"
 
 sync-drive-run: ## Run Drive sync manually
 	@echo "$(BLUE)Syncing Google Drive...$(NC)"
+	@$(ENV_LOAD) \
+	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
+	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
+	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
 	/opt/scripts/sync-drive.sh
 	@echo "$(GREEN)✓ Sync complete$(NC)"
 
 sync-drive-status: ## Show sync status and recent files
 	@echo "$(BLUE)Recent synced files:$(NC)"
-	@ls -lt /data/drive-sync 2>/dev/null | head -20 || echo "No files synced yet"
+	@$(ENV_LOAD) \
+	if [ -n "$${GDRIVE_SYNC_DIR:-}" ] && [ -d "$${GDRIVE_SYNC_DIR}" ]; then \
+	  ls -lt "$${GDRIVE_SYNC_DIR}" 2>/dev/null | head -20; \
+	else \
+	  echo "No files synced yet"; \
+	fi
 	@echo ""
 	@echo "$(BLUE)Last sync log:$(NC)"
 	@tail -10 /var/log/rclone-sync.log 2>/dev/null || echo "No logs yet"
@@ -788,7 +812,7 @@ sync-drive-status: ## Show sync status and recent files
 # DOCUMENT INGESTION (CocoIndex Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-services ingest-test
+.PHONY: ingest-setup ingest-dir ingest-status ingest-services ingest-test
 
 ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
@@ -808,15 +832,6 @@ endif
 	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
 	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
 
-ingest-gdrive: ## [DEPRECATED] Use ingest-gdrive-run instead (rclone + CocoIndex pipeline)
-	@echo "$(RED)⚠ make ingest-gdrive is deprecated.$(NC)"
-	@echo "  GDrive ingestion now uses rclone sync + CocoIndex pipeline."
-	@echo "  Use one of:"
-	@echo "    make ingest-gdrive-run    # Run ingestion once"
-	@echo "    make ingest-gdrive-watch  # Continuous watch mode"
-	@echo "    make ingest-gdrive-status # Collection stats"
-	@exit 1
-
 ingest-status: ## Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
 	uv run python -m telegram_bot.services.ingestion_cocoindex status
@@ -827,58 +842,39 @@ ingest-services: ## Index curated services.yaml content into Qdrant
 	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
 
 # =============================================================================
-# GOOGLE DRIVE INGESTION (rclone + watcher pipeline)
-# =============================================================================
-
-.PHONY: ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status
-
-ingest-gdrive-setup: ## Setup GDrive collection in Qdrant (scalar + binary)
-	@echo "$(BLUE)Creating Qdrant collections...$(NC)"
-	uv run python scripts/setup_scalar_collection.py --source gdrive_documents
-	uv run python scripts/setup_binary_collection.py --source gdrive_documents
-	@echo "$(GREEN)✓ Collections ready$(NC)"
-
-ingest-gdrive-run: ## Run GDrive ingestion once
-	@echo "$(BLUE)Running GDrive ingestion...$(NC)"
-	uv run python -m src.ingestion.gdrive_flow --once
-	@echo "$(GREEN)✓ Ingestion complete$(NC)"
-
-ingest-gdrive-watch: ## Run GDrive ingestion continuously (watch mode)
-	@echo "$(BLUE)Starting GDrive watch mode...$(NC)"
-	uv run python -m src.ingestion.gdrive_flow --watch
-
-ingest-gdrive-status: ## Show GDrive collection stats
-	@echo "$(BLUE)GDrive collection stats:$(NC)"
-	@uv run python -c "from qdrant_client import QdrantClient; c=QdrantClient('http://localhost:6333'); \
-		[print(f'  {n}: {c.get_collection(n).points_count} points') if c.collection_exists(n) else print(f'  {n}: not found') \
-		for n in ['gdrive_documents_scalar', 'gdrive_documents_binary']]"
-
-# =============================================================================
 # UNIFIED INGESTION PIPELINE (v3.2.1)
 # =============================================================================
 
-.PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+
+ingest-unified-preflight: ## Check unified ingestion dependencies and source path
+	@echo "$(BLUE)Running unified ingestion preflight...$(NC)"
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli preflight
+
+ingest-unified-bootstrap: ## Create/validate unified ingestion collection schema
+	@echo "$(BLUE)Bootstrapping unified ingestion collection...$(NC)"
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
 
 ingest-unified: ## Run unified ingestion once
 	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
 ingest-unified-watch: ## Run unified ingestion continuously (watch mode)
 	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run --watch
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run --watch
 
 ingest-unified-status: ## Show unified ingestion status
 	@echo "$(BLUE)Unified ingestion status:$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli status
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli status
 
 ingest-unified-reprocess: ## Reprocess all error files
 	@echo "$(BLUE)Reprocessing error files...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli reprocess --errors
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli reprocess --errors
 	@echo "$(GREEN)✓ Reprocess queued$(NC)"
 
 ingest-unified-logs: ## Show ingestion service logs
-	docker logs dev-ingestion -f --tail 100
+	docker compose logs ingestion -f --tail 100
 
 # =============================================================================
 # QDRANT BACKUP
@@ -939,12 +935,21 @@ k3s-down: ## Delete all k3s resources
 	kubectl delete -k k8s/overlays/full/ --ignore-not-found
 
 k3s-secrets: ## Create k8s secrets from k8s/secrets/.env
-	kubectl create secret generic api-keys --from-env-file=k8s/secrets/.env -n rag --dry-run=client -o yaml | kubectl apply -f -
-	kubectl create secret generic db-credentials \
-		--from-literal=POSTGRES_USER=postgres \
-		--from-literal=POSTGRES_PASSWORD=postgres \
-		--from-literal=POSTGRES_DB=postgres \
-		-n rag --dry-run=client -o yaml | kubectl apply -f -
+	@tmp_api_keys=$$(mktemp); \
+		tmp_db_credentials=$$(mktemp); \
+		trap 'rm -f "$$tmp_api_keys" "$$tmp_db_credentials"' EXIT; \
+		grep -v '^POSTGRES_PASSWORD=' k8s/secrets/.env > "$$tmp_api_keys"; \
+		POSTGRES_PASSWORD=$$(awk -F= '/^POSTGRES_PASSWORD=/{sub(/^[^=]*=/,""); print; found=1; exit} END{if(!found) exit 1}' k8s/secrets/.env) || { \
+			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			exit 1; \
+		}; \
+		[ -n "$$POSTGRES_PASSWORD" ] || { \
+			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			exit 1; \
+		}; \
+		printf 'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=postgres\n' "$$POSTGRES_PASSWORD" > "$$tmp_db_credentials"; \
+		kubectl create secret generic api-keys --from-env-file="$$tmp_api_keys" -n rag --dry-run=client -o yaml | kubectl apply -f -; \
+		kubectl create secret generic db-credentials --from-env-file="$$tmp_db_credentials" -n rag --dry-run=client -o yaml | kubectl apply -f -
 
 k3s-ingest-start: ## Scale ingestion to 1 replica
 	kubectl scale deployment ingestion -n rag --replicas=1

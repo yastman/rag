@@ -18,8 +18,10 @@ from telegram_bot.integrations.prompt_templates import (
     get_token_limit,
 )
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.coverage_mode import detect_coverage_mode
 from telegram_bot.services.grounding_policy import (
     build_safe_fallback_response,
+    is_strict_grounding_safe,
     should_safe_fallback,
 )
 from telegram_bot.services.metrics import PipelineMetrics
@@ -93,6 +95,12 @@ _GENERATE_FALLBACK = (
     "ЕСЛИ ИНФОРМАЦИИ НЕ ХВАТАЕТ:\n"
     "Скажи это спокойно и предметно, затем укажи, что именно стоит уточнить. "
     "Например: бюджет, цель покупки, тип объекта, основание ВНЖ, срок рассрочки, статус объекта."
+)
+_EXHAUSTIVE_GENERATE_FALLBACK = (
+    "Ты — консультант по {{domain}}. "
+    "Если вопрос подразумевает множественность, перечисли все найденные в контексте "
+    "релевантные варианты, сгруппируй близкие пункты и убери дубли. "
+    "Если база покрывает не все варианты, скажи, что перечислены только найденные в базе основания."
 )
 
 
@@ -183,6 +191,15 @@ def _sanitize_response_text(answer: str, *, sources_enabled: bool) -> str:
 
     sanitized = "\n".join(sanitized_lines).strip()
     return sanitized or answer.strip()
+
+
+def _ensure_generation_signal_defaults(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize raw cacheability signals across every generation return path."""
+    llm_provider_model = str(result.get("llm_provider_model", "") or "")
+    result.setdefault("fallback_used", llm_provider_model == "fallback")
+    result.setdefault("safe_fallback_used", False)
+    result.setdefault("llm_timeout", False)
+    return result
 
 
 def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
@@ -447,12 +464,14 @@ def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float |
 async def generate_response(
     *,
     query: str,
+    needs_coverage: bool = False,
     documents: list[dict[str, Any]],
     retrieved_context: list[dict[str, Any]] | None = None,
     raw_messages: list[Any] | None = None,
     latency_stages: dict[str, float] | None = None,
     llm_call_count: int = 0,
     grounding_mode: str = "normal",
+    grade_confidence: float | None = None,
     message: Any | None = None,
     config: Any | None = None,
     get_config: Callable[[], Any] | None = None,
@@ -500,12 +519,27 @@ async def generate_response(
 
     detector = style_detector or _detector
     style_info = detector.detect(effective_query)
+    coverage_decision = detect_coverage_mode(effective_query)
+    needs_coverage = bool(needs_coverage) or coverage_decision.needs_coverage
+    coverage_reason = coverage_decision.reason or (
+        "state:needs_coverage" if needs_coverage else None
+    )
     sources_enabled = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    legal_answer_safe = grounding_mode != "strict" or is_strict_grounding_safe(
+        documents=docs,
+        sources_enabled=sources_enabled,
+        grade_confidence=grade_confidence,
+    )
     format_params = inspect.signature(format_context).parameters
+    effective_max_context_docs = len(docs) if needs_coverage else max_context_docs
     if "sources_enabled" in format_params:
-        context = format_context(docs, max_context_docs, sources_enabled=sources_enabled)
+        context = format_context(
+            docs,
+            effective_max_context_docs,
+            sources_enabled=sources_enabled,
+        )
     else:
-        context = format_context(docs, max_context_docs)
+        context = format_context(docs, effective_max_context_docs)
 
     # Curated span metadata
     lf_client.update_current_span(
@@ -516,6 +550,8 @@ async def generate_response(
             "context_docs_count": len(docs),
             "streaming_enabled": bool(message is not None and config.streaming_enabled),
             "grounding_mode": grounding_mode,
+            "needs_coverage": needs_coverage,
+            "coverage_reason": coverage_reason,
         }
     )
 
@@ -523,6 +559,8 @@ async def generate_response(
         grounding_mode=grounding_mode,
         documents=docs,
         sources_enabled=sources_enabled,
+        grade_confidence=grade_confidence,
+        legal_answer_safe=legal_answer_safe,
     ):
         elapsed = time.monotonic() - t0
         PipelineMetrics.get().record("generate", elapsed * 1000)
@@ -536,46 +574,73 @@ async def generate_response(
                 "safe_fallback_used": True,
                 "grounded": False,
                 "response_sent": False,
+                "needs_coverage": needs_coverage,
+                "coverage_mode": "exhaustive_list" if needs_coverage else "default",
+                "coverage_reason": coverage_reason,
             }
         )
-        return {
-            "response": answer,
-            "response_sent": False,
-            "sent_message": None,
-            "llm_provider_model": "safe_fallback",
-            "llm_ttft_ms": 0.0,
-            "llm_response_duration_ms": elapsed * 1000,
-            "llm_stream_only_ttft_ms": None,
-            "llm_ttft_drift_ms": None,
-            "llm_call_count": max(0, int(llm_call_count)),
-            "latency_stages": {**current_latency, "generate": elapsed},
-            "llm_decode_ms": None,
-            "llm_tps": None,
-            "llm_queue_ms": None,
-            "llm_timeout": False,
-            "llm_stream_recovery": False,
-            "streaming_enabled": False,
-            "response_style": style_info.style,
-            "response_difficulty": style_info.difficulty,
-            "response_style_reasoning": style_info.reasoning,
-            "answer_words": len(answer.split()),
-            "answer_chars": len(answer),
-            "answer_to_question_ratio": len(answer.split()) / max(style_info.word_count, 1),
-            "response_policy_mode": "safe_fallback",
-            "grounding_mode": grounding_mode,
-            "safe_fallback_used": True,
-            "grounded": False,
-            "legal_answer_safe": False,
-            "semantic_cache_safe_reuse": False,
-        }
+        return _ensure_generation_signal_defaults(
+            {
+                "response": answer,
+                "response_sent": False,
+                "sent_message": None,
+                "llm_provider_model": "safe_fallback",
+                "llm_ttft_ms": 0.0,
+                "llm_response_duration_ms": elapsed * 1000,
+                "llm_stream_only_ttft_ms": None,
+                "llm_ttft_drift_ms": None,
+                "llm_call_count": max(0, int(llm_call_count)),
+                "latency_stages": {**current_latency, "generate": elapsed},
+                "llm_decode_ms": None,
+                "llm_tps": None,
+                "llm_queue_ms": None,
+                "llm_timeout": False,
+                "llm_stream_recovery": False,
+                "streaming_enabled": False,
+                "response_style": style_info.style,
+                "response_difficulty": style_info.difficulty,
+                "response_style_reasoning": style_info.reasoning,
+                "answer_words": len(answer.split()),
+                "answer_chars": len(answer),
+                "answer_to_question_ratio": len(answer.split()) / max(style_info.word_count, 1),
+                "response_policy_mode": "safe_fallback",
+                "grounding_mode": grounding_mode,
+                "safe_fallback_used": True,
+                "grounded": False,
+                "legal_answer_safe": False,
+                "semantic_cache_safe_reuse": False,
+                "needs_coverage": needs_coverage,
+            }
+        )
 
     style_enabled = bool(getattr(config, "response_style_enabled", False))
     shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
     legacy_max_tokens = int(config.generate_max_tokens)
-    use_style = style_enabled and not shadow_mode
 
     prompt_config: dict[str, Any] = {}
-    if use_style:
+    prompt_name = "generate"
+    use_style = False
+    if needs_coverage:
+        system_prompt, prompt_config = get_prompt_with_config(
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        if "max_tokens" in prompt_config:
+            max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
+        else:
+            max_tokens = legacy_max_tokens
+        response_policy_mode = "coverage"
+        prompt_name = "generate_exhaustive_list"
+    else:
+        use_style = style_enabled and not shadow_mode
+        response_policy_mode = (
+            "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
+        )
+
+    if needs_coverage:
+        pass
+    elif use_style:
         style_system_prompt = style_prompt_builder(
             style=style_info.style,
             difficulty=style_info.difficulty,
@@ -851,6 +916,17 @@ async def generate_response(
         "eval_query": effective_query[:2000],
         "eval_answer": answer[:3000],
         "eval_context": eval_context,
+        "needs_coverage": needs_coverage,
+        "coverage_mode": "exhaustive_list" if needs_coverage else "default",
+        "coverage_reason": coverage_reason,
+        "prompt_name": prompt_name,
+        "documents_count": len(docs),
+        "distinct_doc_count": len(
+            {
+                str((doc.get("metadata", {}) or {}).get("doc_id") or doc.get("id") or "")
+                for doc in docs
+            }
+        ),
     }
     if usage_details:
         span_output["token_usage"] = {
@@ -907,7 +983,6 @@ async def generate_response(
     answer_chars = len(answer)
     question_words = style_info.word_count
     ratio = answer_words / max(question_words, 1)
-    response_policy_mode = "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
 
     sent_message_ref = (
         extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
@@ -915,35 +990,38 @@ async def generate_response(
     current_latency = latency_stages or {}
     current_llm_calls = max(0, int(llm_call_count))
 
-    return {
-        "response": answer,
-        "response_sent": response_sent,
-        "sent_message": sent_message_ref,
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms,
-        "llm_response_duration_ms": elapsed * 1000,
-        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
-        "llm_ttft_drift_ms": llm_ttft_drift_ms,
-        "llm_call_count": current_llm_calls + 1,
-        "latency_stages": {**current_latency, "generate": elapsed},
-        # Latency breakdown (#147)
-        "llm_decode_ms": llm_decode_ms,
-        "llm_tps": llm_tps,
-        "llm_queue_ms": llm_queue_ms,
-        "llm_timeout": hard_timeout,
-        "llm_stream_recovery": stream_recovery,
-        "streaming_enabled": streaming_was_enabled,
-        # Response length control (#129)
-        "response_style": style_info.style,
-        "response_difficulty": style_info.difficulty,
-        "response_style_reasoning": style_info.reasoning,
-        "answer_words": answer_words,
-        "answer_chars": answer_chars,
-        "answer_to_question_ratio": ratio,
-        "response_policy_mode": response_policy_mode,
-        "grounding_mode": grounding_mode,
-        "safe_fallback_used": False,
-        "grounded": True,
-        "legal_answer_safe": True,
-        "semantic_cache_safe_reuse": True,
-    }
+    return _ensure_generation_signal_defaults(
+        {
+            "response": answer,
+            "response_sent": response_sent,
+            "sent_message": sent_message_ref,
+            "llm_provider_model": actual_model,
+            "llm_ttft_ms": ttft_ms,
+            "llm_response_duration_ms": elapsed * 1000,
+            "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+            "llm_ttft_drift_ms": llm_ttft_drift_ms,
+            "llm_call_count": current_llm_calls + 1,
+            "latency_stages": {**current_latency, "generate": elapsed},
+            # Latency breakdown (#147)
+            "llm_decode_ms": llm_decode_ms,
+            "llm_tps": llm_tps,
+            "llm_queue_ms": llm_queue_ms,
+            "llm_timeout": hard_timeout,
+            "llm_stream_recovery": stream_recovery,
+            "streaming_enabled": streaming_was_enabled,
+            # Response length control (#129)
+            "response_style": style_info.style,
+            "response_difficulty": style_info.difficulty,
+            "response_style_reasoning": style_info.reasoning,
+            "answer_words": answer_words,
+            "answer_chars": answer_chars,
+            "answer_to_question_ratio": ratio,
+            "response_policy_mode": response_policy_mode,
+            "grounding_mode": grounding_mode,
+            "safe_fallback_used": False,
+            "grounded": True,
+            "legal_answer_safe": legal_answer_safe,
+            "semantic_cache_safe_reuse": legal_answer_safe,
+            "needs_coverage": needs_coverage,
+        }
+    )

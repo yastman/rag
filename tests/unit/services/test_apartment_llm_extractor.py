@@ -85,6 +85,19 @@ class TestApartmentLlmExtractor:
         result = await extractor.extract(query="солнечный берег двушка")
         assert result.hard.city == "Солнечный берег"
 
+    async def test_extract_coerces_null_view_tags_from_llm(self) -> None:
+        bad_result = ApartmentSearchFilters.model_construct(
+            hard=HardFilters.model_construct(view_tags=None),
+            meta=ExtractionMeta(source="llm"),
+        )
+        extractor = ApartmentLlmExtractor.__new__(ApartmentLlmExtractor)
+        extractor._client = AsyncMock()
+        extractor._client.chat.completions.create = AsyncMock(return_value=bad_result)
+        extractor._model = "gpt-4o-mini"
+
+        result = await extractor.extract(query="квартира без уточнения вида")
+        assert result.hard.view_tags == []
+
 
 class TestMergeExtractionResults:
     def test_regex_wins_for_numbers(self) -> None:
@@ -158,3 +171,7 @@ class TestGetSystemPrompt:
         """EXTRACTION_SYSTEM_PROMPT must remain importable for backward compatibility."""
         assert EXTRACTION_SYSTEM_PROMPT
         assert "Солнечный берег" in EXTRACTION_SYSTEM_PROMPT
+
+    def test_system_prompt_forbids_null_view_tags(self) -> None:
+        assert "view_tags=[]" in EXTRACTION_SYSTEM_PROMPT
+        assert "Никогда не возвращай null для массивов" in EXTRACTION_SYSTEM_PROMPT

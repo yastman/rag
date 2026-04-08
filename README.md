@@ -226,6 +226,7 @@ src/evaluation/            # RAG evaluation (RAGAS, A/B testing)
 ```bash
 make check       # Ruff lint + MyPy strict type checking
 make test-unit   # Unit tests (parallel via pytest-xdist)
+make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
 Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `main` or deploying to VPS.
@@ -244,6 +245,8 @@ CI is intentionally lightweight. It should stay fast and is used as a guardrail 
 | [Local Development](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation guide |
 | [Qdrant Stack](docs/QDRANT_STACK.md) | Vector collections, schema, operations |
 | [Ingestion Runbook](docs/INGESTION.md) | Unified ingestion guide and troubleshooting |
+| [Google Drive Sync Runbook](docs/GDRIVE_INGESTION.md) | Google Drive -> local mirror -> unified ingestion contract |
+| [VPS Recovery Runbook](docs/runbooks/vps-gdrive-ingestion-recovery.md) | Recover empty sync mount / empty collection incidents on VPS |
 | [SDK Migration Audit](docs/SDK_MIGRATION_AUDIT_2026-03-13.md) | Canonical SDK keeper stack and bounded follow-up work |
 | [SDK Migration Roadmap](docs/SDK_MIGRATION_ROADMAP_2026-03-13.md) | Post-audit execution order and guardrails |
 | [Alerting](docs/ALERTING.md) | Loki/Alertmanager setup |

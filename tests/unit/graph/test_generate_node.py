@@ -821,6 +821,8 @@ class TestGenerateNodeProviderMetadata:
             result = await generate_node(state)
 
         assert result["llm_provider_model"] == "fallback"
+        assert result["fallback_used"] is True
+        assert result["safe_fallback_used"] is False
         assert result["llm_ttft_ms"] == 0.0
         assert result["llm_response_duration_ms"] > 0
 
@@ -1145,6 +1147,10 @@ class TestGenerateNodeResponseStyle:
                 return_value=mock_config,
             ),
             patch(
+                "telegram_bot.services.generate_response._build_system_prompt_with_config",
+                return_value=("LEGACY PROMPT", {"max_tokens": 512}),
+            ),
+            patch(
                 "telegram_bot.graph.nodes.generate.build_system_prompt_with_manager",
             ) as mock_style_prompt,
         ):
@@ -1153,9 +1159,9 @@ class TestGenerateNodeResponseStyle:
         # Style fields are populated (shadow collects metrics)
         assert result["response_style"] == "short"
         assert result["response_policy_mode"] == "shadow"
-        # But legacy max_tokens is used
+        # Shadow mode stays on the legacy prompt path, which honors prompt-config limits.
         call_kwargs = mock_client.chat.completions.create.call_args
-        assert call_kwargs.kwargs.get("max_tokens") == 2048
+        assert call_kwargs.kwargs.get("max_tokens") == 512
         # No style prompt manager call in shadow mode (avoid unnecessary overhead)
         mock_style_prompt.assert_not_called()
 
@@ -1175,6 +1181,10 @@ class TestGenerateNodeResponseStyle:
                 return_value=mock_config,
             ),
             patch(
+                "telegram_bot.services.generate_response._build_system_prompt_with_config",
+                return_value=("LEGACY PROMPT", {"max_tokens": 512}),
+            ),
+            patch(
                 "telegram_bot.graph.nodes.generate.build_system_prompt_with_manager",
             ) as mock_style_prompt,
         ):
@@ -1182,7 +1192,7 @@ class TestGenerateNodeResponseStyle:
 
         assert result["response_policy_mode"] == "disabled"
         call_kwargs = mock_client.chat.completions.create.call_args
-        assert call_kwargs.kwargs.get("max_tokens") == 2048
+        assert call_kwargs.kwargs.get("max_tokens") == 512
         mock_style_prompt.assert_not_called()
 
     async def test_style_mode_injects_history_instruction_if_missing(self) -> None:
@@ -1254,6 +1264,26 @@ class TestGenerateNodeCitationInstruction:
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         system_msg = messages[0]["content"]
         assert "[Объект 1] = [1]" not in system_msg
+
+    async def test_context_omits_object_labels_when_sources_disabled(self) -> None:
+        """Model-visible context must not contain numbered object labels when sources are hidden."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_config.show_sources = False
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        user_msg = messages[-1]["content"]
+        assert "Фрагмент контекста" in user_msg
+        assert "[Объект 1]" not in user_msg
 
     async def test_no_citation_instruction_without_documents(self) -> None:
         """No citation instruction when documents are empty."""

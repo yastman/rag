@@ -7,11 +7,14 @@ and data lineage features.
 Milestone J: Document Ingestion Pipeline (2026-02-02)
 """
 
+import asyncio
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 from numpy.typing import NDArray
@@ -200,16 +203,23 @@ def create_document_flow(
                 )
 
         # Export to Qdrant
+        parsed_qdrant_url = urlparse(config.qdrant_url)
+        grpc_host = parsed_qdrant_url.hostname or "localhost"
+        grpc_port = parsed_qdrant_url.port or 6333
         qdrant_connection = cocoindex.targets.QdrantConnection(
-            url=config.qdrant_url,
+            grpc_url=f"{grpc_host}:{grpc_port + 1}",
             api_key=config.qdrant_api_key,
+        )
+        qdrant_connection_ref = cocoindex.auth_registry.add_auth_entry(
+            f"document_ingestion_qdrant_{config.collection_name}",
+            qdrant_connection,
         )
 
         doc_embeddings.export(
             "document_embeddings",
             cocoindex.targets.Qdrant(
                 collection_name=config.collection_name,
-                connection=qdrant_connection,
+                connection=qdrant_connection_ref,
             ),
             primary_key_fields=["file_name", "location"],
             vector_indexes=[
@@ -221,6 +231,38 @@ def create_document_flow(
         )
 
     return document_ingestion_flow
+
+
+def _run_update_all_flows_blocking(options: Any) -> None:
+    """Run CocoIndex async updates from sync code, even inside a live event loop."""
+
+    async def _update() -> None:
+        await cocoindex.update_all_flows_async(options)
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(_update())
+        return
+
+    result: dict[str, BaseException | None] = {"error": None}
+
+    def _runner() -> None:
+        try:
+            asyncio.run(_update())
+        except BaseException as exc:  # pragma: no cover - exercised via caller error surface
+            result["error"] = exc
+
+    thread = threading.Thread(
+        target=_runner,
+        name="cocoindex-flow-blocking-runner",
+        daemon=False,
+    )
+    thread.start()
+    thread.join()
+
+    if result["error"] is not None:
+        raise result["error"]
 
 
 def setup_and_run_flow(
@@ -259,9 +301,17 @@ def setup_and_run_flow(
 
         # Run the flow
         if blocking:
-            cocoindex.update_all_flows()
+            _run_update_all_flows_blocking(cocoindex.FlowLiveUpdaterOptions(live_mode=False))
         else:
-            cocoindex.update_all_flows_async()
+            threading.Thread(
+                target=lambda: asyncio.run(
+                    cocoindex.update_all_flows_async(
+                        cocoindex.FlowLiveUpdaterOptions(live_mode=True)
+                    )
+                ),
+                name="cocoindex-flow-updater",
+                daemon=True,
+            ).start()
 
         return {
             "success": True,

@@ -19,12 +19,18 @@ pytest.importorskip("docling_core", reason="docling-core not installed (ingest e
 pytest.importorskip("transformers", reason="transformers not installed (ml-local extra)")
 pytest.importorskip("fitz", reason="PyMuPDF/fitz not installed (ingest extra)")
 
-from docling.chunking import HybridChunker
-from docling.document_converter import DocumentConverter
-from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
-from transformers import AutoTokenizer
+try:
+    from docling.chunking import HybridChunker
+    from docling.document_converter import DocumentConverter
+    from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
+    from transformers import AutoTokenizer
+except Exception as exc:  # pragma: no cover - depends on optional third-party packages
+    pytest.skip(f"docling stack unusable in this environment: {exc}", allow_module_level=True)
 
-from legacy.pymupdf_chunker import PyMuPDFChunker
+try:
+    from legacy.pymupdf_chunker import PyMuPDFChunker
+except ModuleNotFoundError as exc:  # pragma: no cover - legacy benchmark helper is optional
+    pytest.skip(f"legacy benchmark chunker unavailable: {exc}", allow_module_level=True)
 
 
 def _run_pymupdf_approach():
