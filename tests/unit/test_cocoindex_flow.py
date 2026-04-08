@@ -6,6 +6,7 @@ without requiring the actual CocoIndex library.
 Milestone J: Document Ingestion Pipeline (2026-02-02)
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -171,6 +172,7 @@ class TestSetupAndRunFlow:
             mock_flow = MagicMock()
             with patch.object(cocoindex_flow, "create_document_flow", return_value=mock_flow):
                 mock_cocoindex = MagicMock()
+                mock_cocoindex.update_all_flows_async = AsyncMock(return_value={})
                 with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
                     config = FlowConfig(collection_name="test_collection")
                     result = setup_and_run_flow("/test/path", config=config)
@@ -179,6 +181,25 @@ class TestSetupAndRunFlow:
         assert result["flow_name"] == "DocumentIngestion"
         assert result["source_path"] == "/test/path"
         assert result["collection"] == "test_collection"
+
+    def test_successful_flow_execution_inside_running_event_loop(self):
+        """Blocking mode should still work when the caller already has an event loop."""
+
+        async def _run_inside_loop():
+            with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", True):
+                mock_flow = MagicMock()
+                with patch.object(cocoindex_flow, "create_document_flow", return_value=mock_flow):
+                    mock_cocoindex = MagicMock()
+                    mock_cocoindex.update_all_flows_async = AsyncMock(return_value={})
+                    with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
+                        config = FlowConfig(collection_name="test_collection")
+                        result = setup_and_run_flow("/test/path", config=config)
+
+            assert result["success"] is True
+            assert result["flow_name"] == "DocumentIngestion"
+            mock_cocoindex.update_all_flows_async.assert_awaited_once()
+
+        asyncio.run(_run_inside_loop())
 
     def test_handles_exception(self):
         """Test handling of exceptions during flow execution."""

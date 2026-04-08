@@ -6,12 +6,19 @@ Search engines for evaluation:
 """
 
 import os
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
-import numpy as np
 from qdrant_client import QdrantClient, models
 
 from src.config import HSNWParameters, RetrievalStages, Settings, ThresholdValues
+from src.retrieval.search_engine_shared import (
+    AbstractSearchEngine,
+    create_engine_from_registry,
+)
+from src.retrieval.search_engine_shared import (
+    lexical_weights_to_sparse as _lexical_weights_to_sparse,
+)
+from src.utils.serialization import convert_to_python_types
 
 
 # Load Qdrant config without failing module import in test environments.
@@ -42,35 +49,7 @@ RETRIEVAL_LIMIT_STAGE2 = RetrievalStages.STAGE2_FINAL
 PAYLOAD_FIELDS_MINIMAL = ["article_number", "chapter", "text"]
 
 
-def convert_to_python_types(obj):
-    """Convert numpy types to native Python types for JSON serialization."""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, (np.float32, np.float64)):
-        return float(obj)
-    if isinstance(obj, (np.int32, np.int64)):
-        return int(obj)
-    if isinstance(obj, dict):
-        return {k: convert_to_python_types(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_to_python_types(item) for item in obj]
-    return obj
-
-
-def _lexical_weights_to_sparse(lexical_weights) -> models.SparseVector:
-    """Convert BGE-M3 lexical weights to Qdrant SparseVector."""
-    if hasattr(lexical_weights, "indices"):
-        # Scipy sparse format
-        sparse_indices = lexical_weights.indices.tolist()
-        sparse_values = lexical_weights.values.tolist()
-    else:
-        # Dict format - keys are strings, need to convert to ints
-        sparse_indices = [int(k) for k in lexical_weights]
-        sparse_values = list(lexical_weights.values())
-    return models.SparseVector(indices=sparse_indices, values=sparse_values)
-
-
-class SearchEngine(ABC):
+class SearchEngine(AbstractSearchEngine):
     """Abstract base class for search engines."""
 
     def __init__(self, collection_name: str):
@@ -364,15 +343,17 @@ def create_search_engine(engine_type: str, collection_name: str, embedding_model
     Returns:
         SearchEngine instance
     """
-    if engine_type == "baseline":
-        return BaselineSearchEngine(collection_name, embedding_model)
-    if engine_type == "hybrid":
-        return HybridSearchEngine(collection_name, embedding_model)
-    if engine_type == "dbsf_colbert":
-        return HybridDBSFColBERTSearchEngine(collection_name, embedding_model)
-    if engine_type == "rrf_colbert":
-        return HybridRRFColBERTSearchEngine(collection_name, embedding_model)
-    raise ValueError(f"Unknown engine type: {engine_type}")
+    registry = {
+        "baseline": lambda: BaselineSearchEngine(collection_name, embedding_model),
+        "hybrid": lambda: HybridSearchEngine(collection_name, embedding_model),
+        "dbsf_colbert": lambda: HybridDBSFColBERTSearchEngine(collection_name, embedding_model),
+        "rrf_colbert": lambda: HybridRRFColBERTSearchEngine(collection_name, embedding_model),
+    }
+    return create_engine_from_registry(
+        engine_type,
+        registry=registry,
+        fallback_on_unknown=False,
+    )
 
 
 if __name__ == "__main__":

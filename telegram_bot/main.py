@@ -21,6 +21,7 @@ from tenacity import (
 
 from .bot import PropertyBot
 from .config import BotConfig
+from .integrations.polling_lock import PollingLockBusy
 from .logging_config import setup_logging
 from .observability import initialize_langfuse
 
@@ -77,7 +78,7 @@ async def main():
 
     try:
         await _start_with_retry()
-    except (TelegramUnauthorizedError, TelegramConflictError):
+    except (TelegramUnauthorizedError, TelegramConflictError, PollingLockBusy):
         logger.error("Fatal Telegram error — check bot token or stop other instances")
         raise
     except KeyboardInterrupt:

@@ -2,6 +2,7 @@
 
 from telegram_bot.services.catalog_session import (
     build_catalog_runtime,
+    clear_legacy_catalog_state,
     update_catalog_runtime_page,
 )
 
@@ -57,3 +58,41 @@ def test_catalog_states_exist() -> None:
     assert hasattr(CatalogSG, "results")
     assert hasattr(CatalogSG, "empty")
     assert hasattr(CatalogSG, "details")
+
+
+def test_clear_legacy_catalog_state_removes_parallel_browsing_keys() -> None:
+    cleaned = clear_legacy_catalog_state(
+        {
+            "catalog_runtime": {"query": "двушка", "results": [{"id": "apt-1"}]},
+            "apartment_results": [{"id": "legacy"}],
+            "apartment_offset": 10,
+            "apartment_total": 42,
+            "apartment_next_offset": "cursor",
+            "apartment_filters": {"rooms": 2},
+            "apartment_footer_msg_id": 777,
+            "bookmark_message_ids": [100],
+        }
+    )
+
+    assert cleaned["catalog_runtime"]["query"] == "двушка"
+    assert "apartment_results" not in cleaned
+    assert "apartment_offset" not in cleaned
+    assert "apartment_total" not in cleaned
+    assert "apartment_next_offset" not in cleaned
+    assert "apartment_filters" not in cleaned
+    assert "apartment_footer_msg_id" not in cleaned
+    assert cleaned["bookmark_message_ids"] == [100]
+
+
+def test_clear_legacy_catalog_state_keeps_unrelated_keys() -> None:
+    cleaned = clear_legacy_catalog_state(
+        {
+            "catalog_runtime": {"source": "free_text"},
+            "bookmark_message_ids": [55],
+            "other_key": "keep-me",
+        }
+    )
+
+    assert cleaned["catalog_runtime"]["source"] == "free_text"
+    assert cleaned["bookmark_message_ids"] == [55]
+    assert cleaned["other_key"] == "keep-me"

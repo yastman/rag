@@ -1,40 +1,44 @@
-# src/ingestion/unified/__init__.py
 """Unified ingestion pipeline package."""
 
-from importlib import import_module
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+from src._compat import load_deprecated_package_export
 
 
-__all__ = [
-    "FileState",
-    "QdrantHybridWriter",
-    "UnifiedConfig",
-    "UnifiedStateManager",
-    "WriteStats",
-]
-
-
-if TYPE_CHECKING:
-    from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.qdrant_writer import QdrantHybridWriter, WriteStats
-    from src.ingestion.unified.state_manager import FileState, UnifiedStateManager
-
-
-_LAZY_ATTRS = {
-    "UnifiedConfig": ("src.ingestion.unified.config", "UnifiedConfig"),
-    "QdrantHybridWriter": ("src.ingestion.unified.qdrant_writer", "QdrantHybridWriter"),
-    "WriteStats": ("src.ingestion.unified.qdrant_writer", "WriteStats"),
-    "FileState": ("src.ingestion.unified.state_manager", "FileState"),
-    "UnifiedStateManager": ("src.ingestion.unified.state_manager", "UnifiedStateManager"),
+_DEPRECATED_EXPORTS = {
+    "FileState": (
+        "src.ingestion.unified.state_manager",
+        "FileState",
+        "from src.ingestion.unified.state_manager import FileState",
+    ),
+    "QdrantHybridWriter": (
+        "src.ingestion.unified.qdrant_writer",
+        "QdrantHybridWriter",
+        "from src.ingestion.unified.qdrant_writer import QdrantHybridWriter",
+    ),
+    "UnifiedConfig": (
+        "src.ingestion.unified.config",
+        "UnifiedConfig",
+        "from src.ingestion.unified.config import UnifiedConfig",
+    ),
+    "UnifiedStateManager": (
+        "src.ingestion.unified.state_manager",
+        "UnifiedStateManager",
+        "from src.ingestion.unified.state_manager import UnifiedStateManager",
+    ),
+    "WriteStats": (
+        "src.ingestion.unified.qdrant_writer",
+        "WriteStats",
+        "from src.ingestion.unified.qdrant_writer import WriteStats",
+    ),
 }
 
 
 def __getattr__(name: str) -> Any:
-    target = _LAZY_ATTRS.get(name)
+    """Resolve deprecated package exports lazily."""
+    target = _DEPRECATED_EXPORTS.get(name)
     if target is None:
         raise AttributeError(f"module 'src.ingestion.unified' has no attribute '{name}'")
-    module_name, attr_name = target
-    module = import_module(module_name)
-    value = getattr(module, attr_name)
+    value = load_deprecated_package_export(module_name=__name__, attr_name=name, target=target)
     globals()[name] = value
     return value

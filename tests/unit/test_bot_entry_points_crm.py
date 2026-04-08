@@ -176,12 +176,12 @@ async def test_cta_get_offer_passes_service_key() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test: results:viewing -> viewing_objects built from apartment_results
+# Test: results:viewing legacy route -> stale compat only
 # ---------------------------------------------------------------------------
 
 
-async def test_results_viewing_passes_objects_context() -> None:
-    """results:viewing -> viewing_objects contains first 5 results from FSM state."""
+async def test_results_viewing_is_stale_compat_only() -> None:
+    """results:viewing should no longer invoke phone collection from legacy callbacks."""
     bot = _create_bot()
     results = [
         {
@@ -204,15 +204,10 @@ async def test_results_viewing_passes_objects_context() -> None:
     ) as mock_collect:
         await bot.handle_results_callback(cb, state)
 
-    mock_collect.assert_awaited_once()
-    kwargs = mock_collect.call_args[1]
-    assert kwargs["service_key"] == "viewing"
-    viewing_objects = kwargs["viewing_objects"]
-    assert viewing_objects is not None
-    assert len(viewing_objects) == 5
-    assert viewing_objects[0]["id"] == "prop-0"
-    assert viewing_objects[0]["complex_name"] == "Complex 0"
-    assert viewing_objects[4]["id"] == "prop-4"
+    mock_collect.assert_not_awaited()
+    cb.message.answer.assert_awaited_once_with(
+        "Это устаревшая кнопка. Используйте актуальное меню ниже."
+    )
 
 
 # ---------------------------------------------------------------------------

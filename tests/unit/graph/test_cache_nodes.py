@@ -267,19 +267,24 @@ class TestCacheStoreNode:
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "generated answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
         result = await cache_store_node(state, _make_runtime(cache=cache))
 
-        cache.store_semantic.assert_awaited_once_with(
-            query="test query",
-            response="generated answer",
-            vector=[0.1] * 1024,
-            query_type="FAQ",
-            cache_scope="rag",
-        )
+        cache.store_semantic.assert_awaited_once()
+        call_kwargs = cache.store_semantic.await_args.kwargs
+        assert call_kwargs["query"] == "test query"
+        assert call_kwargs["response"] == "generated answer"
+        assert call_kwargs["vector"] == [0.1] * 1024
+        assert call_kwargs["query_type"] == "FAQ"
+        assert call_kwargs["cache_scope"] == "rag"
+        assert call_kwargs["metadata"]["response_state"] == "ok"
+        assert call_kwargs["metadata"]["cache_eligible"] is True
+        assert call_kwargs["metadata"]["schema_version"] == "v7"
         assert result["response"] == "generated answer"
 
     async def test_general_stores_to_semantic_cache(self):
@@ -288,6 +293,8 @@ class TestCacheStoreNode:
         state["query_type"] = "GENERAL"
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "generated answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
@@ -303,6 +310,8 @@ class TestCacheStoreNode:
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "generated answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
@@ -318,6 +327,8 @@ class TestCacheStoreNode:
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "generated answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
@@ -346,6 +357,25 @@ class TestCacheStoreNode:
         state["query_type"] = "GENERAL"
         state["query_embedding"] = None
         state["response"] = "answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+
+        await cache_store_node(state, _make_runtime(cache=cache))
+
+        cache.store_semantic.assert_not_awaited()
+
+    async def test_cache_store_node_skips_provider_fallback_response(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "⚠️ fallback text"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
+        state["fallback_used"] = True
+        state["safe_fallback_used"] = False
+        state["llm_provider_model"] = "fallback"
+        state["llm_timeout"] = True
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
