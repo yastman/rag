@@ -17,6 +17,11 @@ from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
 from telegram_bot.observability import get_client, observe
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.scoring import score, write_langfuse_scores
+from telegram_bot.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    maybe_store_semantic_response,
+)
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.grounding_policy import get_grounding_mode
 from telegram_bot.services.history_service import HistoryService
@@ -344,6 +349,11 @@ async def run_client_pipeline(
             latency_stages=result.get("latency_stages", {}),
             llm_call_count=int(result.get("llm_call_count", 0) or 0),
             grounding_mode=grounding_mode,
+            grade_confidence=(
+                float(result["grade_confidence"])
+                if isinstance(result.get("grade_confidence"), Real)
+                else None
+            ),
             config=config,
             message=message,
         )
@@ -362,7 +372,7 @@ async def run_client_pipeline(
 
     sources_html = ""
     documents_list: list[Any] = result.get("documents", [])
-    sources_required = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    sources_required = bool(getattr(config, "show_sources", False))
     if sources_required and documents_list:
         sources_html = format_sources(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
@@ -405,12 +415,43 @@ async def run_client_pipeline(
     topic_hint_value = topic_hint if isinstance(topic_hint, str) else ""
     result_grounding_mode: Any = result.get("grounding_mode")
     grounding_mode_value = result_grounding_mode if isinstance(result_grounding_mode, str) else ""
+    store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
+    grade_confidence = float(result.get("grade_confidence", 0.0))
+    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
+    confidence_threshold = (
+        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
+    )
+    decision = build_cacheability_decision(
+        result=result,
+        query_type=query_type,
+        grounding_mode=grounding_mode_value,
+        documents=documents_list,
+        cache_hit=bool(result.get("cache_hit", False)),
+        contextual=_is_contextual_query(user_text),
+        grade_confidence=grade_confidence,
+        confidence_threshold=confidence_threshold,
+        schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+    )
+    result["response_state"] = decision.response_state
+    result["degraded_reason"] = decision.degraded_reason
+    result["cache_eligible"] = decision.cache_eligible
+    result["store_reason"] = decision.store_reason
+
     trace_metadata = {
         "route": "client_direct",
         "pipeline_mode": "client_direct",
         "query_type": query_type,
         "topic_hint": topic_hint_value,
         "grounding_mode": grounding_mode_value,
+        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
+        "sources_count": int(result.get("sources_count", 0) or 0),
+        "grounded": bool(result.get("grounded", True)),
+        "legal_answer_safe": bool(result.get("legal_answer_safe", True)),
+        "semantic_cache_safe_reuse": bool(result.get("semantic_cache_safe_reuse", True)),
+        "safe_fallback_used": bool(result.get("safe_fallback_used", False)),
+        "response_state": decision.response_state,
+        "degraded_reason": decision.degraded_reason,
+        "cache_eligible": decision.cache_eligible,
         "collection": _safe_collection_name(config),
         "environment": _safe_langfuse_env(config),
         "pipeline_wall_ms": wall_ms,
@@ -419,34 +460,16 @@ async def run_client_pipeline(
     }
     _store.update(trace_metadata)
 
-    # Cache store — apply guards: type, contextual, confidence, source presence.
-    store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
-    grade_confidence = float(result.get("grade_confidence", 0.0))
-    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
-    confidence_threshold = (
-        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
-    )
-
-    should_store = (
-        cache
-        and response_text
-        and query_type in _PIPELINE_STORE_TYPES
-        and not result.get("cache_hit", False)
-        and isinstance(store_vector, list)
-        and bool(store_vector)
-        and not _is_contextual_query(user_text)
-        and grade_confidence >= confidence_threshold
-        and bool(documents_list)
-    )
-
-    if should_store:
+    if cache and isinstance(store_vector, list) and bool(store_vector):
         try:
-            await cache.store_semantic(
+            await maybe_store_semantic_response(
+                cache=cache,
                 query=user_text,
                 response=response_text,
                 vector=store_vector,
                 query_type=query_type,
                 cache_scope="rag",
+                decision=decision,
                 agent_role=role,
             )
         except Exception:

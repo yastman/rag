@@ -8,6 +8,7 @@ from qdrant_client import models
 
 import src.retrieval.search_engines as search_engines
 from src.config.constants import SearchEngine
+from src.retrieval.search_engine_shared import lexical_weights_to_sparse as shared_sparse
 from src.retrieval.search_engines import (
     BaselineSearchEngine,
     DBSFColBERTSearchEngine,
@@ -18,6 +19,7 @@ from src.retrieval.search_engines import (
     create_search_engine,
     lexical_weights_to_sparse,
 )
+from src.utils.serialization import convert_to_python_types as shared_convert
 
 
 class TestSearchResult:
@@ -51,6 +53,10 @@ class TestSearchResult:
 
 class TestConvertToPythonTypes:
     """Test numpy type conversion."""
+
+    def test_retrieval_module_reexports_shared_helper(self):
+        """Test helper is re-exported from shared serialization module."""
+        assert convert_to_python_types is shared_convert
 
     def test_convert_numpy_array(self):
         """Test numpy array to list conversion."""
@@ -539,6 +545,10 @@ class TestCreateSearchEngine:
 
 class TestSparseVectorConversion:
     """Test sparse vector conversion to Qdrant models."""
+
+    def test_retrieval_module_reexports_shared_sparse_helper(self):
+        """Test sparse helper is re-exported from shared module."""
+        assert lexical_weights_to_sparse is shared_sparse
 
     def test_convert_lexical_weights_to_sparse_vector(self):
         """Test converting BGE-M3 lexical weights to Qdrant SparseVector."""

@@ -5,8 +5,10 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -28,6 +30,28 @@ def setup_logging(verbose: bool = False) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("cocoindex").setLevel(logging.INFO)
+
+
+def _inspect_sync_dir(
+    sync_dir: Path, supported_extensions: frozenset[str]
+) -> dict[str, int | bool]:
+    """Inspect ingestion source directory health."""
+    exists = sync_dir.exists()
+    is_dir = sync_dir.is_dir()
+    supported_files = 0
+
+    if exists and is_dir:
+        supported_files = sum(
+            1
+            for path in sync_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in supported_extensions
+        )
+
+    return {
+        "exists": exists,
+        "is_dir": is_dir,
+        "supported_files": supported_files,
+    }
 
 
 @observe(name="ingestion-cli-run", capture_input=False, capture_output=False)
@@ -70,6 +94,7 @@ async def cmd_status(args: argparse.Namespace) -> int:
     try:
         stats = await manager.get_stats()
         dlq_count = await manager.get_dlq_count()
+        sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
 
         print("\n=== Ingestion Status ===")
         total = sum(stats.values())
@@ -80,6 +105,12 @@ async def cmd_status(args: argparse.Namespace) -> int:
         print(f"\n  DLQ: {dlq_count} items")
         print(f"  Collection: {config.collection_name}")
         print(f"  Sync dir: {config.sync_dir}")
+        if sync_info["exists"] and sync_info["is_dir"]:
+            print(f"  Supported files: {sync_info['supported_files']}")
+        elif not sync_info["exists"]:
+            print("  Supported files: n/a (sync dir missing)")
+        else:
+            print("  Supported files: n/a (sync dir is not a directory)")
     finally:
         await manager.close()
 
@@ -91,12 +122,14 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     """Check that all ingestion dependencies are reachable."""
     import httpx
 
+    from src.ingestion.docling_native import NativeDoclingAdapter
     from src.ingestion.unified.config import UnifiedConfig
 
     config = UnifiedConfig()
     try_update_ingestion_trace(command="preflight", status="started")
     timeout = httpx.Timeout(float(os.getenv("BGE_M3_TIMEOUT", "60")))
     results: dict[str, bool] = {}
+    sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         # Qdrant reachable + collection exists
@@ -145,20 +178,31 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
             results["bge_m3_sparse"] = False
             print(f"  [FAIL] BGE-M3 sparse ({config.bge_m3_url}) — {e}")
 
-        # Docling service
-        try:
-            resp = await client.get(f"{config.docling_url}/health")
-            results["docling"] = resp.status_code == 200
-            if results["docling"]:
-                print(f"  [OK] Docling ({config.docling_url})")
-            else:
-                print(f"  [FAIL] Docling — HTTP {resp.status_code}")
-        except Exception as e:
-            results["docling"] = False
-            print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
+        # Docling backend
+        if config.docling_backend == "docling_native":
+            try:
+                NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)._get_converter()
+                results["docling"] = True
+                print("  [OK] Docling native backend available")
+            except Exception as e:
+                results["docling"] = False
+                print(f"  [FAIL] Docling native backend — {e}")
+        else:
+            try:
+                resp = await client.get(f"{config.docling_url}/health")
+                results["docling"] = resp.status_code == 200
+                if results["docling"]:
+                    print(f"  [OK] Docling ({config.docling_url})")
+                else:
+                    print(f"  [FAIL] Docling — HTTP {resp.status_code}")
+            except Exception as e:
+                results["docling"] = False
+                print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
 
     # Required env vars
-    required_vars = ["QDRANT_URL", "BGE_M3_URL", "DOCLING_URL", "INGESTION_DATABASE_URL"]
+    required_vars = ["QDRANT_URL", "BGE_M3_URL", "INGESTION_DATABASE_URL"]
+    if config.docling_backend != "docling_native":
+        required_vars.append("DOCLING_URL")
     missing = [v for v in required_vars if not os.getenv(v)]
     if missing:
         results["env_vars"] = False
@@ -166,6 +210,18 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     else:
         results["env_vars"] = True
         print("  [OK] All required env vars set")
+
+    if not sync_info["exists"]:
+        results["sync_dir"] = False
+        print(f"  [FAIL] Sync dir missing: {config.sync_dir}")
+    elif not sync_info["is_dir"]:
+        results["sync_dir"] = False
+        print(f"  [FAIL] Sync dir is not a directory: {config.sync_dir}")
+    else:
+        results["sync_dir"] = True
+        print(
+            f"  [OK] Sync dir: {config.sync_dir} ({sync_info['supported_files']} supported files)"
+        )
 
     # Summary
     ok = sum(1 for v in results.values() if v)
@@ -418,6 +474,50 @@ async def cmd_reprocess(args: argparse.Namespace) -> int:
     from src.ingestion.unified.config import UnifiedConfig
     from src.ingestion.unified.state_manager import UnifiedStateManager
 
+    async def _tracking_tables(pool) -> list[str]:
+        rows = await pool.fetch(
+            """
+            SELECT tablename
+            FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename LIKE 'unified\\_\\_ingest\\_%\\_\\_cocoindex\\_tracking' ESCAPE '\\'
+            """
+        )
+        return [row["tablename"] for row in rows]
+
+    async def _purge_tracking_rows(pool, source_paths: list[str]) -> int:
+        if not source_paths:
+            return 0
+
+        total_deleted = 0
+        source_keys = [f'"{source_path}"' for source_path in source_paths]
+        for table_name in await _tracking_tables(pool):
+            if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
+                raise ValueError(f"Unexpected tracking table name: {table_name}")
+            delete_query = f"DELETE FROM {table_name} WHERE source_key = ANY($1::jsonb[])"  # nosec B608
+            deleted = await pool.execute(
+                delete_query,
+                source_keys,
+            )
+            total_deleted += int(deleted.split()[-1])
+        return total_deleted
+
+    def _touch_source_files(sync_dir: Path, source_paths: list[str]) -> int:
+        touched = 0
+        for source_path in source_paths:
+            relative = Path(source_path)
+            candidates = [
+                relative,
+                sync_dir / relative,
+                sync_dir.parent / relative,
+            ]
+            for candidate in candidates:
+                if candidate.exists() and candidate.is_file():
+                    candidate.touch()
+                    touched += 1
+                    break
+        return touched
+
     config = UnifiedConfig()
     manager = UnifiedStateManager(database_url=config.database_url)
 
@@ -425,23 +525,44 @@ async def cmd_reprocess(args: argparse.Namespace) -> int:
         pool = await manager._get_pool()
 
         if args.file_id:
-            # Reset specific file
-            await pool.execute(
-                "UPDATE ingestion_state SET status = 'pending', retry_count = 0, "
-                "retry_after = NULL WHERE file_id = $1",
+            rows = await pool.fetch(
+                "SELECT source_path FROM ingestion_state WHERE file_id = $1",
                 args.file_id,
             )
-            print(f"Reset file: {args.file_id}")
-        elif args.errors:
-            # Reset all errors
+            source_paths = [row["source_path"] for row in rows if row["source_path"]]
+            await pool.execute(
+                "UPDATE ingestion_state SET status = 'pending', retry_count = 0, "
+                "retry_after = NULL, error_message = NULL WHERE file_id = $1",
+                args.file_id,
+            )
+            purged = await _purge_tracking_rows(pool, source_paths)
+            touched = _touch_source_files(config.sync_dir, source_paths)
+            print(
+                f"Reset file: {args.file_id} "
+                f"(purged tracking rows: {purged}, touched files: {touched})"
+            )
+        else:
+            target_status = "error" if args.errors else "pending" if args.pending else None
+            if target_status is None:
+                print("Specify --file-id, --errors, or --pending")
+                return 1
+
+            rows = await pool.fetch(
+                "SELECT source_path FROM ingestion_state WHERE status = $1",
+                target_status,
+            )
+            source_paths = [row["source_path"] for row in rows if row["source_path"]]
             result = await pool.execute(
                 "UPDATE ingestion_state SET status = 'pending', retry_count = 0, "
-                "retry_after = NULL WHERE status = 'error'"
+                "retry_after = NULL, error_message = NULL WHERE status = $1",
+                target_status,
             )
-            print(f"Reset error files: {result}")
-        else:
-            print("Specify --file-id or --errors")
-            return 1
+            purged = await _purge_tracking_rows(pool, source_paths)
+            touched = _touch_source_files(config.sync_dir, source_paths)
+            print(
+                f"Reset {target_status} files: {result} "
+                f"(purged tracking rows: {purged}, touched files: {touched})"
+            )
     finally:
         await manager.close()
 
@@ -595,6 +716,7 @@ def main() -> int:
     reprocess_p = subparsers.add_parser("reprocess", help="Reprocess files")
     reprocess_p.add_argument("--file-id", help="Specific file ID")
     reprocess_p.add_argument("--errors", action="store_true", help="All error files")
+    reprocess_p.add_argument("--pending", action="store_true", help="All pending files")
 
     args = parser.parse_args()
     setup_logging(args.verbose)
