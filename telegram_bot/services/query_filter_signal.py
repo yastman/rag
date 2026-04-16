@@ -36,7 +36,10 @@ _BATHROOMS_RE = re.compile(
     r"\b(?:\d+\s*санузл\w*|(?:один|одна|два|две|двумя|три)\s+сануз\w*)\b",
     re.IGNORECASE,
 )
-_FURNITURE_RE = re.compile(r"\b(?:с\s+мебелью|мебел\w*|обставлен\w*)\b", re.IGNORECASE)
+_FURNITURE_RE = re.compile(
+    r"\b(?:с\s+мебелью|мебел\w*|меблирован\w*|обставлен\w*)\b",
+    re.IGNORECASE,
+)
 _YEAR_ROUND_RE = re.compile(
     r"\b(?:круглогодич\w*|круглый\s+год|зимой\s+(?:можно|работает|жить)|year[- ]round)\b",
     re.IGNORECASE,
