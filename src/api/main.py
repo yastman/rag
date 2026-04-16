@@ -27,7 +27,6 @@ async def lifespan(app: FastAPI):
     from telegram_bot.graph.config import GraphConfig
     from telegram_bot.graph.graph import build_graph
     from telegram_bot.integrations.cache import CacheLayerManager
-    from telegram_bot.services.colbert_reranker import ColbertRerankerService
     from telegram_bot.services.qdrant import QdrantService
 
     cfg = GraphConfig.from_env()
@@ -51,7 +50,7 @@ async def lifespan(app: FastAPI):
 
     reranker = None
     if cfg.rerank_provider == "colbert":
-        reranker = ColbertRerankerService(base_url=cfg.bge_m3_url)
+        logger.info("Reranking via server-side Qdrant ColBERT path")
     elif cfg.rerank_provider != "none":
         logger.warning("Unknown RERANK_PROVIDER=%s, reranking disabled", cfg.rerank_provider)
     llm = cfg.create_llm()
