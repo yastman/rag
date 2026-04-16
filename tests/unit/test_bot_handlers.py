@@ -137,6 +137,22 @@ class TestPreAgentStateContract:
 
         assert contract["filters"] == filters
 
+    def test_bot_pre_agent_state_contract_uses_existing_filters(self):
+        from telegram_bot.bot import _build_pre_agent_state_contract
+
+        rag_result_store = {"filters": {"city": "Несебр", "price": {"lte": 80000}}}
+        contract = _build_pre_agent_state_contract(
+            rag_result_store=rag_result_store,
+            query_type="FAQ",
+            topic_hint="finance",
+            dense_vector=[0.1, 0.2],
+            sparse_vector={"indices": [1], "values": [0.5]},
+            colbert_query=[[0.2] * 4],
+            grounding_mode="normal",
+        )
+
+        assert contract["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
+
 
 class TestErrorUtils:
     def test_walk_traceback_frames_returns_function_names(self):
