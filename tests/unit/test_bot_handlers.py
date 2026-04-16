@@ -233,6 +233,24 @@ class TestPropertyBotInit:
         # First call is main collection (with timeout), second is apartments
         assert mock_qdrant.call_args_list[0].kwargs["timeout"] == 7
 
+    def test_init_keeps_colbert_runtime_server_side(self, mock_config):
+        """PropertyBot should not instantiate deprecated client-side ColBERT reranker."""
+        mock_config.rerank_provider = "colbert"
+        with (
+            patch("telegram_bot.bot.Bot"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+            patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+        ):
+            bot = PropertyBot(mock_config)
+
+        assert bot._reranker is None
+        mock_colbert.assert_not_called()
+
 
 class TestCommandHandlers:
     """Test command handlers."""
