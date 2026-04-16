@@ -153,6 +153,35 @@ class TestPreAgentStateContract:
 
         assert contract["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
 
+    def test_coerce_pre_agent_state_contract_backfills_empty_existing_filters(self):
+        from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
+
+        store = {
+            "filters": {"city": "Несебр", "price": {"lte": 80000}},
+            "state_contract": {
+                "cache_checked": True,
+                "cache_hit": False,
+                "cache_scope": "rag",
+                "embedding_bundle_ready": True,
+                "embedding_bundle_version": "bge_m3_hybrid_colbert",
+                "query_type": "FAQ",
+                "topic_hint": "finance",
+                "filters": {},
+                "retrieval_policy": "topic_then_relax",
+                "grounding_mode": "normal",
+            },
+        }
+
+        contract = coerce_pre_agent_state_contract(
+            store,
+            query_type="FAQ",
+            topic_hint="finance",
+            grounding_mode="normal",
+        )
+
+        assert contract is not None
+        assert contract["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
+
 
 class TestErrorUtils:
     def test_walk_traceback_frames_returns_function_names(self):
