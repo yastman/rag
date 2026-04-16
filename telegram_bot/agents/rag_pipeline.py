@@ -29,7 +29,9 @@ from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
 )
+from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.services.query_preprocessor import expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
@@ -146,6 +148,8 @@ async def _cache_check(
     pre_computed_sparse: Any = None,
     pre_computed_colbert: list[list[float]] | None = None,
     semantic_cache_already_checked: bool = False,
+    semantic_cache_filter_sensitive: bool = False,
+    semantic_cache_filter_signature: str | None = None,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -205,11 +209,18 @@ async def _cache_check(
         }
 
     # Step 2: Check semantic cache via shared core
-    if semantic_cache_already_checked:
+    if semantic_cache_already_checked or (
+        semantic_cache_filter_sensitive and semantic_cache_filter_signature is None
+    ):
         hit, cached = False, None
     else:
         hit, cached = await check_semantic_cache(
-            query, embedding, query_type, cache=cache, agent_role=agent_role
+            query,
+            embedding,
+            query_type,
+            cache=cache,
+            agent_role=agent_role,
+            filter_signature=semantic_cache_filter_signature,
         )
 
     latency = time.perf_counter() - start
@@ -943,6 +954,16 @@ async def rag_pipeline(
     contract_filters = state_contract.get("filters") if state_contract is not None else None
     topic_hint = contract_topic_hint or get_query_topic_hint(query)
     semantic_cache_prechecked = semantic_cache_already_checked
+    semantic_cache_filter_signature = resolve_semantic_cache_signature(
+        filters=contract_filters if isinstance(contract_filters, dict) else None
+    )
+    semantic_cache_filter_sensitive = (
+        detect_filter_sensitive_query(cache_key).is_filter_sensitive
+        if semantic_cache_filter_signature is None
+        else True
+    )
+    if semantic_cache_filter_sensitive and semantic_cache_filter_signature is None:
+        semantic_cache_prechecked = True
 
     # Step 1: Cache check (use cache_key = original user query)
     # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
@@ -978,6 +999,8 @@ async def rag_pipeline(
             pre_computed_sparse=pre_computed_sparse,
             pre_computed_colbert=pre_computed_colbert,
             semantic_cache_already_checked=semantic_cache_prechecked,
+            semantic_cache_filter_sensitive=semantic_cache_filter_sensitive,
+            semantic_cache_filter_signature=semantic_cache_filter_signature,
         )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
