@@ -50,6 +50,7 @@ def test_detect_filter_sensitive_query_for_remaining_supported_filters(
         ("квартира на 4", "floor"),
         ("квартира с двумя санузлами", "bathrooms"),
         ("обставленная квартира", "furniture"),
+        ("меблированная квартира", "furniture"),
         ("апартамент для жизни круглый год", "year_round"),
         ("зимой можно жить", "year_round"),
     ],
