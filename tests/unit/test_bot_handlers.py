@@ -3271,6 +3271,32 @@ class TestPreAgentCacheCheck:
         sent_text = message.answer.call_args_list[0].args[0]
         assert "Ответ из кеша" in sent_text
 
+    async def test_pre_agent_plain_faq_cache_hit_does_not_require_filter_extraction(
+        self, mock_config
+    ):
+        """Plain FAQ cache hits should not call filter extraction before semantic cache lookup."""
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
+        bot._extract_pre_agent_filters = AsyncMock(side_effect=AssertionError("must not be used"))
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("как оформить покупку")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_agent.ainvoke.assert_not_called()
+        bot._cache.check_semantic.assert_awaited_once()
+
     async def test_pre_agent_cache_miss_proceeds_to_agent(self, mock_config):
         """On pre-agent cache MISS, agent.ainvoke is called and embedding is stashed (#563)."""
         bot, _ = _create_bot(mock_config)
@@ -3351,11 +3377,12 @@ class TestPreAgentCacheCheck:
 
     async def test_pre_agent_filters_skip_semantic_cache_lookup(self, mock_config):
         """Filtered queries must bypass pre-agent semantic cache reuse."""
+        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10
         self._setup_cache_mocks(bot, embedding=test_embedding, cached_response="unsafe cache hit")
 
-        extracted_filters = {"city": "Несебр"}
         stashed_store: dict = {}
 
         async def _capture_invoke(*args, **kwargs):
@@ -3364,13 +3391,6 @@ class TestPreAgentCacheCheck:
 
         mock_agent = AsyncMock()
         mock_agent.ainvoke = _capture_invoke
-        mock_analyzer = MagicMock()
-        mock_analyzer.analyze = AsyncMock(
-            return_value={
-                "filters": extracted_filters,
-                "semantic_query": "квартира в Несебре",
-            }
-        )
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
@@ -3378,7 +3398,11 @@ class TestPreAgentCacheCheck:
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.services.query_analyzer.QueryAnalyzer", return_value=mock_analyzer),
+            patch(
+                "telegram_bot.bot.detect_filter_sensitive_query",
+                return_value=QueryFilterSignal(True, ("city",)),
+                create=True,
+            ),
         ):
             message = _make_text_message("квартира в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3386,8 +3410,7 @@ class TestPreAgentCacheCheck:
                 await bot.handle_query(message)
 
         bot._cache.check_semantic.assert_not_awaited()
-        assert stashed_store["filters"] == extracted_filters
-        assert stashed_store["state_contract"]["filters"] == extracted_filters
+        assert stashed_store.get("semantic_cache_already_checked") is True
 
     async def test_pre_agent_cache_skip_chitchat(self, mock_config):
         """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (#563)."""
@@ -4287,7 +4310,9 @@ class TestTextPathSemanticCachePolicy:
         assert metadata["cache_eligible"] is True
         assert metadata["schema_version"] == "v7"
 
-    async def test_text_path_filtered_result_skips_semantic_store(self, mock_config):
+    async def test_text_path_filtered_result_stores_semantic_with_filter_signature(
+        self, mock_config
+    ):
         bot, _ = _create_bot(mock_config)
         bot._cache = AsyncMock()
         bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
@@ -4331,7 +4356,8 @@ class TestTextPathSemanticCachePolicy:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        bot._cache.store_semantic.assert_not_awaited()
+        bot._cache.store_semantic.assert_awaited_once()
+        assert bot._cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
 
 
 class TestClearCacheCommand:
