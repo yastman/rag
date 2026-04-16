@@ -240,7 +240,9 @@ async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qd
     mock_sparse.aembed_query.assert_not_awaited()
 
 
-async def test_hybrid_retrieve_stores_relaxed_results_under_final_filters(mock_cache, mock_sparse):
+async def test_hybrid_retrieve_does_not_store_relaxed_results_under_strict_filters(
+    mock_cache, mock_sparse
+):
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
 
     user_filters = {"city": "Несебр", "price": {"lte": 80000}}
@@ -281,18 +283,10 @@ async def test_hybrid_retrieve_stores_relaxed_results_under_final_filters(mock_c
         },
     )
     store_calls = mock_cache.store_search_results.await_args_list
-    assert len(store_calls) == 2
+    assert len(store_calls) == 1
     assert store_calls[0].args[0] == [0.1] * 1024
-    assert store_calls[0].args[1] == {
-        "city": "Несебр",
-        "price": {"lte": 80000},
-        "topic": "finance",
-        "doc_type": "faq",
-    }
+    assert store_calls[0].args[1] == user_filters
     assert len(store_calls[0].args[2]) == 3
-    assert store_calls[1].args[0] == [0.1] * 1024
-    assert store_calls[1].args[1] == user_filters
-    assert len(store_calls[1].args[2]) == 3
 
 
 async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(mock_cache, mock_sparse):
