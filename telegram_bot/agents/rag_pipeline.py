@@ -29,7 +29,9 @@ from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
 )
+from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.services.query_preprocessor import expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
@@ -146,6 +148,8 @@ async def _cache_check(
     pre_computed_sparse: Any = None,
     pre_computed_colbert: list[list[float]] | None = None,
     semantic_cache_already_checked: bool = False,
+    semantic_cache_filter_sensitive: bool = False,
+    semantic_cache_filter_signature: str | None = None,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -205,11 +209,18 @@ async def _cache_check(
         }
 
     # Step 2: Check semantic cache via shared core
-    if semantic_cache_already_checked:
+    if semantic_cache_already_checked or (
+        semantic_cache_filter_sensitive and semantic_cache_filter_signature is None
+    ):
         hit, cached = False, None
     else:
         hit, cached = await check_semantic_cache(
-            query, embedding, query_type, cache=cache, agent_role=agent_role
+            query,
+            embedding,
+            query_type,
+            cache=cache,
+            agent_role=agent_role,
+            filter_signature=semantic_cache_filter_signature,
         )
 
     latency = time.perf_counter() - start
@@ -301,6 +312,7 @@ async def _hybrid_retrieve(
     embeddings: Any | None = None,
     colbert_query: list[list[float]] | None = None,
     sparse_embedding: Any = None,
+    filters: dict[str, Any] | None = None,
     topic_hint: str | None = None,
     top_k: int = 20,
     latency_stages: dict[str, float],
@@ -366,10 +378,35 @@ async def _hybrid_retrieve(
     if not dense_vector:
         dense_vector = []
 
+    # Step 1: Compute retrieval filters before touching the search cache.
+    colbert_search_used = False
+    normalized_query = query.strip().lower()
+    query_word_count = len(normalized_query.split()) if normalized_query else 0
+    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
+    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
+    topic_filters = dict(base_filters or {})
+    if topic_hint:
+        topic_filters["topic"] = topic_hint
+
+    active_filters = dict(topic_filters) if topic_filters else None
+    relaxed_filters = dict(base_filters) if base_filters else None
+    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+    initial_results_count: int | None = None
+    retrieval_relaxed_from_topic_filter = False
+    retrieval_relax_stage: str | None = None
+    qdrant_search_attempts = 0
+    if prefer_faq_doc_type and topic_hint:
+        active_filters = dict(topic_filters)
+        active_filters["doc_type"] = "faq"
+        relaxed_filters = dict(topic_filters) if topic_filters else None
+        initial_filters = dict(active_filters)
+        final_filters = dict(active_filters)
+
     start = time.perf_counter()
 
-    # Step 1: Check search cache
-    cached_results = await cache.get_search_results(dense_vector)
+    # Step 2: Check search cache
+    cached_results = await cache.get_search_results(dense_vector, initial_filters)
     if cached_results is not None:
         latency = time.perf_counter() - start
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
@@ -379,6 +416,8 @@ async def _hybrid_retrieve(
                 "results_count": len(cached_results),
                 "search_cache_hit": True,
                 "duration_ms": round(latency * 1000, 1),
+                "initial_filters": initial_filters,
+                "final_filters": initial_filters,
                 "eval_query": query[:2000],
                 "eval_docs": "\n\n".join(
                     f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
@@ -397,34 +436,18 @@ async def _hybrid_retrieve(
             "retrieved_context": cached_ctx,
             "rerank_applied": False,
             "colbert_query": colbert_query,
+            "initial_filters": initial_filters,
+            "final_filters": initial_filters,
         }
 
-    # Step 2: Get sparse embedding (cached or compute)
+    # Step 3: Get sparse embedding only after a confirmed search-cache miss.
     if sparse_vector is None:
         sparse_vector = await cache.get_sparse_embedding(query)
         if sparse_vector is None:
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
-    colbert_search_used = False
-    normalized_query = query.strip().lower()
-    query_word_count = len(normalized_query.split()) if normalized_query else 0
-    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
-    filters = {"topic": topic_hint} if topic_hint else None
-    relaxed_filters: dict[str, str] | None = None
-    initial_filters = dict(filters) if isinstance(filters, dict) else None
-    final_filters = dict(filters) if isinstance(filters, dict) else None
-    initial_results_count: int | None = None
-    retrieval_relaxed_from_topic_filter = False
-    retrieval_relax_stage: str | None = None
-    qdrant_search_attempts = 0
-    if prefer_faq_doc_type and topic_hint:
-        filters = {"topic": topic_hint, "doc_type": "faq"}
-        relaxed_filters = {"topic": topic_hint}
-        initial_filters = dict(filters)
-        final_filters = dict(filters)
-
+    # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
     results, search_meta, colbert_used = await _run_initial_retrieval(
@@ -432,23 +455,28 @@ async def _hybrid_retrieve(
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         colbert_query=colbert_query,
-        filters=filters,
+        filters=active_filters,
         top_k=top_k,
     )
     colbert_search_used = colbert_search_used or colbert_used
     qdrant_search_attempts += 1
     initial_results_count = len(results)
 
-    if filters and len(results) < 3:
+    if active_filters and len(results) < 3 and active_filters != relaxed_filters:
         logger.info(
             "metric",
             extra={"metric_name": "topic_filter_fallback", "value": 1},
         )
         retrieval_relaxed_from_topic_filter = True
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        retrieval_relax_stage = (
-            "topic_and_doc_type_to_topic" if relaxed_filters is not None else "topic_to_none"
-        )
+        if prefer_faq_doc_type:
+            retrieval_relax_stage = (
+                "topic_and_doc_type_to_topic"
+                if fallback_filters is not None
+                else "topic_and_doc_type_to_none"
+            )
+        else:
+            retrieval_relax_stage = "topic_to_user_filters" if fallback_filters else "topic_to_none"
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
@@ -461,26 +489,33 @@ async def _hybrid_retrieve(
         qdrant_search_attempts += 1
         final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
 
-    if relaxed_filters is not None and len(results) < 3:
-        retrieval_relax_stage = "topic_to_none"
+    if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
+        retrieval_relax_stage = "topic_to_user_filters" if base_filters is not None else "topic_to_none"
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
-            filters=None,
+            filters=base_filters,
             top_k=top_k,
         )
         colbert_search_used = colbert_search_used or colbert_used
         qdrant_search_attempts += 1
-        final_filters = None
+        final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
 
     if not results:
         logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
 
-    # Step 4: Cache results
+    # Step 5: Cache results
     if results and not search_meta.get("backend_error", False):
-        await cache.store_search_results(dense_vector, None, results)
+        stored_filters: list[dict[str, Any] | None] = []
+        cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
+        for cache_filters in cache_targets:
+            normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
+            if normalized_filters in stored_filters:
+                continue
+            await cache.store_search_results(dense_vector, normalized_filters, results)
+            stored_filters.append(normalized_filters)
 
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
@@ -916,8 +951,19 @@ async def rag_pipeline(
     current_query = query
     query_embedding: list[float] | None = None
     contract_topic_hint = state_contract.get("topic_hint") if state_contract is not None else None
+    contract_filters = state_contract.get("filters") if state_contract is not None else None
     topic_hint = contract_topic_hint or get_query_topic_hint(query)
     semantic_cache_prechecked = semantic_cache_already_checked
+    semantic_cache_filter_signature = resolve_semantic_cache_signature(
+        filters=contract_filters if isinstance(contract_filters, dict) else None
+    )
+    semantic_cache_filter_sensitive = (
+        detect_filter_sensitive_query(cache_key).is_filter_sensitive
+        if semantic_cache_filter_signature is None
+        else True
+    )
+    if semantic_cache_filter_sensitive and semantic_cache_filter_signature is None:
+        semantic_cache_prechecked = True
 
     # Step 1: Cache check (use cache_key = original user query)
     # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
@@ -953,6 +999,8 @@ async def rag_pipeline(
             pre_computed_sparse=pre_computed_sparse,
             pre_computed_colbert=pre_computed_colbert,
             semantic_cache_already_checked=semantic_cache_prechecked,
+            semantic_cache_filter_sensitive=semantic_cache_filter_sensitive,
+            semantic_cache_filter_signature=semantic_cache_filter_signature,
         )
     semantic_cache_already_checked = semantic_cache_prechecked
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
@@ -1028,6 +1076,7 @@ async def rag_pipeline(
             embeddings=embeddings,
             colbert_query=colbert_query,
             sparse_embedding=query_sparse,
+            filters=contract_filters if isinstance(contract_filters, dict) else None,
             topic_hint=topic_hint,
             latency_stages=latency_stages,
         )

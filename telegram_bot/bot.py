@@ -64,12 +64,14 @@ from .services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
 )
 from .services.error_utils import walk_traceback_frames
 from .services.forum_bridge import ForumBridge
 from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
 from .services.metrics import PipelineMetrics
+from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
@@ -77,6 +79,7 @@ from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 if TYPE_CHECKING:
     from .agents.context import BotContext as BotContextType
+    from .pipelines.state_contract import PreAgentStateContract
     from .services.history_service import HistoryService
 else:
     BotContextType = Any
@@ -124,6 +127,35 @@ def detect_injection(*args: Any, **kwargs: Any) -> Any:
     from .graph.nodes.guard import detect_injection as _detect_injection
 
     return _detect_injection(*args, **kwargs)
+
+
+def _build_pre_agent_state_contract(
+    *,
+    rag_result_store: dict[str, Any],
+    query_type: str,
+    topic_hint: str | None,
+    dense_vector: list[float] | None,
+    sparse_vector: dict[str, Any] | None,
+    colbert_query: list[list[float]] | None,
+    grounding_mode: str,
+    filters: dict[str, Any] | None = None,
+) -> "PreAgentStateContract":
+    """Build the shared pre-agent contract and preserve any upstream filters."""
+    from .pipelines.state_contract import build_pre_agent_miss_contract
+
+    resolved_filters = filters
+    if resolved_filters is None:
+        store_filters = rag_result_store.get("filters")
+        resolved_filters = store_filters if isinstance(store_filters, dict) else None
+    return build_pre_agent_miss_contract(
+        query_type=query_type,
+        topic_hint=topic_hint,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        grounding_mode=grounding_mode,
+        filters=resolved_filters if isinstance(resolved_filters, dict) else None,
+    )
 
 
 async def _stream_agent_to_draft(
@@ -638,12 +670,31 @@ class PropertyBot:
 
         # Track initialization state
         self._cache_initialized = False
+        self._pre_agent_filter_extractor: Any | None = None
 
         # Setup middlewares (before handlers)
         self._setup_middlewares()
 
         # Register handlers
         self._register_handlers()
+
+    def _get_pre_agent_filter_extractor(self) -> Any:
+        """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
+        if self._pre_agent_filter_extractor is None:
+            from .services.filter_extractor import FilterExtractor
+
+            self._pre_agent_filter_extractor = FilterExtractor()
+        return self._pre_agent_filter_extractor
+
+    async def _extract_pre_agent_filters(self, query: str) -> dict[str, Any]:
+        """Extract structured retrieval filters for the active bot path."""
+        try:
+            extractor = self._get_pre_agent_filter_extractor()
+            filters = extractor.extract_filters(query)
+        except Exception:
+            logger.warning("Pre-agent filter extraction failed, continuing without filters")
+            return {}
+        return dict(filters) if isinstance(filters, dict) else {}
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
@@ -2718,7 +2769,6 @@ class PropertyBot:
         from .agents.rag_tool import rag_search
         from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
         from .graph.nodes.guard import _BLOCKED_RESPONSE
-        from .pipelines.state_contract import build_pre_agent_miss_contract
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -2806,6 +2856,7 @@ class PropertyBot:
             # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
             query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
+                extracted_filters: dict[str, Any] = {}
                 try:
                     embed_start = time.perf_counter()
                     embedding = await self._cache.get_embedding(user_text)
@@ -2866,6 +2917,9 @@ class PropertyBot:
                         query_type=query_type,
                         topic_hint=topic_hint,
                     )
+                    filter_signal = detect_filter_sensitive_query(user_text)
+                    rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
+                    rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
                     rag_result_store["topic_hint"] = topic_hint or ""
                     rag_result_store["grounding_mode"] = grounding_mode
                     if grounding_mode == "strict":
@@ -2875,20 +2929,24 @@ class PropertyBot:
                         rag_result_store.setdefault("legal_answer_safe", True)
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
                         rag_result_store.setdefault("safe_fallback_used", False)
-                    check_start = time.perf_counter()
-                    cached = await self._cache.check_semantic(
-                        query=user_text,
-                        vector=embedding,
-                        query_type=query_type,
-                        cache_scope="rag",
-                        agent_role=role,
-                        grounding_mode=grounding_mode if grounding_mode == "strict" else None,
-                        require_safe_reuse=grounding_mode == "strict",
-                    )
-                    rag_result_store["pre_agent_cache_check_ms"] = (
-                        time.perf_counter() - check_start
-                    ) * 1000
-                    rag_result_store["semantic_cache_already_checked"] = True
+                    cached = None
+                    if filter_signal.is_filter_sensitive:
+                        rag_result_store["semantic_cache_already_checked"] = True
+                    else:
+                        check_start = time.perf_counter()
+                        cached = await self._cache.check_semantic(
+                            query=user_text,
+                            vector=embedding,
+                            query_type=query_type,
+                            cache_scope="rag",
+                            agent_role=role,
+                            grounding_mode=grounding_mode if grounding_mode == "strict" else None,
+                            require_safe_reuse=grounding_mode == "strict",
+                        )
+                        rag_result_store["pre_agent_cache_check_ms"] = (
+                            time.perf_counter() - check_start
+                        ) * 1000
+                        rag_result_store["semantic_cache_already_checked"] = True
                     if cached:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
@@ -2998,13 +3056,19 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
-                    rag_result_store["state_contract"] = build_pre_agent_miss_contract(
+                    if filter_signal.is_filter_sensitive:
+                        extracted_filters = await self._extract_pre_agent_filters(user_text)
+                        if extracted_filters:
+                            rag_result_store["filters"] = extracted_filters
+                    rag_result_store["state_contract"] = _build_pre_agent_state_contract(
+                        rag_result_store=rag_result_store,
                         query_type=query_type,
                         topic_hint=topic_hint.value if topic_hint is not None else None,
                         dense_vector=embedding,
                         sparse_vector=sparse if isinstance(sparse, dict) else None,
                         colbert_query=colbert,
                         grounding_mode="normal",
+                        filters=extracted_filters or None,
                     )
                 except Exception:
                     logger.warning(
@@ -3350,6 +3414,14 @@ class PropertyBot:
                 store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
                     "query_embedding"
                 )
+                result_filters = rag_result_store.get("filters")
+                if not isinstance(result_filters, dict) or not result_filters:
+                    state_contract = rag_result_store.get("state_contract")
+                    if isinstance(state_contract, dict):
+                        contract_filters = state_contract.get("filters")
+                        if isinstance(contract_filters, dict) and contract_filters:
+                            result_filters = contract_filters
+                filter_signature = resolve_semantic_cache_signature(filters=result_filters)
                 if (
                     query_type in CACHEABLE_QUERY_TYPES
                     and isinstance(store_vector, list)
@@ -3365,6 +3437,7 @@ class PropertyBot:
                             cache_scope="rag",
                             decision=decision,
                             agent_role=role,
+                            filter_signature=filter_signature,
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
@@ -4980,6 +5053,7 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        self._pre_agent_filter_extractor = None
         if self._kommo_client is not None:
             await self._kommo_client.close()
             self._kommo_client = None
