@@ -301,6 +301,7 @@ async def _hybrid_retrieve(
     embeddings: Any | None = None,
     colbert_query: list[list[float]] | None = None,
     sparse_embedding: Any = None,
+    filters: dict[str, Any] | None = None,
     topic_hint: str | None = None,
     top_k: int = 20,
     latency_stages: dict[str, float],
@@ -411,19 +412,25 @@ async def _hybrid_retrieve(
     normalized_query = query.strip().lower()
     query_word_count = len(normalized_query.split()) if normalized_query else 0
     prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
-    filters = {"topic": topic_hint} if topic_hint else None
-    relaxed_filters: dict[str, str] | None = None
-    initial_filters = dict(filters) if isinstance(filters, dict) else None
-    final_filters = dict(filters) if isinstance(filters, dict) else None
+    base_filters = dict(filters) if isinstance(filters, dict) and filters else None
+    topic_filters = dict(base_filters or {})
+    if topic_hint:
+        topic_filters["topic"] = topic_hint
+
+    active_filters = dict(topic_filters) if topic_filters else None
+    relaxed_filters = dict(base_filters) if base_filters else None
+    initial_filters = dict(active_filters) if isinstance(active_filters, dict) else None
+    final_filters = dict(active_filters) if isinstance(active_filters, dict) else None
     initial_results_count: int | None = None
     retrieval_relaxed_from_topic_filter = False
     retrieval_relax_stage: str | None = None
     qdrant_search_attempts = 0
     if prefer_faq_doc_type and topic_hint:
-        filters = {"topic": topic_hint, "doc_type": "faq"}
-        relaxed_filters = {"topic": topic_hint}
-        initial_filters = dict(filters)
-        final_filters = dict(filters)
+        active_filters = dict(topic_filters)
+        active_filters["doc_type"] = "faq"
+        relaxed_filters = dict(topic_filters) if topic_filters else None
+        initial_filters = dict(active_filters)
+        final_filters = dict(active_filters)
 
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
@@ -432,23 +439,28 @@ async def _hybrid_retrieve(
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         colbert_query=colbert_query,
-        filters=filters,
+        filters=active_filters,
         top_k=top_k,
     )
     colbert_search_used = colbert_search_used or colbert_used
     qdrant_search_attempts += 1
     initial_results_count = len(results)
 
-    if filters and len(results) < 3:
+    if active_filters and len(results) < 3:
         logger.info(
             "metric",
             extra={"metric_name": "topic_filter_fallback", "value": 1},
         )
         retrieval_relaxed_from_topic_filter = True
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
-        retrieval_relax_stage = (
-            "topic_and_doc_type_to_topic" if relaxed_filters is not None else "topic_to_none"
-        )
+        if prefer_faq_doc_type:
+            retrieval_relax_stage = (
+                "topic_and_doc_type_to_topic"
+                if fallback_filters is not None
+                else "topic_and_doc_type_to_none"
+            )
+        else:
+            retrieval_relax_stage = "topic_to_user_filters" if fallback_filters else "topic_to_none"
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
@@ -461,19 +473,19 @@ async def _hybrid_retrieve(
         qdrant_search_attempts += 1
         final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
 
-    if relaxed_filters is not None and len(results) < 3:
-        retrieval_relax_stage = "topic_to_none"
+    if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
+        retrieval_relax_stage = "topic_to_user_filters" if base_filters is not None else "topic_to_none"
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
-            filters=None,
+            filters=base_filters,
             top_k=top_k,
         )
         colbert_search_used = colbert_search_used or colbert_used
         qdrant_search_attempts += 1
-        final_filters = None
+        final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
 
     if not results:
         logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
@@ -916,6 +928,7 @@ async def rag_pipeline(
     current_query = query
     query_embedding: list[float] | None = None
     contract_topic_hint = state_contract.get("topic_hint") if state_contract is not None else None
+    contract_filters = state_contract.get("filters") if state_contract is not None else None
     topic_hint = contract_topic_hint or get_query_topic_hint(query)
     semantic_cache_prechecked = semantic_cache_already_checked
 
@@ -1028,6 +1041,7 @@ async def rag_pipeline(
             embeddings=embeddings,
             colbert_query=colbert_query,
             sparse_embedding=query_sparse,
+            filters=contract_filters if isinstance(contract_filters, dict) else None,
             topic_hint=topic_hint,
             latency_stages=latency_stages,
         )
