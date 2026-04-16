@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -20,6 +20,7 @@ from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.classify import classify_query
 from telegram_bot.graph.nodes.guard import guard_node
 from telegram_bot.observability import get_client, observe
+from telegram_bot.pipelines.state_contract import PreAgentStateContract
 from telegram_bot.scoring import write_langfuse_scores
 
 
@@ -143,10 +144,18 @@ async def rag_search(
         pre_computed_embedding: list[float] | None = None
         pre_computed_sparse: Any = None
         pre_computed_colbert: list[list[float]] | None = None
+        state_contract: PreAgentStateContract | None = None
+        semantic_cache_already_checked = False
         if isinstance(result_store, dict):
             pre_computed_embedding = result_store.get("cache_key_embedding")
             pre_computed_sparse = result_store.get("cache_key_sparse")
             pre_computed_colbert = result_store.get("cache_key_colbert")
+            cached_state_contract = result_store.get("state_contract")
+            if isinstance(cached_state_contract, dict):
+                state_contract = cast(PreAgentStateContract, cached_state_contract)
+            semantic_cache_already_checked = bool(
+                result_store.get("semantic_cache_already_checked")
+            )
 
         invoke_start = time.perf_counter()
         result = await rag_pipeline(
@@ -162,9 +171,11 @@ async def rag_search(
             reranker=ctx.reranker if ctx else None,
             llm=ctx.llm if ctx else None,
             agent_role=ctx.role if ctx else None,
+            state_contract=state_contract,
             pre_computed_embedding=pre_computed_embedding,
             pre_computed_sparse=pre_computed_sparse,
             pre_computed_colbert=pre_computed_colbert,
+            semantic_cache_already_checked=semantic_cache_already_checked,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
