@@ -121,6 +121,22 @@ class TestPreAgentStateContract:
         assert contract["topic_hint"] == "legal"
         assert contract["grounding_mode"] == "strict"
 
+    def test_build_pre_agent_miss_contract_preserves_filters(self):
+        from telegram_bot.pipelines.state_contract import build_pre_agent_miss_contract
+
+        filters = {"city": "Несебр", "price": {"lte": 80000}}
+        contract = build_pre_agent_miss_contract(
+            query_type="FAQ",
+            topic_hint="finance",
+            dense_vector=[0.1, 0.2],
+            sparse_vector={"indices": [1], "values": [0.5]},
+            colbert_query=[[0.2] * 4],
+            grounding_mode="strict",
+            filters=filters,
+        )
+
+        assert contract["filters"] == filters
+
 
 class TestErrorUtils:
     def test_walk_traceback_frames_returns_function_names(self):
