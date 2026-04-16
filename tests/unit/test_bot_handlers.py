@@ -3279,6 +3279,47 @@ class TestPreAgentCacheCheck:
         assert stashed_store.get("cache_key_embedding") == test_embedding
         assert stashed_store.get("query_type") == "FAQ"
 
+    async def test_pre_agent_cache_miss_stashes_extracted_filters_in_state_contract(
+        self, mock_config
+    ):
+        """On semantic miss, extracted filters should reach rag_result_store and state_contract."""
+        bot, _ = _create_bot(mock_config)
+        test_embedding = [0.5] * 10
+        self._setup_cache_mocks(bot, embedding=test_embedding, cached_response=None)
+
+        extracted_filters = {"city": "Несебр", "price": {"lte": 80000}}
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze = AsyncMock(
+            return_value={
+                "filters": extracted_filters,
+                "semantic_query": "квартира у моря",
+            }
+        )
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.services.query_analyzer.QueryAnalyzer", return_value=mock_analyzer),
+        ):
+            message = _make_text_message("квартира до 80000 евро в Несебре")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        assert stashed_store["filters"] == extracted_filters
+        assert stashed_store["state_contract"]["filters"] == extracted_filters
+
     async def test_pre_agent_cache_skip_chitchat(self, mock_config):
         """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (#563)."""
         bot, _ = _create_bot(mock_config)
