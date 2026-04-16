@@ -100,17 +100,6 @@ repos:
   ***REMOVED*** =============================================================================
   ***REMOVED*** These hooks run more expensive checks that shouldn't slow down commits
 
-  ***REMOVED*** Run tests before push (if you have tests)
-  ***REMOVED*** Uncomment when tests are available
-  ***REMOVED*** - repo: local
-  ***REMOVED***   hooks:
-  ***REMOVED***     - id: pytest
-  ***REMOVED***       name: Run pytest
-  ***REMOVED***       entry: pytest
-  ***REMOVED***       language: system
-  ***REMOVED***       pass_filenames: false
-  ***REMOVED***       stages: [pre-push]
-
   ***REMOVED*** Block direct commits to main — only merge from dev allowed.
   ***REMOVED*** git merge doesn't trigger pre-commit stage, so merges pass through.
   - repo: local
@@ -122,6 +111,13 @@ repos:
         always_run: true
         pass_filenames: false
         stages: [pre-commit]
+
+      - id: mypy
+        name: MyPy Type Checker
+        entry: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
 
 ***REMOVED*** CI configuration
 ci:
