@@ -367,47 +367,14 @@ async def _hybrid_retrieve(
     if not dense_vector:
         dense_vector = []
 
-    start = time.perf_counter()
-
-    # Step 1: Check search cache
-    cached_results = await cache.get_search_results(dense_vector)
-    if cached_results is not None:
-        latency = time.perf_counter() - start
-        logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
-        cached_ctx = _build_retrieved_context(cached_results)
-        lf.update_current_span(
-            output={
-                "results_count": len(cached_results),
-                "search_cache_hit": True,
-                "duration_ms": round(latency * 1000, 1),
-                "eval_query": query[:2000],
-                "eval_docs": "\n\n".join(
-                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
-                    for d in cached_ctx
-                ),
-            }
-        )
-        return {
-            "documents": cached_results,
-            "search_results_count": len(cached_results),
-            "search_cache_hit": True,
-            "query_embedding": dense_vector,
-            "latency_stages": {**latency_stages, "retrieve": latency},
-            "retrieval_backend_error": False,
-            "retrieval_error_type": None,
-            "retrieved_context": cached_ctx,
-            "rerank_applied": False,
-            "colbert_query": colbert_query,
-        }
-
-    # Step 2: Get sparse embedding (cached or compute)
+    # Step 1: Get sparse embedding (cached or compute)
     if sparse_vector is None:
         sparse_vector = await cache.get_sparse_embedding(query)
         if sparse_vector is None:
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
+    # Step 2: Compute retrieval filters before touching the search cache.
     colbert_search_used = False
     normalized_query = query.strip().lower()
     query_word_count = len(normalized_query.split()) if normalized_query else 0
@@ -432,6 +399,44 @@ async def _hybrid_retrieve(
         initial_filters = dict(active_filters)
         final_filters = dict(active_filters)
 
+    start = time.perf_counter()
+
+    # Step 3: Check search cache
+    cached_results = await cache.get_search_results(dense_vector, initial_filters)
+    if cached_results is not None:
+        latency = time.perf_counter() - start
+        logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
+        cached_ctx = _build_retrieved_context(cached_results)
+        lf.update_current_span(
+            output={
+                "results_count": len(cached_results),
+                "search_cache_hit": True,
+                "duration_ms": round(latency * 1000, 1),
+                "initial_filters": initial_filters,
+                "final_filters": initial_filters,
+                "eval_query": query[:2000],
+                "eval_docs": "\n\n".join(
+                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
+                    for d in cached_ctx
+                ),
+            }
+        )
+        return {
+            "documents": cached_results,
+            "search_results_count": len(cached_results),
+            "search_cache_hit": True,
+            "query_embedding": dense_vector,
+            "latency_stages": {**latency_stages, "retrieve": latency},
+            "retrieval_backend_error": False,
+            "retrieval_error_type": None,
+            "retrieved_context": cached_ctx,
+            "rerank_applied": False,
+            "colbert_query": colbert_query,
+            "initial_filters": initial_filters,
+            "final_filters": initial_filters,
+        }
+
+    # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
     results, search_meta, colbert_used = await _run_initial_retrieval(
@@ -490,9 +495,9 @@ async def _hybrid_retrieve(
     if not results:
         logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
 
-    # Step 4: Cache results
+    # Step 5: Cache results
     if results and not search_meta.get("backend_error", False):
-        await cache.store_search_results(dense_vector, None, results)
+        await cache.store_search_results(dense_vector, final_filters, results)
 
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
