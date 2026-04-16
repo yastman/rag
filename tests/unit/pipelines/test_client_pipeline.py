@@ -1520,8 +1520,8 @@ class TestPreComputedEmbeddingPassthrough:
             "price": {"lte": 80000},
         }
 
-    async def test_filtered_state_contract_skips_semantic_cache_store(self):
-        """Filtered retrieval results must not be stored in filter-blind semantic cache."""
+    async def test_filtered_state_contract_stores_semantic_cache_with_filter_signature(self):
+        """Filtered retrieval results should store a canonical filter signature for safe reuse."""
         msg = _make_message()
         lf = _make_lf_client()
         mock_cache = AsyncMock()
@@ -1573,7 +1573,8 @@ class TestPreComputedEmbeddingPassthrough:
                 rag_result_store={"state_contract": state_contract},
             )
 
-        mock_cache.store_semantic.assert_not_called()
+        mock_cache.store_semantic.assert_called_once()
+        assert mock_cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""
