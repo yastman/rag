@@ -21,6 +21,7 @@ from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
 )
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.grounding_policy import get_grounding_mode
@@ -465,12 +466,12 @@ async def run_client_pipeline(
         contract_filters = state_contract.get("filters") if state_contract is not None else None
         if isinstance(contract_filters, dict) and contract_filters:
             result_filters = contract_filters
+    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
 
     if (
         cache
         and isinstance(store_vector, list)
         and bool(store_vector)
-        and not (isinstance(result_filters, dict) and result_filters)
     ):
         try:
             await maybe_store_semantic_response(
@@ -482,6 +483,7 @@ async def run_client_pipeline(
                 cache_scope="rag",
                 decision=decision,
                 agent_role=role,
+                filter_signature=filter_signature,
             )
         except Exception:
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)

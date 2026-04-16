@@ -201,6 +201,24 @@ class TestSemanticCache:
         )
         mgr.semantic_cache.astore.assert_awaited_once()
 
+    async def test_semantic_store_persists_filter_signature(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"GENERAL": 3600}
+
+        await mgr.store_semantic(
+            query="квартиры в Несебре",
+            response="Есть варианты",
+            vector=[0.1] * 1024,
+            query_type="GENERAL",
+            filter_signature="city=Несебр",
+        )
+
+        assert mgr.semantic_cache.astore.await_args.kwargs["filters"]["filter_signature"] == (
+            "city=Несебр"
+        )
+
     async def test_semantic_check_disabled_returns_none(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = None
@@ -226,6 +244,22 @@ class TestSemanticCache:
         assert result == "user-specific answer"
 
         # Verify acheck was called with a filter_expression
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_semantic_check_includes_filter_signature(self, _ensure_redisvl_filter_mock):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(return_value=[{"response": "filtered answer"}])
+
+        result = await mgr.check_semantic(
+            query="квартиры в Несебре",
+            vector=[0.1] * 1024,
+            query_type="GENERAL",
+            filter_signature="city=Несебр",
+        )
+
+        assert result == "filtered answer"
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 
