@@ -64,12 +64,14 @@ from .services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
 )
 from .services.error_utils import walk_traceback_frames
 from .services.forum_bridge import ForumBridge
 from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
 from .services.metrics import PipelineMetrics
+from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
 from .startup_status import StartupReport, StartupSeverity, StartupSignal
@@ -2926,9 +2928,9 @@ class PropertyBot:
                         query_type=query_type,
                         topic_hint=topic_hint,
                     )
-                    extracted_filters = await self._extract_pre_agent_filters(user_text)
-                    if extracted_filters:
-                        rag_result_store["filters"] = extracted_filters
+                    filter_signal = detect_filter_sensitive_query(user_text)
+                    rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
+                    rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
                     rag_result_store["topic_hint"] = topic_hint or ""
                     rag_result_store["grounding_mode"] = grounding_mode
                     if grounding_mode == "strict":
@@ -2939,7 +2941,7 @@ class PropertyBot:
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
                         rag_result_store.setdefault("safe_fallback_used", False)
                     cached = None
-                    if extracted_filters:
+                    if filter_signal.is_filter_sensitive:
                         rag_result_store["semantic_cache_already_checked"] = True
                     else:
                         check_start = time.perf_counter()
@@ -3065,8 +3067,10 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
-                    if extracted_filters:
-                        rag_result_store["filters"] = extracted_filters
+                    if filter_signal.is_filter_sensitive:
+                        extracted_filters = await self._extract_pre_agent_filters(user_text)
+                        if extracted_filters:
+                            rag_result_store["filters"] = extracted_filters
                     rag_result_store["state_contract"] = _build_pre_agent_state_contract(
                         rag_result_store=rag_result_store,
                         query_type=query_type,
@@ -3428,11 +3432,11 @@ class PropertyBot:
                         contract_filters = state_contract.get("filters")
                         if isinstance(contract_filters, dict) and contract_filters:
                             result_filters = contract_filters
+                filter_signature = resolve_semantic_cache_signature(filters=result_filters)
                 if (
                     query_type in CACHEABLE_QUERY_TYPES
                     and isinstance(store_vector, list)
                     and bool(store_vector)
-                    and not (isinstance(result_filters, dict) and result_filters)
                 ):
                     try:
                         await maybe_store_semantic_response(
@@ -3444,6 +3448,7 @@ class PropertyBot:
                             cache_scope="rag",
                             decision=decision,
                             agent_role=role,
+                            filter_signature=filter_signature,
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
