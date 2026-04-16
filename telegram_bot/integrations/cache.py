@@ -245,6 +245,7 @@ class CacheLayerManager:
         grounding_mode: str | None = None,
         require_safe_reuse: bool = False,
         cache_timeout: float = 0.3,
+        filter_signature: str | None = None,
     ) -> str | None:
         """Check semantic cache with query-type-specific threshold.
 
@@ -269,6 +270,7 @@ class CacheLayerManager:
                 "has_user_id": user_id is not None,
                 "has_cache_scope": cache_scope is not None,
                 "has_agent_role": agent_role is not None,
+                "has_filter_signature": filter_signature is not None,
                 "grounding_mode": grounding_mode,
                 "require_safe_reuse": require_safe_reuse,
                 "cache_timeout_s": cache_timeout,
@@ -299,6 +301,8 @@ class CacheLayerManager:
                 filter_expr = filter_expr & (Tag("agent_role") == agent_role)
             if grounding_mode is not None:
                 filter_expr = filter_expr & (Tag("grounding_mode") == grounding_mode)
+            if filter_signature is not None:
+                filter_expr = filter_expr & (Tag("filter_signature") == filter_signature)
             if require_safe_reuse:
                 filter_expr = filter_expr & (Tag("semantic_cache_safe_reuse") == "true")
             start = time.time()
@@ -375,6 +379,7 @@ class CacheLayerManager:
         cache_scope: str | None = None,
         agent_role: str | None = None,
         metadata: dict[str, Any] | None = None,
+        filter_signature: str | None = None,
     ) -> None:
         """Store query-response pair in semantic cache."""
         lf = get_client()
@@ -385,6 +390,7 @@ class CacheLayerManager:
                 "has_user_id": user_id is not None,
                 "has_cache_scope": cache_scope is not None,
                 "has_agent_role": agent_role is not None,
+                "has_filter_signature": filter_signature is not None,
                 "metadata_keys": sorted((metadata or {}).keys()),
                 "query_length": len(query),
                 "response_length": len(response),
@@ -403,6 +409,8 @@ class CacheLayerManager:
             filters["cache_scope"] = cache_scope
         if agent_role is not None:
             filters["agent_role"] = agent_role
+        if filter_signature is not None:
+            filters["filter_signature"] = filter_signature
         if metadata:
             grounding_mode = metadata.get("grounding_mode")
             if isinstance(grounding_mode, str) and grounding_mode:
