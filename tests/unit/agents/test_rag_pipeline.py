@@ -195,6 +195,27 @@ async def test_cache_check_passes_rag_scope(mock_cache, mock_embeddings):
     assert call_kwargs.get("cache_scope") == "rag"
 
 
+async def test_cache_check_passes_filter_signature(mock_cache, mock_embeddings):
+    """_cache_check forwards exact filter_signature to semantic cache lookup."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await _cache_check(
+        "квартиры в Несебре",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        semantic_cache_filter_signature="city=Несебр",
+    )
+
+    call_kwargs = mock_cache.check_semantic.call_args.kwargs
+    assert call_kwargs.get("filter_signature") == "city=Несебр"
+
+
 # ---------------------------------------------------------------------------
 # _hybrid_retrieve tests
 # ---------------------------------------------------------------------------
@@ -924,8 +945,8 @@ async def test_pipeline_cache_hit_via_original_query(
 ):
     """Cache hit when original_query matches stored key, even with different reformulated query.
 
-    Scenario: user sends "квартиры в Несебре до 80000", agent reformulates to
-    "apartments in Nesebar under 80000 EUR". The cache was keyed on the original
+    Scenario: user sends "как оформить покупку", agent reformulates to
+    "how to buy property". The cache was keyed on the original
     Russian text. After the fix, the pipeline checks the cache with original_query
     and returns the cached response without going to retrieval.
     """
@@ -936,8 +957,8 @@ async def test_pipeline_cache_hit_via_original_query(
     mock_cache.check_semantic = AsyncMock(return_value="Cached answer about Nesebar apartments")
 
     result = await rag_pipeline(
-        "apartments in Nesebar under 80000 EUR",  # agent-reformulated query
-        original_query="квартиры в Несебре до 80000",  # original user query
+        "how to buy property",  # agent-reformulated query
+        original_query="как оформить покупку",  # original user query
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -953,7 +974,7 @@ async def test_pipeline_cache_hit_via_original_query(
     mock_qdrant.hybrid_search_rrf.assert_not_called()
     # Cache was checked with the ORIGINAL query (not the reformulated one)
     check_call = mock_cache.check_semantic.call_args
-    assert check_call.kwargs["query"] == "квартиры в Несебре до 80000"
+    assert check_call.kwargs["query"] == "как оформить покупку"
 
 
 async def test_pipeline_cache_uses_original_query_as_key(
@@ -972,8 +993,8 @@ async def test_pipeline_cache_uses_original_query_as_key(
     mock_cache.check_semantic = AsyncMock(return_value=None)
 
     await rag_pipeline(
-        "apartments in Nesebar",  # reformulated
-        original_query="квартиры в Несебре",  # original
+        "how to buy property",  # reformulated
+        original_query="как оформить покупку",  # original
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -985,10 +1006,10 @@ async def test_pipeline_cache_uses_original_query_as_key(
 
     # Embedding was computed for the ORIGINAL query
     embed_call_args = [str(c) for c in mock_embeddings.aembed_hybrid.call_args_list]
-    assert any("квартиры в Несебре" in a for a in embed_call_args)
+    assert any("как оформить покупку" in a for a in embed_call_args)
     # Semantic check was done with the original query key
     check_call = mock_cache.check_semantic.call_args
-    assert check_call.kwargs["query"] == "квартиры в Несебре"
+    assert check_call.kwargs["query"] == "как оформить покупку"
 
 
 async def test_pipeline_fallback_to_query_when_original_query_empty(
@@ -1001,7 +1022,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
     mock_cache.check_semantic = AsyncMock(return_value=None)
 
     await rag_pipeline(
-        "квартиры в Несебре",
+        "как оформить покупку",
         original_query="",  # empty — backward compat mode
         user_id=42,
         session_id="test",
@@ -1014,7 +1035,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
 
     # Fallback: cache was checked with the query itself
     check_call = mock_cache.check_semantic.call_args
-    assert check_call.kwargs["query"] == "квартиры в Несебре"
+    assert check_call.kwargs["query"] == "как оформить покупку"
 
 
 async def test_pipeline_cache_miss_when_different_original_query(
@@ -2032,3 +2053,106 @@ async def test_rag_pipeline_passes_state_contract_filters_to_retrieval(mock_cach
         "topic": "legal",
     }
     assert second_call["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
+
+
+async def test_rag_pipeline_passes_state_contract_filter_signature_to_semantic_lookup(
+    mock_cache, mock_sparse
+):
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+    state_contract = {
+        "cache_checked": False,
+        "cache_hit": False,
+        "cache_scope": "rag",
+        "embedding_bundle_ready": True,
+        "embedding_bundle_version": "bge_m3_hybrid_colbert",
+        "dense_vector": dense,
+        "sparse_vector": sparse,
+        "colbert_query": None,
+        "query_type": "GENERAL",
+        "topic_hint": "legal",
+        "filters": {"city": "Несебр", "price": {"lte": 80000}},
+        "retrieval_policy": "topic_then_relax",
+        "grounding_mode": "strict",
+    }
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+    mock_cache.get_embedding = AsyncMock(return_value=dense)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await rag_pipeline(
+        "квартира в Несебре",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        state_contract=state_contract,
+    )
+
+    assert mock_cache.check_semantic.await_args.kwargs["filter_signature"] == (
+        "city=Несебр|price.lte=80000"
+    )
+
+
+async def test_rag_pipeline_skips_blind_semantic_lookup_for_filter_sensitive_query(
+    mock_cache, mock_sparse
+):
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+    mock_cache.get_embedding = AsyncMock(return_value=dense)
+    mock_cache.check_semantic = AsyncMock(side_effect=AssertionError("unexpected blind lookup"))
+
+    result = await rag_pipeline(
+        "квартира на 3 этаже",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+    )
+
+    mock_cache.check_semantic.assert_not_awaited()
+    assert result["semantic_cache_already_checked"] is True
