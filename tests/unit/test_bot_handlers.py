@@ -3351,13 +3351,8 @@ class TestPreAgentCacheCheck:
 
         mock_agent = AsyncMock()
         mock_agent.ainvoke = _capture_invoke
-        mock_analyzer = MagicMock()
-        mock_analyzer.analyze = AsyncMock(
-            return_value={
-                "filters": extracted_filters,
-                "semantic_query": "квартира у моря",
-            }
-        )
+        mock_extractor = MagicMock()
+        mock_extractor.extract_filters.return_value = extracted_filters
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
@@ -3365,7 +3360,7 @@ class TestPreAgentCacheCheck:
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.services.query_analyzer.QueryAnalyzer", return_value=mock_analyzer),
+            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
         ):
             message = _make_text_message("квартира до 80000 евро в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3374,6 +3369,7 @@ class TestPreAgentCacheCheck:
 
         assert stashed_store["filters"] == extracted_filters
         assert stashed_store["state_contract"]["filters"] == extracted_filters
+        mock_extractor.extract_filters.assert_called_once_with("квартира до 80000 евро в Несебре")
 
     async def test_pre_agent_filters_skip_semantic_cache_lookup(self, mock_config):
         """Filtered queries must bypass pre-agent semantic cache reuse."""
