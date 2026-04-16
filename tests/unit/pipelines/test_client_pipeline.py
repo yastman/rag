@@ -1473,6 +1473,7 @@ class TestPreComputedEmbeddingPassthrough:
             "colbert_query": [[0.2] * 3],
             "query_type": "GENERAL",
             "topic_hint": "legal",
+            "filters": {"city": "Несебр", "price": {"lte": 80000}},
             "retrieval_policy": "topic_then_relax",
             "grounding_mode": "strict",
         }
@@ -1514,6 +1515,66 @@ class TestPreComputedEmbeddingPassthrough:
             )
 
         assert captured_kwargs.get("state_contract") == state_contract
+        assert captured_kwargs["state_contract"]["filters"] == {
+            "city": "Несебр",
+            "price": {"lte": 80000},
+        }
+
+    async def test_filtered_state_contract_stores_semantic_cache_with_filter_signature(self):
+        """Filtered retrieval results should store a canonical filter signature for safe reuse."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        state_contract = {
+            "cache_checked": True,
+            "cache_hit": False,
+            "cache_scope": "rag",
+            "embedding_bundle_ready": True,
+            "embedding_bundle_version": "bge_m3_hybrid_colbert",
+            "dense_vector": [0.1] * 3,
+            "query_type": "FAQ",
+            "filters": {"city": "Несебр"},
+            "retrieval_policy": "topic_then_relax",
+            "grounding_mode": "normal",
+        }
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+            "query_embedding": [0.1, 0.2, 0.3],
+        }
+        gen_result = {"response": "Есть варианты", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="квартиры в Несебре",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+                rag_result_store={"state_contract": state_contract},
+            )
+
+        mock_cache.store_semantic.assert_called_once()
+        assert mock_cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""

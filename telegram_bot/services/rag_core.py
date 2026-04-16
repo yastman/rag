@@ -248,6 +248,7 @@ async def check_semantic_cache(
     *,
     cache: Any,
     agent_role: str | None = None,
+    filter_signature: str | None = None,
 ) -> tuple[bool, str | None]:
     """Check semantic cache for a given query vector.
 
@@ -274,6 +275,7 @@ async def check_semantic_cache(
         query_type=query_type,
         cache_scope="rag",
         agent_role=agent_role,
+        filter_signature=filter_signature,
     )
 
     if cached:
