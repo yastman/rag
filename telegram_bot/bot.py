@@ -11,7 +11,6 @@ import re
 import socket
 import time
 import uuid
-import warnings
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
@@ -560,19 +559,12 @@ class PropertyBot:
         )
         self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
 
-        # Rerank provider (feature flag)
+        # Rerank provider (feature flag). "colbert" keeps the existing
+        # server-side Qdrant ColBERT path and does not instantiate the
+        # deprecated client-side reranker service.
         self._reranker = None
         if config.rerank_provider == "colbert":
-            from .services.colbert_reranker import ColbertRerankerService
-
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message="ColbertRerankerService is deprecated.*",
-                    category=DeprecationWarning,
-                )
-                self._reranker = ColbertRerankerService(base_url=config.bge_m3_url)
-            logger.info("Using ColbertRerankerService for reranking")
+            logger.info("Reranking via server-side Qdrant ColBERT path")
         elif config.rerank_provider == "none":
             logger.info("Reranking disabled")
 
