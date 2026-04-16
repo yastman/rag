@@ -1473,6 +1473,7 @@ class TestPreComputedEmbeddingPassthrough:
             "colbert_query": [[0.2] * 3],
             "query_type": "GENERAL",
             "topic_hint": "legal",
+            "filters": {"city": "Несебр", "price": {"lte": 80000}},
             "retrieval_policy": "topic_then_relax",
             "grounding_mode": "strict",
         }
@@ -1514,6 +1515,10 @@ class TestPreComputedEmbeddingPassthrough:
             )
 
         assert captured_kwargs.get("state_contract") == state_contract
+        assert captured_kwargs["state_contract"]["filters"] == {
+            "city": "Несебр",
+            "price": {"lte": 80000},
+        }
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""
