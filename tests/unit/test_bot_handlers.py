@@ -3389,22 +3389,58 @@ class TestPreAgentCacheCheck:
         assert stashed_store["state_contract"]["filters"] == extracted_filters
         mock_extractor.extract_filters.assert_called_once_with("квартира до 80000 евро в Несебре")
 
-    async def test_pre_agent_filters_skip_semantic_cache_lookup(self, mock_config):
-        """Filtered queries must bypass pre-agent semantic cache reuse."""
+    async def test_pre_agent_filters_use_signature_for_semantic_lookup(self, mock_config):
+        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+
+        bot, _ = _create_bot(mock_config)
+        test_embedding = [0.5] * 10
+        self._setup_cache_mocks(bot, embedding=test_embedding, cached_response="filtered cache hit")
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+        mock_extractor = MagicMock()
+        mock_extractor.extract_filters.return_value = {
+            "city": "Несебр",
+            "price": {"lte": 80000},
+        }
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch(
+                "telegram_bot.bot.detect_filter_sensitive_query",
+                return_value=QueryFilterSignal(True, ("city", "price")),
+                create=True,
+            ),
+            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+        ):
+            message = _make_text_message("квартира до 80000 евро в Несебре")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        assert bot._cache.check_semantic.await_args.kwargs["filter_signature"] == (
+            "city=Несебр|price.lte=80000"
+        )
+        mock_agent.ainvoke.assert_not_awaited()
+
+    async def test_pre_agent_filter_sensitive_without_extracted_filters_still_skips_lookup(
+        self, mock_config
+    ):
         from telegram_bot.services.query_filter_signal import QueryFilterSignal
 
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10
         self._setup_cache_mocks(bot, embedding=test_embedding, cached_response="unsafe cache hit")
 
-        stashed_store: dict = {}
-
-        async def _capture_invoke(*args, **kwargs):
-            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
-            return _mock_agent_result()
-
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = _capture_invoke
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        mock_extractor = MagicMock()
+        mock_extractor.extract_filters.return_value = {}
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
@@ -3417,6 +3453,7 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
+            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
         ):
             message = _make_text_message("квартира в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3424,7 +3461,7 @@ class TestPreAgentCacheCheck:
                 await bot.handle_query(message)
 
         bot._cache.check_semantic.assert_not_awaited()
-        assert stashed_store.get("semantic_cache_already_checked") is True
+        mock_agent.ainvoke.assert_awaited_once()
 
     async def test_pre_agent_cache_skip_chitchat(self, mock_config):
         """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (#563)."""
