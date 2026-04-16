@@ -2865,6 +2865,7 @@ class PropertyBot:
             # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
             query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
+                extracted_filters: dict[str, Any] = {}
                 try:
                     embed_start = time.perf_counter()
                     embedding = await self._cache.get_embedding(user_text)
@@ -2925,6 +2926,9 @@ class PropertyBot:
                         query_type=query_type,
                         topic_hint=topic_hint,
                     )
+                    extracted_filters = await self._extract_pre_agent_filters(user_text)
+                    if extracted_filters:
+                        rag_result_store["filters"] = extracted_filters
                     rag_result_store["topic_hint"] = topic_hint or ""
                     rag_result_store["grounding_mode"] = grounding_mode
                     if grounding_mode == "strict":
@@ -2934,20 +2938,24 @@ class PropertyBot:
                         rag_result_store.setdefault("legal_answer_safe", True)
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
                         rag_result_store.setdefault("safe_fallback_used", False)
-                    check_start = time.perf_counter()
-                    cached = await self._cache.check_semantic(
-                        query=user_text,
-                        vector=embedding,
-                        query_type=query_type,
-                        cache_scope="rag",
-                        agent_role=role,
-                        grounding_mode=grounding_mode if grounding_mode == "strict" else None,
-                        require_safe_reuse=grounding_mode == "strict",
-                    )
-                    rag_result_store["pre_agent_cache_check_ms"] = (
-                        time.perf_counter() - check_start
-                    ) * 1000
-                    rag_result_store["semantic_cache_already_checked"] = True
+                    cached = None
+                    if extracted_filters:
+                        rag_result_store["semantic_cache_already_checked"] = True
+                    else:
+                        check_start = time.perf_counter()
+                        cached = await self._cache.check_semantic(
+                            query=user_text,
+                            vector=embedding,
+                            query_type=query_type,
+                            cache_scope="rag",
+                            agent_role=role,
+                            grounding_mode=grounding_mode if grounding_mode == "strict" else None,
+                            require_safe_reuse=grounding_mode == "strict",
+                        )
+                        rag_result_store["pre_agent_cache_check_ms"] = (
+                            time.perf_counter() - check_start
+                        ) * 1000
+                        rag_result_store["semantic_cache_already_checked"] = True
                     if cached:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
@@ -3057,7 +3065,6 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
-                    extracted_filters = await self._extract_pre_agent_filters(user_text)
                     if extracted_filters:
                         rag_result_store["filters"] = extracted_filters
                     rag_result_store["state_contract"] = _build_pre_agent_state_contract(
@@ -3414,10 +3421,18 @@ class PropertyBot:
                 store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
                     "query_embedding"
                 )
+                result_filters = rag_result_store.get("filters")
+                if not isinstance(result_filters, dict) or not result_filters:
+                    state_contract = rag_result_store.get("state_contract")
+                    if isinstance(state_contract, dict):
+                        contract_filters = state_contract.get("filters")
+                        if isinstance(contract_filters, dict) and contract_filters:
+                            result_filters = contract_filters
                 if (
                     query_type in CACHEABLE_QUERY_TYPES
                     and isinstance(store_vector, list)
                     and bool(store_vector)
+                    and not (isinstance(result_filters, dict) and result_filters)
                 ):
                     try:
                         await maybe_store_semantic_response(
