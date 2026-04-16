@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CACHE_VERSION = "v5"
-SEMANTIC_CACHE_VERSION = "v7"
+SEMANTIC_CACHE_VERSION = "v8"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
@@ -90,6 +90,7 @@ def _create_semantic_cache(
                 {"name": "cache_scope", "type": "tag"},
                 {"name": "agent_role", "type": "tag"},
                 {"name": "grounding_mode", "type": "tag"},
+                {"name": "filter_signature", "type": "tag"},
                 {"name": "semantic_cache_safe_reuse", "type": "tag"},
                 {"name": "response_state", "type": "tag"},
                 {"name": "cache_eligible", "type": "tag"},
