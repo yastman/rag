@@ -278,10 +278,47 @@ async def test_hybrid_retrieve_stores_relaxed_results_under_final_filters(mock_c
             "doc_type": "faq",
         },
     )
-    store_args = mock_cache.store_search_results.await_args.args
-    assert store_args[0] == [0.1] * 1024
-    assert store_args[1] == user_filters
-    assert len(store_args[2]) == 3
+    store_calls = mock_cache.store_search_results.await_args_list
+    assert len(store_calls) == 2
+    assert store_calls[0].args[0] == [0.1] * 1024
+    assert store_calls[0].args[1] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+        "doc_type": "faq",
+    }
+    assert len(store_calls[0].args[2]) == 3
+    assert store_calls[1].args[0] == [0.1] * 1024
+    assert store_calls[1].args[1] == user_filters
+    assert len(store_calls[1].args[2]) == 3
+
+
+async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    user_filters = {"city": "Несебр", "price": {"lte": 80000}}
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "narrow", "score": 0.9, "metadata": {}}],
+            {"backend_error": False},
+        )
+    )
+
+    result = await _hybrid_retrieve(
+        "квартиры у моря",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        filters=user_filters,
+        latency_stages={},
+    )
+
+    assert mock_qdrant.hybrid_search_rrf.await_count == 1
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    assert first_call["filters"] == user_filters
+    assert result["final_filters"] == user_filters
 
 async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock_qdrant):
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
