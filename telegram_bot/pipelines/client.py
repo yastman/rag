@@ -468,11 +468,7 @@ async def run_client_pipeline(
             result_filters = contract_filters
     filter_signature = resolve_semantic_cache_signature(filters=result_filters)
 
-    if (
-        cache
-        and isinstance(store_vector, list)
-        and bool(store_vector)
-    ):
+    if cache and isinstance(store_vector, list) and bool(store_vector):
         try:
             await maybe_store_semantic_response(
                 cache=cache,
