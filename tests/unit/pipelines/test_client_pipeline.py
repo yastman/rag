@@ -1571,10 +1571,12 @@ class TestPreComputedEmbeddingPassthrough:
                 config=_make_config(),
                 query_type="FAQ",
                 rag_result_store={"state_contract": state_contract},
-            )
+        )
 
         mock_cache.store_semantic.assert_called_once()
         assert mock_cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
+        trace_metadata = lf.update_current_trace.call_args.kwargs["metadata"]
+        assert trace_metadata["filter_signature"] == "city=Несебр"
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""
