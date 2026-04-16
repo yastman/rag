@@ -490,7 +490,9 @@ async def _hybrid_retrieve(
         final_filters = dict(fallback_filters) if isinstance(fallback_filters, dict) else None
 
     if relaxed_filters is not None and len(results) < 3 and final_filters != base_filters:
-        retrieval_relax_stage = "topic_to_user_filters" if base_filters is not None else "topic_to_none"
+        retrieval_relax_stage = (
+            "topic_to_user_filters" if base_filters is not None else "topic_to_none"
+        )
         results, search_meta, colbert_used = await _run_relaxed_retrieval(
             qdrant=qdrant,
             dense_vector=dense_vector,
