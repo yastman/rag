@@ -442,7 +442,7 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
-    image: clickhouse/clickhouse-server:26.2@sha256:51beb66e790213a53ddacacf133d3067106f5aa0c446c5b40b9b0c3ae0cd39fc
+    image: clickhouse/clickhouse-server:26.2@sha256:69dc8a82253e007d51393db2bc016ee4dbd75d98134efb964d26f37294c36018
     restart: unless-stopped
     logging: *default-logging
     user: "101:101"
