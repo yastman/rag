@@ -200,6 +200,39 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
     mock_colbert.assert_not_called()
 
 
+async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
+    fake_cfg = SimpleNamespace(
+        redis_url="redis://localhost:6379",
+        cache_thresholds={"GENERAL": 0.08},
+        cache_ttl={"GENERAL": 3600},
+        qdrant_url="http://qdrant:6333",
+        qdrant_collection="test_collection",
+        bge_m3_url="http://bge-m3:8000",
+        rerank_provider="colbert",
+        max_rewrite_attempts=2,
+    )
+    fake_cfg.create_embeddings = MagicMock(return_value=SimpleNamespace())
+    fake_cfg.create_sparse_embeddings = MagicMock(return_value=SimpleNamespace())
+    fake_cfg.create_llm = MagicMock(return_value=MagicMock())
+
+    fake_cache = AsyncMock()
+    fake_qdrant = AsyncMock()
+    fake_graph = MagicMock()
+
+    with (
+        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
+        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
+        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+    ):
+        async with lifespan(app):
+            assert app.state.max_rewrite_attempts == 2
+
+    assert mock_build_graph.call_args.kwargs["reranker"] is None
+    mock_colbert.assert_not_called()
+
+
 async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> None:
     closable_embeddings = SimpleNamespace(aclose=AsyncMock())
     closable_sparse = SimpleNamespace(aclose=AsyncMock())
