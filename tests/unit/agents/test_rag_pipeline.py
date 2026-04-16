@@ -426,6 +426,62 @@ async def test_relaxed_retrieval_emits_second_stage_only_when_needed(mock_cache,
     assert result["final_filters"] is None
 
 
+async def test_hybrid_retrieve_relaxes_topic_layers_but_keeps_user_filters(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    user_filters = {"city": "Несебр", "price": {"lte": 80000}}
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        side_effect=[
+            ([{"text": "faq-only", "score": 0.9, "metadata": {}}], {"backend_error": False}),
+            ([{"text": "topic-only", "score": 0.8, "metadata": {}}], {"backend_error": False}),
+            (
+                [
+                    {"text": "broad-1", "score": 0.9, "metadata": {}},
+                    {"text": "broad-2", "score": 0.8, "metadata": {}},
+                    {"text": "broad-3", "score": 0.7, "metadata": {}},
+                ],
+                {"backend_error": False},
+            ),
+        ]
+    )
+
+    result = await _hybrid_retrieve(
+        "рассрочки",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        filters=user_filters,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    second_call = mock_qdrant.hybrid_search_rrf.await_args_list[1].kwargs
+    third_call = mock_qdrant.hybrid_search_rrf.await_args_list[2].kwargs
+
+    assert first_call["filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+        "doc_type": "faq",
+    }
+    assert second_call["filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+    }
+    assert third_call["filters"] == user_filters
+    assert result["initial_filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+        "doc_type": "faq",
+    }
+    assert result["final_filters"] == user_filters
+
+
 # ---------------------------------------------------------------------------
 # _grade_documents tests
 # ---------------------------------------------------------------------------
@@ -1837,3 +1893,64 @@ async def test_rag_pipeline_skips_semantic_cache_when_state_contract_already_che
 
     mock_cache.check_semantic.assert_not_awaited()
     assert result["documents"]
+
+
+async def test_rag_pipeline_passes_state_contract_filters_to_retrieval(mock_cache, mock_sparse):
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+    state_contract = {
+        "cache_checked": True,
+        "cache_hit": False,
+        "cache_scope": "rag",
+        "embedding_bundle_ready": True,
+        "embedding_bundle_version": "bge_m3_hybrid_colbert",
+        "dense_vector": dense,
+        "sparse_vector": sparse,
+        "colbert_query": None,
+        "query_type": "GENERAL",
+        "topic_hint": "legal",
+        "filters": {"city": "Несебр", "price": {"lte": 80000}},
+        "retrieval_policy": "topic_then_relax",
+        "grounding_mode": "strict",
+    }
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    await rag_pipeline(
+        "test query",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        state_contract=state_contract,
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    second_call = mock_qdrant.hybrid_search_rrf.await_args_list[1].kwargs
+
+    assert first_call["filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "legal",
+    }
+    assert second_call["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
