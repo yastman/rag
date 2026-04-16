@@ -77,6 +77,7 @@ from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 if TYPE_CHECKING:
     from .agents.context import BotContext as BotContextType
+    from .pipelines.state_contract import PreAgentStateContract
     from .services.history_service import HistoryService
 else:
     BotContextType = Any
@@ -124,6 +125,31 @@ def detect_injection(*args: Any, **kwargs: Any) -> Any:
     from .graph.nodes.guard import detect_injection as _detect_injection
 
     return _detect_injection(*args, **kwargs)
+
+
+def _build_pre_agent_state_contract(
+    *,
+    rag_result_store: dict[str, Any],
+    query_type: str,
+    topic_hint: str | None,
+    dense_vector: list[float] | None,
+    sparse_vector: dict[str, Any] | None,
+    colbert_query: list[list[float]] | None,
+    grounding_mode: str,
+) -> "PreAgentStateContract":
+    """Build the shared pre-agent contract and preserve any upstream filters."""
+    from .pipelines.state_contract import build_pre_agent_miss_contract
+
+    filters = rag_result_store.get("filters")
+    return build_pre_agent_miss_contract(
+        query_type=query_type,
+        topic_hint=topic_hint,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        grounding_mode=grounding_mode,
+        filters=filters if isinstance(filters, dict) else None,
+    )
 
 
 async def _stream_agent_to_draft(
@@ -2718,7 +2744,6 @@ class PropertyBot:
         from .agents.rag_tool import rag_search
         from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
         from .graph.nodes.guard import _BLOCKED_RESPONSE
-        from .pipelines.state_contract import build_pre_agent_miss_contract
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -2998,7 +3023,8 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
-                    rag_result_store["state_contract"] = build_pre_agent_miss_contract(
+                    rag_result_store["state_contract"] = _build_pre_agent_state_contract(
+                        rag_result_store=rag_result_store,
                         query_type=query_type,
                         topic_hint=topic_hint.value if topic_hint is not None else None,
                         dense_vector=embedding,
