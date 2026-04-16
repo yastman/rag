@@ -451,7 +451,7 @@ async def _hybrid_retrieve(
     qdrant_search_attempts += 1
     initial_results_count = len(results)
 
-    if active_filters and len(results) < 3:
+    if active_filters and len(results) < 3 and active_filters != relaxed_filters:
         logger.info(
             "metric",
             extra={"metric_name": "topic_filter_fallback", "value": 1},
@@ -497,7 +497,13 @@ async def _hybrid_retrieve(
 
     # Step 5: Cache results
     if results and not search_meta.get("backend_error", False):
-        await cache.store_search_results(dense_vector, final_filters, results)
+        stored_filters: list[dict[str, Any] | None] = []
+        for cache_filters in (initial_filters, final_filters):
+            normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
+            if normalized_filters in stored_filters:
+                continue
+            await cache.store_search_results(dense_vector, normalized_filters, results)
+            stored_filters.append(normalized_filters)
 
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
