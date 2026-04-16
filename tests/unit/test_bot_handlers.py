@@ -3601,6 +3601,40 @@ class TestPreAgentCacheCheck:
         assert pre_agent_meta["semantic_cache_safe_reuse"] is True
         assert pre_agent_meta["safe_fallback_used"] is False
 
+    async def test_pre_agent_filtered_cache_hit_adds_filter_signature_to_trace_metadata(
+        self, mock_config
+    ):
+        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+
+        bot, _ = _create_bot(mock_config)
+        test_embedding = [0.5] * 10
+        self._setup_cache_mocks(bot, embedding=test_embedding, cached_response="filtered cache hit")
+
+        lf = MagicMock()
+        mock_extractor = MagicMock()
+        mock_extractor.extract_filters.return_value = {"city": "Несебр"}
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=AsyncMock()),
+            patch("telegram_bot.bot.get_client", return_value=lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch(
+                "telegram_bot.bot.detect_filter_sensitive_query",
+                return_value=QueryFilterSignal(True, ("city",)),
+                create=True,
+            ),
+            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+        ):
+            message = _make_text_message("квартира в Несебре")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        metadata = lf.update_current_trace.call_args.kwargs["metadata"]
+        assert metadata["filter_signature"] == "city=Несебр"
+
     async def test_pre_agent_cache_skip_off_topic(self, mock_config):
         """OFF_TOPIC query type skips pre-agent cache entirely (#563)."""
         bot, _ = _create_bot(mock_config)
