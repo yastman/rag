@@ -5,6 +5,7 @@ from time import time
 from typing import Any
 
 from telegram_bot.services.grounding_policy import semantic_cache_safe_reuse_allowed
+from telegram_bot.services.query_filter_signal import build_filter_signature
 
 
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"ENTITY", "FAQ", "GENERAL", "STRUCTURED"}
@@ -108,6 +109,16 @@ def build_cacheability_decision(
     )
 
 
+def resolve_semantic_cache_signature(
+    *,
+    filters: dict[str, Any] | None,
+    explicit_signature: str | None = None,
+) -> str | None:
+    if explicit_signature:
+        return explicit_signature
+    return build_filter_signature(filters)
+
+
 async def maybe_store_semantic_response(
     *,
     cache: Any,
@@ -118,6 +129,7 @@ async def maybe_store_semantic_response(
     cache_scope: str,
     decision: SemanticCacheDecision,
     agent_role: str | None = None,
+    filter_signature: str | None = None,
 ) -> bool:
     if cache_scope != "rag":
         return False
@@ -134,5 +146,6 @@ async def maybe_store_semantic_response(
         cache_scope=cache_scope,
         agent_role=agent_role,
         metadata=decision.metadata,
+        filter_signature=filter_signature,
     )
     return True
