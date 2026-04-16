@@ -670,7 +670,7 @@ class PropertyBot:
 
         # Track initialization state
         self._cache_initialized = False
-        self._query_analyzer: Any | None = None
+        self._pre_agent_filter_extractor: Any | None = None
 
         # Setup middlewares (before handlers)
         self._setup_middlewares()
@@ -678,33 +678,22 @@ class PropertyBot:
         # Register handlers
         self._register_handlers()
 
-    def _get_query_analyzer(self) -> Any | None:
-        """Lazily construct the filter extractor used on pre-agent semantic misses."""
-        if not self.config.llm_base_url:
-            return None
-        if self._query_analyzer is None:
-            from .services.query_analyzer import QueryAnalyzer
+    def _get_pre_agent_filter_extractor(self) -> Any:
+        """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
+        if self._pre_agent_filter_extractor is None:
+            from .services.filter_extractor import FilterExtractor
 
-            self._query_analyzer = QueryAnalyzer(
-                api_key=self.config.llm_api_key or "no-key",
-                base_url=self.config.llm_base_url,
-                model=self.config.llm_model,
-            )
-        return self._query_analyzer
+            self._pre_agent_filter_extractor = FilterExtractor()
+        return self._pre_agent_filter_extractor
 
     async def _extract_pre_agent_filters(self, query: str) -> dict[str, Any]:
         """Extract structured retrieval filters for the active bot path."""
-        analyzer = self._get_query_analyzer()
-        if analyzer is None:
-            return {}
         try:
-            analysis = await analyzer.analyze(query)
+            extractor = self._get_pre_agent_filter_extractor()
+            filters = extractor.extract_filters(query)
         except Exception:
             logger.warning("Pre-agent filter extraction failed, continuing without filters")
             return {}
-        if not isinstance(analysis, dict):
-            return {}
-        filters = analysis.get("filters")
         return dict(filters) if isinstance(filters, dict) else {}
 
     def _setup_middlewares(self):
@@ -5064,9 +5053,7 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
-        if self._query_analyzer is not None and hasattr(self._query_analyzer, "close"):
-            await self._query_analyzer.close()
-            self._query_analyzer = None
+        self._pre_agent_filter_extractor = None
         if self._kommo_client is not None:
             await self._kommo_client.close()
             self._kommo_client = None
