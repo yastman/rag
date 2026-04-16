@@ -498,7 +498,8 @@ async def _hybrid_retrieve(
     # Step 5: Cache results
     if results and not search_meta.get("backend_error", False):
         stored_filters: list[dict[str, Any] | None] = []
-        for cache_filters in (initial_filters, final_filters):
+        cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
+        for cache_filters in cache_targets:
             normalized_filters = dict(cache_filters) if isinstance(cache_filters, dict) else None
             if normalized_filters in stored_filters:
                 continue
