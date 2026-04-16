@@ -2984,6 +2984,9 @@ class PropertyBot:
                             "e2e_latency_ms": wall_ms,
                             "topic_hint": rag_result_store.get("topic_hint", ""),
                             "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                            "filter_signature": rag_result_store.get(
+                                "semantic_cache_filter_signature", ""
+                            ),
                             "grade_confidence": float(
                                 rag_result_store.get("grade_confidence", 0.0) or 0.0
                             ),

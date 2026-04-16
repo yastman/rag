@@ -438,12 +438,23 @@ async def run_client_pipeline(
     result["cache_eligible"] = decision.cache_eligible
     result["store_reason"] = decision.store_reason
 
+    result_filters = _store.get("filters")
+    if not isinstance(result_filters, dict) or not result_filters:
+        contract_filters = state_contract.get("filters") if state_contract is not None else None
+        if isinstance(contract_filters, dict) and contract_filters:
+            result_filters = contract_filters
+    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
+    if filter_signature is not None:
+        result["semantic_cache_filter_signature"] = filter_signature
+        _store["semantic_cache_filter_signature"] = filter_signature
+
     trace_metadata = {
         "route": "client_direct",
         "pipeline_mode": "client_direct",
         "query_type": query_type,
         "topic_hint": topic_hint_value,
         "grounding_mode": grounding_mode_value,
+        "filter_signature": filter_signature or "",
         "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
         "sources_count": int(result.get("sources_count", 0) or 0),
         "grounded": bool(result.get("grounded", True)),
@@ -460,13 +471,6 @@ async def run_client_pipeline(
         "e2e_latency_ms": e2e_wall_ms,
     }
     _store.update(trace_metadata)
-
-    result_filters = _store.get("filters")
-    if not isinstance(result_filters, dict) or not result_filters:
-        contract_filters = state_contract.get("filters") if state_contract is not None else None
-        if isinstance(contract_filters, dict) and contract_filters:
-            result_filters = contract_filters
-    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
 
     if cache and isinstance(store_vector, list) and bool(store_vector):
         try:
