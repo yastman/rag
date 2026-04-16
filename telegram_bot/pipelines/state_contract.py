@@ -69,7 +69,7 @@ def coerce_pre_agent_state_contract(
     existing = store.get("state_contract")
     if isinstance(existing, dict):
         contract = cast(PreAgentStateContract, dict(existing))
-        if coerced_filters is not None and "filters" not in contract:
+        if coerced_filters is not None and not contract.get("filters"):
             contract["filters"] = coerced_filters
         return contract
 

@@ -367,14 +367,7 @@ async def _hybrid_retrieve(
     if not dense_vector:
         dense_vector = []
 
-    # Step 1: Get sparse embedding (cached or compute)
-    if sparse_vector is None:
-        sparse_vector = await cache.get_sparse_embedding(query)
-        if sparse_vector is None:
-            sparse_vector = await sparse_embeddings.aembed_query(query)
-            await cache.store_sparse_embedding(query, sparse_vector)
-
-    # Step 2: Compute retrieval filters before touching the search cache.
+    # Step 1: Compute retrieval filters before touching the search cache.
     colbert_search_used = False
     normalized_query = query.strip().lower()
     query_word_count = len(normalized_query.split()) if normalized_query else 0
@@ -401,7 +394,7 @@ async def _hybrid_retrieve(
 
     start = time.perf_counter()
 
-    # Step 3: Check search cache
+    # Step 2: Check search cache
     cached_results = await cache.get_search_results(dense_vector, initial_filters)
     if cached_results is not None:
         latency = time.perf_counter() - start
@@ -435,6 +428,13 @@ async def _hybrid_retrieve(
             "initial_filters": initial_filters,
             "final_filters": initial_filters,
         }
+
+    # Step 3: Get sparse embedding only after a confirmed search-cache miss.
+    if sparse_vector is None:
+        sparse_vector = await cache.get_sparse_embedding(query)
+        if sparse_vector is None:
+            sparse_vector = await sparse_embeddings.aembed_query(query)
+            await cache.store_sparse_embedding(query, sparse_vector)
 
     # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):

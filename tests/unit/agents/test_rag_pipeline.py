@@ -236,6 +236,8 @@ async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qd
     assert result["search_cache_hit"] is True
     assert len(result["documents"]) == 1
     mock_qdrant.hybrid_search_rrf.assert_not_called()
+    mock_cache.get_sparse_embedding.assert_not_awaited()
+    mock_sparse.aembed_query.assert_not_awaited()
 
 
 async def test_hybrid_retrieve_stores_relaxed_results_under_final_filters(mock_cache, mock_sparse):
