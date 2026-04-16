@@ -3349,6 +3349,46 @@ class TestPreAgentCacheCheck:
         assert stashed_store["filters"] == extracted_filters
         assert stashed_store["state_contract"]["filters"] == extracted_filters
 
+    async def test_pre_agent_filters_skip_semantic_cache_lookup(self, mock_config):
+        """Filtered queries must bypass pre-agent semantic cache reuse."""
+        bot, _ = _create_bot(mock_config)
+        test_embedding = [0.5] * 10
+        self._setup_cache_mocks(bot, embedding=test_embedding, cached_response="unsafe cache hit")
+
+        extracted_filters = {"city": "Несебр"}
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+        mock_analyzer = MagicMock()
+        mock_analyzer.analyze = AsyncMock(
+            return_value={
+                "filters": extracted_filters,
+                "semantic_query": "квартира в Несебре",
+            }
+        )
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.services.query_analyzer.QueryAnalyzer", return_value=mock_analyzer),
+        ):
+            message = _make_text_message("квартира в Несебре")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._cache.check_semantic.assert_not_awaited()
+        assert stashed_store["filters"] == extracted_filters
+        assert stashed_store["state_contract"]["filters"] == extracted_filters
+
     async def test_pre_agent_cache_skip_chitchat(self, mock_config):
         """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (#563)."""
         bot, _ = _create_bot(mock_config)
@@ -4246,6 +4286,52 @@ class TestTextPathSemanticCachePolicy:
         assert metadata["response_state"] == "ok"
         assert metadata["cache_eligible"] is True
         assert metadata["schema_version"] == "v7"
+
+    async def test_text_path_filtered_result_skips_semantic_store(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_text_message("какие квартиры есть в Несебре")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "FAQ",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "cache_hit": False,
+                        "grade_confidence": 0.9,
+                        "grounding_mode": "normal",
+                        "filters": {"city": "Несебр"},
+                        "grounded": True,
+                        "legal_answer_safe": True,
+                        "semantic_cache_safe_reuse": True,
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_not_awaited()
 
 
 class TestClearCacheCommand:
