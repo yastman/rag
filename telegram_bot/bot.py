@@ -136,11 +136,15 @@ def _build_pre_agent_state_contract(
     sparse_vector: dict[str, Any] | None,
     colbert_query: list[list[float]] | None,
     grounding_mode: str,
+    filters: dict[str, Any] | None = None,
 ) -> "PreAgentStateContract":
     """Build the shared pre-agent contract and preserve any upstream filters."""
     from .pipelines.state_contract import build_pre_agent_miss_contract
 
-    filters = rag_result_store.get("filters")
+    resolved_filters = filters
+    if resolved_filters is None:
+        store_filters = rag_result_store.get("filters")
+        resolved_filters = store_filters if isinstance(store_filters, dict) else None
     return build_pre_agent_miss_contract(
         query_type=query_type,
         topic_hint=topic_hint,
@@ -148,7 +152,7 @@ def _build_pre_agent_state_contract(
         sparse_vector=sparse_vector,
         colbert_query=colbert_query,
         grounding_mode=grounding_mode,
-        filters=filters if isinstance(filters, dict) else None,
+        filters=resolved_filters if isinstance(resolved_filters, dict) else None,
     )
 
 
@@ -664,12 +668,42 @@ class PropertyBot:
 
         # Track initialization state
         self._cache_initialized = False
+        self._query_analyzer: Any | None = None
 
         # Setup middlewares (before handlers)
         self._setup_middlewares()
 
         # Register handlers
         self._register_handlers()
+
+    def _get_query_analyzer(self) -> Any | None:
+        """Lazily construct the filter extractor used on pre-agent semantic misses."""
+        if not self.config.llm_base_url:
+            return None
+        if self._query_analyzer is None:
+            from .services.query_analyzer import QueryAnalyzer
+
+            self._query_analyzer = QueryAnalyzer(
+                api_key=self.config.llm_api_key or "no-key",
+                base_url=self.config.llm_base_url,
+                model=self.config.llm_model,
+            )
+        return self._query_analyzer
+
+    async def _extract_pre_agent_filters(self, query: str) -> dict[str, Any]:
+        """Extract structured retrieval filters for the active bot path."""
+        analyzer = self._get_query_analyzer()
+        if analyzer is None:
+            return {}
+        try:
+            analysis = await analyzer.analyze(query)
+        except Exception:
+            logger.warning("Pre-agent filter extraction failed, continuing without filters")
+            return {}
+        if not isinstance(analysis, dict):
+            return {}
+        filters = analysis.get("filters")
+        return dict(filters) if isinstance(filters, dict) else {}
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
@@ -3023,6 +3057,9 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
+                    extracted_filters = await self._extract_pre_agent_filters(user_text)
+                    if extracted_filters:
+                        rag_result_store["filters"] = extracted_filters
                     rag_result_store["state_contract"] = _build_pre_agent_state_contract(
                         rag_result_store=rag_result_store,
                         query_type=query_type,
@@ -3031,6 +3068,7 @@ class PropertyBot:
                         sparse_vector=sparse if isinstance(sparse, dict) else None,
                         colbert_query=colbert,
                         grounding_mode="normal",
+                        filters=extracted_filters or None,
                     )
                 except Exception:
                     logger.warning(
@@ -5006,6 +5044,9 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        if self._query_analyzer is not None and hasattr(self._query_analyzer, "close"):
+            await self._query_analyzer.close()
+            self._query_analyzer = None
         if self._kommo_client is not None:
             await self._kommo_client.close()
             self._kommo_client = None
