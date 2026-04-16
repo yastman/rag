@@ -2921,8 +2921,18 @@ class PropertyBot:
                         rag_result_store.setdefault("legal_answer_safe", True)
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
                         rag_result_store.setdefault("safe_fallback_used", False)
-                    cached = None
+                    extracted_filters: dict[str, Any] = {}
+                    filter_signature: str | None = None
                     if filter_signal.is_filter_sensitive:
+                        extracted_filters = await self._extract_pre_agent_filters(user_text)
+                        if extracted_filters:
+                            rag_result_store["filters"] = extracted_filters
+                            filter_signature = resolve_semantic_cache_signature(
+                                filters=extracted_filters
+                            )
+                            rag_result_store["semantic_cache_filter_signature"] = filter_signature
+                    cached = None
+                    if filter_signal.is_filter_sensitive and filter_signature is None:
                         rag_result_store["semantic_cache_already_checked"] = True
                     else:
                         check_start = time.perf_counter()
@@ -2934,6 +2944,7 @@ class PropertyBot:
                             agent_role=role,
                             grounding_mode=grounding_mode if grounding_mode == "strict" else None,
                             require_safe_reuse=grounding_mode == "strict",
+                            filter_signature=filter_signature,
                         )
                         rag_result_store["pre_agent_cache_check_ms"] = (
                             time.perf_counter() - check_start
@@ -3048,10 +3059,6 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
-                    if filter_signal.is_filter_sensitive:
-                        extracted_filters = await self._extract_pre_agent_filters(user_text)
-                        if extracted_filters:
-                            rag_result_store["filters"] = extracted_filters
                     rag_result_store["state_contract"] = _build_pre_agent_state_contract(
                         rag_result_store=rag_result_store,
                         query_type=query_type,
