@@ -238,6 +238,51 @@ async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qd
     mock_qdrant.hybrid_search_rrf.assert_not_called()
 
 
+async def test_hybrid_retrieve_stores_relaxed_results_under_final_filters(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    user_filters = {"city": "Несебр", "price": {"lte": 80000}}
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        side_effect=[
+            ([{"text": "narrow", "score": 0.9, "metadata": {}}], {"backend_error": False}),
+            ([{"text": "topic-only", "score": 0.8, "metadata": {}}], {"backend_error": False}),
+            (
+                [
+                    {"text": "broad-1", "score": 0.9, "metadata": {}},
+                    {"text": "broad-2", "score": 0.8, "metadata": {}},
+                    {"text": "broad-3", "score": 0.7, "metadata": {}},
+                ],
+                {"backend_error": False},
+            ),
+        ]
+    )
+
+    await _hybrid_retrieve(
+        "рассрочки",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        filters=user_filters,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    mock_cache.get_search_results.assert_awaited_once_with(
+        [0.1] * 1024,
+        {
+            "city": "Несебр",
+            "price": {"lte": 80000},
+            "topic": "finance",
+            "doc_type": "faq",
+        },
+    )
+    store_args = mock_cache.store_search_results.await_args.args
+    assert store_args[0] == [0.1] * 1024
+    assert store_args[1] == user_filters
+    assert len(store_args[2]) == 3
+
 async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock_qdrant):
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
 
