@@ -13,6 +13,7 @@ from telegram_bot.integrations.cache import (
     CACHE_VERSION,
     SEMANTIC_CACHE_VERSION,
     CacheLayerManager,
+    _create_semantic_cache,
     _normalize_query_for_cache,
 )
 
@@ -76,11 +77,29 @@ class TestCacheLayerManagerInit:
     def test_cache_versions_reflect_schema_boundaries(self):
         """Semantic cache schema changed, but exact-cache namespaces stay stable."""
         assert CACHE_VERSION == "v5"
-        assert SEMANTIC_CACHE_VERSION == "v7"
+        assert SEMANTIC_CACHE_VERSION == "v8"
 
 
 class TestCacheLayerManagerInitialize:
     """Test async initialization."""
+
+    def test_create_semantic_cache_declares_filter_signature_tag(self):
+        fake_cache = MagicMock()
+
+        with patch(
+            "redisvl.extensions.cache.llm.SemanticCache",
+            return_value=fake_cache,
+        ) as mock_semantic_cache:
+            cache = _create_semantic_cache(
+                redis_url="redis://localhost:6379",
+                distance_threshold=0.08,
+                ttl=3600,
+                vectorizer=MagicMock(),
+            )
+
+        assert cache is fake_cache
+        filterable_fields = mock_semantic_cache.call_args.kwargs["filterable_fields"]
+        assert {"name": "filter_signature", "type": "tag"} in filterable_fields
 
     async def test_initialize_uses_hardened_connection_params(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
