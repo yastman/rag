@@ -128,6 +128,19 @@ make test-bot-health
 - Use `make deploy-vps-local` or `./scripts/deploy-vps.sh` only as fallback/manual recovery when GitHub-driven deploy is unavailable.
 - Do not treat `/opt/rag-fresh` on the server as an editable working copy; it is a deployment target.
 
+## Internal K3s Images
+
+- Kubernetes manifests under `k8s/` use versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
+- Canonical image names:
+  - `ghcr.io/yastman/rag-bot`
+  - `ghcr.io/yastman/rag-ingestion`
+  - `ghcr.io/yastman/rag-docling`
+  - `ghcr.io/yastman/rag-user-base`
+  - `ghcr.io/yastman/rag-bge-m3`
+- Publish workflow: `.github/workflows/publish-internal-images.yml`
+- Manual publish helper: `make k3s-push-<service> K3S_IMAGE_TAG=v<version>`
+- Use explicit version tags for k3s manifests and let Renovate manage future updates.
+
 ## Common Operations
 
 ```bash
