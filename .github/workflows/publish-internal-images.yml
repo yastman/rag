@@ -28,20 +28,22 @@ jobs:
       matrix:
         include:
           - image_name: rag-bot
+            build_context: .
             dockerfile: telegram_bot/Dockerfile
           - image_name: rag-ingestion
+            build_context: .
             dockerfile: Dockerfile.ingestion
           - image_name: rag-docling
+            build_context: ./services/docling
             dockerfile: services/docling/Dockerfile
           - image_name: rag-user-base
+            build_context: ./services/user-base
             dockerfile: services/user-base/Dockerfile
           - image_name: rag-bge-m3
+            build_context: ./services/bge-m3-api
             dockerfile: services/bge-m3-api/Dockerfile
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Resolve release tag
         id: version
         env:
@@ -53,6 +55,11 @@ jobs:
             VERSION="${GITHUB_REF_NAME}"
           fi
           echo "value=${VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.value }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -76,7 +83,7 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ matrix.build_context }}
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
