@@ -39,7 +39,15 @@
 
   "github-actions": {
     "managerFilePatterns": [
+      "/(^|/)(workflow-templates|\\.(?:github|gitea|forgejo)/(?:workflows|actions))/.+\\.ya?ml$/",
+      "/(^|/)action\\.ya?ml$/",
       "/(^|/)\\.github/workflows\\.disabled/.+$/"
+    ]
+  },
+
+  "kubernetes": {
+    "managerFilePatterns": [
+      "/(^|/)k8s/.+\\.ya?ml$/"
     ]
   },
 
