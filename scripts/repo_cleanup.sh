@@ -15,7 +15,7 @@
 set -euo pipefail
 
 DRY_RUN=true
-MAIN_BRANCH="main"
+MAIN_BRANCH="${MAIN_BRANCH:-dev}"
 
 show_help() {
     sed -n '2,14p' "$0" | sed 's/^# \?//'
