@@ -4377,9 +4377,11 @@ class TestTextPathSemanticCachePolicy:
         mock_agent = AsyncMock()
         mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
 
+        mock_lf = MagicMock()
+
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4393,7 +4395,9 @@ class TestTextPathSemanticCachePolicy:
         assert metadata["grounding_mode"] == "strict"
         assert metadata["response_state"] == "ok"
         assert metadata["cache_eligible"] is True
-        assert metadata["schema_version"] == "v7"
+        assert metadata["schema_version"] == "v8"
+        trace_metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        assert trace_metadata["filter_signature"] == ""
 
     async def test_text_path_filtered_result_stores_semantic_with_filter_signature(
         self, mock_config
@@ -4430,9 +4434,11 @@ class TestTextPathSemanticCachePolicy:
         mock_agent = AsyncMock()
         mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
 
+        mock_lf = MagicMock()
+
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4443,6 +4449,8 @@ class TestTextPathSemanticCachePolicy:
 
         bot._cache.store_semantic.assert_awaited_once()
         assert bot._cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
+        trace_metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        assert trace_metadata["filter_signature"] == "city=Несебр"
 
 
 class TestClearCacheCommand:
