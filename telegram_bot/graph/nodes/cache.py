@@ -20,8 +20,10 @@ from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
     maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
 )
 from telegram_bot.services.metrics import PipelineMetrics
+from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
     check_semantic_cache,
@@ -30,6 +32,15 @@ from telegram_bot.services.rag_core import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_graph_filter_signature(state: dict[str, Any], query: str) -> tuple[bool, str | None]:
+    filter_sensitive = detect_filter_sensitive_query(query).is_filter_sensitive
+    filter_signature = resolve_semantic_cache_signature(
+        filters=state.get("filters"),
+        explicit_signature=state.get("semantic_cache_filter_signature"),
+    )
+    return filter_sensitive, filter_signature
 
 
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
@@ -105,7 +116,17 @@ async def cache_check_node(
     # Step 2: Check semantic cache via shared core.
     # Voice path has no user role — agent_role omitted so voice responses are
     # shared across roles within the same cache_scope="rag" bucket.
-    hit, cached = await check_semantic_cache(query, embedding, query_type, cache=cache)
+    filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
+    if filter_sensitive and filter_signature is None:
+        hit, cached = False, None
+    else:
+        hit, cached = await check_semantic_cache(
+            query,
+            embedding,
+            query_type,
+            cache=cache,
+            filter_signature=filter_signature,
+        )
 
     latency = time.perf_counter() - start
 
@@ -220,7 +241,13 @@ async def cache_store_node(
 
     # Store in semantic cache if we have both response and embedding.
     stored_semantic = False
-    if response and embedding and query_type in CACHEABLE_QUERY_TYPES:
+    filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
+    if (
+        response
+        and embedding
+        and query_type in CACHEABLE_QUERY_TYPES
+        and not (filter_sensitive and filter_signature is None)
+    ):
         decision = build_cacheability_decision(
             result=state,
             query_type=query_type,
@@ -242,6 +269,7 @@ async def cache_store_node(
                 query_type=query_type,
                 cache_scope="rag",
                 decision=decision,
+                filter_signature=filter_signature,
             )
         except Exception as exc:
             # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected

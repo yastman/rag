@@ -248,6 +248,24 @@ async def run_client_pipeline(
         response_text = _build_non_rag_response(query_type)
         await _send_html_chunks(message, response_text, reply_to_user_text=user_text)
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
+        try:
+            lf.update_current_trace(
+                input={"query": user_text},
+                output={"response": response_text},
+                tags=["telegram", "rag", "client_direct"],
+                metadata={
+                    "route": "client_direct",
+                    "pipeline_mode": "client_direct",
+                    "query_type": query_type,
+                    "pipeline_wall_ms": latency_ms,
+                    "e2e_latency_ms": latency_ms,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "Failed to update Langfuse trace metadata in client-direct non-RAG path",
+                exc_info=True,
+            )
         return PipelineResult(
             answer=response_text,
             query_type=query_type,
