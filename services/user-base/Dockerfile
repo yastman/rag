@@ -29,6 +29,8 @@ COPY main.py ./
 # ====== RUNTIME STAGE ======
 FROM python:3.14-slim-bookworm AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
+
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
