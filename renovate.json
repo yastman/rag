@@ -25,10 +25,21 @@
     "enabled": true
   },
 
+  "docker-compose": {
+    "managerFilePatterns": [
+      "/(^|/)(?:compose|docker-compose)(?:\\.[^/]+)?\\.ya?ml$/"
+    ]
+  },
+
+  "dockerfile": {
+    "managerFilePatterns": [
+      "/(^|/)(?:[Dd]ockerfile(?:\\.[^/]+)?)$/"
+    ]
+  },
+
   "github-actions": {
     "managerFilePatterns": [
-      "/(^|/)\\.github/workflows\\.disabled/.+\\.ya?ml$/",
-      "/(^|/)\\.github/workflows\\.disabled/.+\\.ya?ml\\.disabled$/"
+      "/(^|/)\\.github/workflows\\.disabled/.+$/"
     ]
   },
 
