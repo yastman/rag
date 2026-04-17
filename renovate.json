@@ -170,6 +170,18 @@
       "groupName": "storage"
     },
     {
+      "description": "Internal GHCR k8s images - group together",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "ghcr.io/yastman/rag-bot",
+        "ghcr.io/yastman/rag-ingestion",
+        "ghcr.io/yastman/rag-docling",
+        "ghcr.io/yastman/rag-user-base",
+        "ghcr.io/yastman/rag-bge-m3"
+      ],
+      "groupName": "internal-k8s-images"
+    },
+    {
       "description": "Base images - Python",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["python"],
