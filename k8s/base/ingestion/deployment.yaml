@@ -47,8 +47,8 @@ spec:
               drop: ["ALL"]
       containers:
         - name: ingestion
-          image: rag/ingestion:latest
-          imagePullPolicy: Never
+          image: ghcr.io/yastman/rag-ingestion:v2.14.0
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
