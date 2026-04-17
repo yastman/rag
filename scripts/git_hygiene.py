@@ -86,7 +86,7 @@ def find_merged_branches() -> list[str]:
     )
     if not raw:
         return []
-    protected = {DEFAULT_BASE_BRANCH, "main", "master", "develop"}
+    protected = {base_branch, "main", "master", "develop"}
     return [b for b in raw.splitlines() if b.strip() not in protected]
 
 
