@@ -284,7 +284,7 @@ class TestCacheStoreNode:
         assert call_kwargs["cache_scope"] == "rag"
         assert call_kwargs["metadata"]["response_state"] == "ok"
         assert call_kwargs["metadata"]["cache_eligible"] is True
-        assert call_kwargs["metadata"]["schema_version"] == "v7"
+        assert call_kwargs["metadata"]["schema_version"] == "v8"
         assert result["response"] == "generated answer"
 
     async def test_general_stores_to_semantic_cache(self):
