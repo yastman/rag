@@ -5,11 +5,12 @@
     "docker:enableMajor"
   ],
   "mode": "default",
-  "baseBranches": ["dev"],
+  "baseBranchPatterns": ["dev"],
 
   "schedule": ["before 9am on monday"],
   "timezone": "Europe/Kiev",
 
+  "configMigration": true,
   "dependencyDashboard": true,
   "platformAutomerge": true,
   "prHourlyLimit": 5,
@@ -22,6 +23,13 @@
 
   "pre-commit": {
     "enabled": true
+  },
+
+  "github-actions": {
+    "managerFilePatterns": [
+      "/(^|/)\\.github/workflows\\.disabled/.+\\.ya?ml$/",
+      "/(^|/)\\.github/workflows\\.disabled/.+\\.ya?ml\\.disabled$/"
+    ]
   },
 
   "packageRules": [
