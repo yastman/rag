@@ -49,6 +49,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ***REMOVED*** =============================================================================
 FROM python:3.14-slim-bookworm AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
+
 WORKDIR /app
 
 ***REMOVED*** Install minimal runtime dependencies with apt cache
