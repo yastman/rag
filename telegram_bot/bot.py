@@ -1453,7 +1453,7 @@ class PropertyBot:
             tid = lf.get_current_trace_id() or ""
 
             if self._history_service is None:
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={"command": "/history", "query": query},
                     output={"error": "service_unavailable"},
                     metadata={"user_id": user_id},
@@ -1470,7 +1470,7 @@ class PropertyBot:
                 )
             except Exception:
                 logger.exception("History search failed for user %s", user_id)
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={"command": "/history", "query": query},
                     output={"error": "backend_exception"},
                     metadata={"user_id": user_id},
@@ -1491,7 +1491,7 @@ class PropertyBot:
                     continue
                 valid.append(r)
 
-            lf.update_current_trace(
+            lf.update_current_span(
                 input={"command": "/history", "query": query},
                 output={"results_count": len(results), "valid_count": len(valid)},
                 metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
@@ -2522,7 +2522,7 @@ class PropertyBot:
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
             update_kwargs["metadata"] = root_trace_metadata
-        get_client().update_current_trace(**update_kwargs)
+        get_client().update_current_span(**update_kwargs)
 
         # Update session last_active for idle detection (#445)
         if self._cache.redis is not None:
@@ -2796,7 +2796,7 @@ class PropertyBot:
                         wall_ms = (time.perf_counter() - pipeline_start) * 1000
                         lf = get_client()
                         tid = lf.get_current_trace_id() or ""
-                        lf.update_current_trace(
+                        lf.update_current_span(
                             input={"query": user_text},
                             output={"response": _BLOCKED_RESPONSE},
                             metadata={
@@ -3001,7 +3001,7 @@ class PropertyBot:
                                 rag_result_store.get("safe_fallback_used", False)
                             ),
                         }
-                        lf.update_current_trace(
+                        lf.update_current_span(
                             input={"query": user_text},
                             output={"response": cached},
                             metadata=cache_trace_metadata,
@@ -3418,7 +3418,7 @@ class PropertyBot:
 
             # Write Langfuse trace metadata
             lf = get_client()
-            lf.update_current_trace(
+            lf.update_current_span(
                 input={"query": message.text},
                 metadata={
                     "pipeline_mode": "sdk_agent",
@@ -3894,7 +3894,7 @@ class PropertyBot:
             lf = get_client()
             tid = lf.get_current_trace_id() or ""
             try:
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={
                         "voice_duration_s": voice.duration,
                         "stt_text": result.get("stt_text", ""),
