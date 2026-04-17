@@ -413,9 +413,8 @@ def get_langfuse_client() -> Langfuse | None:
 def create_callback_handler(
     *,
     trace_context: Any | None = None,
-    update_trace: bool = False,
 ):
-    """Create Langfuse CallbackHandler for create_agent integration.
+    """Create a native v4 Langfuse CallbackHandler for LangChain integrations.
 
     Returns None when Langfuse is not configured or handler init fails.
     """
@@ -425,10 +424,7 @@ def create_callback_handler(
     try:
         from langfuse.langchain import CallbackHandler
 
-        return CallbackHandler(
-            trace_context=trace_context,
-            update_trace=update_trace,
-        )
+        return CallbackHandler(trace_context=trace_context)
     except Exception:
         logger.warning("Failed to create Langfuse CallbackHandler", exc_info=True)
         return None
