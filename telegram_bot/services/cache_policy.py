@@ -9,7 +9,7 @@ from telegram_bot.services.query_filter_signal import build_filter_signature
 
 
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"ENTITY", "FAQ", "GENERAL", "STRUCTURED"}
-SEMANTIC_CACHE_SCHEMA_VERSION = "v7"
+SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
 
 
 @dataclass(slots=True, frozen=True)
