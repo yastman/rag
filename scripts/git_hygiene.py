@@ -18,9 +18,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
+
+
+DEFAULT_BASE_BRANCH = "dev"
+base_branch = os.environ.get("REPO_BASE_BRANCH", DEFAULT_BASE_BRANCH)
 
 
 @dataclass
@@ -63,17 +68,25 @@ def _run(cmd: list[str], *, check: bool = True) -> str:
 
 
 def find_merged_branches() -> list[str]:
-    """Find local branches already merged into origin/main."""
+    """Find local branches already merged into the configured base branch."""
     # Fetch latest remote state silently
     subprocess.run(
         ["git", "fetch", "--prune"],
         capture_output=True,
         check=False,
     )
-    raw = _run(["git", "branch", "--merged", "origin/main", "--format=%(refname:short)"])
+    raw = _run(
+        [
+            "git",
+            "branch",
+            "--merged",
+            f"origin/{base_branch}",
+            "--format=%(refname:short)",
+        ]
+    )
     if not raw:
         return []
-    protected = {"main", "master", "develop"}
+    protected = {base_branch, "main", "master", "develop"}
     return [b for b in raw.splitlines() if b.strip() not in protected]
 
 
@@ -210,7 +223,7 @@ def print_human_report(report: HygieneReport) -> None:
 def fix_merged_branches(
     branches: list[str], *, dry_run: bool = False, quiet: bool = False
 ) -> list[str]:
-    """Delete branches merged to origin/main. Returns list of deleted branches."""
+    """Delete branches merged to the configured base branch."""
     deleted: list[str] = []
     for branch in branches:
         if dry_run:
@@ -245,7 +258,7 @@ def main() -> None:
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="Auto-cleanup merged branches (conservative: only merged to origin/main)",
+        help="Auto-cleanup merged branches (conservative: only merged to origin/base branch)",
     )
     parser.add_argument(
         "--dry-run",
