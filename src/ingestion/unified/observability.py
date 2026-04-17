@@ -37,8 +37,6 @@ def update_ingestion_trace(
         "user_id": "ingestion-cli",
         "tags": INGESTION_TAGS,
     }
-    if trace_id:
-        trace_kwargs["trace_id"] = trace_id
 
     payload: dict[str, Any] = {
         "command": command,
@@ -47,14 +45,21 @@ def update_ingestion_trace(
     if metadata:
         payload.update(metadata)
 
-    with propagate_attributes(**trace_kwargs):
-        lf = get_client()
-        lf.update_current_trace(
-            session_id=session_id,
-            user_id="ingestion-cli",
-            tags=INGESTION_TAGS,
-            metadata=payload,
-        )
+    lf = get_client()
+    if lf is None:
+        return
+
+    resolved_trace_id = trace_id or lf.create_trace_id(seed=session_id)
+
+    with (
+        lf.start_as_current_observation(
+            as_type="span",
+            name=f"ingestion-{command}",
+            trace_context={"trace_id": resolved_trace_id},
+        ) as observation,
+        propagate_attributes(**trace_kwargs),
+    ):
+        observation.update(metadata=payload)
 
 
 def try_update_ingestion_trace(
