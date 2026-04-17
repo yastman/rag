@@ -5,7 +5,9 @@
     "docker:enableMajor"
   ],
   "mode": "default",
-  "baseBranches": ["dev"],
+  "baseBranchPatterns": [
+    "dev"
+  ],
 
   "schedule": ["before 9am on monday"],
   "timezone": "Europe/Kiev",
