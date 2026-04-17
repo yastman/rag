@@ -33,6 +33,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ====== RUNTIME STAGE ======
 FROM python:3.14-slim-bookworm AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 libxml2 libxslt1.1 zlib1g \
     && rm -rf /var/lib/apt/lists/*

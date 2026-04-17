@@ -32,6 +32,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ====== RUNTIME STAGE ======
 FROM python:3.14-slim-bookworm AS runtime
 
+LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
+
 WORKDIR /app
 
 RUN groupadd -g 1001 botgroup && \
