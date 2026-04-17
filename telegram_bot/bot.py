@@ -3087,15 +3087,6 @@ class PropertyBot:
                         rag_result_store["pre_agent_ms"] = (
                             time.perf_counter() - pre_agent_start
                         ) * 1000
-                        if root_trace_metadata is not None:
-                            root_trace_metadata.update(
-                                {
-                                    "route": "client_direct",
-                                    "pipeline_mode": "client_direct",
-                                    "query_type": query_type,
-                                    "pre_agent_ms": rag_result_store["pre_agent_ms"],
-                                }
-                            )
                         pipeline_answer = await self._handle_client_direct_pipeline(
                             message=message,
                             user_text=user_text,
@@ -3108,28 +3099,6 @@ class PropertyBot:
                             dialog_manager=dialog_manager,
                         )
                         if pipeline_answer is not None:
-                            if root_trace_metadata is not None:
-                                root_trace_metadata.update(
-                                    {
-                                        "route": rag_result_store.get("route", "client_direct"),
-                                        "pipeline_mode": rag_result_store.get(
-                                            "pipeline_mode", "client_direct"
-                                        ),
-                                        "query_type": rag_result_store.get(
-                                            "query_type", query_type
-                                        ),
-                                        "topic_hint": rag_result_store.get("topic_hint", ""),
-                                        "grounding_mode": rag_result_store.get(
-                                            "grounding_mode", ""
-                                        ),
-                                        "collection": rag_result_store.get("collection", ""),
-                                        "environment": rag_result_store.get("environment", ""),
-                                        "pipeline_wall_ms": rag_result_store.get(
-                                            "pipeline_wall_ms"
-                                        ),
-                                        "e2e_latency_ms": rag_result_store.get("e2e_latency_ms"),
-                                    }
-                                )
                             return pipeline_answer
                         # needs_agent=True: fall through to sdk_agent path below
                 except Exception:
