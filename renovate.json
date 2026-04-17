@@ -51,6 +51,51 @@
     ]
   },
 
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track Python versions installed via uv in workflow files",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/workflows\\.disabled/.+$/"
+      ],
+      "matchStrings": [
+        "uv python install\\s+(?<currentValue>\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "python-version",
+      "depNameTemplate": "python",
+      "versioningTemplate": "python"
+    },
+    {
+      "customType": "regex",
+      "description": "Track setup-python version literals in workflow files",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/workflows\\.disabled/.+$/"
+      ],
+      "matchStrings": [
+        "python-version:\\s*[\"']?(?<currentValue>\\d+\\.\\d+)[\"']?"
+      ],
+      "datasourceTemplate": "python-version",
+      "depNameTemplate": "python",
+      "versioningTemplate": "python"
+    },
+    {
+      "customType": "regex",
+      "description": "Track PYTHON_VERSION env literals in workflow files",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/workflows\\.disabled/.+$/"
+      ],
+      "matchStrings": [
+        "PYTHON_VERSION:\\s*[\"']?(?<currentValue>\\d+\\.\\d+)[\"']?"
+      ],
+      "datasourceTemplate": "python-version",
+      "depNameTemplate": "python",
+      "versioningTemplate": "python"
+    }
+  ],
+
   "packageRules": [
     {
       "description": "Auto-merge patch updates",
