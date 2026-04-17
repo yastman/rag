@@ -507,15 +507,20 @@ async def run_client_pipeline(
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
 
     # Langfuse update + scores.
-    lf.update_current_trace(
-        input={"query": user_text},
-        output={"response": response_text},
-        tags=["telegram", "rag", "client_direct"],
-        metadata=trace_metadata,
-    )
+    try:
+        lf.update_current_trace(
+            input={"query": user_text},
+            output={"response": response_text},
+            tags=["telegram", "rag", "client_direct"],
+            metadata=trace_metadata,
+        )
+    except Exception:
+        logger.warning(
+            "Failed to update Langfuse trace metadata in client-direct RAG path",
+            exc_info=True,
+        )
     tid = trace_id or (lf.get_current_trace_id() or "")
     if tid:
-        score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
         result.update(
             {
                 "pipeline_wall_ms": wall_ms,
@@ -529,6 +534,10 @@ async def run_client_pipeline(
                 ],
             }
         )
+        try:
+            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+        except Exception:
+            logger.warning("Failed to write user_role score in client pipeline", exc_info=True)
         try:
             write_langfuse_scores(lf, result, trace_id=tid)
         except Exception:
