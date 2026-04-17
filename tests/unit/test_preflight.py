@@ -1,6 +1,6 @@
 """Unit tests for telegram_bot/preflight.py — dependency preflight checks."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
@@ -122,6 +122,28 @@ class TestCheckRedisDeep:
         assert details["maxmemory_policy"] == "volatile-lfu"
         assert details["connected_clients"] == "3"
         assert details["redis_version"] == "7.2.4"
+
+    async def test_sync_ping_result_is_accepted(self):
+        mock_redis = AsyncMock()
+        mock_redis.ping = Mock(return_value=True)
+        mock_redis.info = AsyncMock(
+            side_effect=lambda section: {
+                "memory": {
+                    "used_memory_human": "1.5M",
+                    "maxmemory_policy": "volatile-lfu",
+                },
+                "clients": {"connected_clients": 3},
+                "server": {"redis_version": "7.2.4"},
+                "keyspace": {"db0": {"keys": 100, "expires": 50}},
+            }[section]
+        )
+        mock_redis.aclose = AsyncMock()
+
+        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+            passed, details = await _check_redis_deep("redis://localhost")
+
+        assert passed is True
+        assert details["ping"] == "ok"
 
     async def test_ping_failure_returns_false(self):
         mock_redis = AsyncMock()
