@@ -1,6 +1,7 @@
 """Bot dependency preflight checks with CRITICAL/OPTIONAL classification."""
 
 import contextlib
+import inspect
 import logging
 import os
 from enum import StrEnum
@@ -130,7 +131,9 @@ async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
     r = aioredis.from_url(redis_url, decode_responses=True)
     try:
         # 1. PING
-        await r.ping()
+        ping_result = r.ping()
+        if inspect.isawaitable(ping_result):
+            await ping_result
         details["ping"] = "ok"
 
         # 2. INFO — memory / clients
