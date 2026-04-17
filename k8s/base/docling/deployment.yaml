@@ -19,8 +19,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: docling
-          image: rag/docling:latest
-          imagePullPolicy: Never
+          image: ghcr.io/yastman/rag-docling:v2.14.0
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

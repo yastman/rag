@@ -13,6 +13,9 @@
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
+PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
+K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
+K3S_IMAGE_TAG ?= v$(PROJECT_VERSION)
 
 # Default target
 .DEFAULT_GOAL := help
@@ -957,8 +960,19 @@ k3s-ingest-start: ## Scale ingestion to 1 replica
 k3s-ingest-stop: ## Scale ingestion to 0 replicas
 	kubectl scale deployment ingestion -n rag --replicas=0
 
-k3s-push-%: ## Build and push image to VPS k3s: make k3s-push-bot
-	docker save rag/$*:latest | ssh vps 'sudo k3s ctr -n k8s.io images import -'
+k3s-push-%: ## Build and push a versioned GHCR image: make k3s-push-bot K3S_IMAGE_TAG=v2.14.0
+	@case "$*" in \
+		bot) dockerfile="telegram_bot/Dockerfile"; image_name="rag-bot" ;; \
+		ingestion) dockerfile="Dockerfile.ingestion"; image_name="rag-ingestion" ;; \
+		docling) dockerfile="services/docling/Dockerfile"; image_name="rag-docling" ;; \
+		user-base) dockerfile="services/user-base/Dockerfile"; image_name="rag-user-base" ;; \
+		bge-m3) dockerfile="services/bge-m3-api/Dockerfile"; image_name="rag-bge-m3" ;; \
+		*) echo "Unsupported k3s image target: $*"; exit 1 ;; \
+	esac; \
+	image_ref="$(K3S_IMAGE_REGISTRY)/$$image_name:$(K3S_IMAGE_TAG)"; \
+	echo "Building $$image_ref from $$dockerfile"; \
+	docker build -f "$$dockerfile" -t "$$image_ref" .; \
+	docker push "$$image_ref"
 
 # =============================================================================
 # DOCKER IMAGE DRIFT (#322)

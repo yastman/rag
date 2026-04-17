@@ -53,8 +53,8 @@ spec:
               drop: ["ALL"]
       containers:
         - name: bot
-          image: rag/bot:latest
-          imagePullPolicy: Never
+          image: ghcr.io/yastman/rag-bot:v2.14.0
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
