@@ -356,7 +356,7 @@ async def test_path_general_uses_semantic_cache():
 
 @pytest.mark.integration
 async def test_path_happy_retrieve_rerank_generate():
-    """Full RAG path: cache miss, relevant docs, rerank, generate (ENTITY query)."""
+    """Full RAG path stores semantic cache when filter signature is available."""
     mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир.")
     mock_gc = _make_mock_graph_config(mocks["llm"])
 
@@ -375,6 +375,7 @@ async def test_path_happy_retrieve_rerank_generate():
     state = make_initial_state(
         user_id=3, session_id="test-path3", query="квартира в Несебре у моря"
     )
+    state["semantic_cache_filter_signature"] = "city=Несебр|distance_to_sea=near"
 
     with traced_pipeline(session_id="test-happy-path", user_id="integration"):
         with _patch_graph_configs(mock_gc):
@@ -396,6 +397,10 @@ async def test_path_happy_retrieve_rerank_generate():
 
     # Cache stored (semantic only — memory owned by checkpointer)
     mocks["cache"].store_semantic.assert_awaited_once()
+    assert (
+        mocks["cache"].store_semantic.await_args.kwargs["filter_signature"]
+        == "city=Несебр|distance_to_sea=near"
+    )
     metadata = mocks["cache"].store_semantic.await_args.kwargs["metadata"]
     assert metadata["response_state"] == "ok"
     assert metadata["cache_eligible"] is True
