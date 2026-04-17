@@ -15,7 +15,7 @@
 set -euo pipefail
 
 DRY_RUN=true
-MAIN_BRANCH="main"
+MAIN_BRANCH="${MAIN_BRANCH:-dev}"
 
 show_help() {
     sed -n '2,14p' "$0" | sed 's/^# \?//'
@@ -53,13 +53,14 @@ echo
 # ---- 2. Remote merged branches ----
 echo "--- Step 2: Remote branches merged into $MAIN_BRANCH ---"
 mapfile -t MERGED_REMOTE < <(git branch -r --merged "origin/$MAIN_BRANCH" \
-    | grep -v "$MAIN_BRANCH" | grep -v HEAD | sed 's|^ *origin/||' || true)
+    | grep -v HEAD | sed 's|^ *origin/||' || true)
 
 # Filter out branches with open PRs
 SAFE_REMOTE=()
 PROTECTED_REMOTE=()
 for branch in "${MERGED_REMOTE[@]+"${MERGED_REMOTE[@]}"}"; do
     [ -z "$branch" ] && continue
+    [ "$branch" = "$MAIN_BRANCH" ] && continue
     open_prs=$(gh pr list --head "$branch" --state open --json number --jq length 2>/dev/null || echo "0")
     if [ "$open_prs" = "0" ] || [ -z "$open_prs" ]; then
         SAFE_REMOTE+=("$branch")
@@ -88,12 +89,13 @@ echo
 # ---- 3. Local merged branches ----
 echo "--- Step 3: Local branches merged into $MAIN_BRANCH ---"
 mapfile -t MERGED_LOCAL < <(git branch --merged "$MAIN_BRANCH" \
-    | grep -v "$MAIN_BRANCH" | grep -v '\*' | sed 's/^[+ ]*//' || true)
+    | grep -v '\*' | sed 's/^[+ ]*//' || true)
 
 SAFE_LOCAL=()
 WORKTREE_LOCAL=()
 for branch in "${MERGED_LOCAL[@]+"${MERGED_LOCAL[@]}"}"; do
     [ -z "$branch" ] && continue
+    [ "$branch" = "$MAIN_BRANCH" ] && continue
     # Check if branch is checked out in a worktree
     if git worktree list | grep -q "\[$branch\]"; then
         WORKTREE_LOCAL+=("$branch")
