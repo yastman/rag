@@ -57,10 +57,8 @@ class TestSdkDisabledClientResilience:
 
         return get_client()
 
-    def test_update_current_trace_no_raise(self):
-        self._client().update_current_trace(
-            input={"query": "test"}, output={"response": "ok"}, metadata={"k": "v"}
-        )
+    def test_set_current_trace_io_no_raise(self):
+        self._client().set_current_trace_io(input={"query": "test"}, output={"response": "ok"})
 
     def test_update_current_span_no_raise(self):
         self._client().update_current_span(
@@ -215,7 +213,7 @@ class TestVoiceErrorScoresResilience:
 
 
 class TestBotScoringTryCatchContract:
-    """bot.py must wrap write_langfuse_scores and update_current_trace in try/except."""
+    """bot.py must wrap write_langfuse_scores and observation updates in try/except."""
 
     def _bot_source(self) -> str:
         from pathlib import Path
