@@ -2921,7 +2921,6 @@ class PropertyBot:
                         rag_result_store.setdefault("legal_answer_safe", True)
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
                         rag_result_store.setdefault("safe_fallback_used", False)
-                    extracted_filters: dict[str, Any] = {}
                     filter_signature: str | None = None
                     if filter_signal.is_filter_sensitive:
                         extracted_filters = await self._extract_pre_agent_filters(user_text)
