@@ -1094,7 +1094,7 @@ class TestCacheStoreGuards:
         assert metadata["semantic_cache_safe_reuse"] is True
         assert metadata["response_state"] == "ok"
         assert metadata["cache_eligible"] is True
-        assert metadata["schema_version"] == "v7"
+        assert metadata["schema_version"] == "v8"
 
     async def test_provider_fallback_skips_cache_store_even_without_safe_fallback(self):
         msg = _make_message()
@@ -1248,7 +1248,7 @@ class TestCacheStoreGuards:
         assert metadata["semantic_cache_safe_reuse"] is True
         assert metadata["response_state"] == "ok"
         assert metadata["cache_eligible"] is True
-        assert metadata["schema_version"] == "v7"
+        assert metadata["schema_version"] == "v8"
 
     async def test_structured_query_type_stores_cache(self):
         """STRUCTURED query type is in _PIPELINE_STORE_TYPES, so cache store is enabled."""

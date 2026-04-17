@@ -3457,6 +3457,7 @@ class PropertyBot:
                     "query_type": rag_result_store.get("query_type", ""),
                     "topic_hint": rag_result_store.get("topic_hint", ""),
                     "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                    "filter_signature": filter_signature or "",
                     "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
                     "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
                     "grounded": bool(rag_result_store.get("grounded", True)),
@@ -3479,6 +3480,7 @@ class PropertyBot:
                         "query_type": rag_result_store.get("query_type", ""),
                         "topic_hint": rag_result_store.get("topic_hint", ""),
                         "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                        "filter_signature": filter_signature or "",
                         "grade_confidence": float(
                             rag_result_store.get("grade_confidence", 0.0) or 0.0
                         ),
