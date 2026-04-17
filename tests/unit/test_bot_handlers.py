@@ -2601,6 +2601,130 @@ class TestClientDirectPipeline:
         assert meta_call is not None
         assert meta_call.kwargs["metadata"]["pipeline_mode"] == "client_direct"
 
+    async def test_client_direct_chitchat_trace_failure_does_not_fall_back_to_sdk_agent(
+        self, mock_config
+    ):
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._cache.store_semantic = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
+
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="")
+        pipeline_lf = MagicMock()
+        pipeline_lf.get_current_trace_id = MagicMock(return_value="")
+        pipeline_lf.update_current_trace.side_effect = RuntimeError("trace write failed")
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+            patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
+            patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
+            patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
+            patch("telegram_bot.pipelines.client.generate_response") as mock_generate,
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.pipelines.client.get_client", return_value=pipeline_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("привет")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_create_agent.assert_not_called()
+        mock_rag.assert_not_called()
+        mock_generate.assert_not_called()
+        assert message.answer.call_count == 1
+        sent = message.answer.call_args[0][0]
+        assert "недвижим" in sent.lower()
+
+    async def test_client_direct_filtered_result_keeps_sdk_trace_metadata_authoritative(
+        self, mock_config
+    ):
+        from telegram_bot.services.query_filter_signal import QueryFilterSignal
+
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        self._setup_pre_agent_cache_miss(bot)
+
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="")
+        rag_result = {
+            "query_type": "FAQ",
+            "cache_hit": False,
+            "documents": [{"text": "doc", "score": 0.8, "metadata": {}}],
+            "latency_stages": {"retrieve": 0.02},
+            "search_results_count": 1,
+            "embeddings_cache_hit": False,
+            "search_cache_hit": False,
+            "rerank_applied": False,
+            "grade_confidence": 0.8,
+            "query_embedding": [0.1] * 10,
+            "cache_key_embedding": [0.1] * 10,
+        }
+        generated = {
+            "response": "Direct filtered answer",
+            "llm_call_count": 1,
+            "latency_stages": {"retrieve": 0.02, "generate": 0.05},
+            "llm_decode_ms": None,
+            "llm_tps": None,
+            "llm_queue_ms": None,
+            "llm_timeout": False,
+            "llm_stream_recovery": False,
+            "streaming_enabled": False,
+            "response_policy_mode": "disabled",
+        }
+        mock_extractor = MagicMock()
+        mock_extractor.extract_filters.return_value = {"city": "Несебр"}
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch(
+                "telegram_bot.bot.detect_filter_sensitive_query",
+                return_value=QueryFilterSignal(True, ("city",)),
+                create=True,
+            ),
+            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
+            patch(
+                "telegram_bot.pipelines.client.rag_pipeline",
+                AsyncMock(return_value=rag_result),
+            ) as mock_rag,
+            patch(
+                "telegram_bot.pipelines.client.generate_response",
+                AsyncMock(return_value=generated),
+            ) as mock_generate,
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.pipelines.client.get_client", return_value=mock_lf),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("какие квартиры есть в Несебре")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_create_agent.assert_not_called()
+        mock_rag.assert_awaited_once()
+        mock_generate.assert_awaited_once()
+        trace_calls = mock_lf.update_current_trace.call_args_list
+        pipeline_meta_call = next(
+            (
+                c
+                for c in trace_calls
+                if c.kwargs.get("metadata", {}).get("pipeline_mode") == "client_direct"
+            ),
+            None,
+        )
+        assert pipeline_meta_call is not None
+        assert pipeline_meta_call.kwargs["metadata"]["filter_signature"] == "city=Несебр"
+        assert "metadata" not in trace_calls[-1].kwargs
+
     async def test_client_direct_failure_falls_back_to_sdk_agent(self, mock_config):
         mock_config.client_direct_pipeline_enabled = True
         bot, _ = _create_bot(mock_config)

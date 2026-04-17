@@ -166,6 +166,37 @@ class TestCacheCheckNode:
         call_kwargs = cache.check_semantic.call_args[1]
         assert call_kwargs.get("cache_scope") == "rag"
 
+    async def test_filter_sensitive_query_without_signature_skips_semantic_cache_lookup(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="квартира в Несебре")
+        state["query_type"] = "FAQ"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value="cached answer")
+
+        embeddings = AsyncMock()
+
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
+
+        assert result["cache_hit"] is False
+        assert result["cached_response"] is None
+        cache.check_semantic.assert_not_awaited()
+
+    async def test_filter_sensitive_query_passes_signature_to_semantic_cache_lookup(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="квартира в Несебре")
+        state["query_type"] = "FAQ"
+        state["semantic_cache_filter_signature"] = "city=Несебр"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        embeddings = AsyncMock()
+
+        await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
+
+        assert cache.check_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
+
     async def test_stores_new_embedding_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="new query")
         state["query_type"] = "FAQ"
@@ -337,6 +368,37 @@ class TestCacheStoreNode:
 
         call_kwargs = cache.store_semantic.call_args[1]
         assert call_kwargs.get("cache_scope") == "rag"
+
+    async def test_filter_sensitive_query_without_signature_skips_semantic_cache_store(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="квартира в Несебре")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+
+        await cache_store_node(state, _make_runtime(cache=cache))
+
+        cache.store_semantic.assert_not_awaited()
+
+    async def test_filter_sensitive_query_passes_signature_to_semantic_cache_store(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="квартира в Несебре")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+        state["documents"] = [{"text": "doc", "score": 0.9, "metadata": {}}]
+        state["grade_confidence"] = 0.9
+        state["semantic_cache_filter_signature"] = "city=Несебр"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+
+        await cache_store_node(state, _make_runtime(cache=cache))
+
+        assert cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
 
     async def test_skips_store_if_no_response(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
