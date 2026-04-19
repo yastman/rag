@@ -185,7 +185,7 @@ services:
     # LiteLLM writes migration/UI artifacts under site-packages at startup.
     # Keep hardening defaults, but allow writes for this service.
     read_only: false
-    image: ghcr.io/berriai/litellm:main-v1.81.14-stable
+    image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
     restart: unless-stopped
     logging: *default-logging
     volumes:
