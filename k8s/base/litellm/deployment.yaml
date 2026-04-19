@@ -26,7 +26,7 @@ spec:
               drop: ["ALL"]
       containers:
         - name: litellm
-          image: ghcr.io/berriai/litellm:main-v1.81.14-stable
+          image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
