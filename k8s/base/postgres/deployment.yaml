@@ -21,7 +21,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: postgres
-          image: pgvector/pgvector:pg17
+          image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
           securityContext:
             allowPrivilegeEscalation: false
           ports:
