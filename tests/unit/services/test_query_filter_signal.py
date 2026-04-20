@@ -63,6 +63,24 @@ def test_detect_filter_sensitive_query_for_extractor_supported_forms(
     assert reason in signal.reasons
 
 
+@pytest.mark.parametrize(
+    ("query", "reason"),
+    [
+        ("квартира в Софии", "city"),
+        ("апартамент в Свети Власе", "city"),
+        ("двухкомнатная квартира в Созополе", "rooms"),
+        ("трехкомнатная квартира у моря", "rooms"),
+        ("однокомнатная квартира в Несебре", "rooms"),
+    ],
+)
+def test_detect_filter_sensitive_query_for_supported_apartment_city_and_room_forms(
+    query: str, reason: str
+) -> None:
+    signal = detect_filter_sensitive_query(query)
+    assert signal.is_filter_sensitive is True
+    assert reason in signal.reasons
+
+
 def test_build_filter_signature_sorts_keys_and_nested_ranges() -> None:
     signature = build_filter_signature({"price": {"lte": 80000}, "city": "Несебр"})
     assert signature == "city=Несебр|price.lte=80000"
