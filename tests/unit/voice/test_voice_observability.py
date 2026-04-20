@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import inspect
 from unittest.mock import MagicMock, patch
 
-from src.voice.observability import build_voice_trace_metadata, update_voice_trace, voice_session_id
+from src.voice.observability import (
+    build_voice_trace_metadata,
+    trace_voice_session,
+    update_voice_trace,
+    voice_session_id,
+)
 
 
 def test_voice_session_id_handles_missing_call_id() -> None:
@@ -49,3 +55,8 @@ def test_update_voice_trace_sets_trace_context() -> None:
     mock_observation.update.assert_called_once_with(
         metadata={"call_id": "call-42", "status": "completed", "duration_sec": 9}
     )
+
+
+def test_trace_voice_session_is_not_wrapped_in_second_observation_layer() -> None:
+    assert not hasattr(trace_voice_session, "__wrapped__")
+    assert inspect.iscoroutinefunction(trace_voice_session)

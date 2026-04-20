@@ -229,8 +229,8 @@ class TestBotScoringTryCatchContract:
         # Both try and write_langfuse_scores exist together in the voice handler
         assert "Failed to write Langfuse voice scores" in source
 
-    def test_update_current_trace_failure_logged_not_raised(self):
-        """Failed update_current_trace must be caught and logged, not re-raised."""
+    def test_update_current_span_failure_logged_not_raised(self):
+        """Failed update_current_span must be caught and logged, not re-raised."""
         source = self._bot_source()
         assert "Failed to update Langfuse voice trace metadata" in source
 
