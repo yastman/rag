@@ -364,6 +364,7 @@ addopts = """
     -ra
     --strict-markers
     --strict-config
+    --capture=sys
     --dist=loadscope
 """
 testpaths = ["tests"]
