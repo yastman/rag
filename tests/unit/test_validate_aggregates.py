@@ -1057,20 +1057,85 @@ class TestAggregatesStddev:
 class TestRunSingleQuery:
     """run_single_query should restore mutable config even on failures."""
 
-    async def test_restores_streaming_flag_on_graph_failure(self, monkeypatch: pytest.MonkeyPatch):
+    async def test_propagates_validation_metadata_before_graph_execution(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        mock_propagate = MagicMock(return_value=contextlib.nullcontext())
+        mock_start_observation = MagicMock(return_value=contextlib.nullcontext())
+
         class _FakeClient:
-            def update_current_trace(self, **kwargs):
+            def start_as_current_observation(self, **kwargs):
+                return mock_start_observation(**kwargs)
+
+            def update_current_span(self, **kwargs):
                 return None
 
-        def _fake_observe(*, name: str):
-            def _decorator(fn):
-                async def _wrapped(*args, **kwargs):
-                    kwargs.pop("langfuse_trace_id", None)
-                    return await fn(*args, **kwargs)
+        class _Graph:
+            async def ainvoke(self, state):
+                return {"response": "ok", "latency_stages": {}}
 
-                return _wrapped
+        fake_graph = types.SimpleNamespace(build_graph=lambda **_kwargs: _Graph())
+        fake_state = types.SimpleNamespace(
+            make_initial_state=lambda **_kwargs: {"messages": [{"role": "user", "content": "q"}]}
+        )
+        fake_observability = types.SimpleNamespace(
+            get_client=lambda: _FakeClient(),
+            propagate_attributes=mock_propagate,
+        )
 
-            return _decorator
+        monkeypatch.setitem(sys.modules, "telegram_bot.graph.graph", fake_graph)
+        monkeypatch.setitem(sys.modules, "telegram_bot.graph.state", fake_state)
+        monkeypatch.setitem(sys.modules, "telegram_bot.observability", fake_observability)
+
+        config = types.SimpleNamespace(
+            streaming_enabled=False,
+            max_rewrite_attempts=1,
+            skip_rerank_threshold=0.018,
+            relevance_threshold_rrf=0.005,
+        )
+        services = {
+            "cache": object(),
+            "embeddings": object(),
+            "sparse_embeddings": object(),
+            "qdrant": object(),
+            "reranker": None,
+            "llm": None,
+            "config": config,
+        }
+        query = types.SimpleNamespace(text="q", source="faq", difficulty="easy")
+        run_meta = {"run_id": "run-1", "git_sha": "abc123", "collection": "test-col"}
+
+        with patch("telegram_bot.scoring.write_langfuse_scores"):
+            await run_single_query(
+                query,
+                services,
+                run_meta,
+                phase="streaming",
+            )
+
+        mock_propagate.assert_called_once_with(
+            session_id="validate-run-1",
+            user_id="validation",
+            metadata={
+                "validation_run_id": "run-1",
+                "git_sha": "abc123",
+                "collection": "test-col",
+                "query_set": "faq",
+                "query_difficulty": "easy",
+                "phase": "streaming",
+                "skip_rerank_threshold": "0.018",
+                "relevance_threshold_rrf": "0.005",
+            },
+            tags=["validation", "streaming", "test-col", "run-1"],
+        )
+
+    async def test_restores_streaming_flag_on_graph_failure(self, monkeypatch: pytest.MonkeyPatch):
+        class _FakeClient:
+            def start_as_current_observation(self, **kwargs):
+                return contextlib.nullcontext()
+
+            def update_current_span(self, **kwargs):
+                return None
 
         class _FailingGraph:
             async def ainvoke(self, state):
@@ -1083,7 +1148,6 @@ class TestRunSingleQuery:
         )
         fake_observability = types.SimpleNamespace(
             get_client=lambda: _FakeClient(),
-            observe=_fake_observe,
             propagate_attributes=lambda **_kwargs: contextlib.nullcontext(),
         )
 
