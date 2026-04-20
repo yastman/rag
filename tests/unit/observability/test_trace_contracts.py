@@ -1,4 +1,4 @@
-"""Trace contract tests — verify score writing and update_current_trace shapes.
+"""Trace contract tests — verify score writing and update_current_span shapes.
 
 Contracts tested:
   - score() must use create_score with trace_id and score_id idempotency key

@@ -134,6 +134,7 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
     mock_propagate.assert_called_once_with(
         session_id="sess-1",
         user_id="42",
+        metadata={"source": "voice"},
         tags=["api", "rag", "voice"],
     )
     lf.update_current_span.assert_called_once()
@@ -144,13 +145,17 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
 
 
 async def test_query_propagates_explicit_langfuse_trace_id() -> None:
-    """POST /query should normalize external ids before passing them to @observe."""
+    """POST /query should normalize external ids before opening the root observation."""
     lf = MagicMock()
     lf.create_trace_id.return_value = "0123456789abcdef0123456789abcdef"
+    lf.start_as_current_observation.return_value = nullcontext()
 
     with (
         patch("telegram_bot.observability.get_client", return_value=lf),
-        patch("src.api.main._query_with_observability", new=AsyncMock()) as mock_query_impl,
+        patch(
+            "src.api.main._execute_query",
+            new=AsyncMock(return_value=SimpleNamespace()),
+        ) as mock_execute,
     ):
         await query(
             QueryRequest(
@@ -163,16 +168,12 @@ async def test_query_propagates_explicit_langfuse_trace_id() -> None:
         )
 
     lf.create_trace_id.assert_called_once_with(seed="trace-123")
-    mock_query_impl.assert_awaited_once_with(
-        QueryRequest(
-            query="test",
-            user_id=42,
-            session_id="sess-1",
-            channel="voice",
-            langfuse_trace_id="trace-123",
-        ),
-        langfuse_trace_id="0123456789abcdef0123456789abcdef",
+    lf.start_as_current_observation.assert_called_once_with(
+        as_type="span",
+        name="rag-api-query",
+        trace_context={"trace_id": "0123456789abcdef0123456789abcdef"},
     )
+    mock_execute.assert_awaited_once()
 
 
 async def test_lifespan_respects_rerank_provider_none() -> None:
