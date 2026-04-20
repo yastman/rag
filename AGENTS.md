@@ -98,6 +98,11 @@
 - Base checks for most code changes:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+- Use the smallest verification set that proves the touched contract:
+  - docs/instruction-only changes: reread changed files for consistency; repo-wide tests are not required by default
+  - local startup/config/preflight fixes: run affected unit tests plus runtime smoke such as `make test-bot-health` and, when relevant, `make run-bot`
+  - graph/search/runtime behavior changes: keep the broader repo gates above unless a local override defines a stricter or more specific path
+- Do not default to `make test-full` for narrow fixes. Use it only when the touched surface or release risk genuinely requires the broader suite.
 - Use stricter checks from local overrides when working in their scope.
 - If you skip a relevant check, state that explicitly.
 

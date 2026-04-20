@@ -1,5 +1,6 @@
 """Bot configuration."""
 
+import os
 from typing import Annotated
 
 from pydantic import (
@@ -25,6 +26,14 @@ def _empty_str_to_false(v: object) -> object:
 EmptyStrBool = Annotated[bool, BeforeValidator(_empty_str_to_false)]
 
 
+def _inject_local_redis_password(redis_url: str) -> str:
+    """Inject REDIS_PASSWORD for the default host-native Redis URL."""
+    password = os.getenv("REDIS_PASSWORD", "").strip()
+    if not password or "@" in redis_url or redis_url != "redis://localhost:6379":
+        return redis_url
+    return redis_url.replace("redis://", f"redis://:{password}@", 1)
+
+
 class BotConfig(BaseSettings):
     """Telegram bot configuration."""
 
@@ -46,6 +55,9 @@ class BotConfig(BaseSettings):
     )
     redis_url: str = Field(
         default="redis://localhost:6379", validation_alias=AliasChoices("redis_url", "REDIS_URL")
+    )
+    redis_password: str = Field(
+        default="", validation_alias=AliasChoices("redis_password", "REDIS_PASSWORD")
     )
     qdrant_url: str = Field(
         default="http://localhost:6333", validation_alias=AliasChoices("qdrant_url", "QDRANT_URL")
@@ -618,7 +630,17 @@ class BotConfig(BaseSettings):
         return []
 
     @model_validator(mode="after")
-    def validate_handoff_contract(self) -> "BotConfig":
+    def normalize_runtime_contracts(self) -> "BotConfig":
+        if (
+            self.redis_password
+            and "@" not in self.redis_url
+            and self.redis_url == "redis://localhost:6379"
+        ):
+            self.redis_url = self.redis_url.replace(
+                "redis://", f"redis://:{self.redis_password}@", 1
+            )
+        else:
+            self.redis_url = _inject_local_redis_password(self.redis_url)
         if self.handoff_enabled and self.managers_group_id is None:
             raise ValueError("HANDOFF_ENABLED=true but MANAGERS_GROUP_ID is missing")
         return self

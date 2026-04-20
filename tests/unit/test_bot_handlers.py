@@ -1590,6 +1590,55 @@ class TestBotLifecycle:
 
         bot._cache.initialize.assert_not_called()
 
+    async def test_start_runs_preflight_before_cache_init(self, mock_config):
+        """Critical dependency preflight should run before cache/bootstrap work."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
+
+        order: list[str] = []
+
+        async def fake_cache_init():
+            order.append("cache")
+
+        async def fake_preflight(*args, **kwargs):
+            order.append("preflight")
+            return DependencyCheckResult({"redis": True}, report=StartupReport())
+
+        bot._cache.initialize = AsyncMock(side_effect=fake_cache_init)
+
+        with patch("telegram_bot.preflight.check_dependencies", side_effect=fake_preflight):
+            await bot.start()
+
+        assert order[:2] == ["preflight", "cache"]
+
+    async def test_start_does_not_init_redis_checkpointers_when_preflight_fails(self, mock_config):
+        """Critical preflight failure should stop before Redis-backed initialization."""
+        from telegram_bot.preflight import PreflightError
+
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+
+        with (
+            patch(
+                "telegram_bot.preflight.check_dependencies",
+                side_effect=PreflightError(["redis"], report=StartupReport()),
+            ),
+            patch("telegram_bot.integrations.memory.create_redis_checkpointer") as mock_create,
+            pytest.raises(PreflightError),
+        ):
+            await bot.start()
+
+        bot._cache.initialize.assert_not_called()
+        mock_create.assert_not_called()
+
     async def test_start_logs_one_final_startup_summary(self, mock_config, caplog):
         """Startup should emit one final verdict block for degraded startup."""
         bot, _ = _create_bot(mock_config)
@@ -2687,7 +2736,10 @@ class TestClientDirectPipeline:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
             patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
             patch(
                 "telegram_bot.pipelines.client.rag_pipeline",
@@ -3638,7 +3690,10 @@ class TestPreAgentCacheCheck:
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира до 80000 евро в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3675,7 +3730,10 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city", "price")),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира до 80000 евро в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3713,7 +3771,10 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3885,7 +3946,10 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:

@@ -32,6 +32,7 @@ cp .env.example .env
 # - TELEGRAM_BOT_TOKEN
 # - OPENAI_API_KEY (or LLM_BASE_URL for LiteLLM)
 # - REDIS_PASSWORD
+# - REDIS_URL only if you are not using the default localhost Redis from `make local-up`
 # - LANGFUSE_PUBLIC_KEY
 # - LANGFUSE_SECRET_KEY
 # - LANGFUSE_HOST
@@ -51,9 +52,11 @@ docker compose ps
 
 ```bash
 # Run bot in development mode
+make test-bot-health
 make run-bot
 
 # Or run via uv directly
+make test-bot-health
 uv run python -m telegram_bot.main
 ```
 

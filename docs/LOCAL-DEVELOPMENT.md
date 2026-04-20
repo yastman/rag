@@ -57,6 +57,13 @@ Bot preflight:
 make test-bot-health
 ```
 
+`make test-bot-health` verifies the native local bot contract:
+- Redis connectivity and auth for the host-side bot runtime
+- Qdrant collection visibility
+- LiteLLM / OpenAI-compatible health
+
+For Redis, the native bot uses `REDIS_PASSWORD` automatically when `REDIS_URL` is not explicitly set. Override `REDIS_URL` only when connecting to a different Redis host/port/db or when you need custom credentials.
+
 `make test-bot-health` resolves `QDRANT_COLLECTION` in this order:
 1. exported shell env (`QDRANT_COLLECTION`)
 2. `.env` value
@@ -70,7 +77,18 @@ Local release gate:
 make check
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 make test-bot-health
+make run-bot
 ```
+
+For narrow local startup/config/preflight fixes, do not jump straight to the full gate above. Prefer this shorter loop first:
+
+```bash
+uv run pytest tests/unit/<affected_test>.py -q
+make test-bot-health
+make run-bot
+```
+
+Escalate to `make check` and `make test-unit` when the fix changes shared bot behavior, broader runtime contracts, or code outside the startup/preflight path.
 
 Optional broader gates:
 
@@ -95,6 +113,7 @@ lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 
 ```bash
 # Telegram bot
+make test-bot-health
 uv run python -m telegram_bot.main
 
 # Unified ingestion

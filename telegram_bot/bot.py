@@ -4465,6 +4465,19 @@ class PropertyBot:
         logger.info("Starting bot...")
         startup_report = StartupReport()
 
+        # Preflight dependency checks
+        from .preflight import PreflightError, check_dependencies
+
+        try:
+            preflight_result = await check_dependencies(self.config, log_summary=False)
+        except PreflightError as exc:
+            startup_report.merge(exc.report)
+            logger.error(startup_report.render())
+            raise
+        preflight_report = getattr(preflight_result, "report", None)
+        if isinstance(preflight_report, StartupReport):
+            startup_report.merge(preflight_report)
+
         # Initialize cache at startup
         if not self._cache_initialized:
             logger.info("Initializing cache service...")
@@ -4890,19 +4903,6 @@ class PropertyBot:
 
         aiogram_setup_dialogs(self.dp)
         logger.info("aiogram-dialog setup complete")
-
-        # Preflight dependency checks
-        from .preflight import PreflightError, check_dependencies
-
-        try:
-            preflight_result = await check_dependencies(self.config, log_summary=False)
-        except PreflightError as exc:
-            startup_report.merge(exc.report)
-            logger.error(startup_report.render())
-            raise
-        preflight_report = getattr(preflight_result, "report", None)
-        if isinstance(preflight_report, StartupReport):
-            startup_report.merge(preflight_report)
 
         # Start Redis health monitor (background task, every 5 min)
         await self._redis_monitor.start()

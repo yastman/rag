@@ -16,6 +16,11 @@
 ### Quick execution
 - Keep the blast radius local and follow existing repository patterns.
 - Prefer the smallest sufficient verification for the touched surface.
+- Startup/config/preflight/local-dev workflow fixes should normally stay on targeted verification:
+  - affected unit tests
+  - the relevant smoke/preflight command
+  - optional direct runtime reproduction when the issue is specifically about startup behavior
+- Avoid escalating Quick execution work into full-suite verification unless the fix crosses service boundaries or changes shared runtime behavior.
 
 ### Plan needed
 - Use this for multi-file, refactor, dependency, or runtime-impacting work.

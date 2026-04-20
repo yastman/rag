@@ -143,6 +143,7 @@ cp .env.example .env   # Fill in API keys (see below)
 
 ```bash
 make local-up    # Redis, Qdrant, BGE-M3, Docling, LiteLLM
+make test-bot-health  # Verify Redis + Qdrant + LiteLLM for native startup
 make run-bot     # Run bot natively (fast iteration, no Docker rebuild)
 ```
 
@@ -171,7 +172,7 @@ make docker-full-up    # All 23 services
 |----------|----------|-------------|
 | `TELEGRAM_BOT_TOKEN` | Yes | Telegram Bot API token |
 | `OPENAI_API_KEY` | Yes | OpenAI API key (routed through LiteLLM) |
-| `REDIS_PASSWORD` | Yes | Redis authentication |
+| `REDIS_PASSWORD` | Yes | Redis authentication; native localhost bot runs reuse it automatically |
 | `LANGFUSE_*` | Yes | Langfuse observability (public key, secret key, host) |
 
 <details>

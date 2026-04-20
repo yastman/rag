@@ -16,6 +16,11 @@
 - Always run fast checks:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+- For bot startup/config/preflight/local-run contract fixes that do not change handler, graph, retrieval, or domain behavior, use targeted verification instead of the full bot gate:
+  - affected unit tests
+  - `make test-bot-health`
+  - `make run-bot` when reproducing or closing a startup issue
+- Reserve the broader `make check` + `make test-unit` pair for changes that alter shared bot behavior, business logic, or integration surfaces.
 - For graph flow edits, run:
   - `uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q`
 - For cache/search/rerank behavior edits, run targeted suites from `tests/unit/` and affected integration tests.
