@@ -19,6 +19,7 @@ from telegram_bot.observability import get_client, observe
 from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
+    is_contextual_query,
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
@@ -117,7 +118,8 @@ async def cache_check_node(
     # Voice path has no user role — agent_role omitted so voice responses are
     # shared across roles within the same cache_scope="rag" bucket.
     filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
-    if filter_sensitive and filter_signature is None:
+    contextual_query = is_contextual_query(query)
+    if contextual_query or (filter_sensitive and filter_signature is None):
         hit, cached = False, None
     else:
         hit, cached = await check_semantic_cache(
@@ -254,7 +256,7 @@ async def cache_store_node(
             grounding_mode=str(state.get("grounding_mode", "normal") or "normal"),
             documents=state.get("documents", []),
             cache_hit=bool(state.get("cache_hit", False)),
-            contextual=False,
+            contextual=is_contextual_query(query),
             grade_confidence=float(state.get("grade_confidence", 0.0) or 0.0),
             confidence_threshold=0.0,
             schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
