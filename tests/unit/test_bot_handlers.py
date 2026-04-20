@@ -758,8 +758,8 @@ class TestHandleQuery:
                 await bot.handle_query(message)
 
             # Child span call (first) carries metadata; root span call (second) carries output (#511)
-            assert mock_lf.update_current_trace.call_count >= 1
-            trace_kwargs = mock_lf.update_current_trace.call_args_list[0].kwargs
+            assert mock_lf.update_current_span.call_count >= 1
+            trace_kwargs = mock_lf.update_current_span.call_args_list[0].kwargs
             assert trace_kwargs["metadata"]["pipeline_mode"] == "sdk_agent"
 
     async def test_handle_query_writes_supervisor_model_score(self, mock_config):
@@ -1182,8 +1182,8 @@ class TestCmdHistory:
                 await bot.cmd_history(message)
 
         # Trace metadata
-        mock_lf.update_current_trace.assert_called_once()
-        trace_kwargs = mock_lf.update_current_trace.call_args[1]
+        mock_lf.update_current_span.assert_called_once()
+        trace_kwargs = mock_lf.update_current_span.call_args[1]
         assert trace_kwargs["input"]["command"] == "/history"
         assert trace_kwargs["input"]["query"] == "цены"
         assert trace_kwargs["output"]["results_count"] == 1
@@ -1232,7 +1232,7 @@ class TestCmdHistory:
                 await bot.cmd_history(message)
 
         # Trace should indicate error
-        trace_kwargs = mock_lf.update_current_trace.call_args[1]
+        trace_kwargs = mock_lf.update_current_span.call_args[1]
         assert trace_kwargs["output"]["error"] == "service_unavailable"
 
         # Scores (#435: uses create_score with trace_id)
@@ -1408,7 +1408,7 @@ class TestHandleVoiceExceptionHandling:
                 mock_cas.typing.return_value = mock_cm
                 await bot.handle_voice(message)
 
-            mock_lf.update_current_trace.assert_called_once()
+            mock_lf.update_current_span.assert_called_once()
             mock_write_scores.assert_called_once()
 
     async def test_post_pipeline_error_does_not_send_false_error(self, mock_config):
@@ -1493,7 +1493,7 @@ class TestHandleVoiceExceptionHandling:
                 "Не удалось распознать" in str(call) for call in message.answer.call_args_list
             )
             assert not error_sent
-            mock_lf.update_current_trace.assert_called_once()
+            mock_lf.update_current_span.assert_called_once()
             mock_write_scores.assert_called_once()
 
     async def test_scores_written_even_if_trace_update_fails(self, mock_config):
@@ -1509,7 +1509,7 @@ class TestHandleVoiceExceptionHandling:
         mock_graph = AsyncMock()
         mock_graph.ainvoke = AsyncMock(return_value=pipeline_result)
         mock_lf = MagicMock()
-        mock_lf.update_current_trace.side_effect = RuntimeError("trace write failed")
+        mock_lf.update_current_span.side_effect = RuntimeError("trace write failed")
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
@@ -2341,8 +2341,8 @@ class TestPreAgentGuard:
 
         # Verify trace metadata
         # Guard metadata is in the child span call (first); root span call (second) has output (#511)
-        assert mock_lf.update_current_trace.call_count >= 1
-        trace_meta = mock_lf.update_current_trace.call_args_list[0].kwargs["metadata"]
+        assert mock_lf.update_current_span.call_count >= 1
+        trace_meta = mock_lf.update_current_span.call_args_list[0].kwargs["metadata"]
         assert trace_meta["guard_blocked"] is True
         assert trace_meta["injection_pattern"] == "system_prompt_leak"
 
@@ -2593,7 +2593,7 @@ class TestClientDirectPipeline:
         sent = message.answer.call_args[0][0]
         assert "недвижим" in sent.lower()
 
-        trace_calls = mock_lf.update_current_trace.call_args_list
+        trace_calls = mock_lf.update_current_span.call_args_list
         meta_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -2615,7 +2615,14 @@ class TestClientDirectPipeline:
         mock_lf.get_current_trace_id = MagicMock(return_value="")
         pipeline_lf = MagicMock()
         pipeline_lf.get_current_trace_id = MagicMock(return_value="")
-        pipeline_lf.update_current_trace.side_effect = RuntimeError("trace write failed")
+
+        def _fail_client_direct_trace_update(*args, **kwargs):
+            metadata = kwargs.get("metadata", {})
+            if metadata.get("pipeline_mode") == "client_direct":
+                raise RuntimeError("trace write failed")
+            return
+
+        pipeline_lf.update_current_span.side_effect = _fail_client_direct_trace_update
 
         with (
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
@@ -2687,7 +2694,10 @@ class TestClientDirectPipeline:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
             patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
             patch(
                 "telegram_bot.pipelines.client.rag_pipeline",
@@ -2712,7 +2722,7 @@ class TestClientDirectPipeline:
         mock_create_agent.assert_not_called()
         mock_rag.assert_awaited_once()
         mock_generate.assert_awaited_once()
-        trace_calls = mock_lf.update_current_trace.call_args_list
+        trace_calls = mock_lf.update_current_span.call_args_list
         pipeline_meta_call = next(
             (
                 c
@@ -2762,7 +2772,14 @@ class TestClientDirectPipeline:
         mock_lf.get_current_trace_id = MagicMock(return_value="")
         pipeline_lf = MagicMock()
         pipeline_lf.get_current_trace_id = MagicMock(return_value="")
-        pipeline_lf.update_current_trace.side_effect = RuntimeError("trace write failed")
+
+        def _fail_client_direct_trace_update(*args, **kwargs):
+            metadata = kwargs.get("metadata", {})
+            if metadata.get("pipeline_mode") == "client_direct":
+                raise RuntimeError("trace write failed")
+            return
+
+        pipeline_lf.update_current_span.side_effect = _fail_client_direct_trace_update
 
         with (
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
@@ -3638,7 +3655,10 @@ class TestPreAgentCacheCheck:
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира до 80000 евро в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3675,7 +3695,10 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city", "price")),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира до 80000 евро в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3713,7 +3736,10 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -3803,8 +3829,8 @@ class TestPreAgentCacheCheck:
                 await bot.handle_query(message)
 
         # Verify Langfuse trace metadata
-        trace_calls = mock_lf.update_current_trace.call_args_list
-        # First update_current_trace call should have pipeline_mode = "pre_agent_cache"
+        trace_calls = mock_lf.update_current_span.call_args_list
+        # First update_current_span call should have pipeline_mode = "pre_agent_cache"
         meta_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -3848,7 +3874,7 @@ class TestPreAgentCacheCheck:
 
         metadata_payloads = [
             c.kwargs.get("metadata", {})
-            for c in mock_lf.update_current_trace.call_args_list
+            for c in mock_lf.update_current_span.call_args_list
             if "metadata" in c.kwargs
         ]
         pre_agent_meta = next(
@@ -3885,14 +3911,17 @@ class TestPreAgentCacheCheck:
                 return_value=QueryFilterSignal(True, ("city",)),
                 create=True,
             ),
-            patch("telegram_bot.services.filter_extractor.FilterExtractor", return_value=mock_extractor),
+            patch(
+                "telegram_bot.services.filter_extractor.FilterExtractor",
+                return_value=mock_extractor,
+            ),
         ):
             message = _make_text_message("квартира в Несебре")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        metadata = lf.update_current_trace.call_args.kwargs["metadata"]
+        metadata = lf.update_current_span.call_args.kwargs["metadata"]
         assert metadata["filter_signature"] == "city=Несебр"
 
     async def test_pre_agent_cache_skip_off_topic(self, mock_config):
@@ -4656,7 +4685,7 @@ class TestTextPathSemanticCachePolicy:
         assert metadata["response_state"] == "ok"
         assert metadata["cache_eligible"] is True
         assert metadata["schema_version"] == "v8"
-        trace_metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        trace_metadata = mock_lf.update_current_span.call_args.kwargs["metadata"]
         assert trace_metadata["filter_signature"] == ""
 
     async def test_text_path_filtered_result_stores_semantic_with_filter_signature(
@@ -4709,7 +4738,7 @@ class TestTextPathSemanticCachePolicy:
 
         bot._cache.store_semantic.assert_awaited_once()
         assert bot._cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
-        trace_metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        trace_metadata = mock_lf.update_current_span.call_args.kwargs["metadata"]
         assert trace_metadata["filter_signature"] == "city=Несебр"
 
 
