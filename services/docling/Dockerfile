@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 # Docling Serve — CPU-only optimized build for VPS
 # Multi-stage build with uv (Context7 best practices 2026)
 #
