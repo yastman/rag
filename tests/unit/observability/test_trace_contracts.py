@@ -1,4 +1,4 @@
-"""Trace contract tests — verify score writing and update_current_trace shapes.
+"""Trace contract tests — verify score writing and update_current_span shapes.
 
 Contracts tested:
   - score() must use create_score with trace_id and score_id idempotency key
@@ -469,7 +469,12 @@ class TestVoiceLifecycleTraceContract:
         from src.voice.observability import update_voice_trace
 
         lf = MagicMock()
-        lf.update_current_trace = MagicMock()
+        lf.create_trace_id.return_value = "trace-voice-contract"
+        observation = MagicMock()
+        observation_ctx = MagicMock()
+        observation_ctx.__enter__ = MagicMock(return_value=observation)
+        observation_ctx.__exit__ = MagicMock(return_value=False)
+        lf.start_as_current_observation.return_value = observation_ctx
         with (
             pytest.MonkeyPatch().context() as mp,
         ):
@@ -477,11 +482,15 @@ class TestVoiceLifecycleTraceContract:
             mp.setattr("src.voice.observability.propagate_attributes", lambda **_: nullcontext())
             update_voice_trace(call_id="call-123", status="answered")
 
-        lf.update_current_trace.assert_called_once()
-        kwargs = lf.update_current_trace.call_args.kwargs
-        assert kwargs["session_id"] == "voice-call-123"
-        assert kwargs["metadata"]["status"] == "answered"
-        assert kwargs["metadata"]["call_id"] == "call-123"
+        lf.create_trace_id.assert_called_once_with(seed="voice-call-123")
+        lf.start_as_current_observation.assert_called_once_with(
+            as_type="span",
+            name="voice-session",
+            trace_context={"trace_id": "trace-voice-contract"},
+        )
+        observation.update.assert_called_once_with(
+            metadata={"call_id": "call-123", "status": "answered"}
+        )
 
 
 class TestSessionIdFormatContract:
