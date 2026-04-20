@@ -30,10 +30,10 @@ from langfuse import (
 
 from src.security.pii_redaction import PIIRedactor
 from telegram_bot.observability_bootstrap import (
-    disable_otel_exporter as _bootstrap_disable_otel_exporter,
+    disable_otel_exporter as _disable_otel_exporter,
 )
 from telegram_bot.observability_bootstrap import (
-    is_endpoint_reachable as _bootstrap_is_endpoint_reachable,
+    is_endpoint_reachable as _is_endpoint_reachable,
 )
 
 
@@ -50,16 +50,6 @@ _MODEL_LIST_PAGE_SIZE = 100
 _pii_redactor = PIIRedactor()
 
 _langfuse_endpoint_warned = False
-
-
-def _is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
-    """Compatibility wrapper used by unit tests and init flow."""
-    return _bootstrap_is_endpoint_reachable(url, timeout=timeout)
-
-
-def _disable_otel_exporter() -> None:
-    """Compatibility wrapper used by unit tests and init flow."""
-    _bootstrap_disable_otel_exporter()
 
 
 # ---------------------------------------------------------------------------

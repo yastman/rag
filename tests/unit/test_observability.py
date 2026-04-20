@@ -718,3 +718,14 @@ class TestInitializeLangfuseCallsDisableOtel:
 
         assert result is None
         mock_disable.assert_called_once()
+
+
+class TestObservabilityBootstrapAliases:
+    """Observability should expose bootstrap helpers without local proxy wrappers."""
+
+    def test_bootstrap_helpers_are_direct_aliases(self):
+        import telegram_bot.observability as observability
+        import telegram_bot.observability_bootstrap as bootstrap
+
+        assert observability._is_endpoint_reachable is bootstrap.is_endpoint_reachable
+        assert observability._disable_otel_exporter is bootstrap.disable_otel_exporter
