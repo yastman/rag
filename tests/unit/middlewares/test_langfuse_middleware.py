@@ -52,7 +52,7 @@ async def test_creates_span_when_langfuse_enabled(middleware, handler, message_e
     mock_span_ctx = MagicMock()
     mock_span_ctx.__enter__ = MagicMock(return_value=mock_span_ctx)
     mock_span_ctx.__exit__ = MagicMock(return_value=False)
-    mock_lf.start_as_current_span.return_value = mock_span_ctx
+    mock_lf.start_as_current_observation.return_value = mock_span_ctx
 
     mock_prop_ctx = MagicMock()
     mock_prop_ctx.__enter__ = MagicMock(return_value=mock_prop_ctx)
@@ -69,7 +69,10 @@ async def test_creates_span_when_langfuse_enabled(middleware, handler, message_e
 
     assert result == "ok"
     handler.assert_awaited_once()
-    mock_lf.start_as_current_span.assert_called_once_with(name="telegram-cmd-start")
+    mock_lf.start_as_current_observation.assert_called_once_with(
+        as_type="span",
+        name="telegram-cmd-start",
+    )
     mock_propagate.assert_called_once()
     call_kwargs = mock_propagate.call_args[1]
     assert call_kwargs["user_id"] == "42"
@@ -96,7 +99,7 @@ async def test_callback_action_type(middleware, handler, event_data):
     mock_span_ctx = MagicMock()
     mock_span_ctx.__enter__ = MagicMock(return_value=mock_span_ctx)
     mock_span_ctx.__exit__ = MagicMock(return_value=False)
-    mock_lf.start_as_current_span.return_value = mock_span_ctx
+    mock_lf.start_as_current_observation.return_value = mock_span_ctx
 
     mock_prop_ctx = MagicMock()
     mock_prop_ctx.__enter__ = MagicMock(return_value=mock_prop_ctx)
@@ -111,4 +114,7 @@ async def test_callback_action_type(middleware, handler, event_data):
     ):
         await middleware(handler, cb, event_data)
 
-    mock_lf.start_as_current_span.assert_called_once_with(name="telegram-callback-fav")
+    mock_lf.start_as_current_observation.assert_called_once_with(
+        as_type="span",
+        name="telegram-callback-fav",
+    )

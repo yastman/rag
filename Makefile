@@ -28,6 +28,12 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 ENV_LOAD = if [ -f .env ]; then set -a; . ./.env; set +a; fi;
+# Force Linux-native temp dirs in WSL to avoid pytest/capture failures
+# when host Windows TEMP/TMP leak into the shell environment.
+TMPDIR ?= /tmp
+TMP ?= $(TMPDIR)
+TEMP ?= $(TMPDIR)
+export TMPDIR TMP TEMP
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/

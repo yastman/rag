@@ -202,15 +202,7 @@ def _start_filter_observation(
         }
     )
 
-    start_observation = getattr(lf, "start_as_current_observation", None)
-    if callable(start_observation):
-        return start_observation(as_type="span", name=name, input=payload)
-
-    start_span = getattr(lf, "start_as_current_span", None)
-    if callable(start_span):
-        return start_span(name=name, input=payload)
-
-    return contextlib.nullcontext(None)
+    return lf.start_as_current_observation(as_type="span", name=name, input=payload)
 
 
 def _update_filter_observation(
