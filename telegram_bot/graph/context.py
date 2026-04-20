@@ -31,7 +31,7 @@ class GraphContext(TypedDict, total=False):
     """QdrantService instance for hybrid search."""
 
     reranker: Any
-    """Optional ColbertRerankerService instance."""
+    """Optional reranker hook; deprecated ColbertRerankerService inputs are ignored."""
 
     llm: Any
     """Optional LLM/OpenAI async client for rewrite/transcribe."""
