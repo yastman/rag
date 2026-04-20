@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 from contextlib import suppress
-from typing import Any
+from typing import Any, cast
 
-from telegram_bot.observability import get_client, observe, propagate_attributes
+from telegram_bot.observability import get_client, propagate_attributes
 
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ def update_voice_trace(
         return
 
     trace_id = langfuse_trace_id or lf.create_trace_id(seed=resolved_session_id)
-    trace_context = {"trace_id": trace_id}
+    trace_context = cast(Any, {"trace_id": trace_id})
 
     with (
         lf.start_as_current_observation(
@@ -81,7 +81,6 @@ def update_voice_trace(
         observation.update(metadata=metadata)
 
 
-@observe(name="voice-session", capture_input=False, capture_output=False)
 async def trace_voice_session(
     *,
     call_id: str,

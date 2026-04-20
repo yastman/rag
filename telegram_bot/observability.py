@@ -265,9 +265,9 @@ def sync_langfuse_model_definitions(
         return 0
 
     try:
-        from langfuse.api.resources.models.types.create_model_request import CreateModelRequest
+        from langfuse.api.commons.types.model_usage_unit import ModelUsageUnit
     except Exception:
-        logger.warning("Langfuse model sync skipped: CreateModelRequest import failed")
+        logger.warning("Langfuse model sync skipped: ModelUsageUnit import failed")
         return 0
 
     existing: list[Any] = []
@@ -310,7 +310,11 @@ def sync_langfuse_model_definitions(
                 existing = [m for m in existing if getattr(m, "id", None) != model_id]
 
         try:
-            created = models_api.create(request=CreateModelRequest(**definition))
+            create_kwargs = dict(definition)
+            unit = create_kwargs.get("unit")
+            if isinstance(unit, str) and unit.strip():
+                create_kwargs["unit"] = ModelUsageUnit[unit.strip().upper()]
+            created = models_api.create(**create_kwargs)
             existing.append(created)
             created_or_updated += 1
         except Exception:
