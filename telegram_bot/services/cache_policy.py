@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from time import time
 from typing import Any
@@ -10,6 +11,30 @@ from telegram_bot.services.query_filter_signal import build_filter_signature
 
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"ENTITY", "FAQ", "GENERAL", "STRUCTURED"}
 SEMANTIC_CACHE_SCHEMA_VERSION = "v8"
+_CONTEXTUAL_RE = re.compile(
+    r"\b(?:"
+    r"расскажи\s+подробнее(?:\s+(?:об|про)\s+(?:этом|этой|этих|этот|эту|них)\s+\w+)?"
+    r"|покажи\s+подробнее(?:\s+(?:об|про)\s+(?:этом|этой|этих|этот|эту|них)\s+\w+)?"
+    r"|объясни\s+подробнее(?:\s+(?:об|про)\s+(?:этом|этой|этих|этот|эту|них)\s+\w+)?"
+    r"|подробнее\s+об\s+(?:этом|этих|них)\s+\w+"
+    r"|подробнее\s+об\s+этой\s+\w+"
+    r"|подробнее\s+про\s+(?:этот|эту|эти|них)\s+\w+"
+    r"|перв(?:ый|ую|ое)\s+(?:вариант|объект)"
+    r"|втор(?:ой|ую|ое)\s+(?:вариант|объект)"
+    r"|трет(?:ий|ью|ье)\s+(?:вариант|объект)"
+    r"|это\s+(?:правильн\w*|тот\s+же|та\s+же|то\s+же|вариант|объект)"
+    r"|тот\s+же\s+(?:вариант|объект)"
+    r"|та\s+же\s+(?:квартира|сделка|локация|планировка|цена)"
+    r"|то\s+же(?:\s+самое)?"
+    r"|они"
+    r"|другие\s+есть"
+    r"|друг(?:ой|ую)\s+(?:вариант|объект)"
+    r"|ещ[её]\s+вариант\w*\s+есть"
+    r"|следующ(?:ий|ую|ее)\s+(?:вариант|объект)"
+    r"|предыдущ(?:ий|ую|ее)\s+(?:вариант|объект)"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -117,6 +142,11 @@ def resolve_semantic_cache_signature(
     if explicit_signature:
         return explicit_signature
     return build_filter_signature(filters)
+
+
+def is_contextual_query(query: str) -> bool:
+    """Return True for follow-up queries that depend on prior conversational context."""
+    return bool(_CONTEXTUAL_RE.search(query))
 
 
 async def maybe_store_semantic_response(
