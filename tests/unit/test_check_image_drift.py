@@ -53,3 +53,36 @@ def test_main_exits_nonzero_when_no_running_containers_checked(
         module.main()
 
     assert exc_info.value.code == 1
+
+
+def test_main_exits_zero_when_checked_containers_have_no_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    monkeypatch.setattr(module, "_run", lambda *_args, **_kwargs: "27.0.0")
+    monkeypatch.setattr(
+        module,
+        "check_drift",
+        lambda _compose: module.DriftReport(
+            "compose.yml",
+            checked=[
+                module.DriftResult(
+                    service="redis",
+                    container="redis-1",
+                    expected_image="redis:8.6.2@sha256:abc",
+                    expected_tag="8.6.2",
+                    expected_digest="sha256:abc",
+                    actual_image="redis:8.6.2",
+                    actual_digest="sha256:abc",
+                    tag_match=True,
+                    digest_match=True,
+                )
+            ],
+        ),
+    )
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main()
+
+    assert exc_info.value.code == 0
