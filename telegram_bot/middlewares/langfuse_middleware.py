@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class LangfuseContextMiddleware(BaseMiddleware):
     """Create Langfuse trace context for every Telegram update.
 
-    Opens a root span via ``start_as_current_span`` and propagates
+    Opens a root observation via ``start_as_current_observation`` and propagates
     ``session_id``, ``user_id`` and ``tags`` to all child observations.
     """
 
@@ -41,7 +41,10 @@ class LangfuseContextMiddleware(BaseMiddleware):
         action_type = classify_action(event, data)
 
         with (
-            lf.start_as_current_span(name=f"telegram-{action_type}"),
+            lf.start_as_current_observation(
+                as_type="span",
+                name=f"telegram-{action_type}",
+            ),
             propagate_attributes(
                 session_id=session_id,
                 user_id=str(user_id) if user_id is not None else None,

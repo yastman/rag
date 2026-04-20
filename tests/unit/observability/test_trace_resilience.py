@@ -57,10 +57,8 @@ class TestSdkDisabledClientResilience:
 
         return get_client()
 
-    def test_update_current_trace_no_raise(self):
-        self._client().update_current_trace(
-            input={"query": "test"}, output={"response": "ok"}, metadata={"k": "v"}
-        )
+    def test_set_current_trace_io_no_raise(self):
+        self._client().set_current_trace_io(input={"query": "test"}, output={"response": "ok"})
 
     def test_update_current_span_no_raise(self):
         self._client().update_current_span(
@@ -215,7 +213,7 @@ class TestVoiceErrorScoresResilience:
 
 
 class TestBotScoringTryCatchContract:
-    """bot.py must wrap write_langfuse_scores and update_current_trace in try/except."""
+    """bot.py must wrap write_langfuse_scores and observation updates in try/except."""
 
     def _bot_source(self) -> str:
         from pathlib import Path
@@ -231,8 +229,8 @@ class TestBotScoringTryCatchContract:
         # Both try and write_langfuse_scores exist together in the voice handler
         assert "Failed to write Langfuse voice scores" in source
 
-    def test_update_current_trace_failure_logged_not_raised(self):
-        """Failed update_current_trace must be caught and logged, not re-raised."""
+    def test_update_current_span_failure_logged_not_raised(self):
+        """Failed update_current_span must be caught and logged, not re-raised."""
         source = self._bot_source()
         assert "Failed to update Langfuse voice trace metadata" in source
 

@@ -15,7 +15,7 @@ dependencies = [
     "aiohttp",
     "requests",
     "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
-    "langfuse>=3.14.0,<4.0",  # Hold v3 until current tracing APIs are migrated
+    "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
     # Voyage AI Integration (2026-01-21)
     "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
