@@ -12,8 +12,8 @@ Usage:
     python scripts/check_image_drift.py --fix                   # Show fix commands
 
 Exit codes:
-    0 — no drift detected (or no running containers)
-    1 — drift detected
+    0 — no drift detected and at least one running container was checked
+    1 — drift detected or no running containers were checked
     2 — error (compose file not found, docker not available)
 """
 
@@ -100,6 +100,10 @@ class DriftReport:
     @property
     def ok(self) -> list[DriftResult]:
         return [r for r in self.checked if not r.has_drift]
+
+    @property
+    def has_checked_containers(self) -> bool:
+        return bool(self.checked)
 
 
 def _run(cmd: list[str], *, check: bool = True) -> str:
@@ -410,7 +414,7 @@ def main() -> None:
     else:
         print_report(report, show_fix=args.fix)
 
-    sys.exit(1 if report.drifted else 0)
+    sys.exit(1 if report.drifted or not report.has_checked_containers else 0)
 
 
 if __name__ == "__main__":
