@@ -62,6 +62,7 @@ from .services.business_hours import is_business_hours
 from .services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
+    is_contextual_query,
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
@@ -2910,8 +2911,10 @@ class PropertyBot:
                         topic_hint=topic_hint,
                     )
                     filter_signal = detect_filter_sensitive_query(user_text)
+                    contextual_query = is_contextual_query(user_text)
                     rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
                     rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
+                    rag_result_store["contextual_query"] = contextual_query
                     rag_result_store["topic_hint"] = topic_hint or ""
                     rag_result_store["grounding_mode"] = grounding_mode
                     if grounding_mode == "strict":
@@ -2931,7 +2934,9 @@ class PropertyBot:
                             )
                             rag_result_store["semantic_cache_filter_signature"] = filter_signature
                     cached = None
-                    if filter_signal.is_filter_sensitive and filter_signature is None:
+                    if contextual_query or (
+                        filter_signal.is_filter_sensitive and filter_signature is None
+                    ):
                         rag_result_store["semantic_cache_already_checked"] = True
                     else:
                         check_start = time.perf_counter()
@@ -3370,7 +3375,7 @@ class PropertyBot:
                     grounding_mode=grounding_mode_value,
                     documents=rag_result_store.get("documents", []),
                     cache_hit=bool(rag_result_store.get("cache_hit", False)),
-                    contextual=False,
+                    contextual=is_contextual_query(user_text),
                     grade_confidence=float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
                     confidence_threshold=confidence_threshold,
                     schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
