@@ -494,7 +494,7 @@ class TestVoiceTraceMetadata:
     async def test_voice_trace_metadata_has_same_keys_as_text(self, mock_config):
         """handle_voice metadata should contain all keys from handle_query."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -507,7 +507,7 @@ class TestVoiceTraceMetadata:
         }
         await _run_handle_voice(mock_config, voice_result, mock_lf)
 
-        call_kwargs = mock_lf.update_current_trace.call_args.kwargs
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
         metadata = call_kwargs["metadata"]
 
         # All keys from handle_query must be present
@@ -536,7 +536,7 @@ class TestVoiceTraceMetadata:
     async def test_trace_metadata_contains_memory_and_overhead(self, mock_config):
         """Trace metadata should include memory_messages_count and overhead proxy."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -548,7 +548,7 @@ class TestVoiceTraceMetadata:
         }
         await _run_handle_voice(mock_config, result, mock_lf)
 
-        metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        metadata = mock_lf.update_current_span.call_args.kwargs["metadata"]
         assert metadata["memory_messages_count"] == 2
         assert metadata["checkpointer_overhead_proxy_ms"] is not None
 
@@ -689,7 +689,7 @@ class TestHistoryScores:
     async def test_history_save_success_score(self, mock_config, save_result, expected_value):
         """history_save_success reflects save_turn return value."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -706,7 +706,7 @@ class TestHistoryScores:
     async def test_supervisor_model_score(self, mock_config):
         """supervisor_model CATEGORICAL score always written (#413)."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -724,7 +724,7 @@ class TestHistoryScores:
     async def test_supervisor_streaming_still_writes_wall_metadata(self, mock_config):
         """Streaming sdk_agent path still writes pipeline wall-time metadata."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-stream-1")
         history_svc = AsyncMock()
@@ -739,7 +739,7 @@ class TestHistoryScores:
 
         metadata_payloads = [
             c.kwargs.get("metadata", {})
-            for c in mock_lf.update_current_trace.call_args_list
+            for c in mock_lf.update_current_span.call_args_list
             if "metadata" in c.kwargs
         ]
         assert any(m.get("pipeline_mode") == "sdk_agent" for m in metadata_payloads)
@@ -748,7 +748,7 @@ class TestHistoryScores:
 
     async def test_sdk_agent_trace_metadata_includes_grounding_safety_fields(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-safe-1")
 
@@ -794,7 +794,7 @@ class TestHistoryScores:
 
         metadata_payloads = [
             c.kwargs.get("metadata", {})
-            for c in mock_lf.update_current_trace.call_args_list
+            for c in mock_lf.update_current_span.call_args_list
             if "metadata" in c.kwargs
         ]
         sdk_agent_meta = next(m for m in metadata_payloads if m.get("pipeline_mode") == "sdk_agent")
@@ -848,7 +848,7 @@ class TestScoreIsolation:
     async def test_supervisor_scores_use_create_score_with_trace_id(self, mock_config):
         """Supervisor-specific scores use create_score(trace_id=...) (#435)."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-xyz")
 
@@ -900,7 +900,7 @@ class TestTextPathFeedbackButtons:
     async def test_text_response_has_feedback_keyboard(self, mock_config):
         """Text response should include feedback inline keyboard."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
@@ -938,7 +938,7 @@ class TestTextPathFeedbackButtons:
     async def test_text_response_has_markdown_parse_mode(self, mock_config):
         """Text response should use Markdown parse_mode."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
@@ -974,7 +974,7 @@ class TestTextPathFeedbackButtons:
     async def test_chitchat_response_no_feedback_keyboard(self, mock_config):
         """CHITCHAT response should NOT include feedback keyboard."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
@@ -1010,7 +1010,7 @@ class TestTextPathFeedbackButtons:
     async def test_response_without_query_type_has_no_feedback_keyboard(self, mock_config):
         """Response without query_type in side-channel should NOT include feedback keyboard."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -1048,7 +1048,7 @@ class TestTextPathSemanticCacheStore:
 
     async def test_stores_semantic_cache_for_cacheable_query_type(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -1102,7 +1102,7 @@ class TestTextPathSemanticCacheStore:
 
     async def test_stores_semantic_cache_for_general_type(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -1148,7 +1148,7 @@ class TestTextPathSemanticCacheStore:
 
     async def test_strict_unsafe_result_skips_text_path_semantic_cache_store(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -1195,7 +1195,7 @@ class TestTextPathSemanticCacheStore:
 
     async def test_strict_safe_result_stores_text_path_cache_metadata(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
