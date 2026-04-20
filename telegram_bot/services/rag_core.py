@@ -14,6 +14,8 @@ import asyncio
 import logging
 from typing import Any
 
+from telegram_bot.services.cache_policy import is_contextual_query
+
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +290,8 @@ async def check_semantic_cache(
         - response: The cached response string, or None on miss
     """
     if query_type not in CACHEABLE_QUERY_TYPES:
+        return (False, None)
+    if is_contextual_query(query):
         return (False, None)
 
     cached = await cache.check_semantic(
