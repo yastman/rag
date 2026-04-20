@@ -376,61 +376,63 @@ clean: ## Clean up cache files and build artifacts
 
 # Common compose command with --compatibility to enforce deploy.resources.limits
 COMPOSE_CMD := docker compose --compatibility
+LOCAL_COMPOSE_FILE := compose.yml:compose.dev.yml
+LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD)
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
-docker-core-up: ## Start core services (postgres, qdrant, redis, docling)
+docker-core-up: ## Start default local compose stack (unprofiled services)
 	@echo "$(BLUE)Starting core services...$(NC)"
-	$(COMPOSE_CMD) up -d
+	$(LOCAL_COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
 docker-bot-up: ## Start core + bot services (litellm, bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
-	$(COMPOSE_CMD) --profile bot up -d
+	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
 
 docker-obs-up: ## Start core + observability (loki, promtail, alertmanager)
 	@echo "$(BLUE)Starting observability services...$(NC)"
-	$(COMPOSE_CMD) --profile obs up -d
+	$(LOCAL_COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Observability services started$(NC)"
 
 docker-ml-up: ## Start core + ML platform (langfuse, clickhouse, minio)
 	@echo "$(BLUE)Starting ML platform services...$(NC)"
-	$(COMPOSE_CMD) --profile ml up -d
+	$(LOCAL_COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
 
 docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
 	@echo "$(BLUE)Starting AI services...$(NC)"
-	$(COMPOSE_CMD) up -d bge-m3 user-base
+	$(LOCAL_COMPOSE_CMD) up -d bge-m3 user-base
 	@echo "$(GREEN)✓ AI services started$(NC)"
 
 docker-ingest-up: ## Start core + ingestion service
 	@echo "$(BLUE)Starting ingestion service...$(NC)"
-	$(COMPOSE_CMD) --profile ingest up -d
+	$(LOCAL_COMPOSE_CMD) --profile ingest up -d
 	@echo "$(GREEN)✓ Ingestion service started$(NC)"
 
 docker-voice-up: ## Start core + voice services (livekit, sip, voice-agent)
 	@echo "$(BLUE)Preflight: checking livekit config...$(NC)"
 	@test -f docker/livekit/livekit.yaml || { echo "$(RED)✗ docker/livekit/livekit.yaml not found$(NC)"; exit 1; }
 	@echo "$(BLUE)Starting voice services...$(NC)"
-	$(COMPOSE_CMD) --profile voice up -d
+	$(LOCAL_COMPOSE_CMD) --profile voice up -d
 	@echo "$(GREEN)✓ Voice services started$(NC)"
 
 docker-full-up: ## Start all services (full stack)
 	@echo "$(BLUE)Starting full stack...$(NC)"
-	$(COMPOSE_CMD) --profile full up -d
+	$(LOCAL_COMPOSE_CMD) --profile full up -d
 	@echo "$(GREEN)✓ Full stack started$(NC)"
 
 docker-up: docker-core-up ## Alias for docker-core-up (backward compat)
 
 docker-down: ## Stop all Docker services
 	@echo "$(BLUE)Stopping Docker services...$(NC)"
-	$(COMPOSE_CMD) --profile full down
+	$(LOCAL_COMPOSE_CMD) --profile full down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
 
 docker-ps: ## Show Docker service status
 	@echo "$(BLUE)Docker service status:$(NC)"
-	@$(COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+	@$(LOCAL_COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOW
@@ -484,7 +486,7 @@ qa: all-checks test ## Full quality assurance
 LOCAL_SERVICES := redis qdrant bge-m3 docling litellm
 
 local-up:  ## Start local Docker services (bot runs via make run-bot)
-	$(COMPOSE_CMD) up -d $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
@@ -495,17 +497,17 @@ bot:  ## Alias: run bot and tee output to logs/bot-run.log
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
 
 local-down:  ## Stop local Docker services
-	$(COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
-	$(COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
 
 local-logs:  ## View local Docker logs
-	$(COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
 
 local-ps:  ## Show local Docker status
-	$(COMPOSE_CMD) ps $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_SERVICES)
 
 local-build:  ## Rebuild local Docker services
-	$(COMPOSE_CMD) build bge-m3 docling
+	$(LOCAL_COMPOSE_CMD) build bge-m3 docling
 
 # =============================================================================
 # Deployment
@@ -721,7 +723,7 @@ eval-sdk-experiment-named: ## Run named SDK experiment (DATASET=name NAME=label 
 
 monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 	@echo "$(BLUE)Starting monitoring stack...$(NC)"
-	$(COMPOSE_CMD) --profile obs up -d
+	$(LOCAL_COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Monitoring stack started$(NC)"
 	@echo "$(YELLOW)Services:$(NC)"
 	@echo "  Loki:         http://localhost:3100"
@@ -729,16 +731,16 @@ monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 
 monitoring-down: ## Stop monitoring stack
 	@echo "$(BLUE)Stopping monitoring stack...$(NC)"
-	$(COMPOSE_CMD) --profile obs stop
+	$(LOCAL_COMPOSE_CMD) --profile obs stop
 	@echo "$(GREEN)✓ Monitoring stack stopped$(NC)"
 
 monitoring-logs: ## View monitoring stack logs
 	@echo "$(BLUE)Monitoring stack logs (Ctrl+C to exit):$(NC)"
-	$(COMPOSE_CMD) logs -f loki promtail alertmanager
+	$(LOCAL_COMPOSE_CMD) logs -f loki promtail alertmanager
 
 monitoring-status: ## Show monitoring stack status
 	@echo "$(BLUE)Monitoring stack status:$(NC)"
-	@$(COMPOSE_CMD) ps loki promtail alertmanager
+	@$(LOCAL_COMPOSE_CMD) ps loki promtail alertmanager
 	@echo ""
 	@echo "$(YELLOW)Checking health...$(NC)"
 	@curl -s http://localhost:3100/ready > /dev/null 2>&1 && echo "  Loki: $(GREEN)OK$(NC)" || echo "  Loki: $(RED)DOWN$(NC)"
