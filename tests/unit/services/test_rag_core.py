@@ -248,6 +248,26 @@ class TestPerformRerank:
         assert applied is True
         assert cache_hit is False
 
+    async def test_deprecated_colbert_reranker_is_ignored(self):
+        """Deprecated client-side ColBERT service must not run in rerank core."""
+        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+
+        documents = [{"text": "doc0", "score": 0.5}]
+        client = MagicMock()
+        client.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.99}])
+
+        with pytest.deprecated_call(match="deprecated"):
+            reranker = ColbertRerankerService(client=client)
+
+        docs, applied, cache_hit = await perform_rerank(
+            "query", documents, cache=None, reranker=reranker, top_k=1
+        )
+
+        assert docs == documents
+        assert applied is False
+        assert cache_hit is False
+        client.rerank.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # H1: compute_query_embedding + check_semantic_cache
