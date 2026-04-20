@@ -120,12 +120,16 @@ class TestDetectAgentIntent:
 class TestIsContextualQuery:
     def test_contextual_pronouns_detected(self):
         assert _is_contextual_query("расскажи подробнее об этом объекте") is True
+        assert _is_contextual_query("подробнее про этот объект") is True
+        assert _is_contextual_query("подробнее об этой квартире") is True
         assert _is_contextual_query("первый вариант") is True
         assert _is_contextual_query("а другие есть?") is True
 
     def test_non_contextual_query(self):
         assert _is_contextual_query("Какие квартиры в центре Москвы?") is False
         assert _is_contextual_query("Цена однокомнатной квартиры") is False
+        assert _is_contextual_query("квартира на первом этаже") is False
+        assert _is_contextual_query("подробнее о квартире в Софии") is False
 
 
 # ---------------------------------------------------------------------------

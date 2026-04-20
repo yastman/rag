@@ -28,6 +28,7 @@ from telegram_bot.pipelines.state_contract import PreAgentStateContract
 from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
+    is_contextual_query,
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
@@ -209,8 +210,11 @@ async def _cache_check(
         }
 
     # Step 2: Check semantic cache via shared core
-    if semantic_cache_already_checked or (
-        semantic_cache_filter_sensitive and semantic_cache_filter_signature is None
+    contextual_query = is_contextual_query(query)
+    if (
+        semantic_cache_already_checked
+        or contextual_query
+        or (semantic_cache_filter_sensitive and semantic_cache_filter_signature is None)
     ):
         hit, cached = False, None
     else:
@@ -845,7 +849,7 @@ async def _cache_store(
             grounding_mode="normal",
             documents=[{"text": response}],
             cache_hit=False,
-            contextual=False,
+            contextual=is_contextual_query(query),
             grade_confidence=1.0,
             confidence_threshold=0.0,
             schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
