@@ -10,7 +10,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -121,12 +121,35 @@ async def query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
     normalized_trace_id = _normalize_langfuse_trace_id(req.langfuse_trace_id)
     if normalized_trace_id:
-        return await _query_with_observability(req, langfuse_trace_id=normalized_trace_id)
+        return await _query_with_explicit_trace(req, langfuse_trace_id=normalized_trace_id)
     return await _query_with_observability(req)
 
 
 @observe(name="rag-api-query", capture_input=False, capture_output=False)
 async def _query_with_observability(req: QueryRequest) -> QueryResponse:
+    return await _execute_query(req)
+
+
+async def _query_with_explicit_trace(
+    req: QueryRequest,
+    *,
+    langfuse_trace_id: str,
+) -> QueryResponse:
+    from telegram_bot.observability import get_client
+
+    lf = get_client()
+    if lf is None:
+        return await _execute_query(req)
+
+    with lf.start_as_current_observation(
+        as_type="span",
+        name="rag-api-query",
+        trace_context=cast(Any, {"trace_id": langfuse_trace_id}),
+    ):
+        return await _execute_query(req)
+
+
+async def _execute_query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
     from telegram_bot.graph.state import make_initial_state
     from telegram_bot.observability import get_client, propagate_attributes
@@ -145,6 +168,7 @@ async def _query_with_observability(req: QueryRequest) -> QueryResponse:
     trace_kwargs: dict[str, Any] = {
         "session_id": session_id,
         "user_id": str(req.user_id),
+        "metadata": {"source": req.channel},
         "tags": ["api", "rag", req.channel],
     }
 
