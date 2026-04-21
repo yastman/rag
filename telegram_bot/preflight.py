@@ -86,6 +86,20 @@ _DEP_REMEDIATION: dict[str, str] = {
 }
 
 
+def _postgres_local_remediation(database_url: str) -> str | None:
+    """Return a clearer hint when native local Postgres is the optional target."""
+    parsed = urlparse(database_url)
+    if parsed.hostname not in {"localhost", "127.0.0.1"}:
+        return None
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 5432
+    return (
+        f"Postgres unreachable at {host}:{port}; this is optional for native bot runs. "
+        "If you need user features locally, start a compose stack that publishes Postgres "
+        "via compose.yml:compose.dev.yml."
+    )
+
+
 class PreflightError(SystemExit):
     """Raised when a CRITICAL dependency is unreachable after retries."""
 
@@ -446,7 +460,11 @@ async def _check_single_dep(
             )
             return False
         except Exception as exc:
-            logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
+            remediation = _postgres_local_remediation(config.realestate_database_url)
+            if remediation:
+                logger.warning("Preflight WARN: %s — %s", remediation, exc)
+            else:
+                logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
             return False
 
     if name == "litellm":
