@@ -216,6 +216,26 @@ async def test_cache_check_passes_filter_signature(mock_cache, mock_embeddings):
     assert call_kwargs.get("filter_signature") == "city=Несебр"
 
 
+async def test_cache_check_skips_contextual_follow_up_lookup(mock_cache, mock_embeddings):
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value="cached answer")
+
+    result = await _cache_check(
+        "расскажи подробнее",
+        "FAQ",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["cache_hit"] is False
+    assert result["cached_response"] is None
+    mock_cache.check_semantic.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # _hybrid_retrieve tests
 # ---------------------------------------------------------------------------
@@ -822,6 +842,23 @@ async def test_cache_store_skips_non_cacheable(mock_cache):
         "hello",
         [0.1] * 1024,
         "CHITCHAT",
+        42,
+        cache=mock_cache,
+        latency_stages={},
+    )
+
+    assert result["stored_semantic"] is False
+    mock_cache.store_semantic.assert_not_called()
+
+
+async def test_cache_store_skips_contextual_follow_up(mock_cache):
+    from telegram_bot.agents.rag_pipeline import _cache_store
+
+    result = await _cache_store(
+        "расскажи подробнее",
+        "Ответ про квартиры",
+        [0.1] * 1024,
+        "FAQ",
         42,
         cache=mock_cache,
         latency_stages={},
