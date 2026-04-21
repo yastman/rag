@@ -150,6 +150,7 @@ make run-bot     # Run bot natively (fast iteration, no Docker rebuild)
 ```
 
 For native bot runs, `REDIS_URL` is optional in local development: when it is unset, the bot derives `redis://:REDIS_PASSWORD@localhost:6379` from `REDIS_PASSWORD` so it matches the password-protected Redis started by `make local-up`.
+`make test-bot-health` is a local helper for published native-run prerequisites: Redis auth, the configured Qdrant collection, LiteLLM readiness, and the optional localhost Postgres note. The authoritative startup preflight still runs in `telegram_bot/preflight.py` when `make run-bot` starts the bot, including the repo-local BGE-M3 health and warmup contract.
 
 ### 3. Or Run Everything in Docker
 

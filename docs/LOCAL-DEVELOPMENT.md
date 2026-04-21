@@ -59,15 +59,14 @@ Bot preflight:
 make test-bot-health
 ```
 
-`make test-bot-health` resolves `QDRANT_COLLECTION` in this order:
-1. exported shell env (`QDRANT_COLLECTION`)
-2. `.env` value
-3. compose default from `compose.yml` (`gdrive_documents_bge`)
+`make test-bot-health` is a helper for local native bot runs. It reuses `BotConfig` for the Redis and Qdrant checks, validates LiteLLM proxy readiness, and keeps the localhost Postgres note non-fatal.
 
 For Redis it uses this native-run order:
 1. exported shell env (`REDIS_URL`)
 2. `.env` value (`REDIS_URL=...`)
 3. derived local default from `REDIS_PASSWORD` as `redis://:REDIS_PASSWORD@localhost:6379`
+
+The authoritative startup preflight still lives in `telegram_bot/preflight.py`. BGE-M3 remains part of that runtime preflight because its `/health` and `/encode/dense` behavior is a repo-local service contract, not a generic upstream SDK check.
 
 ## 4. Development Gates
 

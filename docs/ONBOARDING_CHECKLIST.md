@@ -43,9 +43,11 @@ cp .env.example .env
 # Start core services (Redis, Qdrant, BGE-M3)
 make local-up
 
-# Verify the native bot contract before startup
+# Verify the published native-run prerequisites before startup
 make test-bot-health
 ```
+
+`make test-bot-health` is a local helper only. The authoritative startup preflight still runs from `telegram_bot/preflight.py` when `make run-bot` starts the bot, including the repo-local BGE-M3 health and warmup contract.
 
 ## 4. Bot Startup
 
