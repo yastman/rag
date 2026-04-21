@@ -19,6 +19,19 @@ def _parse_env_example() -> set[str]:
     return keys
 
 
+def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
+    """Local docs/tooling should consistently point to the root .env file."""
+    readme = Path("README.md").read_text(encoding="utf-8")
+    local_dev = Path("docs/LOCAL-DEVELOPMENT.md").read_text(encoding="utf-8")
+    docker_doc = Path("DOCKER.md").read_text(encoding="utf-8")
+    makefile = Path("Makefile").read_text(encoding="utf-8")
+
+    assert "cp .env.example .env" in readme
+    assert "cp .env.example .env" in local_dev
+    assert "canonical local env file is `.env`" in docker_doc
+    assert ".env -> .env.local symlink" not in makefile
+
+
 class TestEnvExampleCompleteness:
     """Env example must document all CRM and manager config vars."""
 
