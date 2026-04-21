@@ -104,7 +104,7 @@ curl -fsS http://localhost:4000/health/liveliness
 curl -fsS http://localhost:3100/ready
 curl -fsS http://localhost:9093/-/healthy
 
-# Preflight gate for retrieval + LLM connectivity
+# Preflight gate for Redis auth + retrieval + LLM connectivity
 make test-bot-health
 ```
 
@@ -112,6 +112,11 @@ make test-bot-health
 1. exported shell env (`QDRANT_COLLECTION`)
 2. `.env` value (`QDRANT_COLLECTION=...`)
 3. compose default from `compose.yml` (currently `gdrive_documents_bge`)
+
+For native bot startup it also resolves Redis in this order:
+1. exported shell env (`REDIS_URL`)
+2. `.env` value (`REDIS_URL=...`)
+3. derived local default from `REDIS_PASSWORD` as `redis://:REDIS_PASSWORD@localhost:6379`
 
 ## Local Release Gate
 
