@@ -344,7 +344,7 @@ test-redis: ***REMOVED******REMOVED*** Verify Redis Query Engine is available
 
 .PHONY: test-bot-health test-bot-health-vps
 
-test-bot-health: ***REMOVED******REMOVED*** Preflight: verify local bot runtime prerequisites (Redis/Qdrant/LLM + Postgres note)
+test-bot-health: ***REMOVED******REMOVED*** Preflight: verify local native-bot prerequisites (Redis/Qdrant/LiteLLM + optional Postgres note)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
 	@./scripts/test_bot_health.sh
 	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"
