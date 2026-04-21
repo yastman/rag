@@ -79,9 +79,9 @@ _DEP_REMEDIATION: dict[str, str] = {
     "redis": "start Redis and verify REDIS_PASSWORD / redis_url",
     "redis_cache": "restore Redis cache write/read path",
     "qdrant": "start Qdrant and verify collection configuration",
-    "bge_m3": "start BGE-M3 and verify /health and encode endpoints",
+    "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
     "postgres": "start PostgreSQL or accept degraded user-feature mode",
-    "litellm": "start LiteLLM or accept degraded generation path",
+    "litellm": "restore LiteLLM proxy readiness or accept degraded generation path",
     "langfuse": "restore Langfuse credentials/connectivity or accept disabled tracing",
 }
 
@@ -266,12 +266,6 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
         await r.aclose()
 
 
-def _is_collection_not_found(exc: Exception) -> bool:
-    """Return True when the exception indicates a missing Qdrant collection (HTTP 404)."""
-    msg = str(exc).lower()
-    return "not found" in msg or "doesn't exist" in msg or "404" in msg
-
-
 async def _ensure_qdrant_collection(qdrant: AsyncQdrantClient, collection_name: str) -> None:
     """Create Qdrant collection with the standard BGE-M3 vector schema.
 
@@ -333,6 +327,28 @@ async def _check_single_dep(
             prefer_grpc=True,
         )
         try:
+            exists = await qdrant.collection_exists(collection)
+            if not exists:
+                logger.warning(
+                    "Preflight WARN: Qdrant collection %s not found via SDK existence check; "
+                    "creating default schema",
+                    collection,
+                )
+                try:
+                    await _ensure_qdrant_collection(qdrant, collection)
+                    logger.info(
+                        "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
+                        collection,
+                    )
+                    return True
+                except Exception as create_exc:
+                    logger.error(
+                        "Preflight FAIL: Qdrant — could not create collection %s: %s",
+                        collection,
+                        create_exc,
+                    )
+                    return False
+
             info = await qdrant.get_collection(collection)
             logger.info(
                 "Preflight Qdrant: collection=%s, points=%s",
@@ -403,25 +419,6 @@ async def _check_single_dep(
 
             return True
         except Exception as exc:
-            if _is_collection_not_found(exc):
-                logger.warning(
-                    "Preflight WARN: Qdrant collection %s not found — creating with default schema",
-                    collection,
-                )
-                try:
-                    await _ensure_qdrant_collection(qdrant, collection)
-                    logger.info(
-                        "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
-                        collection,
-                    )
-                    return True
-                except Exception as create_exc:
-                    logger.error(
-                        "Preflight FAIL: Qdrant — could not create collection %s: %s",
-                        collection,
-                        create_exc,
-                    )
-                    return False
             logger.error("Preflight FAIL: Qdrant — %s", exc)
             return False
         finally:
@@ -430,9 +427,9 @@ async def _check_single_dep(
     if name == "bge_m3":
         resp = await client.get(f"{config.bge_m3_url}/health")
         if resp.status_code != 200:
-            logger.error("Preflight FAIL: BGE-M3 — %s", resp.status_code)
+            logger.error("Preflight FAIL: BGE-M3 repo-local health contract — %s", resp.status_code)
             return False
-        # Warm encode to ensure model is loaded and warmed
+        # Warm encode to verify the repo-local model service is actually ready to serve embeddings.
         warmup_resp = await client.post(
             f"{config.bge_m3_url}/encode/dense",
             json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
@@ -440,9 +437,15 @@ async def _check_single_dep(
         )
         if warmup_resp.status_code == 200:
             data = warmup_resp.json()
-            logger.info("Preflight BGE-M3 warmup OK (%.3fs)", data.get("processing_time", 0))
+            logger.info(
+                "Preflight BGE-M3 repo-local warmup OK (%.3fs)",
+                data.get("processing_time", 0),
+            )
         else:
-            logger.warning("Preflight BGE-M3 warmup failed: %s", warmup_resp.status_code)
+            logger.warning(
+                "Preflight BGE-M3 repo-local warmup failed: %s",
+                warmup_resp.status_code,
+            )
         return True
 
     if name == "postgres":
@@ -471,9 +474,9 @@ async def _check_single_dep(
     if name == "litellm":
         # Health endpoint is at proxy root, not under /v1
         base = config.llm_base_url.rstrip("/").removesuffix("/v1")
-        resp = await client.get(f"{base}/health/liveliness")
+        resp = await client.get(f"{base}/health/readiness")
         if resp.status_code != 200:
-            logger.error("Preflight FAIL: LiteLLM — %s", resp.status_code)
+            logger.error("Preflight FAIL: LiteLLM proxy readiness — %s", resp.status_code)
             return False
         return True
 
