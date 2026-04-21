@@ -13,10 +13,17 @@ def test_bot_health_uses_botconfig_and_redis_sdk_for_auth_contract() -> None:
     assert "redis.from_url(config.redis_url" in text
 
 
-def test_bot_health_keeps_litellm_liveliness_probe() -> None:
-    """The LLM preflight should keep the liveliness endpoint check path."""
+def test_bot_health_uses_qdrant_client_and_botconfig_collection_contract() -> None:
+    """Qdrant preflight should reuse BotConfig collection logic via qdrant-client."""
     text = SCRIPT.read_text(encoding="utf-8")
-    assert "/health/liveliness" in text
+    assert "from qdrant_client import QdrantClient" in text
+    assert "config.get_collection_name()" in text
+
+
+def test_bot_health_uses_litellm_readiness_probe() -> None:
+    """The LLM preflight should use the readiness endpoint check path."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "/health/readiness" in text
 
 
 def test_bot_health_reports_local_postgres_expectation() -> None:
