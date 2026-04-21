@@ -15,6 +15,8 @@ uv sync
 cp .env.example .env
 ```
 
+For local development, the canonical environment file is `.env` in the repo root. `.env.local` is legacy/manual-only and is not auto-loaded by local commands.
+
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
 - `LITELLM_MASTER_KEY`
