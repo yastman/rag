@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import pytest
 
 
@@ -52,7 +54,7 @@ def _make_lf_client() -> MagicMock:
     """Create a no-op Langfuse client mock."""
     lf = MagicMock()
     lf.get_current_trace_id.return_value = ""
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
     lf.create_score = MagicMock()
     return lf
 
@@ -368,7 +370,7 @@ class TestPipelineFullFlow:
         msg.answer.assert_called()
 
     async def test_pipeline_trace_tags_override_agent_tag(self):
-        """update_current_trace must set tags=client_direct, not agent (#566).
+        """Client pipeline must override inherited agent tag via propagate_attributes (#566).
 
         propagate_attributes in bot.py sets tags=["telegram","rag","agent"] before
         the role check, so the client pipeline must override tags to remove "agent".
@@ -394,6 +396,10 @@ class TestPipelineFullFlow:
 
         with (
             _patch_observability(lf),
+            patch(
+                "telegram_bot.pipelines.client.propagate_attributes",
+                return_value=nullcontext(),
+            ) as mock_propagate,
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
             patch("telegram_bot.pipelines.client.write_langfuse_scores"),
@@ -414,13 +420,15 @@ class TestPipelineFullFlow:
                 query_type="GENERAL",
             )
 
-        trace_calls = lf.update_current_trace.call_args_list
         pipeline_call = next(
-            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            (
+                c
+                for c in mock_propagate.call_args_list
+                if c.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
+            ),
             None,
         )
-        assert pipeline_call is not None, "update_current_trace with pipeline_mode not found"
-        assert pipeline_call.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
+        assert pipeline_call is not None, "client-direct propagate_attributes override not found"
 
     async def test_pipeline_metadata_includes_pre_agent_and_e2e_latency(self):
         """Trace metadata should include pre-agent and canonical end-to-end latency."""
@@ -467,7 +475,7 @@ class TestPipelineFullFlow:
                 rag_result_store=rag_store,
             )
 
-        trace_calls = lf.update_current_trace.call_args_list
+        trace_calls = lf.update_current_span.call_args_list
         pipeline_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -523,7 +531,7 @@ class TestPipelineFullFlow:
                 query_type="FAQ",
             )
 
-        trace_calls = lf.update_current_trace.call_args_list
+        trace_calls = lf.update_current_span.call_args_list
         pipeline_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -1571,11 +1579,11 @@ class TestPreComputedEmbeddingPassthrough:
                 config=_make_config(),
                 query_type="FAQ",
                 rag_result_store={"state_contract": state_contract},
-        )
+            )
 
         mock_cache.store_semantic.assert_called_once()
         assert mock_cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
-        trace_metadata = lf.update_current_trace.call_args.kwargs["metadata"]
+        trace_metadata = lf.update_current_span.call_args.kwargs["metadata"]
         assert trace_metadata["filter_signature"] == "city=Несебр"
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
