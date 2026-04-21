@@ -21,7 +21,7 @@ services:
   # =============================================================================
 
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
@@ -44,7 +44,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:8.6.2
+    image: redis:8.6.2@sha256:1f073813b641755b70b0200da64131bbeeb4ec5b633ca67772229b49820caafa
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -68,7 +68,7 @@ services:
           memory: 300M
 
   qdrant:
-    image: qdrant/qdrant:v1.17.1
+    image: qdrant/qdrant:v1.17.1@sha256:94728574965d17c6485dd361aa3c0818b325b9016dac5ea6afec7b4b2700865f
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -185,7 +185,7 @@ services:
     # LiteLLM writes migration/UI artifacts under site-packages at startup.
     # Keep hardening defaults, but allow writes for this service.
     read_only: false
-    image: ghcr.io/berriai/litellm:main-v1.81.14-stable
+    image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -476,7 +476,7 @@ services:
 
   # MinIO S3-compatible storage for Langfuse v3
   minio:
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
     restart: unless-stopped
     logging: *default-logging
     entrypoint: sh
@@ -499,7 +499,7 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.6.2
+    image: redis:8.6.2@sha256:1f073813b641755b70b0200da64131bbeeb4ec5b633ca67772229b49820caafa
     restart: unless-stopped
     logging: *default-logging
     command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}
@@ -515,7 +515,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.163.0
+    image: langfuse/langfuse-worker:3.163.0@sha256:86c9e101007e25af35a4022340e1bc32fa7d2b05d458bbf96d639694565ca9f1
     restart: always
     depends_on:
       postgres:
@@ -578,7 +578,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.163.0
+    image: langfuse/langfuse:3.163.0@sha256:5162f58ca7f4861154c38debd7f5de4e77f1f6522fd32170b4fcea8db668f61b
     restart: always
     depends_on:
       postgres:

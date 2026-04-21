@@ -511,11 +511,12 @@ class TestLangfuseModelSync:
 
         assert result == 1
         models_api.create.assert_called_once()
-        req = models_api.create.call_args.kwargs["request"]
-        assert req.model_name == "zai-glm-4.7"
-        assert req.match_pattern == "(?i)^(zai-glm-4\\.7)$"
-        assert req.input_price == 0.000001
-        assert req.output_price == 0.000003
+        kwargs = models_api.create.call_args.kwargs
+        assert kwargs["model_name"] == "zai-glm-4.7"
+        assert kwargs["match_pattern"] == "(?i)^(zai-glm-4\\.7)$"
+        assert kwargs["unit"].value == "TOKENS"
+        assert kwargs["input_price"] == 0.000001
+        assert kwargs["output_price"] == 0.000003
 
     def test_sync_langfuse_model_definitions_updates_stale_custom_model(self):
         import telegram_bot.observability as observability
@@ -717,3 +718,14 @@ class TestInitializeLangfuseCallsDisableOtel:
 
         assert result is None
         mock_disable.assert_called_once()
+
+
+class TestObservabilityBootstrapAliases:
+    """Observability should expose bootstrap helpers without local proxy wrappers."""
+
+    def test_bootstrap_helpers_are_direct_aliases(self):
+        import telegram_bot.observability as observability
+        import telegram_bot.observability_bootstrap as bootstrap
+
+        assert observability._is_endpoint_reachable is bootstrap.is_endpoint_reachable
+        assert observability._disable_otel_exporter is bootstrap.disable_otel_exporter
