@@ -308,7 +308,8 @@ async def _check_single_dep(
         return cache_ok
 
     if name == "qdrant":
-        collection = config.qdrant_collection
+        getter = getattr(config, "get_collection_name", None)
+        collection = getter() if callable(getter) else config.qdrant_collection
         scheme = urlparse(config.qdrant_url).scheme.lower()
         effective_key = config.qdrant_api_key if scheme == "https" else None
         qdrant = AsyncQdrantClient(
