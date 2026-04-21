@@ -29,11 +29,10 @@ Secret model by compose file:
 ## 2. Start Services
 
 ```bash
-# Core services (default compose set)
-make docker-up
-
-# Bot runtime
-make docker-bot-up
+# Minimal native bot stack
+make local-up
+make test-bot-health
+make run-bot
 
 # Optional profiles
 make docker-ml-up
@@ -57,10 +56,14 @@ Bot preflight:
 make test-bot-health
 ```
 
-`make test-bot-health` resolves `QDRANT_COLLECTION` in this order:
-1. exported shell env (`QDRANT_COLLECTION`)
-2. `.env` value
-3. compose default from `compose.yml` (`gdrive_documents_bge`)
+`make test-bot-health` now reuses the bot's native `telegram_bot.preflight.check_dependencies(...)`
+path instead of a separate shell-only probe. That means it validates the same Redis auth contract,
+Qdrant collection path, and LLM endpoint that `make run-bot` will use next.
+
+Native Redis contract:
+- If `REDIS_URL` is unset and `REDIS_PASSWORD` is set, `BotConfig` automatically uses
+  `redis://:$(REDIS_PASSWORD)@localhost:6379` for host-native runs.
+- Set `REDIS_URL` explicitly only when you need a non-default host, port, credentials, or DB index.
 
 ## 4. Development Gates
 
@@ -110,6 +113,8 @@ Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:com
 
 ```bash
 make local-up
+make test-bot-health
+make run-bot
 make local-ps
 make local-down
 ```
@@ -117,5 +122,6 @@ make local-down
 ## 7. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
+- `make test-bot-health` fails on Redis auth: check `REDIS_PASSWORD` or set an explicit host-native `REDIS_URL`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
 - Ingestion status empty: verify `GDRIVE_SYNC_DIR` and collection bootstrap.

@@ -344,7 +344,7 @@ test-redis: ## Verify Redis Query Engine is available
 
 .PHONY: test-bot-health test-bot-health-vps
 
-test-bot-health: ## Preflight: verify Qdrant collection + LLM (local dev, ports published)
+test-bot-health: ## Preflight: verify Redis + Qdrant + LLM (local dev, native bot contract)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
 	@./scripts/test_bot_health.sh
 	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"

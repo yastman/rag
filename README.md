@@ -143,7 +143,8 @@ cp .env.example .env   # Fill in API keys (see below)
 
 ```bash
 make local-up    # Redis, Qdrant, BGE-M3, Docling, LiteLLM
-make run-bot     # Run bot natively (fast iteration, no Docker rebuild)
+make test-bot-health  # Native bot preflight: Redis + Qdrant + LLM
+make run-bot          # Run bot natively (fast iteration, no Docker rebuild)
 ```
 
 ### 3. Or Run Everything in Docker

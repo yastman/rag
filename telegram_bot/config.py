@@ -25,6 +25,21 @@ def _empty_str_to_false(v: object) -> object:
 EmptyStrBool = Annotated[bool, BeforeValidator(_empty_str_to_false)]
 
 
+def _inject_local_redis_password(
+    redis_url: str,
+    *,
+    redis_password: SecretStr | None,
+    redis_url_explicit: bool,
+) -> str:
+    """Align host-native local Redis URL with compose auth defaults."""
+    password = redis_password.get_secret_value().strip() if redis_password is not None else ""
+    if redis_url_explicit or not password:
+        return redis_url
+    if "@" in redis_url or redis_url != "redis://localhost:6379":
+        return redis_url
+    return redis_url.replace("redis://", f"redis://:{password}@", 1)
+
+
 class BotConfig(BaseSettings):
     """Telegram bot configuration."""
 
@@ -43,6 +58,10 @@ class BotConfig(BaseSettings):
     # Services
     bge_m3_url: str = Field(
         default="http://localhost:8000", validation_alias=AliasChoices("bge_m3_url", "BGE_M3_URL")
+    )
+    redis_password: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("redis_password", "REDIS_PASSWORD"),
     )
     redis_url: str = Field(
         default="redis://localhost:6379", validation_alias=AliasChoices("redis_url", "REDIS_URL")
@@ -619,6 +638,11 @@ class BotConfig(BaseSettings):
 
     @model_validator(mode="after")
     def validate_handoff_contract(self) -> "BotConfig":
+        self.redis_url = _inject_local_redis_password(
+            self.redis_url,
+            redis_password=self.redis_password,
+            redis_url_explicit="redis_url" in self.model_fields_set,
+        )
         if self.handoff_enabled and self.managers_group_id is None:
             raise ValueError("HANDOFF_ENABLED=true but MANAGERS_GROUP_ID is missing")
         return self

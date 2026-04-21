@@ -149,3 +149,35 @@ class TestBotConfigIsPydanticSettings:
 
         cfg = BotConfig(_env_file=None)
         assert cfg.handoff_enabled is False
+
+    def test_redis_url_infers_password_for_local_default(self, monkeypatch):
+        """Host-native local default should inherit REDIS_PASSWORD when URL is implicit."""
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.setenv("REDIS_PASSWORD", "dev_redis_pass")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.redis_url == "redis://:dev_redis_pass@localhost:6379"
+
+    def test_explicit_redis_url_wins_over_password_inference(self, monkeypatch):
+        """Explicit REDIS_URL must not be rewritten by local password inference."""
+        monkeypatch.setenv("REDIS_URL", "redis://cache.internal:6380/0")
+        monkeypatch.setenv("REDIS_PASSWORD", "dev_redis_pass")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.redis_url == "redis://cache.internal:6380/0"
+
+    def test_redis_url_infers_password_loaded_from_env_file(self, monkeypatch, tmp_path):
+        """REDIS_PASSWORD loaded by BaseSettings from dotenv must drive local URL inference."""
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.delenv("REDIS_PASSWORD", raising=False)
+        env_file = tmp_path / ".env.bot"
+        env_file.write_text("REDIS_PASSWORD=dotenv_secret\n", encoding="utf-8")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=env_file)
+        assert cfg.redis_url == "redis://:dotenv_secret@localhost:6379"

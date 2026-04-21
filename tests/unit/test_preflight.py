@@ -36,6 +36,8 @@ def _make_config(**overrides) -> MagicMock:
     cfg.realestate_database_url = overrides.get(
         "realestate_database_url", "postgresql://postgres:postgres@localhost:5432/realestate"
     )
+    effective_collection = overrides.get("effective_collection", cfg.qdrant_collection)
+    cfg.get_collection_name = MagicMock(return_value=effective_collection)
     return cfg
 
 
@@ -314,7 +316,7 @@ class TestCheckSingleDep:
         mock_verify.assert_awaited_once_with(config.redis_url)
 
     async def test_qdrant_collection_ok(self):
-        config = _make_config()
+        config = _make_config(qdrant_collection="test_col", effective_collection="test_col_scalar")
         client = AsyncMock(spec=httpx.AsyncClient)
 
         mock_info = MagicMock()
@@ -329,7 +331,8 @@ class TestCheckSingleDep:
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
-        mock_qdrant_client.get_collection.assert_awaited_once_with(config.qdrant_collection)
+        config.get_collection_name.assert_called_once_with()
+        mock_qdrant_client.get_collection.assert_awaited_once_with("test_col_scalar")
         mock_qdrant_client.close.assert_awaited_once()
 
     async def test_qdrant_connection_error_fails(self):

@@ -57,3 +57,10 @@ def test_docker_docs_default_stack_mentions_mini_app_services() -> None:
     assert "- `mini-app-frontend`" in text, (
         "DOCKER.md must list mini-app-frontend in the default stack"
     )
+
+
+def test_test_bot_health_help_mentions_redis_qdrant_llm() -> None:
+    text = MAKEFILE.read_text(encoding="utf-8")
+    assert "test-bot-health: ## Preflight: verify Redis + Qdrant + LLM" in text, (
+        "test-bot-health help text must describe the real local native-run dependencies"
+    )

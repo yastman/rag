@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
+from telegram_bot.preflight import PreflightError
 from telegram_bot.services.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
 
@@ -1652,6 +1653,28 @@ class TestBotLifecycle:
 
         polling_lock.acquire.assert_awaited_once()
         assert "polling-lock-heartbeat" in created_task_names
+
+    async def test_start_stops_before_redis_init_on_critical_preflight_failure(self, mock_config):
+        """Critical preflight must abort before cache/checkpointer initialization."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+
+        startup_report = StartupReport()
+
+        with (
+            patch(
+                "telegram_bot.preflight.check_dependencies",
+                new_callable=AsyncMock,
+                side_effect=PreflightError(["redis"], report=startup_report),
+            ),
+            patch("telegram_bot.integrations.memory.create_redis_checkpointer") as mock_create_cp,
+        ):
+            with pytest.raises(PreflightError):
+                await bot.start()
+
+        bot._cache.initialize.assert_not_awaited()
+        mock_create_cp.assert_not_called()
 
     async def test_stop_closes_services(self, mock_config):
         """Test that stop() closes all services."""

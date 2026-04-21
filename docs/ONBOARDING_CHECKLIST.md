@@ -43,8 +43,8 @@ cp .env.example .env
 # Start core services (Redis, Qdrant, BGE-M3)
 make local-up
 
-# Verify services are running
-docker compose ps
+# Verify the native bot contract before startup
+make test-bot-health
 ```
 
 ## 4. Bot Startup
