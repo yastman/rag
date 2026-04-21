@@ -145,11 +145,13 @@ For local development, the canonical environment file is `.env` in the repo root
 
 ```bash
 make local-up    # Redis, Qdrant, BGE-M3, Docling, LiteLLM
-make test-bot-health
-make run-bot     # Run bot natively (fast iteration, no Docker rebuild)
+make test-bot-health   # Local helper: Redis, Qdrant, LiteLLM + optional Postgres note
+make run-bot           # Run bot natively (fast iteration, no Docker rebuild)
 ```
 
 For native bot runs, `REDIS_URL` is optional in local development: when it is unset, the bot derives `redis://:REDIS_PASSWORD@localhost:6379` from `REDIS_PASSWORD` so it matches the password-protected Redis started by `make local-up`.
+
+`make test-bot-health` validates the published local prerequisites used by native bot runs. The authoritative startup preflight still runs in [`telegram_bot/preflight.py`](/home/user/projects/rag-fresh-issue-1198/telegram_bot/preflight.py) when the bot starts. That runtime preflight still owns the repo-local BGE-M3 contract because BGE-M3 is a service this repository depends on directly, not a generic upstream SDK health path.
 
 ### 3. Or Run Everything in Docker
 
