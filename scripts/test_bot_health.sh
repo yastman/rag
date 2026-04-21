@@ -53,6 +53,25 @@ if ! command -v curl >/dev/null 2>&1; then
   fail "curl is required"
 fi
 
+if ! command -v uv >/dev/null 2>&1; then
+  fail "uv is required"
+fi
+
+# Redis: use the same BotConfig + redis-py path as native bot startup
+uv run --no-sync python - <<'PY' || fail "Redis is unreachable or auth failed for native bot startup"
+from telegram_bot.config import BotConfig
+import redis
+
+config = BotConfig()
+client = redis.from_url(config.redis_url, decode_responses=True)
+try:
+    if client.ping() is not True:
+        raise RuntimeError("unexpected Redis ping response")
+finally:
+    client.close()
+PY
+echo "✓ Redis auth OK"
+
 # Qdrant: target collection exists (match bot's suffix rules)
 base_collection="$QDRANT_COLLECTION"
 base_collection="${base_collection%_binary}"

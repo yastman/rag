@@ -62,6 +62,11 @@ make test-bot-health
 2. `.env` value
 3. compose default from `compose.yml` (`gdrive_documents_bge`)
 
+For Redis it uses this native-run order:
+1. exported shell env (`REDIS_URL`)
+2. `.env` value (`REDIS_URL=...`)
+3. derived local default from `REDIS_PASSWORD` as `redis://:REDIS_PASSWORD@localhost:6379`
+
 ## 4. Development Gates
 
 Local release gate:
