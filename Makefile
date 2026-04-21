@@ -755,7 +755,7 @@ monitoring-status: ## Show monitoring stack status
 
 monitoring-test-alert: ## Send a test alert to verify Telegram integration
 	@echo "$(BLUE)Sending test alert...$(NC)"
-	@# Load local env (repo uses .env -> .env.local symlink) so `make` works without manual `source`.
+	@# Load the canonical local .env file so `make` works without manual `source`.
 	@set -a; [ -f ./.env ] && . ./.env; set +a; \
 	if [ -z "$$TELEGRAM_ALERTING_BOT_TOKEN" ] || [ -z "$$TELEGRAM_ALERTING_CHAT_ID" ]; then \
 		echo "$(RED)Error: TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID must be set$(NC)"; \
