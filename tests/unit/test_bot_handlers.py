@@ -1861,18 +1861,19 @@ class TestBotLifecycle:
 
         bot.dp.stop_polling.assert_not_awaited()
 
-    async def test_polling_lock_heartbeat_stops_after_retry_budget(self, mock_config):
-        """Repeated heartbeat failures should still stop polling after the retry budget."""
+    async def test_polling_lock_heartbeat_stops_before_lease_can_expire(self, mock_config):
+        """Two missed refreshes must stop polling before a third interval can expire the lease."""
         bot, _ = _create_bot(mock_config)
         bot._polling_lock = AsyncMock()
         bot._polling_lock.ttl_sec = 3
-        bot._polling_lock.refresh = AsyncMock(side_effect=[RuntimeError("redis lost")] * 3)
+        bot._polling_lock.refresh = AsyncMock(side_effect=[RuntimeError("redis lost")] * 2)
         bot.dp = MagicMock()
         bot.dp.stop_polling = AsyncMock()
 
         with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()):
             await bot._polling_lock_heartbeat()
 
+        assert bot._polling_lock.refresh.await_count == 2
         bot.dp.stop_polling.assert_awaited_once_with()
 
 
