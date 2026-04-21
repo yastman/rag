@@ -30,6 +30,8 @@ def _make_config(**overrides) -> MagicMock:
     cfg.qdrant_url = overrides.get("qdrant_url", "http://localhost:6333")
     cfg.qdrant_api_key = overrides.get("qdrant_api_key")
     cfg.qdrant_collection = overrides.get("qdrant_collection", "test_col")
+    effective_collection = overrides.get("effective_collection", cfg.qdrant_collection)
+    cfg.get_collection_name = MagicMock(return_value=effective_collection)
     cfg.qdrant_timeout = overrides.get("qdrant_timeout", 30)
     cfg.bge_m3_url = overrides.get("bge_m3_url", "http://localhost:8000")
     cfg.llm_base_url = overrides.get("llm_base_url", "http://localhost:4000")
@@ -314,7 +316,7 @@ class TestCheckSingleDep:
         mock_verify.assert_awaited_once_with(config.redis_url)
 
     async def test_qdrant_collection_ok(self):
-        config = _make_config()
+        config = _make_config(qdrant_collection="test_col", effective_collection="test_col_scalar")
         client = AsyncMock(spec=httpx.AsyncClient)
 
         mock_info = MagicMock()
@@ -329,7 +331,8 @@ class TestCheckSingleDep:
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
-        mock_qdrant_client.get_collection.assert_awaited_once_with(config.qdrant_collection)
+        config.get_collection_name.assert_called_once_with()
+        mock_qdrant_client.get_collection.assert_awaited_once_with("test_col_scalar")
         mock_qdrant_client.close.assert_awaited_once()
 
     async def test_qdrant_connection_error_fails(self):
