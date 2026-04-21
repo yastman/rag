@@ -139,6 +139,8 @@ uv sync
 cp .env.example .env   ***REMOVED*** Fill in API keys (see below)
 ```
 
+For local development, the canonical environment file is `.env` in the repo root. `.env.local` is not loaded automatically by the bot, `make`, or `uv run` entry points.
+
 ***REMOVED******REMOVED******REMOVED*** 2. Start Services
 
 ```bash
