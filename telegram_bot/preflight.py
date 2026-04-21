@@ -456,9 +456,10 @@ async def _check_single_dep(
                 await conn.close()
         except asyncpg.InvalidCatalogNameError:
             logger.warning(
-                "Preflight WARN: Postgres database does not exist (user features will use defaults)"
+                "Preflight WARN: Postgres database does not exist yet; startup may auto-create "
+                "it before enabling user features"
             )
-            return False
+            return True
         except Exception as exc:
             remediation = _postgres_local_remediation(config.realestate_database_url)
             if remediation:
