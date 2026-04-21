@@ -99,7 +99,8 @@ _STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Исп
 _TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
-_POLLING_LOCK_MAX_REFRESH_FAILURES = 3
+# Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
+_POLLING_LOCK_MAX_REFRESH_FAILURES = 2
 
 
 def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
