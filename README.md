@@ -143,8 +143,11 @@ cp .env.example .env   # Fill in API keys (see below)
 
 ```bash
 make local-up    # Redis, Qdrant, BGE-M3, Docling, LiteLLM
+make test-bot-health
 make run-bot     # Run bot natively (fast iteration, no Docker rebuild)
 ```
+
+For native bot runs, `REDIS_URL` is optional in local development: when it is unset, the bot derives `redis://:REDIS_PASSWORD@localhost:6379` from `REDIS_PASSWORD` so it matches the password-protected Redis started by `make local-up`.
 
 ### 3. Or Run Everything in Docker
 
