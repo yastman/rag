@@ -363,3 +363,82 @@ async def test_get_tasks_by_entity_id(kommo_client, httpx_mock):
     assert len(tasks) == 1
     assert tasks[0].id == 301
     assert tasks[0].entity_id == 42
+
+
+# --- upsert_contact missing-name merge behavior (#717) ---
+
+
+async def test_upsert_contact_updates_first_name_when_empty(kommo_client) -> None:
+    """Existing contact with empty first_name gets ContactUpdate(first_name=...)."""
+    from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
+
+    existing_raw = {"id": 42, "first_name": None, "last_name": "Doe"}
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
+        return_value={"_embedded": {"contacts": [existing_raw]}}
+    )
+    captured: list[tuple[int, ContactUpdate]] = []
+
+    async def _mock_update(contact_id: int, update: ContactUpdate) -> Contact:
+        captured.append((contact_id, update))
+        return Contact(id=contact_id)
+
+    kommo_client.update_contact = _mock_update  # type: ignore[method-assign]
+
+    await kommo_client.upsert_contact("+1234567890", ContactCreate(first_name="John"))
+
+    assert len(captured) == 1
+    cid, update_payload = captured[0]
+    assert cid == 42
+    assert update_payload.first_name == "John"
+    assert update_payload.last_name is None
+
+
+async def test_upsert_contact_updates_last_name_when_empty(kommo_client) -> None:
+    """Existing contact with empty last_name gets ContactUpdate(last_name=...)."""
+    from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
+
+    existing_raw = {"id": 7, "first_name": "Jane", "last_name": None}
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
+        return_value={"_embedded": {"contacts": [existing_raw]}}
+    )
+    captured: list[tuple[int, ContactUpdate]] = []
+
+    async def _mock_update(contact_id: int, update: ContactUpdate) -> Contact:
+        captured.append((contact_id, update))
+        return Contact(id=contact_id)
+
+    kommo_client.update_contact = _mock_update  # type: ignore[method-assign]
+
+    await kommo_client.upsert_contact(
+        "+1234567890", ContactCreate(first_name="Jane", last_name="Smith")
+    )
+
+    assert len(captured) == 1
+    cid, update_payload = captured[0]
+    assert cid == 7
+    assert update_payload.first_name is None
+    assert update_payload.last_name == "Smith"
+
+
+async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) -> None:
+    """When names are already present, upsert_contact should return existing contact unchanged."""
+    from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
+
+    existing_raw = {"id": 99, "first_name": "Alice", "last_name": "Wonder"}
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
+        return_value={"_embedded": {"contacts": [existing_raw]}}
+    )
+    captured: list[tuple[int, ContactUpdate]] = []
+
+    async def _mock_update(contact_id: int, update: ContactUpdate) -> Contact:
+        captured.append((contact_id, update))
+        return Contact(id=contact_id)
+
+    kommo_client.update_contact = _mock_update  # type: ignore[method-assign]
+
+    result = await kommo_client.upsert_contact(
+        "+1234567890", ContactCreate(first_name="X", last_name="Y")
+    )
+
+    assert not captured
+    assert result.id == 99

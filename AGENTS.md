@@ -75,6 +75,12 @@
 - Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
 - Before adding a new SDK, API client, or dependency, check `docs/engineering/sdk-registry.md`.
 
+## Test Writing Instruction
+- Use `docs/engineering/test-writing-guide.md` as the default instruction for creating or updating tests.
+- Keep one canonical owner per behavior; extend existing tests before adding a new file.
+- Preserve local-fast vs heavy-tier split; do not move runtime-heavy checks into `make test-unit` / `make test`.
+- For test changes, run focused pytest on touched files first, then baseline verification from `Validation`.
+
 ## Engineering Heuristics
 - Prefer the simplest change that solves the current task and keeps the local blast radius small.
 - Do not add abstractions, extension points, wrappers, or interfaces before a real second use case exists.
@@ -117,4 +123,5 @@
 ## References
 - `README.md`
 - `docs/engineering/sdk-registry.md`
+- `docs/engineering/test-writing-guide.md`
 - `DOCKER.md`
