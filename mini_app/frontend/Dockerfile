@@ -1,4 +1,4 @@
-***REMOVED*** syntax=docker/dockerfile:1
+***REMOVED*** syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ***REMOVED*** Mini App React frontend — Node build + nginx serve
 
 ***REMOVED*** ====== BUILD STAGE ======

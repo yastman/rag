@@ -970,12 +970,11 @@ wheels = [
 
 [[package]]
 name = "langfuse"
-version = "3.14.6"
+version = "4.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backoff" },
     { name = "httpx" },
-    { name = "openai" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
@@ -983,9 +982,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "wrapt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/e4/5bb96bc5f95f476c8f7c4e654a6420250938cc21645b914a1309c2dc3d49/langfuse-3.14.6.tar.gz", hash = "sha256:058f7b7caa9284b964feaee81c223542d78e9fb4daabf312269b9f903471b9c4", size = 236530, upload-time = "2026-04-01T17:27:55.057Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0c/84/e04d7966e79eda4126e9c4a90f374b1b7d9a6d8155e386f9bade49f19296/langfuse-4.3.1.tar.gz", hash = "sha256:fb83155d17c2bc96fdc7c749f10c8ae8b6be1e47619e31627b5a907f965a6580", size = 276525, upload-time = "2026-04-16T12:20:17.679Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8b/9a/f2d82cdb7fb71d89de2e693b317a8f2c3d3da44db8a1533b96cf0fbe362f/langfuse-3.14.6-py3-none-any.whl", hash = "sha256:5eb22a5ea579ac10f050513e3fedccc3c9a981eeefe44f9014273bc229a56f88", size = 421426, upload-time = "2026-04-01T17:27:53.487Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/45/bcc15ea8df11224516e060efb2d813cdfafb8d285233f350ff0d8098ff20/langfuse-4.3.1-py3-none-any.whl", hash = "sha256:4ec1524fcb082acaff1a746f3da1ab92c4fb2352e66350c11341b34c13013685", size = 476379, upload-time = "2026-04-16T12:20:18.741Z" },
 ]
 
 [[package]]
@@ -2046,7 +2045,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.2" },
     { name = "langchain-core", specifier = ">=1.2" },
     { name = "langchain-openai", specifier = ">=0.3.0" },
-    { name = "langfuse", specifier = ">=3.0.0,<4.0" },
+    { name = "langfuse", specifier = ">=4.0.0,<5.0" },
     { name = "langgraph", specifier = ">=1.0.3" },
     { name = "langgraph-checkpoint-redis", specifier = ">=0.2.0" },
     { name = "langmem", specifier = ">=0.0.30" },
