@@ -25,11 +25,18 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     local_dev = Path("docs/LOCAL-DEVELOPMENT.md").read_text(encoding="utf-8")
     docker_doc = Path("DOCKER.md").read_text(encoding="utf-8")
     makefile = Path("Makefile").read_text(encoding="utf-8")
+    bot_config = Path("telegram_bot/config.py").read_text(encoding="utf-8")
 
     assert "cp .env.example .env" in readme
     assert "cp .env.example .env" in local_dev
     assert "canonical local env file is `.env`" in docker_doc
+    assert 'env_file=".env"' in bot_config
+    assert "uv run --env-file .env python -m telegram_bot.main" in makefile
+    assert "[ -f ./.env ] && . ./.env" in makefile
+    assert ".env.local" not in bot_config
+    assert ".env.local" not in makefile
     assert ".env -> .env.local symlink" not in makefile
+    assert "feature branches that merge into `dev` first" not in docker_doc
 
 
 class TestEnvExampleCompleteness:
