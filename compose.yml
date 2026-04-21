@@ -502,9 +502,23 @@ services:
     image: redis:8.6.2@sha256:1f073813b641755b70b0200da64131bbeeb4ec5b633ca67772229b49820caafa
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -n "${LANGFUSE_REDIS_PASSWORD:-}" ]; then
+          exec redis-server --requirepass "$LANGFUSE_REDIS_PASSWORD"
+        fi
+        exec redis-server
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-}", "ping"]
+      test:
+        - CMD-SHELL
+        - |
+          if [ -n "${LANGFUSE_REDIS_PASSWORD+x}" ] && [ -n "$LANGFUSE_REDIS_PASSWORD" ]; then
+            redis-cli -a "$LANGFUSE_REDIS_PASSWORD" ping | grep -q PONG
+          else
+            redis-cli ping | grep -q PONG
+          fi
       interval: 5s
       timeout: 5s
       retries: 3
