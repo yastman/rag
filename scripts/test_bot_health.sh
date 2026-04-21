@@ -2,6 +2,7 @@
 set -euo pipefail
 
 LLM_BASE_URL=${LLM_BASE_URL:-${LITELLM_BASE_URL:-http://localhost:4000}}
+ALLOW_GENERIC_OPENAI_HEALTHCHECK_FALLBACK=${ALLOW_GENERIC_OPENAI_HEALTHCHECK_FALLBACK:-0}
 
 fail() {
   echo "FAIL: $1" >&2
@@ -91,10 +92,12 @@ health_url="$health_base_url/health/readiness"
 
 if curl -fsS "$health_url" >/dev/null; then
   echo "✓ LiteLLM readiness OK: $health_url"
-else
-  # Fallback for OpenAI-compatible endpoints.
+elif [ "$ALLOW_GENERIC_OPENAI_HEALTHCHECK_FALLBACK" = "1" ]; then
+  # Explicit opt-in for generic OpenAI-compatible endpoints that do not implement LiteLLM readiness.
   curl -fsS "$models_url" >/dev/null || fail "LLM endpoint not responding at $LLM_BASE_URL"
-  echo "✓ LLM models OK: $models_url"
+  echo "✓ LLM models OK via explicit generic fallback: $models_url"
+else
+  fail "LiteLLM readiness check failed at $health_url"
 fi
 
 exit 0

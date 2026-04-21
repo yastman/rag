@@ -26,6 +26,12 @@ def test_bot_health_uses_litellm_readiness_probe() -> None:
     assert "/health/readiness" in text
 
 
+def test_bot_health_only_allows_models_fallback_with_explicit_override() -> None:
+    """The helper should not silently treat /models as a default LiteLLM readiness fallback."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "ALLOW_GENERIC_OPENAI_HEALTHCHECK_FALLBACK" in text
+
+
 def test_bot_health_reports_local_postgres_expectation() -> None:
     """The local preflight should surface the optional localhost Postgres contract."""
     text = SCRIPT.read_text(encoding="utf-8")
