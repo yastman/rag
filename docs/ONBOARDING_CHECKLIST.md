@@ -43,7 +43,7 @@ cp .env.example .env
 # Start core services (Redis, Qdrant, BGE-M3)
 make local-up
 
-# Verify the native bot contract before startup
+# Verify the published local prerequisites for native bot startup
 make test-bot-health
 ```
 
@@ -58,6 +58,8 @@ uv run python -m telegram_bot.main
 ```
 
 If you do set `REDIS_URL` manually for native runs, it must include the Redis password. Otherwise the bot derives the local URL from `REDIS_PASSWORD`.
+
+`make test-bot-health` is the local helper for Redis/Qdrant/LiteLLM plus the optional localhost Postgres note. The full startup preflight still runs in [`telegram_bot/preflight.py`](/repo-issue-1198/telegram_bot/preflight.py) when the bot starts, and that runtime path keeps the repo-local BGE-M3 health contract.
 
 ## 5. Validation
 
