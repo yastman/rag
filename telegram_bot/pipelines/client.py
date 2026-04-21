@@ -6,7 +6,6 @@ Steps: classify → agent intent gate → RAG → generate → send → post-pro
 from __future__ import annotations
 
 import logging
-import re
 import time
 from numbers import Real
 from typing import Any
@@ -20,6 +19,7 @@ from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
     build_cacheability_decision,
+    is_contextual_query,
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
@@ -39,14 +39,6 @@ _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY", "STRUCTURED"})
 
 _TELEGRAM_MESSAGE_LIMIT = 4096
-
-# Contextual follow-up indicators — queries referencing prior turns are not cacheable.
-_CONTEXTUAL_RE = re.compile(
-    r"\b(подробнее|первый|первую|первое|второй|вторую|второе|третий|третью|третье"
-    r"|это|тот|та|те|они|ещё|другие|другой|другую|следующий|следующую|предыдущий|предыдущую"
-    r"|оба|обе|тот же|та же|то же)\b",
-    re.IGNORECASE,
-)
 
 # Fallback confidence threshold for semantic cache store guard.
 _CONFIDENCE_THRESHOLD = 0.005
@@ -137,7 +129,7 @@ def _safe_langfuse_env(config: Any) -> str:
 
 def _is_contextual_query(user_text: str) -> bool:
     """Return True if query contains follow-up pronouns / contextual references."""
-    return bool(_CONTEXTUAL_RE.search(user_text))
+    return is_contextual_query(user_text)
 
 
 # ---------------------------------------------------------------------------
