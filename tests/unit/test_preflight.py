@@ -204,6 +204,26 @@ class TestCheckRedisDeep:
         assert details["keyspace_db0"] == "empty"
 
 
+class TestPostgresRemediation:
+    async def test_local_connection_refused_logs_local_runtime_remediation(self, caplog):
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost:5432/realestate")
+        client = AsyncMock()
+
+        with (
+            patch(
+                "telegram_bot.preflight.asyncpg.connect",
+                AsyncMock(side_effect=ConnectionRefusedError(111, "Connection refused")),
+            ),
+            caplog.at_level("WARNING"),
+        ):
+            result = await _check_single_dep("postgres", config, client)
+
+        assert result is False
+        assert "localhost:5432" in caplog.text
+        assert "optional for native bot runs" in caplog.text
+        assert "compose.yml:compose.dev.yml" in caplog.text
+
+
 # ===========================================================================
 # _verify_cache_synthetic
 # ===========================================================================
@@ -745,7 +765,7 @@ class TestQdrantPreflightClient:
 
 
 class TestPostgresPreflight:
-    """Postgres preflight check validates database existence."""
+    """Postgres preflight check validates connectivity without blocking recovery paths."""
 
     async def test_postgres_check_passes_when_db_exists(self):
         """Preflight passes when Postgres connection succeeds."""
@@ -760,8 +780,8 @@ class TestPostgresPreflight:
             result = await _check_single_dep("postgres", config, client)
             assert result is True
 
-    async def test_postgres_check_fails_when_db_missing(self):
-        """Preflight fails when database does not exist."""
+    async def test_postgres_check_allows_missing_db_recovery(self, caplog):
+        """Missing DB should stay recoverable so startup can run the auto-create path."""
         import asyncpg as real_asyncpg
 
         config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
@@ -775,7 +795,8 @@ class TestPostgresPreflight:
 
             client = AsyncMock()
             result = await _check_single_dep("postgres", config, client)
-            assert result is False
+            assert result is True
+            assert "auto-create" in caplog.text.lower()
 
     async def test_postgres_in_dep_classification_as_optional(self):
         """Postgres is OPTIONAL — bot degrades without it."""

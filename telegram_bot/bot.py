@@ -99,6 +99,8 @@ _STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Исп
 _TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
+# Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
+_POLLING_LOCK_MAX_REFRESH_FAILURES = 2
 
 
 def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
@@ -4634,109 +4636,126 @@ class PropertyBot:
                 self._kommo_client = None
 
         # Initialize PostgreSQL pool for realestate DB
-        try:
-            import asyncpg
-
-            test_conn: Any | None = None
+        postgres_available = (
+            preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
+        )
+        if postgres_available:
             try:
-                # Validate DB exists before creating pool (avoid traceback spam #570)
-                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            except asyncpg.InvalidCatalogNameError:
-                target_db = self._extract_database_name(self.config.realestate_database_url)
-                if target_db is None:
-                    raise
-                logger.warning(
-                    "PostgreSQL database %s missing; attempting auto-create",
-                    target_db,
-                )
-                if not await self._ensure_postgres_database_exists(asyncpg, target_db):
-                    raise
-                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            finally:
-                if test_conn is not None:
-                    await test_conn.close()
+                import asyncpg
 
-            self._pg_pool = await asyncpg.create_pool(
-                self.config.realestate_database_url,
-                min_size=0,
-                max_size=5,
-                timeout=5,
-            )
-            logger.info("PostgreSQL pool ready (realestate)")
-            await self._ensure_realestate_schema()
-            logger.info("PostgreSQL schema ready (realestate)")
-
-            from .services.user_service import UserService
-
-            self._user_service = UserService(pool=self._pg_pool)
-
-            # Initialize lead scoring store (#384)
-            from .services.lead_scoring_store import LeadScoringStore
-
-            self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
-            logger.info("Lead scoring store ready")
-
-            # Initialize favorites service (#628)
-            from .services.favorites_service import FavoritesService
-
-            self._favorites_service = FavoritesService(pool=self._pg_pool)
-            logger.info("Favorites service ready")
-
-            from .services.search_event_store import SearchEventStore
-
-            self._search_event_store = SearchEventStore(pool=self._pg_pool)
-            logger.info("Search event store ready")
-
-            # Initialize hot lead notifier (#402)
-            if self.config.manager_ids and self._cache.redis is not None:
+                test_conn: Any | None = None
                 try:
-                    from .services.hot_lead_notifier import HotLeadNotifier
-
-                    self._hot_lead_notifier = HotLeadNotifier(
-                        bot=self.bot,
-                        cache=self._cache,
-                        manager_ids=self.config.manager_ids,
-                        dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
+                    # Validate DB exists before creating pool (avoid traceback spam #570)
+                    test_conn = await asyncpg.connect(
+                        self.config.realestate_database_url, timeout=5
                     )
-                    logger.info("Hot lead notifier ready (managers=%s)", self.config.manager_ids)
-                except Exception:
-                    logger.exception("Failed to initialize hot lead notifier")
-
-            # Initialize nurturing scheduler (#390)
-            if self.config.nurturing_enabled:
-                try:
-                    from .services.funnel_analytics_service import FunnelAnalyticsService
-                    from .services.nurturing_scheduler import NurturingScheduler
-                    from .services.nurturing_service import NurturingService
-
-                    nurturing_svc = NurturingService(
-                        pool=self._pg_pool,
-                        bot=self.bot if self.config.nurturing_dispatch_enabled else None,
-                        qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
-                        llm=self._llm if self.config.nurturing_dispatch_enabled else None,
+                except asyncpg.InvalidCatalogNameError:
+                    target_db = self._extract_database_name(self.config.realestate_database_url)
+                    if target_db is None:
+                        raise
+                    logger.warning(
+                        "PostgreSQL database %s missing; attempting auto-create",
+                        target_db,
                     )
-                    analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
-                    self._nurturing_service = nurturing_svc
-                    self._funnel_analytics_service = analytics_svc
-                    self._nurturing_scheduler = NurturingScheduler(
-                        nurturing_service=nurturing_svc,
-                        analytics_service=analytics_svc,
-                        lease_store=None,
-                        config=self.config,
+                    if not await self._ensure_postgres_database_exists(asyncpg, target_db):
+                        raise
+                    test_conn = await asyncpg.connect(
+                        self.config.realestate_database_url, timeout=5
                     )
-                    await self._nurturing_scheduler.start()
-                    logger.info("Nurturing scheduler started")
-                except Exception:
-                    logger.exception("Failed to start nurturing scheduler")
-        except Exception:
-            logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
-            startup_report.add(
-                StartupSignal(
-                    source="postgres_runtime",
-                    severity=StartupSeverity.DEGRADED,
-                    summary="PostgreSQL pool unavailable, user features disabled",
-                    remediation="restore PostgreSQL connectivity for favorites, search events, and user services",
+                finally:
+                    if test_conn is not None:
+                        await test_conn.close()
+
+                self._pg_pool = await asyncpg.create_pool(
+                    self.config.realestate_database_url,
+                    min_size=0,
+                    max_size=5,
+                    timeout=5,
                 )
+                logger.info("PostgreSQL pool ready (realestate)")
+                await self._ensure_realestate_schema()
+                logger.info("PostgreSQL schema ready (realestate)")
+
+                from .services.user_service import UserService
+
+                self._user_service = UserService(pool=self._pg_pool)
+
+                # Initialize lead scoring store (#384)
+                from .services.lead_scoring_store import LeadScoringStore
+
+                self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
+                logger.info("Lead scoring store ready")
+
+                # Initialize favorites service (#628)
+                from .services.favorites_service import FavoritesService
+
+                self._favorites_service = FavoritesService(pool=self._pg_pool)
+                logger.info("Favorites service ready")
+
+                from .services.search_event_store import SearchEventStore
+
+                self._search_event_store = SearchEventStore(pool=self._pg_pool)
+                logger.info("Search event store ready")
+
+                # Initialize hot lead notifier (#402)
+                if self.config.manager_ids and self._cache.redis is not None:
+                    try:
+                        from .services.hot_lead_notifier import HotLeadNotifier
+
+                        self._hot_lead_notifier = HotLeadNotifier(
+                            bot=self.bot,
+                            cache=self._cache,
+                            manager_ids=self.config.manager_ids,
+                            dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
+                        )
+                        logger.info(
+                            "Hot lead notifier ready (managers=%s)", self.config.manager_ids
+                        )
+                    except Exception:
+                        logger.exception("Failed to initialize hot lead notifier")
+
+                # Initialize nurturing scheduler (#390)
+                if self.config.nurturing_enabled:
+                    try:
+                        from .services.funnel_analytics_service import FunnelAnalyticsService
+                        from .services.nurturing_scheduler import NurturingScheduler
+                        from .services.nurturing_service import NurturingService
+
+                        nurturing_svc = NurturingService(
+                            pool=self._pg_pool,
+                            bot=self.bot if self.config.nurturing_dispatch_enabled else None,
+                            qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
+                            llm=self._llm if self.config.nurturing_dispatch_enabled else None,
+                        )
+                        analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
+                        self._nurturing_service = nurturing_svc
+                        self._funnel_analytics_service = analytics_svc
+                        self._nurturing_scheduler = NurturingScheduler(
+                            nurturing_service=nurturing_svc,
+                            analytics_service=analytics_svc,
+                            lease_store=None,
+                            config=self.config,
+                        )
+                        await self._nurturing_scheduler.start()
+                        logger.info("Nurturing scheduler started")
+                    except Exception:
+                        logger.exception("Failed to start nurturing scheduler")
+            except Exception:
+                logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+                startup_report.add(
+                    StartupSignal(
+                        source="postgres_runtime",
+                        severity=StartupSeverity.DEGRADED,
+                        summary="PostgreSQL pool unavailable, user features disabled",
+                        remediation=(
+                            "restore PostgreSQL connectivity for favorites, search events, "
+                            "and user services"
+                        ),
+                    )
+                )
+        else:
+            logger.info(
+                "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
 
         # Initialize session summary worker (#445)
@@ -4989,16 +5008,32 @@ class PropertyBot:
             return
 
         refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+        consecutive_failures = 0
         try:
             while True:
                 await asyncio.sleep(refresh_interval)
-                await self._polling_lock.refresh()
+                try:
+                    await self._polling_lock.refresh()
+                except Exception:
+                    consecutive_failures += 1
+                    if consecutive_failures < _POLLING_LOCK_MAX_REFRESH_FAILURES:
+                        logger.warning(
+                            "Polling lock heartbeat refresh failed (%d/%d); retrying",
+                            consecutive_failures,
+                            _POLLING_LOCK_MAX_REFRESH_FAILURES,
+                            exc_info=True,
+                        )
+                        continue
+                    logger.exception(
+                        "Polling lock heartbeat failed %d times; stopping polling",
+                        _POLLING_LOCK_MAX_REFRESH_FAILURES,
+                    )
+                    with contextlib.suppress(Exception):
+                        await self.dp.stop_polling()
+                    return
+                consecutive_failures = 0
         except asyncio.CancelledError:
             raise
-        except Exception:
-            logger.exception("Polling lock heartbeat failed; stopping polling")
-            with contextlib.suppress(Exception):
-                await self.dp.stop_polling()
 
     async def stop(self):
         """Stop bot and cleanup."""
