@@ -72,6 +72,34 @@ finally:
 PY
 echo "✓ Redis auth OK"
 
+# Postgres: report the REAL_ESTATE_DATABASE_URL localhost:5432 contract used by
+# native bot startup without turning optional DB reachability into a hard fail.
+uv run --no-sync python - <<'PY'
+from telegram_bot.config import BotConfig
+import socket
+from urllib.parse import urlparse
+
+config = BotConfig()
+parsed = urlparse(config.realestate_database_url)
+host = parsed.hostname or ""
+port = parsed.port or 5432
+
+if host in {"localhost", "127.0.0.1"}:
+    try:
+        with socket.create_connection((host, port), timeout=1):
+            print(f"✓ Postgres reachable for native bot startup: {host}:{port}")
+    except OSError as exc:
+        print(
+            f"! Postgres unreachable at {host}:{port} "
+            f"(optional for native bot runs): {exc}"
+        )
+else:
+    print(
+        f"i Postgres DSN points to {host or 'remote host'}:{port}; "
+        "skipping local localhost:5432 contract check"
+    )
+PY
+
 # Qdrant: target collection exists (match bot's suffix rules)
 base_collection="$QDRANT_COLLECTION"
 base_collection="${base_collection%_binary}"
