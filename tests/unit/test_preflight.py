@@ -335,7 +335,7 @@ class TestCheckSingleDep:
         assert result is True
         mock_verify.assert_awaited_once_with(config.redis_url)
 
-    async def test_qdrant_collection_ok(self):
+    async def test_qdrant_uses_collection_exists_before_get_collection(self):
         config = _make_config(qdrant_collection="test_col", effective_collection="test_col_scalar")
         client = AsyncMock(spec=httpx.AsyncClient)
 
@@ -344,6 +344,7 @@ class TestCheckSingleDep:
         mock_info.config.params.vectors = {"dense": MagicMock(), "colbert": MagicMock()}
         mock_info.config.params.sparse_vectors = {"bm42": MagicMock()}
         mock_qdrant_client = AsyncMock()
+        mock_qdrant_client.collection_exists = AsyncMock(return_value=True)
         mock_qdrant_client.get_collection = AsyncMock(return_value=mock_info)
         mock_qdrant_client.close = AsyncMock()
 
@@ -352,6 +353,7 @@ class TestCheckSingleDep:
 
         assert result is True
         config.get_collection_name.assert_called_once_with()
+        mock_qdrant_client.collection_exists.assert_awaited_once_with("test_col_scalar")
         mock_qdrant_client.get_collection.assert_awaited_once_with("test_col_scalar")
         mock_qdrant_client.close.assert_awaited_once()
 
@@ -412,7 +414,7 @@ class TestCheckSingleDep:
         result = await _check_single_dep("bge_m3", config, client)
         assert result is True
 
-    async def test_litellm_health_ok(self):
+    async def test_litellm_health_uses_readiness(self):
         config = _make_config()
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -422,7 +424,7 @@ class TestCheckSingleDep:
         result = await _check_single_dep("litellm", config, client)
 
         assert result is True
-        client.get.assert_awaited_once_with(f"{config.llm_base_url}/health/liveliness")
+        client.get.assert_awaited_once_with(f"{config.llm_base_url}/health/readiness")
 
     async def test_litellm_non_200_fails(self):
         config = _make_config()
@@ -836,13 +838,12 @@ class TestPostgresOptionalBehavior:
 class TestQdrantPreflightEnsureCollection:
     """Preflight auto-creates Qdrant collection when it is missing."""
 
-    async def test_creates_collection_when_not_found(self):
-        """When collection missing (not-found error), preflight creates it and returns True."""
+    async def test_qdrant_creates_missing_collection_when_collection_exists_is_false(self):
+        """Missing collection should trigger create via collection_exists(), not exception parsing."""
         config = _make_config()
         mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(
-            side_effect=Exception("Not found: Collection `test_col` doesn't exist!")
-        )
+        mock_qdrant.collection_exists = AsyncMock(return_value=False)
+        mock_qdrant.get_collection = AsyncMock()
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
 
@@ -851,27 +852,16 @@ class TestQdrantPreflightEnsureCollection:
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
+        mock_qdrant.collection_exists.assert_awaited_once_with("test_col")
+        mock_qdrant.get_collection.assert_not_awaited()
         mock_qdrant.create_collection.assert_awaited_once()
-
-    async def test_returns_true_after_auto_create(self):
-        """Returns True after successfully creating missing collection (404 variant)."""
-        config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("status_code=404"))
-        mock_qdrant.create_collection = AsyncMock()
-        mock_qdrant.close = AsyncMock()
-
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
-            client = AsyncMock()
-            result = await _check_single_dep("qdrant", config, client)
-
-        assert result is True
 
     async def test_fails_when_create_also_raises(self):
         """Returns False when collection missing AND create_collection also fails."""
         config = _make_config()
         mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Not found"))
+        mock_qdrant.collection_exists = AsyncMock(return_value=False)
+        mock_qdrant.get_collection = AsyncMock()
         mock_qdrant.create_collection = AsyncMock(side_effect=Exception("Permission denied"))
         mock_qdrant.close = AsyncMock()
 
@@ -885,6 +875,7 @@ class TestQdrantPreflightEnsureCollection:
         """Connection-refused and other non-404 errors fail without attempting create."""
         config = _make_config()
         mock_qdrant = AsyncMock()
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Connection refused"))
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
@@ -900,7 +891,8 @@ class TestQdrantPreflightEnsureCollection:
         """Auto-created collection has dense, colbert (multivector), and bm42 vectors."""
         config = _make_config(qdrant_collection="gdrive_documents_bge")
         mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Not found"))
+        mock_qdrant.collection_exists = AsyncMock(return_value=False)
+        mock_qdrant.get_collection = AsyncMock()
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
 
