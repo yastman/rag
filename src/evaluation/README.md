@@ -75,28 +75,29 @@ with logger.start_run(run_name="dbsf_colbert_v2.0.1"):
 
 **Usage**:
 ```python
-from langfuse import observe, get_client
+from langfuse import observe, get_client, propagate_attributes
 
 @observe(name="rag-query")
 def search_query(query: str, user_id: str):
     langfuse = get_client()
 
-    # Update trace metadata
-    langfuse.update_current_trace(
-        input={"query": query},
+    with propagate_attributes(
         session_id="session_abc",
         user_id=user_id,
-        tags=["production", "criminal-code"]
-    )
+        tags=["production", "criminal-code"],
+    ):
+        langfuse.update_current_span(input={"query": query})
 
-    # Your search logic
-    results = engine.search(query, top_k=10)
+        # Your search logic
+        results = engine.search(query, top_k=10)
 
-    # Log metrics
-    langfuse.score_current_trace(
-        name="precision_at_1",
-        value=calculate_precision(results)
-    )
+        # Log metrics
+        langfuse.score_current_trace(
+            name="precision_at_1",
+            value=calculate_precision(results)
+        )
+
+        langfuse.update_current_span(output={"num_results": len(results)})
 
     return results
 ```
