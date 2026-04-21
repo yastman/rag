@@ -14,6 +14,8 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 
 Default `up` (no profile) starts unprofiled services:
 - `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `docling`
+- `mini-app-api`
+- `mini-app-frontend`
 
 Optional profiles add scoped services:
 
