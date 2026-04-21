@@ -92,11 +92,11 @@ class TestHandleQueryObservability:
 
             await bot.handle_query(mock_message)
 
-        # Two calls: child span (input+metadata) + root span (output only) — #511
-        assert mock_lf.update_current_trace.call_count == 2
-        child_kwargs = mock_lf.update_current_trace.call_args_list[0].kwargs
+        # Two calls: child/root observation updates — #511
+        assert mock_lf.update_current_span.call_count == 2
+        child_kwargs = mock_lf.update_current_span.call_args_list[0].kwargs
         assert child_kwargs["input"]["query"] == "квартиры до 100000 евро"
-        root_kwargs = mock_lf.update_current_trace.call_args_list[1].kwargs
+        root_kwargs = mock_lf.update_current_span.call_args_list[1].kwargs
         assert root_kwargs["output"]["response"] == "ok"
 
     async def test_handle_query_includes_expected_metadata_fields(
@@ -125,6 +125,6 @@ class TestHandleQueryObservability:
             await bot.handle_query(mock_message)
 
         # Metadata is in the child span call (first call) — #511
-        metadata = mock_lf.update_current_trace.call_args_list[0].kwargs["metadata"]
+        metadata = mock_lf.update_current_span.call_args_list[0].kwargs["metadata"]
         assert metadata["pipeline_mode"] == "sdk_agent"
         assert "pipeline_wall_ms" in metadata
