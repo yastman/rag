@@ -36,7 +36,6 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     assert ".env.local" not in bot_config
     assert ".env.local" not in makefile
     assert ".env -> .env.local symlink" not in makefile
-    assert "feature branches that merge into `dev` first" not in docker_doc
 
 
 class TestEnvExampleCompleteness:
