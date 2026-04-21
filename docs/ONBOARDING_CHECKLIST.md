@@ -43,8 +43,8 @@ cp .env.example .env
 ***REMOVED*** Start core services (Redis, Qdrant, BGE-M3)
 make local-up
 
-***REMOVED*** Verify services are running
-docker compose ps
+***REMOVED*** Verify the native bot contract before startup
+make test-bot-health
 ```
 
 ***REMOVED******REMOVED*** 4. Bot Startup
@@ -56,6 +56,8 @@ make run-bot
 ***REMOVED*** Or run via uv directly
 uv run python -m telegram_bot.main
 ```
+
+If you do set `REDIS_URL` manually for native runs, it must include the Redis password. Otherwise the bot derives the local URL from `REDIS_PASSWORD`.
 
 ***REMOVED******REMOVED*** 5. Validation
 
