@@ -78,7 +78,7 @@ async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
     app.state.max_rewrite_attempts = 3
 
     lf = MagicMock()
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
 
     with (
         patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
@@ -97,7 +97,7 @@ async def test_query_writes_langfuse_scores() -> None:
     app.state.max_rewrite_attempts = 1
 
     lf = MagicMock()
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
     lf.score_current_trace = MagicMock()
 
     with (
@@ -114,45 +114,48 @@ async def test_query_writes_langfuse_scores() -> None:
     assert isinstance(call_args[0][1], dict)  # second arg: result dict
 
 
-async def test_query_observe_trace_sets_api_tags_and_ids() -> None:
-    """POST /query must set trace tags ["api", "rag", channel] and session/user IDs."""
+async def test_query_updates_current_observation_and_propagates_api_attributes() -> None:
+    """POST /query must propagate correlating attrs and update the active root observation."""
     graph = _DummyGraph()
     app.state.graph = graph
     app.state.max_rewrite_attempts = 1
 
     lf = MagicMock()
-    lf.update_current_trace = MagicMock()
-
-    with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=lf),
-    ):
-        await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
-
-    lf.update_current_trace.assert_called_once()
-    call_kwargs = lf.update_current_trace.call_args.kwargs
-    assert "tags" in call_kwargs
-    assert "api" in call_kwargs["tags"]
-    assert "rag" in call_kwargs["tags"]
-    assert "voice" in call_kwargs["tags"]
-    assert call_kwargs["session_id"] == "sess-1"
-    assert call_kwargs["user_id"] == "42"
-
-
-async def test_query_propagates_explicit_langfuse_trace_id() -> None:
-    """POST /query should forward explicit trace id into propagate_attributes."""
-    graph = _DummyGraph()
-    app.state.graph = graph
-    app.state.max_rewrite_attempts = 1
-
-    lf = MagicMock()
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
 
     with (
         patch(
             "telegram_bot.observability.propagate_attributes", return_value=nullcontext()
         ) as mock_propagate,
         patch("telegram_bot.observability.get_client", return_value=lf),
+    ):
+        await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
+
+    mock_propagate.assert_called_once_with(
+        session_id="sess-1",
+        user_id="42",
+        metadata={"source": "voice"},
+        tags=["api", "rag", "voice"],
+    )
+    lf.update_current_span.assert_called_once()
+    call_kwargs = lf.update_current_span.call_args.kwargs
+    assert call_kwargs["input"] == "test"
+    assert call_kwargs["output"] == "ok"
+    assert call_kwargs["metadata"] == {"source": "voice", "query_type": "GENERAL"}
+
+
+async def test_query_propagates_explicit_langfuse_trace_id() -> None:
+    """POST /query should normalize external ids before opening the root observation."""
+    lf = MagicMock()
+    lf.create_trace_id.return_value = "0123456789abcdef0123456789abcdef"
+    lf.start_as_current_observation.return_value = nullcontext()
+
+    with (
+        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch(
+            "src.api.main._execute_query",
+            new=AsyncMock(return_value=SimpleNamespace()),
+        ) as mock_execute,
     ):
         await query(
             QueryRequest(
@@ -164,7 +167,13 @@ async def test_query_propagates_explicit_langfuse_trace_id() -> None:
             )
         )
 
-    assert mock_propagate.call_args.kwargs["trace_id"] == "trace-123"
+    lf.create_trace_id.assert_called_once_with(seed="trace-123")
+    lf.start_as_current_observation.assert_called_once_with(
+        as_type="span",
+        name="rag-api-query",
+        trace_context={"trace_id": "0123456789abcdef0123456789abcdef"},
+    )
+    mock_execute.assert_awaited_once()
 
 
 async def test_lifespan_respects_rerank_provider_none() -> None:

@@ -310,7 +310,9 @@ async def test_hybrid_retrieve_does_not_store_relaxed_results_under_strict_filte
     assert len(store_calls[0].args[2]) == 3
 
 
-async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(mock_cache, mock_sparse):
+async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(
+    mock_cache, mock_sparse
+):
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
 
     user_filters = {"city": "Несебр", "price": {"lte": 80000}}
@@ -336,6 +338,7 @@ async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(mock
     first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
     assert first_call["filters"] == user_filters
     assert result["final_filters"] == user_filters
+
 
 async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock_qdrant):
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
@@ -701,6 +704,29 @@ async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
 
     assert len(result["documents"]) == 2
     assert all("ВНЖ" not in d["text"] for d in result["documents"])
+
+
+async def test_rerank_ignores_deprecated_colbert_service():
+    from telegram_bot.agents.rag_pipeline import _rerank
+    from telegram_bot.services.colbert_reranker import ColbertRerankerService
+
+    docs = [
+        {"text": "Doc A", "score": 0.3},
+        {"text": "Doc B", "score": 0.8},
+    ]
+    client = MagicMock()
+    client.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.99}])
+
+    with pytest.deprecated_call(match="deprecated"):
+        reranker = ColbertRerankerService(client=client)
+
+    result = await _rerank("query", docs, reranker=reranker, latency_stages={})
+
+    assert result["rerank_applied"] is False
+    assert result["rerank_cache_hit"] is False
+    assert result["documents"][0]["text"] == "Doc B"
+    assert result["documents"][1]["text"] == "Doc A"
+    client.rerank.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
