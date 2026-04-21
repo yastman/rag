@@ -29,6 +29,15 @@ class TestBotConfigIsPydanticSettings:
         config = BotConfig()
         assert config.domain == "тестовый домен"
 
+    def test_config_derives_local_redis_url_from_password(self, monkeypatch):
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.setenv("REDIS_PASSWORD", "dev_redis_pass")
+
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(_env_file=None)
+        assert config.redis_url == "redis://:dev_redis_pass@localhost:6379"
+
     def test_config_constructor_kwargs(self):
         """Ensure BotConfig can be created with python field names (backward compat)."""
         from telegram_bot.config import BotConfig
