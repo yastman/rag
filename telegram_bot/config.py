@@ -1,6 +1,8 @@
 """Bot configuration."""
 
+import os
 from typing import Annotated
+from urllib.parse import quote
 
 from pydantic import (
     AliasChoices,
@@ -25,6 +27,14 @@ def _empty_str_to_false(v: object) -> object:
 EmptyStrBool = Annotated[bool, BeforeValidator(_empty_str_to_false)]
 
 
+def _default_redis_url() -> str:
+    """Derive the native local Redis URL from REDIS_PASSWORD when available."""
+    redis_password = os.getenv("REDIS_PASSWORD", "")
+    if not redis_password:
+        return "redis://localhost:6379"
+    return f"redis://:{quote(redis_password, safe='')}@localhost:6379"
+
+
 class BotConfig(BaseSettings):
     """Telegram bot configuration."""
 
@@ -45,7 +55,8 @@ class BotConfig(BaseSettings):
         default="http://localhost:8000", validation_alias=AliasChoices("bge_m3_url", "BGE_M3_URL")
     )
     redis_url: str = Field(
-        default="redis://localhost:6379", validation_alias=AliasChoices("redis_url", "REDIS_URL")
+        default_factory=_default_redis_url,
+        validation_alias=AliasChoices("redis_url", "REDIS_URL"),
     )
     qdrant_url: str = Field(
         default="http://localhost:6333", validation_alias=AliasChoices("qdrant_url", "QDRANT_URL")
