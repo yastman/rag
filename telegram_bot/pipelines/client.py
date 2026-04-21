@@ -14,7 +14,7 @@ from typing import Any
 from src.retrieval.topic_classifier import get_query_topic_hint
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.cache_policy import (
@@ -249,18 +249,18 @@ async def run_client_pipeline(
         await _send_html_chunks(message, response_text, reply_to_user_text=user_text)
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
         try:
-            lf.update_current_trace(
-                input={"query": user_text},
-                output={"response": response_text},
-                tags=["telegram", "rag", "client_direct"],
-                metadata={
-                    "route": "client_direct",
-                    "pipeline_mode": "client_direct",
-                    "query_type": query_type,
-                    "pipeline_wall_ms": latency_ms,
-                    "e2e_latency_ms": latency_ms,
-                },
-            )
+            with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
+                lf.update_current_span(
+                    input={"query": user_text},
+                    output={"response": response_text},
+                    metadata={
+                        "route": "client_direct",
+                        "pipeline_mode": "client_direct",
+                        "query_type": query_type,
+                        "pipeline_wall_ms": latency_ms,
+                        "e2e_latency_ms": latency_ms,
+                    },
+                )
         except Exception:
             logger.warning(
                 "Failed to update Langfuse trace metadata in client-direct non-RAG path",
@@ -508,12 +508,12 @@ async def run_client_pipeline(
 
     # Langfuse update + scores.
     try:
-        lf.update_current_trace(
-            input={"query": user_text},
-            output={"response": response_text},
-            tags=["telegram", "rag", "client_direct"],
-            metadata=trace_metadata,
-        )
+        with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
+            lf.update_current_span(
+                input={"query": user_text},
+                output={"response": response_text},
+                metadata=trace_metadata,
+            )
     except Exception:
         logger.warning(
             "Failed to update Langfuse trace metadata in client-direct RAG path",

@@ -233,13 +233,11 @@ telegram_bot/
 1. **`voyageai>=0.3.0` is impossible** — latest is v0.1.7. `uv sync` may silently resolve to older version or fail.
    - Fix: `voyageai>=0.1.7`
 
-2. **langfuse v3 → v4 (breaking)** — v4.0.4 released March 30, 2026
-   - Smart default span filtering changed
-   - `update_current_trace()` replaced by `propagate_attributes()` context manager
-   - `start_span()`/`start_generation()` → `start_observation()` with `as_type`
-   - `DatasetItemClient.run()` removed
-   - Pydantic v1 support dropped
-   - Recommendation: stay on v3, add upper bound `langfuse>=3.14.0,<4.0`
+2. **Langfuse v4 migration landed** — repo-wide tracing was moved to the native v4 SDK model
+   - observation-first runtime with `propagate_attributes(...)` and `start_as_current_observation(...)`
+   - no compatibility layer or custom wrapper semantics retained
+   - API, bot, voice, ingestion, evaluation, and Langfuse maintenance scripts aligned to v4
+   - current dependency direction is `langfuse>=4.0.0,<5.0`
 
 **Safe Updates:**
 - `aiogram-dialog` 2.5.0 → 2.6.0 (small jump, likely compatible)
