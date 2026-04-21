@@ -423,6 +423,21 @@ class TestCheckSemanticCache:
         assert hit is False
         assert response is None
 
+    async def test_contextual_follow_up_skips_cache_lookup(self):
+        cache = AsyncMock()
+        cache.check_semantic = AsyncMock(return_value="cached answer")
+
+        hit, response = await check_semantic_cache(
+            "расскажи подробнее",
+            [0.1] * 10,
+            "FAQ",
+            cache=cache,
+        )
+
+        assert hit is False
+        assert response is None
+        cache.check_semantic.assert_not_awaited()
+
     async def test_agent_role_passed_to_cache(self):
         """agent_role kwarg is forwarded to cache.check_semantic."""
         cache = AsyncMock()

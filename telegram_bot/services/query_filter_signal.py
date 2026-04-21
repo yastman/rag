@@ -5,9 +5,33 @@ from dataclasses import dataclass
 from typing import Any
 
 
-_CITY_RE = re.compile(r"\b(несеб\w*|варн\w*|бургас\w*|солнечн\w*\s+берег\w*)\b", re.IGNORECASE)
+_CITY_RE = re.compile(
+    r"\b("
+    r"несеб\w*"
+    r"|варн\w*"
+    r"|бургас\w*"
+    r"|солнечн\w*\s+берег\w*"
+    r"|свети\s+влас\w*"
+    r"|свят\w+\s+влас\w*"
+    r"|эленит\w*"
+    r"|помори\w*"
+    r"|созопол\w*"
+    r"|софи\w*"
+    r")\b",
+    re.IGNORECASE,
+)
 _PRICE_RE = re.compile(r"\b(до|от|дешевле|дороже|меньше|больше)\s*\d", re.IGNORECASE)
-_ROOMS_RE = re.compile(r"\b(студия|однушк|двушк|тр[её]шк|\d+\s*комн)\b", re.IGNORECASE)
+_ROOMS_RE = re.compile(
+    r"\b("
+    r"студи\w*"
+    r"|однушк\w*"
+    r"|двушк\w*"
+    r"|тр[её]шк\w*"
+    r"|\d+[\s-]*комн\w*"
+    r"|(?:одно|дв(?:у|ух)|тр[её]х|четыр[её]х|пяти)комнат\w*"
+    r")\b",
+    re.IGNORECASE,
+)
 _AREA_RE = re.compile(r"\b\d+\s*(м2|м²|кв)\b", re.IGNORECASE)
 _CURRENCY_RE = re.compile(r"\b(евро|€|eur|доллар|usd)\b", re.IGNORECASE)
 _FLOOR_RE = re.compile(r"\b(?:\d+\s*этаж\w*|на\s+\d+)\b", re.IGNORECASE)
