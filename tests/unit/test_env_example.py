@@ -30,6 +30,8 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     assert "cp .env.example .env" in readme
     assert "cp .env.example .env" in local_dev
     assert "canonical local env file is `.env`" in docker_doc
+    assert ".env.local` is not loaded automatically" in readme
+    assert ".env.local` is legacy/manual-only and is not auto-loaded" in local_dev
     assert 'env_file=".env"' in bot_config
     assert "uv run --env-file .env python -m telegram_bot.main" in makefile
     assert "[ -f ./.env ] && . ./.env" in makefile
