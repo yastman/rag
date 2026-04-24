@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,22 @@ def _load_compose() -> dict:
     return yaml.safe_load(COMPOSE.read_text())
 
 
+def _render_vps_ml_compose() -> dict:
+    env = os.environ.copy()
+    env["COMPOSE_FILE"] = "compose.yml:compose.vps.yml"
+    env["CLICKHOUSE_PASSWORD"] = "test-clickhouse-password"
+    env["MINIO_ROOT_PASSWORD"] = "test-minio-password"
+    rendered = subprocess.run(
+        ["docker", "compose", "--profile", "ml", "--compatibility", "config"],
+        cwd=ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return yaml.safe_load(rendered.stdout)
+
+
 def _depends_on(compose: dict, service: str, dependency: str) -> dict:
     svc = compose["services"][service]
     depends = svc.get("depends_on")
@@ -33,6 +51,11 @@ def _depends_on(compose: dict, service: str, dependency: str) -> dict:
 @pytest.fixture(scope="module")
 def compose() -> dict:
     return _load_compose()
+
+
+@pytest.fixture(scope="module")
+def vps_ml_compose() -> dict:
+    return _render_vps_ml_compose()
 
 
 class TestLangfuseRuntimeContract:
@@ -81,3 +104,21 @@ class TestLangfuseRuntimeContract:
         assert dep.get("restart") is not True, (
             "langfuse.depends_on.langfuse-worker must not set restart: true"
         )
+
+    def test_vps_clickhouse_password_matches_langfuse_clients(self, vps_ml_compose: dict) -> None:
+        services = vps_ml_compose["services"]
+        clickhouse_password = services["clickhouse"]["environment"]["CLICKHOUSE_PASSWORD"]
+
+        assert clickhouse_password, "VPS clickhouse.CLICKHOUSE_PASSWORD must not render empty"
+        for service in LANGFUSE_SERVICES:
+            assert services[service]["environment"]["CLICKHOUSE_PASSWORD"] == clickhouse_password
+
+    def test_vps_minio_secret_is_required_for_langfuse_s3(self, vps_ml_compose: dict) -> None:
+        services = vps_ml_compose["services"]
+        minio_password = services["minio"]["environment"]["MINIO_ROOT_PASSWORD"]
+
+        assert minio_password, "VPS minio.MINIO_ROOT_PASSWORD must not render empty"
+        for service in LANGFUSE_SERVICES:
+            env = services[service]["environment"]
+            assert env["LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY"] == minio_password
+            assert env["LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY"] == minio_password
