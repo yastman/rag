@@ -26,6 +26,7 @@ def _render_vps_ml_compose() -> dict:
     env["COMPOSE_FILE"] = "compose.yml:compose.vps.yml"
     env["CLICKHOUSE_PASSWORD"] = "test-clickhouse-password"
     env["ENCRYPTION_KEY"] = "test-encryption-key"
+    env["GDRIVE_SYNC_DIR"] = str(ROOT / ".test-drive-sync")
     env["LITELLM_MASTER_KEY"] = "test-litellm-master-key"
     env["MINIO_ROOT_PASSWORD"] = "test-minio-password"
     env["NEXTAUTH_SECRET"] = "test-nextauth-secret"
