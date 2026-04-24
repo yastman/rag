@@ -64,6 +64,14 @@ def test_release_gate_script_contains_handoff_contract() -> None:
     assert "docker compose --env-file .env -f compose.yml -f compose.vps.yml config" in script
 
 
+def test_release_gate_script_requires_langfuse_stateful_secrets() -> None:
+    """The production env preflight must reject empty Langfuse stateful credentials."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert "CLICKHOUSE_PASSWORD" in script
+    assert "MINIO_ROOT_PASSWORD" in script
+    assert "is required in production env" in script
+
+
 def test_release_smoke_checks_handoff_contract_when_enabled() -> None:
     """Release smoke must validate handoff env presence when the feature is enabled."""
     script = RELEASE_SMOKE_SCRIPT.read_text()
