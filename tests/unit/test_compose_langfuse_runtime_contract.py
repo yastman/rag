@@ -25,7 +25,14 @@ def _render_vps_ml_compose() -> dict:
     env = os.environ.copy()
     env["COMPOSE_FILE"] = "compose.yml:compose.vps.yml"
     env["CLICKHOUSE_PASSWORD"] = "test-clickhouse-password"
+    env["ENCRYPTION_KEY"] = "test-encryption-key"
+    env["LITELLM_MASTER_KEY"] = "test-litellm-master-key"
     env["MINIO_ROOT_PASSWORD"] = "test-minio-password"
+    env["NEXTAUTH_SECRET"] = "test-nextauth-secret"
+    env["POSTGRES_PASSWORD"] = "test-postgres-password"
+    env["REDIS_PASSWORD"] = "test-redis-password"
+    env["SALT"] = "test-salt"
+    env["TELEGRAM_BOT_TOKEN"] = "test-telegram-bot-token"
     rendered = subprocess.run(
         ["docker", "compose", "--profile", "ml", "--compatibility", "config"],
         cwd=ROOT,
