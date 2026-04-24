@@ -209,8 +209,8 @@ class TestGetOrCreateAnnotationQueue:
         module.get_or_create_annotation_queue(mock_api, "dislike-review")
 
         call_kwargs = mock_api.annotation_queues.create_queue.call_args.kwargs
-        request = call_kwargs["request"]
-        assert request.name == "dislike-review"
+        assert call_kwargs["name"] == "dislike-review"
+        assert call_kwargs["score_config_ids"] == []
 
     def test_returns_correct_queue_among_multiple(self):
         """Finds correct queue when multiple queues exist."""
@@ -268,9 +268,8 @@ class TestAddTracesToQueue:
         module.add_traces_to_queue(mock_api, "queue-xyz", ["trace-1"])
 
         call_kwargs = mock_api.annotation_queues.create_queue_item.call_args.kwargs
-        request = call_kwargs["request"]
-        # AnnotationQueueObjectType.TRACE has value "TRACE"
-        assert request.object_type.value == "TRACE"
+        assert call_kwargs["object_type"].value == "TRACE"
+        assert call_kwargs["status"].value == "PENDING"
 
     def test_item_object_id_matches_trace_id(self):
         """object_id in request matches the trace ID."""
@@ -280,8 +279,7 @@ class TestAddTracesToQueue:
         module.add_traces_to_queue(mock_api, "queue-xyz", ["trace-abc-123"])
 
         call_kwargs = mock_api.annotation_queues.create_queue_item.call_args.kwargs
-        request = call_kwargs["request"]
-        assert request.object_id == "trace-abc-123"
+        assert call_kwargs["object_id"] == "trace-abc-123"
 
     def test_returns_zero_for_empty_list(self):
         """Returns 0 when no traces to add."""

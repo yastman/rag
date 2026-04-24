@@ -1,8 +1,8 @@
-# syntax=docker/dockerfile:1@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
+# syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 # Mini App FastAPI backend — uv sync pattern (2026 best practices)
 
 # ====== BUILD STAGE ======
-FROM ghcr.io/astral-sh/uv:0.9-python3.13-bookworm-slim@sha256:847b5e690018bc6b9d97a0848da65f721b785f1e78d9c7067b8947c7010b2718 AS builder
+FROM ghcr.io/astral-sh/uv:0.9-python3.14-bookworm-slim@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1 AS builder
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra mini-app
 
 # ====== RUNTIME STAGE ======
-FROM python:3.13-slim-bookworm@sha256:cb4d57d6b3bba54e4584ac09c136758e0cbf0cced945bcb2f1e160d7c38af2eb AS runtime
+FROM python:3.14-slim-bookworm@sha256:980c03657c7c8bfbce5212d242ffe5caf69bfd8b6c8383e3580b27d028a6ddb3 AS runtime
 
 WORKDIR /app
 

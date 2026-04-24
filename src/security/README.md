@@ -112,7 +112,7 @@ print(metadata)
 #### Integration with Langfuse
 
 ```python
-from langfuse import observe, get_client
+from langfuse import observe, get_client, propagate_attributes
 from security.pii_redaction import PIIRedactor
 
 redactor = PIIRedactor()
@@ -128,13 +128,15 @@ async def rag_query(query: str, user_id: str):
         print(f"⚠️  PII detected: {pii_metadata}")
 
     # 2. Log redacted query to Langfuse (NOT original!)
-    langfuse.update_current_trace(
-        input={"query": redacted_query},  # Redacted version
-        metadata={
-            **pii_metadata,
-            "user_id": user_id,
-        }
-    )
+    with propagate_attributes(
+        user_id=user_id,
+        metadata={k: str(v) for k, v in pii_metadata.items()},
+        tags=["security", "pii-redaction"],
+    ):
+        langfuse.update_current_span(
+            input={"query": redacted_query},  # Redacted version
+            metadata={"redaction_applied": "true"},
+        )
 
     # 3. Use ORIGINAL query for search (better accuracy)
     results = await qdrant_client.search(
@@ -421,14 +423,15 @@ class SecureRAGPipeline:
 
         # 3. Log to Langfuse (redacted)
         langfuse = get_client()
-        langfuse.update_current_trace(
-            input={"query": redacted_query},
+        with propagate_attributes(
+            user_id=user_id,
             metadata={
-                **pii_metadata,
-                "user_id": user_id,
-                "budget_check": "passed"
-            }
-        )
+                **{k: str(v) for k, v in pii_metadata.items()},
+                "budget_check": "passed",
+            },
+            tags=["security", "budget-guard"],
+        ):
+            langfuse.update_current_span(input={"query": redacted_query})
 
         # 4. Execute query (original query for accuracy)
         results = await rag_pipeline.query(query)

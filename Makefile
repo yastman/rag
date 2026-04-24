@@ -3,9 +3,8 @@
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
-	ingest-dir ingest-gdrive ingest-status ingest-services \
-	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
-	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
+	ingest-dir ingest-status ingest-services \
+	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
@@ -14,6 +13,9 @@
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
+PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
+K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
+K3S_IMAGE_TAG ?= v$(PROJECT_VERSION)
 
 # Default target
 .DEFAULT_GOAL := help
@@ -24,6 +26,17 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
+
+ENV_LOAD = if [ -f .env ]; then set -a; . ./.env; set +a; fi;
+# Force Linux-native temp dirs in WSL to avoid pytest/capture failures
+# when host Windows TEMP/TMP leak into the shell environment.
+TMPDIR ?= /tmp
+TMP ?= $(TMPDIR)
+TEMP ?= $(TMPDIR)
+export TMPDIR TMP TEMP
+PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
+PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
+PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 
 help: ## Show this help message
 	@echo "$(BLUE)Contextual RAG v2.0.1 - Development Commands$(NC)"
@@ -140,10 +153,13 @@ test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
-test-full: ## Run full test suite (all tiers)
+test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
-	uv run pytest tests/
+	@echo "$(BLUE)Phase 1/2: parallel-safe suites...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
+	@echo "$(BLUE)Phase 2/2: stateful/live suites sequentially...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
 test-cov: ## Run tests with coverage
@@ -328,7 +344,7 @@ test-redis: ## Verify Redis Query Engine is available
 
 .PHONY: test-bot-health test-bot-health-vps
 
-test-bot-health: ## Preflight: verify Qdrant collection + LLM (local dev, ports published)
+test-bot-health: ## Preflight: verify local native-bot prerequisites (Redis/Qdrant/LiteLLM + optional Postgres note)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
 	@./scripts/test_bot_health.sh
 	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"
@@ -366,61 +382,63 @@ clean: ## Clean up cache files and build artifacts
 
 # Common compose command with --compatibility to enforce deploy.resources.limits
 COMPOSE_CMD := docker compose --compatibility
+LOCAL_COMPOSE_FILE := compose.yml:compose.dev.yml
+LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD)
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
-docker-core-up: ## Start core services (postgres, qdrant, redis, docling)
+docker-core-up: ## Start default local compose stack (unprofiled services)
 	@echo "$(BLUE)Starting core services...$(NC)"
-	$(COMPOSE_CMD) up -d
+	$(LOCAL_COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
 docker-bot-up: ## Start core + bot services (litellm, bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
-	$(COMPOSE_CMD) --profile bot up -d
+	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
 
 docker-obs-up: ## Start core + observability (loki, promtail, alertmanager)
 	@echo "$(BLUE)Starting observability services...$(NC)"
-	$(COMPOSE_CMD) --profile obs up -d
+	$(LOCAL_COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Observability services started$(NC)"
 
 docker-ml-up: ## Start core + ML platform (langfuse, clickhouse, minio)
 	@echo "$(BLUE)Starting ML platform services...$(NC)"
-	$(COMPOSE_CMD) --profile ml up -d
+	$(LOCAL_COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
 
 docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
 	@echo "$(BLUE)Starting AI services...$(NC)"
-	$(COMPOSE_CMD) up -d bge-m3 user-base
+	$(LOCAL_COMPOSE_CMD) up -d bge-m3 user-base
 	@echo "$(GREEN)✓ AI services started$(NC)"
 
 docker-ingest-up: ## Start core + ingestion service
 	@echo "$(BLUE)Starting ingestion service...$(NC)"
-	$(COMPOSE_CMD) --profile ingest up -d
+	$(LOCAL_COMPOSE_CMD) --profile ingest up -d
 	@echo "$(GREEN)✓ Ingestion service started$(NC)"
 
 docker-voice-up: ## Start core + voice services (livekit, sip, voice-agent)
 	@echo "$(BLUE)Preflight: checking livekit config...$(NC)"
 	@test -f docker/livekit/livekit.yaml || { echo "$(RED)✗ docker/livekit/livekit.yaml not found$(NC)"; exit 1; }
 	@echo "$(BLUE)Starting voice services...$(NC)"
-	$(COMPOSE_CMD) --profile voice up -d
+	$(LOCAL_COMPOSE_CMD) --profile voice up -d
 	@echo "$(GREEN)✓ Voice services started$(NC)"
 
 docker-full-up: ## Start all services (full stack)
 	@echo "$(BLUE)Starting full stack...$(NC)"
-	$(COMPOSE_CMD) --profile full up -d
+	$(LOCAL_COMPOSE_CMD) --profile full up -d
 	@echo "$(GREEN)✓ Full stack started$(NC)"
 
 docker-up: docker-core-up ## Alias for docker-core-up (backward compat)
 
 docker-down: ## Stop all Docker services
 	@echo "$(BLUE)Stopping Docker services...$(NC)"
-	$(COMPOSE_CMD) --profile full down
+	$(LOCAL_COMPOSE_CMD) --profile full down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
 
 docker-ps: ## Show Docker service status
 	@echo "$(BLUE)Docker service status:$(NC)"
-	@$(COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+	@$(LOCAL_COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOW
@@ -474,7 +492,7 @@ qa: all-checks test ## Full quality assurance
 LOCAL_SERVICES := redis qdrant bge-m3 docling litellm
 
 local-up:  ## Start local Docker services (bot runs via make run-bot)
-	$(COMPOSE_CMD) up -d $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
@@ -485,17 +503,17 @@ bot:  ## Alias: run bot and tee output to logs/bot-run.log
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
 
 local-down:  ## Stop local Docker services
-	$(COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
-	$(COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
 
 local-logs:  ## View local Docker logs
-	$(COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
 
 local-ps:  ## Show local Docker status
-	$(COMPOSE_CMD) ps $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_SERVICES)
 
 local-build:  ## Rebuild local Docker services
-	$(COMPOSE_CMD) build bge-m3 docling
+	$(LOCAL_COMPOSE_CMD) build bge-m3 docling
 
 # =============================================================================
 # Deployment
@@ -711,7 +729,7 @@ eval-sdk-experiment-named: ## Run named SDK experiment (DATASET=name NAME=label 
 
 monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 	@echo "$(BLUE)Starting monitoring stack...$(NC)"
-	$(COMPOSE_CMD) --profile obs up -d
+	$(LOCAL_COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Monitoring stack started$(NC)"
 	@echo "$(YELLOW)Services:$(NC)"
 	@echo "  Loki:         http://localhost:3100"
@@ -719,16 +737,16 @@ monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 
 monitoring-down: ## Stop monitoring stack
 	@echo "$(BLUE)Stopping monitoring stack...$(NC)"
-	$(COMPOSE_CMD) --profile obs stop
+	$(LOCAL_COMPOSE_CMD) --profile obs stop
 	@echo "$(GREEN)✓ Monitoring stack stopped$(NC)"
 
 monitoring-logs: ## View monitoring stack logs
 	@echo "$(BLUE)Monitoring stack logs (Ctrl+C to exit):$(NC)"
-	$(COMPOSE_CMD) logs -f loki promtail alertmanager
+	$(LOCAL_COMPOSE_CMD) logs -f loki promtail alertmanager
 
 monitoring-status: ## Show monitoring stack status
 	@echo "$(BLUE)Monitoring stack status:$(NC)"
-	@$(COMPOSE_CMD) ps loki promtail alertmanager
+	@$(LOCAL_COMPOSE_CMD) ps loki promtail alertmanager
 	@echo ""
 	@echo "$(YELLOW)Checking health...$(NC)"
 	@curl -s http://localhost:3100/ready > /dev/null 2>&1 && echo "  Loki: $(GREEN)OK$(NC)" || echo "  Loki: $(RED)DOWN$(NC)"
@@ -737,7 +755,7 @@ monitoring-status: ## Show monitoring stack status
 
 monitoring-test-alert: ## Send a test alert to verify Telegram integration
 	@echo "$(BLUE)Sending test alert...$(NC)"
-	@# Load local env (repo uses .env -> .env.local symlink) so `make` works without manual `source`.
+	@# Load the canonical local .env file so `make` works without manual `source`.
 	@set -a; [ -f ./.env ] && . ./.env; set +a; \
 	if [ -z "$$TELEGRAM_ALERTING_BOT_TOKEN" ] || [ -z "$$TELEGRAM_ALERTING_CHAT_ID" ]; then \
 		echo "$(RED)Error: TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID must be set$(NC)"; \
@@ -764,22 +782,39 @@ rclone-install: ## Install rclone
 
 sync-drive-install: ## Install rclone cron job
 	@echo "$(BLUE)Installing rclone cron...$(NC)"
-	sudo mkdir -p /opt/scripts /opt/credentials /data/drive-sync
-	sudo cp docker/rclone/sync-drive.sh /opt/scripts/
-	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/
-	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh
-	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync
+	@$(ENV_LOAD) \
+	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
+	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
+	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
+	sudo mkdir -p /opt/scripts /opt/credentials /etc/rag-fresh "$${GDRIVE_SYNC_DIR}"; \
+	sudo cp docker/rclone/sync-drive.sh /opt/scripts/; \
+	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/; \
+	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh; \
+	printf 'GDRIVE_SYNC_DIR=%s\nRCLONE_CONFIG_FILE=%s\nRCLONE_REMOTE=%s\n' \
+	  "$${GDRIVE_SYNC_DIR}" "$${RCLONE_CONFIG_FILE}" "$${RCLONE_REMOTE:-gdrive:RAG}" | \
+	  sudo tee /etc/rag-fresh/rclone-sync.env >/dev/null; \
+	sudo chmod 600 /etc/rag-fresh/rclone-sync.env; \
+	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync; \
 	sudo chmod 644 /etc/cron.d/rclone-sync
 	@echo "$(GREEN)✓ Cron installed$(NC)"
 
 sync-drive-run: ## Run Drive sync manually
 	@echo "$(BLUE)Syncing Google Drive...$(NC)"
+	@$(ENV_LOAD) \
+	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
+	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
+	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
 	/opt/scripts/sync-drive.sh
 	@echo "$(GREEN)✓ Sync complete$(NC)"
 
 sync-drive-status: ## Show sync status and recent files
 	@echo "$(BLUE)Recent synced files:$(NC)"
-	@ls -lt /data/drive-sync 2>/dev/null | head -20 || echo "No files synced yet"
+	@$(ENV_LOAD) \
+	if [ -n "$${GDRIVE_SYNC_DIR:-}" ] && [ -d "$${GDRIVE_SYNC_DIR}" ]; then \
+	  ls -lt "$${GDRIVE_SYNC_DIR}" 2>/dev/null | head -20; \
+	else \
+	  echo "No files synced yet"; \
+	fi
 	@echo ""
 	@echo "$(BLUE)Last sync log:$(NC)"
 	@tail -10 /var/log/rclone-sync.log 2>/dev/null || echo "No logs yet"
@@ -788,7 +823,7 @@ sync-drive-status: ## Show sync status and recent files
 # DOCUMENT INGESTION (CocoIndex Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-services ingest-test
+.PHONY: ingest-setup ingest-dir ingest-status ingest-services ingest-test
 
 ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
@@ -808,15 +843,6 @@ endif
 	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
 	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
 
-ingest-gdrive: ## [DEPRECATED] Use ingest-gdrive-run instead (rclone + CocoIndex pipeline)
-	@echo "$(RED)⚠ make ingest-gdrive is deprecated.$(NC)"
-	@echo "  GDrive ingestion now uses rclone sync + CocoIndex pipeline."
-	@echo "  Use one of:"
-	@echo "    make ingest-gdrive-run    # Run ingestion once"
-	@echo "    make ingest-gdrive-watch  # Continuous watch mode"
-	@echo "    make ingest-gdrive-status # Collection stats"
-	@exit 1
-
 ingest-status: ## Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
 	uv run python -m telegram_bot.services.ingestion_cocoindex status
@@ -827,58 +853,39 @@ ingest-services: ## Index curated services.yaml content into Qdrant
 	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
 
 # =============================================================================
-# GOOGLE DRIVE INGESTION (rclone + watcher pipeline)
-# =============================================================================
-
-.PHONY: ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status
-
-ingest-gdrive-setup: ## Setup GDrive collection in Qdrant (scalar + binary)
-	@echo "$(BLUE)Creating Qdrant collections...$(NC)"
-	uv run python scripts/setup_scalar_collection.py --source gdrive_documents
-	uv run python scripts/setup_binary_collection.py --source gdrive_documents
-	@echo "$(GREEN)✓ Collections ready$(NC)"
-
-ingest-gdrive-run: ## Run GDrive ingestion once
-	@echo "$(BLUE)Running GDrive ingestion...$(NC)"
-	uv run python -m src.ingestion.gdrive_flow --once
-	@echo "$(GREEN)✓ Ingestion complete$(NC)"
-
-ingest-gdrive-watch: ## Run GDrive ingestion continuously (watch mode)
-	@echo "$(BLUE)Starting GDrive watch mode...$(NC)"
-	uv run python -m src.ingestion.gdrive_flow --watch
-
-ingest-gdrive-status: ## Show GDrive collection stats
-	@echo "$(BLUE)GDrive collection stats:$(NC)"
-	@uv run python -c "from qdrant_client import QdrantClient; c=QdrantClient('http://localhost:6333'); \
-		[print(f'  {n}: {c.get_collection(n).points_count} points') if c.collection_exists(n) else print(f'  {n}: not found') \
-		for n in ['gdrive_documents_scalar', 'gdrive_documents_binary']]"
-
-# =============================================================================
 # UNIFIED INGESTION PIPELINE (v3.2.1)
 # =============================================================================
 
-.PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+.PHONY: ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+
+ingest-unified-preflight: ## Check unified ingestion dependencies and source path
+	@echo "$(BLUE)Running unified ingestion preflight...$(NC)"
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli preflight
+
+ingest-unified-bootstrap: ## Create/validate unified ingestion collection schema
+	@echo "$(BLUE)Bootstrapping unified ingestion collection...$(NC)"
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
 
 ingest-unified: ## Run unified ingestion once
 	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
 ingest-unified-watch: ## Run unified ingestion continuously (watch mode)
 	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run --watch
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli run --watch
 
 ingest-unified-status: ## Show unified ingestion status
 	@echo "$(BLUE)Unified ingestion status:$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli status
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli status
 
 ingest-unified-reprocess: ## Reprocess all error files
 	@echo "$(BLUE)Reprocessing error files...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli reprocess --errors
+	@$(ENV_LOAD) uv run python -m src.ingestion.unified.cli reprocess --errors
 	@echo "$(GREEN)✓ Reprocess queued$(NC)"
 
 ingest-unified-logs: ## Show ingestion service logs
-	docker logs dev-ingestion -f --tail 100
+	docker compose logs ingestion -f --tail 100
 
 # =============================================================================
 # QDRANT BACKUP
@@ -939,12 +946,21 @@ k3s-down: ## Delete all k3s resources
 	kubectl delete -k k8s/overlays/full/ --ignore-not-found
 
 k3s-secrets: ## Create k8s secrets from k8s/secrets/.env
-	kubectl create secret generic api-keys --from-env-file=k8s/secrets/.env -n rag --dry-run=client -o yaml | kubectl apply -f -
-	kubectl create secret generic db-credentials \
-		--from-literal=POSTGRES_USER=postgres \
-		--from-literal=POSTGRES_PASSWORD=postgres \
-		--from-literal=POSTGRES_DB=postgres \
-		-n rag --dry-run=client -o yaml | kubectl apply -f -
+	@tmp_api_keys=$$(mktemp); \
+		tmp_db_credentials=$$(mktemp); \
+		trap 'rm -f "$$tmp_api_keys" "$$tmp_db_credentials"' EXIT; \
+		grep -v '^POSTGRES_PASSWORD=' k8s/secrets/.env > "$$tmp_api_keys"; \
+		POSTGRES_PASSWORD=$$(awk -F= '/^POSTGRES_PASSWORD=/{sub(/^[^=]*=/,""); print; found=1; exit} END{if(!found) exit 1}' k8s/secrets/.env) || { \
+			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			exit 1; \
+		}; \
+		[ -n "$$POSTGRES_PASSWORD" ] || { \
+			echo "POSTGRES_PASSWORD is required in k8s/secrets/.env" >&2; \
+			exit 1; \
+		}; \
+		printf 'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=postgres\n' "$$POSTGRES_PASSWORD" > "$$tmp_db_credentials"; \
+		kubectl create secret generic api-keys --from-env-file="$$tmp_api_keys" -n rag --dry-run=client -o yaml | kubectl apply -f -; \
+		kubectl create secret generic db-credentials --from-env-file="$$tmp_db_credentials" -n rag --dry-run=client -o yaml | kubectl apply -f -
 
 k3s-ingest-start: ## Scale ingestion to 1 replica
 	kubectl scale deployment ingestion -n rag --replicas=1
@@ -952,8 +968,19 @@ k3s-ingest-start: ## Scale ingestion to 1 replica
 k3s-ingest-stop: ## Scale ingestion to 0 replicas
 	kubectl scale deployment ingestion -n rag --replicas=0
 
-k3s-push-%: ## Build and push image to VPS k3s: make k3s-push-bot
-	docker save rag/$*:latest | ssh vps 'sudo k3s ctr -n k8s.io images import -'
+k3s-push-%: ## Build and push a versioned GHCR image: make k3s-push-bot K3S_IMAGE_TAG=v2.14.0
+	@case "$*" in \
+		bot) dockerfile="telegram_bot/Dockerfile"; build_context="."; image_name="rag-bot" ;; \
+		ingestion) dockerfile="Dockerfile.ingestion"; build_context="."; image_name="rag-ingestion" ;; \
+		docling) dockerfile="services/docling/Dockerfile"; build_context="./services/docling"; image_name="rag-docling" ;; \
+		user-base) dockerfile="services/user-base/Dockerfile"; build_context="./services/user-base"; image_name="rag-user-base" ;; \
+		bge-m3) dockerfile="services/bge-m3-api/Dockerfile"; build_context="./services/bge-m3-api"; image_name="rag-bge-m3" ;; \
+		*) echo "Unsupported k3s image target: $*"; exit 1 ;; \
+	esac; \
+	image_ref="$(K3S_IMAGE_REGISTRY)/$$image_name:$(K3S_IMAGE_TAG)"; \
+	echo "Building $$image_ref from $$dockerfile (context $$build_context)"; \
+	docker build -f "$$dockerfile" -t "$$image_ref" "$$build_context"; \
+	docker push "$$image_ref"
 
 # =============================================================================
 # DOCKER IMAGE DRIFT (#322)

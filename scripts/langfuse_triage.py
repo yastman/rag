@@ -101,10 +101,6 @@ def get_or_create_annotation_queue(api: Any, queue_name: str) -> str:
     Returns:
         Queue ID string.
     """
-    from langfuse.api.resources.annotation_queues.types.create_annotation_queue_request import (
-        CreateAnnotationQueueRequest,
-    )
-
     page = 1
     while True:
         response = api.annotation_queues.list_queues(page=page, limit=BATCH_SIZE)
@@ -118,9 +114,7 @@ def get_or_create_annotation_queue(api: Any, queue_name: str) -> str:
             break
         page += 1
 
-    created = api.annotation_queues.create_queue(
-        request=CreateAnnotationQueueRequest(name=queue_name, score_config_ids=[])
-    )
+    created = api.annotation_queues.create_queue(name=queue_name, score_config_ids=[])
     logger.info("Created annotation queue '%s' (id=%s)", queue_name, created.id)
     return created.id
 
@@ -138,11 +132,11 @@ def add_traces_to_queue(api: Any, queue_id: str, trace_ids: list[str]) -> int:
     Returns:
         Number of items added.
     """
-    from langfuse.api.resources.annotation_queues.types.annotation_queue_object_type import (
+    from langfuse.api.annotation_queues.types.annotation_queue_object_type import (
         AnnotationQueueObjectType,
     )
-    from langfuse.api.resources.annotation_queues.types.create_annotation_queue_item_request import (
-        CreateAnnotationQueueItemRequest,
+    from langfuse.api.annotation_queues.types.annotation_queue_status import (
+        AnnotationQueueStatus,
     )
 
     if not trace_ids:
@@ -152,10 +146,9 @@ def add_traces_to_queue(api: Any, queue_id: str, trace_ids: list[str]) -> int:
     for trace_id in trace_ids:
         api.annotation_queues.create_queue_item(
             queue_id=queue_id,
-            request=CreateAnnotationQueueItemRequest(
-                object_id=trace_id,
-                object_type=AnnotationQueueObjectType.TRACE,
-            ),
+            object_id=trace_id,
+            object_type=AnnotationQueueObjectType.TRACE,
+            status=AnnotationQueueStatus.PENDING,
         )
         added += 1
 

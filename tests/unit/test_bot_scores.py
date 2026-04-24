@@ -494,7 +494,7 @@ class TestVoiceTraceMetadata:
     async def test_voice_trace_metadata_has_same_keys_as_text(self, mock_config):
         """handle_voice metadata should contain all keys from handle_query."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -507,7 +507,7 @@ class TestVoiceTraceMetadata:
         }
         await _run_handle_voice(mock_config, voice_result, mock_lf)
 
-        call_kwargs = mock_lf.update_current_trace.call_args.kwargs
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
         metadata = call_kwargs["metadata"]
 
         # All keys from handle_query must be present
@@ -536,7 +536,7 @@ class TestVoiceTraceMetadata:
     async def test_trace_metadata_contains_memory_and_overhead(self, mock_config):
         """Trace metadata should include memory_messages_count and overhead proxy."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -548,7 +548,7 @@ class TestVoiceTraceMetadata:
         }
         await _run_handle_voice(mock_config, result, mock_lf)
 
-        metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        metadata = mock_lf.update_current_span.call_args.kwargs["metadata"]
         assert metadata["memory_messages_count"] == 2
         assert metadata["checkpointer_overhead_proxy_ms"] is not None
 
@@ -689,7 +689,7 @@ class TestHistoryScores:
     async def test_history_save_success_score(self, mock_config, save_result, expected_value):
         """history_save_success reflects save_turn return value."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -706,7 +706,7 @@ class TestHistoryScores:
     async def test_supervisor_model_score(self, mock_config):
         """supervisor_model CATEGORICAL score always written (#413)."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -724,7 +724,7 @@ class TestHistoryScores:
     async def test_supervisor_streaming_still_writes_wall_metadata(self, mock_config):
         """Streaming sdk_agent path still writes pipeline wall-time metadata."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-stream-1")
         history_svc = AsyncMock()
@@ -739,12 +739,72 @@ class TestHistoryScores:
 
         metadata_payloads = [
             c.kwargs.get("metadata", {})
-            for c in mock_lf.update_current_trace.call_args_list
+            for c in mock_lf.update_current_span.call_args_list
             if "metadata" in c.kwargs
         ]
         assert any(m.get("pipeline_mode") == "sdk_agent" for m in metadata_payloads)
         assert any(m.get("pipeline_wall_ms") is not None for m in metadata_payloads)
         assert any(m.get("pre_agent_ms") is not None for m in metadata_payloads)
+
+    async def test_sdk_agent_trace_metadata_includes_grounding_safety_fields(self, mock_config):
+        mock_lf = MagicMock()
+        mock_lf.update_current_span = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-safe-1")
+
+        bot = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_message("какие документы нужны для внж")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "FAQ",
+                        "topic_hint": "legal",
+                        "grounding_mode": "strict",
+                        "grade_confidence": 0.91,
+                        "sources_count": 2,
+                        "grounded": True,
+                        "legal_answer_safe": True,
+                        "semantic_cache_safe_reuse": True,
+                        "safe_fallback_used": False,
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        metadata_payloads = [
+            c.kwargs.get("metadata", {})
+            for c in mock_lf.update_current_span.call_args_list
+            if "metadata" in c.kwargs
+        ]
+        sdk_agent_meta = next(m for m in metadata_payloads if m.get("pipeline_mode") == "sdk_agent")
+        assert sdk_agent_meta["grounding_mode"] == "strict"
+        assert sdk_agent_meta["grade_confidence"] == 0.91
+        assert sdk_agent_meta["sources_count"] == 2
+        assert sdk_agent_meta["grounded"] is True
+        assert sdk_agent_meta["legal_answer_safe"] is True
+        assert sdk_agent_meta["semantic_cache_safe_reuse"] is True
+        assert sdk_agent_meta["safe_fallback_used"] is False
 
 
 class TestCheckpointerOverheadScore:
@@ -788,7 +848,7 @@ class TestScoreIsolation:
     async def test_supervisor_scores_use_create_score_with_trace_id(self, mock_config):
         """Supervisor-specific scores use create_score(trace_id=...) (#435)."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-xyz")
 
@@ -840,7 +900,7 @@ class TestTextPathFeedbackButtons:
     async def test_text_response_has_feedback_keyboard(self, mock_config):
         """Text response should include feedback inline keyboard."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
@@ -878,7 +938,7 @@ class TestTextPathFeedbackButtons:
     async def test_text_response_has_markdown_parse_mode(self, mock_config):
         """Text response should use Markdown parse_mode."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
@@ -914,7 +974,7 @@ class TestTextPathFeedbackButtons:
     async def test_chitchat_response_no_feedback_keyboard(self, mock_config):
         """CHITCHAT response should NOT include feedback keyboard."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
@@ -950,7 +1010,7 @@ class TestTextPathFeedbackButtons:
     async def test_response_without_query_type_has_no_feedback_keyboard(self, mock_config):
         """Response without query_type in side-channel should NOT include feedback keyboard."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -988,7 +1048,7 @@ class TestTextPathSemanticCacheStore:
 
     async def test_stores_semantic_cache_for_cacheable_query_type(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -1009,7 +1069,13 @@ class TestTextPathSemanticCacheStore:
                         "query_type": "FAQ",
                         "query_embedding": [0.1, 0.2, 0.3],
                         "cache_hit": False,
-                        "documents": [],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "grade_confidence": 0.9,
+                        "grounding_mode": "strict",
+                        "grounded": True,
+                        "legal_answer_safe": True,
+                        "semantic_cache_safe_reuse": True,
+                        "safe_fallback_used": False,
                     }
                 )
             return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
@@ -1036,7 +1102,7 @@ class TestTextPathSemanticCacheStore:
 
     async def test_stores_semantic_cache_for_general_type(self, mock_config):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
@@ -1057,7 +1123,8 @@ class TestTextPathSemanticCacheStore:
                         "query_type": "GENERAL",
                         "query_embedding": [0.1, 0.2, 0.3],
                         "cache_hit": False,
-                        "documents": [],
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "grade_confidence": 0.9,
                     }
                 )
             return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
@@ -1078,6 +1145,105 @@ class TestTextPathSemanticCacheStore:
         bot._cache.store_semantic.assert_called_once()
         kwargs = bot._cache.store_semantic.call_args.kwargs
         assert kwargs["query_type"] == "GENERAL"
+
+    async def test_strict_unsafe_result_skips_text_path_semantic_cache_store(self, mock_config):
+        mock_lf = MagicMock()
+        mock_lf.update_current_span = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_message("какие документы нужны для внж")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "FAQ",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "cache_hit": False,
+                        "grounding_mode": "strict",
+                        "grounded": False,
+                        "legal_answer_safe": False,
+                        "semantic_cache_safe_reuse": False,
+                        "safe_fallback_used": True,
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_not_called()
+
+    async def test_strict_safe_result_stores_text_path_cache_metadata(self, mock_config):
+        mock_lf = MagicMock()
+        mock_lf.update_current_span = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_message("какие документы нужны для внж")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "FAQ",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "cache_hit": False,
+                        "documents": [{"text": "doc", "score": 0.9, "metadata": {}}],
+                        "grade_confidence": 0.9,
+                        "grounding_mode": "strict",
+                        "grounded": True,
+                        "legal_answer_safe": True,
+                        "semantic_cache_safe_reuse": True,
+                        "safe_fallback_used": False,
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_called_once()
+        metadata = bot._cache.store_semantic.call_args.kwargs["metadata"]
+        assert metadata["grounding_mode"] == "strict"
+        assert metadata["semantic_cache_safe_reuse"] is True
 
 
 class TestExtractCurrentTurn:

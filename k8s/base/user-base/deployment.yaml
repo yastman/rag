@@ -19,8 +19,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: user-base
-          image: rag/user-base:latest
-          imagePullPolicy: Never
+          image: ghcr.io/yastman/rag-user-base:v2.14.0
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

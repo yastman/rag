@@ -197,6 +197,41 @@ async def test_rag_search_forwards_precomputed_sparse_and_colbert(bot_context):
     assert kwargs["pre_computed_colbert"] == colbert
 
 
+async def test_rag_search_forwards_state_contract(bot_context):
+    """rag_search must forward pre-agent state contract to rag_pipeline."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    state_contract = {
+        "cache_checked": True,
+        "cache_hit": False,
+        "cache_scope": "rag",
+        "embedding_bundle_ready": True,
+        "embedding_bundle_version": "bge_m3_hybrid_colbert",
+        "dense_vector": [0.1, 0.2, 0.3],
+        "filters": {"city": "Несебр"},
+        "query_type": "FAQ",
+        "retrieval_policy": "topic_then_relax",
+        "grounding_mode": "normal",
+    }
+
+    config = RunnableConfig(
+        configurable={
+            "bot_context": bot_context,
+            "rag_result_store": {"state_contract": state_contract},
+        }
+    )
+
+    with patch(
+        "telegram_bot.agents.rag_tool.rag_pipeline",
+        new_callable=AsyncMock,
+        return_value=_pipeline_result(),
+    ) as mock_pipeline:
+        await rag_search.ainvoke({"query": "квартиры в Несебре"}, config=config)
+
+    kwargs = mock_pipeline.call_args.kwargs
+    assert kwargs["state_contract"] == state_contract
+
+
 async def test_rag_search_writes_langfuse_scores(bot_context):
     """rag_search tool calls write_langfuse_scores with full pipeline result."""
     from telegram_bot.agents.rag_tool import rag_search

@@ -29,6 +29,15 @@ class TestBotConfigIsPydanticSettings:
         config = BotConfig()
         assert config.domain == "тестовый домен"
 
+    def test_config_derives_local_redis_url_from_password(self, monkeypatch):
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.setenv("REDIS_PASSWORD", "dev_redis_pass")
+
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(_env_file=None)
+        assert config.redis_url == "redis://:dev_redis_pass@localhost:6379"
+
     def test_config_constructor_kwargs(self):
         """Ensure BotConfig can be created with python field names (backward compat)."""
         from telegram_bot.config import BotConfig
@@ -149,3 +158,16 @@ class TestBotConfigIsPydanticSettings:
 
         cfg = BotConfig(_env_file=None)
         assert cfg.handoff_enabled is False
+
+    def test_redis_url_infers_password_loaded_from_env_file(self, monkeypatch, tmp_path):
+        """REDIS_PASSWORD loaded from dotenv should drive the native local default URL."""
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.delenv("REDIS_PASSWORD", raising=False)
+
+        env_file = tmp_path / ".env.bot"
+        env_file.write_text("REDIS_PASSWORD=dotenv_secret\n", encoding="utf-8")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=env_file)
+        assert cfg.redis_url == "redis://:dotenv_secret@localhost:6379"

@@ -11,40 +11,14 @@ Centralizes: httpx client lifecycle, retry/timeout policy, response parsing.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential_jitter,
-)
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services._retry import bge_retry
 
-
-logger = logging.getLogger(__name__)
-
-# Transient transport errors worth retrying
-RETRYABLE_ERRORS = (
-    httpx.RemoteProtocolError,
-    httpx.ConnectError,
-    httpx.ReadTimeout,
-    httpx.ConnectTimeout,
-    httpx.PoolTimeout,
-)
-
-_bge_retry = retry(
-    retry=retry_if_exception_type(RETRYABLE_ERRORS),
-    wait=wait_exponential_jitter(initial=0.5, max=4, jitter=1),
-    stop=stop_after_attempt(3),
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-    reraise=True,
-)
 
 DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
@@ -131,7 +105,7 @@ class BGEM3Client:
         return self._client
 
     @observe(name="bge-m3-encode-dense", capture_input=False, capture_output=False)
-    @_bge_retry
+    @bge_retry
     async def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors via /encode/dense."""
         lf = get_client()
@@ -168,7 +142,7 @@ class BGEM3Client:
         return DenseResult(vectors=all_vecs, processing_time=processing_time)
 
     @observe(name="bge-m3-encode-sparse", capture_input=False, capture_output=False)
-    @_bge_retry
+    @bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors via /encode/sparse."""
         lf = get_client()
@@ -201,7 +175,7 @@ class BGEM3Client:
         return SparseResult(weights=all_weights, processing_time=processing_time)
 
     @observe(name="bge-m3-encode-hybrid", capture_input=False, capture_output=False)
-    @_bge_retry
+    @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse via /encode/hybrid (single call)."""
         lf = get_client()
@@ -239,7 +213,7 @@ class BGEM3Client:
         return result
 
     @observe(name="bge-m3-rerank", capture_input=False, capture_output=False)
-    @_bge_retry
+    @bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
         """Rerank documents via ColBERT MaxSim /rerank endpoint."""
         lf = get_client()
@@ -280,7 +254,7 @@ class BGEM3Client:
         return result
 
     @observe(name="bge-m3-encode-colbert", capture_input=False, capture_output=False)
-    @_bge_retry
+    @bge_retry
     async def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors via /encode/colbert."""
         lf = get_client()

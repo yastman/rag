@@ -2,7 +2,7 @@
 
 ## Project At A Glance
 - Production contextual RAG system for real-estate workflows.
-- Main surfaces: `telegram_bot/`, apartment search, CRM automation, voice agent, unified ingestion, local services, and k3s deployment.
+- Main surfaces: `telegram_bot/`, `mini_app/`, apartment search, CRM automation, voice agent, unified ingestion, local services, and k3s deployment.
 - Treat this repo as a multi-system product, not a single bot package.
 
 ## First Pass For New Sessions
@@ -10,6 +10,22 @@
 - Read the nearest `AGENTS.override.md` before editing scoped subtrees.
 - Start code discovery with `grepai` MCP tools; use `rg` only for exact text or path matching.
 - Use `context-mode` MCP tools for large-output exploration, external docs, and large-file summarization.
+
+## Instruction Priority
+- The nearest `AGENTS.override.md` takes precedence for files in its scope.
+- Root `Critical Invariants` and `Validation` rules still apply repo-wide unless a local override adds stricter requirements.
+- `Engineering Heuristics` are defaults for ambiguous design choices; they do not justify violating explicit repo rules.
+
+## Workflow Reality
+- Do not assume `main` is the everyday integration branch.
+- Before giving PR, merge, release, or cleanup advice, verify the current workflow using:
+  - `git branch --show-current`
+  - `gh pr list --state merged --limit 8 --json number,baseRefName,headRefName,mergedAt`
+  - `.github/workflows/ci.yml`
+  - `Makefile`
+  - `scripts/git_hygiene.py`
+  - `scripts/repo_cleanup.sh`
+- Treat drift between merged PR history, docs, CI, and cleanup scripts as a real repo issue.
 
 ## MCP Priority And Fallbacks
 - `grepai` is the default entry point for code discovery, semantic search, and call-graph tracing.
@@ -20,6 +36,22 @@
 - If `grepai` is unavailable or returns weak results, fall back to `rg` plus direct file reads.
 - If `context-mode` is unavailable, fall back to short shell commands and targeted file reads.
 
+## SDK And Docs Lookup Order
+- For SDK and framework decisions, use this order:
+  - `docs/engineering/sdk-registry.md`
+  - current code usage
+  - official docs / Context7 for version-sensitive behavior
+  - broad web search only as fallback
+- Do not block work on missing MCP tools; use shell and direct file reads when MCP is unavailable.
+
+## Issue Triage Workflow
+- Before starting new work, classify it as `Quick execution`, `Plan needed`, or `Design first`.
+- Use `docs/engineering/issue-triage.md` as the detailed operator playbook.
+- Keep small local fixes in `Quick execution`.
+- Route multi-file or runtime-sensitive work through `Plan needed`.
+- Route structurally ambiguous or contract-changing work through `Design first`.
+- `Plan needed` work routes through `@writing-plans`; `Design first` work routes through `@brainstorming`, then a written spec and user review before planning.
+
 ## Task Routing
 - `telegram_bot/`: handlers, dialogs, middlewares, agents, business services, orchestration.
 - `telegram_bot/services/` and `src/retrieval/`: search, RAG, cache, reranking, retrieval behavior.
@@ -29,13 +61,38 @@
 - `services/`: supporting local service containers and helper APIs.
 - `k8s/`, `compose*.yml`, `DOCKER.md`: deploy and environment orchestration.
 
+## Runtime And Compose Contract
+- Treat `compose*.yml`, `docker/**`, `services/**`, `mini_app/**`, `src/api/**`, `src/voice/**`, and ingestion runtime paths as runtime-impacting surfaces.
+- For those changes, validate effective Compose config and service set, not only Python tests.
+- Compose contract tests must use Docker Compose native env handling (`--env-file`, `-f`, `COMPOSE_DISABLE_ENV_FILE=1`) instead of relying on the developer's local `.env` or `os.environ.copy()`.
+- Keep non-secret test interpolation values in `tests/fixtures/compose.ci.env`; update that fixture when adding new `${VAR:?required}` interpolation to Compose files.
+- Production deploy paths must run `scripts/validate_prod_env.sh` before `docker compose build` / `up`, including both GitHub Actions and manual deploy scripts.
+- Prefer:
+  - `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services`
+  - `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services`
+  - `make verify-compose-images`
+
 ## Working Rules
 - Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
-- Do not pass `workspace` or `projects` to `grepai` MCP calls in this repo unless `grepai_list_workspaces` confirms the workspace exists; otherwise use workspace-less local-project queries.
 - Use `mcp__context-mode__ctx_batch_execute` for multi-command repo exploration.
 - Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
-- Use direct shell/file reads when you need exact contents for editing or the output is small.
-- Before adding a new SDK, API client, or dependency, check `.claude/rules/sdk-registry.md`.
+- Before adding a new SDK, API client, or dependency, check `docs/engineering/sdk-registry.md`.
+
+## Test Writing Instruction
+- Use `docs/engineering/test-writing-guide.md` as the default instruction for creating or updating tests.
+- Keep one canonical owner per behavior; extend existing tests before adding a new file.
+- Preserve local-fast vs heavy-tier split; do not move runtime-heavy checks into `make test-unit` / `make test`.
+- For test changes, run focused pytest on touched files first, then baseline verification from `Validation`.
+
+## Engineering Heuristics
+- Prefer the simplest change that solves the current task and keeps the local blast radius small.
+- Do not add abstractions, extension points, wrappers, or interfaces before a real second use case exists.
+- Apply DRY to shared knowledge, rules, validations, and contracts; do not merge code paths that change for different reasons.
+- Extract reuse only after repetition is proven and the shared shape is stable.
+- Prefer composition and focused modules over inheritance-heavy designs.
+- Use SOLID ideas only when they improve testability, replaceability, or change safety for the current code.
+- Favor small, reviewable PRs and incremental code-health improvements.
+- Refactor when it makes the current change simpler, safer, or easier to test.
 
 ## Critical Invariants
 - Preserve service boundaries: transport-layer Telegram code should not absorb retrieval or domain logic.
@@ -43,6 +100,7 @@
 - Preserve LangGraph state contracts, checkpoint assumptions, and routing shapes.
 - Preserve ingestion determinism and resumability; do not casually change manifest identity, hashing, or collection semantics.
 - Do not remove tracing, scoring, or observability hooks without a clear replacement.
+- Treat mini app parity as part of the release surface, not as an optional frontend.
 
 ## Validation
 - Run fresh verification before claiming completion.
@@ -67,5 +125,6 @@
 
 ## References
 - `README.md`
-- `.claude/rules/sdk-registry.md`
+- `docs/engineering/sdk-registry.md`
+- `docs/engineering/test-writing-guide.md`
 - `DOCKER.md`

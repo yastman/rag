@@ -139,12 +139,19 @@ uv sync
 cp .env.example .env   # Fill in API keys (see below)
 ```
 
+For local development, the canonical environment file is `.env` in the repo root. `.env.local` is not loaded automatically by the bot, `make`, or `uv run` entry points.
+
 ### 2. Start Services
 
 ```bash
 make local-up    # Redis, Qdrant, BGE-M3, Docling, LiteLLM
-make run-bot     # Run bot natively (fast iteration, no Docker rebuild)
+make test-bot-health   # Local helper: Redis, Qdrant, LiteLLM + optional Postgres note
+make run-bot           # Run bot natively (fast iteration, no Docker rebuild)
 ```
+
+For native bot runs, `REDIS_URL` is optional in local development: when it is unset, the bot derives `redis://:REDIS_PASSWORD@localhost:6379` from `REDIS_PASSWORD` so it matches the password-protected Redis started by `make local-up`.
+
+`make test-bot-health` validates the published local prerequisites used by native bot runs. The authoritative startup preflight still runs in [`telegram_bot/preflight.py`](/home/user/projects/rag-fresh-issue-1198/telegram_bot/preflight.py) when the bot starts. That runtime preflight still owns the repo-local BGE-M3 contract because BGE-M3 is a service this repository depends on directly, not a generic upstream SDK health path.
 
 ### 3. Or Run Everything in Docker
 
@@ -226,6 +233,7 @@ src/evaluation/            # RAG evaluation (RAGAS, A/B testing)
 ```bash
 make check       # Ruff lint + MyPy strict type checking
 make test-unit   # Unit tests (parallel via pytest-xdist)
+make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
 Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `main` or deploying to VPS.
@@ -244,6 +252,8 @@ CI is intentionally lightweight. It should stay fast and is used as a guardrail 
 | [Local Development](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation guide |
 | [Qdrant Stack](docs/QDRANT_STACK.md) | Vector collections, schema, operations |
 | [Ingestion Runbook](docs/INGESTION.md) | Unified ingestion guide and troubleshooting |
+| [Google Drive Sync Runbook](docs/GDRIVE_INGESTION.md) | Google Drive -> local mirror -> unified ingestion contract |
+| [VPS Recovery Runbook](docs/runbooks/vps-gdrive-ingestion-recovery.md) | Recover empty sync mount / empty collection incidents on VPS |
 | [SDK Migration Audit](docs/SDK_MIGRATION_AUDIT_2026-03-13.md) | Canonical SDK keeper stack and bounded follow-up work |
 | [SDK Migration Roadmap](docs/SDK_MIGRATION_ROADMAP_2026-03-13.md) | Post-audit execution order and guardrails |
 | [Alerting](docs/ALERTING.md) | Loki/Alertmanager setup |

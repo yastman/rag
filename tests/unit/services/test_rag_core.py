@@ -248,6 +248,26 @@ class TestPerformRerank:
         assert applied is True
         assert cache_hit is False
 
+    async def test_deprecated_colbert_reranker_is_ignored(self):
+        """Deprecated client-side ColBERT service must not run in rerank core."""
+        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+
+        documents = [{"text": "doc0", "score": 0.5}]
+        client = MagicMock()
+        client.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.99}])
+
+        with pytest.deprecated_call(match="deprecated"):
+            reranker = ColbertRerankerService(client=client)
+
+        docs, applied, cache_hit = await perform_rerank(
+            "query", documents, cache=None, reranker=reranker, top_k=1
+        )
+
+        assert docs == documents
+        assert applied is False
+        assert cache_hit is False
+        client.rerank.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # H1: compute_query_embedding + check_semantic_cache
@@ -402,6 +422,21 @@ class TestCheckSemanticCache:
 
         assert hit is False
         assert response is None
+
+    async def test_contextual_follow_up_skips_cache_lookup(self):
+        cache = AsyncMock()
+        cache.check_semantic = AsyncMock(return_value="cached answer")
+
+        hit, response = await check_semantic_cache(
+            "расскажи подробнее",
+            [0.1] * 10,
+            "FAQ",
+            cache=cache,
+        )
+
+        assert hit is False
+        assert response is None
+        cache.check_semantic.assert_not_awaited()
 
     async def test_agent_role_passed_to_cache(self):
         """agent_role kwarg is forwarded to cache.check_semantic."""

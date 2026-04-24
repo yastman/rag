@@ -19,6 +19,7 @@ class PreAgentStateContract(TypedDict, total=False):
     colbert_query: list[list[float]] | None
     query_type: str
     topic_hint: str | None
+    filters: dict[str, Any]
     retrieval_policy: str
     grounding_mode: str
 
@@ -31,8 +32,9 @@ def build_pre_agent_miss_contract(
     sparse_vector: dict[str, Any] | None,
     colbert_query: list[list[float]] | None,
     grounding_mode: str,
+    filters: dict[str, Any] | None = None,
 ) -> PreAgentStateContract:
-    return {
+    contract: PreAgentStateContract = {
         "cache_checked": True,
         "cache_hit": False,
         "cache_scope": "rag",
@@ -46,6 +48,9 @@ def build_pre_agent_miss_contract(
         "retrieval_policy": RETRIEVAL_POLICY_TOPIC_THEN_RELAX,
         "grounding_mode": grounding_mode,
     }
+    if isinstance(filters, dict) and filters:
+        contract["filters"] = filters
+    return contract
 
 
 def coerce_pre_agent_state_contract(
@@ -58,9 +63,15 @@ def coerce_pre_agent_state_contract(
     if not store:
         return None
 
+    store_filters = store.get("filters")
+    coerced_filters = store_filters if isinstance(store_filters, dict) and store_filters else None
+
     existing = store.get("state_contract")
     if isinstance(existing, dict):
-        return cast(PreAgentStateContract, existing)
+        contract = cast(PreAgentStateContract, dict(existing))
+        if coerced_filters is not None and not contract.get("filters"):
+            contract["filters"] = coerced_filters
+        return contract
 
     dense_vector = store.get("cache_key_embedding")
     sparse_vector = store.get("cache_key_sparse")
@@ -78,4 +89,5 @@ def coerce_pre_agent_state_contract(
         sparse_vector=sparse,
         colbert_query=colbert,
         grounding_mode=grounding_mode,
+        filters=coerced_filters,
     )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import pytest
 
 
@@ -52,7 +54,7 @@ def _make_lf_client() -> MagicMock:
     """Create a no-op Langfuse client mock."""
     lf = MagicMock()
     lf.get_current_trace_id.return_value = ""
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
     lf.create_score = MagicMock()
     return lf
 
@@ -118,12 +120,16 @@ class TestDetectAgentIntent:
 class TestIsContextualQuery:
     def test_contextual_pronouns_detected(self):
         assert _is_contextual_query("расскажи подробнее об этом объекте") is True
+        assert _is_contextual_query("подробнее про этот объект") is True
+        assert _is_contextual_query("подробнее об этой квартире") is True
         assert _is_contextual_query("первый вариант") is True
         assert _is_contextual_query("а другие есть?") is True
 
     def test_non_contextual_query(self):
         assert _is_contextual_query("Какие квартиры в центре Москвы?") is False
         assert _is_contextual_query("Цена однокомнатной квартиры") is False
+        assert _is_contextual_query("квартира на первом этаже") is False
+        assert _is_contextual_query("подробнее о квартире в Софии") is False
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +374,7 @@ class TestPipelineFullFlow:
         msg.answer.assert_called()
 
     async def test_pipeline_trace_tags_override_agent_tag(self):
-        """update_current_trace must set tags=client_direct, not agent (#566).
+        """Client pipeline must override inherited agent tag via propagate_attributes (#566).
 
         propagate_attributes in bot.py sets tags=["telegram","rag","agent"] before
         the role check, so the client pipeline must override tags to remove "agent".
@@ -394,6 +400,10 @@ class TestPipelineFullFlow:
 
         with (
             _patch_observability(lf),
+            patch(
+                "telegram_bot.pipelines.client.propagate_attributes",
+                return_value=nullcontext(),
+            ) as mock_propagate,
             _patch_rag_pipeline(rag_result),
             _patch_generate_response(gen_result),
             patch("telegram_bot.pipelines.client.write_langfuse_scores"),
@@ -414,13 +424,15 @@ class TestPipelineFullFlow:
                 query_type="GENERAL",
             )
 
-        trace_calls = lf.update_current_trace.call_args_list
         pipeline_call = next(
-            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            (
+                c
+                for c in mock_propagate.call_args_list
+                if c.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
+            ),
             None,
         )
-        assert pipeline_call is not None, "update_current_trace with pipeline_mode not found"
-        assert pipeline_call.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
+        assert pipeline_call is not None, "client-direct propagate_attributes override not found"
 
     async def test_pipeline_metadata_includes_pre_agent_and_e2e_latency(self):
         """Trace metadata should include pre-agent and canonical end-to-end latency."""
@@ -467,7 +479,7 @@ class TestPipelineFullFlow:
                 rag_result_store=rag_store,
             )
 
-        trace_calls = lf.update_current_trace.call_args_list
+        trace_calls = lf.update_current_span.call_args_list
         pipeline_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -523,7 +535,7 @@ class TestPipelineFullFlow:
                 query_type="FAQ",
             )
 
-        trace_calls = lf.update_current_trace.call_args_list
+        trace_calls = lf.update_current_span.call_args_list
         pipeline_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -535,6 +547,12 @@ class TestPipelineFullFlow:
         assert metadata["query_type"] == "FAQ"
         assert metadata["topic_hint"] == "legal"
         assert metadata["grounding_mode"] == "strict"
+        assert metadata["grade_confidence"] == 0.7
+        assert metadata["sources_count"] == 0
+        assert metadata["grounded"] is True
+        assert metadata["legal_answer_safe"] is True
+        assert metadata["semantic_cache_safe_reuse"] is True
+        assert metadata["safe_fallback_used"] is False
 
     async def test_pipeline_passes_strict_grounding_mode_to_generate_response(self):
         """Legal topic should force strict grounding mode in generation step."""
@@ -592,9 +610,7 @@ class TestPipelineFullFlow:
         assert captured_kwargs["grounding_mode"] == "strict"
         assert result.answer == "Нужна проверка менеджером."
 
-    async def test_pipeline_shows_sources_for_strict_grounding_even_when_global_sources_disabled(
-        self,
-    ):
+    async def test_pipeline_hides_sources_when_global_sources_disabled_even_in_strict_mode(self):
         msg = _make_message()
         lf = _make_lf_client()
 
@@ -649,7 +665,7 @@ class TestPipelineFullFlow:
         send_text = send_chunks.await_args.args[1]
         assert "Подтвержденный ответ." in send_text
         assert "Источники:" not in send_text
-        assert send_chunks.await_args.kwargs["sources_html"] == "\n\nИсточники:\n[1] ВНЖ"
+        assert send_chunks.await_args.kwargs["sources_html"] == ""
 
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""
@@ -1049,7 +1065,17 @@ class TestCacheStoreGuards:
             "latency_stages": {},
             "cache_key_embedding": [0.1, 0.2, 0.3],
         }
-        gen_result = {"response": "Good answer", "response_sent": False}
+        gen_result = {
+            "response": "Good answer",
+            "response_sent": False,
+            "grounded": True,
+            "legal_answer_safe": True,
+            "semantic_cache_safe_reuse": True,
+            "safe_fallback_used": False,
+            "llm_provider_model": "gpt-4.1",
+            "fallback_used": False,
+            "llm_timeout": False,
+        }
 
         with (
             _patch_observability(lf),
@@ -1074,6 +1100,167 @@ class TestCacheStoreGuards:
             )
 
         mock_cache.store_semantic.assert_called_once()
+        metadata = mock_cache.store_semantic.await_args.kwargs["metadata"]
+        assert metadata["grounding_mode"] == "strict"
+        assert metadata["legal_answer_safe"] is True
+        assert metadata["semantic_cache_safe_reuse"] is True
+        assert metadata["response_state"] == "ok"
+        assert metadata["cache_eligible"] is True
+        assert metadata["schema_version"] == "v8"
+
+    async def test_provider_fallback_skips_cache_store_even_without_safe_fallback(self):
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": _CONFIDENCE_THRESHOLD + 0.1,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+        }
+        gen_result = {
+            "response": "⚠️ fallback text",
+            "response_sent": False,
+            "fallback_used": True,
+            "safe_fallback_used": False,
+            "llm_provider_model": "fallback",
+            "llm_timeout": True,
+            "grounded": False,
+            "legal_answer_safe": False,
+            "semantic_cache_safe_reuse": False,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Расскажи про рынок в Несебре",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+            )
+
+        mock_cache.store_semantic.assert_not_called()
+
+    async def test_strict_mode_unsafe_result_skips_cache_store(self):
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": _CONFIDENCE_THRESHOLD + 0.1,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+            "topic_hint": "legal",
+        }
+        gen_result = {
+            "response": "Нужна ручная проверка.",
+            "response_sent": False,
+            "grounding_mode": "strict",
+            "grounded": False,
+            "legal_answer_safe": False,
+            "semantic_cache_safe_reuse": False,
+            "safe_fallback_used": True,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы нужны для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        mock_cache.store_semantic.assert_not_called()
+
+    async def test_strict_mode_safe_result_stores_cache_with_safety_metadata(self):
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": _CONFIDENCE_THRESHOLD + 0.1,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+            "topic_hint": "legal",
+        }
+        gen_result = {
+            "response": "Подтвержденный ответ.",
+            "response_sent": False,
+            "grounding_mode": "strict",
+            "grounded": True,
+            "legal_answer_safe": True,
+            "semantic_cache_safe_reuse": True,
+            "safe_fallback_used": False,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы нужны для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        mock_cache.store_semantic.assert_called_once()
+        metadata = mock_cache.store_semantic.await_args.kwargs["metadata"]
+        assert metadata["grounding_mode"] == "strict"
+        assert metadata["semantic_cache_safe_reuse"] is True
+        assert metadata["response_state"] == "ok"
+        assert metadata["cache_eligible"] is True
+        assert metadata["schema_version"] == "v8"
 
     async def test_structured_query_type_stores_cache(self):
         """STRUCTURED query type is in _PIPELINE_STORE_TYPES, so cache store is enabled."""
@@ -1298,6 +1485,7 @@ class TestPreComputedEmbeddingPassthrough:
             "colbert_query": [[0.2] * 3],
             "query_type": "GENERAL",
             "topic_hint": "legal",
+            "filters": {"city": "Несебр", "price": {"lte": 80000}},
             "retrieval_policy": "topic_then_relax",
             "grounding_mode": "strict",
         }
@@ -1339,6 +1527,68 @@ class TestPreComputedEmbeddingPassthrough:
             )
 
         assert captured_kwargs.get("state_contract") == state_contract
+        assert captured_kwargs["state_contract"]["filters"] == {
+            "city": "Несебр",
+            "price": {"lte": 80000},
+        }
+
+    async def test_filtered_state_contract_stores_semantic_cache_with_filter_signature(self):
+        """Filtered retrieval results should store a canonical filter signature for safe reuse."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        state_contract = {
+            "cache_checked": True,
+            "cache_hit": False,
+            "cache_scope": "rag",
+            "embedding_bundle_ready": True,
+            "embedding_bundle_version": "bge_m3_hybrid_colbert",
+            "dense_vector": [0.1] * 3,
+            "query_type": "FAQ",
+            "filters": {"city": "Несебр"},
+            "retrieval_policy": "topic_then_relax",
+            "grounding_mode": "normal",
+        }
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+            "query_embedding": [0.1, 0.2, 0.3],
+        }
+        gen_result = {"response": "Есть варианты", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="квартиры в Несебре",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+                rag_result_store={"state_contract": state_contract},
+            )
+
+        mock_cache.store_semantic.assert_called_once()
+        assert mock_cache.store_semantic.await_args.kwargs["filter_signature"] == "city=Несебр"
+        trace_metadata = lf.update_current_span.call_args.kwargs["metadata"]
+        assert trace_metadata["filter_signature"] == "city=Несебр"
 
     async def test_passes_none_when_embeddings_absent_from_store(self):
         """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""

@@ -93,17 +93,24 @@ class TestZooHealth:
         api_key = os.getenv("LLM_API_KEY") or os.getenv("LITELLM_MASTER_KEY")
         if not api_key:
             pytest.skip("LLM_API_KEY or LITELLM_MASTER_KEY not set")
+        if ("localhost" in litellm_url or "127.0.0.1" in litellm_url) and not _is_port_open(
+            "localhost", 4000
+        ):
+            pytest.skip("LiteLLM not running (port 4000)")
 
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{litellm_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
-                    "messages": [{"role": "user", "content": "Say OK"}],
-                    "max_tokens": 5,
-                },
-            )
+            try:
+                response = await client.post(
+                    f"{litellm_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
+                        "messages": [{"role": "user", "content": "Say OK"}],
+                        "max_tokens": 5,
+                    },
+                )
+            except httpx.ConnectError:
+                pytest.skip(f"LiteLLM not reachable at {litellm_url}")
             assert response.status_code == 200
             data = response.json()
             assert "choices" in data

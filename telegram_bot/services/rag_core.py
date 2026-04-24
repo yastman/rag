@@ -14,6 +14,8 @@ import asyncio
 import logging
 from typing import Any
 
+from telegram_bot.services.cache_policy import is_contextual_query
+
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,19 @@ _REWRITE_PROMPT = (
     "Верни ТОЛЬКО переформулированный запрос, без пояснений.\n\n"
     "Оригинальный запрос: {query}"
 )
+
+
+def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
+    """Return True when caller passed the deprecated client-side ColBERT service."""
+    if reranker is None:
+        return False
+
+    try:
+        from telegram_bot.services.colbert_reranker import ColbertRerankerService
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+    return isinstance(reranker, ColbertRerankerService)
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +139,8 @@ async def perform_rerank(
         query: The query string for reranking.
         documents: Retrieved document dicts with "text" and "score" keys.
         cache: Optional cache instance with get_rerank_results / store_rerank_results.
-        reranker: Optional ColBERT reranker instance with .rerank() method.
+        reranker: Optional reranker instance with .rerank() method.
+            Deprecated ColbertRerankerService inputs are ignored.
         top_k: Number of documents to return.
 
     Returns:
@@ -141,6 +157,13 @@ async def perform_rerank(
     """
     if not documents:
         return ([], False, False)
+
+    if _is_deprecated_colbert_reranker(reranker):
+        logger.warning(
+            "perform_rerank: ignoring deprecated ColbertRerankerService; "
+            "server-side Qdrant ColBERT is the only supported ColBERT path"
+        )
+        reranker = None
 
     if reranker is not None:
         _cache_get = getattr(cache, "get_rerank_results", None) if cache is not None else None
@@ -248,6 +271,7 @@ async def check_semantic_cache(
     *,
     cache: Any,
     agent_role: str | None = None,
+    filter_signature: str | None = None,
 ) -> tuple[bool, str | None]:
     """Check semantic cache for a given query vector.
 
@@ -267,6 +291,8 @@ async def check_semantic_cache(
     """
     if query_type not in CACHEABLE_QUERY_TYPES:
         return (False, None)
+    if is_contextual_query(query):
+        return (False, None)
 
     cached = await cache.check_semantic(
         query=query,
@@ -274,6 +300,7 @@ async def check_semantic_cache(
         query_type=query_type,
         cache_scope="rag",
         agent_role=agent_role,
+        filter_signature=filter_signature,
     )
 
     if cached:

@@ -78,7 +78,7 @@ async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
     app.state.max_rewrite_attempts = 3
 
     lf = MagicMock()
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
 
     with (
         patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
@@ -97,7 +97,7 @@ async def test_query_writes_langfuse_scores() -> None:
     app.state.max_rewrite_attempts = 1
 
     lf = MagicMock()
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
     lf.score_current_trace = MagicMock()
 
     with (
@@ -114,45 +114,48 @@ async def test_query_writes_langfuse_scores() -> None:
     assert isinstance(call_args[0][1], dict)  # second arg: result dict
 
 
-async def test_query_observe_trace_sets_api_tags_and_ids() -> None:
-    """POST /query must set trace tags ["api", "rag", channel] and session/user IDs."""
+async def test_query_updates_current_observation_and_propagates_api_attributes() -> None:
+    """POST /query must propagate correlating attrs and update the active root observation."""
     graph = _DummyGraph()
     app.state.graph = graph
     app.state.max_rewrite_attempts = 1
 
     lf = MagicMock()
-    lf.update_current_trace = MagicMock()
-
-    with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=lf),
-    ):
-        await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
-
-    lf.update_current_trace.assert_called_once()
-    call_kwargs = lf.update_current_trace.call_args.kwargs
-    assert "tags" in call_kwargs
-    assert "api" in call_kwargs["tags"]
-    assert "rag" in call_kwargs["tags"]
-    assert "voice" in call_kwargs["tags"]
-    assert call_kwargs["session_id"] == "sess-1"
-    assert call_kwargs["user_id"] == "42"
-
-
-async def test_query_propagates_explicit_langfuse_trace_id() -> None:
-    """POST /query should forward explicit trace id into propagate_attributes."""
-    graph = _DummyGraph()
-    app.state.graph = graph
-    app.state.max_rewrite_attempts = 1
-
-    lf = MagicMock()
-    lf.update_current_trace = MagicMock()
+    lf.update_current_span = MagicMock()
 
     with (
         patch(
             "telegram_bot.observability.propagate_attributes", return_value=nullcontext()
         ) as mock_propagate,
         patch("telegram_bot.observability.get_client", return_value=lf),
+    ):
+        await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
+
+    mock_propagate.assert_called_once_with(
+        session_id="sess-1",
+        user_id="42",
+        metadata={"source": "voice"},
+        tags=["api", "rag", "voice"],
+    )
+    lf.update_current_span.assert_called_once()
+    call_kwargs = lf.update_current_span.call_args.kwargs
+    assert call_kwargs["input"] == "test"
+    assert call_kwargs["output"] == "ok"
+    assert call_kwargs["metadata"] == {"source": "voice", "query_type": "GENERAL"}
+
+
+async def test_query_propagates_explicit_langfuse_trace_id() -> None:
+    """POST /query should normalize external ids before opening the root observation."""
+    lf = MagicMock()
+    lf.create_trace_id.return_value = "0123456789abcdef0123456789abcdef"
+    lf.start_as_current_observation.return_value = nullcontext()
+
+    with (
+        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch(
+            "src.api.main._execute_query",
+            new=AsyncMock(return_value=SimpleNamespace()),
+        ) as mock_execute,
     ):
         await query(
             QueryRequest(
@@ -164,7 +167,13 @@ async def test_query_propagates_explicit_langfuse_trace_id() -> None:
             )
         )
 
-    assert mock_propagate.call_args.kwargs["trace_id"] == "trace-123"
+    lf.create_trace_id.assert_called_once_with(seed="trace-123")
+    lf.start_as_current_observation.assert_called_once_with(
+        as_type="span",
+        name="rag-api-query",
+        trace_context={"trace_id": "0123456789abcdef0123456789abcdef"},
+    )
+    mock_execute.assert_awaited_once()
 
 
 async def test_lifespan_respects_rerank_provider_none() -> None:
@@ -176,6 +185,39 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
         qdrant_collection="test_collection",
         bge_m3_url="http://bge-m3:8000",
         rerank_provider="none",
+        max_rewrite_attempts=2,
+    )
+    fake_cfg.create_embeddings = MagicMock(return_value=SimpleNamespace())
+    fake_cfg.create_sparse_embeddings = MagicMock(return_value=SimpleNamespace())
+    fake_cfg.create_llm = MagicMock(return_value=MagicMock())
+
+    fake_cache = AsyncMock()
+    fake_qdrant = AsyncMock()
+    fake_graph = MagicMock()
+
+    with (
+        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
+        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph) as mock_build_graph,
+        patch("telegram_bot.services.colbert_reranker.ColbertRerankerService") as mock_colbert,
+    ):
+        async with lifespan(app):
+            assert app.state.max_rewrite_attempts == 2
+
+    assert mock_build_graph.call_args.kwargs["reranker"] is None
+    mock_colbert.assert_not_called()
+
+
+async def test_lifespan_keeps_colbert_runtime_server_side() -> None:
+    fake_cfg = SimpleNamespace(
+        redis_url="redis://localhost:6379",
+        cache_thresholds={"GENERAL": 0.08},
+        cache_ttl={"GENERAL": 3600},
+        qdrant_url="http://qdrant:6333",
+        qdrant_collection="test_collection",
+        bge_m3_url="http://bge-m3:8000",
+        rerank_provider="colbert",
         max_rewrite_attempts=2,
     )
     fake_cfg.create_embeddings = MagicMock(return_value=SimpleNamespace())

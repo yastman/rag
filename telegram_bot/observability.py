@@ -30,10 +30,10 @@ from langfuse import (
 
 from src.security.pii_redaction import PIIRedactor
 from telegram_bot.observability_bootstrap import (
-    disable_otel_exporter as _bootstrap_disable_otel_exporter,
+    disable_otel_exporter as _disable_otel_exporter,
 )
 from telegram_bot.observability_bootstrap import (
-    is_endpoint_reachable as _bootstrap_is_endpoint_reachable,
+    is_endpoint_reachable as _is_endpoint_reachable,
 )
 
 
@@ -50,16 +50,6 @@ _MODEL_LIST_PAGE_SIZE = 100
 _pii_redactor = PIIRedactor()
 
 _langfuse_endpoint_warned = False
-
-
-def _is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
-    """Compatibility wrapper used by unit tests and init flow."""
-    return _bootstrap_is_endpoint_reachable(url, timeout=timeout)
-
-
-def _disable_otel_exporter() -> None:
-    """Compatibility wrapper used by unit tests and init flow."""
-    _bootstrap_disable_otel_exporter()
 
 
 # ---------------------------------------------------------------------------
@@ -265,9 +255,9 @@ def sync_langfuse_model_definitions(
         return 0
 
     try:
-        from langfuse.api.resources.models.types.create_model_request import CreateModelRequest
+        from langfuse.api.commons.types.model_usage_unit import ModelUsageUnit
     except Exception:
-        logger.warning("Langfuse model sync skipped: CreateModelRequest import failed")
+        logger.warning("Langfuse model sync skipped: ModelUsageUnit import failed")
         return 0
 
     existing: list[Any] = []
@@ -310,7 +300,11 @@ def sync_langfuse_model_definitions(
                 existing = [m for m in existing if getattr(m, "id", None) != model_id]
 
         try:
-            created = models_api.create(request=CreateModelRequest(**definition))
+            create_kwargs = dict(definition)
+            unit = create_kwargs.get("unit")
+            if isinstance(unit, str) and unit.strip():
+                create_kwargs["unit"] = ModelUsageUnit[unit.strip().upper()]
+            created = models_api.create(**create_kwargs)
             existing.append(created)
             created_or_updated += 1
         except Exception:
@@ -413,9 +407,8 @@ def get_langfuse_client() -> Langfuse | None:
 def create_callback_handler(
     *,
     trace_context: Any | None = None,
-    update_trace: bool = False,
 ):
-    """Create Langfuse CallbackHandler for create_agent integration.
+    """Create a native v4 Langfuse CallbackHandler for LangChain integrations.
 
     Returns None when Langfuse is not configured or handler init fails.
     """
@@ -425,10 +418,7 @@ def create_callback_handler(
     try:
         from langfuse.langchain import CallbackHandler
 
-        return CallbackHandler(
-            trace_context=trace_context,
-            update_trace=update_trace,
-        )
+        return CallbackHandler(trace_context=trace_context)
     except Exception:
         logger.warning("Failed to create Langfuse CallbackHandler", exc_info=True)
         return None

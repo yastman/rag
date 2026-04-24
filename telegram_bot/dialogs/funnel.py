@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import inspect
 import logging
 import operator
 from typing import Any
 
-from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
+from aiogram.types import CallbackQuery, InaccessibleMessage
+from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.widgets.kbd import (
     Back,
     Button,
@@ -29,6 +28,7 @@ from telegram_bot.dialogs.root_nav import (
     get_main_menu_label,
     root_menu_button,
 )
+from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.observability import observe
 
 from .filter_constants import (
@@ -820,6 +820,7 @@ async def on_summary_search(
     manager: DialogManager,
 ) -> None:
     """Search, send results as ordinary messages, then hand off to CatalogSG."""
+    from telegram_bot.dialogs.catalog import activate_catalog_state, show_catalog_controls
     from telegram_bot.dialogs.states import CatalogSG
     from telegram_bot.services.catalog_rendering import send_catalog_results
     from telegram_bot.services.catalog_session import (
@@ -864,7 +865,7 @@ async def on_summary_search(
     if svc is None and property_bot is not None:
         svc = getattr(property_bot, "_apartments_service", None)
 
-    if svc is None or msg is None:
+    if svc is None or msg is None or isinstance(msg, InaccessibleMessage):
         await manager.done()
         return
 
@@ -909,24 +910,28 @@ async def on_summary_search(
         await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
     if not results:
-        maybe_start = manager.start(CatalogSG.empty, mode=StartMode.RESET_STACK)
-        if inspect.isawaitable(maybe_start):
-            await maybe_start
+        await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
+        await activate_catalog_state(dialog_manager=manager, state=CatalogSG.empty)
         return
 
     telegram_id = callback.from_user.id if callback.from_user else 0
+    i18n = manager.middleware_data.get("i18n")
     await send_catalog_results(
-        message=callback.message,
+        message=msg,
         property_bot=property_bot,
         results=results,
         total_count=total_count,
         view_mode=view_mode,
         shown_start=1,
         telegram_id=telegram_id,
+        reply_markup=(
+            build_catalog_keyboard(shown=len(results), total=total_count, i18n=i18n)
+            if view_mode == "list"
+            else None
+        ),
     )
-    maybe_start = manager.start(CatalogSG.results, mode=StartMode.RESET_STACK)
-    if inspect.isawaitable(maybe_start):
-        await maybe_start
+    await show_catalog_controls(message=msg, dialog_manager=manager, runtime=runtime)
+    await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
 
 
 async def on_change_filter_selected(

@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
+# syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 # Docling Serve — CPU-only optimized build for VPS
 # Multi-stage build with uv (Context7 best practices 2026)
 #
@@ -47,7 +47,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # RUNTIME STAGE
 # =============================================================================
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm@sha256:980c03657c7c8bfbce5212d242ffe5caf69bfd8b6c8383e3580b27d028a6ddb3 AS runtime
+
+LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
 
 WORKDIR /app
 

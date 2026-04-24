@@ -6,7 +6,9 @@ import inspect
 import io
 import json
 import logging
+import os
 import re
+import socket
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -20,6 +22,7 @@ from aiogram.types import (
     BotCommand,
     CallbackQuery,
     FSInputFile,
+    InaccessibleMessage,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
@@ -27,22 +30,16 @@ from aiogram.types import (
 )
 from aiogram.utils.chat_action import ChatActionSender
 
-from .agents.agent import create_bot_agent
-from .agents.context import BotContext
+from src.retrieval.topic_classifier import get_query_topic_hint
+
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
-from .graph.config import GraphConfig
-from .graph.graph import build_graph
-from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
-from .graph.nodes.classify import classify_query
-from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
-from .graph.state import make_initial_state
 from .handlers.handoff import (
     HandoffStates,
     start_qualification,
 )
+from .integrations.polling_lock import RedisPollingLock
 from .keyboards.client_keyboard import (
-    build_client_keyboard,
     parse_menu_button,
 )
 from .middlewares import setup_error_handler, setup_throttling_middleware
@@ -62,18 +59,34 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.business_hours import is_business_hours
+from .services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
+from .services.error_utils import walk_traceback_frames
 from .services.forum_bridge import ForumBridge
+from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
 from .services.metrics import PipelineMetrics
+from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
+from .startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
 if TYPE_CHECKING:
+    from .agents.context import BotContext as BotContextType
+    from .pipelines.state_contract import PreAgentStateContract
     from .services.history_service import HistoryService
+else:
+    BotContextType = Any
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 HistoryService: Any = None  # type: ignore[no-redef]
+BotContext: Any = Any
 
 
 logger = logging.getLogger(__name__)
@@ -82,9 +95,69 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
+_STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
 _TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
+# Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
+_POLLING_LOCK_MAX_REFRESH_FAILURES = 2
+
+
+def create_bot_agent(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .agents.agent import create_bot_agent as _create_bot_agent
+
+    return _create_bot_agent(*args, **kwargs)
+
+
+def build_graph(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .graph.graph import build_graph as _build_graph
+
+    return _build_graph(*args, **kwargs)
+
+
+def classify_query(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .graph.nodes.classify import classify_query as _classify_query
+
+    return _classify_query(*args, **kwargs)
+
+
+def detect_injection(*args: Any, **kwargs: Any) -> Any:
+    """Lazy wrapper that keeps module-level patchability for tests."""
+    from .graph.nodes.guard import detect_injection as _detect_injection
+
+    return _detect_injection(*args, **kwargs)
+
+
+def _build_pre_agent_state_contract(
+    *,
+    rag_result_store: dict[str, Any],
+    query_type: str,
+    topic_hint: str | None,
+    dense_vector: list[float] | None,
+    sparse_vector: dict[str, Any] | None,
+    colbert_query: list[list[float]] | None,
+    grounding_mode: str,
+    filters: dict[str, Any] | None = None,
+) -> "PreAgentStateContract":
+    """Build the shared pre-agent contract and preserve any upstream filters."""
+    from .pipelines.state_contract import build_pre_agent_miss_contract
+
+    resolved_filters = filters
+    if resolved_filters is None:
+        store_filters = rag_result_store.get("filters")
+        resolved_filters = store_filters if isinstance(store_filters, dict) else None
+    return build_pre_agent_miss_contract(
+        query_type=query_type,
+        topic_hint=topic_hint,
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        colbert_query=colbert_query,
+        grounding_mode=grounding_mode,
+        filters=resolved_filters if isinstance(resolved_filters, dict) else None,
+    )
 
 
 async def _stream_agent_to_draft(
@@ -180,6 +253,19 @@ def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]
     return []
 
 
+def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
+    runtime = state_data.get("catalog_runtime")
+    if isinstance(runtime, dict):
+        control_message_id = runtime.get("control_message_id")
+        if isinstance(control_message_id, int):
+            return control_message_id
+
+    footer_msg_id = state_data.get("apartment_footer_msg_id")
+    if isinstance(footer_msg_id, int):
+        return footer_msg_id
+    return None
+
+
 def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
     """Split text into Telegram-safe chunks without importing the full client pipeline."""
     if not text:
@@ -238,6 +324,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "input_type": result.get("input_type", "text"),
         "query_type": result.get("query_type", ""),
+        "topic_hint": result.get("topic_hint", ""),
+        "grounding_mode": result.get("grounding_mode", ""),
+        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
         "pipeline_wall_ms": result.get("pipeline_wall_ms"),
         "pre_agent_ms": result.get("pre_agent_ms"),
         "e2e_latency_ms": result.get("e2e_latency_ms"),
@@ -253,6 +342,11 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "response_policy_mode": result.get("response_policy_mode"),
         "answer_words": result.get("answer_words"),
         "answer_to_question_ratio": result.get("answer_to_question_ratio"),
+        "sources_count": int(result.get("sources_count", 0) or 0),
+        "grounded": result.get("grounded", True),
+        "legal_answer_safe": result.get("legal_answer_safe", True),
+        "semantic_cache_safe_reuse": result.get("semantic_cache_safe_reuse", True),
+        "safe_fallback_used": result.get("safe_fallback_used", False),
         # Voice transcription (#151)
         "stt_duration_ms": result.get("stt_duration_ms"),
         # Embedding resilience (#210)
@@ -319,13 +413,9 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
     if any(m in message for m in cleanup_markers) and any(m in message for m in storage_markers):
         return True
 
-    tb = exc.__traceback__
-    while tb is not None:
-        filename = tb.tb_frame.f_code.co_filename.lower()
-        func = tb.tb_frame.f_code.co_name
+    for filename, func in walk_traceback_frames(exc):
         if "langgraph" in filename and func == "__aexit__":
             return True
-        tb = tb.tb_next
 
     return False
 
@@ -352,12 +442,9 @@ def _is_checkpointer_runtime_error(exc: Exception) -> bool:
     ):
         return True
 
-    tb = exc.__traceback__
-    while tb is not None:
-        filename = tb.tb_frame.f_code.co_filename.lower()
+    for filename, _ in walk_traceback_frames(exc):
         if "langgraph" in filename and "checkpoint" in filename:
             return True
-        tb = tb.tb_next
     return False
 
 
@@ -421,6 +508,8 @@ class PropertyBot:
 
     def __init__(self, config: BotConfig):
         """Initialize bot with services."""
+        from .graph.config import GraphConfig
+
         self.config = config
         self.bot = Bot(token=config.telegram_token)
         self.dp = Dispatcher()
@@ -473,13 +562,12 @@ class PropertyBot:
         )
         self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
 
-        # Rerank provider (feature flag)
+        # Rerank provider (feature flag). "colbert" keeps the existing
+        # server-side Qdrant ColBERT path and does not instantiate the
+        # deprecated client-side reranker service.
         self._reranker = None
         if config.rerank_provider == "colbert":
-            from .services.colbert_reranker import ColbertRerankerService
-
-            self._reranker = ColbertRerankerService(base_url=config.bge_m3_url)
-            logger.info("Using ColbertRerankerService for reranking")
+            logger.info("Reranking via server-side Qdrant ColBERT path")
         elif config.rerank_provider == "none":
             logger.info("Reranking disabled")
 
@@ -571,15 +659,37 @@ class PropertyBot:
         self._deeplink_redis: Any | None = None
         self._topic_manager: Any = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
+        self._polling_lock: RedisPollingLock | None = None
+        self._polling_lock_task: asyncio.Task[None] | None = None
+        self._polling_lock_owner: str | None = None
 
         # Track initialization state
         self._cache_initialized = False
+        self._pre_agent_filter_extractor: Any | None = None
 
         # Setup middlewares (before handlers)
         self._setup_middlewares()
 
         # Register handlers
         self._register_handlers()
+
+    def _get_pre_agent_filter_extractor(self) -> Any:
+        """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
+        if self._pre_agent_filter_extractor is None:
+            from .services.filter_extractor import FilterExtractor
+
+            self._pre_agent_filter_extractor = FilterExtractor()
+        return self._pre_agent_filter_extractor
+
+    async def _extract_pre_agent_filters(self, query: str) -> dict[str, Any]:
+        """Extract structured retrieval filters for the active bot path."""
+        try:
+            extractor = self._get_pre_agent_filter_extractor()
+            filters = extractor.extract_filters(query)
+        except Exception:
+            logger.warning("Pre-agent filter extraction failed, continuing without filters")
+            return {}
+        return dict(filters) if isinstance(filters, dict) else {}
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
@@ -900,7 +1010,7 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ):
-        """Handle /start command with SDK-native root menus when available."""
+        """Handle /start command with lower-menu client root and SDK dialogs for flows."""
         assert message.from_user is not None
 
         role = await self._resolve_user_role(message.from_user.id)
@@ -912,23 +1022,13 @@ class PropertyBot:
             from .dialogs.states import ManagerMenuSG
 
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
-        elif dialog_manager is not None:
-            from aiogram_dialog import StartMode
-
-            from .dialogs.states import ClientMenuSG
-
-            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
-            # ReplyKeyboard remains only as a no-dialog fallback path.
-            name = message.from_user.first_name or ""
-            if i18n is not None:
-                welcome = i18n.get("welcome-text", name=name)
-            else:
-                from .services.content_loader import load_services_config
+            if dialog_manager is not None:
+                with contextlib.suppress(Exception):
+                    await dialog_manager.reset_stack(remove_keyboard=True)
+            from .dialogs.root_nav import show_client_main_menu
 
-                cfg = load_services_config()
-                welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
-            await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
+            await show_client_main_menu(message, i18n=i18n)
 
     async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
         """Handle Mini App deep link: /start q_<uuid>.
@@ -1356,7 +1456,7 @@ class PropertyBot:
             tid = lf.get_current_trace_id() or ""
 
             if self._history_service is None:
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={"command": "/history", "query": query},
                     output={"error": "service_unavailable"},
                     metadata={"user_id": user_id},
@@ -1373,7 +1473,7 @@ class PropertyBot:
                 )
             except Exception:
                 logger.exception("History search failed for user %s", user_id)
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={"command": "/history", "query": query},
                     output={"error": "backend_exception"},
                     metadata={"user_id": user_id},
@@ -1394,7 +1494,7 @@ class PropertyBot:
                     continue
                 valid.append(r)
 
-            lf.update_current_trace(
+            lf.update_current_span(
                 input={"command": "/history", "query": query},
                 output={"results_count": len(results), "valid_count": len(valid)},
                 metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
@@ -1443,6 +1543,16 @@ class PropertyBot:
         current = await state.get_state()
         if isinstance(current, str) and current.startswith("PhoneCollectorStates:"):
             await state.clear()
+
+        if dialog_manager is not None:
+            from .dialogs.catalog import dispatch_catalog_text_action, is_catalog_state
+
+            if is_catalog_state(current) and await dispatch_catalog_text_action(
+                message=message,
+                manager=dialog_manager,
+                i18n_hub=getattr(self, "_i18n_hub", None),
+            ):
+                return
 
         handlers: dict[str, Any] = {
             "search": self._handle_search,
@@ -2251,176 +2361,12 @@ class PropertyBot:
         dialog_manager: Any = None,
     ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        # Resolve action from CallbackData or legacy string
-        if callback_data is not None:
-            action = callback_data.action
-        else:
-            data = callback.data or ""
-            parts = data.split(":", 1)
-            action = parts[1] if len(parts) > 1 else ""
-
-        if action == "more":
-            state_data = await state.get_data()
-            results = state_data.get("apartment_results")
-            offset = state_data.get("apartment_offset", 0)
-            if not results:
-                await callback.answer("Нет сохранённых результатов")
-                return
-            apartment_total = state_data.get("apartment_total", len(results))
-            apartment_total_value = (
-                apartment_total if isinstance(apartment_total, int) else len(results)
-            )
-            apartment_next_offset = state_data.get("apartment_next_offset")
-            apartment_filters = state_data.get("apartment_filters")
-            apartment_scroll_seen_ids = state_data.get("apartment_scroll_seen_ids")
-            new_offset = offset + _APARTMENT_PAGE_SIZE
-
-            # Funnel flow stores only the first page; lazily append more pages on demand.
-            if new_offset >= len(results):
-                apartments_service = getattr(self, "_apartments_service", None)
-                can_fetch_more = (
-                    apartment_filters is not None
-                    and apartments_service is not None
-                    and len(results) < apartment_total_value
-                )
-                if can_fetch_more:
-                    # Qdrant may return None offset while more rows still exist in count().
-                    # In that case, fetch a wider prefix from start and replace cached list.
-                    backfill_from_start = apartment_next_offset is None
-                    scroll_limit = (
-                        new_offset + _APARTMENT_PAGE_SIZE
-                        if backfill_from_start
-                        else _APARTMENT_PAGE_SIZE
-                    )
-                    scroll_offset = None if backfill_from_start else apartment_next_offset
-                    try:
-                        (
-                            extra_results,
-                            total_count,
-                            next_offset,
-                            page_ids,
-                        ) = await apartments_service.scroll_with_filters(  # type: ignore[union-attr]
-                            filters=apartment_filters,
-                            limit=scroll_limit,
-                            start_from=scroll_offset,
-                            exclude_ids=apartment_scroll_seen_ids or None,
-                        )
-                    except Exception:
-                        logger.exception("Failed to fetch next results page")
-                    else:
-                        if extra_results:
-                            if backfill_from_start and len(extra_results) >= len(results):
-                                results = list(extra_results)
-                            else:
-                                results = _merge_results(results, extra_results)
-                            apartment_total = total_count
-                            apartment_total_value = (
-                                total_count if isinstance(total_count, int) else len(results)
-                            )
-                            apartment_next_offset = next_offset
-                            await state.update_data(
-                                apartment_results=results,
-                                apartment_total=apartment_total,
-                                apartment_next_offset=apartment_next_offset,
-                                apartment_scroll_seen_ids=page_ids,
-                            )
-                if new_offset >= len(results):
-                    await callback.answer("Все результаты уже показаны")
-                    return
-            page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
-            for result in page:
-                if callback.message:
-                    await self._send_property_card(callback.message, result, callback.from_user.id)  # type: ignore[arg-type]
-            shown = len(page)
-            shown_total = new_offset + shown
-            total = apartment_total_value
-            has_more = shown_total < total
-            if callback.message:
-                _footer_rows: list[list[InlineKeyboardButton]] = []
-                if has_more:
-                    _footer_rows.append(
-                        [
-                            InlineKeyboardButton(
-                                text=f"🔄 Показать ещё ({max(total - shown_total, 0)} осталось)",
-                                callback_data=ResultsCB(action="more").pack(),
-                            )
-                        ]
-                    )
-                _footer_rows.append(
-                    [
-                        InlineKeyboardButton(
-                            text="⚙️ Изменить параметры",
-                            callback_data=ResultsCB(action="refine").pack(),
-                        )
-                    ]
-                )
-                _footer_rows.append(
-                    [
-                        InlineKeyboardButton(
-                            text="📅 Запись на осмотр",
-                            callback_data=ResultsCB(action="viewing").pack(),
-                        )
-                    ]
-                )
-                footer_msg = await callback.message.answer(
-                    f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows),
-                )
-                await state.update_data(
-                    apartment_offset=new_offset,
-                    apartment_footer_msg_id=footer_msg.message_id,
-                )
-            else:
-                await state.update_data(apartment_offset=new_offset)
-            await callback.answer()
-        elif action == "refine":
-            await state.update_data(apartment_results=None, apartment_offset=0)
-            if callback.message:
-                await callback.message.answer(
-                    "Опишите, какие апартаменты вы ищете, и я подберу варианты."
-                )
-            await callback.answer()
-        elif action == "viewing":
-            state_data = await state.get_data()
-            results = state_data.get("apartment_results", [])
-            # Первые 5 результатов как контекст для CRM заметки
-            viewing_objs = []
-            for r in results[:5]:
-                if isinstance(r, dict):
-                    p = r.get("payload", {})
-                    viewing_objs.append(
-                        {
-                            "id": r.get("id", ""),
-                            "complex_name": p.get("complex_name", ""),
-                            "property_type": p.get("property_type", ""),
-                            "area_m2": p.get("area_m2", 0),
-                            "price_eur": p.get("price_eur", 0),
-                        }
-                    )
-            if dialog_manager is not None:
-                from aiogram_dialog import ShowMode, StartMode
-
-                from .dialogs.states import ViewingSG
-
-                # Delete footer message to keep chat clean
-                if callback.message:
-                    with contextlib.suppress(Exception):
-                        await callback.message.delete()  # type: ignore[union-attr]
-
-                await dialog_manager.start(
-                    ViewingSG.date,
-                    mode=StartMode.RESET_STACK,
-                    show_mode=ShowMode.DELETE_AND_SEND,
-                    data={"selected_objects": viewing_objs},
-                )
-            else:
-                from .handlers.phone_collector import start_phone_collection
-
-                await start_phone_collection(
-                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-                )
-        else:
-            await callback.answer()
+        message = callback.message
+        if message is not None and not isinstance(message, InaccessibleMessage):
+            with contextlib.suppress(Exception):
+                await message.edit_reply_markup(reply_markup=None)
+            await message.answer(_STALE_RESULTS_CALLBACK_TEXT)
+        await callback.answer()
 
     @observe(name="cb-card", capture_input=False, capture_output=False)
     async def handle_card_callback(
@@ -2483,11 +2429,19 @@ class PropertyBot:
 
                 from .dialogs.states import ViewingSG
 
-                # Delete footer message to avoid visual clutter during dialog
-                footer_msg_id = state_data.get("apartment_footer_msg_id")
-                if footer_msg_id and callback.message and callback.message.chat:
+                control_message_id = _state_control_message_id(state_data)
+                bot = callback.bot
+                if (
+                    control_message_id
+                    and bot is not None
+                    and callback.message
+                    and callback.message.chat
+                ):
                     with contextlib.suppress(Exception):
-                        await callback.bot.delete_message(callback.message.chat.id, footer_msg_id)  # type: ignore[union-attr]
+                        await bot.delete_message(
+                            callback.message.chat.id,
+                            control_message_id,
+                        )
 
                 await dialog_manager.start(
                     ViewingSG.date,
@@ -2514,7 +2468,11 @@ class PropertyBot:
 
     @observe(name="telegram-rag-query")
     async def handle_query(
-        self, message: Message, locale: str = "ru", state: FSMContext | None = None
+        self,
+        message: Message,
+        locale: str = "ru",
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ):
         """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
@@ -2562,11 +2520,12 @@ class PropertyBot:
             state=state,
             forum_thread_id=forum_thread_id,
             expert_id=expert_id,
+            dialog_manager=dialog_manager,
         )
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
             update_kwargs["metadata"] = root_trace_metadata
-        get_client().update_current_trace(**update_kwargs)
+        get_client().update_current_span(**update_kwargs)
 
         # Update session last_active for idle detection (#445)
         if self._cache.redis is not None:
@@ -2597,6 +2556,7 @@ class PropertyBot:
         user_text: str,
         message: Message,
         state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ) -> str | None:
         """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
         from .services.apartments_service import check_escalation
@@ -2673,58 +2633,59 @@ class PropertyBot:
         if not generated.get("response_sent"):
             await self._send_markdown_chunks(message, response_text)
 
-        # Store results in FSMContext and send property cards (#654)
+        # Cut over free-text apartment sessions to the shared dialog-owned catalog runtime.
         if state is not None and results:
-            await state.update_data(
-                apartment_results=results,
-                apartment_query=user_text,
-                apartment_offset=0,
-                bookmarks_context=False,
-                apartment_total=len(results),
-                apartment_next_offset=None,
-                apartment_filters=None,
+            from .dialogs.catalog import activate_catalog_state, show_catalog_controls
+            from .dialogs.states import CatalogSG
+            from .services.catalog_rendering import send_catalog_results
+            from .services.catalog_session import (
+                build_catalog_runtime,
+                clear_legacy_catalog_state,
             )
-            page = results[:_APARTMENT_PAGE_SIZE]
-            for card_result in page:
-                await self._send_property_card(
-                    message,
-                    card_result,
-                    message.from_user.id,  # type: ignore[union-attr]
+
+            runtime = build_catalog_runtime(
+                query=user_text,
+                source="free_text",
+                filters=filters or {},
+                view_mode="cards",
+                results=results,
+                total=len(results),
+                next_offset=None,
+            )
+            state_data = await state.get_data()
+            control_message_id = _state_control_message_id(state_data)
+            if control_message_id is not None and message.bot is not None:
+                with contextlib.suppress(Exception):
+                    await message.bot.delete_message(message.chat.id, control_message_id)
+            cleaned_state = clear_legacy_catalog_state(state_data)
+            cleaned_state["catalog_runtime"] = runtime
+
+            maybe_set_data = getattr(state, "set_data", None)
+            if inspect.iscoroutinefunction(maybe_set_data):
+                await maybe_set_data(cleaned_state)
+            await state.update_data(**cleaned_state)
+
+            telegram_id = message.from_user.id if message.from_user else 0
+            await send_catalog_results(
+                message=message,
+                property_bot=self,
+                results=results,
+                total_count=len(results),
+                view_mode=runtime.get("view_mode", "cards"),
+                shown_start=1,
+                telegram_id=telegram_id,
+            )
+            if dialog_manager is not None:
+                dialog_manager.middleware_data.setdefault("state", state)
+                await show_catalog_controls(
+                    message=message,
+                    dialog_manager=dialog_manager,
+                    runtime=runtime,
                 )
-            shown = len(page)
-            total = len(results)
-            _has_more = total > _APARTMENT_PAGE_SIZE
-            _footer_rows2: list[list[InlineKeyboardButton]] = []
-            if _has_more:
-                _footer_rows2.append(
-                    [
-                        InlineKeyboardButton(
-                            text=f"🔄 Показать ещё ({max(total - shown, 0)} осталось)",
-                            callback_data=ResultsCB(action="more").pack(),
-                        )
-                    ]
+                await activate_catalog_state(
+                    dialog_manager=dialog_manager,
+                    state=CatalogSG.results,
                 )
-            _footer_rows2.append(
-                [
-                    InlineKeyboardButton(
-                        text="⚙️ Изменить параметры",
-                        callback_data=ResultsCB(action="refine").pack(),
-                    )
-                ]
-            )
-            _footer_rows2.append(
-                [
-                    InlineKeyboardButton(
-                        text="📅 Запись на осмотр",
-                        callback_data=ResultsCB(action="viewing").pack(),
-                    )
-                ]
-            )
-            footer_msg = await message.answer(
-                f"Найдено {total} апартаментов (показаны 1–{shown})",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows2),
-            )
-            await state.update_data(apartment_footer_msg_id=footer_msg.message_id)
 
         return response_text
 
@@ -2739,6 +2700,7 @@ class PropertyBot:
         query_type: str,
         rag_result_store: dict[str, Any],
         state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ) -> str | None:
         """Thin wrapper: delegates to run_client_pipeline (see pipelines/client.py).
 
@@ -2754,6 +2716,7 @@ class PropertyBot:
                 user_text=user_text,
                 message=message,
                 state=state,
+                dialog_manager=dialog_manager,
             )
             if apt_answer is not None:
                 return apt_answer
@@ -2790,15 +2753,17 @@ class PropertyBot:
         state: FSMContext | None = None,
         forum_thread_id: int | None = None,
         expert_id: str | None = None,
+        dialog_manager: Any = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
-        from src.retrieval.topic_classifier import get_query_topic_hint
 
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
+        from .agents.context import BotContext
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
-        from .pipelines.state_contract import build_pre_agent_miss_contract
+        from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
+        from .graph.nodes.guard import _BLOCKED_RESPONSE
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -2834,7 +2799,7 @@ class PropertyBot:
                         wall_ms = (time.perf_counter() - pipeline_start) * 1000
                         lf = get_client()
                         tid = lf.get_current_trace_id() or ""
-                        lf.update_current_trace(
+                        lf.update_current_span(
                             input={"query": user_text},
                             output={"response": _BLOCKED_RESPONSE},
                             metadata={
@@ -2886,6 +2851,7 @@ class PropertyBot:
             # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
             query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
+                extracted_filters: dict[str, Any] = {}
                 try:
                     embed_start = time.perf_counter()
                     embedding = await self._cache.get_embedding(user_text)
@@ -2940,18 +2906,56 @@ class PropertyBot:
                     rag_result_store["pre_agent_embed_ms"] = (
                         time.perf_counter() - embed_start
                     ) * 1000
-                    check_start = time.perf_counter()
-                    cached = await self._cache.check_semantic(
-                        query=user_text,
-                        vector=embedding,
+                    topic_hint_label = get_query_topic_hint(user_text)
+                    topic_hint = topic_hint_label.value if topic_hint_label is not None else None
+                    grounding_mode = get_grounding_mode(
                         query_type=query_type,
-                        cache_scope="rag",
-                        agent_role=role,
+                        topic_hint=topic_hint,
                     )
-                    rag_result_store["pre_agent_cache_check_ms"] = (
-                        time.perf_counter() - check_start
-                    ) * 1000
-                    rag_result_store["semantic_cache_already_checked"] = True
+                    filter_signal = detect_filter_sensitive_query(user_text)
+                    contextual_query = is_contextual_query(user_text)
+                    rag_result_store["filter_sensitive"] = filter_signal.is_filter_sensitive
+                    rag_result_store["filter_signal_reasons"] = list(filter_signal.reasons)
+                    rag_result_store["contextual_query"] = contextual_query
+                    rag_result_store["topic_hint"] = topic_hint or ""
+                    rag_result_store["grounding_mode"] = grounding_mode
+                    if grounding_mode == "strict":
+                        # Strict-mode cache hits are only allowed for reusable safe answers,
+                        # so keep those observability fields on the early-return path too.
+                        rag_result_store.setdefault("grounded", True)
+                        rag_result_store.setdefault("legal_answer_safe", True)
+                        rag_result_store.setdefault("semantic_cache_safe_reuse", True)
+                        rag_result_store.setdefault("safe_fallback_used", False)
+                    filter_signature: str | None = None
+                    if filter_signal.is_filter_sensitive:
+                        extracted_filters = await self._extract_pre_agent_filters(user_text)
+                        if extracted_filters:
+                            rag_result_store["filters"] = extracted_filters
+                            filter_signature = resolve_semantic_cache_signature(
+                                filters=extracted_filters
+                            )
+                            rag_result_store["semantic_cache_filter_signature"] = filter_signature
+                    cached = None
+                    if contextual_query or (
+                        filter_signal.is_filter_sensitive and filter_signature is None
+                    ):
+                        rag_result_store["semantic_cache_already_checked"] = True
+                    else:
+                        check_start = time.perf_counter()
+                        cached = await self._cache.check_semantic(
+                            query=user_text,
+                            vector=embedding,
+                            query_type=query_type,
+                            cache_scope="rag",
+                            agent_role=role,
+                            grounding_mode=grounding_mode if grounding_mode == "strict" else None,
+                            require_safe_reuse=grounding_mode == "strict",
+                            filter_signature=filter_signature,
+                        )
+                        rag_result_store["pre_agent_cache_check_ms"] = (
+                            time.perf_counter() - check_start
+                        ) * 1000
+                        rag_result_store["semantic_cache_already_checked"] = True
                     if cached:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
@@ -2975,19 +2979,39 @@ class PropertyBot:
                             reply_markup=reply_markup,
                         )
                         wall_ms = (time.perf_counter() - pipeline_start) * 1000
-                        lf.update_current_trace(
+                        cache_trace_metadata = {
+                            "pipeline_mode": "pre_agent_cache",
+                            "pipeline_wall_ms": wall_ms,
+                            "pre_agent_ms": pre_agent_ms,
+                            "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                            "pre_agent_cache_check_ms": rag_result_store.get(
+                                "pre_agent_cache_check_ms"
+                            ),
+                            "e2e_latency_ms": wall_ms,
+                            "topic_hint": rag_result_store.get("topic_hint", ""),
+                            "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                            "filter_signature": rag_result_store.get(
+                                "semantic_cache_filter_signature", ""
+                            ),
+                            "grade_confidence": float(
+                                rag_result_store.get("grade_confidence", 0.0) or 0.0
+                            ),
+                            "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                            "grounded": bool(rag_result_store.get("grounded", True)),
+                            "legal_answer_safe": bool(
+                                rag_result_store.get("legal_answer_safe", True)
+                            ),
+                            "semantic_cache_safe_reuse": bool(
+                                rag_result_store.get("semantic_cache_safe_reuse", True)
+                            ),
+                            "safe_fallback_used": bool(
+                                rag_result_store.get("safe_fallback_used", False)
+                            ),
+                        }
+                        lf.update_current_span(
                             input={"query": user_text},
                             output={"response": cached},
-                            metadata={
-                                "pipeline_mode": "pre_agent_cache",
-                                "pipeline_wall_ms": wall_ms,
-                                "pre_agent_ms": pre_agent_ms,
-                                "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
-                                "pre_agent_cache_check_ms": rag_result_store.get(
-                                    "pre_agent_cache_check_ms"
-                                ),
-                                "e2e_latency_ms": wall_ms,
-                            },
+                            metadata=cache_trace_metadata,
                         )
                         if tid:
                             score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
@@ -3000,20 +3024,7 @@ class PropertyBot:
                             )
                             score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
                         if root_trace_metadata is not None:
-                            root_trace_metadata.update(
-                                {
-                                    "pipeline_mode": "pre_agent_cache",
-                                    "pipeline_wall_ms": wall_ms,
-                                    "pre_agent_ms": pre_agent_ms,
-                                    "pre_agent_embed_ms": rag_result_store.get(
-                                        "pre_agent_embed_ms"
-                                    ),
-                                    "pre_agent_cache_check_ms": rag_result_store.get(
-                                        "pre_agent_cache_check_ms"
-                                    ),
-                                    "e2e_latency_ms": wall_ms,
-                                }
-                            )
+                            root_trace_metadata.update(cache_trace_metadata)
                         return cached
                     # MISS: stash all embeddings so rag_pipeline can skip recomputation (#571)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
@@ -3057,13 +3068,15 @@ class PropertyBot:
                                 logger.debug("Pre-agent ColBERT encode failed, skipping")
                     rag_result_store["cache_key_colbert"] = colbert
                     topic_hint = get_query_topic_hint(user_text)
-                    rag_result_store["state_contract"] = build_pre_agent_miss_contract(
+                    rag_result_store["state_contract"] = _build_pre_agent_state_contract(
+                        rag_result_store=rag_result_store,
                         query_type=query_type,
                         topic_hint=topic_hint.value if topic_hint is not None else None,
                         dense_vector=embedding,
                         sparse_vector=sparse if isinstance(sparse, dict) else None,
                         colbert_query=colbert,
                         grounding_mode="normal",
+                        filters=extracted_filters or None,
                     )
                 except Exception:
                     logger.warning(
@@ -3080,15 +3093,6 @@ class PropertyBot:
                         rag_result_store["pre_agent_ms"] = (
                             time.perf_counter() - pre_agent_start
                         ) * 1000
-                        if root_trace_metadata is not None:
-                            root_trace_metadata.update(
-                                {
-                                    "route": "client_direct",
-                                    "pipeline_mode": "client_direct",
-                                    "query_type": query_type,
-                                    "pre_agent_ms": rag_result_store["pre_agent_ms"],
-                                }
-                            )
                         pipeline_answer = await self._handle_client_direct_pipeline(
                             message=message,
                             user_text=user_text,
@@ -3098,30 +3102,9 @@ class PropertyBot:
                             query_type=query_type,
                             rag_result_store=rag_result_store,
                             state=state,
+                            dialog_manager=dialog_manager,
                         )
                         if pipeline_answer is not None:
-                            if root_trace_metadata is not None:
-                                root_trace_metadata.update(
-                                    {
-                                        "route": rag_result_store.get("route", "client_direct"),
-                                        "pipeline_mode": rag_result_store.get(
-                                            "pipeline_mode", "client_direct"
-                                        ),
-                                        "query_type": rag_result_store.get(
-                                            "query_type", query_type
-                                        ),
-                                        "topic_hint": rag_result_store.get("topic_hint", ""),
-                                        "grounding_mode": rag_result_store.get(
-                                            "grounding_mode", ""
-                                        ),
-                                        "collection": rag_result_store.get("collection", ""),
-                                        "environment": rag_result_store.get("environment", ""),
-                                        "pipeline_wall_ms": rag_result_store.get(
-                                            "pipeline_wall_ms"
-                                        ),
-                                        "e2e_latency_ms": rag_result_store.get("e2e_latency_ms"),
-                                    }
-                                )
                             return pipeline_answer
                         # needs_agent=True: fall through to sdk_agent path below
                 except Exception:
@@ -3378,25 +3361,60 @@ class PropertyBot:
             # even when the agent reformulated the query for retrieval (#504).
             if self._cache and response_text:
                 query_type = str(rag_result_store.get("query_type", "") or "")
+                grounding_mode_value = str(
+                    rag_result_store.get("grounding_mode", "normal") or "normal"
+                )
+                raw_threshold = getattr(self.config, "relevance_threshold_rrf", 0.005)
+                confidence_threshold = (
+                    float(raw_threshold) if isinstance(raw_threshold, int | float) else 0.005
+                )
+                decision = build_cacheability_decision(
+                    result={
+                        **rag_result_store,
+                        "response": response_text,
+                    },
+                    query_type=query_type,
+                    grounding_mode=grounding_mode_value,
+                    documents=rag_result_store.get("documents", []),
+                    cache_hit=bool(rag_result_store.get("cache_hit", False)),
+                    contextual=is_contextual_query(user_text),
+                    grade_confidence=float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                    confidence_threshold=confidence_threshold,
+                    schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+                )
+                rag_result_store["response_state"] = decision.response_state
+                rag_result_store["degraded_reason"] = decision.degraded_reason
+                rag_result_store["cache_eligible"] = decision.cache_eligible
+                rag_result_store["store_reason"] = decision.store_reason
                 # Prefer cache_key_embedding (original query vector) over query_embedding
                 # (retrieval/rewritten vector) to avoid check/store vector mismatch.
                 store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
                     "query_embedding"
                 )
+                result_filters = rag_result_store.get("filters")
+                if not isinstance(result_filters, dict) or not result_filters:
+                    state_contract = rag_result_store.get("state_contract")
+                    if isinstance(state_contract, dict):
+                        contract_filters = state_contract.get("filters")
+                        if isinstance(contract_filters, dict) and contract_filters:
+                            result_filters = contract_filters
+                filter_signature = resolve_semantic_cache_signature(filters=result_filters)
                 if (
                     query_type in CACHEABLE_QUERY_TYPES
-                    and not rag_result_store.get("cache_hit", False)
                     and isinstance(store_vector, list)
                     and bool(store_vector)
                 ):
                     try:
-                        await self._cache.store_semantic(
+                        await maybe_store_semantic_response(
+                            cache=self._cache,
                             query=message.text or "",
                             response=response_text,
                             vector=store_vector,
                             query_type=query_type,
                             cache_scope="rag",
+                            decision=decision,
                             agent_role=role,
+                            filter_signature=filter_signature,
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
@@ -3407,10 +3425,22 @@ class PropertyBot:
 
             # Write Langfuse trace metadata
             lf = get_client()
-            lf.update_current_trace(
+            lf.update_current_span(
                 input={"query": message.text},
                 metadata={
                     "pipeline_mode": "sdk_agent",
+                    "query_type": rag_result_store.get("query_type", ""),
+                    "topic_hint": rag_result_store.get("topic_hint", ""),
+                    "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                    "filter_signature": filter_signature or "",
+                    "grade_confidence": float(rag_result_store.get("grade_confidence", 0.0) or 0.0),
+                    "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                    "grounded": bool(rag_result_store.get("grounded", True)),
+                    "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+                    "semantic_cache_safe_reuse": bool(
+                        rag_result_store.get("semantic_cache_safe_reuse", True)
+                    ),
+                    "safe_fallback_used": bool(rag_result_store.get("safe_fallback_used", False)),
                     "pipeline_wall_ms": wall_ms,
                     "pre_agent_ms": pre_agent_ms,
                     "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
@@ -3422,6 +3452,22 @@ class PropertyBot:
                 root_trace_metadata.update(
                     {
                         "pipeline_mode": "sdk_agent",
+                        "query_type": rag_result_store.get("query_type", ""),
+                        "topic_hint": rag_result_store.get("topic_hint", ""),
+                        "grounding_mode": rag_result_store.get("grounding_mode", ""),
+                        "filter_signature": filter_signature or "",
+                        "grade_confidence": float(
+                            rag_result_store.get("grade_confidence", 0.0) or 0.0
+                        ),
+                        "sources_count": int(rag_result_store.get("sources_count", 0) or 0),
+                        "grounded": bool(rag_result_store.get("grounded", True)),
+                        "legal_answer_safe": bool(rag_result_store.get("legal_answer_safe", True)),
+                        "semantic_cache_safe_reuse": bool(
+                            rag_result_store.get("semantic_cache_safe_reuse", True)
+                        ),
+                        "safe_fallback_used": bool(
+                            rag_result_store.get("safe_fallback_used", False)
+                        ),
                         "pipeline_wall_ms": wall_ms,
                         "pre_agent_ms": pre_agent_ms,
                         "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
@@ -3511,7 +3557,7 @@ class PropertyBot:
         user_text: str,
         chat_id: int,
         callbacks: list[Any],
-        bot_context: BotContext,
+        bot_context: BotContextType,
         rag_result_store: dict[str, Any],
         forum_thread_id: int | None = None,
         use_streaming: bool = True,
@@ -3634,7 +3680,7 @@ class PropertyBot:
         user_text: str,
         chat_id: int,
         callbacks: list[Any],
-        bot_context: BotContext,
+        bot_context: BotContextType,
         rag_result_store: dict[str, Any],
         forum_thread_id: int | None = None,
         message: Any | None = None,
@@ -3713,6 +3759,8 @@ class PropertyBot:
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
         """Handle voice message via Whisper STT + LangGraph RAG pipeline."""
+        from .graph.state import make_initial_state
+
         pipeline_start = time.perf_counter()
         assert message.bot is not None
         assert message.from_user is not None
@@ -3853,7 +3901,7 @@ class PropertyBot:
             lf = get_client()
             tid = lf.get_current_trace_id() or ""
             try:
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={
                         "voice_duration_s": voice.duration,
                         "stt_text": result.get("stt_text", ""),
@@ -3937,6 +3985,8 @@ class PropertyBot:
     @observe(name="telegram-hitl-callback")
     async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
         """Handle HITL approve/cancel button click (#443)."""
+        from .agents.context import BotContext
+
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
@@ -4277,6 +4327,7 @@ class PropertyBot:
         """
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.apartment_tools import apartment_search
+        from .agents.context import BotContext
         from .agents.rag_tool import rag_search
 
         if callback.from_user is None or callback.message is None:
@@ -4419,6 +4470,20 @@ class PropertyBot:
     async def start(self):
         """Start bot polling."""
         logger.info("Starting bot...")
+        startup_report = StartupReport()
+
+        # Authoritative dependency gate must run before Redis-backed startup work.
+        from .preflight import PreflightError, check_dependencies
+
+        try:
+            preflight_result = await check_dependencies(self.config, log_summary=False)
+        except PreflightError as exc:
+            startup_report.merge(exc.report)
+            logger.error(startup_report.render())
+            raise
+        preflight_report = getattr(preflight_result, "report", None)
+        if isinstance(preflight_report, StartupReport):
+            startup_report.merge(preflight_report)
 
         # Initialize cache at startup
         if not self._cache_initialized:
@@ -4441,6 +4506,14 @@ class PropertyBot:
         except Exception:
             logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
             self._checkpointer = create_fallback_checkpointer()
+            startup_report.add(
+                StartupSignal(
+                    source="conversation_memory",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="Redis checkpointer unavailable, using in-memory fallback",
+                    remediation="restore Redis connectivity for persistent conversation memory",
+                )
+            )
 
         # Agent/voice checkpointer — Redis with TTL for bounded retention (#424).
         try:
@@ -4457,6 +4530,14 @@ class PropertyBot:
         except Exception:
             logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
             self._agent_checkpointer = create_fallback_checkpointer()
+            startup_report.add(
+                StartupSignal(
+                    source="agent_memory",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="Agent Redis checkpointer unavailable, using in-memory fallback",
+                    remediation="restore Redis connectivity for persistent agent state",
+                )
+            )
 
         # Initialize topic service (forum topics mapping — user+expert → thread_id)
         import redis.asyncio as aioredis
@@ -4494,6 +4575,14 @@ class PropertyBot:
         except Exception:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
+            startup_report.add(
+                StartupSignal(
+                    source="history",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="/history disabled because history service initialization failed",
+                    remediation="restore Qdrant history collection and embeddings dependencies",
+                )
+            )
 
         # Initialize Kommo CRM client if enabled (#420: fail-safe, must not block startup)
         if self.config.kommo_enabled and self.config.kommo_subdomain:
@@ -4547,102 +4636,127 @@ class PropertyBot:
                 self._kommo_client = None
 
         # Initialize PostgreSQL pool for realestate DB
-        try:
-            import asyncpg
-
-            test_conn: Any | None = None
+        postgres_available = (
+            preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
+        )
+        if postgres_available:
             try:
-                # Validate DB exists before creating pool (avoid traceback spam #570)
-                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            except asyncpg.InvalidCatalogNameError:
-                target_db = self._extract_database_name(self.config.realestate_database_url)
-                if target_db is None:
-                    raise
-                logger.warning(
-                    "PostgreSQL database %s missing; attempting auto-create",
-                    target_db,
+                import asyncpg
+
+                test_conn: Any | None = None
+                try:
+                    # Validate DB exists before creating pool (avoid traceback spam #570)
+                    test_conn = await asyncpg.connect(
+                        self.config.realestate_database_url, timeout=5
+                    )
+                except asyncpg.InvalidCatalogNameError:
+                    target_db = self._extract_database_name(self.config.realestate_database_url)
+                    if target_db is None:
+                        raise
+                    logger.warning(
+                        "PostgreSQL database %s missing; attempting auto-create",
+                        target_db,
+                    )
+                    if not await self._ensure_postgres_database_exists(asyncpg, target_db):
+                        raise
+                    test_conn = await asyncpg.connect(
+                        self.config.realestate_database_url, timeout=5
+                    )
+                finally:
+                    if test_conn is not None:
+                        await test_conn.close()
+
+                self._pg_pool = await asyncpg.create_pool(
+                    self.config.realestate_database_url,
+                    min_size=0,
+                    max_size=5,
+                    timeout=5,
                 )
-                if not await self._ensure_postgres_database_exists(asyncpg, target_db):
-                    raise
-                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            finally:
-                if test_conn is not None:
-                    await test_conn.close()
+                logger.info("PostgreSQL pool ready (realestate)")
+                await self._ensure_realestate_schema()
+                logger.info("PostgreSQL schema ready (realestate)")
 
-            self._pg_pool = await asyncpg.create_pool(
-                self.config.realestate_database_url,
-                min_size=0,
-                max_size=5,
-                timeout=5,
+                from .services.user_service import UserService
+
+                self._user_service = UserService(pool=self._pg_pool)
+
+                # Initialize lead scoring store (#384)
+                from .services.lead_scoring_store import LeadScoringStore
+
+                self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
+                logger.info("Lead scoring store ready")
+
+                # Initialize favorites service (#628)
+                from .services.favorites_service import FavoritesService
+
+                self._favorites_service = FavoritesService(pool=self._pg_pool)
+                logger.info("Favorites service ready")
+
+                from .services.search_event_store import SearchEventStore
+
+                self._search_event_store = SearchEventStore(pool=self._pg_pool)
+                logger.info("Search event store ready")
+
+                # Initialize hot lead notifier (#402)
+                if self.config.manager_ids and self._cache.redis is not None:
+                    try:
+                        from .services.hot_lead_notifier import HotLeadNotifier
+
+                        self._hot_lead_notifier = HotLeadNotifier(
+                            bot=self.bot,
+                            cache=self._cache,
+                            manager_ids=self.config.manager_ids,
+                            dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
+                        )
+                        logger.info(
+                            "Hot lead notifier ready (managers=%s)", self.config.manager_ids
+                        )
+                    except Exception:
+                        logger.exception("Failed to initialize hot lead notifier")
+
+                # Initialize nurturing scheduler (#390)
+                if self.config.nurturing_enabled:
+                    try:
+                        from .services.funnel_analytics_service import FunnelAnalyticsService
+                        from .services.nurturing_scheduler import NurturingScheduler
+                        from .services.nurturing_service import NurturingService
+
+                        nurturing_svc = NurturingService(
+                            pool=self._pg_pool,
+                            bot=self.bot if self.config.nurturing_dispatch_enabled else None,
+                            qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
+                            llm=self._llm if self.config.nurturing_dispatch_enabled else None,
+                        )
+                        analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
+                        self._nurturing_service = nurturing_svc
+                        self._funnel_analytics_service = analytics_svc
+                        self._nurturing_scheduler = NurturingScheduler(
+                            nurturing_service=nurturing_svc,
+                            analytics_service=analytics_svc,
+                            lease_store=None,
+                            config=self.config,
+                        )
+                        await self._nurturing_scheduler.start()
+                        logger.info("Nurturing scheduler started")
+                    except Exception:
+                        logger.exception("Failed to start nurturing scheduler")
+            except Exception:
+                logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+                startup_report.add(
+                    StartupSignal(
+                        source="postgres_runtime",
+                        severity=StartupSeverity.DEGRADED,
+                        summary="PostgreSQL pool unavailable, user features disabled",
+                        remediation=(
+                            "restore PostgreSQL connectivity for favorites, search events, "
+                            "and user services"
+                        ),
+                    )
+                )
+        else:
+            logger.info(
+                "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
-            logger.info("PostgreSQL pool ready (realestate)")
-            await self._ensure_realestate_schema()
-            logger.info("PostgreSQL schema ready (realestate)")
-
-            from .services.user_service import UserService
-
-            self._user_service = UserService(pool=self._pg_pool)
-
-            # Initialize lead scoring store (#384)
-            from .services.lead_scoring_store import LeadScoringStore
-
-            self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
-            logger.info("Lead scoring store ready")
-
-            # Initialize favorites service (#628)
-            from .services.favorites_service import FavoritesService
-
-            self._favorites_service = FavoritesService(pool=self._pg_pool)
-            logger.info("Favorites service ready")
-
-            from .services.search_event_store import SearchEventStore
-
-            self._search_event_store = SearchEventStore(pool=self._pg_pool)
-            logger.info("Search event store ready")
-
-            # Initialize hot lead notifier (#402)
-            if self.config.manager_ids and self._cache.redis is not None:
-                try:
-                    from .services.hot_lead_notifier import HotLeadNotifier
-
-                    self._hot_lead_notifier = HotLeadNotifier(
-                        bot=self.bot,
-                        cache=self._cache,
-                        manager_ids=self.config.manager_ids,
-                        dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
-                    )
-                    logger.info("Hot lead notifier ready (managers=%s)", self.config.manager_ids)
-                except Exception:
-                    logger.exception("Failed to initialize hot lead notifier")
-
-            # Initialize nurturing scheduler (#390)
-            if self.config.nurturing_enabled:
-                try:
-                    from .services.funnel_analytics_service import FunnelAnalyticsService
-                    from .services.nurturing_scheduler import NurturingScheduler
-                    from .services.nurturing_service import NurturingService
-
-                    nurturing_svc = NurturingService(
-                        pool=self._pg_pool,
-                        bot=self.bot if self.config.nurturing_dispatch_enabled else None,
-                        qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
-                        llm=self._llm if self.config.nurturing_dispatch_enabled else None,
-                    )
-                    analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
-                    self._nurturing_service = nurturing_svc
-                    self._funnel_analytics_service = analytics_svc
-                    self._nurturing_scheduler = NurturingScheduler(
-                        nurturing_service=nurturing_svc,
-                        analytics_service=analytics_svc,
-                        lease_store=None,
-                        config=self.config,
-                    )
-                    await self._nurturing_scheduler.start()
-                    logger.info("Nurturing scheduler started")
-                except Exception:
-                    logger.exception("Failed to start nurturing scheduler")
-        except Exception:
-            logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
 
         # Initialize session summary worker (#445)
         self._session_summary_worker: Any | None = None
@@ -4814,11 +4928,6 @@ class PropertyBot:
         aiogram_setup_dialogs(self.dp)
         logger.info("aiogram-dialog setup complete")
 
-        # Preflight dependency checks
-        from .preflight import check_dependencies
-
-        await check_dependencies(self.config)
-
         # Start Redis health monitor (background task, every 5 min)
         await self._redis_monitor.start()
 
@@ -4865,7 +4974,66 @@ class PropertyBot:
                 self._miniapp_subscriber_loop(), name="miniapp-pubsub"
             )
 
-        await self.dp.start_polling(self.bot)
+        if startup_report.final_severity is StartupSeverity.FAILED:
+            logger.error(startup_report.render())
+        elif startup_report.final_severity is StartupSeverity.DEGRADED:
+            logger.warning(startup_report.render())
+        else:
+            logger.info(startup_report.render())
+
+        if self._cache.redis is not None:
+            self._polling_lock = RedisPollingLock(
+                redis=self._cache.redis,
+                key="telegram-bot:polling",
+            )
+            self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
+            await self._polling_lock.acquire(self._polling_lock_owner)
+            self._polling_lock_task = asyncio.create_task(
+                self._polling_lock_heartbeat(),
+                name="polling-lock-heartbeat",
+            )
+
+        try:
+            await self.dp.start_polling(self.bot)
+        finally:
+            if self._polling_lock_task is not None:
+                self._polling_lock_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._polling_lock_task
+                self._polling_lock_task = None
+
+    async def _polling_lock_heartbeat(self) -> None:
+        """Keep the Redis lease alive while polling is active."""
+        if self._polling_lock is None:
+            return
+
+        refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+        consecutive_failures = 0
+        try:
+            while True:
+                await asyncio.sleep(refresh_interval)
+                try:
+                    await self._polling_lock.refresh()
+                except Exception:
+                    consecutive_failures += 1
+                    if consecutive_failures < _POLLING_LOCK_MAX_REFRESH_FAILURES:
+                        logger.warning(
+                            "Polling lock heartbeat refresh failed (%d/%d); retrying",
+                            consecutive_failures,
+                            _POLLING_LOCK_MAX_REFRESH_FAILURES,
+                            exc_info=True,
+                        )
+                        continue
+                    logger.exception(
+                        "Polling lock heartbeat failed %d times; stopping polling",
+                        _POLLING_LOCK_MAX_REFRESH_FAILURES,
+                    )
+                    with contextlib.suppress(Exception):
+                        await self.dp.stop_polling()
+                    return
+                consecutive_failures = 0
+        except asyncio.CancelledError:
+            raise
 
     async def stop(self):
         """Stop bot and cleanup."""
@@ -4875,6 +5043,19 @@ class PropertyBot:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._miniapp_subscriber_task
             self._miniapp_subscriber_task = None
+        if self._polling_lock_task is not None:
+            self._polling_lock_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._polling_lock_task
+            self._polling_lock_task = None
+        if self._polling_lock is not None and self._polling_lock_owner is not None:
+            try:
+                await self._polling_lock.release()
+            except Exception:
+                logger.warning("Failed to release polling lock cleanly", exc_info=True)
+            finally:
+                self._polling_lock = None
+                self._polling_lock_owner = None
         await self._redis_monitor.stop()
         await self._cache.close()
         await self._qdrant.close()
@@ -4884,6 +5065,7 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        self._pre_agent_filter_extractor = None
         if self._kommo_client is not None:
             await self._kommo_client.close()
             self._kommo_client = None

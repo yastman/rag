@@ -6,7 +6,6 @@ Steps: classify → agent intent gate → RAG → generate → send → post-pro
 from __future__ import annotations
 
 import logging
-import re
 import time
 from numbers import Real
 from typing import Any
@@ -14,9 +13,16 @@ from typing import Any
 from src.retrieval.topic_classifier import get_query_topic_hint
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.pipelines.state_contract import coerce_pre_agent_state_contract
 from telegram_bot.scoring import score, write_langfuse_scores
+from telegram_bot.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.grounding_policy import get_grounding_mode
 from telegram_bot.services.history_service import HistoryService
@@ -33,14 +39,6 @@ _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY", "STRUCTURED"})
 
 _TELEGRAM_MESSAGE_LIMIT = 4096
-
-# Contextual follow-up indicators — queries referencing prior turns are not cacheable.
-_CONTEXTUAL_RE = re.compile(
-    r"\b(подробнее|первый|первую|первое|второй|вторую|второе|третий|третью|третье"
-    r"|это|тот|та|те|они|ещё|другие|другой|другую|следующий|следующую|предыдущий|предыдущую"
-    r"|оба|обе|тот же|та же|то же)\b",
-    re.IGNORECASE,
-)
 
 # Fallback confidence threshold for semantic cache store guard.
 _CONFIDENCE_THRESHOLD = 0.005
@@ -131,7 +129,7 @@ def _safe_langfuse_env(config: Any) -> str:
 
 def _is_contextual_query(user_text: str) -> bool:
     """Return True if query contains follow-up pronouns / contextual references."""
-    return bool(_CONTEXTUAL_RE.search(user_text))
+    return is_contextual_query(user_text)
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +240,24 @@ async def run_client_pipeline(
         response_text = _build_non_rag_response(query_type)
         await _send_html_chunks(message, response_text, reply_to_user_text=user_text)
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
+        try:
+            with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
+                lf.update_current_span(
+                    input={"query": user_text},
+                    output={"response": response_text},
+                    metadata={
+                        "route": "client_direct",
+                        "pipeline_mode": "client_direct",
+                        "query_type": query_type,
+                        "pipeline_wall_ms": latency_ms,
+                        "e2e_latency_ms": latency_ms,
+                    },
+                )
+        except Exception:
+            logger.warning(
+                "Failed to update Langfuse trace metadata in client-direct non-RAG path",
+                exc_info=True,
+            )
         return PipelineResult(
             answer=response_text,
             query_type=query_type,
@@ -344,6 +360,11 @@ async def run_client_pipeline(
             latency_stages=result.get("latency_stages", {}),
             llm_call_count=int(result.get("llm_call_count", 0) or 0),
             grounding_mode=grounding_mode,
+            grade_confidence=(
+                float(result["grade_confidence"])
+                if isinstance(result.get("grade_confidence"), Real)
+                else None
+            ),
             config=config,
             message=message,
         )
@@ -362,7 +383,7 @@ async def run_client_pipeline(
 
     sources_html = ""
     documents_list: list[Any] = result.get("documents", [])
-    sources_required = bool(getattr(config, "show_sources", False) or grounding_mode == "strict")
+    sources_required = bool(getattr(config, "show_sources", False))
     if sources_required and documents_list:
         sources_html = format_sources(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
@@ -405,12 +426,54 @@ async def run_client_pipeline(
     topic_hint_value = topic_hint if isinstance(topic_hint, str) else ""
     result_grounding_mode: Any = result.get("grounding_mode")
     grounding_mode_value = result_grounding_mode if isinstance(result_grounding_mode, str) else ""
+    store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
+    grade_confidence = float(result.get("grade_confidence", 0.0))
+    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
+    confidence_threshold = (
+        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
+    )
+    decision = build_cacheability_decision(
+        result=result,
+        query_type=query_type,
+        grounding_mode=grounding_mode_value,
+        documents=documents_list,
+        cache_hit=bool(result.get("cache_hit", False)),
+        contextual=_is_contextual_query(user_text),
+        grade_confidence=grade_confidence,
+        confidence_threshold=confidence_threshold,
+        schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+    )
+    result["response_state"] = decision.response_state
+    result["degraded_reason"] = decision.degraded_reason
+    result["cache_eligible"] = decision.cache_eligible
+    result["store_reason"] = decision.store_reason
+
+    result_filters = _store.get("filters")
+    if not isinstance(result_filters, dict) or not result_filters:
+        contract_filters = state_contract.get("filters") if state_contract is not None else None
+        if isinstance(contract_filters, dict) and contract_filters:
+            result_filters = contract_filters
+    filter_signature = resolve_semantic_cache_signature(filters=result_filters)
+    if filter_signature is not None:
+        result["semantic_cache_filter_signature"] = filter_signature
+        _store["semantic_cache_filter_signature"] = filter_signature
+
     trace_metadata = {
         "route": "client_direct",
         "pipeline_mode": "client_direct",
         "query_type": query_type,
         "topic_hint": topic_hint_value,
         "grounding_mode": grounding_mode_value,
+        "filter_signature": filter_signature or "",
+        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
+        "sources_count": int(result.get("sources_count", 0) or 0),
+        "grounded": bool(result.get("grounded", True)),
+        "legal_answer_safe": bool(result.get("legal_answer_safe", True)),
+        "semantic_cache_safe_reuse": bool(result.get("semantic_cache_safe_reuse", True)),
+        "safe_fallback_used": bool(result.get("safe_fallback_used", False)),
+        "response_state": decision.response_state,
+        "degraded_reason": decision.degraded_reason,
+        "cache_eligible": decision.cache_eligible,
         "collection": _safe_collection_name(config),
         "environment": _safe_langfuse_env(config),
         "pipeline_wall_ms": wall_ms,
@@ -419,49 +482,37 @@ async def run_client_pipeline(
     }
     _store.update(trace_metadata)
 
-    # Cache store — apply guards: type, contextual, confidence, source presence.
-    store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
-    grade_confidence = float(result.get("grade_confidence", 0.0))
-    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
-    confidence_threshold = (
-        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
-    )
-
-    should_store = (
-        cache
-        and response_text
-        and query_type in _PIPELINE_STORE_TYPES
-        and not result.get("cache_hit", False)
-        and isinstance(store_vector, list)
-        and bool(store_vector)
-        and not _is_contextual_query(user_text)
-        and grade_confidence >= confidence_threshold
-        and bool(documents_list)
-    )
-
-    if should_store:
+    if cache and isinstance(store_vector, list) and bool(store_vector):
         try:
-            await cache.store_semantic(
+            await maybe_store_semantic_response(
+                cache=cache,
                 query=user_text,
                 response=response_text,
                 vector=store_vector,
                 query_type=query_type,
                 cache_scope="rag",
+                decision=decision,
                 agent_role=role,
+                filter_signature=filter_signature,
             )
         except Exception:
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
 
     # Langfuse update + scores.
-    lf.update_current_trace(
-        input={"query": user_text},
-        output={"response": response_text},
-        tags=["telegram", "rag", "client_direct"],
-        metadata=trace_metadata,
-    )
+    try:
+        with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
+            lf.update_current_span(
+                input={"query": user_text},
+                output={"response": response_text},
+                metadata=trace_metadata,
+            )
+    except Exception:
+        logger.warning(
+            "Failed to update Langfuse trace metadata in client-direct RAG path",
+            exc_info=True,
+        )
     tid = trace_id or (lf.get_current_trace_id() or "")
     if tid:
-        score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
         result.update(
             {
                 "pipeline_wall_ms": wall_ms,
@@ -475,6 +526,10 @@ async def run_client_pipeline(
                 ],
             }
         )
+        try:
+            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+        except Exception:
+            logger.warning("Failed to write user_role score in client pipeline", exc_info=True)
         try:
             write_langfuse_scores(lf, result, trace_id=tid)
         except Exception:

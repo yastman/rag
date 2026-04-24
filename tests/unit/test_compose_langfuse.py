@@ -65,6 +65,19 @@ SERVICES_WITH_DEV_DEFAULTS = ["bot", "litellm", "rag-api", "voice-agent", "inges
 class TestLangfuseSecretPosture:
     """Base compose avoids predictable secrets; dev compose restores convenience defaults."""
 
+    def test_base_redis_langfuse_command_is_safe_without_password(self, compose_base: dict):
+        command = compose_base["services"]["redis-langfuse"]["command"]
+        assert "redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}" not in str(command), (
+            "compose.yml: redis-langfuse command must not render a bare --requirepass when "
+            "LANGFUSE_REDIS_PASSWORD is unset"
+        )
+
+    def test_base_redis_langfuse_healthcheck_handles_optional_password(self, compose_base: dict):
+        test_cmd = compose_base["services"]["redis-langfuse"]["healthcheck"]["test"]
+        assert "${LANGFUSE_REDIS_PASSWORD:-}" not in str(test_cmd), (
+            "compose.yml: redis-langfuse healthcheck must not require an empty password arg"
+        )
+
     @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
     def test_base_compose_has_no_dev_public_key_default(self, compose_base: dict, service: str):
         env = _get_service_env(compose_base, service)
@@ -104,6 +117,15 @@ class TestLangfuseSecretPosture:
         assert "langfuse:3000" in val, (
             f"compose.yml: {service}.LANGFUSE_HOST must default to http://langfuse:3000, "
             f"got: {val!r}"
+        )
+
+    @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
+    def test_base_compose_uses_docker_specific_host_var(self, compose_base: dict, service: str):
+        env = _get_service_env(compose_base, service)
+        val = str(env.get("LANGFUSE_HOST", ""))
+        assert "LANGFUSE_DOCKER_HOST" in val, (
+            f"compose.yml: {service}.LANGFUSE_HOST must use LANGFUSE_DOCKER_HOST to avoid "
+            f"host localhost values leaking into containers, got: {val!r}"
         )
 
 

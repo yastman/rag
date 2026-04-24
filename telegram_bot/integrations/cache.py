@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CACHE_VERSION = "v5"
+SEMANTIC_CACHE_VERSION = "v8"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
@@ -77,7 +78,7 @@ def _create_semantic_cache(
         from redisvl.extensions.cache.llm import SemanticCache
 
         cache = SemanticCache(
-            name=f"sem:{CACHE_VERSION}:bge1024",
+            name=f"sem:{SEMANTIC_CACHE_VERSION}:bge1024",
             redis_url=redis_url,
             ttl=ttl,
             distance_threshold=distance_threshold,
@@ -88,6 +89,12 @@ def _create_semantic_cache(
                 {"name": "user_id", "type": "tag"},
                 {"name": "cache_scope", "type": "tag"},
                 {"name": "agent_role", "type": "tag"},
+                {"name": "grounding_mode", "type": "tag"},
+                {"name": "filter_signature", "type": "tag"},
+                {"name": "semantic_cache_safe_reuse", "type": "tag"},
+                {"name": "response_state", "type": "tag"},
+                {"name": "cache_eligible", "type": "tag"},
+                {"name": "schema_version", "type": "tag"},
             ],
         )
         logger.info("SemanticCache initialized (threshold=%.2f, ttl=%ds)", distance_threshold, ttl)
@@ -236,7 +243,10 @@ class CacheLayerManager:
         user_id: int | None = None,
         cache_scope: str | None = None,
         agent_role: str | None = None,
+        grounding_mode: str | None = None,
+        require_safe_reuse: bool = False,
         cache_timeout: float = 0.3,
+        filter_signature: str | None = None,
     ) -> str | None:
         """Check semantic cache with query-type-specific threshold.
 
@@ -261,6 +271,10 @@ class CacheLayerManager:
                 "has_user_id": user_id is not None,
                 "has_cache_scope": cache_scope is not None,
                 "has_agent_role": agent_role is not None,
+                "has_filter_signature": filter_signature is not None,
+                "filter_signature": filter_signature,
+                "grounding_mode": grounding_mode,
+                "require_safe_reuse": require_safe_reuse,
                 "cache_timeout_s": cache_timeout,
                 "query_length": len(query),
                 "vector_dim": len(vector),
@@ -281,8 +295,18 @@ class CacheLayerManager:
                 filter_expr = filter_expr & (Tag("user_id") == str(user_id))
             if cache_scope is not None:
                 filter_expr = filter_expr & (Tag("cache_scope") == cache_scope)
+                if cache_scope == "rag":
+                    filter_expr = filter_expr & (Tag("response_state") == "ok")
+                    filter_expr = filter_expr & (Tag("cache_eligible") == "true")
+                    filter_expr = filter_expr & (Tag("schema_version") == SEMANTIC_CACHE_VERSION)
             if agent_role is not None:
                 filter_expr = filter_expr & (Tag("agent_role") == agent_role)
+            if grounding_mode is not None:
+                filter_expr = filter_expr & (Tag("grounding_mode") == grounding_mode)
+            if filter_signature is not None:
+                filter_expr = filter_expr & (Tag("filter_signature") == filter_signature)
+            if require_safe_reuse:
+                filter_expr = filter_expr & (Tag("semantic_cache_safe_reuse") == "true")
             start = time.time()
 
             try:
@@ -356,6 +380,8 @@ class CacheLayerManager:
         user_id: int | None = None,
         cache_scope: str | None = None,
         agent_role: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        filter_signature: str | None = None,
     ) -> None:
         """Store query-response pair in semantic cache."""
         lf = get_client()
@@ -366,6 +392,9 @@ class CacheLayerManager:
                 "has_user_id": user_id is not None,
                 "has_cache_scope": cache_scope is not None,
                 "has_agent_role": agent_role is not None,
+                "has_filter_signature": filter_signature is not None,
+                "filter_signature": filter_signature,
+                "metadata_keys": sorted((metadata or {}).keys()),
                 "query_length": len(query),
                 "response_length": len(response),
                 "vector_dim": len(vector),
@@ -383,12 +412,29 @@ class CacheLayerManager:
             filters["cache_scope"] = cache_scope
         if agent_role is not None:
             filters["agent_role"] = agent_role
+        if filter_signature is not None:
+            filters["filter_signature"] = filter_signature
+        if metadata:
+            grounding_mode = metadata.get("grounding_mode")
+            if isinstance(grounding_mode, str) and grounding_mode:
+                filters["grounding_mode"] = grounding_mode
+            if "semantic_cache_safe_reuse" in metadata:
+                filters["semantic_cache_safe_reuse"] = str(
+                    bool(metadata["semantic_cache_safe_reuse"])
+                ).lower()
+            if "response_state" in metadata:
+                filters["response_state"] = str(metadata["response_state"])
+            if "cache_eligible" in metadata:
+                filters["cache_eligible"] = str(bool(metadata["cache_eligible"])).lower()
+            if "schema_version" in metadata:
+                filters["schema_version"] = str(metadata["schema_version"])
         try:
             await self.semantic_cache.astore(
                 prompt=query,
                 response=response,
                 vector=vector,
                 filters=filters,
+                metadata=metadata,
                 ttl=ttl,
             )
             logger.debug(
@@ -592,7 +638,7 @@ class CacheLayerManager:
                 "filters_count": len(filters or {}),
             }
         )
-        key = _hash(str(embedding_prefix[:10]) + json.dumps(filters, sort_keys=True, default=str))
+        key = _hash(str(embedding_prefix) + json.dumps(filters, sort_keys=True, default=str))
         result = await self.get_exact("search", key)
         lf.update_current_span(
             output={"hit": result is not None, "results_count": len(result or [])}
@@ -615,7 +661,7 @@ class CacheLayerManager:
                 "results_count": len(results),
             }
         )
-        key = _hash(str(embedding_prefix[:10]) + json.dumps(filters, sort_keys=True, default=str))
+        key = _hash(str(embedding_prefix) + json.dumps(filters, sort_keys=True, default=str))
         await self.store_exact("search", key, results)
         lf.update_current_span(output={"stored": True, "results_count": len(results)})
 
@@ -744,7 +790,7 @@ class CacheLayerManager:
             elif hasattr(self.semantic_cache, "clear"):
                 self.semantic_cache.clear()
             elif self.redis:
-                pattern = f"sem:{CACHE_VERSION}:*"
+                pattern = f"sem:{SEMANTIC_CACHE_VERSION}:*"
                 keys = [key async for key in self.redis.scan_iter(match=pattern)]
                 if keys:
                     await self.redis.delete(*keys)

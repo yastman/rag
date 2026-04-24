@@ -195,6 +195,47 @@ async def test_cache_check_passes_rag_scope(mock_cache, mock_embeddings):
     assert call_kwargs.get("cache_scope") == "rag"
 
 
+async def test_cache_check_passes_filter_signature(mock_cache, mock_embeddings):
+    """_cache_check forwards exact filter_signature to semantic cache lookup."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await _cache_check(
+        "квартиры в Несебре",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        semantic_cache_filter_signature="city=Несебр",
+    )
+
+    call_kwargs = mock_cache.check_semantic.call_args.kwargs
+    assert call_kwargs.get("filter_signature") == "city=Несебр"
+
+
+async def test_cache_check_skips_contextual_follow_up_lookup(mock_cache, mock_embeddings):
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value="cached answer")
+
+    result = await _cache_check(
+        "расскажи подробнее",
+        "FAQ",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["cache_hit"] is False
+    assert result["cached_response"] is None
+    mock_cache.check_semantic.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # _hybrid_retrieve tests
 # ---------------------------------------------------------------------------
@@ -236,6 +277,87 @@ async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qd
     assert result["search_cache_hit"] is True
     assert len(result["documents"]) == 1
     mock_qdrant.hybrid_search_rrf.assert_not_called()
+    mock_cache.get_sparse_embedding.assert_not_awaited()
+    mock_sparse.aembed_query.assert_not_awaited()
+
+
+async def test_hybrid_retrieve_does_not_store_relaxed_results_under_strict_filters(
+    mock_cache, mock_sparse
+):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    user_filters = {"city": "Несебр", "price": {"lte": 80000}}
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        side_effect=[
+            ([{"text": "narrow", "score": 0.9, "metadata": {}}], {"backend_error": False}),
+            ([{"text": "topic-only", "score": 0.8, "metadata": {}}], {"backend_error": False}),
+            (
+                [
+                    {"text": "broad-1", "score": 0.9, "metadata": {}},
+                    {"text": "broad-2", "score": 0.8, "metadata": {}},
+                    {"text": "broad-3", "score": 0.7, "metadata": {}},
+                ],
+                {"backend_error": False},
+            ),
+        ]
+    )
+
+    await _hybrid_retrieve(
+        "рассрочки",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        filters=user_filters,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    mock_cache.get_search_results.assert_awaited_once_with(
+        [0.1] * 1024,
+        {
+            "city": "Несебр",
+            "price": {"lte": 80000},
+            "topic": "finance",
+            "doc_type": "faq",
+        },
+    )
+    store_calls = mock_cache.store_search_results.await_args_list
+    assert len(store_calls) == 1
+    assert store_calls[0].args[0] == [0.1] * 1024
+    assert store_calls[0].args[1] == user_filters
+    assert len(store_calls[0].args[2]) == 3
+
+
+async def test_hybrid_retrieve_avoids_duplicate_relax_for_same_user_filters(
+    mock_cache, mock_sparse
+):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    user_filters = {"city": "Несебр", "price": {"lte": 80000}}
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "narrow", "score": 0.9, "metadata": {}}],
+            {"backend_error": False},
+        )
+    )
+
+    result = await _hybrid_retrieve(
+        "квартиры у моря",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        filters=user_filters,
+        latency_stages={},
+    )
+
+    assert mock_qdrant.hybrid_search_rrf.await_count == 1
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    assert first_call["filters"] == user_filters
+    assert result["final_filters"] == user_filters
 
 
 async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock_qdrant):
@@ -426,6 +548,62 @@ async def test_relaxed_retrieval_emits_second_stage_only_when_needed(mock_cache,
     assert result["final_filters"] is None
 
 
+async def test_hybrid_retrieve_relaxes_topic_layers_but_keeps_user_filters(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    user_filters = {"city": "Несебр", "price": {"lte": 80000}}
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        side_effect=[
+            ([{"text": "faq-only", "score": 0.9, "metadata": {}}], {"backend_error": False}),
+            ([{"text": "topic-only", "score": 0.8, "metadata": {}}], {"backend_error": False}),
+            (
+                [
+                    {"text": "broad-1", "score": 0.9, "metadata": {}},
+                    {"text": "broad-2", "score": 0.8, "metadata": {}},
+                    {"text": "broad-3", "score": 0.7, "metadata": {}},
+                ],
+                {"backend_error": False},
+            ),
+        ]
+    )
+
+    result = await _hybrid_retrieve(
+        "рассрочки",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        filters=user_filters,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    second_call = mock_qdrant.hybrid_search_rrf.await_args_list[1].kwargs
+    third_call = mock_qdrant.hybrid_search_rrf.await_args_list[2].kwargs
+
+    assert first_call["filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+        "doc_type": "faq",
+    }
+    assert second_call["filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+    }
+    assert third_call["filters"] == user_filters
+    assert result["initial_filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "finance",
+        "doc_type": "faq",
+    }
+    assert result["final_filters"] == user_filters
+
+
 # ---------------------------------------------------------------------------
 # _grade_documents tests
 # ---------------------------------------------------------------------------
@@ -548,6 +726,29 @@ async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
     assert all("ВНЖ" not in d["text"] for d in result["documents"])
 
 
+async def test_rerank_ignores_deprecated_colbert_service():
+    from telegram_bot.agents.rag_pipeline import _rerank
+    from telegram_bot.services.colbert_reranker import ColbertRerankerService
+
+    docs = [
+        {"text": "Doc A", "score": 0.3},
+        {"text": "Doc B", "score": 0.8},
+    ]
+    client = MagicMock()
+    client.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.99}])
+
+    with pytest.deprecated_call(match="deprecated"):
+        reranker = ColbertRerankerService(client=client)
+
+    result = await _rerank("query", docs, reranker=reranker, latency_stages={})
+
+    assert result["rerank_applied"] is False
+    assert result["rerank_cache_hit"] is False
+    assert result["documents"][0]["text"] == "Doc B"
+    assert result["documents"][1]["text"] == "Doc A"
+    client.rerank.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # _rewrite_query tests
 # ---------------------------------------------------------------------------
@@ -641,6 +842,23 @@ async def test_cache_store_skips_non_cacheable(mock_cache):
         "hello",
         [0.1] * 1024,
         "CHITCHAT",
+        42,
+        cache=mock_cache,
+        latency_stages={},
+    )
+
+    assert result["stored_semantic"] is False
+    mock_cache.store_semantic.assert_not_called()
+
+
+async def test_cache_store_skips_contextual_follow_up(mock_cache):
+    from telegram_bot.agents.rag_pipeline import _cache_store
+
+    result = await _cache_store(
+        "расскажи подробнее",
+        "Ответ про квартиры",
+        [0.1] * 1024,
+        "FAQ",
         42,
         cache=mock_cache,
         latency_stages={},
@@ -790,8 +1008,8 @@ async def test_pipeline_cache_hit_via_original_query(
 ):
     """Cache hit when original_query matches stored key, even with different reformulated query.
 
-    Scenario: user sends "квартиры в Несебре до 80000", agent reformulates to
-    "apartments in Nesebar under 80000 EUR". The cache was keyed on the original
+    Scenario: user sends "как оформить покупку", agent reformulates to
+    "how to buy property". The cache was keyed on the original
     Russian text. After the fix, the pipeline checks the cache with original_query
     and returns the cached response without going to retrieval.
     """
@@ -802,8 +1020,8 @@ async def test_pipeline_cache_hit_via_original_query(
     mock_cache.check_semantic = AsyncMock(return_value="Cached answer about Nesebar apartments")
 
     result = await rag_pipeline(
-        "apartments in Nesebar under 80000 EUR",  # agent-reformulated query
-        original_query="квартиры в Несебре до 80000",  # original user query
+        "how to buy property",  # agent-reformulated query
+        original_query="как оформить покупку",  # original user query
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -819,7 +1037,7 @@ async def test_pipeline_cache_hit_via_original_query(
     mock_qdrant.hybrid_search_rrf.assert_not_called()
     # Cache was checked with the ORIGINAL query (not the reformulated one)
     check_call = mock_cache.check_semantic.call_args
-    assert check_call.kwargs["query"] == "квартиры в Несебре до 80000"
+    assert check_call.kwargs["query"] == "как оформить покупку"
 
 
 async def test_pipeline_cache_uses_original_query_as_key(
@@ -838,8 +1056,8 @@ async def test_pipeline_cache_uses_original_query_as_key(
     mock_cache.check_semantic = AsyncMock(return_value=None)
 
     await rag_pipeline(
-        "apartments in Nesebar",  # reformulated
-        original_query="квартиры в Несебре",  # original
+        "how to buy property",  # reformulated
+        original_query="как оформить покупку",  # original
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -851,10 +1069,10 @@ async def test_pipeline_cache_uses_original_query_as_key(
 
     # Embedding was computed for the ORIGINAL query
     embed_call_args = [str(c) for c in mock_embeddings.aembed_hybrid.call_args_list]
-    assert any("квартиры в Несебре" in a for a in embed_call_args)
+    assert any("как оформить покупку" in a for a in embed_call_args)
     # Semantic check was done with the original query key
     check_call = mock_cache.check_semantic.call_args
-    assert check_call.kwargs["query"] == "квартиры в Несебре"
+    assert check_call.kwargs["query"] == "как оформить покупку"
 
 
 async def test_pipeline_fallback_to_query_when_original_query_empty(
@@ -867,7 +1085,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
     mock_cache.check_semantic = AsyncMock(return_value=None)
 
     await rag_pipeline(
-        "квартиры в Несебре",
+        "как оформить покупку",
         original_query="",  # empty — backward compat mode
         user_id=42,
         session_id="test",
@@ -880,7 +1098,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
 
     # Fallback: cache was checked with the query itself
     check_call = mock_cache.check_semantic.call_args
-    assert check_call.kwargs["query"] == "квартиры в Несебре"
+    assert check_call.kwargs["query"] == "как оформить покупку"
 
 
 async def test_pipeline_cache_miss_when_different_original_query(
@@ -1837,3 +2055,167 @@ async def test_rag_pipeline_skips_semantic_cache_when_state_contract_already_che
 
     mock_cache.check_semantic.assert_not_awaited()
     assert result["documents"]
+
+
+async def test_rag_pipeline_passes_state_contract_filters_to_retrieval(mock_cache, mock_sparse):
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+    state_contract = {
+        "cache_checked": True,
+        "cache_hit": False,
+        "cache_scope": "rag",
+        "embedding_bundle_ready": True,
+        "embedding_bundle_version": "bge_m3_hybrid_colbert",
+        "dense_vector": dense,
+        "sparse_vector": sparse,
+        "colbert_query": None,
+        "query_type": "GENERAL",
+        "topic_hint": "legal",
+        "filters": {"city": "Несебр", "price": {"lte": 80000}},
+        "retrieval_policy": "topic_then_relax",
+        "grounding_mode": "strict",
+    }
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    await rag_pipeline(
+        "test query",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        state_contract=state_contract,
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    second_call = mock_qdrant.hybrid_search_rrf.await_args_list[1].kwargs
+
+    assert first_call["filters"] == {
+        "city": "Несебр",
+        "price": {"lte": 80000},
+        "topic": "legal",
+    }
+    assert second_call["filters"] == {"city": "Несебр", "price": {"lte": 80000}}
+
+
+async def test_rag_pipeline_passes_state_contract_filter_signature_to_semantic_lookup(
+    mock_cache, mock_sparse
+):
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+    state_contract = {
+        "cache_checked": False,
+        "cache_hit": False,
+        "cache_scope": "rag",
+        "embedding_bundle_ready": True,
+        "embedding_bundle_version": "bge_m3_hybrid_colbert",
+        "dense_vector": dense,
+        "sparse_vector": sparse,
+        "colbert_query": None,
+        "query_type": "GENERAL",
+        "topic_hint": "legal",
+        "filters": {"city": "Несебр", "price": {"lte": 80000}},
+        "retrieval_policy": "topic_then_relax",
+        "grounding_mode": "strict",
+    }
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+    mock_cache.get_embedding = AsyncMock(return_value=dense)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await rag_pipeline(
+        "квартира в Несебре",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        state_contract=state_contract,
+    )
+
+    assert mock_cache.check_semantic.await_args.kwargs["filter_signature"] == (
+        "city=Несебр|price.lte=80000"
+    )
+
+
+async def test_rag_pipeline_skips_blind_semantic_lookup_for_filter_sensitive_query(
+    mock_cache, mock_sparse
+):
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+    mock_cache.get_embedding = AsyncMock(return_value=dense)
+    mock_cache.check_semantic = AsyncMock(side_effect=AssertionError("unexpected blind lookup"))
+
+    result = await rag_pipeline(
+        "квартира на 3 этаже",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+    )
+
+    mock_cache.check_semantic.assert_not_awaited()
+    assert result["semantic_cache_already_checked"] is True

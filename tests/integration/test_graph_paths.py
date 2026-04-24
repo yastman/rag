@@ -343,6 +343,9 @@ async def test_path_general_uses_semantic_cache():
     mocks["cache"].check_semantic.assert_awaited_once()
     # Semantic cache IS stored after generate
     mocks["cache"].store_semantic.assert_awaited_once()
+    metadata = mocks["cache"].store_semantic.await_args.kwargs["metadata"]
+    assert metadata["response_state"] == "ok"
+    assert metadata["cache_eligible"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +356,7 @@ async def test_path_general_uses_semantic_cache():
 
 @pytest.mark.integration
 async def test_path_happy_retrieve_rerank_generate():
-    """Full RAG path: cache miss, relevant docs, rerank, generate (ENTITY query)."""
+    """Full RAG path stores semantic cache when filter signature is available."""
     mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир.")
     mock_gc = _make_mock_graph_config(mocks["llm"])
 
@@ -372,6 +375,7 @@ async def test_path_happy_retrieve_rerank_generate():
     state = make_initial_state(
         user_id=3, session_id="test-path3", query="квартира в Несебре у моря"
     )
+    state["semantic_cache_filter_signature"] = "city=Несебр|distance_to_sea=near"
 
     with traced_pipeline(session_id="test-happy-path", user_id="integration"):
         with _patch_graph_configs(mock_gc):
@@ -393,6 +397,45 @@ async def test_path_happy_retrieve_rerank_generate():
 
     # Cache stored (semantic only — memory owned by checkpointer)
     mocks["cache"].store_semantic.assert_awaited_once()
+    assert (
+        mocks["cache"].store_semantic.await_args.kwargs["filter_signature"]
+        == "city=Несебр|distance_to_sea=near"
+    )
+    metadata = mocks["cache"].store_semantic.await_args.kwargs["metadata"]
+    assert metadata["response_state"] == "ok"
+    assert metadata["cache_eligible"] is True
+
+
+@pytest.mark.integration
+async def test_path_generate_fallback_does_not_store_semantic():
+    """LLM fallback still returns a response, but semantic cache store is skipped."""
+    mocks = _make_graph_mocks()
+    mocks["llm"].chat.completions.create = AsyncMock(side_effect=Exception("LLM unavailable"))
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(
+        user_id=11, session_id="test-fallback-no-store", query="квартира в Несебре у моря"
+    )
+
+    with traced_pipeline(session_id="test-fallback-no-store", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    assert result["response"]
+    assert result["llm_provider_model"] == "fallback"
+    assert result["fallback_used"] is True
+    mocks["cache"].store_semantic.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -783,6 +826,64 @@ class TestConversationMemory:
 
         assert result["response"]
         assert "summarize" in result.get("latency_stages", {})
+
+
+# ---------------------------------------------------------------------------
+# Path 8b: GENERAL coverage query → grouped RRF, bypass ColBERT
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_general_coverage_query_uses_grouped_rrf():
+    """Coverage query should force grouped RRF even when ColBERT path is available."""
+    mocks = _make_graph_mocks(
+        qdrant_results=[
+            {
+                "text": "По работе",
+                "score": 0.95,
+                "id": "1",
+                "metadata": {"doc_id": "a"},
+            },
+            {
+                "text": "Digital Nomad",
+                "score": 0.92,
+                "id": "2",
+                "metadata": {"doc_id": "b"},
+            },
+        ],
+        llm_response="Полный список найденных оснований.",
+    )
+    mocks["embeddings"].aembed_hybrid_with_colbert = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1, 5], "values": [0.5, 0.3]}, [[0.2] * 1024] * 4)
+    )
+    mocks["qdrant"].hybrid_search_rrf_colbert = AsyncMock()
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(
+        user_id=1,
+        session_id="coverage-path",
+        query="какие еще есть виды внж в болгарии? напиши полный список",
+    )
+
+    with _patch_graph_configs(mock_gc):
+        result = await graph.ainvoke(state)
+
+    assert result["needs_coverage"] is True
+    kwargs = mocks["qdrant"].hybrid_search_rrf.await_args.kwargs
+    assert kwargs["group_by"] == "metadata.doc_id"
+    assert kwargs["group_size"] == 2
+    mocks["qdrant"].hybrid_search_rrf_colbert.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

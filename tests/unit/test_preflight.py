@@ -1,6 +1,6 @@
 """Unit tests for telegram_bot/preflight.py — dependency preflight checks."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
@@ -15,6 +15,7 @@ from telegram_bot.preflight import (
     _verify_cache_synthetic,
     check_dependencies,
 )
+from telegram_bot.startup_status import StartupReport
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +30,8 @@ def _make_config(**overrides) -> MagicMock:
     cfg.qdrant_url = overrides.get("qdrant_url", "http://localhost:6333")
     cfg.qdrant_api_key = overrides.get("qdrant_api_key")
     cfg.qdrant_collection = overrides.get("qdrant_collection", "test_col")
+    effective_collection = overrides.get("effective_collection", cfg.qdrant_collection)
+    cfg.get_collection_name = MagicMock(return_value=effective_collection)
     cfg.qdrant_timeout = overrides.get("qdrant_timeout", 30)
     cfg.bge_m3_url = overrides.get("bge_m3_url", "http://localhost:8000")
     cfg.llm_base_url = overrides.get("llm_base_url", "http://localhost:4000")
@@ -63,6 +66,10 @@ class TestPreflightError:
     def test_message_mentions_retry_count(self):
         err = PreflightError(["redis"])
         assert str(CRITICAL_RETRIES) in str(err)
+
+    def test_report_attribute_defaults_to_startup_report(self):
+        err = PreflightError(["redis"])
+        assert isinstance(err.report, StartupReport)
 
 
 class TestColbertCoverageWarnThreshold:
@@ -117,6 +124,28 @@ class TestCheckRedisDeep:
         assert details["maxmemory_policy"] == "volatile-lfu"
         assert details["connected_clients"] == "3"
         assert details["redis_version"] == "7.2.4"
+
+    async def test_sync_ping_result_is_accepted(self):
+        mock_redis = AsyncMock()
+        mock_redis.ping = Mock(return_value=True)
+        mock_redis.info = AsyncMock(
+            side_effect=lambda section: {
+                "memory": {
+                    "used_memory_human": "1.5M",
+                    "maxmemory_policy": "volatile-lfu",
+                },
+                "clients": {"connected_clients": 3},
+                "server": {"redis_version": "7.2.4"},
+                "keyspace": {"db0": {"keys": 100, "expires": 50}},
+            }[section]
+        )
+        mock_redis.aclose = AsyncMock()
+
+        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+            passed, details = await _check_redis_deep("redis://localhost")
+
+        assert passed is True
+        assert details["ping"] == "ok"
 
     async def test_ping_failure_returns_false(self):
         mock_redis = AsyncMock()
@@ -173,6 +202,26 @@ class TestCheckRedisDeep:
 
         assert passed is True
         assert details["keyspace_db0"] == "empty"
+
+
+class TestPostgresRemediation:
+    async def test_local_connection_refused_logs_local_runtime_remediation(self, caplog):
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost:5432/realestate")
+        client = AsyncMock()
+
+        with (
+            patch(
+                "telegram_bot.preflight.asyncpg.connect",
+                AsyncMock(side_effect=ConnectionRefusedError(111, "Connection refused")),
+            ),
+            caplog.at_level("WARNING"),
+        ):
+            result = await _check_single_dep("postgres", config, client)
+
+        assert result is False
+        assert "localhost:5432" in caplog.text
+        assert "optional for native bot runs" in caplog.text
+        assert "compose.yml:compose.dev.yml" in caplog.text
 
 
 # ===========================================================================
@@ -286,8 +335,8 @@ class TestCheckSingleDep:
         assert result is True
         mock_verify.assert_awaited_once_with(config.redis_url)
 
-    async def test_qdrant_collection_ok(self):
-        config = _make_config()
+    async def test_qdrant_uses_collection_exists_before_get_collection(self):
+        config = _make_config(qdrant_collection="test_col", effective_collection="test_col_scalar")
         client = AsyncMock(spec=httpx.AsyncClient)
 
         mock_info = MagicMock()
@@ -295,6 +344,7 @@ class TestCheckSingleDep:
         mock_info.config.params.vectors = {"dense": MagicMock(), "colbert": MagicMock()}
         mock_info.config.params.sparse_vectors = {"bm42": MagicMock()}
         mock_qdrant_client = AsyncMock()
+        mock_qdrant_client.collection_exists = AsyncMock(return_value=True)
         mock_qdrant_client.get_collection = AsyncMock(return_value=mock_info)
         mock_qdrant_client.close = AsyncMock()
 
@@ -302,7 +352,9 @@ class TestCheckSingleDep:
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
-        mock_qdrant_client.get_collection.assert_awaited_once_with(config.qdrant_collection)
+        config.get_collection_name.assert_called_once_with()
+        mock_qdrant_client.collection_exists.assert_awaited_once_with("test_col_scalar")
+        mock_qdrant_client.get_collection.assert_awaited_once_with("test_col_scalar")
         mock_qdrant_client.close.assert_awaited_once()
 
     async def test_qdrant_connection_error_fails(self):
@@ -362,7 +414,7 @@ class TestCheckSingleDep:
         result = await _check_single_dep("bge_m3", config, client)
         assert result is True
 
-    async def test_litellm_health_ok(self):
+    async def test_litellm_health_uses_readiness(self):
         config = _make_config()
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -372,7 +424,7 @@ class TestCheckSingleDep:
         result = await _check_single_dep("litellm", config, client)
 
         assert result is True
-        client.get.assert_awaited_once_with(f"{config.llm_base_url}/health/liveliness")
+        client.get.assert_awaited_once_with(f"{config.llm_base_url}/health/readiness")
 
     async def test_litellm_non_200_fails(self):
         config = _make_config()
@@ -462,6 +514,7 @@ class TestCheckDependencies:
             await check_dependencies(config)
 
         assert "redis" in exc_info.value.failed_deps
+        assert exc_info.value.report.final_severity.name == "FAILED"
 
     async def test_optional_failure_does_not_raise(self):
         config = _make_config()
@@ -714,7 +767,7 @@ class TestQdrantPreflightClient:
 
 
 class TestPostgresPreflight:
-    """Postgres preflight check validates database existence."""
+    """Postgres preflight check validates connectivity without blocking recovery paths."""
 
     async def test_postgres_check_passes_when_db_exists(self):
         """Preflight passes when Postgres connection succeeds."""
@@ -729,8 +782,8 @@ class TestPostgresPreflight:
             result = await _check_single_dep("postgres", config, client)
             assert result is True
 
-    async def test_postgres_check_fails_when_db_missing(self):
-        """Preflight fails when database does not exist."""
+    async def test_postgres_check_allows_missing_db_recovery(self, caplog):
+        """Missing DB should stay recoverable so startup can run the auto-create path."""
         import asyncpg as real_asyncpg
 
         config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
@@ -744,7 +797,8 @@ class TestPostgresPreflight:
 
             client = AsyncMock()
             result = await _check_single_dep("postgres", config, client)
-            assert result is False
+            assert result is True
+            assert "auto-create" in caplog.text.lower()
 
     async def test_postgres_in_dep_classification_as_optional(self):
         """Postgres is OPTIONAL — bot degrades without it."""
@@ -784,13 +838,12 @@ class TestPostgresOptionalBehavior:
 class TestQdrantPreflightEnsureCollection:
     """Preflight auto-creates Qdrant collection when it is missing."""
 
-    async def test_creates_collection_when_not_found(self):
-        """When collection missing (not-found error), preflight creates it and returns True."""
+    async def test_qdrant_creates_missing_collection_when_collection_exists_is_false(self):
+        """Missing collection should trigger create via collection_exists(), not exception parsing."""
         config = _make_config()
         mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(
-            side_effect=Exception("Not found: Collection `test_col` doesn't exist!")
-        )
+        mock_qdrant.collection_exists = AsyncMock(return_value=False)
+        mock_qdrant.get_collection = AsyncMock()
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
 
@@ -799,27 +852,16 @@ class TestQdrantPreflightEnsureCollection:
             result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
+        mock_qdrant.collection_exists.assert_awaited_once_with("test_col")
+        mock_qdrant.get_collection.assert_not_awaited()
         mock_qdrant.create_collection.assert_awaited_once()
-
-    async def test_returns_true_after_auto_create(self):
-        """Returns True after successfully creating missing collection (404 variant)."""
-        config = _make_config()
-        mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("status_code=404"))
-        mock_qdrant.create_collection = AsyncMock()
-        mock_qdrant.close = AsyncMock()
-
-        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
-            client = AsyncMock()
-            result = await _check_single_dep("qdrant", config, client)
-
-        assert result is True
 
     async def test_fails_when_create_also_raises(self):
         """Returns False when collection missing AND create_collection also fails."""
         config = _make_config()
         mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Not found"))
+        mock_qdrant.collection_exists = AsyncMock(return_value=False)
+        mock_qdrant.get_collection = AsyncMock()
         mock_qdrant.create_collection = AsyncMock(side_effect=Exception("Permission denied"))
         mock_qdrant.close = AsyncMock()
 
@@ -833,6 +875,7 @@ class TestQdrantPreflightEnsureCollection:
         """Connection-refused and other non-404 errors fail without attempting create."""
         config = _make_config()
         mock_qdrant = AsyncMock()
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Connection refused"))
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
@@ -848,7 +891,8 @@ class TestQdrantPreflightEnsureCollection:
         """Auto-created collection has dense, colbert (multivector), and bm42 vectors."""
         config = _make_config(qdrant_collection="gdrive_documents_bge")
         mock_qdrant = AsyncMock()
-        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Not found"))
+        mock_qdrant.collection_exists = AsyncMock(return_value=False)
+        mock_qdrant.get_collection = AsyncMock()
         mock_qdrant.create_collection = AsyncMock()
         mock_qdrant.close = AsyncMock()
 

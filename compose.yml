@@ -23,6 +23,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     environment:
       POSTGRES_USER: postgres
@@ -43,7 +44,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:8.6.1@sha256:1c054d54ecd1597bba52f4304bca5afbc5565ebe614c5b3d7dc5b7f8a0cd768d
+    image: redis:8.6.2@sha256:1f073813b641755b70b0200da64131bbeeb4ec5b633ca67772229b49820caafa
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -67,7 +68,7 @@ services:
           memory: 300M
 
   qdrant:
-    image: qdrant/qdrant:v1.17.0@sha256:f1c7272cdac52b38c1a0e89313922d940ba50afd90d593a1605dbbc214e66ffb
+    image: qdrant/qdrant:v1.17.1@sha256:94728574965d17c6485dd361aa3c0818b325b9016dac5ea6afec7b4b2700865f
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -199,8 +200,8 @@ services:
       # Langfuse v3 OTEL (Docker internal network)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
-      LANGFUSE_OTEL_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      LANGFUSE_OTEL_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       # Database disabled — config.yaml is source of truth for local dev
       # DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/litellm
     command: ["--config", "/app/config.yaml"]
@@ -261,7 +262,7 @@ services:
       # Langfuse observability (optional — bot degrades gracefully)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
@@ -344,7 +345,7 @@ services:
       LLM_MODEL: gpt-4o-mini
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
@@ -359,6 +360,7 @@ services:
         condition: service_healthy
       litellm:
         condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=5)"]
       interval: 30s
@@ -407,7 +409,7 @@ services:
     environment:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
+      - LANGFUSE_HOST=${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -420,7 +422,12 @@ services:
       - BGE_M3_CONCURRENCY=1
       - MANIFEST_DIR=/data/manifest
     volumes:
-      - ${GDRIVE_SYNC_DIR:-~/drive-sync}:/data/drive-sync:ro
+      - type: bind
+        source: ${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}
+        target: /data/drive-sync
+        read_only: true
+        bind:
+          create_host_path: false
       - ingestion-manifest:/data/manifest
     depends_on:
       postgres:
@@ -442,14 +449,17 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
-    image: clickhouse/clickhouse-server:26.2@sha256:51beb66e790213a53ddacacf133d3067106f5aa0c446c5b40b9b0c3ae0cd39fc
+    image: clickhouse/clickhouse-server:26.3
     restart: unless-stopped
     logging: *default-logging
     user: "101:101"
+    command: >
+      clickhouse-server
+      --listen_host=0.0.0.0
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
@@ -470,7 +480,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
@@ -489,12 +499,26 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.6.1@sha256:1c054d54ecd1597bba52f4304bca5afbc5565ebe614c5b3d7dc5b7f8a0cd768d
+    image: redis:8.6.2@sha256:1f073813b641755b70b0200da64131bbeeb4ec5b633ca67772229b49820caafa
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -n "${LANGFUSE_REDIS_PASSWORD:-}" ]; then
+          exec redis-server --requirepass "$LANGFUSE_REDIS_PASSWORD"
+        fi
+        exec redis-server
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-}", "ping"]
+      test:
+        - CMD-SHELL
+        - |
+          if [ -n "${LANGFUSE_REDIS_PASSWORD+x}" ] && [ -n "$LANGFUSE_REDIS_PASSWORD" ]; then
+            redis-cli -a "$LANGFUSE_REDIS_PASSWORD" ping | grep -q PONG
+          else
+            redis-cli ping | grep -q PONG
+          fi
       interval: 5s
       timeout: 5s
       retries: 3
@@ -505,17 +529,21 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.150.0@sha256:e4c98263d86593e2ba76e104c7e62e1c0c306785b84d83e21f74ef9f2d9bd0c9
+    image: langfuse/langfuse-worker:3.163.0@sha256:86c9e101007e25af35a4022340e1bc32fa7d2b05d458bbf96d639694565ca9f1
     restart: always
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       redis-langfuse:
         condition: service_healthy
+        restart: true
       clickhouse:
         condition: service_healthy
+        restart: true
     environment: &langfuse-env
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/langfuse
@@ -528,7 +556,7 @@ services:
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       # S3/MinIO
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
@@ -564,17 +592,21 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.150.0@sha256:7f47fd823a5d6f8b1195e0ca6830f8f99e78a659b150ccdb077d188674efb1b6
+    image: langfuse/langfuse:3.163.0@sha256:5162f58ca7f4861154c38debd7f5de4e77f1f6522fd32170b4fcea8db668f61b
     restart: always
     depends_on:
       postgres:
         condition: service_healthy
+        restart: true
       minio:
         condition: service_healthy
+        restart: true
       redis-langfuse:
         condition: service_healthy
+        restart: true
       clickhouse:
         condition: service_healthy
+        restart: true
       langfuse-worker:
         condition: service_started
     environment:
@@ -601,7 +633,7 @@ services:
   # =============================================================================
 
   loki:
-    image: grafana/loki:3.6.7@sha256:3c8fd3570dd9219951a60d3f919c7f31923d10baee578b77bc26c4a0b32d092d
+    image: grafana/loki:3.6.7
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -617,7 +649,7 @@ services:
       start_period: 30s
 
   promtail:
-    image: grafana/promtail:3.6.7@sha256:51346af8682f7a664affaca4f34a62f5a4f0f83ace9931df94590375a94ff8f1
+    image: grafana/promtail:3.6.7
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -636,7 +668,7 @@ services:
       start_period: 10s
 
   alertmanager:
-    image: prom/alertmanager:v0.31.1@sha256:88b605de9aba0410775c1eb3438f951115054e0d307f23f274a4c705f51630c1
+    image: prom/alertmanager:v0.31.1
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -706,7 +738,7 @@ services:
       RERANK_PROVIDER: colbert
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     depends_on:
       redis:
         condition: service_healthy
@@ -728,10 +760,13 @@ services:
           memory: 512M
 
   livekit-server:
-    image: livekit/livekit-server:v1.9@sha256:2c13cbf2edcbf13ea7b20d05c10b394d04d8fb3fe358269cff845a90b4de9576
+    image: livekit/livekit-server:v1.10
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     volumes:
       - ./docker/livekit:/etc/livekit:ro
     command: --config /etc/livekit/livekit.yaml
@@ -747,18 +782,18 @@ services:
           memory: 256M
 
   livekit-sip:
-    image: livekit/sip:latest@sha256:96ef59d461e692c43c77bfe2caa8b469e662e2cc1158082e3af5434184225897
+    image: livekit/sip:v1.2
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
-      LIVEKIT_WS_URL: ws://livekit-server:7880
+      LIVEKIT_WS_URL: ${LIVEKIT_URL:-ws://livekit-server:7880}
       SIP_CONFIG_BODY: |
         api_key: ${LIVEKIT_API_KEY:-}
         api_secret: ${LIVEKIT_API_SECRET:-}
-        ws_url: ws://livekit-server:7880
+        ws_url: ${LIVEKIT_URL:-ws://livekit-server:7880}
         redis:
           address: redis:6379
           password: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -793,7 +828,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      LIVEKIT_URL: ws://livekit-server:7880
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit-server:7880}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
@@ -801,7 +836,7 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081')\" || exit 1"]
       interval: 15s

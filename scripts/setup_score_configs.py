@@ -16,11 +16,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langfuse import Langfuse
-from langfuse.api.resources.commons.types.config_category import ConfigCategory
-from langfuse.api.resources.commons.types.score_config_data_type import ScoreConfigDataType
-from langfuse.api.resources.score_configs.types.create_score_config_request import (
-    CreateScoreConfigRequest,
-)
+from langfuse.api.commons.types.config_category import ConfigCategory
+from langfuse.api.commons.types.score_config_data_type import ScoreConfigDataType
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -130,7 +127,7 @@ def setup_score_configs(api: Any) -> dict[str, str]:
                 ConfigCategory(label=cat["label"], value=cat["value"]) for cat in cfg["categories"]
             ]
 
-        created = api.score_configs.create(request=CreateScoreConfigRequest(**kwargs))
+        created = api.score_configs.create(**kwargs)
         result[name] = created.id
         logger.info("Created score config: %s (%s)", name, created.id)
 

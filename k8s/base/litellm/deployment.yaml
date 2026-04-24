@@ -18,7 +18,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.37
+          image: busybox:1.37@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo "waiting for postgres..."; sleep 3; done']
           securityContext:
             allowPrivilegeEscalation: false
@@ -26,7 +26,7 @@ spec:
               drop: ["ALL"]
       containers:
         - name: litellm
-          image: ghcr.io/berriai/litellm:main-v1.81.3-stable
+          image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

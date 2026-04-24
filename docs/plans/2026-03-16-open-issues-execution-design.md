@@ -152,7 +152,7 @@ Rules:
 
 - no new big-bang SDK migration work
 - preserve keeper stack defined in `docs/plans/2026-03-15-sdk-canonical-remediation-plan.md`
-- keep SDK-first checks grounded in `.claude/rules/sdk-registry.md`
+- keep SDK-first checks grounded in `docs/engineering/sdk-registry.md`
 
 Acceptance:
 

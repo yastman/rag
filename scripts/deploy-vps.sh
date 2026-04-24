@@ -191,7 +191,17 @@ else
 fi
 
 # =============================================================================
-# Step 4: Build images on VPS
+# Step 4: Validate production env on VPS
+# =============================================================================
+log "Validating production env on VPS..."
+if ! $DRY_RUN; then
+    ssh_cmd "cd ${VPS_DIR} && export COMPOSE_FILE=${VPS_COMPOSE_FILE} && chmod +x ./scripts/validate_prod_env.sh && ./scripts/validate_prod_env.sh"
+else
+    info "[dry-run] Would run: ./scripts/validate_prod_env.sh"
+fi
+
+# =============================================================================
+# Step 5: Build images on VPS
 # =============================================================================
 log "Building Docker images on VPS..."
 if ! $DRY_RUN; then
@@ -201,7 +211,7 @@ else
 fi
 
 # =============================================================================
-# Step 5: Start services
+# Step 6: Start services
 # =============================================================================
 log "Starting services from rebuilt images..."
 if ! $DRY_RUN; then
@@ -211,7 +221,7 @@ else
 fi
 
 # =============================================================================
-# Step 6: Container status snapshot
+# Step 7: Container status snapshot
 # =============================================================================
 log "Verifying running containers..."
 if ! $DRY_RUN; then
@@ -223,7 +233,7 @@ else
 fi
 
 # =============================================================================
-# Step 7: Post-deploy release smoke
+# Step 8: Post-deploy release smoke
 # =============================================================================
 if ! $SKIP_SMOKE; then
     log "Running release smoke checks on VPS..."

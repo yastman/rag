@@ -18,28 +18,28 @@ spec:
       terminationGracePeriodSeconds: 30
       initContainers:
         - name: wait-for-postgres
-          image: busybox:1.37
+          image: busybox:1.37@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
           command: ['sh', '-c', 'until nc -z postgres 5432; do echo "waiting for postgres..."; sleep 3; done']
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
         - name: wait-for-qdrant
-          image: busybox:1.37
+          image: busybox:1.37@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
           command: ['sh', '-c', 'until nc -z qdrant 6333; do echo "waiting for qdrant..."; sleep 3; done']
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
         - name: wait-for-docling
-          image: busybox:1.37
+          image: busybox:1.37@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
           command: ['sh', '-c', 'until nc -z docling 5001; do echo "waiting for docling..."; sleep 5; done']
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
         - name: wait-for-bge-m3
-          image: busybox:1.37
+          image: busybox:1.37@sha256:1487d0af5f52b4ba31c7e465126ee2123fe3f2305d638e7827681e7cf6c83d5e
           command: ['sh', '-c', 'until nc -z bge-m3 8000; do echo "waiting for bge-m3..."; sleep 5; done']
           securityContext:
             allowPrivilegeEscalation: false
@@ -47,8 +47,8 @@ spec:
               drop: ["ALL"]
       containers:
         - name: ingestion
-          image: rag/ingestion:latest
-          imagePullPolicy: Never
+          image: ghcr.io/yastman/rag-ingestion:v2.14.0
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -56,8 +56,13 @@ spec:
           env:
             - name: GDRIVE_SYNC_DIR
               value: /data/drive-sync
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
             - name: INGESTION_DATABASE_URL
-              value: postgresql://postgres:postgres@postgres:5432/cocoindex
+              value: postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/cocoindex
             - name: QDRANT_URL
               value: http://qdrant:6333
             - name: DOCLING_URL

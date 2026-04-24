@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -19,6 +20,7 @@ from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
+_LANGFUSE_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 @asynccontextmanager
@@ -27,7 +29,6 @@ async def lifespan(app: FastAPI):
     from telegram_bot.graph.config import GraphConfig
     from telegram_bot.graph.graph import build_graph
     from telegram_bot.integrations.cache import CacheLayerManager
-    from telegram_bot.services.colbert_reranker import ColbertRerankerService
     from telegram_bot.services.qdrant import QdrantService
 
     cfg = GraphConfig.from_env()
@@ -51,7 +52,7 @@ async def lifespan(app: FastAPI):
 
     reranker = None
     if cfg.rerank_provider == "colbert":
-        reranker = ColbertRerankerService(base_url=cfg.bge_m3_url)
+        logger.info("Reranking via server-side Qdrant ColBERT path")
     elif cfg.rerank_provider != "none":
         logger.warning("Unknown RERANK_PROVIDER=%s, reranking disabled", cfg.rerank_provider)
     llm = cfg.create_llm()
@@ -101,9 +102,54 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+def _normalize_langfuse_trace_id(trace_id: str | None) -> str | None:
+    if not trace_id:
+        return None
+    if _LANGFUSE_TRACE_ID_RE.fullmatch(trace_id):
+        return trace_id
+
+    from telegram_bot.observability import get_client
+
+    lf = get_client()
+    if lf is None:
+        return None
+    return lf.create_trace_id(seed=trace_id)
+
+
 @app.post("/query", response_model=QueryResponse)
-@observe(name="rag-api-query", capture_input=False, capture_output=False)
 async def query(req: QueryRequest) -> QueryResponse:
+    """Run a RAG query through the LangGraph pipeline."""
+    normalized_trace_id = _normalize_langfuse_trace_id(req.langfuse_trace_id)
+    if normalized_trace_id:
+        return await _query_with_explicit_trace(req, langfuse_trace_id=normalized_trace_id)
+    return await _query_with_observability(req)
+
+
+@observe(name="rag-api-query", capture_input=False, capture_output=False)
+async def _query_with_observability(req: QueryRequest) -> QueryResponse:
+    return await _execute_query(req)
+
+
+async def _query_with_explicit_trace(
+    req: QueryRequest,
+    *,
+    langfuse_trace_id: str,
+) -> QueryResponse:
+    from telegram_bot.observability import get_client
+
+    lf = get_client()
+    if lf is None:
+        return await _execute_query(req)
+
+    with lf.start_as_current_observation(
+        as_type="span",
+        name="rag-api-query",
+        trace_context=cast(Any, {"trace_id": langfuse_trace_id}),
+    ):
+        return await _execute_query(req)
+
+
+async def _execute_query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
     from telegram_bot.graph.state import make_initial_state
     from telegram_bot.observability import get_client, propagate_attributes
@@ -122,27 +168,22 @@ async def query(req: QueryRequest) -> QueryResponse:
     trace_kwargs: dict[str, Any] = {
         "session_id": session_id,
         "user_id": str(req.user_id),
+        "metadata": {"source": req.channel},
         "tags": ["api", "rag", req.channel],
     }
-    if req.langfuse_trace_id:
-        trace_kwargs["trace_id"] = req.langfuse_trace_id
 
     with propagate_attributes(**trace_kwargs):
         result = await app.state.graph.ainvoke(state)
         lf = get_client()
-        # session_id/user_id/tags are also in propagate_attributes (for child spans);
-        # update_current_trace sets them on the root @observe trace itself.
-        lf.update_current_trace(
-            input=req.query,
-            output=result.get("response", ""),
-            session_id=session_id,
-            user_id=str(req.user_id),
-            tags=["api", "rag", req.channel],
-            metadata={
-                "source": req.channel,
-                "query_type": result.get("query_type", ""),
-            },
-        )
+        if lf is not None:
+            lf.update_current_span(
+                input=req.query,
+                output=result.get("response", ""),
+                metadata={
+                    "source": req.channel,
+                    "query_type": result.get("query_type", ""),
+                },
+            )
         # Set wall-time fields so write_langfuse_scores reports real latency
         elapsed_ms = (time.perf_counter() - start) * 1000
         result["pipeline_wall_ms"] = elapsed_ms

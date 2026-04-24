@@ -26,7 +26,7 @@ class BotContext:
     sparse_embeddings: Any  # BGEM3SparseEmbeddings
     qdrant: Any  # QdrantService
     cache: Any  # CacheLayerManager
-    reranker: Any | None  # ColbertRerankerService or None
+    reranker: Any | None  # Optional reranker hook; deprecated ColBERT client is ignored
     llm: Any  # AsyncOpenAI
     content_filter_enabled: bool = True
     guard_mode: str = "hard"

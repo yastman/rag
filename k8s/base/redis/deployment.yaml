@@ -20,7 +20,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: redis
-          image: redis:8.6.0
+          image: redis:8.6.2@sha256:1f073813b641755b70b0200da64131bbeeb4ec5b633ca67772229b49820caafa
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

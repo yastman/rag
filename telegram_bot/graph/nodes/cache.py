@@ -16,7 +16,15 @@ from langgraph.runtime import Runtime
 
 from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.cache_policy import (
+    SEMANTIC_CACHE_SCHEMA_VERSION,
+    build_cacheability_decision,
+    is_contextual_query,
+    maybe_store_semantic_response,
+    resolve_semantic_cache_signature,
+)
 from telegram_bot.services.metrics import PipelineMetrics
+from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
     check_semantic_cache,
@@ -25,6 +33,15 @@ from telegram_bot.services.rag_core import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_graph_filter_signature(state: dict[str, Any], query: str) -> tuple[bool, str | None]:
+    filter_sensitive = detect_filter_sensitive_query(query).is_filter_sensitive
+    filter_signature = resolve_semantic_cache_signature(
+        filters=state.get("filters"),
+        explicit_signature=state.get("semantic_cache_filter_signature"),
+    )
+    return filter_sensitive, filter_signature
 
 
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
@@ -100,7 +117,18 @@ async def cache_check_node(
     # Step 2: Check semantic cache via shared core.
     # Voice path has no user role — agent_role omitted so voice responses are
     # shared across roles within the same cache_scope="rag" bucket.
-    hit, cached = await check_semantic_cache(query, embedding, query_type, cache=cache)
+    filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
+    contextual_query = is_contextual_query(query)
+    if contextual_query or (filter_sensitive and filter_signature is None):
+        hit, cached = False, None
+    else:
+        hit, cached = await check_semantic_cache(
+            query,
+            embedding,
+            query_type,
+            cache=cache,
+            filter_signature=filter_signature,
+        )
 
     latency = time.perf_counter() - start
 
@@ -213,28 +241,46 @@ async def cache_store_node(
     )
     start = time.perf_counter()
 
-    # Store in semantic cache if we have both response and embedding (allowlisted types only)
+    # Store in semantic cache if we have both response and embedding.
     stored_semantic = False
-    if response and embedding:
-        if query_type in CACHEABLE_QUERY_TYPES:
-            try:
-                # Voice path: agent_role intentionally omitted (no role context in graph state).
-                await cache.store_semantic(
-                    query=query,
-                    response=response,
-                    vector=embedding,
-                    query_type=query_type,
-                    cache_scope="rag",
-                )
-                stored_semantic = True
-            except Exception as exc:
-                # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
-                # error from store_semantic must never lose the response (#524).
-                logger.warning(
-                    "cache_store: semantic store failed, response preserved: %s: %s",
-                    type(exc).__name__,
-                    exc,
-                )
+    filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
+    if (
+        response
+        and embedding
+        and query_type in CACHEABLE_QUERY_TYPES
+        and not (filter_sensitive and filter_signature is None)
+    ):
+        decision = build_cacheability_decision(
+            result=state,
+            query_type=query_type,
+            grounding_mode=str(state.get("grounding_mode", "normal") or "normal"),
+            documents=state.get("documents", []),
+            cache_hit=bool(state.get("cache_hit", False)),
+            contextual=is_contextual_query(query),
+            grade_confidence=float(state.get("grade_confidence", 0.0) or 0.0),
+            confidence_threshold=0.0,
+            schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
+        )
+        try:
+            # Voice path: agent_role intentionally omitted (no role context in graph state).
+            stored_semantic = await maybe_store_semantic_response(
+                cache=cache,
+                query=query,
+                response=response,
+                vector=embedding,
+                query_type=query_type,
+                cache_scope="rag",
+                decision=decision,
+                filter_signature=filter_signature,
+            )
+        except Exception as exc:
+            # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
+            # error from store_semantic must never lose the response (#524).
+            logger.warning(
+                "cache_store: semantic store failed, response preserved: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
 
         if stored_semantic:
             logger.info("cache_store: stored=semantic (type=%s)", query_type)

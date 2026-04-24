@@ -23,7 +23,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import yaml
@@ -398,7 +398,7 @@ async def run_single_query(
     """Execute a single query through LangGraph pipeline with Langfuse tracing."""
     from telegram_bot.graph.graph import build_graph
     from telegram_bot.graph.state import make_initial_state
-    from telegram_bot.observability import get_client, observe, propagate_attributes
+    from telegram_bot.observability import get_client, propagate_attributes
     from telegram_bot.scoring import write_langfuse_scores
 
     config = services["config"]
@@ -417,11 +417,27 @@ async def run_single_query(
     with propagate_attributes(
         session_id=session_id,
         user_id="validation",
+        metadata={
+            "validation_run_id": run_meta["run_id"],
+            "git_sha": run_meta["git_sha"],
+            "collection": run_meta["collection"],
+            "query_set": str(query.source),
+            "query_difficulty": str(query.difficulty),
+            "phase": phase,
+            "skip_rerank_threshold": str(config.skip_rerank_threshold),
+            "relevance_threshold_rrf": str(config.relevance_threshold_rrf),
+        },
         tags=["validation", phase, run_meta["collection"], run_meta["run_id"]],
     ):
+        lf = get_client()
+        if lf is None:
+            raise RuntimeError("Langfuse client unavailable for validation traces")
 
-        @observe(name="validation-query")
-        async def _run() -> Any:
+        with lf.start_as_current_observation(
+            as_type="span",
+            name="validation-query",
+            trace_context=cast(Any, {"trace_id": trace_id}),
+        ):
             # Force streaming when fake message provided, restore in finally
             orig_streaming = config.streaming_enabled
             if message is not None:
@@ -441,8 +457,7 @@ async def run_single_query(
                 # Compute wall-time BEFORE writing scores so latency_total_ms is correct
                 result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
                 # Write metadata/scores while still inside active observation context
-                lf = get_client()
-                lf.update_current_trace(
+                lf.update_current_span(
                     input={"query": query.text},
                     output={"response": result.get("response", "")[:200]},
                     metadata={
@@ -457,11 +472,8 @@ async def run_single_query(
                     },
                 )
                 write_langfuse_scores(lf, result)
-                return result
             finally:
                 config.streaming_enabled = orig_streaming
-
-        result = await _run(langfuse_trace_id=trace_id)
 
     wall_ms = result.get("pipeline_wall_ms", (time.perf_counter() - wall_start) * 1000)
 
