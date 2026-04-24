@@ -12,6 +12,7 @@ import yaml
 
 ROOT = Path(__file__).parents[2]
 COMPOSE = ROOT / "compose.yml"
+COMPOSE_CI_ENV = ROOT / "tests" / "fixtures" / "compose.ci.env"
 
 LANGFUSE_SERVICES = ("langfuse-worker", "langfuse")
 STATEFUL_DEPS = ("postgres", "clickhouse", "minio", "redis-langfuse")
@@ -22,20 +23,27 @@ def _load_compose() -> dict:
 
 
 def _render_vps_ml_compose() -> dict:
-    env = os.environ.copy()
-    env["COMPOSE_FILE"] = "compose.yml:compose.vps.yml"
-    env["CLICKHOUSE_PASSWORD"] = "test-clickhouse-password"
-    env["ENCRYPTION_KEY"] = "test-encryption-key"
-    env["GDRIVE_SYNC_DIR"] = str(ROOT / ".test-drive-sync")
-    env["LITELLM_MASTER_KEY"] = "test-litellm-master-key"
-    env["MINIO_ROOT_PASSWORD"] = "test-minio-password"
-    env["NEXTAUTH_SECRET"] = "test-nextauth-secret"
-    env["POSTGRES_PASSWORD"] = "test-postgres-password"
-    env["REDIS_PASSWORD"] = "test-redis-password"
-    env["SALT"] = "test-salt"
-    env["TELEGRAM_BOT_TOKEN"] = "test-telegram-bot-token"
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key == "PATH" or key.startswith("DOCKER_")
+    }
+    env["COMPOSE_DISABLE_ENV_FILE"] = "1"
     rendered = subprocess.run(
-        ["docker", "compose", "--profile", "ml", "--compatibility", "config"],
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.vps.yml",
+            "--profile",
+            "ml",
+            "--compatibility",
+            "config",
+        ],
         cwd=ROOT,
         env=env,
         check=True,
