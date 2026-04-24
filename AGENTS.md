@@ -64,6 +64,9 @@
 ## Runtime And Compose Contract
 - Treat `compose*.yml`, `docker/**`, `services/**`, `mini_app/**`, `src/api/**`, `src/voice/**`, and ingestion runtime paths as runtime-impacting surfaces.
 - For those changes, validate effective Compose config and service set, not only Python tests.
+- Compose contract tests must use Docker Compose native env handling (`--env-file`, `-f`, `COMPOSE_DISABLE_ENV_FILE=1`) instead of relying on the developer's local `.env` or `os.environ.copy()`.
+- Keep non-secret test interpolation values in `tests/fixtures/compose.ci.env`; update that fixture when adding new `${VAR:?required}` interpolation to Compose files.
+- Production deploy paths must run `scripts/validate_prod_env.sh` before `docker compose build` / `up`, including both GitHub Actions and manual deploy scripts.
 - Prefer:
   - `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services`
   - `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services`

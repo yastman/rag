@@ -56,6 +56,13 @@ def test_manual_deploy_force_recreates_services_after_build() -> None:
     )
 
 
+def test_manual_deploy_runs_prod_env_preflight_before_build() -> None:
+    """Manual deploy must validate the production env contract before docker compose build."""
+    script = DEPLOY_SCRIPT.read_text()
+    assert "./scripts/validate_prod_env.sh" in script
+    assert script.index("./scripts/validate_prod_env.sh") < script.index("docker compose build")
+
+
 def test_release_gate_script_contains_handoff_contract() -> None:
     """The production env preflight script must enforce the handoff contract."""
     script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
