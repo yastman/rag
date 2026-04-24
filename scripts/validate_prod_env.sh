@@ -23,4 +23,16 @@ if [ "${handoff_enabled}" = "true" ] && [ -z "${managers_group_id}" ]; then
   exit 1
 fi
 
+required_prod_vars=(
+  CLICKHOUSE_PASSWORD
+  MINIO_ROOT_PASSWORD
+)
+
+for var_name in "${required_prod_vars[@]}"; do
+  if [ -z "${!var_name:-}" ]; then
+    echo "${var_name} is required in production env" >&2
+    exit 1
+  fi
+done
+
 docker compose --env-file .env -f compose.yml -f compose.vps.yml config >/dev/null
