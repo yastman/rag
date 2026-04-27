@@ -533,6 +533,62 @@ class TestRetrieveNodeColbert:
         assert [doc["id"] for doc in result["documents"]] == ["9"]
         qdrant.hybrid_search_rrf_colbert.assert_awaited_once()
 
+    async def test_search_cache_is_partitioned_by_state_filters(self) -> None:
+        stored: dict[tuple[tuple[float, ...], str], list[dict]] = {}
+
+        def _cache_key(vec: list[float], filters: dict | None) -> tuple[tuple[float, ...], str]:
+            return (tuple(round(v, 3) for v in vec[:10]), str(filters))
+
+        async def _get_search_results(vec: list[float], filters: dict | None = None):
+            return stored.get(_cache_key(vec, filters))
+
+        async def _store_search_results(
+            vec: list[float], filters: dict | None, results: list[dict]
+        ):
+            stored[_cache_key(vec, filters)] = results
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(side_effect=_get_search_results)
+        cache.store_search_results = AsyncMock(side_effect=_store_search_results)
+        cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(
+            side_effect=[
+                (
+                    [{"id": "unfiltered", "text": "any city", "score": 0.9, "metadata": {}}],
+                    _OK_META,
+                ),
+                (
+                    [{"id": "filtered", "text": "nesebar", "score": 0.8, "metadata": {}}],
+                    _OK_META,
+                ),
+            ]
+        )
+
+        unfiltered_state = make_initial_state(user_id=1, session_id="s1", query="апартамент")
+        unfiltered_state["query_type"] = "GENERAL"
+        unfiltered_state["query_embedding"] = [0.1] * 1024
+
+        await retrieve_node(
+            unfiltered_state,
+            _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+        )
+
+        filtered_state = make_initial_state(user_id=2, session_id="s2", query="апартамент")
+        filtered_state["query_type"] = "GENERAL"
+        filtered_state["query_embedding"] = [0.1] * 1024
+        filtered_state["filters"] = {"city": "Несебр"}
+
+        result = await retrieve_node(
+            filtered_state,
+            _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+        )
+
+        assert result["search_cache_hit"] is False
+        assert [doc["id"] for doc in result["documents"]] == ["filtered"]
+        assert qdrant.hybrid_search_rrf.await_count == 2
+
     async def test_retrieve_uses_colbert_search_when_available(self):
         """When colbert_query in state, uses hybrid_search_rrf_colbert."""
         mock_cache = AsyncMock()
