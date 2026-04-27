@@ -90,6 +90,7 @@ async def retrieve_node(
     needs_coverage = bool(state.get("needs_coverage")) or coverage_decision.needs_coverage
     effective_top_k = 10 if needs_coverage else top_k
     colbert_query = state.get("colbert_query")
+    retrieval_filters = state.get("filters")
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     search_cache_profile = _build_search_cache_profile(
         needs_coverage=needs_coverage,
@@ -202,6 +203,7 @@ async def retrieve_node(
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
+            filters=retrieval_filters,
             top_k=10,
             prefetch_multiplier=7,
             group_by="metadata.doc_id",
@@ -215,6 +217,7 @@ async def retrieve_node(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
+            filters=retrieval_filters,
             top_k=top_k,
             return_meta=True,
         )
@@ -224,6 +227,7 @@ async def retrieve_node(
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
+            filters=retrieval_filters,
             top_k=top_k,
             return_meta=True,
         )
