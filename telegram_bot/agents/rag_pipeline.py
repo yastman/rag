@@ -33,7 +33,7 @@ from telegram_bot.services.cache_policy import (
     resolve_semantic_cache_signature,
 )
 from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
-from telegram_bot.services.query_preprocessor import expand_short_query
+from telegram_bot.services.query_preprocessor import QueryPreprocessor, expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
     check_semantic_cache,
@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 # top_k=5 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
 _DEFAULT_RERANK_TOP_K = 5
+_QUERY_PREPROCESSOR = QueryPreprocessor()
 
 
 async def _execute_qdrant_retrieval(
@@ -60,6 +61,8 @@ async def _execute_qdrant_retrieval(
     colbert_query: list[list[float]] | None,
     filters: dict[str, str] | None,
     top_k: int,
+    dense_weight: float,
+    sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
     has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     if colbert_query and has_colbert_search:
@@ -77,6 +80,8 @@ async def _execute_qdrant_retrieval(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             filters=filters,
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
             top_k=top_k,
             return_meta=True,
         )
@@ -99,6 +104,8 @@ async def _run_initial_retrieval(
     colbert_query: list[list[float]] | None,
     filters: dict[str, str] | None,
     top_k: int,
+    dense_weight: float,
+    sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
     return await _execute_qdrant_retrieval(
         qdrant=qdrant,
@@ -107,6 +114,8 @@ async def _run_initial_retrieval(
         colbert_query=colbert_query,
         filters=filters,
         top_k=top_k,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
     )
 
 
@@ -119,6 +128,8 @@ async def _run_relaxed_retrieval(
     colbert_query: list[list[float]] | None,
     filters: dict[str, str] | None,
     top_k: int,
+    dense_weight: float,
+    sparse_weight: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
     return await _execute_qdrant_retrieval(
         qdrant=qdrant,
@@ -127,6 +138,8 @@ async def _run_relaxed_retrieval(
         colbert_query=colbert_query,
         filters=filters,
         top_k=top_k,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
     )
 
 
@@ -400,6 +413,7 @@ async def _hybrid_retrieve(
     retrieval_relaxed_from_topic_filter = False
     retrieval_relax_stage: str | None = None
     qdrant_search_attempts = 0
+    dense_weight, sparse_weight = _QUERY_PREPROCESSOR.get_rrf_weights(query)
     if prefer_faq_doc_type and topic_hint:
         active_filters = dict(topic_filters)
         active_filters["doc_type"] = "faq"
@@ -461,6 +475,8 @@ async def _hybrid_retrieve(
         colbert_query=colbert_query,
         filters=active_filters,
         top_k=top_k,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
     )
     colbert_search_used = colbert_search_used or colbert_used
     qdrant_search_attempts += 1
@@ -488,6 +504,8 @@ async def _hybrid_retrieve(
             colbert_query=colbert_query,
             filters=fallback_filters,
             top_k=top_k,
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
         )
         colbert_search_used = colbert_search_used or colbert_used
         qdrant_search_attempts += 1
@@ -504,6 +522,8 @@ async def _hybrid_retrieve(
             colbert_query=colbert_query,
             filters=base_filters,
             top_k=top_k,
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
         )
         colbert_search_used = colbert_search_used or colbert_used
         qdrant_search_attempts += 1
@@ -543,6 +563,8 @@ async def _hybrid_retrieve(
             "retrieval_relaxed_from_topic_filter": retrieval_relaxed_from_topic_filter,
             "retrieval_relax_stage": retrieval_relax_stage,
             "qdrant_search_attempts": qdrant_search_attempts,
+            "rrf_dense_weight": dense_weight,
+            "rrf_sparse_weight": sparse_weight,
             "eval_query": query[:2000],
             "eval_docs": "\n\n".join(
                 f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
