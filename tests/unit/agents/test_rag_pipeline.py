@@ -402,6 +402,33 @@ async def test_hybrid_retrieve_applies_exact_query_rrf_weights(mock_cache, mock_
     assert first_call["sparse_weight"] == 0.8
 
 
+async def test_hybrid_retrieve_applies_exact_query_candidate_limits_to_colbert(
+    mock_cache, mock_sparse
+):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"text": "корпус 5", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    await _hybrid_retrieve(
+        "квартира корпус 5",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=[[0.2] * 1024] * 4,
+        latency_stages={},
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf_colbert.await_args_list[0].kwargs
+    assert first_call["dense_limit"] < first_call["sparse_limit"]
+
+
 async def test_hybrid_retrieve_prefers_faq_candidates_for_short_finance_query(
     mock_cache, mock_sparse
 ):
