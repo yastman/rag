@@ -51,6 +51,19 @@ logger = logging.getLogger(__name__)
 # top_k=5 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
 _DEFAULT_RERANK_TOP_K = 5
 _QUERY_PREPROCESSOR = QueryPreprocessor()
+_DEFAULT_COLBERT_PREFETCH_LIMIT = 100
+
+
+def _weighted_colbert_prefetch_limits(
+    dense_weight: float,
+    sparse_weight: float,
+    *,
+    top_k: int,
+) -> tuple[int, int]:
+    """Scale ColBERT candidate pools using the same query weights as RRF prefetch."""
+    dense_limit = max(int(_DEFAULT_COLBERT_PREFETCH_LIMIT * dense_weight / 0.6), top_k)
+    sparse_limit = max(int(_DEFAULT_COLBERT_PREFETCH_LIMIT * sparse_weight / 0.4), top_k)
+    return dense_limit, sparse_limit
 
 
 async def _execute_qdrant_retrieval(
@@ -66,11 +79,18 @@ async def _execute_qdrant_retrieval(
 ) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
     has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     if colbert_query and has_colbert_search:
+        dense_limit, sparse_limit = _weighted_colbert_prefetch_limits(
+            dense_weight,
+            sparse_weight,
+            top_k=top_k,
+        )
         result = await qdrant.hybrid_search_rrf_colbert(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
             filters=filters,
+            dense_limit=dense_limit,
+            sparse_limit=sparse_limit,
             top_k=top_k,
             return_meta=True,
         )
