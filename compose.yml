@@ -529,7 +529,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.163.0@sha256:86c9e101007e25af35a4022340e1bc32fa7d2b05d458bbf96d639694565ca9f1
+    image: langfuse/langfuse-worker:3.171.0@sha256:a1ba2245d3106459b75ba01e44f2e05cd34dae964526f7cae592f5873aad1587
     restart: always
     depends_on:
       postgres:
@@ -592,7 +592,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.163.0@sha256:5162f58ca7f4861154c38debd7f5de4e77f1f6522fd32170b4fcea8db668f61b
+    image: langfuse/langfuse:3.171.0@sha256:b2c50e13ff4b87ee952656453c13525d43fb21b8a51a8fccf99c3684d53f3ecb
     restart: always
     depends_on:
       postgres:
