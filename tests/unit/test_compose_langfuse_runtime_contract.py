@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -23,6 +24,9 @@ def _load_compose() -> dict:
 
 
 def _render_vps_ml_compose() -> dict:
+    if shutil.which("docker") is None:
+        pytest.skip("docker CLI is required to render VPS ML compose contract")
+
     env = {
         key: value
         for key, value in os.environ.items()
