@@ -921,6 +921,27 @@ class TestQdrantServiceHybridSearchColbert:
         inner_prefetch = call_kwargs["prefetch"][0].prefetch
         assert len(inner_prefetch) == 1  # dense only
 
+    async def test_colbert_search_weight_distribution(self, service, mock_point):
+        """ColBERT nested RRF prefetch limits should respect query weights."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            sparse_vector={"indices": [1, 2], "values": [0.5, 0.5]},
+            colbert_query=[[0.1] * 1024] * 3,
+            top_k=5,
+            dense_weight=0.2,
+            sparse_weight=0.8,
+        )
+
+        inner_prefetch = service._client.query_points.call_args.kwargs["prefetch"][0].prefetch
+        dense_limit = inner_prefetch[0].limit
+        sparse_limit = inner_prefetch[1].limit
+
+        assert dense_limit >= 5
+        assert sparse_limit >= 5
+        assert sparse_limit > dense_limit
+
     async def test_colbert_search_graceful_degradation(self, service):
         """Fallback to hybrid_search_rrf on ColBERT query error."""
         service._client.query_points = AsyncMock(side_effect=Exception("Connection lost"))
@@ -1077,6 +1098,27 @@ class TestQdrantServiceHybridSearchColbert:
         assert result[0]["id"] == "fallback_1"
         service._client.query_points.assert_not_called()
         service.hybrid_search_rrf.assert_awaited_once()
+
+    async def test_colbert_disabled_fallback_forwards_rrf_weights(self, service):
+        """ColBERT fallback should preserve sparse-favored exact-query weights."""
+        service._colbert_available = False
+        service._client.query_points = AsyncMock()
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            sparse_vector={"indices": [1, 2], "values": [0.5, 0.5]},
+            colbert_query=[[0.1] * 1024] * 3,
+            top_k=5,
+            dense_weight=0.2,
+            sparse_weight=0.8,
+        )
+
+        fallback_kwargs = service.hybrid_search_rrf.await_args.kwargs
+        assert fallback_kwargs["dense_weight"] == 0.2
+        assert fallback_kwargs["sparse_weight"] == 0.8
 
 
 class TestQdrantServiceClose:
