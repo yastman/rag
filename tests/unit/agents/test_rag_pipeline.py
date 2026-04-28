@@ -377,6 +377,57 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
     assert first_call["filters"] == {"topic": "finance"}
 
 
+async def test_hybrid_retrieve_applies_exact_query_rrf_weights(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "корпус 5", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    await _hybrid_retrieve(
+        "квартира корпус 5",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        latency_stages={},
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    assert first_call["dense_weight"] == 0.2
+    assert first_call["sparse_weight"] == 0.8
+
+
+async def test_hybrid_retrieve_applies_exact_query_rrf_weights_to_colbert(mock_cache, mock_sparse):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"text": "корпус 5", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    await _hybrid_retrieve(
+        "квартира корпус 5",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=[[0.2] * 1024] * 4,
+        latency_stages={},
+    )
+
+    first_call = mock_qdrant.hybrid_search_rrf_colbert.await_args_list[0].kwargs
+    assert first_call["dense_weight"] == 0.2
+    assert first_call["sparse_weight"] == 0.8
+
+
 async def test_hybrid_retrieve_prefers_faq_candidates_for_short_finance_query(
     mock_cache, mock_sparse
 ):
