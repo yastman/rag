@@ -453,6 +453,44 @@ class TestDBSFColBERTSearchEngine:
         assert "prefetch" in call_kwargs
         assert call_kwargs["using"] == "colbert"
 
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
+    def test_dbsf_colbert_reads_article_number_from_metadata(
+        self, mock_settings_cls, mock_qdrant, mock_bge
+    ):
+        """DBSF ColBERT should preserve metadata.article_number from Qdrant payload."""
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings.collection_name = "test_collection"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+        mock_bge.return_value = mock_model
+
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "metadata": {"article_number": "115"},
+            "page_content": "Test",
+        }
+        mock_point.score = 0.9
+
+        mock_client = MagicMock()
+        mock_client.query_points.return_value = MagicMock(points=[mock_point])
+        mock_qdrant.return_value = mock_client
+
+        engine = DBSFColBERTSearchEngine(mock_settings)
+        results = engine.search("test query", top_k=5)
+
+        assert len(results) == 1
+        assert results[0].article_number == "115"
+
 
 class TestCreateSearchEngine:
     """Test search engine factory function."""
