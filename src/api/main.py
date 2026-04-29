@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
@@ -93,7 +94,29 @@ app = FastAPI(title="RAG API", version="0.1.0", lifespan=lifespan)
 async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
     """Return structured error response for unhandled exceptions."""
     logger.exception("Unhandled error in RAG API")
-    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+    trace_id = None
+    try:
+        from telegram_bot.observability import get_client
+
+        lf = get_client()
+        if lf is not None:
+            trace_id = lf.get_current_trace_id()
+    except Exception:
+        pass
+
+    if not trace_id:
+        trace_id = uuid.uuid4().hex
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "internal_error",
+            "message": "Internal server error",
+            "trace_id": trace_id,
+            "recoverable": False,
+        },
+    )
 
 
 @app.get("/health")
