@@ -161,6 +161,28 @@ class TestRetrieveNode:
         call_kwargs = qdrant.hybrid_search_rrf.call_args[1]
         assert call_kwargs["sparse_vector"] == cached_sparse
 
+    async def test_passes_state_filters_to_rrf_search(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="апартамент в Несебре")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["filters"] = {"city": "Несебр", "price_lte": 80000}
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+        cache.store_search_results = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(_make_docs(2), _OK_META))
+
+        await retrieve_node(
+            state,
+            _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+        )
+
+        qdrant.hybrid_search_rrf.assert_awaited_once()
+        assert qdrant.hybrid_search_rrf.await_args.kwargs["filters"] == state["filters"]
+
     async def test_stores_results_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="cache me")
         state["query_type"] = "GENERAL"
@@ -511,6 +533,62 @@ class TestRetrieveNodeColbert:
         assert [doc["id"] for doc in result["documents"]] == ["9"]
         qdrant.hybrid_search_rrf_colbert.assert_awaited_once()
 
+    async def test_search_cache_is_partitioned_by_state_filters(self) -> None:
+        stored: dict[tuple[tuple[float, ...], str], list[dict]] = {}
+
+        def _cache_key(vec: list[float], filters: dict | None) -> tuple[tuple[float, ...], str]:
+            return (tuple(round(v, 3) for v in vec[:10]), str(filters))
+
+        async def _get_search_results(vec: list[float], filters: dict | None = None):
+            return stored.get(_cache_key(vec, filters))
+
+        async def _store_search_results(
+            vec: list[float], filters: dict | None, results: list[dict]
+        ):
+            stored[_cache_key(vec, filters)] = results
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(side_effect=_get_search_results)
+        cache.store_search_results = AsyncMock(side_effect=_store_search_results)
+        cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(
+            side_effect=[
+                (
+                    [{"id": "unfiltered", "text": "any city", "score": 0.9, "metadata": {}}],
+                    _OK_META,
+                ),
+                (
+                    [{"id": "filtered", "text": "nesebar", "score": 0.8, "metadata": {}}],
+                    _OK_META,
+                ),
+            ]
+        )
+
+        unfiltered_state = make_initial_state(user_id=1, session_id="s1", query="апартамент")
+        unfiltered_state["query_type"] = "GENERAL"
+        unfiltered_state["query_embedding"] = [0.1] * 1024
+
+        await retrieve_node(
+            unfiltered_state,
+            _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+        )
+
+        filtered_state = make_initial_state(user_id=2, session_id="s2", query="апартамент")
+        filtered_state["query_type"] = "GENERAL"
+        filtered_state["query_embedding"] = [0.1] * 1024
+        filtered_state["filters"] = {"city": "Несебр"}
+
+        result = await retrieve_node(
+            filtered_state,
+            _make_runtime(cache=cache, sparse_embeddings=AsyncMock(), qdrant=qdrant),
+        )
+
+        assert result["search_cache_hit"] is False
+        assert [doc["id"] for doc in result["documents"]] == ["filtered"]
+        assert qdrant.hybrid_search_rrf.await_count == 2
+
     async def test_retrieve_uses_colbert_search_when_available(self):
         """When colbert_query in state, uses hybrid_search_rrf_colbert."""
         mock_cache = AsyncMock()
@@ -545,6 +623,45 @@ class TestRetrieveNodeColbert:
         assert result.get("rerank_applied") is True
         mock_qdrant.hybrid_search_rrf_colbert.assert_awaited_once()
         mock_qdrant.hybrid_search_rrf.assert_not_awaited()
+
+    async def test_retrieve_passes_state_filters_to_colbert_search(self):
+        """When ColBERT path is used, state filters are forwarded to Qdrant."""
+        mock_cache = AsyncMock()
+        mock_cache.get_search_results = AsyncMock(return_value=None)
+        mock_cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+        mock_cache.store_search_results = AsyncMock()
+
+        mock_qdrant = AsyncMock()
+        mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+            return_value=(
+                [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+                _OK_META,
+            )
+        )
+        mock_qdrant.hybrid_search_rrf = AsyncMock()
+
+        state = {
+            "messages": [{"role": "user", "content": "апартамент в Несебре"}],
+            "query_embedding": [0.1] * 1024,
+            "colbert_query": [[0.2] * 1024] * 4,
+            "filters": {"city": "Несебр", "price_lte": 80000},
+            "latency_stages": {},
+            "query_type": "GENERAL",
+        }
+
+        await retrieve_node(
+            state,
+            _make_runtime(
+                cache=mock_cache,
+                sparse_embeddings=AsyncMock(),
+                qdrant=mock_qdrant,
+            ),
+        )
+
+        mock_qdrant.hybrid_search_rrf_colbert.assert_awaited_once()
+        assert (
+            mock_qdrant.hybrid_search_rrf_colbert.await_args.kwargs["filters"] == state["filters"]
+        )
 
     async def test_retrieve_falls_back_when_no_colbert_query(self):
         """When colbert_query is None in state, uses hybrid_search_rrf (fallback)."""
