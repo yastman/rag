@@ -151,6 +151,17 @@ class TestCacheLayerManagerInitialize:
 
         assert mgr.redis is None
 
+    async def test_initialize_disables_redis_when_ping_fails(self):
+        """initialize() leaves Redis disabled when ping() fails after connect."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(side_effect=ConnectionError("pool exhausted"))
+
+        with patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis):
+            await mgr.initialize()
+
+        assert mgr.redis is None
+
 
 class TestSemanticCache:
     """Test semantic cache check/store."""
@@ -336,6 +347,22 @@ class TestSemanticCache:
         assert call_kwargs["filters"]["query_type"] == "FAQ"
         assert call_kwargs["filters"]["language"] == "ru"
 
+    async def test_semantic_store_uses_query_type_ttl(self):
+        """store_semantic passes per-query-type TTL to astore."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400, "GENERAL": 3600}
+
+        await mgr.store_semantic(
+            query="faq",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+        )
+
+        assert mgr.semantic_cache.astore.await_args.kwargs["ttl"] == 86400
+
 
 class TestSemanticCacheRedisVLErrors:
     """Test CacheLayerManager graceful degradation on RedisVL errors (#524).
@@ -455,6 +482,51 @@ class TestExactCaches:
 
         result = await mgr.get_exact("embeddings", "key1")
         assert result is None
+
+    async def test_exact_store_uses_explicit_ttl_override(self):
+        """store_exact respects caller TTL override rather than tier default."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+        mgr.redis.setex = AsyncMock()
+
+        await mgr.store_exact("search", "key1", [{"id": "1"}], ttl=45)
+
+        mgr.redis.setex.assert_awaited_once()
+        assert mgr.redis.setex.await_args.args[1] == 45
+
+    async def test_search_cache_key_uses_full_embedding_vector(self):
+        """Vectors differing after the first 10 dims must produce different keys."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        seen_keys: list[str] = []
+
+        async def mock_store_exact(tier, key, value, ttl=None):
+            seen_keys.append(key)
+
+        mgr.store_exact = AsyncMock(side_effect=mock_store_exact)
+
+        prefix_a = [0.1] * 10 + [0.2]
+        prefix_b = [0.1] * 10 + [0.3]
+
+        await mgr.store_search_results(prefix_a, {"city": "Sofia"}, [{"id": "a"}])
+        await mgr.store_search_results(prefix_b, {"city": "Sofia"}, [{"id": "b"}])
+
+        assert len(set(seen_keys)) == 2
+
+    async def test_search_cache_key_is_stable_for_filter_order(self):
+        """Equivalent filters in different dict key order produce the same cache key."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        seen_keys: list[str] = []
+
+        async def mock_store_exact(tier, key, value, ttl=None):
+            seen_keys.append(key)
+
+        mgr.store_exact = AsyncMock(side_effect=mock_store_exact)
+
+        vector = [0.1, 0.2, 0.3]
+        await mgr.store_search_results(vector, {"city": "Sofia", "rooms": 2}, [{"id": "a"}])
+        await mgr.store_search_results(vector, {"rooms": 2, "city": "Sofia"}, [{"id": "b"}])
+
+        assert len(set(seen_keys)) == 1
 
     async def test_search_cache_with_hash_key(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
