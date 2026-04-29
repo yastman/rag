@@ -280,7 +280,11 @@ async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> 
 
 async def test_generic_error_handler_returns_structured_payload() -> None:
     """Unhandled exceptions must return a stable structured error with trace id."""
-    with patch("src.api.main.logger") as mock_logger:
+    with (
+        patch("telegram_bot.observability.get_client", return_value=None),
+        patch("src.api.main.uuid.uuid4", return_value=SimpleNamespace(hex="fallback-trace-id")),
+        patch("src.api.main.logger") as mock_logger,
+    ):
         response = await generic_error_handler(None, RuntimeError("boom"))
 
     assert response.status_code == 500
@@ -288,8 +292,10 @@ async def test_generic_error_handler_returns_structured_payload() -> None:
     assert content["error"] == "internal_error"
     assert content["message"] == "Internal server error"
     assert content["recoverable"] is False
-    assert isinstance(content["trace_id"], str) and content["trace_id"]
-    mock_logger.exception.assert_called_once()
+    assert content["trace_id"] == "fallback-trace-id"
+    mock_logger.exception.assert_called_once_with(
+        "Unhandled error in RAG API", extra={"trace_id": "fallback-trace-id"}
+    )
 
 
 async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> None:
@@ -299,8 +305,11 @@ async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> 
 
     with (
         patch("telegram_bot.observability.get_client", return_value=mock_lf),
-        patch("src.api.main.logger"),
+        patch("src.api.main.logger") as mock_logger,
     ):
         response = await generic_error_handler(None, ValueError("bad input"))
 
     assert response.content["trace_id"] == "trace-abc-123"
+    mock_logger.exception.assert_called_once_with(
+        "Unhandled error in RAG API", extra={"trace_id": "trace-abc-123"}
+    )
