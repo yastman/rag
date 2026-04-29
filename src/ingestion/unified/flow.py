@@ -196,11 +196,11 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
 def run_once(config: UnifiedConfig | None = None) -> None:
     """Run ingestion once (single pass)."""
     try_update_ingestion_trace(command="flow-run-once", status="started")
+    flow: cocoindex.Flow | None = None
     try:
         flow = build_flow(config)
         flow.setup()
         flow.update(print_stats=True)
-        flow.close()
     except Exception as exc:
         try_update_ingestion_trace(
             command="flow-run-once",
@@ -208,6 +208,9 @@ def run_once(config: UnifiedConfig | None = None) -> None:
             metadata={"error_type": type(exc).__name__},
         )
         raise
+    finally:
+        if flow is not None:
+            flow.close()
     try_update_ingestion_trace(command="flow-run-once", status="completed")
 
 
