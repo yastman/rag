@@ -30,7 +30,9 @@ def _build_search_cache_profile(
     needs_coverage: bool,
     use_colbert: bool,
     top_k: int,
+    filters: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    filter_profile = {"filters": filters} if filters else {}
     if needs_coverage:
         return {
             "mode": "coverage",
@@ -38,10 +40,11 @@ def _build_search_cache_profile(
             "group_by": "metadata.doc_id",
             "group_size": 2,
             "prefetch_multiplier": 7,
+            **filter_profile,
         }
     if use_colbert:
-        return {"mode": "colbert", "top_k": top_k}
-    return {"mode": "rrf", "top_k": top_k}
+        return {"mode": "colbert", "top_k": top_k, **filter_profile}
+    return {"mode": "rrf", "top_k": top_k, **filter_profile}
 
 
 def _distinct_doc_count(results: list[dict[str, Any]]) -> int:
@@ -90,11 +93,13 @@ async def retrieve_node(
     needs_coverage = bool(state.get("needs_coverage")) or coverage_decision.needs_coverage
     effective_top_k = 10 if needs_coverage else top_k
     colbert_query = state.get("colbert_query")
+    retrieval_filters = state.get("filters")
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     search_cache_profile = _build_search_cache_profile(
         needs_coverage=needs_coverage,
         use_colbert=bool(colbert_query and _has_colbert_search),
         top_k=effective_top_k,
+        filters=retrieval_filters if isinstance(retrieval_filters, dict) else None,
     )
 
     # Curated span metadata (replaces auto-captured full state)
@@ -202,6 +207,7 @@ async def retrieve_node(
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
+            filters=retrieval_filters,
             top_k=10,
             prefetch_multiplier=7,
             group_by="metadata.doc_id",
@@ -215,6 +221,7 @@ async def retrieve_node(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             colbert_query=colbert_query,
+            filters=retrieval_filters,
             top_k=top_k,
             return_meta=True,
         )
@@ -224,6 +231,7 @@ async def retrieve_node(
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
+            filters=retrieval_filters,
             top_k=top_k,
             return_meta=True,
         )
