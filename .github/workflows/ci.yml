@@ -38,6 +38,9 @@ jobs:
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
+      - name: Set up Python for tests
+        run: uv python install 3.12
+
       - name: Install dev dependencies
         run: uv sync --frozen
 
