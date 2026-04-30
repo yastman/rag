@@ -33,7 +33,7 @@ jobs:
         run: uv run --python 3.14 ruff check src/ telegram_bot/ --output-format=github
 
       - name: Ruff format check
-        run: uv run --python 3.14 ruff format --check src/ telegram_bot/
+        run: uv run --python 3.14 ruff format --target-version py312 --check src/ telegram_bot/
 
       - name: Type check
         run: uv run --python 3.14 mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
