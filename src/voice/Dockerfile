@@ -34,7 +34,9 @@ RUN groupadd -g 1001 appuser && \
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/telegram_bot /app/telegram_bot
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 # Download VAD/turn-detector models (before switching to non-root)
 RUN python -c "from livekit.plugins.silero import VAD; VAD.load()" 2>/dev/null || true

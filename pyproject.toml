@@ -81,6 +81,11 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
+# Docling service (standalone docling-serve image)
+docling = [
+    "docling-serve[ui]>=1.0.0",
+]
+
 # Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
 ingest = [
     "pymupdf>=1.26.0",
@@ -188,8 +193,8 @@ exclude = [
 line-length = 100
 indent-width = 4
 
-# Target Python 3.9+ (project minimum)
-target-version = "py311"
+# Target Python 3.14 (aligned with Docker runtime)
+target-version = "py314"
 
 # =============================================================================
 # LINTING RULES
@@ -293,7 +298,7 @@ docstring-code-line-length = "dynamic"
 # Run: mypy .
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Set to true for strict mode
@@ -325,7 +330,7 @@ skips = ["B101"]  # Skip assert_used (common in tests)
 
 [tool.pylint.main]
 # Python version for compatibility checks
-py-version = "3.11"
+py-version = "3.14"
 
 # Files/directories to exclude
 ignore = ["legacy", "tests", ".venv", "__pycache__"]
