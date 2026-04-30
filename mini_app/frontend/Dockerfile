@@ -2,7 +2,7 @@
 # Mini App React frontend — Node build + nginx serve
 
 # ====== BUILD STAGE ======
-FROM node:20.19.0-slim AS builder
+FROM node:20.19.0-slim@sha256:5cfa999422613d3b34f766cbb814d964cbfcb76aaf3607e805da21cccb352bac AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # ====== RUNTIME STAGE ======
-FROM nginx:1.29-alpine AS runtime
+FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de AS runtime
 
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
