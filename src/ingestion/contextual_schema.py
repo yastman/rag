@@ -79,7 +79,7 @@ class ContextualChunk:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContextualChunk":
+    def from_dict(cls, data: dict) -> ContextualChunk:
         """Deserialize from dictionary."""
         return cls(
             chunk_id=data["chunk_id"],
@@ -130,7 +130,7 @@ class ContextualDocument:
             f.write(self.to_json())
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContextualDocument":
+    def from_dict(cls, data: dict) -> ContextualDocument:
         """Deserialize from dictionary."""
         chunks = [ContextualChunk.from_dict(c) for c in data["chunks"]]
         return cls(
@@ -140,13 +140,13 @@ class ContextualDocument:
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "ContextualDocument":
+    def from_json(cls, json_str: str) -> ContextualDocument:
         """Deserialize from JSON string."""
         data = json.loads(json_str)
         return cls.from_dict(data)
 
     @classmethod
-    def load(cls, file_path: str) -> "ContextualDocument":
+    def load(cls, file_path: str) -> ContextualDocument:
         """Load from JSON file."""
         with open(file_path, encoding="utf-8") as f:
             return cls.from_json(f.read())
