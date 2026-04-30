@@ -1,5 +1,6 @@
 """Regression tests for the VPS release gate contract."""
 
+import re
 from pathlib import Path
 
 
@@ -130,3 +131,99 @@ def test_release_gate_script_uses_safe_env_parsing() -> None:
     assert ". ./.env" not in script
     assert "source .env" not in script
     assert "Invalid .env line" in script
+
+
+# ── Healthcheck contract tests (PR #1256 runtime blockers) ──────────────
+
+
+_PYTHON_SLIM_DOCKERFILES = [
+    ROOT / "src" / "api" / "Dockerfile",
+    ROOT / "src" / "voice" / "Dockerfile",
+]
+
+
+def _extract_healthcheck_cmd(dockerfile: Path) -> str:
+    """Extract the HEALTHCHECK CMD line from a Dockerfile."""
+    text = dockerfile.read_text()
+    m = re.search(r"HEALTHCHECK.*?\n\s+CMD\s+(.+)", text)
+    return m.group(1) if m else ""
+
+
+def test_python_slim_healthchecks_do_not_use_wget() -> None:
+    """Python slim runtime images do not install wget; healthchecks must not rely on it."""
+    for df in _PYTHON_SLIM_DOCKERFILES:
+        cmd = _extract_healthcheck_cmd(df)
+        assert "wget" not in cmd, (
+            f"{df.name} HEALTHCHECK uses wget but runtime is python:3.14-slim-bookworm "
+            "(no wget installed). Use Python urllib.request instead."
+        )
+        assert "urllib.request" in cmd or "python -c" in cmd, (
+            f"{df.name} HEALTHCHECK should use a Python stdlib HTTP check "
+            "since the runtime image is python:3.14-slim-bookworm."
+        )
+
+
+def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
+    """compose.yml healthchecks for rag-api and voice-agent run in python:slim images;
+    wget is not available there."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    # Find rag-api healthcheck section
+    rag_api_match = re.search(
+        r"rag-api:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
+        compose_text,
+        re.DOTALL,
+    )
+    voice_agent_match = re.search(
+        r"voice-agent:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
+        compose_text,
+        re.DOTALL,
+    )
+
+    if rag_api_match:
+        assert "wget" not in rag_api_match.group(1), (
+            "rag-api compose healthcheck uses wget; Python urllib.request should be used instead."
+        )
+    if voice_agent_match:
+        assert "wget" not in voice_agent_match.group(1), (
+            "voice-agent compose healthcheck uses wget; Python urllib.request should be used instead."
+        )
+
+
+def test_bot_dockerfile_healthcheck_command_is_runtime_available() -> None:
+    """Bot HEALTHCHECK must use a command guaranteed in the runtime image OR install it."""
+    bot_df = ROOT / "telegram_bot" / "Dockerfile"
+    text = bot_df.read_text()
+
+    cmd = _extract_healthcheck_cmd(bot_df)
+    has_procps_install = bool(
+        re.search(
+            r"apt-get install.*procps",
+            text,
+        )
+    )
+
+    if "pgrep" in cmd:
+        assert has_procps_install, (
+            "telegram_bot/Dockerfile HEALTHCHECK uses pgrep but runtime stage "
+            "does not install procps. python:3.14-slim-bookworm does not include pgrep."
+        )
+
+
+def test_bot_k8s_probes_are_runtime_available() -> None:
+    """Bot k8s probes must use a command guaranteed in the bot image."""
+    k8s_text = (ROOT / "k8s" / "base" / "bot" / "deployment.yaml").read_text()
+    bot_df_text = (ROOT / "telegram_bot" / "Dockerfile").read_text()
+
+    has_pgrep = "pgrep" in k8s_text
+    has_procps_install = bool(
+        re.search(
+            r"apt-get install.*procps",
+            bot_df_text,
+        )
+    )
+
+    if has_pgrep:
+        assert has_procps_install, (
+            "k8s bot probes use pgrep but telegram_bot/Dockerfile does not install procps."
+        )
