@@ -314,7 +314,7 @@ services:
       litellm:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, signal; os.kill(1, 0)"]
+      test: ["CMD-SHELL", "pgrep -f 'telegram_bot.main' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -775,7 +775,7 @@ services:
       litellm:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --spider http://localhost:8080/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -865,7 +865,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --spider http://localhost:8080/health || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
       interval: 15s
       timeout: 5s
       retries: 5
