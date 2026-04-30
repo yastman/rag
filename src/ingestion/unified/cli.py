@@ -362,7 +362,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
     try:
         existing_info = client.get_collection(collection_name)
         exists = True
-    except UnexpectedResponse, Exception:
+    except (UnexpectedResponse, Exception):
         pass
 
     if exists:

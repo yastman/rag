@@ -317,7 +317,7 @@ def _parse_csv_row_metadata(row: dict[str, str]) -> dict[str, Any]:
             if "." in cleaned:
                 return float(cleaned)
             return int(cleaned)
-        except ValueError, AttributeError:
+        except (ValueError, AttributeError):
             return None
 
     # Map CSV column names to metadata fields
