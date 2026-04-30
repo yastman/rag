@@ -1,19 +1,11 @@
-"""Unit tests for QueryAnalyzer service (OpenAI SDK)."""
+"""Unit tests for QueryAnalyzer service (Instructor SDK)."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import openai
 import pytest
 
-from telegram_bot.services.query_analyzer import QueryAnalyzer
-
-
-def _mock_completion(content: str) -> MagicMock:
-    """Helper: create a mock ChatCompletion response."""
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content=content))]
-    return mock_response
+from telegram_bot.services.query_analyzer import QueryAnalysisResult, QueryAnalyzer
 
 
 # =============================================================================
@@ -71,22 +63,19 @@ class TestQueryAnalyzerAnalyze:
 
     @pytest.fixture
     def analyzer(self):
-        """Create QueryAnalyzer with mocked OpenAI client."""
+        """Create QueryAnalyzer with mocked Instructor client."""
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
         )
-        analyzer.client = AsyncMock()
+        analyzer._instructor_client = AsyncMock()
         return analyzer
 
     async def test_analyze_returns_filters_and_semantic_query(self, analyzer):
-        response_content = json.dumps(
-            {
-                "filters": {"price": {"lt": 100000}, "city": "Несебр"},
-                "semantic_query": "уютная квартира с хорошим ремонтом",
-            }
-        )
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(
+                filters={"price": {"lt": 100000}, "city": "Несебр"},
+                semantic_query="уютная квартира с хорошим ремонтом",
+            )
         )
 
         result = await analyzer.analyze("квартира до 100000 евро в Несебре с хорошим ремонтом")
@@ -96,66 +85,62 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"] == {"price": {"lt": 100000}, "city": "Несебр"}
         assert result["semantic_query"] == "уютная квартира с хорошим ремонтом"
 
-    async def test_analyze_calls_openai_sdk(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "test query"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+    async def test_analyze_calls_instructor_sdk(self, analyzer):
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="test query")
         )
 
         await analyzer.analyze("test query")
 
-        analyzer.client.chat.completions.create.assert_called_once()
+        analyzer._instructor_client.chat.completions.create.assert_called_once()
 
-    async def test_analyze_uses_json_response_format(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "test"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+    async def test_analyze_uses_instructor_response_model(self, analyzer):
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer.client.chat.completions.create.call_args[1]
-        assert call_kwargs["response_format"] == {"type": "json_object"}
+        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
+        assert call_kwargs["response_model"] is QueryAnalysisResult
+        assert call_kwargs["max_retries"] == 2
 
     async def test_analyze_uses_zero_temperature(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "test"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer.client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
         assert call_kwargs["temperature"] == 0.0
 
     async def test_analyze_sends_query_in_user_message(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "test"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         test_query = "квартира в Солнечном берегу до 50000 евро"
         await analyzer.analyze(test_query)
 
-        call_kwargs = analyzer.client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
         messages = call_kwargs["messages"]
         user_message = next(m for m in messages if m["role"] == "user")
         assert test_query in user_message["content"]
 
     async def test_analyze_uses_specified_model(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "test"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer.client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
         assert call_kwargs["model"] == "gpt-4o-mini"
 
-    async def test_analyze_fallback_on_json_parse_error(self, analyzer):
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("not valid json {")
+    async def test_analyze_fallback_on_instructor_error(self, analyzer):
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Instructor validation failed")
         )
 
         original_query = "квартира в Бургасе"
@@ -165,7 +150,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_fallback_on_api_connection_error(self, analyzer):
-        analyzer.client.chat.completions.create = AsyncMock(
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
             side_effect=openai.APIConnectionError(request=MagicMock())
         )
 
@@ -179,7 +164,7 @@ class TestQueryAnalyzerAnalyze:
         mock_resp = MagicMock()
         mock_resp.status_code = 429
         mock_resp.headers = {}
-        analyzer.client.chat.completions.create = AsyncMock(
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
             side_effect=openai.RateLimitError(
                 message="Rate limited",
                 response=mock_resp,
@@ -194,7 +179,7 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_fallback_on_timeout_error(self, analyzer):
-        analyzer.client.chat.completions.create = AsyncMock(
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
             side_effect=openai.APITimeoutError(request=MagicMock())
         )
 
@@ -205,9 +190,8 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_returns_empty_filters_when_none_found(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "красивая квартира у моря"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="красивая квартира у моря")
         )
 
         result = await analyzer.analyze("красивая квартира у моря")
@@ -216,9 +200,8 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == "красивая квартира у моря"
 
     async def test_analyze_handles_missing_semantic_query_in_response(self, analyzer):
-        response_content = json.dumps({"filters": {"price": {"lt": 50000}}})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={"price": {"lt": 50000}}, semantic_query="")
         )
 
         original_query = "квартира до 50000 евро"
@@ -228,9 +211,8 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == original_query
 
     async def test_analyze_handles_missing_filters_in_response(self, analyzer):
-        response_content = json.dumps({"semantic_query": "уютная квартира"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(semantic_query="уютная квартира")
         )
 
         result = await analyzer.analyze("уютная квартира")
@@ -239,20 +221,17 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == "уютная квартира"
 
     async def test_analyze_with_complex_filters(self, analyzer):
-        response_content = json.dumps(
-            {
-                "filters": {
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(
+                filters={
                     "price": {"lt": 100000, "gt": 50000},
                     "rooms": 2,
                     "city": "Солнечный берег",
                     "area": {"gte": 50},
                     "distance_to_sea": {"lt": 500},
                 },
-                "semantic_query": "квартира с хорошим ремонтом",
-            }
-        )
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+                semantic_query="квартира с хорошим ремонтом",
+            )
         )
 
         result = await analyzer.analyze(
@@ -264,22 +243,20 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"]["city"] == "Солнечный берег"
 
     async def test_analyze_sets_max_tokens(self, analyzer):
-        response_content = json.dumps({"filters": {}, "semantic_query": "test"})
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={}, semantic_query="test")
         )
 
         await analyzer.analyze("test query")
 
-        call_kwargs = analyzer.client.chat.completions.create.call_args[1]
+        call_kwargs = analyzer._instructor_client.chat.completions.create.call_args[1]
         assert call_kwargs["max_tokens"] == 1000
 
     async def test_analyze_with_unicode_query(self, analyzer):
-        response_content = json.dumps(
-            {"filters": {"city": "Варна"}, "semantic_query": "квартира с мебелью"}
-        )
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(
+                filters={"city": "Варна"}, semantic_query="квартира с мебелью"
+            )
         )
 
         result = await analyzer.analyze("Ищу квартиру с мебелью в Варне")
@@ -287,17 +264,9 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"]["city"] == "Варна"
         assert result["semantic_query"] == "квартира с мебелью"
 
-    async def test_analyze_handles_none_content(self, analyzer):
-        analyzer.client.chat.completions.create = AsyncMock(return_value=_mock_completion(None))
-
-        result = await analyzer.analyze("test query")
-
-        assert result["filters"] == {}
-        assert result["semantic_query"] == "test query"
-
-    async def test_analyze_handles_non_dict_json(self, analyzer):
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("[1, 2, 3]")
+    async def test_analyze_handles_instructor_failure(self, analyzer):
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Instructor failed")
         )
 
         result = await analyzer.analyze("test query")
@@ -336,13 +305,13 @@ class TestQueryAnalyzerFlow:
             api_key="test-key", base_url="http://localhost:8000", model="gpt-4o"
         )
 
-        response_content = json.dumps(
-            {"filters": {"price": {"lt": 75000}}, "semantic_query": "квартира у моря"}
+        analyzer._instructor_client = AsyncMock()
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(
+                filters={"price": {"lt": 75000}}, semantic_query="квартира у моря"
+            )
         )
-        analyzer.client = AsyncMock()
-        analyzer.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_content)
-        )
+        analyzer.client = AsyncMock()  # needed for close() assertion
 
         assert analyzer.api_key == "test-key"
         assert analyzer.base_url == "http://localhost:8000"
@@ -357,16 +326,14 @@ class TestQueryAnalyzerFlow:
 
     async def test_multiple_queries(self):
         analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
-        analyzer.client = AsyncMock()
+        analyzer._instructor_client = AsyncMock()
 
         responses = [
-            _mock_completion(
-                json.dumps({"filters": {"city": "Несебр"}, "semantic_query": "студия"})
-            ),
-            _mock_completion(json.dumps({"filters": {"rooms": 2}, "semantic_query": "квартира"})),
-            _mock_completion(json.dumps({"filters": {}, "semantic_query": "апартамент у моря"})),
+            QueryAnalysisResult(filters={"city": "Несебр"}, semantic_query="студия"),
+            QueryAnalysisResult(filters={"rooms": 2}, semantic_query="квартира"),
+            QueryAnalysisResult(filters={}, semantic_query="апартамент у моря"),
         ]
-        analyzer.client.chat.completions.create = AsyncMock(side_effect=responses)
+        analyzer._instructor_client.chat.completions.create = AsyncMock(side_effect=responses)
 
         result1 = await analyzer.analyze("студия в Несебре")
         result2 = await analyzer.analyze("двухкомнатная квартира")
@@ -375,19 +342,16 @@ class TestQueryAnalyzerFlow:
         assert result1["filters"] == {"city": "Несебр"}
         assert result2["filters"] == {"rooms": 2}
         assert result3["filters"] == {}
-        assert analyzer.client.chat.completions.create.call_count == 3
+        assert analyzer._instructor_client.chat.completions.create.call_count == 3
 
     async def test_error_recovery(self):
         analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
-        analyzer.client = AsyncMock()
+        analyzer._instructor_client = AsyncMock()
 
-        success_response = _mock_completion(
-            json.dumps({"filters": {"city": "Бургас"}, "semantic_query": "квартира"})
-        )
-        analyzer.client.chat.completions.create = AsyncMock(
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
             side_effect=[
                 openai.APIConnectionError(request=MagicMock()),
-                success_response,
+                QueryAnalysisResult(filters={"city": "Бургас"}, semantic_query="квартира"),
             ]
         )
 
