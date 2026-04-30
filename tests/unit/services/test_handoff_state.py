@@ -23,6 +23,26 @@ def test_handoff_data_to_redis_dict():
     assert d["topic_id"] == "456"
     assert d["mode"] == "human_waiting"
     assert "created_at" in d
+    assert d["lead_id"] == ""
+    assert d["manager_joined_at"] == ""
+    assert d["qualification"] == "{}"
+
+
+def test_handoff_data_to_redis_dict_full():
+    data = HandoffData(
+        client_id=123,
+        topic_id=456,
+        mode="human",
+        lead_id=789,
+        qualification={"goal": "buy", "budget": "50-100"},
+    )
+    d = data.to_redis_dict()
+    assert d["client_id"] == "123"
+    assert d["topic_id"] == "456"
+    assert d["mode"] == "human"
+    assert d["lead_id"] == "789"
+    assert d["manager_joined_at"] == ""
+    assert d["qualification"] == '{"goal":"buy","budget":"50-100"}'
 
 
 def test_handoff_data_from_redis_dict():
