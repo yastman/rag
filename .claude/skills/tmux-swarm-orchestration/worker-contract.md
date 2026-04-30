@@ -1,11 +1,65 @@
-***REMOVED*** Контракты воркеров v10
+***REMOVED*** Контракты воркеров v11
 
-Orch заполняет `{...}` → сохраняет в `.claude/prompts/worker-{name}.md`.
+Orch заполняет `{...}` → сохраняет в `.codex/prompts/worker-{name}.md`.
 
-**Task List:** Orch создаёт задачи (TaskCreate + DAG) ПЕРЕД запуском worker'а.
-Worker спавнится с `CLAUDE_CODE_TASK_LIST_ID` → видит задачи через TaskList.
-Worker отмечает прогресс (TaskUpdate) → orch видит мгновенно через system-reminder.
-Промт worker'а = полный контракт (sandbox, SDK, HARD-GATE, финал) + инструкция работать по TaskList.
+**OpenCode only:** Orch передает `ORCH_PANE` и `SIGNAL_FILE`; worker пишет компактный JSON и отправляет короткий `[DONE] ...json` в pane оркестратора. Оркестратор читает JSON, а не transcript.
+Промт worker'а = полный контракт (sandbox, SDK, WORKTREE ISOLATION, SUPERPOWERS WORKFLOW, SIGNALING, HARD-GATE, финал).
+
+***REMOVED******REMOVED*** Prompt Template
+
+Orch ОБЯЗАН сгенерировать отдельный `.codex/prompts/worker-{name}.md` для каждого worker'а:
+
+    ***REMOVED*** W-{NAME}: {short_task}
+
+    ***REMOVED******REMOVED*** ROLE
+    Ты OpenCode worker. Работай только в выданном worktree. Модель не меняй.
+
+    ***REMOVED******REMOVED*** TASK
+    {issue_or_plan_slice}
+
+    ***REMOVED******REMOVED*** IMPLEMENTATION BRIEF
+    Goal: {one_sentence_goal}
+    Acceptance criteria:
+    {acceptance_criteria}
+    Exact files / reserved files:
+    {reserved_files}
+    Implementation steps or plan slice:
+    {implementation_steps_or_plan_slice}
+    Tests to run:
+    {focused_tests_and_checks}
+    Non-goals:
+    {out_of_scope}
+    Risks/gotchas:
+    {known_risks}
+    Done definition:
+    {done_definition}
+
+    ***REMOVED******REMOVED*** WORKTREE ISOLATION
+    WORKTREE={worktree_or_project_root}
+    BRANCH={branch_name}
+    RESERVED_FILES={reserved_files}
+
+    ***REMOVED******REMOVED*** SUPERPOWERS WORKFLOW
+    Обязательные skills в порядке:
+    {skills_in_order}
+
+    Для каждого skill:
+    1. Прочитай/примени skill перед соответствующей фазой.
+    2. Запиши маркер:
+       echo "[SKILL:{skill_name}] $(date -Iseconds)" >> logs/worker-{name}.log
+    3. Не переходи к commit/status="done" без `verification-before-completion`.
+
+    ***REMOVED******REMOVED*** CONTEXT
+    NOTION_TASK={notion_task_page_id_or_empty}
+    Notion ведет только orch. Worker не обновляет Notion напрямую, но сохраняет NOTION_TASK в DONE JSON.
+    {codebase_context}
+    {sdk_summary}
+    {sdk_registry_excerpt}
+
+    ***REMOVED******REMOVED*** SIGNALING
+    ORCH_PANE={ORCH_PANE}
+    SIGNAL_FILE={worktree_or_project_root}/.signals/worker-{name}.json
+    Запиши DONE JSON атомарно и отправь `[DONE] W-{NAME} {worktree_or_project_root}/.signals/worker-{name}.json`.
 
 ***REMOVED******REMOVED*** Общие правила
 
@@ -13,14 +67,27 @@ Worker отмечает прогресс (TaskUpdate) → orch видит мгн
 
     РАБОЧАЯ ДИРЕКТОРИЯ: {worktree_or_project_root}
 
+    ***REMOVED******REMOVED*** IMPLEMENTATION BRIEF CONTRACT
+    - Не начинай кодить, если brief отсутствует или содержит только сырой issue.
+    - Если acceptance/tests/files неясны, зафиксируй status="blocked" с конкретным вопросом вместо догадок.
+    - Следуй exact files/reserved files. Выход за scope только через blocked signal.
+    - Для full plan выполняй только свой plan slice, не весь план.
+
+    ***REMOVED******REMOVED*** WORKTREE ISOLATION
+    - Ты работаешь ТОЛЬКО в этом git worktree: {worktree_or_project_root}
+    - Ветка: {branch_name}. НЕ переключайся на другие ветки.
+    - НЕ редактируй файлы вне RESERVED FILES без явного разрешения в задаче.
+    - Если нужен файл, зарезервированный другим worker'ом, остановись и запиши SIGNAL_FILE со status="blocked".
+    - НЕ используй основной PROJECT_ROOT для кода/коммитов. PROJECT_ROOT разрешён только для `.signals/` и чтения prompt/cache, если указано.
+
     SANDBOX:
-    - Доступ ТОЛЬКО к {worktree_or_project_root} и {PROJECT_ROOT}/.signals/
+    - Доступ ТОЛЬКО к {worktree_or_project_root}. Сигналы пиши в `{worktree_or_project_root}/.signals/`.
     - Любые пути вне этих директорий → ЗАПРЕЩЕНО
     - Чтение .env, ~/.ssh, ~/.aws, ~/.config/gh → ЗАПРЕЩЕНО
     - pip install, npm install, curl | bash, wget → ЗАПРЕЩЕНО
     - rm -rf, git push --force, git reset --hard → ЗАПРЕЩЕНО
     - git checkout другой ветки → ЗАПРЕЩЕНО
-    - pytest tests/ (широко) — только конкретные файлы
+    - Тесты: сначала focused tests по измененному поведению. Широкий `pytest tests/` / `make test-unit` — только если задача явно broad/final или orch назначил это в prompt.
     - Спавн субагентов (Agent tool) → ЗАПРЕЩЕНО
     - SDK исследование (Context7/Exa) → ЗАПРЕЩЕНО для A/B/D (orch уже сделал). Разрешено ТОЛЬКО для C.
 
@@ -44,32 +111,97 @@ Worker отмечает прогресс (TaskUpdate) → orch видит мгн
     ЛОГ: logs/worker-{name}.log
     echo "[SKILL:{name}]" при каждом вызове Skill tool
 
+    ***REMOVED******REMOVED*** SUPERPOWERS WORKFLOW
+    - Используй обязательные Skill(...) из контракта ниже в указанном порядке.
+    - После каждого Skill(...) запиши маркер: echo "[SKILL:{skill_name}] $(date -Iseconds)" >> logs/worker-{name}.log
+    - Code review и verification выполняются ДО commit.
+    - `verification-before-completion` обязателен перед commit, push, PR и любым status="done".
+    - `finishing-a-development-branch` для A/B/D выполняй в PR-flow: push branch, create PR, worktree НЕ удаляй; orch удалит после Phase 5.
+
     ПРОГРЕСС (для задач >10 мин):
     echo "[PROGRESS:50%] {что сделано}" >> logs/worker-{name}.log
 
-    TASK LIST КООРДИНАЦИЯ (orch видит в реалтайме):
-    ***REMOVED*** При старте задачи:
-    TaskUpdate(taskId="{task_id}", status="in_progress", owner="W-{NAME}")
-    ***REMOVED*** При завершении задачи:
-    TaskUpdate(taskId="{task_id}", status="completed")
-    ***REMOVED*** Orch АВТОМАТИЧЕСКИ видит смену статуса через system-reminder — БЕЗ polling.
+    ***REMOVED******REMOVED*** VERIFICATION LADDER
+    Worker НЕ обязан по умолчанию гонять весь suite. Обязательный минимум для A/B/D:
+    1. focused tests для измененного поведения/файлов;
+    2. `make check`;
+    3. runtime/contract checks, если затронуты compose/API/deploy/service surfaces;
+    4. PR created для A/B/D, если контракт требует PR.
 
-    СИГНАЛ ЗАВЕРШЕНИЯ (rich metadata — persist после completed):
-    echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'","learnings":[]}' \
-      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
-      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
+    `make test-unit` запускай только когда:
+    - изменение широкое или cross-module;
+    - ты final integration worker;
+    - focused tests не покрывают риск;
+    - orch явно попросил.
+
+    GitHub CI не является обязательным gate: если CI отсутствует, сломан или покрывает только линтеры, не жди его как финальный сигнал. Для final/integration worker на мощной локальной машине запусти один локальный broad run: `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`, если задача кодовая и не docs-only/trivial.
+
+    Если широкий suite падает на unrelated baseline/flaky failure, запусти или перечисли изолированные failing areas, зафиксируй evidence в DONE JSON и пометь результат как warning/blocker по риску. Не пытайся чинить чужой baseline в текущей PR. Финальный PASS все равно принимает orch после review локального evidence.
+
+    ***REMOVED******REMOVED*** SIGNALING
+    ORCH_PANE={ORCH_PANE}
+    SIGNAL_FILE={worktree_or_project_root}/.signals/worker-{name}.json
+    Worker пишет SIGNAL_FILE атомарно и будит orch через tmux.
+
+    DONE JSON (минимум):
+    {
+      "status": "done|failed|blocked",
+      "worker": "W-{NAME}",
+      "issue": {N},
+      "branch": "{branch_name}",
+      "pr": "{url_or_empty}",
+      "base": "{base_branch}",
+      "changed_files": [],
+      "pr_files": [],
+      "reserved_files": [],
+      "notion_task": "{notion_task_page_id_or_empty}",
+      "notion_status": "Queued|In Progress|Workers Running|PR Open|Review Fix|Ready to Merge|Done|Blocked|",
+      "agent": "pr-worker|pr-review-fix|complex-escalation|",
+      "model": "provider/model-or-empty",
+      "review_decision": "not_reviewed|clean|blockers|fixed|escalate",
+      "autofix_commits": [],
+      "prompt_sha256": "{sha256_or_empty}",
+      "commands": [
+        {"cmd": "uv run pytest ...", "exit": 0, "summary": "N passed"},
+        {"cmd": "make check", "exit": 0, "summary": "ruff+mypy ok"}
+      ],
+      "summary": "1-3 строки",
+      "next_action": "review|verify|escalate",
+      "ts": "ISO-8601"
+    }
+
+    DONE JSON без exit code и краткого summary по каждой команде = неполный сигнал.
+
+    Для PR implementation workers:
+    - agent = "pr-worker"
+    - model = "opencode-go/kimi-k2.6"
+    - review_decision = "not_reviewed"
+
+    Для PR review-fix workers:
+    - agent = "pr-review-fix"
+    - model = "opencode-go/deepseek-v4-pro"
+    - review_decision = "clean|blockers|fixed|escalate"
+    - autofix_commits содержит commit SHA, если worker правил PR branch.
+
+    OPENCODE WAKE-UP:
+    ***REMOVED*** SIGNAL_FILE уже должен быть записан атомарно. Потом разбуди orch:
+    tmux send-keys -t "$ORCH_PANE" "[DONE] W-{NAME} $SIGNAL_FILE"
+    sleep 1
+    tmux send-keys -t "$ORCH_PANE" Enter
+    ***REMOVED*** НЕ выполняй tmux wait-for -S для финала.
 
     СИГНАЛ ПРОВАЛА:
-    TaskUpdate(taskId="{task_id}", status="in_progress", metadata={"error": "{msg}"})
     echo '{"status":"failed","worker":"W-{NAME}","error":"{msg}","ts":"'$(date -Iseconds)'"}' \
-      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
-      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
+      > "$SIGNAL_FILE.tmp" \
+      && mv "$SIGNAL_FILE.tmp" "$SIGNAL_FILE"
 
 ---
 
 ***REMOVED******REMOVED*** Общий финал (контракты A/B/D — код)
 
 Применяется после прохождения всех HARD-GATE скиллов. Не дублируй в контрактах.
+Code review и verification уже должны быть выполнены ДО этого блока.
+После commit используй `Skill(skill="finishing-a-development-branch")` в PR-flow: push branch, create PR, worktree оставить для orch review.
 
     git add {файлы}
     git diff --cached --stat
@@ -78,20 +210,26 @@ Worker отмечает прогресс (TaskUpdate) → orch видит мгн
 
     Closes ***REMOVED***{N}
 
-    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     EOF
     )"
+    echo "[SKILL:finishing-a-development-branch] $(date -Iseconds)" >> logs/worker-{name}.log
+    ***REMOVED*** finishing-a-development-branch PR-flow:
     git push -u origin {branch_name}
     gh pr create --title "{type}({scope}): {desc}" --body "Closes ***REMOVED***{N}"
-
-    ***REMOVED*** Task List — orch узнает мгновенно:
-    TaskUpdate(taskId="{task_id}", status="completed")
+    ***REMOVED*** НЕ удаляй worktree. Orch делает Phase 5 review/verify и cleanup.
 
     ***REMOVED*** Rich metadata — persist для Phase 5 review:
     PR_URL=$(gh pr view --json url -q .url)
     echo '{"status":"done","worker":"W-{NAME}","pr":"'"$PR_URL"'","ts":"'$(date -Iseconds)'","learnings":[]}' \
-      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
-      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
+      > "$SIGNAL_FILE.tmp" \
+      && mv "$SIGNAL_FILE.tmp" "$SIGNAL_FILE"
+
+    ***REMOVED*** OpenCode: wake-up оркестратора после JSON:
+    if [ -n "{ORCH_PANE}" ]; then
+      tmux send-keys -t "{ORCH_PANE}" "[DONE] W-{NAME} {worktree_or_project_root}/.signals/worker-{name}.json"
+      sleep 1
+      tmux send-keys -t "{ORCH_PANE}" Enter
+    fi
 
 ---
 
@@ -106,38 +244,34 @@ Part-workers коммитят и пушат, но **НЕ создают PR**. PR
 
     Part of ***REMOVED***{issue_N}
 
-    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     EOF
     )"
     git push -u origin {branch_name}
 
     ***REMOVED*** Атомарный сигнал (без pr, с branch):
     echo '{"status":"done","worker":"W-{NAME}","branch":"'"${branch_name}"'","ts":"'$(date -Iseconds)'"}' \
-      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
-      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
+      > "$SIGNAL_FILE.tmp" \
+      && mv "$SIGNAL_FILE.tmp" "$SIGNAL_FILE"
+
+    ***REMOVED*** OpenCode: wake-up оркестратора после JSON:
+    if [ -n "{ORCH_PANE}" ]; then
+      tmux send-keys -t "{ORCH_PANE}" "[DONE] W-{NAME} {worktree_or_project_root}/.signals/worker-{name}.json"
+      sleep 1
+      tmux send-keys -t "{ORCH_PANE}" Enter
+    fi
 
 ---
 
-***REMOVED******REMOVED*** SDK исследование субагентом (Фаза 2.7 — orch, НЕ worker)
+***REMOVED******REMOVED*** SDK context (Фаза 2.7 — orch, НЕ worker)
 
-    Agent(
-        description="SDK исследование для ***REMOVED***{N}: {library}",
-        prompt="""
-        РЕЕСТР (из .claude/rules/sdk-registry.md):
-        {sdk_registry_excerpt_for_this_library}
+Orch собирает SDK context сам до запуска worker'ов:
 
-        Context7: resolve-library-id("{context7_id_from_registry}") → query-docs("{topic}")
-        Exa: get_code_context_exa("{library} {topic} 2026")
+    SDK_REGISTRY=docs/engineering/sdk-registry.md  ***REMOVED*** или .codex/rules/sdk-registry.md
+    Read "$SDK_REGISTRY"
+    Context7: resolve-library-id("{context7_id_from_registry}") → query-docs("{topic}")
+    Exa: get_code_context_exa("{library} {topic} 2026")
 
-        РЕЗУЛЬТАТ:
-        А) Резюме (верни мне, макс 300 слов): ключевые сигнатуры, подход, SDK покрывает? ДА/НЕТ
-           Сравни с "как_у_нас" из реестра — отметь если паттерн устарел.
-        Б) Полный контекст (Write → .claude/cache/sdk-{library}-{N}.md):
-           все сигнатуры, примеры, лучшие практики, анти-паттерны
-        """,
-        subagent_type="general-purpose",
-        model="sonnet"
-    )
+Результат orch кладёт в `.codex/cache/sdk-{library}-{N}.md` и вставляет summary/excerpt в worker prompt.
 
 ***REMOVED******REMOVED*** Codebase контекст (Фаза 2.3 — orch, НЕ worker)
 
@@ -165,42 +299,11 @@ Orch использует 3 системы ДО классификации дл�
 
 ---
 
-***REMOVED******REMOVED*** Предварительная фильтрация (5+ issues)
-
-Haiku НЕ классифицирует сложность — только фильтрует актуальность.
-Сложность определяет orch (Phase 2) после фильтрации.
-
-    Agent(description="Фильтрация ***REMOVED***{numbers}", model="haiku", subagent_type="Explore",
-      prompt="""
-      gh issue view для каждого issue из списка: {numbers}
-
-      КОНТЕКСТ ПРОЕКТА (для определения скоупа):
-      {project_scope}
-
-      Для каждого определи ТОЛЬКО статус актуальности:
-      - DO — issue актуален, нужно решать
-      - SKIP — дубликат другого issue ИЛИ явно закрыт/решён (PR смержен)
-      - STALE — устарел (>90 дней без активности, упоминает удалённый код)
-      - UNCERTAIN — не уверен в статусе (непонятный скоуп, неясно дубликат ли)
-
-      ПРАВИЛА:
-      - Сомневаешься → UNCERTAIN (НЕ SKIP)
-      - "Вне скоупа" → UNCERTAIN (ты не знаешь весь скоуп)
-      - SKIP только при ЯВНОМ доказательстве (ссылка на PR, дубль номера)
-
-      Верни таблицу:
-      | Issue | Статус | Затронутые файлы (из тела issue) | Причина статуса |
-
-      НЕ оценивай сложность. НЕ предлагай решение. Только фильтрация.
-      """)
-
----
-
-***REMOVED******REMOVED*** Контракт A: Sonnet реализация
+***REMOVED******REMOVED*** Контракт A: OpenCode реализация
 
 **Когда:** TRIVIAL / CLEAR / MEDIUM — worker получает issue и делает.
 
-    Ты — Sonnet worker. Реши issue и создай PR.
+    Ты — OpenCode worker. Реши issue и создай PR.
 
     ISSUE: ***REMOVED***{N} — {title}
     {issue_body}
@@ -208,21 +311,11 @@ Haiku НЕ классифицирует сложность — только фи
     {Общие правила}
     Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
-    ***REMOVED******REMOVED*** TASK LIST (твои задачи — orch видит прогресс в реалтайме)
-
-    TaskList покажет задачи с DAG зависимостями. АЛГОРИТМ:
-    1. TaskList → найди незаблокированную задачу (blockedBy пуст)
-    2. TaskUpdate(taskId=X, status="in_progress", owner="W-{NAME}")
-    3. Выполни задачу
-    4. TaskUpdate(taskId=X, status="completed")
-    5. Повторяй пока все задачи не completed
-    Orch АВТОМАТИЧЕСКИ видит каждый TaskUpdate — не нужны файлы/сигналы для статуса.
-
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
-    Полная документация: Read .claude/cache/sdk-{library}-{N}.md
+    Полная документация: Read .codex/cache/sdk-{library}-{N}.md
 
-    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    SDK РЕЕСТР (релевантные записи из SDK registry):
     {sdk_registry_excerpt}
 
     CODEBASE КОНТЕКСТ (orch собрал в Phase 2.3):
@@ -237,7 +330,8 @@ Haiku НЕ классифицирует сложность — только фи
     <HARD-GATE>
     Skill(skill="test-driven-development") — ПЕРЕД кодом. БЕЗ ИСКЛЮЧЕНИЙ.
     Skill(skill="requesting-code-review") — ПЕРЕД коммитом.
-    Skill(skill="verification-before-completion") — ПЕРЕД PR.
+    Skill(skill="verification-before-completion") — ПЕРЕД коммитом и PR.
+    Skill(skill="finishing-a-development-branch") — ПОСЛЕ commit; выбрать PR-flow, worktree оставить для orch.
     Нарушил порядок = провал задачи.
     </HARD-GATE>
 
@@ -245,11 +339,11 @@ Haiku НЕ классифицирует сложность — только фи
 
 ---
 
-***REMOVED******REMOVED*** Контракт B: Sonnet выполнение плана
+***REMOVED******REMOVED*** Контракт B: OpenCode выполнение плана
 
-**Когда:** COMPLEX / VERY COMPLEX — worker получает готовый план от Opus.
+**Когда:** COMPLEX / VERY COMPLEX — worker получает готовый план от Codex.
 
-    Ты — Sonnet worker. Выполни план и создай PR.
+    Ты — OpenCode worker. Выполни план и создай PR.
 
     ISSUE: ***REMOVED***{N} — {title}
     ПЛАН: Read {plan_file_path}
@@ -257,22 +351,11 @@ Haiku НЕ классифицирует сложность — только фи
     {Общие правила}
     Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
-    ***REMOVED******REMOVED*** TASK LIST (шаги плана = задачи с DAG — orch видит прогресс в реалтайме)
-
-    Orch уже создал задачи из плана с зависимостями. TaskList покажет их.
-    АЛГОРИТМ:
-    1. TaskList → найди незаблокированную задачу (blockedBy пуст)
-    2. TaskUpdate(taskId=X, status="in_progress", owner="W-{NAME}")
-    3. Выполни задачу (Read план для деталей шага)
-    4. TaskUpdate(taskId=X, status="completed")
-    5. Повторяй пока все задачи не completed
-    Задачи в TaskList соответствуют шагам плана. Используй план для деталей, TaskList для порядка.
-
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
-    Полная документация: Read .claude/cache/sdk-{library}-{N}.md
+    Полная документация: Read .codex/cache/sdk-{library}-{N}.md
 
-    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    SDK РЕЕСТР (релевантные записи из SDK registry):
     {sdk_registry_excerpt}
 
     CODEBASE КОНТЕКСТ (orch собрал в Phase 2.3):
@@ -285,34 +368,35 @@ Haiku НЕ классифицирует сложность — только фи
     Skill(skill="executing-plans") — загрузи план, задача за задачей.
     Skill(skill="test-driven-development") — для каждой задачи.
     Skill(skill="requesting-code-review") — ПЕРЕД коммитом.
-    Skill(skill="verification-before-completion") — ПЕРЕД PR.
+    Skill(skill="verification-before-completion") — ПЕРЕД коммитом и PR.
+    Skill(skill="finishing-a-development-branch") — ПОСЛЕ commit; выбрать PR-flow, worktree оставить для orch.
     </HARD-GATE>
 
     После верификации: {Общий финал}
 
 ---
 
-***REMOVED******REMOVED*** Контракт C: Opus исследование
+***REMOVED******REMOVED*** Контракт C: OpenCode исследование
 
 **Когда:** COMPLEX / VERY COMPLEX — исследование + план, БЕЗ кода.
 
-    Ты — Opus research worker. Изучи проблему и напиши план. НЕ КОДЬ.
+    Ты — OpenCode research worker. Изучи проблему и напиши план. НЕ КОДЬ.
 
     ISSUE: ***REMOVED***{N} — {title}
     {issue_body}
 
     {Общие правила}
-    Ветка: main. НЕ создавай веток.
+    Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
-    Полная документация: Read .claude/cache/sdk-{library}-{N}.md
+    Полная документация: Read .codex/cache/sdk-{library}-{N}.md
     Углуби SDK исследование если нужно (Context7, Exa). Включи SDK контекст в план.
 
-    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    SDK РЕЕСТР (релевантные записи из SDK registry):
     {sdk_registry_excerpt}
 
-    ОБЯЗАТЕЛЬНО: Read .claude/rules/sdk-registry.md (если существует).
+    ОБЯЗАТЕЛЬНО: Read SDK registry excerpt из prompt.
     В плане — секция "SDK Coverage":
     - Какие SDK из реестра затронуты этой задачей
     - Какие SDK-паттерны использовать (из как_у_нас)
@@ -339,11 +423,12 @@ Haiku НЕ классифицирует сложность — только фи
 
     <HARD-GATE>
     Skill(skill="writing-plans") — для создания плана. БЕЗ ИСКЛЮЧЕНИЙ.
+    Skill(skill="verification-before-completion") — проверить план ДО сигнала done.
     </HARD-GATE>
 
     План → docs/plans/{DATE}-issue-{N}-plan.md
     План содержит: файлы, подход, SDK сигнатуры, задачи по 2-5 мин, TDD.
-    ЗАПРЕЩЕНО: production код, создание веток.
+    ЗАПРЕЩЕНО: production код, переключение веток.
 
     ***REMOVED******REMOVED*** РЕШЕНИЕ О ВЫПОЛНЕНИИ
 
@@ -378,17 +463,19 @@ Haiku НЕ классифицирует сложность — только фи
     - Финальная группа (интеграция, документация) — всегда последняя
 
     ***REMOVED*** Атомарный сигнал — включить execution решение:
+    git add docs/plans/{DATE}-issue-{N}-plan.md
+    git commit -m "docs(plan): add implementation plan for issue ***REMOVED***{N}"
     echo '{"status":"done","worker":"W-{NAME}","plan":"{path}","execution":"{sequential|parallel}","groups":{N},"ts":"'$(date -Iseconds)'"}' \
-      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
-      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
+      > "$SIGNAL_FILE.tmp" \
+      && mv "$SIGNAL_FILE.tmp" "$SIGNAL_FILE"
 
 ---
 
-***REMOVED******REMOVED*** Контракт D: Opus соло
+***REMOVED******REMOVED*** Контракт D: OpenCode solo
 
-**Когда:** VERY COMPLEX — Sonnet не потянет. Полный цикл.
+**Когда:** VERY COMPLEX — полный цикл одним worker'ом.
 
-    Ты — Opus solo worker. Изучи, спланируй, реализуй, создай PR.
+    Ты — OpenCode solo worker. Изучи, спланируй, реализуй, создай PR.
 
     ISSUE: ***REMOVED***{N} — {title}
     {issue_body}
@@ -396,18 +483,11 @@ Haiku НЕ классифицирует сложность — только фи
     {Общие правила}
     Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
-    ***REMOVED******REMOVED*** TASK LIST (orch видит твой прогресс в реалтайме)
-
-    Orch создал начальную задачу. По мере работы ты САМ создаёшь подзадачи:
-    1. После writing-plans — TaskCreate для каждого шага плана + DAG
-    2. При executing-plans — TaskUpdate(in_progress/completed) для каждого шага
-    Orch видит декомпозицию и прогресс без вмешательства.
-
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
-    Полная документация: Read .claude/cache/sdk-{library}-{N}.md
+    Полная документация: Read .codex/cache/sdk-{library}-{N}.md
 
-    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    SDK РЕЕСТР (релевантные записи из SDK registry):
     {sdk_registry_excerpt}
 
     CODEBASE КОНТЕКСТ (orch собрал в Phase 2.3):
@@ -416,8 +496,9 @@ Haiku НЕ классифицирует сложность — только фи
     <HARD-GATE>
     Skill(skill="writing-plans") → Skill(skill="executing-plans") →
     Skill(skill="test-driven-development") → Skill(skill="requesting-code-review") →
-    Skill(skill="verification-before-completion")
-    Все 5 скиллов ОБЯЗАТЕЛЬНЫ. Нарушил = провал.
+    Skill(skill="verification-before-completion") → Skill(skill="finishing-a-development-branch")
+    Все 6 скиллов ОБЯЗАТЕЛЬНЫ. Code review и verification ДО commit. Finish после commit в PR-flow, worktree оставить для orch.
+    Нарушил = провал.
     </HARD-GATE>
 
     После верификации: {Общий финал}
