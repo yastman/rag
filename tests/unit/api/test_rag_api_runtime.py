@@ -48,7 +48,7 @@ if importlib.util.find_spec("fastapi") is None:
     _FASTAPI_SHIM_ACTIVE = True
 
 from src.api.main import app, generic_error_handler, lifespan, query
-from src.api.schemas import QueryRequest
+from src.api.schemas import QueryRequest, QueryResponse
 
 
 if _FASTAPI_SHIM_ACTIVE:
@@ -313,3 +313,64 @@ async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> 
     mock_logger.exception.assert_called_once_with(
         "Unhandled error in RAG API", extra={"trace_id": "trace-abc-123"}
     )
+
+
+async def test_query_returns_fallback_on_graph_recursion_error() -> None:
+    """GraphRecursionError must return a valid QueryResponse fallback, not 500."""
+    from langgraph.errors import GraphRecursionError
+
+    class _FailingGraph:
+        async def ainvoke(self, state: dict) -> dict:
+            raise GraphRecursionError("recursion limit exceeded")
+
+    app.state.graph = _FailingGraph()
+    app.state.max_rewrite_attempts = 1
+
+    lf = MagicMock()
+    lf.update_current_span = MagicMock()
+
+    with (
+        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
+        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("telegram_bot.scoring.write_langfuse_scores") as mock_write_scores,
+    ):
+        response = await query(QueryRequest(query="test", user_id=1))
+
+    assert isinstance(response, QueryResponse)
+    assert "лимит" in response.response.lower() or "limit" in response.response.lower()
+    assert response.query_type == "ERROR"
+    assert response.documents_count == 0
+    assert response.latency_ms >= 0
+    # Observability: span should still be updated and scores written
+    lf.update_current_span.assert_called_once()
+    mock_write_scores.assert_called_once()
+
+
+async def test_query_graph_recursion_error_preserves_trace_context() -> None:
+    """GraphRecursionError fallback should preserve trace/span behavior."""
+    from langgraph.errors import GraphRecursionError
+
+    class _FailingGraph:
+        async def ainvoke(self, state: dict) -> dict:
+            raise GraphRecursionError("recursion limit exceeded")
+
+    app.state.graph = _FailingGraph()
+    app.state.max_rewrite_attempts = 1
+
+    lf = MagicMock()
+    lf.update_current_span = MagicMock()
+
+    with (
+        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
+        patch("telegram_bot.observability.get_client", return_value=lf),
+    ):
+        await query(QueryRequest(query="complex", user_id=42, session_id="sess-1"))
+
+    call_kwargs = lf.update_current_span.call_args.kwargs
+    assert call_kwargs["input"] == "complex"
+    assert (
+        "recursion" in str(call_kwargs.get("output", "")).lower()
+        or "limit" in str(call_kwargs.get("output", "")).lower()
+    )
+    assert call_kwargs["metadata"]["source"] == "api"
+    assert call_kwargs["metadata"]["query_type"] == "ERROR"
