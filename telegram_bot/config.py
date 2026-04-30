@@ -1,5 +1,7 @@
 """Bot configuration."""
 
+from __future__ import annotations
+
 from typing import Annotated
 from urllib.parse import quote
 
@@ -639,7 +641,7 @@ class BotConfig(BaseSettings):
         return []
 
     @model_validator(mode="after")
-    def validate_handoff_contract(self) -> "BotConfig":
+    def validate_handoff_contract(self) -> BotConfig:
         self.redis_url = _inject_local_redis_password(
             self.redis_url,
             redis_password=self.redis_password,
