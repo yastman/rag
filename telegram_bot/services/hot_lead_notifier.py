@@ -34,7 +34,7 @@ class HotLeadNotifier:
         raw_score = payload.get("score", 0)
         try:
             score = int(raw_score)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             logger.warning("Invalid hot lead score %r; defaulting to 0", raw_score)
             score = 0
         if not lead_id or not session_id:
