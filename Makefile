@@ -39,7 +39,7 @@ PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 
 help: ## Show this help message
-	@echo "$(BLUE)Contextual RAG v2.0.1 - Development Commands$(NC)"
+	@echo "$(BLUE)Contextual RAG v$(PROJECT_VERSION) - Development Commands$(NC)"
 	@echo ""
 	@echo "$(GREEN)Available commands:$(NC)"
 	@grep -E '^[a-zA-Z0-9_%-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
@@ -177,11 +177,6 @@ test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse loca
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
-
-test-unit-core: ## Run core unit tests (no optional deps needed, PR gate)
-	@echo "$(BLUE)Running core unit tests (no optional deps)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
-	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
 	@echo "$(BLUE)Running full unit tests (all extras)...$(NC)"
