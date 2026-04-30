@@ -154,21 +154,21 @@ def coerce_filter_value(field: str, value: str) -> Any:
     if field == "rooms":
         try:
             return int(value)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
     if field == "floor":
         if value in FLOOR_MAP:
             return FLOOR_MAP[value]
         try:
             return int(value)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
     if field == "area":
         if value in AREA_MAP:
             return AREA_MAP[value]
         try:
             return {"gte": int(value)}
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
     if field == "budget":
         return BUDGET_MAP.get(value)

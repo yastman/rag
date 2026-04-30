@@ -561,7 +561,7 @@ class DoclingClient:
         if isinstance(page_numbers, list) and page_numbers:
             try:
                 nums = [int(p) for p in page_numbers if p is not None]
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 nums = []
             if nums:
                 return (min(nums), max(nums))

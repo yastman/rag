@@ -282,7 +282,7 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         try:
             rooms_key = _string_filter_value(rooms_val)
             label = ROOMS_DISPLAY.get(int(rooms_key or "0"), str(rooms_key or ""))
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             label = str(rooms_val)
         lines.append(f"🛏 Комнаты: {label}")
 

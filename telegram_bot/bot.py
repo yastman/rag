@@ -586,7 +586,7 @@ class PropertyBot:
             from .services.apartment_llm_extractor import ApartmentLlmExtractor
 
             _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
-        except ImportError, ModuleNotFoundError:
+        except (ImportError, ModuleNotFoundError):
             logger.warning(
                 "ApartmentLlmExtractor unavailable, falling back to regex-only extraction",
                 exc_info=True,
@@ -1068,7 +1068,7 @@ class PropertyBot:
 
         try:
             payload = json.loads(raw)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             if message:
                 await message.answer("Ошибка обработки ссылки.")
             else:
@@ -1208,7 +1208,7 @@ class PropertyBot:
                     data = json.loads(raw_msg["data"])
                     uuid_str = data["uuid"]
                     user_id = int(data["user_id"])
-                except ValueError, TypeError, KeyError:
+                except (ValueError, TypeError, KeyError):
                     logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
                     continue
 

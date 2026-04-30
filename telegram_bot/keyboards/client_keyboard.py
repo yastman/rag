@@ -45,7 +45,7 @@ def collect_client_menu_texts(labels: list[Any]) -> set[str]:
             continue
         try:
             texts.add(label)
-        except AttributeError, TypeError:
+        except (AttributeError, TypeError):
             logger.debug("Skipping malformed client keyboard label", exc_info=True)
     return texts
 
