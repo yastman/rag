@@ -40,7 +40,7 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
 
     try:
         from telegram_bot.services.colbert_reranker import ColbertRerankerService
-    except (ImportError, ModuleNotFoundError):
+    except ImportError, ModuleNotFoundError:
         return False
 
     return isinstance(reranker, ColbertRerankerService)
