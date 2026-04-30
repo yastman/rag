@@ -2,12 +2,8 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
-from typing import TypeVar
 
 from qdrant_client import models
-
-
-T = TypeVar("T")
 
 
 class AbstractSearchEngine(ABC):
@@ -36,7 +32,7 @@ def lexical_weights_to_sparse(lexical_weights) -> models.SparseVector:
     )
 
 
-def create_engine_from_registry(
+def create_engine_from_registry[T](
     engine_key: str | None,
     *,
     registry: Mapping[str, Callable[[], T]],
