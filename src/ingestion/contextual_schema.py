@@ -8,6 +8,8 @@ Defines dataclasses for storing contextualized chunks created by Claude CLI:
 Claude CLI creates JSON in this format, Python code loads and indexes it.
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
