@@ -54,19 +54,7 @@ class HandoffData(BaseModel):
 
     def to_redis_dict(self) -> dict[str, str]:
         payload = self.model_dump(mode="json")
-        return {
-            "client_id": str(payload["client_id"]),
-            "topic_id": str(payload["topic_id"]),
-            "mode": str(payload["mode"]),
-            "lead_id": str(payload["lead_id"]) if payload["lead_id"] is not None else "",
-            "created_at": str(payload["created_at"]),
-            "manager_joined_at": (
-                str(payload["manager_joined_at"])
-                if payload["manager_joined_at"] is not None
-                else ""
-            ),
-            "qualification": str(payload["qualification"]),
-        }
+        return {k: "" if v is None else str(v) for k, v in payload.items()}
 
     @classmethod
     def from_redis_dict(cls, raw: dict[str, str]) -> HandoffData:
