@@ -13,7 +13,7 @@ Authoritative evidence:
 - PR metadata and PR file list
 - `git diff --name-only` / `git diff --stat`
 - focused verification commands run fresh by the orchestrator when needed
-- GitHub CI checks
+- GitHub CI checks only when they are available and relevant; local verification is the gate in local-first workflows
 
 Diagnostic-only evidence:
 - OpenCode TUI logs
@@ -98,7 +98,7 @@ For code workers that create PRs, DONE JSON should include:
 3. Compare PR files with reserved files.
 4. Compare local diff files with PR files.
 5. Run focused checks if needed.
-6. Check CI.
+6. Check CI only when available and relevant; do not block on broken or lint-only CI in local-first workflows.
 7. Read worker logs only if one of the previous steps is missing or contradictory.
 
 ## Prompt File Handoff
@@ -141,8 +141,8 @@ Prompt file rules:
 - PR review-fix workers use `pr-review-fix` on `opencode-go/deepseek-v4-pro`.
 - Model selection belongs in launcher flags or OpenCode agent config, not natural-language prompt text.
 - DONE JSON records `agent`, `model`, `review_decision`, and `autofix_commits`.
-- Merge remains orchestrator-owned after scope gate, verification, and review gate.
+- Merge remains orchestrator-owned after scope gate, local verification, and review gate. CI is an optional signal when it is available and meaningful.
 
 ## Rule To Add To Swarm Skill
 
-Worker logs are diagnostic-only. After DONE JSON or PR creation, the orchestrator must not read TUI logs. The review source of truth is SIGNAL JSON, PR metadata/files, git diff, fresh verification commands, and CI. Logs may be read only after missing or invalid JSON, contradictory artifacts, or a stalled worker, capped to 80 sanitized lines.
+Worker logs are diagnostic-only. After DONE JSON or PR creation, the orchestrator must not read TUI logs. The review source of truth is SIGNAL JSON, PR metadata/files, git diff, fresh verification commands, and CI only when available and relevant. Logs may be read only after missing or invalid JSON, contradictory artifacts, or a stalled worker, capped to 80 sanitized lines.
