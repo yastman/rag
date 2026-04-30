@@ -11,7 +11,15 @@ Use this skill to review pull requests with a bug-finding mindset and, when aske
 
 In repositories that use `AGENTS.md`, local override files, SDK registries, or Docker Compose as part of the product contract, load those first. They are part of correctness, not optional background reading.
 
-For `rag-fresh`, treat this as a `review -> verify -> merge-to-dev -> cleanup` operator unless the user explicitly wants a read-only review.
+For `rag-fresh`, treat this as a `review -> verify -> merge-to-dev -> cleanup` operator unless the user explicitly wants a read-only review or the caller is a swarm review-fix worker.
+
+When invoked by the OpenCode `pr-review-fix` agent, this skill is non-merge:
+- do not merge;
+- do not run cleanup;
+- do not delete branches or worktrees;
+- review against the true PR merge base;
+- if autofix is explicitly allowed, make only narrow blocker fixes in the same PR branch;
+- push the same PR branch and write DONE JSON with `review_decision` and `autofix_commits`.
 
 ## Read First
 
@@ -50,7 +58,7 @@ Follow the repository tool contract from `AGENTS.md`:
 - Treat local verification as the release authority unless the user or repo contract says otherwise.
 - Prefer SDK-native or framework-native solutions already adopted by the repo. Custom layers require a concrete justification.
 - For SDK-sensitive changes, do not approve or merge based on intuition alone when the registry/current code is stale or unclear. Verify through Context7 or official docs first.
-- Review is read-first by default. Only patch, merge, or clean up when the user asks for it.
+- Review is read-first by default. Only patch, merge, or clean up when the user asks for it. If running as `pr-review-fix`, patch only explicitly allowed blockers and never merge or clean up.
 - Findings must describe concrete failure modes, not style preferences.
 
 ## Workflow
