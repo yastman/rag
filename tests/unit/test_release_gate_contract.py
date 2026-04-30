@@ -1,5 +1,6 @@
 """Regression tests for the VPS release gate contract."""
 
+import re
 from pathlib import Path
 
 
@@ -98,3 +99,212 @@ def test_release_smoke_reads_handoff_gate_from_bot_runtime_env() -> None:
     script = RELEASE_SMOKE_SCRIPT.read_text()
     assert "docker compose exec -T bot python - <<'PY'" in script
     assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' not in script
+
+
+def test_release_gate_script_requires_all_compose_required_vars() -> None:
+    """The production env preflight must check every ?:required variable from compose.yml."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    required_vars = [
+        "POSTGRES_PASSWORD",
+        "REDIS_PASSWORD",
+        "LITELLM_MASTER_KEY",
+        "TELEGRAM_BOT_TOKEN",
+        "GDRIVE_SYNC_DIR",
+        "NEXTAUTH_SECRET",
+        "SALT",
+        "ENCRYPTION_KEY",
+        "LANGFUSE_REDIS_PASSWORD",
+    ]
+    for var in required_vars:
+        assert var in script, f"{var} missing from validate_prod_env.sh"
+
+
+def test_release_gate_script_enforces_password_length() -> None:
+    """The production env preflight must reject passwords shorter than 12 characters."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert "-lt 12" in script or "must be at least 12 characters" in script
+
+
+def test_release_gate_script_uses_safe_env_parsing() -> None:
+    """The production env preflight must not blindly source .env (shell-injection safe)."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert ". ./.env" not in script
+    assert "source .env" not in script
+    assert "Invalid .env line" in script
+
+
+# ── Healthcheck contract tests (PR #1256 runtime blockers) ──────────────
+
+
+_PYTHON_SLIM_DOCKERFILES = [
+    ROOT / "src" / "api" / "Dockerfile",
+    ROOT / "src" / "voice" / "Dockerfile",
+]
+
+
+def _extract_healthcheck_cmd(dockerfile: Path) -> str:
+    """Extract the HEALTHCHECK CMD line from a Dockerfile."""
+    text = dockerfile.read_text()
+    m = re.search(r"HEALTHCHECK.*?\n\s+CMD\s+(.+)", text)
+    return m.group(1) if m else ""
+
+
+def test_python_slim_healthchecks_do_not_use_wget() -> None:
+    """Python slim runtime images do not install wget; healthchecks must not rely on it."""
+    for df in _PYTHON_SLIM_DOCKERFILES:
+        cmd = _extract_healthcheck_cmd(df)
+        assert "wget" not in cmd, (
+            f"{df.name} HEALTHCHECK uses wget but runtime is python:3.14-slim-bookworm "
+            "(no wget installed). Use Python urllib.request instead."
+        )
+        assert "urllib.request" in cmd or "python -c" in cmd, (
+            f"{df.name} HEALTHCHECK should use a Python stdlib HTTP check "
+            "since the runtime image is python:3.14-slim-bookworm."
+        )
+
+
+def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
+    """compose.yml healthchecks for rag-api and voice-agent run in python:slim images;
+    wget is not available there."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    # Find rag-api healthcheck section
+    rag_api_match = re.search(
+        r"rag-api:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
+        compose_text,
+        re.DOTALL,
+    )
+    voice_agent_match = re.search(
+        r"voice-agent:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
+        compose_text,
+        re.DOTALL,
+    )
+
+    if rag_api_match:
+        assert "wget" not in rag_api_match.group(1), (
+            "rag-api compose healthcheck uses wget; Python urllib.request should be used instead."
+        )
+    if voice_agent_match:
+        assert "wget" not in voice_agent_match.group(1), (
+            "voice-agent compose healthcheck uses wget; Python urllib.request should be used instead."
+        )
+
+
+def test_bot_dockerfile_healthcheck_command_is_runtime_available() -> None:
+    """Bot HEALTHCHECK must use a command guaranteed in the runtime image OR install it."""
+    bot_df = ROOT / "telegram_bot" / "Dockerfile"
+    text = bot_df.read_text()
+
+    cmd = _extract_healthcheck_cmd(bot_df)
+    has_procps_install = bool(
+        re.search(
+            r"apt-get install.*procps",
+            text,
+        )
+    )
+
+    if "pgrep" in cmd:
+        assert has_procps_install, (
+            "telegram_bot/Dockerfile HEALTHCHECK uses pgrep but runtime stage "
+            "does not install procps. python:3.14-slim-bookworm does not include pgrep."
+        )
+
+
+def test_bot_k8s_probes_are_runtime_available() -> None:
+    """Bot k8s probes must use a command guaranteed in the bot image."""
+    k8s_text = (ROOT / "k8s" / "base" / "bot" / "deployment.yaml").read_text()
+    bot_df_text = (ROOT / "telegram_bot" / "Dockerfile").read_text()
+
+    has_pgrep = "pgrep" in k8s_text
+    has_procps_install = bool(
+        re.search(
+            r"apt-get install.*procps",
+            bot_df_text,
+        )
+    )
+
+    if has_pgrep:
+        assert has_procps_install, (
+            "k8s bot probes use pgrep but telegram_bot/Dockerfile does not install procps."
+        )
+
+
+def test_qdrant_healthcheck_does_not_use_wget() -> None:
+    """qdrant/qdrant:v1.17.1 does not include wget/curl/busybox;
+    the compose healthcheck must use a runtime-available command."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    qdrant_hc = _extract_compose_service_healthcheck(compose_text, "qdrant")
+    assert qdrant_hc is not None, "qdrant healthcheck section not found in compose.yml"
+    assert "wget" not in qdrant_hc, (
+        "qdrant compose healthcheck uses wget but qdrant/qdrant:v1.17.1 does not "
+        "include wget/curl/busybox. Use bash /dev/tcp instead."
+    )
+
+
+def test_promtail_healthcheck_does_not_use_wget() -> None:
+    """grafana/promtail:3.6.7 does not include wget/curl/busybox;
+    the compose healthcheck must use a runtime-available command."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    promtail_hc = _extract_compose_service_healthcheck(compose_text, "promtail")
+    assert promtail_hc is not None, "promtail healthcheck section not found in compose.yml"
+    assert "wget" not in promtail_hc, (
+        "promtail compose healthcheck uses wget but grafana/promtail:3.6.7 does not "
+        "include wget/curl/busybox. Use bash /dev/tcp instead."
+    )
+
+
+def test_qdrant_healthcheck_uses_bash_dev_tcp() -> None:
+    """qdrant/qdrant:v1.17.1 has bash with /dev/tcp support;
+    the compose healthcheck must use bash /dev/tcp to hit /readyz."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    qdrant_hc = _extract_compose_service_healthcheck(compose_text, "qdrant")
+    assert qdrant_hc is not None, "qdrant healthcheck section not found in compose.yml"
+    assert "bash" in qdrant_hc, (
+        "qdrant compose healthcheck must invoke bash explicitly since /bin/sh is dash "
+        "and does not support /dev/tcp."
+    )
+    assert "/dev/tcp" in qdrant_hc, (
+        "qdrant compose healthcheck must use bash /dev/tcp since wget/curl/busybox "
+        "are not installed in qdrant/qdrant:v1.17.1."
+    )
+    assert "readyz" in qdrant_hc, (
+        "qdrant compose healthcheck must check the canonical readiness endpoint /readyz."
+    )
+
+
+def test_promtail_healthcheck_uses_bash_dev_tcp() -> None:
+    """grafana/promtail:3.6.7 has bash with /dev/tcp support;
+    the compose healthcheck must use bash /dev/tcp to hit /ready."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    promtail_hc = _extract_compose_service_healthcheck(compose_text, "promtail")
+    assert promtail_hc is not None, "promtail healthcheck section not found in compose.yml"
+    assert "bash" in promtail_hc, (
+        "promtail compose healthcheck must invoke bash explicitly since /bin/sh is dash "
+        "and does not support /dev/tcp."
+    )
+    assert "/dev/tcp" in promtail_hc, (
+        "promtail compose healthcheck must use bash /dev/tcp since wget/curl/busybox "
+        "are not installed in grafana/promtail:3.6.7."
+    )
+    assert "ready" in promtail_hc, (
+        "promtail compose healthcheck must check the canonical readiness endpoint /ready."
+    )
+
+
+def _extract_compose_service_healthcheck(compose_text: str, service_name: str) -> str | None:
+    """Extract the healthcheck test section for a named compose service.
+
+    Returns the multiline content between the healthcheck key and the next
+    compose key that is at the same or shallower indentation, or None if
+    the service or its healthcheck section is not found.
+    """
+    m = re.search(
+        rf"  {service_name}:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
+        compose_text,
+        re.DOTALL,
+    )
+    return m.group(1) if m else None
