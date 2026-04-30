@@ -50,6 +50,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER botuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, signal; os.kill(1, 0)" || exit 1
+    CMD pgrep -f "telegram_bot.main" || exit 1
 
 CMD ["python", "-m", "telegram_bot.main"]
