@@ -3,12 +3,14 @@
 Uses OpenAI SDK via Langfuse drop-in replacement for auto-tracing.
 """
 
-import json
 import logging
+import warnings
 from typing import Any
 
+import instructor
 import openai
 from langfuse.openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 
 from telegram_bot.integrations.prompt_manager import get_prompt
 
@@ -47,6 +49,19 @@ SYSTEM_PROMPT = """Ты QueryAnalyzer для системы поиска нед�
 4. ОБЯЗАТЕЛЬНО возвращай валидный JSON"""
 
 
+class QueryAnalysisResult(BaseModel):
+    """Pydantic model for query analysis extraction via Instructor."""
+
+    filters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extracted filters from user query",
+    )
+    semantic_query: str = Field(
+        default="",
+        description="Semantic query for embedding search",
+    )
+
+
 class QueryAnalyzer:
     """Analyze user queries to extract structured filters and semantic query."""
 
@@ -60,6 +75,13 @@ class QueryAnalyzer:
             max_retries=2,
             timeout=30.0,
         )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=("Client should be an instance of openai.OpenAI or openai.AsyncOpenAI.*"),
+                category=UserWarning,
+            )
+            self._instructor_client = instructor.from_openai(self.client)
 
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
@@ -72,46 +94,21 @@ class QueryAnalyzer:
         """
         try:
             system_prompt = get_prompt("query-analysis", fallback=SYSTEM_PROMPT)
-            response = await self.client.chat.completions.create(
+            result = await self._instructor_client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Запрос пользователя: {query}"},
                 ],
-                response_format={"type": "json_object"},  # type: ignore[arg-type]
+                response_model=QueryAnalysisResult,
+                max_retries=2,
                 temperature=0.0,
                 max_tokens=1000,
                 name="query-analysis",  # type: ignore[call-overload]  # langfuse kwarg
             )
 
-            content = response.choices[0].message.content
-
-            if content is None:
-                logger.warning(
-                    "QueryAnalyzer: LLM returned None content. model=%s",
-                    self.model,
-                )
-                return {"filters": {}, "semantic_query": query}
-
-            try:
-                analysis = json.loads(content)
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.error(
-                    "QueryAnalyzer: failed to parse JSON: %s. Raw: %s",
-                    e,
-                    content[:500],
-                )
-                return {"filters": {}, "semantic_query": query}
-
-            if not isinstance(analysis, dict):
-                logger.warning(
-                    "QueryAnalyzer: non-dict JSON: type=%s",
-                    type(analysis).__name__,
-                )
-                return {"filters": {}, "semantic_query": query}
-
-            filters = analysis.get("filters", {})
-            semantic_query = analysis.get("semantic_query", query)
+            filters = result.filters
+            semantic_query = result.semantic_query or query
 
             logger.info("QueryAnalyzer: filters=%s, semantic_query=%s", filters, semantic_query)
             return {"filters": filters, "semantic_query": semantic_query}

@@ -3,13 +3,18 @@
 Tests verify graceful degradation when LLM services fail.
 """
 
-import json
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
+from telegram_bot.services.llm import (
+    LOW_CONFIDENCE_THRESHOLD,
+    ConfidenceResponse,
+    ConfidenceResult,
+    LLMService,
+)
 
 
 pytestmark = [
@@ -105,11 +110,13 @@ class TestLLMHTTPErrors:
 class TestLLMResponseParsing:
     """Tests for LLM response parsing failures."""
 
-    async def test_malformed_json_response_handled(self, httpx_mock: HTTPXMock):
-        """Verify handling of malformed JSON in LLM response."""
-        httpx_mock.add_response(json={"choices": [{"message": {"content": "not json response"}}]})
-
+    async def test_malformed_json_response_handled(self):
+        """Verify handling of Instructor validation failure (formerly JSON parsing)."""
         service = LLMService(api_key="test-key")
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Instructor validation failed")
+        )
 
         result = await service.generate_answer(
             "Query",
@@ -117,22 +124,18 @@ class TestLLMResponseParsing:
             with_confidence=True,
         )
 
-        # Should return result with default confidence (parsing failed)
+        # Instructor failure falls through to generic exception → fallback
         assert isinstance(result, ConfidenceResult)
-        assert result.answer == "not json response"
-        assert result.confidence == 0.5  # Default on parse failure
+        assert result.confidence == 0.0
+        assert result.is_low_confidence is True
 
-    async def test_missing_confidence_field_handled(self, httpx_mock: HTTPXMock):
-        """Verify handling when confidence field is missing."""
-        httpx_mock.add_response(
-            json={
-                "choices": [
-                    {"message": {"content": json.dumps({"answer": "Response without confidence"})}}
-                ]
-            }
-        )
-
+    async def test_missing_confidence_field_handled(self):
+        """Verify default confidence used when field is missing from response."""
         service = LLMService(api_key="test-key")
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Response without confidence", confidence=0.5)
+        )
 
         result = await service.generate_answer(
             "Query",
@@ -141,19 +144,15 @@ class TestLLMResponseParsing:
         )
 
         assert isinstance(result, ConfidenceResult)
-        assert result.confidence == 0.5  # Default when missing
+        assert result.confidence == 0.5  # Pydantic default when missing
 
-    async def test_invalid_confidence_value_clamped(self, httpx_mock: HTTPXMock):
+    async def test_invalid_confidence_value_clamped(self):
         """Verify invalid confidence values are clamped to valid range."""
-        httpx_mock.add_response(
-            json={
-                "choices": [
-                    {"message": {"content": json.dumps({"answer": "Test", "confidence": 1.5})}}
-                ]
-            }
-        )
-
         service = LLMService(api_key="test-key")
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Test", confidence=1.5)
+        )
 
         result = await service.generate_answer(
             "Query",
@@ -161,6 +160,7 @@ class TestLLMResponseParsing:
             with_confidence=True,
         )
 
+        # 1.5 is clamped to 1.0 by the ConfidenceResponse field_validator
         assert result.confidence == 1.0  # Clamped to max
 
 
