@@ -515,7 +515,7 @@ def _start_health_server() -> None:
             pass
 
     def _run() -> None:
-        server = HTTPServer(("0.0.0.0", 8080), _HealthHandler)
+        server = HTTPServer(("127.0.0.1", 8080), _HealthHandler)
         server.serve_forever()
 
     threading.Thread(target=_run, daemon=True).start()
