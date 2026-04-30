@@ -36,7 +36,7 @@ def _read_colbert_coverage_warn_threshold() -> float:
     )
     try:
         return float(raw)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         logger.warning(
             "Invalid COLBERT_COVERAGE_WARN_THRESHOLD=%r, fallback to %.3f",
             raw,
