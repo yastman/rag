@@ -78,7 +78,7 @@ class KommoTokenStore:
         refresh_token = data.get("refresh_token", "")
         try:
             expires_at = int(data.get("expires_at", 0))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             expires_at = 0
 
         # Kommo OAuth refresh flow requires refresh_token. If only access_token is
