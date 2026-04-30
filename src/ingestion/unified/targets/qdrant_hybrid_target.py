@@ -8,6 +8,8 @@ This target connector receives mutations from CocoIndex and:
 4. Updates state in Postgres
 """
 
+from __future__ import annotations
+
 import dataclasses
 import hashlib
 import logging
