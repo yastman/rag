@@ -3,22 +3,42 @@
 Prefer telegram_bot.services.generate_response for active runtime paths.
 """
 
-import json
 import logging
-import re
 import warnings
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
+import instructor
 import openai
 from langfuse.openai import AsyncOpenAI
+from pydantic import BaseModel, Field, field_validator
 
 
 logger = logging.getLogger(__name__)
 
 # Default confidence threshold for triggering fallback response
 LOW_CONFIDENCE_THRESHOLD = 0.3
+
+
+class ConfidenceResponse(BaseModel):
+    """Pydantic model for LLM confidence extraction via Instructor.
+
+    Confidence is clamped to [0.0, 1.0] to preserve legacy clamp semantics:
+    values outside this range are accepted but clipped, not rejected.
+    """
+
+    answer: str = Field(description="Generated answer text")
+    confidence: float = Field(
+        default=0.5,
+        description="Confidence score — clamped to [0.0, 1.0] to match legacy behavior",
+    )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _clamp_confidence(cls, v: float) -> float:
+        """Clamp confidence to [0.0, 1.0], preserving legacy clamp semantics."""
+        return max(0.0, min(1.0, float(v)))
 
 
 @dataclass
@@ -64,6 +84,13 @@ class LLMService:
             max_retries=2,
             timeout=60.0,
         )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=("Client should be an instance of openai.OpenAI or openai.AsyncOpenAI.*"),
+                category=UserWarning,
+            )
+            self._instructor_client = instructor.from_openai(self.client)
 
     async def generate_answer(
         self,
@@ -108,6 +135,23 @@ class LLMService:
                 {"role": "user", "content": user_content},
             ]
 
+            if with_confidence:
+                response_model = await self._instructor_client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,  # type: ignore[arg-type]
+                    response_model=ConfidenceResponse,
+                    max_retries=2,
+                    temperature=0.7,
+                    max_tokens=4096,
+                    name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+                )
+                return ConfidenceResult(
+                    answer=response_model.answer,
+                    confidence=response_model.confidence,
+                    is_low_confidence=response_model.confidence < self.low_confidence_threshold,
+                    raw_response=None,
+                )
+
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
@@ -117,12 +161,7 @@ class LLMService:
             )
 
             message = response.choices[0].message
-            raw_answer = message.content or ""
-
-            if with_confidence:
-                return self._parse_confidence_response(raw_answer, question, context_chunks)
-
-            return raw_answer
+            return message.content or ""
 
         except (openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM API timeout/connection: {e}")
@@ -168,39 +207,6 @@ class LLMService:
             "- 0.0-0.3: Ответ не основан на контексте или контекст нерелевантен\n\n"
             "Если контекст не содержит релевантной информации, установи confidence < 0.5."
         )
-
-    def _parse_confidence_response(
-        self, raw_response: str, question: str, context_chunks: list[dict[str, Any]]
-    ) -> ConfidenceResult:
-        """Parse LLM response with confidence scoring."""
-        try:
-            json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-            else:
-                json_match = re.search(r"\{[^{}]*\"answer\"[^{}]*\}", raw_response, re.DOTALL)
-                json_str = json_match.group(0) if json_match else raw_response.strip()
-
-            data = json.loads(json_str)
-            answer = data.get("answer", raw_response)
-            confidence = float(data.get("confidence", 0.5))
-            confidence = max(0.0, min(1.0, confidence))
-
-            return ConfidenceResult(
-                answer=answer,
-                confidence=confidence,
-                is_low_confidence=confidence < self.low_confidence_threshold,
-                raw_response=raw_response,
-            )
-
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning(f"Failed to parse confidence response: {e}")
-            return ConfidenceResult(
-                answer=raw_response,
-                confidence=0.5,
-                is_low_confidence=False,
-                raw_response=raw_response,
-            )
 
     async def stream_answer(
         self,

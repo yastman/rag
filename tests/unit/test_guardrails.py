@@ -4,12 +4,16 @@ Tests confidence scoring and low confidence fallback in LLMService.
 Off-topic detection is now handled by classify_node in the LangGraph pipeline.
 """
 
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
+from telegram_bot.services.llm import (
+    LOW_CONFIDENCE_THRESHOLD,
+    ConfidenceResponse,
+    ConfidenceResult,
+    LLMService,
+)
 
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -77,11 +81,10 @@ class TestConfidenceScoring:
 
     async def test_generate_answer_with_confidence(self, sample_chunks):
         """Test generate_answer returns ConfidenceResult when with_confidence=True."""
-        response_json = json.dumps({"answer": "Found an apartment", "confidence": 0.85})
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Found an apartment", confidence=0.85)
         )
 
         result = await service.generate_answer(
@@ -110,11 +113,10 @@ class TestConfidenceScoring:
 
     async def test_low_confidence_detection(self, sample_chunks):
         """Test is_low_confidence is True when confidence < threshold."""
-        response_json = json.dumps({"answer": "Uncertain answer", "confidence": 0.2})
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Uncertain answer", confidence=0.2)
         )
 
         result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
@@ -122,94 +124,86 @@ class TestConfidenceScoring:
         assert result.is_low_confidence is True
         assert result.confidence < LOW_CONFIDENCE_THRESHOLD
 
-    async def test_confidence_parsing_from_markdown_json(self, sample_chunks):
-        """Test parsing confidence from JSON wrapped in markdown code blocks."""
-        response = """```json
-{"answer": "Markdown wrapped", "confidence": 0.75}
-```"""
+    async def test_instructor_validation_fallback(self, sample_chunks):
+        """Test fallback when Instructor fails after retries."""
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion(response))
-
-        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
-
-        assert result.answer == "Markdown wrapped"
-        assert result.confidence == 0.75
-
-    async def test_confidence_clamped_to_valid_range(self, sample_chunks):
-        """Test confidence values outside 0-1 are clamped."""
-        response_json = json.dumps({"answer": "Test", "confidence": 1.5})
-        service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Instructor validation failed")
         )
 
         result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
+        assert isinstance(result, ConfidenceResult)
+        assert result.confidence == 0.0
+        assert result.is_low_confidence is True
+
+    async def test_instructor_uses_response_model(self, sample_chunks):
+        """Test that Instructor create is called with response_model."""
+        service = LLMService(api_key="test-key")
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Test", confidence=0.6)
+        )
+
+        await service.generate_answer("Query", sample_chunks, with_confidence=True)
+
+        call_kwargs = service._instructor_client.chat.completions.create.call_args[1]
+        assert call_kwargs["response_model"] is ConfidenceResponse
+        assert call_kwargs["max_retries"] == 2
+
+    async def test_confidence_clamped_to_valid_range(self, sample_chunks):
+        """Test confidence values outside [0,1] are clamped, not rejected.
+
+        The ConfidenceResponse Pydantic model uses a field_validator that
+        clamps to [0.0, 1.0], preserving legacy clamp semantics.
+        """
+        service = LLMService(api_key="test-key")
+        service._instructor_client = AsyncMock()
+        # Construct with out-of-range value - validator clamps during init
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Test", confidence=1.5)
+        )
+
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+
+        # 1.5 is clamped to 1.0 by the field_validator
         assert result.confidence == 1.0
 
     async def test_negative_confidence_clamped(self, sample_chunks):
-        """Test negative confidence is clamped to 0."""
-        response_json = json.dumps({"answer": "Test", "confidence": -0.5})
+        """Test negative confidence is clamped to 0.0, not rejected."""
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Test", confidence=-0.5)
         )
 
         result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
+        # -0.5 is clamped to 0.0 by the field_validator
         assert result.confidence == 0.0
 
 
 class TestConfidenceParsingEdgeCases:
-    """Tests for edge cases in confidence response parsing."""
+    """Tests for edge cases in confidence response parsing via Instructor."""
 
     @pytest.fixture
     def sample_chunks(self):
         return [{"text": "Test", "metadata": {}, "score": 0.9}]
 
-    async def test_malformed_json_returns_raw_response(self, sample_chunks):
-        """Test malformed JSON returns raw response with default confidence."""
+    async def test_instructor_failure_returns_fallback(self, sample_chunks):
+        """Test Instructor failure returns fallback with zero confidence."""
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("Not JSON at all")
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Instructor failed")
         )
 
         result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
-        assert result.answer == "Not JSON at all"
-        assert result.confidence == 0.5  # Default on parse failure
-
-    async def test_missing_answer_field(self, sample_chunks):
-        """Test missing answer field uses raw response."""
-        response_json = json.dumps({"confidence": 0.8})
-        service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
-        )
-
-        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
-
-        # Should use raw response as answer
-        assert result.confidence == 0.8
-
-    async def test_missing_confidence_uses_default(self, sample_chunks):
-        """Test missing confidence field uses default value."""
-        response_json = json.dumps({"answer": "Answer only"})
-        service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
-        )
-
-        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
-
-        assert result.answer == "Answer only"
-        assert result.confidence == 0.5  # Default when missing
+        assert isinstance(result, ConfidenceResult)
+        assert result.confidence == 0.0
+        assert result.is_low_confidence is True
 
 
 class TestLowConfidenceResponse:
@@ -264,13 +258,12 @@ class TestGuardrailsIntegration:
 
     async def test_high_confidence_answer_returned_as_is(self, sample_chunks):
         """Test high confidence answers are returned without modification."""
-        response_json = json.dumps(
-            {"answer": "Great apartment in Sofia for 45000€", "confidence": 0.9}
-        )
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(response_json)
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(
+                answer="Great apartment in Sofia for 45000€", confidence=0.9
+            )
         )
 
         result = await service.generate_answer(
