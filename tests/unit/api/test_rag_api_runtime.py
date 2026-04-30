@@ -47,7 +47,7 @@ if importlib.util.find_spec("fastapi") is None:
     sys.modules["fastapi.responses"] = fake_fastapi_responses
     _FASTAPI_SHIM_ACTIVE = True
 
-from src.api.main import app, lifespan, query
+from src.api.main import app, generic_error_handler, lifespan, query
 from src.api.schemas import QueryRequest
 
 
@@ -276,3 +276,40 @@ async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> 
     mock_warning.assert_called_once()
     closable_embeddings.aclose.assert_awaited_once()
     closable_sparse.aclose.assert_awaited_once()
+
+
+async def test_generic_error_handler_returns_structured_payload() -> None:
+    """Unhandled exceptions must return a stable structured error with trace id."""
+    with (
+        patch("telegram_bot.observability.get_client", return_value=None),
+        patch("src.api.main.uuid.uuid4", return_value=SimpleNamespace(hex="fallback-trace-id")),
+        patch("src.api.main.logger") as mock_logger,
+    ):
+        response = await generic_error_handler(None, RuntimeError("boom"))
+
+    assert response.status_code == 500
+    content = response.content
+    assert content["error"] == "internal_error"
+    assert content["message"] == "Internal server error"
+    assert content["recoverable"] is False
+    assert content["trace_id"] == "fallback-trace-id"
+    mock_logger.exception.assert_called_once_with(
+        "Unhandled error in RAG API", extra={"trace_id": "fallback-trace-id"}
+    )
+
+
+async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> None:
+    """If a Langfuse trace is active, its trace id should be exposed to the client."""
+    mock_lf = MagicMock()
+    mock_lf.get_current_trace_id.return_value = "trace-abc-123"
+
+    with (
+        patch("telegram_bot.observability.get_client", return_value=mock_lf),
+        patch("src.api.main.logger") as mock_logger,
+    ):
+        response = await generic_error_handler(None, ValueError("bad input"))
+
+    assert response.content["trace_id"] == "trace-abc-123"
+    mock_logger.exception.assert_called_once_with(
+        "Unhandled error in RAG API", extra={"trace_id": "trace-abc-123"}
+    )
