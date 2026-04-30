@@ -176,12 +176,12 @@ spec:
               memory: 512Mi
           startupProbe:
             exec:
-              command: ["sh", "-c", "kill -0 1"]
+              command: ["sh", "-c", "pgrep -f 'telegram_bot.main' || exit 1"]
             failureThreshold: 12
             periodSeconds: 5
           livenessProbe:
             exec:
-              command: ["sh", "-c", "kill -0 1"]
+              command: ["sh", "-c", "pgrep -f 'telegram_bot.main' || exit 1"]
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
