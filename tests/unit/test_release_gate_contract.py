@@ -227,3 +227,84 @@ def test_bot_k8s_probes_are_runtime_available() -> None:
         assert has_procps_install, (
             "k8s bot probes use pgrep but telegram_bot/Dockerfile does not install procps."
         )
+
+
+def test_qdrant_healthcheck_does_not_use_wget() -> None:
+    """qdrant/qdrant:v1.17.1 does not include wget/curl/busybox;
+    the compose healthcheck must use a runtime-available command."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    qdrant_hc = _extract_compose_service_healthcheck(compose_text, "qdrant")
+    assert qdrant_hc is not None, "qdrant healthcheck section not found in compose.yml"
+    assert "wget" not in qdrant_hc, (
+        "qdrant compose healthcheck uses wget but qdrant/qdrant:v1.17.1 does not "
+        "include wget/curl/busybox. Use bash /dev/tcp instead."
+    )
+
+
+def test_promtail_healthcheck_does_not_use_wget() -> None:
+    """grafana/promtail:3.6.7 does not include wget/curl/busybox;
+    the compose healthcheck must use a runtime-available command."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    promtail_hc = _extract_compose_service_healthcheck(compose_text, "promtail")
+    assert promtail_hc is not None, "promtail healthcheck section not found in compose.yml"
+    assert "wget" not in promtail_hc, (
+        "promtail compose healthcheck uses wget but grafana/promtail:3.6.7 does not "
+        "include wget/curl/busybox. Use bash /dev/tcp instead."
+    )
+
+
+def test_qdrant_healthcheck_uses_bash_dev_tcp() -> None:
+    """qdrant/qdrant:v1.17.1 has bash with /dev/tcp support;
+    the compose healthcheck must use bash /dev/tcp to hit /readyz."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    qdrant_hc = _extract_compose_service_healthcheck(compose_text, "qdrant")
+    assert qdrant_hc is not None, "qdrant healthcheck section not found in compose.yml"
+    assert "bash" in qdrant_hc, (
+        "qdrant compose healthcheck must invoke bash explicitly since /bin/sh is dash "
+        "and does not support /dev/tcp."
+    )
+    assert "/dev/tcp" in qdrant_hc, (
+        "qdrant compose healthcheck must use bash /dev/tcp since wget/curl/busybox "
+        "are not installed in qdrant/qdrant:v1.17.1."
+    )
+    assert "readyz" in qdrant_hc, (
+        "qdrant compose healthcheck must check the canonical readiness endpoint /readyz."
+    )
+
+
+def test_promtail_healthcheck_uses_bash_dev_tcp() -> None:
+    """grafana/promtail:3.6.7 has bash with /dev/tcp support;
+    the compose healthcheck must use bash /dev/tcp to hit /ready."""
+    compose_text = (ROOT / "compose.yml").read_text()
+
+    promtail_hc = _extract_compose_service_healthcheck(compose_text, "promtail")
+    assert promtail_hc is not None, "promtail healthcheck section not found in compose.yml"
+    assert "bash" in promtail_hc, (
+        "promtail compose healthcheck must invoke bash explicitly since /bin/sh is dash "
+        "and does not support /dev/tcp."
+    )
+    assert "/dev/tcp" in promtail_hc, (
+        "promtail compose healthcheck must use bash /dev/tcp since wget/curl/busybox "
+        "are not installed in grafana/promtail:3.6.7."
+    )
+    assert "ready" in promtail_hc, (
+        "promtail compose healthcheck must check the canonical readiness endpoint /ready."
+    )
+
+
+def _extract_compose_service_healthcheck(compose_text: str, service_name: str) -> str | None:
+    """Extract the healthcheck test section for a named compose service.
+
+    Returns the multiline content between the healthcheck key and the next
+    compose key that is at the same or shallower indentation, or None if
+    the service or its healthcheck section is not found.
+    """
+    m = re.search(
+        rf"  {service_name}:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
+        compose_text,
+        re.DOTALL,
+    )
+    return m.group(1) if m else None
