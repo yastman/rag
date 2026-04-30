@@ -213,7 +213,7 @@ class LLMService:
         question: str,
         context_chunks: list[dict[str, Any]],
         system_prompt: str | None = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """Stream answer generation token by token."""
         try:
             context = self._format_context(context_chunks)
