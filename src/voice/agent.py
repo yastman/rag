@@ -9,7 +9,9 @@ import functools
 import json
 import logging
 import os
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -495,6 +497,30 @@ async def entrypoint(ctx: agents.JobContext):
     )
 
 
+def _start_health_server() -> None:
+    """Start a minimal HTTP health server in a background thread."""
+
+    class _HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path == "/health":
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"status":"ok"}')
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format: str, *args: Any) -> None:
+            pass
+
+    def _run() -> None:
+        server = HTTPServer(("127.0.0.1", 8080), _HealthHandler)
+        server.serve_forever()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 # Setup Langfuse before starting
 _setup_langfuse()
 
@@ -503,4 +529,5 @@ if __name__ == "__main__":
         raise RuntimeError(
             "LiveKit runtime is unavailable in this environment"
         ) from _LIVEKIT_IMPORT_ERROR
+    _start_health_server()
     cli.run_app(server)
