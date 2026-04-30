@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from langgraph.errors import GraphRecursionError
 
 from src.api.schemas import QueryRequest, QueryResponse
 from telegram_bot.observability import observe
@@ -196,7 +197,46 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
     }
 
     with propagate_attributes(**trace_kwargs):
-        result = await app.state.graph.ainvoke(state)
+        try:
+            result = await app.state.graph.ainvoke(state)
+        except GraphRecursionError:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            lf = get_client()
+            if lf is not None:
+                lf.update_current_span(
+                    input=req.query,
+                    output="recursion_limit_reached",
+                    metadata={
+                        "source": req.channel,
+                        "query_type": "ERROR",
+                        "error_reason": "recursion_limit",
+                    },
+                )
+                fallback_response = (
+                    "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
+                )
+                fallback_result: dict[str, Any] = {
+                    "input_type": "api",
+                    "query_type": "ERROR",
+                    "pipeline_wall_ms": elapsed_ms,
+                    "e2e_latency_ms": elapsed_ms,
+                    "user_perceived_wall_ms": elapsed_ms,
+                    "cache_hit": False,
+                    "search_results_count": 0,
+                    "rerank_applied": False,
+                    "response": fallback_response,
+                }
+                write_langfuse_scores(lf, fallback_result)
+            return QueryResponse(
+                response=fallback_response,
+                query_type="ERROR",
+                cache_hit=False,
+                documents_count=0,
+                rerank_applied=False,
+                latency_ms=round(elapsed_ms, 1),
+                context=[],
+            )
+
         lf = get_client()
         if lf is not None:
             lf.update_current_span(

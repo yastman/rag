@@ -29,6 +29,7 @@ from aiogram.types import (
     Message,
 )
 from aiogram.utils.chat_action import ChatActionSender
+from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 
@@ -3847,6 +3848,27 @@ class PropertyBot:
                         logger.debug("Failed to write voice error scores", exc_info=True)
                     return
                 raise
+            except GraphRecursionError:
+                logger.warning(
+                    "Voice pipeline recursion limit exceeded (user=%s, session=%s)",
+                    state.get("user_id"),
+                    state.get("session_id"),
+                    exc_info=True,
+                )
+                await message.answer(
+                    "Запрос слишком сложный — достигнут лимит обработки. "
+                    "Попробуйте упростить его или отправить текстом."
+                )
+                try:
+                    _write_voice_error_scores(
+                        get_client(),
+                        trace_id=state.get("trace_id", ""),
+                        voice_duration_s=voice.duration,
+                        error_reason="recursion_limit",
+                    )
+                except Exception:
+                    logger.debug("Failed to write voice error scores", exc_info=True)
+                return
             except Exception as e:
                 if result is None:
                     # Checkpointer/storage cleanup can fail after nodes complete.
