@@ -46,6 +46,7 @@ services:
   redis:
     image: redis:8.6.2@sha256:832d7785830f3f4b559300e6191fc914b15642c1935252338825cf4332200148
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -70,13 +71,14 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.17.1@sha256:94728574965d17c6485dd361aa3c0818b325b9016dac5ea6afec7b4b2700865f
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'set -euo pipefail; exec 3<>/dev/tcp/localhost/6333; echo -e \"GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; read -r line <&3; [[ \"$$line\" == *\"200\"* ]]'"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/6333 && printf 'GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && head -1 <&3 | grep -q '200 OK'"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -312,7 +314,7 @@ services:
       litellm:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, signal; os.kill(1, 0)"]
+      test: ["CMD-SHELL", "pgrep -f 'telegram_bot.main' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -373,11 +375,13 @@ services:
           memory: 256M
 
   mini-app-frontend:
+    <<: *security-defaults
     image: "${COMPOSE_PROJECT_NAME:-dev}_mini-app-frontend"
     build:
       context: ./mini_app/frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    read_only: false
     logging: *default-logging
     depends_on:
       mini-app-api:
@@ -398,6 +402,7 @@ services:
   # =============================================================================
 
   ingestion:
+    <<: *security-defaults
     image: "${COMPOSE_PROJECT_NAME:-dev}_ingestion"
     build:
       context: .
@@ -438,6 +443,12 @@ services:
         condition: service_healthy
       bge-m3:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'src.ingestion.unified.cli' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -451,6 +462,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:26.3.9@sha256:537014a67ce8bf1f5c79c2e2b26fb30b8285a86ffff03875bb14ed17ea35db62
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     user: "101:101"
     command: >
@@ -459,7 +471,7 @@ services:
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
@@ -483,7 +495,7 @@ services:
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -501,6 +513,7 @@ services:
   redis-langfuse:
     image: redis:8.6.2@sha256:832d7785830f3f4b559300e6191fc914b15642c1935252338825cf4332200148
     restart: unless-stopped
+    stop_grace_period: 30s
     logging: *default-logging
     command:
       - /bin/sh
@@ -510,6 +523,8 @@ services:
           exec redis-server --requirepass "$LANGFUSE_REDIS_PASSWORD"
         fi
         exec redis-server
+    volumes:
+      - langfuse_redis_data:/data
     healthcheck:
       test:
         - CMD-SHELL
@@ -556,7 +571,7 @@ services:
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       # S3/MinIO
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
@@ -580,11 +595,13 @@ services:
       # Telemetry
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'langfuse-worker' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -626,14 +643,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1024M
+          memory: 512M
 
   # =============================================================================
   # MONITORING & ALERTING (dev-only)
   # =============================================================================
 
   loki:
-    image: grafana/loki:3.6.7
+    image: grafana/loki:3.6.7@sha256:3c8fd3570dd9219951a60d3f919c7f31923d10baee578b77bc26c4a0b32d092d
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -649,7 +666,7 @@ services:
       start_period: 30s
 
   promtail:
-    image: grafana/promtail:3.6.7
+    image: grafana/promtail:3.6.7@sha256:51346af8682f7a664affaca4f34a62f5a4f0f83ace9931df94590375a94ff8f1
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -661,14 +678,18 @@ services:
       loki:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "/usr/bin/promtail", "--version"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9080 && printf 'GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && head -1 <&3 | grep -q '200 OK'"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   alertmanager:
-    image: prom/alertmanager:v0.31.1
+    image: prom/alertmanager:v0.31.1@sha256:88b605de9aba0410775c1eb3438f951115054e0d307f23f274a4c705f51630c1
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -715,12 +736,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   # =============================================================================
   # VOICE (dev-only — LiveKit Agents + SIP)
   # =============================================================================
 
   rag-api:
+    <<: *security-defaults
     build:
       context: .
       dockerfile: src/api/Dockerfile
@@ -760,7 +786,7 @@ services:
           memory: 512M
 
   livekit-server:
-    image: livekit/livekit-server:v1.10
+    image: livekit/livekit-server:v1.10@sha256:698a13999b4b2285866a32903724884b1e10c03259526391d9b3a72d9b73bbb4
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
@@ -782,7 +808,7 @@ services:
           memory: 256M
 
   livekit-sip:
-    image: livekit/sip:v1.2
+    image: livekit/sip:v1.2@sha256:96ef59d461e692c43c77bfe2caa8b469e662e2cc1158082e3af5434184225897
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
@@ -821,6 +847,7 @@ services:
           memory: 256M
 
   voice-agent:
+    <<: *security-defaults
     build:
       context: .
       dockerfile: src/voice/Dockerfile
@@ -838,7 +865,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081')\" || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -871,3 +898,4 @@ volumes:
   ingestion-manifest:
   loki_data:
   alertmanager_data:
+  langfuse_redis_data:

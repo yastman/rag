@@ -87,13 +87,18 @@ spec:
               cpu: 50m
             limits:
               memory: 512Mi
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "pgrep -f 'src.ingestion.unified.cli' || exit 1"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
           livenessProbe:
             exec:
-              command: ["pgrep", "-f", "src.ingestion"]
+              command: ["sh", "-c", "pgrep -f 'src.ingestion.unified.cli' || exit 1"]
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
-            initialDelaySeconds: 60
       volumes:
         - name: drive-sync
           hostPath:
