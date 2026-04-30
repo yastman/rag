@@ -78,6 +78,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}
           tags: |
             type=raw,value=${{ steps.version.outputs.value }}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha,format=short,prefix=sha-
 
       - name: Build and push image
