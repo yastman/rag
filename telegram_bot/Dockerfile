@@ -36,6 +36,12 @@ LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
 
 WORKDIR /app
 
+# Install procps for pgrep-based HEALTHCHECK
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install -y --no-install-recommends procps
+
 RUN groupadd -g 1001 botgroup && \
     useradd -u 1001 -g botgroup -m -s /bin/false botuser
 
@@ -50,6 +56,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
 USER botuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import os, signal; os.kill(1, 0)" || exit 1
+    CMD pgrep -f "telegram_bot.main" || exit 1
 
 CMD ["python", "-m", "telegram_bot.main"]
