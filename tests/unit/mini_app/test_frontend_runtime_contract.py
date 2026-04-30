@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 
@@ -22,7 +23,10 @@ def test_frontend_lockfile_records_supported_node_floor() -> None:
 
 def test_frontend_builder_pins_supported_node_floor() -> None:
     text = DOCKERFILE.read_text(encoding="utf-8")
-    assert "FROM node:20.19.0-slim AS builder" in text
+    assert re.search(
+        r"FROM node:20\.19\.0-slim(?:@sha256:[a-f0-9]{64})? AS builder",
+        text,
+    ), "Dockerfile must use supported Node floor (20.19.0-slim) with builder stage"
 
 
 def test_frontend_build_context_ignores_local_dependency_and_build_artifacts() -> None:
