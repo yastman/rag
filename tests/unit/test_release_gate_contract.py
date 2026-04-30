@@ -98,3 +98,35 @@ def test_release_smoke_reads_handoff_gate_from_bot_runtime_env() -> None:
     script = RELEASE_SMOKE_SCRIPT.read_text()
     assert "docker compose exec -T bot python - <<'PY'" in script
     assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' not in script
+
+
+def test_release_gate_script_requires_all_compose_required_vars() -> None:
+    """The production env preflight must check every ?:required variable from compose.yml."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    required_vars = [
+        "POSTGRES_PASSWORD",
+        "REDIS_PASSWORD",
+        "LITELLM_MASTER_KEY",
+        "TELEGRAM_BOT_TOKEN",
+        "GDRIVE_SYNC_DIR",
+        "NEXTAUTH_SECRET",
+        "SALT",
+        "ENCRYPTION_KEY",
+        "LANGFUSE_REDIS_PASSWORD",
+    ]
+    for var in required_vars:
+        assert var in script, f"{var} missing from validate_prod_env.sh"
+
+
+def test_release_gate_script_enforces_password_length() -> None:
+    """The production env preflight must reject passwords shorter than 12 characters."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert "-lt 12" in script or "must be at least 12 characters" in script
+
+
+def test_release_gate_script_uses_safe_env_parsing() -> None:
+    """The production env preflight must not blindly source .env (shell-injection safe)."""
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert ". ./.env" not in script
+    assert "source .env" not in script
+    assert "Invalid .env line" in script
