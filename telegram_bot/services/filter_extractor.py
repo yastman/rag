@@ -226,7 +226,7 @@ class FilterExtractor(BaseFilterExtractor):
                 try:
                     distance = int(match.group(1))
                     return {"lte": distance}
-                except ValueError, IndexError:
+                except (ValueError, IndexError):
                     continue
 
         return None
@@ -250,7 +250,7 @@ class FilterExtractor(BaseFilterExtractor):
                 try:
                     cost = float(match.group(1))
                     return {"lte": cost}
-                except ValueError, IndexError:
+                except (ValueError, IndexError):
                     continue
 
         return None

@@ -42,15 +42,15 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dev dependencies
-        run: uv sync --python 3.12 --frozen
+        run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv sync --python 3.12 --frozen
 
       - name: Unit tests
-        run: uv run --python 3.12 pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30
+        run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30
 
       - name: Security scan (bandit + vulture)
         run: |
-          uv run --python 3.12 bandit -r src/ telegram_bot/ -c pyproject.toml
-          uv run --python 3.12 vulture src/ telegram_bot/ --min-confidence 80
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run bandit -r src/ telegram_bot/ -c pyproject.toml
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run vulture src/ telegram_bot/ --min-confidence 80
 
   deploy:
     name: Deploy to VPS
