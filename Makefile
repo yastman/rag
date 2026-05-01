@@ -483,12 +483,18 @@ qa: all-checks test ## Full quality assurance
 # Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
-.PHONY: local-up local-down local-logs local-ps local-build run-bot bot
-LOCAL_SERVICES := redis qdrant bge-m3 docling litellm
+.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build run-bot bot
+LOCAL_SERVICES := redis qdrant bge-m3 litellm
+LOCAL_INGEST_SERVICES := docling
+LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
 local-up:  ## Start local Docker services (bot runs via make run-bot)
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
+
+local-up-ingest:  ## Start local services + docling for ingestion workflows
+	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_ALL_SERVICES)
+	@echo "$(GREEN)✓ Local services + docling started$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
 	uv run --env-file .env python -m telegram_bot.main
@@ -498,14 +504,14 @@ bot:  ## Alias: run bot and tee output to logs/bot-run.log
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
 
 local-down:  ## Stop local Docker services
-	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
-	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_ALL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_ALL_SERVICES) || true
 
 local-logs:  ## View local Docker logs
-	$(LOCAL_COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) logs -f $(LOCAL_ALL_SERVICES)
 
 local-ps:  ## Show local Docker status
-	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_ALL_SERVICES)
 
 local-build:  ## Rebuild local Docker services
 	$(LOCAL_COMPOSE_CMD) build bge-m3 docling
