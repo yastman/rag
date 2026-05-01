@@ -827,6 +827,132 @@ class TestConversationMemory:
         assert result["response"]
         assert "summarize" in result.get("latency_stages", {})
 
+    @pytest.mark.integration
+    async def test_summarize_creates_generation_observation(self):
+        """Summarize node wraps LLM call in a Langfuse generation observation."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        mocks = _make_graph_mocks(llm_response="Найдено 2 варианта.")
+        mock_gc = _make_mock_graph_config(mocks["llm"])
+
+        mock_observation = MagicMock()
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        summarize_node = MagicMock()
+        summarize_node.ainvoke = AsyncMock(return_value={"messages": []})
+
+        # Build without message mock — avoids MagicMock serialization in state
+        graph_kwargs = {k: v for k, v in mocks.items() if k != "message"}
+
+        with (
+            patch("langmem.short_term.SummarizationNode", return_value=summarize_node),
+            _patch_graph_configs(mock_gc),
+        ):
+            graph = build_graph(**graph_kwargs, checkpointer=checkpointer)
+
+        config = {"configurable": {"thread_id": "test-summarize-gen"}}
+        state = make_initial_state(user_id=1, session_id="s", query="Цены в Банско?")
+
+        with traced_pipeline(session_id="test-memory-summarize-gen", user_id="integration"):
+            with _patch_graph_configs(mock_gc):
+                with patch("telegram_bot.graph.graph.get_client", return_value=mock_lf):
+                    result = await graph.ainvoke(state, config=config)
+
+        assert result["response"]
+        mock_lf.start_as_current_observation.assert_called_once()
+        call_kwargs = mock_lf.start_as_current_observation.call_args.kwargs
+        assert call_kwargs["as_type"] == "generation"
+        assert call_kwargs["name"] == "summarize-llm"
+        mock_observation.update.assert_called_once()
+
+    @pytest.mark.integration
+    async def test_summarize_observation_setup_failure_still_runs_summarize(self):
+        """When Langfuse start_as_current_observation raises, summarize still runs."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        mocks = _make_graph_mocks(llm_response="Найдено 2 варианта.")
+        mock_gc = _make_mock_graph_config(mocks["llm"])
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.side_effect = RuntimeError("Langfuse unavailable")
+
+        summarize_node = MagicMock()
+        summarize_node.ainvoke = AsyncMock(return_value={"messages": []})
+
+        graph_kwargs = {k: v for k, v in mocks.items() if k != "message"}
+
+        with (
+            patch("langmem.short_term.SummarizationNode", return_value=summarize_node),
+            _patch_graph_configs(mock_gc),
+        ):
+            graph = build_graph(**graph_kwargs, checkpointer=checkpointer)
+
+        config = {"configurable": {"thread_id": "test-summarize-setup-fail"}}
+        state = make_initial_state(user_id=1, session_id="s", query="Цены в Банско?")
+
+        with traced_pipeline(session_id="test-memory-summarize-setup-fail", user_id="integration"):
+            with _patch_graph_configs(mock_gc):
+                with patch("telegram_bot.graph.graph.get_client", return_value=mock_lf):
+                    result = await graph.ainvoke(state, config=config)
+
+        # Response still returned (pipeline not broken by observation failure)
+        assert result["response"]
+        # Summarize was still invoked despite Langfuse observation setup failure
+        summarize_node.ainvoke.assert_awaited_once()
+        # Latency still recorded
+        assert "summarize" in result.get("latency_stages", {})
+
+    @pytest.mark.integration
+    async def test_summarize_observation_update_failure_preserves_result(self):
+        """When observation.update() raises after successful summarize, result is preserved."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        mocks = _make_graph_mocks(llm_response="Найдено 2 варианта.")
+        mock_gc = _make_mock_graph_config(mocks["llm"])
+
+        mock_observation = MagicMock()
+        mock_observation.update.side_effect = RuntimeError("Langfuse update failed")
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        summarize_node = MagicMock()
+        summarize_node.ainvoke = AsyncMock(return_value={"messages": []})
+
+        graph_kwargs = {k: v for k, v in mocks.items() if k != "message"}
+
+        with (
+            patch("langmem.short_term.SummarizationNode", return_value=summarize_node),
+            _patch_graph_configs(mock_gc),
+        ):
+            graph = build_graph(**graph_kwargs, checkpointer=checkpointer)
+
+        config = {"configurable": {"thread_id": "test-summarize-update-fail"}}
+        state = make_initial_state(user_id=1, session_id="s", query="Цены в Банско?")
+
+        with traced_pipeline(session_id="test-memory-summarize-update-fail", user_id="integration"):
+            with _patch_graph_configs(mock_gc):
+                with patch("telegram_bot.graph.graph.get_client", return_value=mock_lf):
+                    result = await graph.ainvoke(state, config=config)
+
+        # Response still returned (pipeline not broken by update failure)
+        assert result["response"]
+        # Summarize was invoked
+        summarize_node.ainvoke.assert_awaited_once()
+        # Latency still recorded
+        assert "summarize" in result.get("latency_stages", {})
+        # Update was attempted and failed (but that didn't break anything)
+        mock_observation.update.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Path 8b: GENERAL coverage query → grouped RRF, bypass ColBERT

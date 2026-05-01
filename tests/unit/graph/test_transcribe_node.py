@@ -167,3 +167,109 @@ class TestTranscribeNode:
         output_data = output_call.kwargs["output"]
         assert "stt_duration_ms" in output_data
         assert "text_length" in output_data
+
+    async def test_transcribe_creates_generation_observation(self):
+        """transcribe_node wraps audio call in a Langfuse generation observation."""
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
+
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = _make_voice_state()
+
+        mock_observation = MagicMock()
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            await node(state)
+
+        mock_lf.start_as_current_observation.assert_called_once()
+        call_kwargs = mock_lf.start_as_current_observation.call_args.kwargs
+        assert call_kwargs["as_type"] == "generation"
+        assert call_kwargs["name"] == "transcribe-audio"
+        assert call_kwargs["model"] == "whisper"
+        mock_observation.update.assert_called_once()
+        update_kwargs = mock_observation.update.call_args.kwargs
+        assert "text" in update_kwargs.get("output", {})
+
+    async def test_transcribe_handles_observation_setup_failure(self):
+        """When Langfuse start_as_current_observation fails, STT still runs and returns text."""
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
+
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = _make_voice_state()
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.side_effect = RuntimeError("Langfuse unavailable")
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            result = await node(state)
+
+        # STT still ran and returned text despite Langfuse observation failure
+        assert result["stt_text"] == "Привет мир"
+        assert result["query"] == "Привет мир"
+        mock_llm.audio.transcriptions.create.assert_awaited_once()
+
+    async def test_transcribe_handles_observation_update_failure(self):
+        """When observation.update() fails after STT success, text is preserved."""
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
+
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = _make_voice_state()
+
+        mock_observation = MagicMock()
+        mock_observation.update.side_effect = RuntimeError("Langfuse update failed")
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            result = await node(state)
+
+        # Text is preserved even though observation.update raised
+        assert result["stt_text"] == "Привет мир"
+        assert result["query"] == "Привет мир"
+        mock_llm.audio.transcriptions.create.assert_awaited_once()
+        # Span output metadata is still recorded (best-effort path runs).
+        # Extract the output call — avoid fragile nested pytest.approx in
+        # assert_any_call since stt_duration_ms is round()'ed in the span
+        # payload and mock dict equality does not resolve approx proxies.
+        output_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
+        ]
+        assert output_calls, "Expected an update_current_span call with output kwarg"
+        output_data = output_calls[0].kwargs["output"]
+        assert output_data["text_length"] == len("Привет мир")
+        assert output_data["text_preview"] == "Привет мир"
+        assert isinstance(output_data["stt_duration_ms"], (int, float))
+        assert output_data["stt_duration_ms"] >= 0
