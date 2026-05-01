@@ -376,3 +376,169 @@ async def test_fav_viewing_all_no_favorites_service_answers_unavailable():
     await bot.handle_fav_viewing_all(cb, state)
 
     cb.answer.assert_awaited_once_with("Закладки недоступны")
+
+
+# ---------------------------------------------------------------------------
+# Direct module-level handler tests (#1264)
+# ---------------------------------------------------------------------------
+
+from telegram_bot.handlers.service_callbacks import (
+    create_service_callback_router,
+    handle_cta_callback,
+    handle_service_callback,
+)
+
+
+def _make_direct_cb(data: str = "svc:back", user_id: int = 12345) -> MagicMock:
+    cb = MagicMock()
+    cb.data = data
+    cb.from_user = MagicMock(id=user_id)
+    cb.answer = AsyncMock()
+    cb.message = MagicMock()
+    cb.message.answer = AsyncMock()
+    cb.message.edit_text = AsyncMock()
+    cb.message.edit_reply_markup = AsyncMock()
+    cb.message.delete = AsyncMock()
+    return cb
+
+
+def _make_direct_state(data: dict | None = None) -> MagicMock:
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value=data or {})
+    state.update_data = AsyncMock()
+    return state
+
+
+# handle_service_callback
+async def test_direct_service_callback_parsed_none() -> None:
+    cb = _make_direct_cb("unknown")
+    await handle_service_callback(cb)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_service_callback_back_with_message() -> None:
+    cb = _make_direct_cb("svc:back")
+    await handle_service_callback(cb)
+    cb.message.delete.assert_awaited_once()
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_service_callback_back_no_message() -> None:
+    cb = _make_direct_cb("svc:back")
+    cb.message = None
+    await handle_service_callback(cb)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_service_callback_menu_with_i18n() -> None:
+    cb = _make_direct_cb("svc:menu")
+    i18n = MagicMock()
+    i18n.get.return_value = "Choose:"
+    with patch("telegram_bot.keyboards.services_keyboard.build_services_menu") as mock_build:
+        mock_kb = MagicMock()
+        mock_build.return_value = mock_kb
+        await handle_service_callback(cb, i18n=i18n)
+        cb.message.edit_text.assert_awaited_once()
+        i18n.get.assert_called_with("services-menu-text")
+
+
+async def test_direct_service_callback_menu_without_i18n() -> None:
+    cb = _make_direct_cb("svc:menu")
+    with patch("telegram_bot.keyboards.services_keyboard.build_services_menu") as mock_build:
+        mock_kb = MagicMock()
+        mock_build.return_value = mock_kb
+        await handle_service_callback(cb, i18n=None)
+        cb.message.edit_text.assert_awaited_once()
+
+
+async def test_direct_service_callback_service_with_card() -> None:
+    cb = _make_direct_cb("svc:service:passive_income")
+    i18n = MagicMock()
+    i18n.get.return_value = None
+    with patch(
+        "telegram_bot.services.content_loader.get_service_card",
+        return_value={"card_text": "Desc"},
+    ):
+        with patch(
+            "telegram_bot.keyboards.services_keyboard.build_service_card_buttons"
+        ) as mock_build:
+            mock_kb = MagicMock()
+            mock_build.return_value = mock_kb
+            await handle_service_callback(cb, i18n=i18n)
+            cb.message.edit_text.assert_awaited_once()
+
+
+async def test_direct_service_callback_service_no_card() -> None:
+    cb = _make_direct_cb("svc:service:passive_income")
+    with patch("telegram_bot.services.content_loader.get_service_card", return_value=None):
+        await handle_service_callback(cb)
+        cb.message.edit_text.assert_not_awaited()
+        cb.answer.assert_awaited_once()
+
+
+async def test_direct_service_callback_unknown_action() -> None:
+    cb = _make_direct_cb("svc:unknown")
+    await handle_service_callback(cb)
+    cb.answer.assert_awaited_once()
+
+
+# handle_cta_callback
+async def test_direct_cta_callback_parsed_none() -> None:
+    cb = _make_direct_cb("unknown")
+    state = _make_direct_state()
+    await handle_cta_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_cta_callback_get_offer() -> None:
+    cb = _make_direct_cb("cta:get_offer:some_service")
+    state = _make_direct_state()
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_cta_callback(cb, state)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["service_key"] == "some_service"
+
+
+async def test_direct_cta_callback_manager_with_forum_bridge() -> None:
+    cb = _make_direct_cb("cta:manager")
+    state = _make_direct_state()
+    forum_bridge = MagicMock()
+    with patch(
+        "telegram_bot.handlers.handoff.start_qualification", new_callable=AsyncMock
+    ) as mock_qual:
+        await handle_cta_callback(cb, state, forum_bridge=forum_bridge)
+        mock_qual.assert_awaited_once()
+        assert mock_qual.call_args.kwargs["goal"] == "services"
+
+
+async def test_direct_cta_callback_manager_without_forum_bridge() -> None:
+    cb = _make_direct_cb("cta:manager")
+    state = _make_direct_state()
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_cta_callback(cb, state, forum_bridge=None)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["service_key"] == "manager"
+
+
+async def test_direct_cta_callback_unknown_action() -> None:
+    cb = _make_direct_cb("cta:unknown")
+    state = _make_direct_state()
+    await handle_cta_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_cta_callback_malformed_data() -> None:
+    cb = _make_direct_cb("cta:")
+    state = _make_direct_state()
+    await handle_cta_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+# create_service_callback_router
+def test_create_service_callback_router() -> None:
+    router = create_service_callback_router()
+    assert router.name == "service_callbacks"

@@ -112,3 +112,203 @@ async def test_results_viewing_is_stale_compat_only() -> None:
         "Это устаревшая кнопка. Используйте актуальное меню ниже."
     )
     callback.answer.assert_awaited_once_with()
+
+
+# ---------------------------------------------------------------------------
+# Direct module-level handler tests (#1264)
+# ---------------------------------------------------------------------------
+
+from telegram_bot.handlers.results_callbacks import (
+    create_results_callback_router,
+    handle_card_callback,
+    handle_results_callback,
+)
+
+
+def _make_direct_cb(data: str = "results:more", user_id: int = 12345) -> MagicMock:
+    cb = MagicMock()
+    cb.data = data
+    cb.from_user = MagicMock(id=user_id)
+    cb.answer = AsyncMock()
+    cb.message = MagicMock()
+    cb.message.answer = AsyncMock()
+    cb.message.edit_reply_markup = AsyncMock()
+    cb.message.delete = AsyncMock()
+    cb.message.chat = MagicMock(id=999)
+    cb.bot = AsyncMock()
+    return cb
+
+
+def _make_direct_state(data: dict | None = None) -> MagicMock:
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value=data or {})
+    state.update_data = AsyncMock()
+    return state
+
+
+# handle_results_callback
+async def test_direct_results_callback_stale() -> None:
+    cb = _make_direct_cb("results:more")
+    state = _make_direct_state()
+    await handle_results_callback(cb, state)
+    cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+    cb.message.answer.assert_awaited_once()
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_results_callback_no_message() -> None:
+    cb = _make_direct_cb("results:more")
+    cb.message = None
+    state = _make_direct_state()
+    await handle_results_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+# handle_card_callback
+async def test_direct_card_callback_invalid_data() -> None:
+    cb = _make_direct_cb("card:viewing")
+    state = _make_direct_state()
+    await handle_card_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_card_callback_no_from_user() -> None:
+    cb = _make_direct_cb("card:viewing:prop-42")
+    cb.from_user = None
+    state = _make_direct_state()
+    await handle_card_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_card_callback_viewing_with_dialog_manager() -> None:
+    cb = _make_direct_cb("card:viewing:prop-42")
+    state = _make_direct_state(
+        {
+            "apartment_results": [
+                {
+                    "id": "prop-42",
+                    "payload": {
+                        "complex_name": "X",
+                        "property_type": "Apt",
+                        "area_m2": 50,
+                        "price_eur": 100000,
+                    },
+                }
+            ]
+        }
+    )
+    dialog_manager = AsyncMock()
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_card_callback(cb, state, dialog_manager=dialog_manager)
+        dialog_manager.start.assert_awaited_once()
+        mock_phone.assert_not_awaited()
+
+
+async def test_direct_card_callback_viewing_without_dialog_manager() -> None:
+    cb = _make_direct_cb("card:viewing:prop-42")
+    state = _make_direct_state(
+        {
+            "apartment_results": [
+                {
+                    "id": "prop-42",
+                    "payload": {
+                        "complex_name": "X",
+                        "property_type": "Apt",
+                        "area_m2": 50,
+                        "price_eur": 100000,
+                    },
+                }
+            ]
+        }
+    )
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_card_callback(cb, state)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["service_key"] == "viewing"
+
+
+async def test_direct_card_callback_ask_with_dialog_manager() -> None:
+    cb = _make_direct_cb("card:ask:prop-42")
+    state = _make_direct_state()
+    dialog_manager = AsyncMock()
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_card_callback(cb, state, dialog_manager=dialog_manager)
+        dialog_manager.start.assert_awaited_once()
+        mock_phone.assert_not_awaited()
+
+
+async def test_direct_card_callback_ask_without_dialog_manager() -> None:
+    cb = _make_direct_cb("card:ask:prop-42")
+    state = _make_direct_state()
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_card_callback(cb, state)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["service_key"] == "question"
+
+
+async def test_direct_card_callback_matched_from_favorites() -> None:
+    cb = _make_direct_cb("card:viewing:prop-42")
+    state = _make_direct_state()
+    favorites_service = MagicMock()
+    mock_fav = MagicMock()
+    mock_fav.property_id = "prop-42"
+    mock_fav.property_data = {
+        "complex_name": "Fav",
+        "property_type": "Studio",
+        "area_m2": 30,
+        "price_eur": 50000,
+    }
+    favorites_service.list = AsyncMock(return_value=[mock_fav])
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_card_callback(cb, state, favorites_service=favorites_service)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["viewing_objects"][0]["complex_name"] == "Fav"
+
+
+async def test_direct_card_callback_control_message_delete() -> None:
+    cb = _make_direct_cb("card:viewing:prop-42")
+    cb.message.chat.id = 999
+    state = _make_direct_state(
+        {
+            "catalog_runtime": {
+                "results": [
+                    {
+                        "id": "prop-42",
+                        "payload": {
+                            "complex_name": "X",
+                            "property_type": "Apt",
+                            "area_m2": 50,
+                            "price_eur": 100000,
+                        },
+                    }
+                ],
+                "control_message_id": 555,
+            }
+        }
+    )
+    dialog_manager = AsyncMock()
+    await handle_card_callback(cb, state, dialog_manager=dialog_manager)
+    cb.bot.delete_message.assert_awaited_once_with(999, 555)
+
+
+async def test_direct_card_callback_unknown_action() -> None:
+    cb = _make_direct_cb("card:unknown:prop-42")
+    state = _make_direct_state()
+    await handle_card_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+# create_results_callback_router
+def test_create_results_callback_router() -> None:
+    router = create_results_callback_router()
+    assert router.name == "results_callbacks"
