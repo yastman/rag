@@ -51,7 +51,8 @@ async def test_catalog_home_restores_client_reply_keyboard() -> None:
 
     await on_catalog_home(callback, MagicMock(), manager)
 
-    manager.done.assert_awaited_once()
+    state.clear.assert_awaited_once()
+    manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
     callback.message.answer.assert_awaited()
 
 
