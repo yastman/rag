@@ -36,9 +36,9 @@ def test_ci_deploy_runs_prod_env_preflight_before_build() -> None:
 def test_ci_deploy_force_recreates_services_after_build() -> None:
     """CI deploy must recreate services so rebuilt images actually reach runtime."""
     workflow = CI_WORKFLOW.read_text()
-    assert "docker compose --compatibility up -d --force-recreate" in workflow
+    assert "docker compose --compatibility up -d --wait --force-recreate" in workflow
     assert workflow.index("docker compose build") < workflow.index(
-        "docker compose --compatibility up -d --force-recreate"
+        "docker compose --compatibility up -d --wait --force-recreate"
     )
 
 
