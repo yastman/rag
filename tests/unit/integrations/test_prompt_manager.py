@@ -9,7 +9,9 @@ import pytest
 from telegram_bot.integrations.prompt_manager import (
     DEFAULT_CACHE_TTL,
     _apply_fallback_vars,
+    _missing_prompts_until,
     _reset_client,
+    _transient_failures_until,
     get_prompt,
 )
 
@@ -120,6 +122,30 @@ class TestGetPrompt:
         # 2nd call should use local missing-cache and skip Langfuse call.
         assert mock_client.get_prompt.call_count == 1
 
+    def test_transient_failure_is_temporarily_cached(self):
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception("[Errno 111] Connection refused")
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            first = get_prompt("generate", fallback="fallback", cache_ttl=60)
+            second = get_prompt("generate", fallback="fallback", cache_ttl=60)
+
+        assert first == "fallback"
+        assert second == "fallback"
+        # 2nd call should use local transient-cache and skip Langfuse call.
+        assert mock_client.get_prompt.call_count == 1
+
+    def test_transient_failure_cache_expires(self):
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception("[Errno 111] Connection refused")
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            get_prompt("generate", fallback="fallback", cache_ttl=0)
+            get_prompt("generate", fallback="fallback", cache_ttl=0)
+
+        # TTL=0 means cache expires immediately; both calls hit SDK.
+        assert mock_client.get_prompt.call_count == 2
+
     def test_no_manual_api_probe_for_missing_prompt(self):
         mock_client = MagicMock()
         mock_client.api.prompts.get.side_effect = RuntimeError("must not be called")
@@ -150,6 +176,51 @@ class TestGetPrompt:
             cache_ttl_seconds=DEFAULT_CACHE_TTL,
             label="staging",
         )
+
+    def test_successful_fetch_clears_transient_failure_cache(self):
+        mock_client = MagicMock()
+        # First call fails transiently and is cached; second SDK call succeeds after cache clear.
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "langfuse prompt"
+        mock_client.get_prompt.side_effect = [
+            Exception("[Errno 111] Connection refused"),
+            mock_prompt,
+        ]
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            # First call caches transient failure
+            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
+            # Second call uses cache
+            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
+            # Manually expire cache to simulate retry
+            _transient_failures_until.clear()
+            # Third call succeeds and should clear caches
+            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "langfuse prompt"
+
+        assert mock_client.get_prompt.call_count == 2
+        assert "my-prompt" not in _transient_failures_until
+        assert "my-prompt" not in _missing_prompts_until
+
+    def test_successful_fetch_clears_missing_prompt_cache(self):
+        mock_client = MagicMock()
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "langfuse prompt"
+        mock_client.get_prompt.side_effect = [
+            Exception("status_code: 404, body: {'message': \"Prompt not found: 'my-prompt'\"}"),
+            mock_prompt,
+        ]
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            # First call caches 404
+            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
+            # Manually expire cache to simulate retry
+            _missing_prompts_until.clear()
+            # Second call succeeds and should clear caches
+            assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "langfuse prompt"
+
+        assert mock_client.get_prompt.call_count == 2
+        assert "my-prompt" not in _missing_prompts_until
+        assert "my-prompt" not in _transient_failures_until
 
 
 class TestApplyFallbackVars:
@@ -227,8 +298,11 @@ class TestSpanOutputPromptVersion:
 
 class TestResetClient:
     def test_reset_clears_missing_prompt_cache(self):
-        from telegram_bot.integrations.prompt_manager import _missing_prompts_until
-
         _missing_prompts_until["some-prompt"] = 9999999999.0
         _reset_client()
         assert "some-prompt" not in _missing_prompts_until
+
+    def test_reset_clears_transient_failure_cache(self):
+        _transient_failures_until["some-prompt"] = 9999999999.0
+        _reset_client()
+        assert "some-prompt" not in _transient_failures_until
