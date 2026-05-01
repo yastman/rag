@@ -24,30 +24,33 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install 3.14
 
       - name: Install dependencies
-        run: uv sync --frozen --no-dev
+        run: uv sync --python 3.14 --frozen --no-dev
 
       - name: Ruff lint
-        run: uv run ruff check src/ telegram_bot/ --output-format=github
+        run: uv run --python 3.14 ruff check src/ telegram_bot/ --output-format=github
 
       - name: Ruff format check
-        run: uv run ruff format --check src/ telegram_bot/
+        run: uv run --python 3.14 ruff format --target-version py312 --check src/ telegram_bot/
 
       - name: Type check
-        run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
+        run: uv run --python 3.14 mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
+
+      - name: Set up Python for tests
+        run: uv python install 3.12
 
       - name: Install dev dependencies
-        run: uv sync --frozen
+        run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv sync --python 3.12 --frozen
 
       - name: Unit tests
-        run: uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30
+        run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30
 
       - name: Security scan (bandit + vulture)
         run: |
-          uv run bandit -r src/ telegram_bot/ -c pyproject.toml
-          uv run vulture src/ telegram_bot/ --min-confidence 80
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run bandit -r src/ telegram_bot/ -c pyproject.toml
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run vulture src/ telegram_bot/ --min-confidence 80
 
   deploy:
     name: Deploy to VPS
