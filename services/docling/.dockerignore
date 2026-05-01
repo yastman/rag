@@ -1,0 +1,31 @@
+# Build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# CI / local config
+.env
+.env.*
+
+# Tests / docs (not needed in docling service image)
+tests/
+docs/
+*.md
