@@ -17,6 +17,7 @@ Orchestrator: rag_pipeline() wires steps with rewrite loop.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import logging
 import time
@@ -921,8 +922,7 @@ async def _cache_store(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="rag-pipeline", capture_input=False, capture_output=False)
-async def rag_pipeline(
+async def _rag_pipeline_impl(
     query: str,
     *,
     user_id: int,
@@ -1276,6 +1276,71 @@ async def rag_pipeline(
         }
     )
     return result
+
+
+async def rag_pipeline(
+    query: str,
+    *,
+    user_id: int,
+    session_id: str,
+    query_type: str = "GENERAL",
+    original_query: str = "",
+    cache: Any,
+    embeddings: Any,
+    sparse_embeddings: Any,
+    qdrant: Any,
+    reranker: Any | None = None,
+    llm: Any | None = None,
+    agent_role: str | None = None,
+    state_contract: PreAgentStateContract | None = None,
+    pre_computed_embedding: list[float] | None = None,
+    pre_computed_sparse: Any = None,
+    pre_computed_colbert: list[list[float]] | None = None,
+    semantic_cache_already_checked: bool = False,
+    skip_rewrite: bool = False,
+    langfuse_trace_id: str | None = None,
+) -> dict[str, Any]:
+    """Execute RAG pipeline with explicit Langfuse trace linking.
+
+    Wraps :func:`_rag_pipeline_impl` in ``start_as_current_observation`` so
+    pipeline observations are nested under the caller's trace when
+    *langfuse_trace_id* is provided.
+    """
+    lf = get_client()
+    trace_kwargs: dict[str, Any] = {}
+    if langfuse_trace_id:
+        trace_kwargs["trace_context"] = {"trace_id": langfuse_trace_id}
+
+    observation_ctx: Any = contextlib.nullcontext()
+    if lf is not None:
+        with contextlib.suppress(Exception):
+            observation_ctx = lf.start_as_current_observation(
+                as_type="span",
+                name="rag-pipeline",
+                **trace_kwargs,
+            )
+
+    with observation_ctx:
+        return await _rag_pipeline_impl(
+            query,
+            user_id=user_id,
+            session_id=session_id,
+            query_type=query_type,
+            original_query=original_query,
+            cache=cache,
+            embeddings=embeddings,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+            reranker=reranker,
+            llm=llm,
+            agent_role=agent_role,
+            state_contract=state_contract,
+            pre_computed_embedding=pre_computed_embedding,
+            pre_computed_sparse=pre_computed_sparse,
+            pre_computed_colbert=pre_computed_colbert,
+            semantic_cache_already_checked=semantic_cache_already_checked,
+            skip_rewrite=skip_rewrite,
+        )
 
 
 def _assemble_context(

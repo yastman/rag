@@ -486,3 +486,45 @@ async def test_rag_search_falls_back_to_query_when_no_original(bot_context):
     # Guard should use the tool query as fallback
     guard_state = mock_guard.call_args[0][0]
     assert guard_state["messages"][0]["content"] == "цены на квартиры"
+
+
+async def test_rag_search_propagates_langfuse_trace_id_to_pipeline(bot_context):
+    """rag_search passes captured langfuse_trace_id into rag_pipeline (#1253)."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    mock_lf = MagicMock()
+    mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+    with (
+        patch(
+            "telegram_bot.agents.rag_tool.rag_pipeline",
+            new_callable=AsyncMock,
+            return_value=_pipeline_result(),
+        ) as mock_pipeline,
+        patch("telegram_bot.agents.rag_tool.get_client", return_value=mock_lf),
+    ):
+        await rag_search.ainvoke({"query": "test"}, config=_make_config(bot_context))
+
+    assert mock_pipeline.call_count == 1
+    assert mock_pipeline.call_args.kwargs["langfuse_trace_id"] == "trace-abc-123"
+
+
+async def test_rag_search_passes_none_trace_id_when_not_available(bot_context):
+    """rag_search passes empty string trace_id when get_current_trace_id returns None."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    mock_lf = MagicMock()
+    mock_lf.get_current_trace_id = MagicMock(return_value=None)
+
+    with (
+        patch(
+            "telegram_bot.agents.rag_tool.rag_pipeline",
+            new_callable=AsyncMock,
+            return_value=_pipeline_result(),
+        ) as mock_pipeline,
+        patch("telegram_bot.agents.rag_tool.get_client", return_value=mock_lf),
+    ):
+        await rag_search.ainvoke({"query": "test"}, config=_make_config(bot_context))
+
+    assert mock_pipeline.call_count == 1
+    assert mock_pipeline.call_args.kwargs["langfuse_trace_id"] == ""

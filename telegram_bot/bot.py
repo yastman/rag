@@ -586,7 +586,7 @@ class PropertyBot:
             from .services.apartment_llm_extractor import ApartmentLlmExtractor
 
             _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
-        except (ImportError, ModuleNotFoundError):
+        except ImportError, ModuleNotFoundError:
             logger.warning(
                 "ApartmentLlmExtractor unavailable, falling back to regex-only extraction",
                 exc_info=True,
@@ -1068,7 +1068,7 @@ class PropertyBot:
 
         try:
             payload = json.loads(raw)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             if message:
                 await message.answer("Ошибка обработки ссылки.")
             else:
@@ -1208,7 +1208,7 @@ class PropertyBot:
                     data = json.loads(raw_msg["data"])
                     uuid_str = data["uuid"]
                     user_id = int(data["user_id"])
-                except (ValueError, TypeError, KeyError):
+                except ValueError, TypeError, KeyError:
                     logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
                     continue
 
@@ -3208,7 +3208,12 @@ class PropertyBot:
             )
 
             # Initialize handler inside propagation context so it inherits session/user/tags.
-            langfuse_handler = create_callback_handler()
+            # Link agent graph observations to the current trace via explicit trace_context (#1253).
+            lf = get_client()
+            tid = lf.get_current_trace_id() or ""
+            langfuse_handler = create_callback_handler(
+                trace_context={"trace_id": tid} if tid else None
+            )
             callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 response_text, result = await self._astream_supervisor_with_recovery(
@@ -3421,6 +3426,8 @@ class PropertyBot:
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
+
+            filter_signature = None
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000

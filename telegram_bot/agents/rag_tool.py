@@ -157,6 +157,7 @@ async def rag_search(
                 result_store.get("semantic_cache_already_checked")
             )
 
+        trace_id = lf.get_current_trace_id() or ""
         invoke_start = time.perf_counter()
         result = await rag_pipeline(
             query,
@@ -176,6 +177,7 @@ async def rag_search(
             pre_computed_sparse=pre_computed_sparse,
             pre_computed_colbert=pre_computed_colbert,
             semantic_cache_already_checked=semantic_cache_already_checked,
+            langfuse_trace_id=trace_id,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 

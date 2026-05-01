@@ -106,3 +106,44 @@ async def test_manager_service_chain_includes_history_and_crm_tools():
         assert "rag_search" in names
         assert "history_search" in names
         assert "crm_get_my_leads" in names
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_supervisor_passes_langfuse_trace_context_to_callback_handler():
+    """_handle_query_supervisor should link agent CallbackHandler to current trace (#1253)."""
+    bot = _create_bot()
+    bot._resolve_user_role = AsyncMock(return_value="client")
+    bot._ainvoke_supervisor_with_recovery = AsyncMock(
+        return_value={"messages": [MagicMock(content="ok")]}
+    )
+
+    message = MagicMock()
+    message.text = "test query"
+    message.chat = MagicMock(id=12345)
+    message.from_user = MagicMock(id=12345)
+    message.bot = MagicMock()
+    message.bot.send_chat_action = AsyncMock()
+    message.answer = AsyncMock()
+
+    mock_lf = MagicMock()
+    mock_lf.get_current_trace_id = MagicMock(return_value="trace-supervisor-789")
+
+    created_agent = MagicMock()
+    created_agent.ainvoke = AsyncMock(return_value={"messages": [MagicMock(content="ok")]})
+    with (
+        patch("telegram_bot.bot.propagate_attributes", return_value=nullcontext()),
+        patch("telegram_bot.bot.get_client", return_value=mock_lf),
+        patch("telegram_bot.bot.classify_query", return_value="OFF_TOPIC"),
+        patch("telegram_bot.bot.create_callback_handler") as mock_create_handler,
+        patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        patch("telegram_bot.bot.create_bot_agent", return_value=created_agent),
+        patch("telegram_bot.agents.utility_tools.get_utility_tools", return_value=[]),
+    ):
+        mock_cas.typing.return_value = _make_typing_cm()
+        mock_create_handler.return_value = None
+        await bot._handle_query_supervisor(message=message, pipeline_start=0.0)
+
+        mock_create_handler.assert_called_once()
+        call_kwargs = mock_create_handler.call_args.kwargs
+        assert call_kwargs.get("trace_context") == {"trace_id": "trace-supervisor-789"}
