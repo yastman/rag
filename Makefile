@@ -483,12 +483,18 @@ qa: all-checks test ***REMOVED******REMOVED*** Full quality assurance
 ***REMOVED*** Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 ***REMOVED*** =============================================================================
 
-.PHONY: local-up local-down local-logs local-ps local-build run-bot bot
-LOCAL_SERVICES := redis qdrant bge-m3 docling litellm
+.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build run-bot bot
+LOCAL_SERVICES := redis qdrant bge-m3 litellm
+LOCAL_INGEST_SERVICES := docling
+LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
 local-up:  ***REMOVED******REMOVED*** Start local Docker services (bot runs via make run-bot)
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
+
+local-up-ingest:  ***REMOVED******REMOVED*** Start local services + docling for ingestion workflows
+	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_ALL_SERVICES)
+	@echo "$(GREEN)✓ Local services + docling started$(NC)"
 
 run-bot:  ***REMOVED******REMOVED*** Run bot locally (requires: make local-up)
 	uv run --env-file .env python -m telegram_bot.main
@@ -498,14 +504,14 @@ bot:  ***REMOVED******REMOVED*** Alias: run bot and tee output to logs/bot-run.l
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
 
 local-down:  ***REMOVED******REMOVED*** Stop local Docker services
-	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
-	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_ALL_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_ALL_SERVICES) || true
 
 local-logs:  ***REMOVED******REMOVED*** View local Docker logs
-	$(LOCAL_COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) logs -f $(LOCAL_ALL_SERVICES)
 
 local-ps:  ***REMOVED******REMOVED*** Show local Docker status
-	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_SERVICES)
+	$(LOCAL_COMPOSE_CMD) ps $(LOCAL_ALL_SERVICES)
 
 local-build:  ***REMOVED******REMOVED*** Rebuild local Docker services
 	$(LOCAL_COMPOSE_CMD) build bge-m3 docling
