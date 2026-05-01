@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -78,7 +78,7 @@ class RuntimeEventWriter:
 
     def _current_path(self) -> Path:
         """Return the JSONL file path for the current UTC day."""
-        today = date.today().isoformat()
+        today = datetime.now(UTC).date().isoformat()
         return self._dir / f"{today}.jsonl"
 
     def _scrub_payload(self, payload: Any) -> Any:
@@ -92,7 +92,7 @@ class RuntimeEventWriter:
         if isinstance(payload, dict):
             result: dict[str, Any] = {}
             for key, value in payload.items():
-                if key in _BANNED_PAYLOAD_KEYS:
+                if key.casefold() in _BANNED_PAYLOAD_KEYS:
                     result[key] = "<redacted>"
                 elif isinstance(value, dict):
                     result[key] = self._scrub_payload(value)
