@@ -21,6 +21,7 @@ DEFAULT_CACHE_TTL = 3600
 
 # Module-level TTL caches for prompt existence
 _missing_prompts_until: dict[str, float] = {}
+_transient_failures_until: dict[str, float] = {}
 
 
 def _update_prompt_span_output(
@@ -102,7 +103,7 @@ def _fetch_prompt_core(
     if client is None:
         return _apply_fallback_vars(fallback, vars_), {}
 
-    if _is_temporarily_missing(name):
+    if _is_temporarily_missing(name) or _is_transient_failure(name):
         return _fallback_result()
 
     try:
@@ -112,6 +113,7 @@ def _fetch_prompt_core(
             prompt_kwargs["label"] = label
         prompt = client.get_prompt(name, **prompt_kwargs)
         _missing_prompts_until.pop(name, None)
+        _transient_failures_until.pop(name, None)
         config: dict[str, Any] = getattr(prompt, "config", None) or {}
         _update_prompt_span_output(
             client,
@@ -132,7 +134,8 @@ def _fetch_prompt_core(
             )
             return _fallback_result()
 
-        logger.warning("Failed to fetch prompt '%s', using fallback", name, exc_info=True)
+        _transient_failures_until[name] = time.monotonic() + cache_ttl
+        logger.warning("Failed to fetch prompt '%s', using fallback: %s", name, e)
         return _fallback_result()
 
 
@@ -165,6 +168,18 @@ def _is_temporarily_missing(name: str) -> bool:
     return False
 
 
+def _is_transient_failure(name: str) -> bool:
+    """True when prompt is in local transient-failure TTL window."""
+    until = _transient_failures_until.get(name)
+    if until is None:
+        return False
+    if until > time.monotonic():
+        return True
+    _transient_failures_until.pop(name, None)
+    return False
+
+
 def _reset_client() -> None:
     """Reset the prompt TTL caches (for testing)."""
     _missing_prompts_until.clear()
+    _transient_failures_until.clear()
