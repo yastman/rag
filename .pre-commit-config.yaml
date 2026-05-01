@@ -83,17 +83,34 @@ repos:
   ***REMOVED***       args:
   ***REMOVED***         - --config-file=pyproject.toml
 
-  ***REMOVED*** Optional: bandit for security issues
-  ***REMOVED*** Uncomment to enable security scanning
-  ***REMOVED*** - repo: https://github.com/PyCQA/bandit
-  ***REMOVED***   rev: '1.7.10'
-  ***REMOVED***   hooks:
-  ***REMOVED***     - id: bandit
-  ***REMOVED***       name: Bandit Security Linter
-  ***REMOVED***       args:
-  ***REMOVED***         - -c
-  ***REMOVED***         - pyproject.toml
-  ***REMOVED***       additional_dependencies: ["bandit[toml]"]
+  ***REMOVED*** Bandit for security issues
+  - repo: https://github.com/PyCQA/bandit
+    rev: '1.7.10'
+    hooks:
+      - id: bandit
+        name: Bandit Security Linter
+        args:
+          - -c
+          - pyproject.toml
+        additional_dependencies: ["bandit[toml]"]
+
+  ***REMOVED*** Gitleaks for secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.23.1
+    hooks:
+      - id: gitleaks
+        name: Gitleaks secret scanner
+
+  ***REMOVED*** Hadolint for Dockerfile linting (requires Docker)
+  - repo: local
+    hooks:
+      - id: hadolint
+        name: Hadolint Dockerfile linter
+        entry: hadolint/hadolint:v2.12.0
+        language: docker_image
+        files: Dockerfile.*|.*Dockerfile
+        pass_filenames: true
+        args: ["--failure-threshold", "error"]
 
   ***REMOVED*** =============================================================================
   ***REMOVED*** PRE-PUSH HOOKS (Run before git push)

@@ -90,3 +90,13 @@ def test_voice_dockerfile_python_version_consistency() -> None:
         f"src/voice/Dockerfile: builder Python {builder_ver} != runtime Python {runtime_ver}. "
         "Binary wheels compiled for one version break on another."
     )
+
+
+def test_mini_app_dockerfile_python_version_consistency() -> None:
+    text = Path("mini_app/Dockerfile").read_text(encoding="utf-8")
+    builder_ver = _get_builder_python_version(text)
+    runtime_ver = _get_runtime_python_version(text)
+    assert builder_ver == runtime_ver, (
+        f"mini_app/Dockerfile: builder Python {builder_ver} != runtime Python {runtime_ver}. "
+        "Binary wheels compiled for one version break on another."
+    )
