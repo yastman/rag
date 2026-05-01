@@ -12,7 +12,8 @@ Tests cover:
 
 import json
 import logging
-from datetime import date
+from datetime import UTC
+from datetime import datetime as dt
 from pathlib import Path
 from unittest.mock import patch
 
@@ -149,9 +150,27 @@ class TestRuntimeEventWriterRotation:
         """Writer selects file based on current UTC date."""
         cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
         writer = RuntimeEventWriter(cfg)
-        today = date.today().isoformat()
+        today = dt.now(UTC).date().isoformat()
         expected = tmp_path / f"{today}.jsonl"
         assert writer._current_path() == expected
+
+    def test_daily_file_path_uses_utc_date(self, tmp_path):
+        """Writer uses UTC date for daily rotation, not local ``date.today()``."""
+        from datetime import datetime
+        from unittest.mock import MagicMock
+
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
+        writer = RuntimeEventWriter(cfg)
+
+        # Fixed UTC datetime: 2026-12-25T23:59Z (UTC date = Dec 25)
+        fixed_dt = datetime(2026, 12, 25, 23, 59, tzinfo=UTC)
+        mock_dt_class = MagicMock()
+        mock_dt_class.now.return_value = fixed_dt
+
+        with patch("telegram_bot.runtime_events.datetime", mock_dt_class):
+            path = writer._current_path()
+
+        assert path == tmp_path / "2026-12-25.jsonl"
 
     def test_append_creates_file_and_directory(self, tmp_path):
         """append() creates parent directories and file if missing."""
@@ -225,6 +244,50 @@ class TestRuntimeEventWriterScrubbing:
         assert scrubbed[banned_key] == "<redacted>"
         assert scrubbed["safe_key"] == "safe-value"
 
+    @pytest.mark.parametrize(
+        "banned_key",
+        [
+            # Same-case variants (should already work, but verify)
+            "user_id",
+            "phone",
+            "email",
+            "api_key",
+            # Mixed-case and upper-case variants (the fix ensures these are caught)
+            "USER_ID",
+            "User_Id",
+            "PHONE",
+            "Phone",
+            "EMAIL",
+            "Email",
+            "API_KEY",
+            "Api_Key",
+            "TOKEN",
+            "Token",
+            "PASSWORD",
+            "Password",
+            "SECRET",
+            "Secret",
+            "TELEGRAM_ID",
+            "Telegram_Id",
+            "QUERY",
+            "Query",
+            "PROMPT",
+            "Prompt",
+            "TRACEBACK",
+            "Traceback",
+            "CONNECTION_STRING",
+            "Connection_String",
+        ],
+    )
+    def test_scrubbing_banned_keys_case_insensitive(self, banned_key, tmp_path):
+        """Banned keys are matched case-insensitively (API_KEY, Phone, userId etc.)."""
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
+        writer = RuntimeEventWriter(cfg)
+        payload = {banned_key: "sensitive-value", "safe_key": "safe-value"}
+        scrubbed = writer._scrub_payload(payload)
+        assert scrubbed[banned_key] == "<redacted>", f"Expected key {banned_key!r} to be redacted"
+        assert scrubbed["safe_key"] == "safe-value"
+
     def test_scrubbing_nested_dict(self, tmp_path):
         """Scrubbing recurses into nested dictionaries."""
         cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
@@ -232,6 +295,16 @@ class TestRuntimeEventWriterScrubbing:
         payload = {"outer": {"user_id": "123", "name": "ok"}, "safe": "top"}
         scrubbed = writer._scrub_payload(payload)
         assert scrubbed["outer"]["user_id"] == "<redacted>"
+        assert scrubbed["outer"]["name"] == "ok"
+        assert scrubbed["safe"] == "top"
+
+    def test_scrubbing_nested_dict_case_insensitive(self, tmp_path):
+        """Case-insensitive scrubbing recurses into nested dictionaries."""
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
+        writer = RuntimeEventWriter(cfg)
+        payload = {"outer": {"USER_ID": "123", "name": "ok"}, "safe": "top"}
+        scrubbed = writer._scrub_payload(payload)
+        assert scrubbed["outer"]["USER_ID"] == "<redacted>"
         assert scrubbed["outer"]["name"] == "ok"
         assert scrubbed["safe"] == "top"
 
@@ -354,7 +427,7 @@ class TestEmitRuntimeEventHelper:
                 message="Langfuse prompt fetch failed, using fallback",
                 payload={"prompt_name": "name", "exception_type": "TimeoutError"},
             )
-            today = date.today().isoformat()
+            today = dt.now(UTC).date().isoformat()
             path = tmp_path / f"{today}.jsonl"
             assert path.exists()
             lines = path.read_text(encoding="utf-8").strip().splitlines()
@@ -407,7 +480,7 @@ class TestEmitRuntimeEventHelper:
                 message="scrub",
                 payload={"user_id": "123", "safe": "ok"},
             )
-            today = date.today().isoformat()
+            today = dt.now(UTC).date().isoformat()
             path = tmp_path / f"{today}.jsonl"
             lines = path.read_text(encoding="utf-8").strip().splitlines()
             parsed = json.loads(lines[0])
