@@ -26,16 +26,21 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
 # =============================================================================
-# VPS connection
+# VPS connection (override via environment)
 # =============================================================================
-VPS_HOST="REDACTED_VPS_IP"
-VPS_PORT="1654"
-VPS_USER="admin"
-VPS_KEY="$HOME/.ssh/vps_access_key"
-VPS_DIR="/opt/rag-fresh"
-VPS_COMPOSE_FILE="compose.yml:compose.vps.yml"
+VPS_HOST="${VPS_HOST:-}"
+VPS_PORT="${VPS_PORT:-22}"
+VPS_USER="${VPS_USER:-}"
+VPS_KEY="${VPS_KEY:-}"
+VPS_DIR="${VPS_DIR:-/opt/rag-fresh}"
+VPS_COMPOSE_FILE="${VPS_COMPOSE_FILE:-compose.yml:compose.vps.yml}"
+VPS_SSH_STRICT_HOST_KEY_CHECKING="${VPS_SSH_STRICT_HOST_KEY_CHECKING:-accept-new}"
 
-SSH_OPTS="-i ${VPS_KEY} -p ${VPS_PORT} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+[[ -n "$VPS_HOST" ]] || error "VPS_HOST is required (not set)"
+[[ -n "$VPS_USER" ]] || error "VPS_USER is required (not set)"
+[[ -n "$VPS_KEY" ]] || error "VPS_KEY is required (not set)"
+
+SSH_OPTS="-i ${VPS_KEY} -p ${VPS_PORT} -o IdentitiesOnly=yes -o StrictHostKeyChecking=${VPS_SSH_STRICT_HOST_KEY_CHECKING}"
 RSYNC_SSH_OPTS="${SSH_OPTS}"
 
 # =============================================================================
