@@ -59,13 +59,26 @@ def make_transcribe_node(
         buf = io.BytesIO(voice_audio)
         buf.name = "voice.ogg"
 
-        transcript = await llm.audio.transcriptions.create(
-            model=stt_model,
-            file=buf,
-            language=voice_language,
-        )
+        try:
+            with lf.start_as_current_observation(
+                name="transcribe-audio",
+                as_type="generation",
+                model=stt_model,
+            ) as gen_obs:
+                transcript = await llm.audio.transcriptions.create(
+                    model=stt_model,
+                    file=buf,
+                    language=voice_language,
+                )
+                text = transcript.text.strip()
+                gen_obs.update(output={"text": text[:120]})
+        except Exception as exc:
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"Transcription failed: {str(exc)[:200]}",
+            )
+            raise
 
-        text = transcript.text.strip()
         stt_duration_ms = (time.perf_counter() - start) * 1000
 
         if not text:
