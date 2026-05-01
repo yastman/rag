@@ -110,6 +110,7 @@ repos:
         language: docker_image
         files: Dockerfile.*|.*Dockerfile
         pass_filenames: true
+        args: ["--failure-threshold", "error"]
 
   # =============================================================================
   # PRE-PUSH HOOKS (Run before git push)
