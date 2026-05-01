@@ -202,3 +202,69 @@ class TestTranscribeNode:
         mock_observation.update.assert_called_once()
         update_kwargs = mock_observation.update.call_args.kwargs
         assert "text" in update_kwargs.get("output", {})
+
+    async def test_transcribe_handles_observation_setup_failure(self):
+        """When Langfuse start_as_current_observation fails, STT still runs and returns text."""
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
+
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = _make_voice_state()
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.side_effect = RuntimeError("Langfuse unavailable")
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            result = await node(state)
+
+        # STT still ran and returned text despite Langfuse observation failure
+        assert result["stt_text"] == "Привет мир"
+        assert result["query"] == "Привет мир"
+        mock_llm.audio.transcriptions.create.assert_awaited_once()
+
+    async def test_transcribe_handles_observation_update_failure(self):
+        """When observation.update() fails after STT success, text is preserved."""
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
+
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = _make_voice_state()
+
+        mock_observation = MagicMock()
+        mock_observation.update.side_effect = RuntimeError("Langfuse update failed")
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            result = await node(state)
+
+        # Text is preserved even though observation.update raised
+        assert result["stt_text"] == "Привет мир"
+        assert result["query"] == "Привет мир"
+        mock_llm.audio.transcriptions.create.assert_awaited_once()
+        # Span output metadata is still recorded (best-effort path runs)
+        mock_lf.update_current_span.assert_any_call(
+            output={
+                "stt_duration_ms": pytest.approx(result["stt_duration_ms"], rel=0.1),
+                "text_length": len("Привет мир"),
+                "text_preview": "Привет мир",
+            }
+        )
