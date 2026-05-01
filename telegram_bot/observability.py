@@ -9,24 +9,12 @@ ensure credentials from `.env`/environment are applied before first tracing.
 """
 
 import atexit
+import contextlib
 import json
 import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
-
-from langfuse import (
-    Langfuse,
-)
-from langfuse import (
-    get_client as _real_get_client,
-)
-from langfuse import (
-    observe as _real_observe,
-)
-from langfuse import (
-    propagate_attributes as _real_propagate,
-)
 
 from src.security.pii_redaction import PIIRedactor
 from telegram_bot.observability_bootstrap import (
@@ -39,9 +27,6 @@ from telegram_bot.observability_bootstrap import (
 
 logger = logging.getLogger(__name__)
 
-_langfuse_client: Langfuse | None = None
-_langfuse_init_attempted = False
-
 _MAX_PII_TEXT_LENGTH = 4000
 _MODEL_DEFINITIONS_ENV = "LANGFUSE_MODEL_DEFINITIONS_JSON"
 _MODEL_SYNC_ENABLED_ENV = "LANGFUSE_MODEL_SYNC_ENABLED"
@@ -50,6 +35,54 @@ _MODEL_LIST_PAGE_SIZE = 100
 _pii_redactor = PIIRedactor()
 
 _langfuse_endpoint_warned = False
+
+
+# ---------------------------------------------------------------------------
+# Guarded Langfuse SDK import (graceful degradation under Python 3.14)
+# ---------------------------------------------------------------------------
+
+try:
+    from langfuse import Langfuse
+    from langfuse import get_client as _real_get_client
+    from langfuse import observe as _real_observe
+    from langfuse import propagate_attributes as _real_propagate
+
+    _LANGFUSE_AVAILABLE = True
+    _LANGFUSE_IMPORT_ERROR = None
+except Exception as _e:
+    _LANGFUSE_AVAILABLE = False
+    _LANGFUSE_IMPORT_ERROR = _e
+
+    class Langfuse:  # type: ignore[no-redef]
+        """Placeholder that raises the original import error on instantiation."""
+
+        def __init__(self, *args, **kwargs):
+            raise _LANGFUSE_IMPORT_ERROR
+
+    def _real_observe(*args, **kwargs):
+        """No-op decorator factory."""
+
+        def decorator(func):
+            return func
+
+        if args and callable(args[0]) and not kwargs:
+            return args[0]
+        return decorator
+
+    def _real_get_client():  # type: ignore[misc]
+        return None
+
+    @contextlib.contextmanager
+    def _real_propagate(**kwargs):  # type: ignore[misc]
+        yield
+
+
+# ---------------------------------------------------------------------------
+# Module state
+# ---------------------------------------------------------------------------
+
+_langfuse_client: Langfuse | None = None
+_langfuse_init_attempted = False
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +373,14 @@ def initialize_langfuse(
     if _langfuse_init_attempted and _langfuse_client is None and not force:
         return None
 
+    if not _LANGFUSE_AVAILABLE:
+        _langfuse_client = None
+        if not _langfuse_init_attempted:
+            logger.warning("Langfuse SDK unavailable (import failed): %s", _LANGFUSE_IMPORT_ERROR)
+        _langfuse_init_attempted = True
+        _disable_otel_exporter()
+        return None
+
     resolved_public_key = _resolve_config_value(public_key, "LANGFUSE_PUBLIC_KEY")
     resolved_secret_key = _resolve_config_value(secret_key, "LANGFUSE_SECRET_KEY")
     resolved_host = _resolve_config_value(host, "LANGFUSE_HOST")
@@ -412,6 +453,8 @@ def create_callback_handler(
 
     Returns None when Langfuse is not configured or handler init fails.
     """
+    if not _LANGFUSE_AVAILABLE:
+        return None
     if get_langfuse_client() is None:
         return None
 
