@@ -262,6 +262,53 @@ class TestDemoVoiceFlow:
         )
 
 
+class TestDemoStateClear:
+    @pytest.mark.asyncio
+    async def test_demo_search_text_clears_state_when_no_dialog_manager(self) -> None:
+        """Legacy demo text handler must clear FSM state after search completes."""
+        message = AsyncMock()
+        message.text = "двушка до 100к"
+        state = AsyncMock(spec=FSMContext)
+
+        pipeline = AsyncMock()
+        from telegram_bot.services.apartment_models import (
+            ApartmentSearchFilters,
+            ExtractionMeta,
+            HardFilters,
+        )
+
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(rooms=2, max_price_eur=100000),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+        apartments_service = AsyncMock()
+        apartments_service.scroll_with_filters.return_value = (
+            [
+                {
+                    "payload": {
+                        "complex_name": "Test",
+                        "rooms": 2,
+                        "price_eur": 95000,
+                        "area_m2": 60,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
+                }
+            ],
+            1,
+            95000.0,
+            ["1"],
+        )
+
+        await handle_demo_search_text(
+            message,
+            state,
+            pipeline=pipeline,
+            apartments_service=apartments_service,
+        )
+        state.set_state.assert_awaited_once_with(None)
+
+
 class TestHandleVoiceStateFilter:
     """Main handle_voice must NOT intercept voice during active FSM states."""
 
