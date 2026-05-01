@@ -1,0 +1,16 @@
+{
+  "status": "done",
+  "worker": "W-1279",
+  "branch": "feat/1279-signal-validator",
+  "head_ref": "feat/1279-signal-validator",
+  "base": "dev",
+  "changed_files": ["scripts/swarm_validate_signal.py", "telegram_bot/agents/rag_pipeline.py"],
+  "pr_files": ["scripts/swarm_validate_signal.py"],
+  "reserved_files": ["scripts/swarm_validate_signal.py"],
+  "agent": "pr-worker",
+  "model": "opencode-go/kimi-k2.6",
+  "prompt_sha256": "abc123",
+  "commands": [
+    {"cmd": "make check", "exit": 0, "status": "passed", "required": true, "summary": "passed"}
+  ]
+}
