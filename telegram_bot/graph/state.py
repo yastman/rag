@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, TypedDict
 
+from langchain_core.messages import HumanMessage
 from langgraph.graph.message import add_messages
 
 
@@ -100,7 +101,7 @@ class RAGState(TypedDict):
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
     """Create initial state for a new RAG pipeline invocation."""
     return {
-        "messages": [{"role": "user", "content": query}],
+        "messages": [HumanMessage(content=query)],
         "user_id": user_id,
         "session_id": session_id,
         "query_type": "",
