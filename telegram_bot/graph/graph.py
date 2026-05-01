@@ -156,25 +156,28 @@ def build_graph(
 
         @observe(name="node-summarize", capture_input=False, capture_output=False)
         async def summarize_wrapper(state: RAGState) -> RAGState:
+            import contextlib
+
             t0 = time.perf_counter()
             result: RAGState
             try:
-                lf = get_client()
-                if lf is not None:
-                    with lf.start_as_current_observation(
-                        name="summarize-llm",
-                        as_type="generation",
-                        model=config.llm_model,
-                    ) as gen_obs:
-                        result = cast(RAGState, await summarize.ainvoke(state))
-                        gen_obs.update(output={"summary_applied": True})
-                else:
-                    result = cast(RAGState, await summarize.ainvoke(state))
+                result = cast(RAGState, await summarize.ainvoke(state))
             except Exception:
                 logger.warning(
                     "Summarization failed; preserving response without summary", exc_info=True
                 )
                 result = state.copy()
+            else:
+                # Best-effort Langfuse generation observation — must not fail the pipeline
+                with contextlib.suppress(Exception):
+                    lf = get_client()
+                    if lf is not None:
+                        with lf.start_as_current_observation(
+                            name="summarize-llm",
+                            as_type="generation",
+                            model=config.llm_model,
+                        ) as gen_obs:
+                            gen_obs.update(output={"summary_applied": True})
             elapsed = time.perf_counter() - t0
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
             return cast(RAGState, result)
