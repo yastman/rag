@@ -307,3 +307,331 @@ async def test_fav_toggle_handles_message_not_modified() -> None:
 
     await bot.handle_favorite_callback(callback, state)
     callback.answer.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Direct module-level handler tests (#1264)
+# ---------------------------------------------------------------------------
+
+from telegram_bot.handlers.favorites_callbacks import (
+    create_favorites_router,
+    handle_fav_add,
+    handle_fav_remove,
+    handle_fav_viewing,
+    handle_fav_viewing_all,
+    handle_favorite_callback,
+)
+
+
+def _make_direct_callback(data: str = "fav:add:prop-42", user_id: int = 12345) -> MagicMock:
+    cb = MagicMock()
+    cb.data = data
+    cb.from_user = MagicMock(id=user_id)
+    cb.answer = AsyncMock()
+    cb.message = MagicMock()
+    cb.message.message_id = 100
+    cb.message.answer = AsyncMock()
+    cb.message.delete = AsyncMock()
+    cb.message.edit_reply_markup = AsyncMock()
+    return cb
+
+
+def _make_direct_state(data: dict | None = None) -> MagicMock:
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value=data or {})
+    state.update_data = AsyncMock()
+    state.clear = AsyncMock()
+    return state
+
+
+def _make_direct_fav_cb(action: str = "add", apartment_id: str = "prop-42") -> MagicMock:
+    cb = MagicMock()
+    cb.action = action
+    cb.apartment_id = apartment_id
+    return cb
+
+
+# handle_fav_add
+async def test_direct_fav_add_no_user() -> None:
+    cb = _make_direct_callback()
+    cb.from_user = None
+    state = _make_direct_state()
+    await handle_fav_add(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_add_missing_property_id() -> None:
+    cb = _make_direct_callback()
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="add", apartment_id="")
+    await handle_fav_add(cb, state, callback_data=callback_data)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_add_no_favorites_service() -> None:
+    cb = _make_direct_callback()
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="add", apartment_id="prop-42")
+    await handle_fav_add(cb, state, callback_data=callback_data, favorites_service=None)
+    cb.answer.assert_awaited_once_with("Закладки недоступны")
+
+
+async def test_direct_fav_add_success_with_metadata() -> None:
+    cb = _make_direct_callback("fav:add:prop-42")
+    state = _make_direct_state({"apartment_results": [_sample_result("prop-42")]})
+    callback_data = _make_direct_fav_cb(action="add", apartment_id="prop-42")
+    favorites_service = MagicMock()
+    favorites_service.add = AsyncMock(return_value={"id": 1})
+    await handle_fav_add(
+        cb, state, callback_data=callback_data, favorites_service=favorites_service
+    )
+    favorites_service.add.assert_awaited_once()
+    call_kwargs = favorites_service.add.call_args.kwargs
+    assert call_kwargs["property_data"]["complex_name"] == "Ocean Vista"
+    cb.answer.assert_awaited_once_with("Добавлено в закладки")
+
+
+async def test_direct_fav_add_duplicate() -> None:
+    cb = _make_direct_callback("fav:add:prop-42")
+    state = _make_direct_state({"apartment_results": [_sample_result("prop-42")]})
+    callback_data = _make_direct_fav_cb(action="add", apartment_id="prop-42")
+    favorites_service = MagicMock()
+    favorites_service.add = AsyncMock(return_value=None)
+    await handle_fav_add(
+        cb, state, callback_data=callback_data, favorites_service=favorites_service
+    )
+    cb.answer.assert_awaited_once_with("Уже в закладках")
+
+
+async def test_direct_fav_add_catalog_runtime_results() -> None:
+    cb = _make_direct_callback("fav:add:prop-42")
+    state = _make_direct_state({"catalog_runtime": {"results": [_sample_result("prop-42")]}})
+    callback_data = _make_direct_fav_cb(action="add", apartment_id="prop-42")
+    favorites_service = MagicMock()
+    favorites_service.add = AsyncMock(return_value={"id": 1})
+    await handle_fav_add(
+        cb, state, callback_data=callback_data, favorites_service=favorites_service
+    )
+    call_kwargs = favorites_service.add.call_args.kwargs
+    assert call_kwargs["property_data"]["complex_name"] == "Ocean Vista"
+
+
+# handle_fav_remove
+async def test_direct_fav_remove_no_user() -> None:
+    cb = _make_direct_callback("fav:remove:prop-42")
+    cb.from_user = None
+    state = _make_direct_state()
+    await handle_fav_remove(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_remove_missing_property_id() -> None:
+    cb = _make_direct_callback("fav:remove:prop-42")
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="remove", apartment_id="")
+    await handle_fav_remove(cb, state, callback_data=callback_data)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_remove_no_favorites_service() -> None:
+    cb = _make_direct_callback("fav:remove:prop-42")
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="remove", apartment_id="prop-42")
+    await handle_fav_remove(cb, state, callback_data=callback_data, favorites_service=None)
+    cb.answer.assert_awaited_once_with("Закладки недоступны")
+
+
+async def test_direct_fav_remove_in_search_results() -> None:
+    cb = _make_direct_callback("fav:remove:prop-42")
+    state = _make_direct_state({"apartment_results": [_sample_result("prop-42")]})
+    callback_data = _make_direct_fav_cb(action="remove", apartment_id="prop-42")
+    favorites_service = MagicMock()
+    favorites_service.remove = AsyncMock()
+    await handle_fav_remove(
+        cb, state, callback_data=callback_data, favorites_service=favorites_service
+    )
+    favorites_service.remove.assert_awaited_once()
+    cb.message.edit_reply_markup.assert_awaited_once()
+    cb.answer.assert_awaited_once_with("Удалено из закладок")
+
+
+async def test_direct_fav_remove_bookmark_message() -> None:
+    cb = _make_direct_callback("fav:remove:prop-42")
+    cb.message.message_id = 200
+    state = _make_direct_state({"bookmark_message_ids": [200]})
+    callback_data = _make_direct_fav_cb(action="remove", apartment_id="prop-42")
+    favorites_service = MagicMock()
+    favorites_service.remove = AsyncMock()
+    await handle_fav_remove(
+        cb, state, callback_data=callback_data, favorites_service=favorites_service
+    )
+    cb.message.delete.assert_awaited_once()
+    cb.answer.assert_awaited_once_with("Удалено из закладок")
+
+
+# handle_fav_viewing
+async def test_direct_fav_viewing_no_user() -> None:
+    cb = _make_direct_callback("fav:viewing:prop-42")
+    cb.from_user = None
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="viewing", apartment_id="prop-42")
+    await handle_fav_viewing(cb, state, callback_data=callback_data)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_viewing_missing_property_id() -> None:
+    cb = _make_direct_callback("fav:viewing:prop-42")
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="viewing", apartment_id="")
+    await handle_fav_viewing(cb, state, callback_data=callback_data)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_viewing_no_favorites_service() -> None:
+    cb = _make_direct_callback("fav:viewing:prop-42")
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="viewing", apartment_id="prop-42")
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_fav_viewing(cb, state, callback_data=callback_data, favorites_service=None)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["viewing_objects"] == []
+
+
+async def test_direct_fav_viewing_success() -> None:
+    cb = _make_direct_callback("fav:viewing:prop-42")
+    state = _make_direct_state()
+    callback_data = _make_direct_fav_cb(action="viewing", apartment_id="prop-42")
+    favorites_service = MagicMock()
+    mock_fav = MagicMock()
+    mock_fav.property_id = "prop-42"
+    mock_fav.property_data = {
+        "complex_name": "Test Property",
+        "property_type": "Apartment",
+        "area_m2": 50,
+        "price_eur": 100000,
+    }
+    favorites_service.list = AsyncMock(return_value=[mock_fav])
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_fav_viewing(
+            cb, state, callback_data=callback_data, favorites_service=favorites_service
+        )
+        mock_phone.assert_awaited_once()
+        assert len(mock_phone.call_args.kwargs["viewing_objects"]) == 1
+        assert mock_phone.call_args.kwargs["service_key"] == "viewing"
+
+
+# handle_fav_viewing_all
+async def test_direct_fav_viewing_all_no_user() -> None:
+    cb = _make_direct_callback("fav:viewing_all")
+    cb.from_user = None
+    state = _make_direct_state()
+    await handle_fav_viewing_all(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_fav_viewing_all_no_favorites_service() -> None:
+    cb = _make_direct_callback("fav:viewing_all")
+    state = _make_direct_state()
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_fav_viewing_all(cb, state, favorites_service=None)
+        mock_phone.assert_awaited_once()
+        assert mock_phone.call_args.kwargs["viewing_objects"] == []
+
+
+async def test_direct_fav_viewing_all_success() -> None:
+    cb = _make_direct_callback("fav:viewing_all")
+    state = _make_direct_state()
+    favorites_service = MagicMock()
+    mock_fav = MagicMock()
+    mock_fav.property_id = "prop-1"
+    mock_fav.property_data = {
+        "complex_name": "Test Property",
+        "property_type": "Apartment",
+        "area_m2": 50,
+        "price_eur": 100000,
+    }
+    favorites_service.list = AsyncMock(return_value=[mock_fav])
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_fav_viewing_all(cb, state, favorites_service=favorites_service)
+        mock_phone.assert_awaited_once()
+        assert len(mock_phone.call_args.kwargs["viewing_objects"]) == 1
+        assert mock_phone.call_args.kwargs["service_key"] == "viewing"
+
+
+# handle_favorite_callback
+async def test_direct_handle_favorite_callback_malformed_data() -> None:
+    cb = _make_direct_callback("fav")
+    state = _make_direct_state()
+    await handle_favorite_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_handle_favorite_callback_unknown_action() -> None:
+    cb = _make_direct_callback("fav:unknown:prop-42")
+    state = _make_direct_state()
+    await handle_favorite_callback(cb, state)
+    cb.answer.assert_awaited_once()
+
+
+async def test_direct_handle_favorite_callback_add() -> None:
+    cb = _make_direct_callback("fav:add:prop-42")
+    state = _make_direct_state({"apartment_results": [_sample_result("prop-42")]})
+    favorites_service = MagicMock()
+    favorites_service.add = AsyncMock(return_value={"id": 1})
+    await handle_favorite_callback(cb, state, favorites_service=favorites_service)
+    favorites_service.add.assert_awaited_once()
+
+
+async def test_direct_handle_favorite_callback_remove() -> None:
+    cb = _make_direct_callback("fav:remove:prop-42")
+    state = _make_direct_state({"apartment_results": [_sample_result("prop-42")]})
+    favorites_service = MagicMock()
+    favorites_service.remove = AsyncMock()
+    await handle_favorite_callback(cb, state, favorites_service=favorites_service)
+    favorites_service.remove.assert_awaited_once()
+
+
+async def test_direct_handle_favorite_callback_viewing() -> None:
+    cb = _make_direct_callback("fav:viewing:prop-42")
+    state = _make_direct_state()
+    favorites_service = MagicMock()
+    mock_fav = MagicMock()
+    mock_fav.property_id = "prop-42"
+    mock_fav.property_data = {
+        "complex_name": "Test",
+        "property_type": "Apt",
+        "area_m2": 50,
+        "price_eur": 100000,
+    }
+    favorites_service.list = AsyncMock(return_value=[mock_fav])
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_favorite_callback(cb, state, favorites_service=favorites_service)
+        mock_phone.assert_awaited_once()
+
+
+async def test_direct_handle_favorite_callback_viewing_all() -> None:
+    cb = _make_direct_callback("fav:viewing_all")
+    state = _make_direct_state()
+    favorites_service = MagicMock()
+    favorites_service.list = AsyncMock(return_value=[])
+    with patch(
+        "telegram_bot.handlers.phone_collector.start_phone_collection", new_callable=AsyncMock
+    ) as mock_phone:
+        await handle_favorite_callback(cb, state, favorites_service=favorites_service)
+        mock_phone.assert_awaited_once()
+
+
+# create_favorites_router
+def test_create_favorites_router() -> None:
+    router = create_favorites_router()
+    assert router.name == "favorites"
