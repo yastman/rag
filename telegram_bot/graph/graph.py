@@ -20,6 +20,7 @@ from telegram_bot.graph.edges import (
     route_start,
 )
 from telegram_bot.graph.state import RAGState
+from telegram_bot.observability import get_client
 
 
 logger = logging.getLogger(__name__)
@@ -158,7 +159,17 @@ def build_graph(
             t0 = time.perf_counter()
             result: RAGState
             try:
-                result = cast(RAGState, await summarize.ainvoke(state))
+                lf = get_client()
+                if lf is not None:
+                    with lf.start_as_current_observation(
+                        name="summarize-llm",
+                        as_type="generation",
+                        model=config.llm_model,
+                    ) as gen_obs:
+                        result = cast(RAGState, await summarize.ainvoke(state))
+                        gen_obs.update(output={"summary_applied": True})
+                else:
+                    result = cast(RAGState, await summarize.ainvoke(state))
             except Exception:
                 logger.warning(
                     "Summarization failed; preserving response without summary", exc_info=True
