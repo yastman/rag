@@ -4,6 +4,8 @@ Integrates with docling-serve container for PDF/DOCX/HTML parsing
 and HybridChunker for RAG-optimized chunking.
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
@@ -197,7 +199,7 @@ class DoclingClient:
         self.config = config or DoclingConfig()
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "DoclingClient":
+    async def __aenter__(self) -> DoclingClient:
         """Async context manager entry."""
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
