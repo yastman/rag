@@ -38,6 +38,38 @@ jobs:
       - name: Type check
         run: uv run --python 3.14 mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
+      - name: Validate Compose configs
+        run: |
+          COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
+          COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.vps.yml config --quiet
+
+      - name: Hadolint Dockerfile lint
+        run: |
+          curl -sL -o /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x /tmp/hadolint
+          /tmp/hadolint src/api/Dockerfile
+          /tmp/hadolint Dockerfile.ingestion
+          /tmp/hadolint telegram_bot/Dockerfile
+          /tmp/hadolint services/bge-m3-api/Dockerfile
+          /tmp/hadolint services/user-base/Dockerfile
+          /tmp/hadolint services/docling/Dockerfile
+          /tmp/hadolint src/voice/Dockerfile
+          /tmp/hadolint mini_app/Dockerfile
+
+      - name: Gitleaks secret scan
+        run: |
+          curl -sL -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.23.1/gitleaks_8.23.1_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          cat > /tmp/gitleaks.toml << 'EOF'
+          [allowlist]
+          paths = [
+            '''\.env\.example$''',
+            '''k8s/secrets/\.env\.example$''',
+            '''tests/unit/test_topic_service_init\.py$''',
+          ]
+          EOF
+          /tmp/gitleaks detect --source . --no-git --config /tmp/gitleaks.toml --verbose
+
       - name: Set up Python for tests
         run: uv python install 3.12
 
