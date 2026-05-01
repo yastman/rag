@@ -167,3 +167,38 @@ class TestTranscribeNode:
         output_data = output_call.kwargs["output"]
         assert "stt_duration_ms" in output_data
         assert "text_length" in output_data
+
+    async def test_transcribe_creates_generation_observation(self):
+        """transcribe_node wraps audio call in a Langfuse generation observation."""
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
+
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = _make_voice_state()
+
+        mock_observation = MagicMock()
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            await node(state)
+
+        mock_lf.start_as_current_observation.assert_called_once()
+        call_kwargs = mock_lf.start_as_current_observation.call_args.kwargs
+        assert call_kwargs["as_type"] == "generation"
+        assert call_kwargs["name"] == "transcribe-audio"
+        assert call_kwargs["model"] == "whisper"
+        mock_observation.update.assert_called_once()
+        update_kwargs = mock_observation.update.call_args.kwargs
+        assert "text" in update_kwargs.get("output", {})
