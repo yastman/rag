@@ -47,14 +47,17 @@ jobs:
         run: |
           curl -sL -o /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
           chmod +x /tmp/hadolint
-          /tmp/hadolint src/api/Dockerfile
-          /tmp/hadolint Dockerfile.ingestion
-          /tmp/hadolint telegram_bot/Dockerfile
-          /tmp/hadolint services/bge-m3-api/Dockerfile
-          /tmp/hadolint services/user-base/Dockerfile
-          /tmp/hadolint services/docling/Dockerfile
-          /tmp/hadolint src/voice/Dockerfile
-          /tmp/hadolint mini_app/Dockerfile
+          for f in \
+            src/api/Dockerfile \
+            Dockerfile.ingestion \
+            telegram_bot/Dockerfile \
+            services/bge-m3-api/Dockerfile \
+            services/user-base/Dockerfile \
+            services/docling/Dockerfile \
+            src/voice/Dockerfile \
+            mini_app/Dockerfile; do
+            /tmp/hadolint --failure-threshold error "$f"
+          done
 
       - name: Gitleaks secret scan
         run: |
