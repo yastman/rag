@@ -4,6 +4,8 @@ Lightweight in-memory metrics using rolling windows (deque).
 No external dependencies — standard library only.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import statistics
@@ -32,7 +34,7 @@ class PipelineMetrics:
         stats = metrics.get_stats()
     """
 
-    _instance: "PipelineMetrics | None" = None
+    _instance: PipelineMetrics | None = None
     _lock = threading.Lock()
 
     def __init__(self) -> None:
@@ -44,7 +46,7 @@ class PipelineMetrics:
         self._mu = threading.Lock()
 
     @classmethod
-    def get(cls) -> "PipelineMetrics":
+    def get(cls) -> PipelineMetrics:
         """Return the singleton instance (create on first call)."""
         if cls._instance is None:
             with cls._lock:
