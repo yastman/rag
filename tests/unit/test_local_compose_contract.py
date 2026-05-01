@@ -27,6 +27,7 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
         "docker-down",
         "docker-ps",
         "local-up",
+        "local-up-ingest",
         "local-down",
         "local-logs",
         "local-ps",
