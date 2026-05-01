@@ -121,6 +121,14 @@ make local-ps
 make local-down
 ```
 
+For ingestion workflows that require docling:
+
+```bash
+make local-up-ingest
+make local-ps
+make local-down
+```
+
 ## 7. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
