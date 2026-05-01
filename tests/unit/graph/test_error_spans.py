@@ -9,6 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from langgraph.runtime import Runtime
 
 from telegram_bot.graph.state import make_initial_state
@@ -140,6 +141,34 @@ class TestRerankNodeErrorSpan:
         assert "ColBERT timeout" in call_kwargs["status_message"]
         # Falls back to score-sort
         assert result["rerank_applied"] is False
+
+
+class TestTranscribeNodeErrorSpan:
+    """transcribe_node sets ERROR span when Whisper API fails."""
+
+    async def test_whisper_error_sets_error_span(self) -> None:
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.side_effect = RuntimeError("Whisper API error")
+
+        node = make_transcribe_node(llm=mock_llm, voice_language="ru", stt_model="whisper")
+        state = _make_state()
+        state["voice_audio"] = b"fake-ogg-data"
+        state["voice_duration_s"] = 3.0
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            with pytest.raises(RuntimeError, match="Whisper API error"):
+                await node(state)
+
+        error_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert error_calls, "transcribe_node must emit ERROR span on Whisper failure"
+        assert "Transcription failed" in error_calls[-1]["status_message"]
 
 
 class TestRespondNodeErrorSpan:

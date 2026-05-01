@@ -21,7 +21,7 @@ from telegram_bot.services.rag_core import rewrite_query_via_llm
 logger = logging.getLogger(__name__)
 
 
-@observe(name="node-rewrite")
+@observe(name="node-rewrite", capture_input=False, capture_output=False)
 async def rewrite_node(
     state: dict[str, Any],
     runtime: Runtime[GraphContext],
@@ -39,6 +39,8 @@ async def rewrite_node(
         State update with rewritten message, incremented rewrite_count,
         reset query_embedding, and latency.
     """
+    import contextlib
+
     llm: Any | None = runtime.context.get("llm")
     t0 = time.perf_counter()
 
@@ -57,6 +59,8 @@ async def rewrite_node(
         rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(
             original_query, llm=llm
         )
+        with contextlib.suppress(Exception):
+            get_client().update_current_generation(model=rewrite_actual_model)
     except Exception as e:
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
         get_client().update_current_span(
