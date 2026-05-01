@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langgraph.runtime import Runtime
 
+from telegram_bot.graph.state import make_initial_state
+
 
 def _rt(**ctx) -> Runtime:
     return Runtime(context=ctx)
@@ -38,6 +40,8 @@ class TestHeavyNodesDisableAutoCapture:
             "telegram_bot.graph.nodes.generate",
             "telegram_bot.graph.nodes.cache",
             "telegram_bot.graph.nodes.respond",
+            "telegram_bot.graph.nodes.rewrite",
+            "telegram_bot.graph.nodes.transcribe",
         ]
         for mod in node_modules:
             if mod in sys.modules:
@@ -54,6 +58,10 @@ class TestHeavyNodesDisableAutoCapture:
             # Force re-import with our mocked observe
             for mod in node_modules:
                 importlib.import_module(mod)
+            # Trigger transcribe decorator via factory
+            from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+            make_transcribe_node(llm=None)
             yield
 
         # Restore original modules
@@ -70,6 +78,8 @@ class TestHeavyNodesDisableAutoCapture:
             "node-cache-check",
             "node-cache-store",
             "node-respond",
+            "node-rewrite",
+            "transcribe",
         ],
     )
     def test_node_disables_auto_capture(self, node_name):
@@ -363,3 +373,73 @@ class TestCuratedSpanPayloads:
         payloads = _extract_span_payloads(mock_lf)
         assert len(payloads) >= 2, "respond_node must call update_current_span for input/output"
         _assert_no_forbidden_keys(payloads, "node-respond")
+
+    async def test_rewrite_node_curated_payload_and_generation(self):
+        from telegram_bot.graph.nodes.rewrite import rewrite_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        mock_llm = MagicMock()
+        mock_llm.chat.completions.create = AsyncMock(
+            return_value=MagicMock(
+                choices=[MagicMock(message=MagicMock(content="переформулированный запрос"))],
+                model="gpt-4o-mini",
+            )
+        )
+
+        mock_config = MagicMock()
+        mock_config.rewrite_model = "gpt-4o-mini"
+        mock_config.rewrite_max_tokens = 64
+
+        mock_lf = MagicMock()
+        with (
+            patch(
+                "telegram_bot.graph.config.GraphConfig.from_env",
+                return_value=mock_config,
+            ),
+            patch("telegram_bot.graph.nodes.rewrite.get_client", return_value=mock_lf),
+        ):
+            await rewrite_node(state, _rt(llm=mock_llm))
+
+        payloads = _extract_span_payloads(mock_lf)
+        _assert_no_forbidden_keys(payloads, "node-rewrite")
+        # Generation metadata must be updated on success
+        mock_lf.update_current_generation.assert_called_once()
+        gen_kwargs = mock_lf.update_current_generation.call_args.kwargs
+        assert gen_kwargs.get("model") == "gpt-4o-mini"
+
+    async def test_transcribe_node_generation_observation(self):
+        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+
+        mock_llm = AsyncMock()
+        mock_llm.audio.transcriptions.create.return_value = MagicMock(text="тест")
+
+        node = make_transcribe_node(
+            llm=mock_llm,
+            voice_language="ru",
+            stt_model="whisper",
+            show_transcription=False,
+        )
+        state = make_initial_state(user_id=1, session_id="s1", query="")
+        state["voice_audio"] = b"fake"
+        state["voice_duration_s"] = 3.0
+
+        mock_observation = MagicMock()
+        mock_gen_ctx = MagicMock()
+        mock_gen_ctx.__enter__ = MagicMock(return_value=mock_observation)
+        mock_gen_ctx.__exit__ = MagicMock(return_value=None)
+
+        mock_lf = MagicMock()
+        mock_lf.start_as_current_observation.return_value = mock_gen_ctx
+
+        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+            await node(state)
+
+        mock_lf.start_as_current_observation.assert_called_once()
+        call_kwargs = mock_lf.start_as_current_observation.call_args.kwargs
+        assert call_kwargs["as_type"] == "generation"
+        assert call_kwargs["name"] == "transcribe-audio"
+        assert call_kwargs["model"] == "whisper"
+        mock_observation.update.assert_called_once()
