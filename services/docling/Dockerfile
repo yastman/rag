@@ -3,8 +3,8 @@
 # Multi-stage build with uv (Context7 best practices 2026)
 #
 # Key optimizations:
-# 1. CPU-only PyTorch (no CUDA) via --index-url
-# 2. uv instead of pip (10x faster installs)
+# 1. CPU-only PyTorch (no CUDA) via uv lockfile + pytorch-cpu index
+# 2. uv sync instead of pip install (lockfile-backed, reproducible)
 # 3. Multi-stage build (builder + runtime)
 # 4. Cache mounts for apt and uv
 # 5. Non-root user
@@ -29,20 +29,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     gcc \
     g++
 
-# Create venv and install CPU-only PyTorch FIRST (critical for size)
+# Deps layer (cached separately from code)
+COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv /opt/venv && \
-    VIRTUAL_ENV=/opt/venv uv pip install \
-    torch \
-    torchvision \
-    --index-url https://download.pytorch.org/whl/cpu
-
-# Install docling-serve with UI support
-RUN --mount=type=cache,target=/root/.cache/uv \
-    VIRTUAL_ENV=/opt/venv uv pip install \
-    "docling-serve[ui]>=1.0.0" \
-    --index-url https://download.pytorch.org/whl/cpu \
-    --extra-index-url https://pypi.org/simple/
+    uv sync --frozen --no-dev --no-install-project --extra docling
 
 # =============================================================================
 # RUNTIME STAGE
@@ -67,8 +57,8 @@ RUN groupadd -g 1001 docling && \
     useradd -u 1001 -g docling -m -d /app -s /bin/false docling
 
 # Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH" \
+COPY --from=builder /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UVICORN_HOST=0.0.0.0 \
@@ -84,7 +74,7 @@ RUN mkdir -p /app/.cache/huggingface && \
     chown -R docling:docling /app/.cache
 
 # RapidOCR downloads models at runtime
-RUN chmod -R a+rw /opt/venv/lib/python*/site-packages/rapidocr/ 2>/dev/null || true
+RUN chmod -R a+rw /app/.venv/lib/python*/site-packages/rapidocr/ 2>/dev/null || true
 
 USER docling
 

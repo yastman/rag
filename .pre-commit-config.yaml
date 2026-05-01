@@ -7,7 +7,7 @@
 # Documentation: https://pre-commit.com/
 
 default_language_version:
-  python: python3.12  # Updated to match installed Python version
+  python: python3.14  # Updated to match installed Python version
 
 # Install both pre-commit and pre-push hooks by default
 default_install_hook_types:

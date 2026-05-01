@@ -7,6 +7,8 @@ NOTE: sentence_transformers is imported lazily to avoid pulling torch
 for bot runtime. Install with: uv sync --extra ml-local
 """
 
+from __future__ import annotations
+
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 _cross_encoder: Any | None = None
 
 
-def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> "CrossEncoder":
+def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> CrossEncoder:
     """
     Get singleton cross-encoder model.
 
