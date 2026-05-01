@@ -11,7 +11,7 @@
 	test-contract
 
 # Configurable container names & thresholds
-REDIS_CONTAINER ?= dev-redis
+REDIS_CONTAINER ?= dev_redis_1
 EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
