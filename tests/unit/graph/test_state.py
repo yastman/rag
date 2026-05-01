@@ -54,12 +54,14 @@ class TestRAGState:
         assert state["query_type"] == ""
 
     def test_messages_contains_user_query(self):
+        from langchain_core.messages import HumanMessage
+
         from telegram_bot.graph.state import make_initial_state
 
         state = make_initial_state(user_id=1, session_id="s-1", query="Привет!")
         msg = state["messages"][0]
-        assert msg["role"] == "user"
-        assert msg["content"] == "Привет!"
+        assert isinstance(msg, HumanMessage)
+        assert msg.content == "Привет!"
 
     def test_initial_state_has_max_rewrite_attempts(self):
         """Initial state includes max_rewrite_attempts=1."""
