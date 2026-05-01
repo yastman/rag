@@ -92,7 +92,7 @@ jobs:
     needs: lint
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     concurrency:
       group: deploy-vps
       cancel-in-progress: false
@@ -108,9 +108,15 @@ jobs:
             set -e
             cd /opt/rag-fresh
             export COMPOSE_FILE=compose.yml:compose.vps.yml
+            export DOCKER_BUILDKIT=1
+            export BUILDKIT_INLINE_CACHE=1
 
             echo "=== Pull latest code ==="
             git fetch origin main
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "WARNING: Dirty tree detected; stashing local changes before reset"
+              git stash push -m "deploy-auto-stash-$(date +%s)"
+            fi
             git reset --hard origin/main
 
             echo "=== Normalize bind-mounted config permissions ==="
@@ -124,10 +130,7 @@ jobs:
             docker compose build
 
             echo "=== Restart services from rebuilt images ==="
-            docker compose --compatibility up -d --force-recreate
-
-            echo "=== Wait for startup ==="
-            sleep 20
+            docker compose --compatibility up -d --wait --force-recreate
 
             echo "=== Release smoke ==="
             chmod +x ./scripts/test_release_health_vps.sh
