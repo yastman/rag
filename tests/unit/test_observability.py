@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 class TestMaskPii:
     """Tests for mask_pii function."""
@@ -729,3 +731,96 @@ class TestObservabilityBootstrapAliases:
 
         assert observability._is_endpoint_reachable is bootstrap.is_endpoint_reachable
         assert observability._disable_otel_exporter is bootstrap.disable_otel_exporter
+
+
+@pytest.fixture
+def observability_without_langfuse():
+    """Simulate langfuse import failure and provide the reloaded observability module."""
+    import importlib
+    import sys
+
+    original_langfuse = sys.modules.pop("langfuse", None)
+    broken = type(
+        "BrokenLangfuse",
+        (),
+        {
+            "__getattr__": lambda _self, _name: (_ for _ in ()).throw(
+                ImportError("simulated pydantic.v1 error")
+            )
+        },
+    )()
+
+    sys.modules["langfuse"] = broken
+    if "telegram_bot.observability" in sys.modules:
+        del sys.modules["telegram_bot.observability"]
+
+    obs = importlib.import_module("telegram_bot.observability")
+
+    yield obs
+
+    # Restore
+    if original_langfuse is not None:
+        sys.modules["langfuse"] = original_langfuse
+    else:
+        sys.modules.pop("langfuse", None)
+    if "telegram_bot.observability" in sys.modules:
+        del sys.modules["telegram_bot.observability"]
+    importlib.import_module("telegram_bot.observability")
+
+
+class TestLangfuseImportFailure:
+    """Tests for graceful degradation when langfuse SDK fails to import."""
+
+    def test_observe_fallback_no_parens(self, observability_without_langfuse):
+        """@observe without parentheses should return the original function."""
+
+        @observability_without_langfuse.observe
+        def my_func():
+            return 42
+
+        assert my_func() == 42
+
+    def test_observe_fallback_with_parens(self, observability_without_langfuse):
+        """@observe() should return the original function."""
+
+        @observability_without_langfuse.observe()
+        def my_func():
+            return 42
+
+        assert my_func() == 42
+
+    def test_observe_fallback_with_kwargs(self, observability_without_langfuse):
+        """@observe(name='test') should return the original function."""
+
+        @observability_without_langfuse.observe(name="test")
+        def my_func():
+            return 42
+
+        assert my_func() == 42
+
+    def test_get_client_returns_none(self, observability_without_langfuse):
+        """get_client should return None when langfuse import fails."""
+        assert observability_without_langfuse.get_client() is None
+
+    def test_propagate_attributes_is_noop(self, observability_without_langfuse):
+        """propagate_attributes should be a no-op context manager."""
+        with observability_without_langfuse.propagate_attributes(session_id="s", user_id="u"):
+            pass
+
+    def test_initialize_langfuse_returns_none(self, observability_without_langfuse):
+        """initialize_langfuse should return None and not raise."""
+        assert observability_without_langfuse.initialize_langfuse() is None
+
+    def test_create_callback_handler_returns_none(self, observability_without_langfuse):
+        """create_callback_handler should return None when langfuse import fails."""
+        assert observability_without_langfuse.create_callback_handler() is None
+
+    def test_langfuse_placeholder_raises_on_init(self, observability_without_langfuse):
+        """Langfuse fallback class should raise the original import error."""
+        with pytest.raises(ImportError, match=r"simulated pydantic\.v1 error"):
+            observability_without_langfuse.Langfuse()
+
+    def test_traced_pipeline_works_with_fallback(self, observability_without_langfuse):
+        """traced_pipeline should work when propagate_attributes is a fallback."""
+        with observability_without_langfuse.traced_pipeline(session_id="s", user_id="u"):
+            pass
