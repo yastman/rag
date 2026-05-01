@@ -1,5 +1,7 @@
 """Main Telegram bot logic — LangGraph pipeline."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import inspect
@@ -142,7 +144,7 @@ def _build_pre_agent_state_contract(
     colbert_query: list[list[float]] | None,
     grounding_mode: str,
     filters: dict[str, Any] | None = None,
-) -> "PreAgentStateContract":
+) -> PreAgentStateContract:
     """Build the shared pre-agent contract and preserve any upstream filters."""
     from .pipelines.state_contract import build_pre_agent_miss_contract
 
