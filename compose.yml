@@ -650,7 +650,7 @@ services:
   # =============================================================================
 
   loki:
-    image: grafana/loki:3.6.7@sha256:3c8fd3570dd9219951a60d3f919c7f31923d10baee578b77bc26c4a0b32d092d
+    image: grafana/loki:3.7.1@sha256:73e905b51a7f917f7a1075e4be68759df30226e03dcb3cd2213b989cc0dc8eb4
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -666,7 +666,7 @@ services:
       start_period: 30s
 
   promtail:
-    image: grafana/promtail:3.6.7@sha256:51346af8682f7a664affaca4f34a62f5a4f0f83ace9931df94590375a94ff8f1
+    image: grafana/promtail:3.6.10@sha256:2a0f5e3e160ee5d549c585f6cc4f4e1c566ff783324a424bd75bc16503fc660e
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
@@ -689,7 +689,7 @@ services:
           memory: 256M
 
   alertmanager:
-    image: prom/alertmanager:v0.31.1@sha256:88b605de9aba0410775c1eb3438f951115054e0d307f23f274a4c705f51630c1
+    image: prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286
     profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
