@@ -1,0 +1,58 @@
+name: Bug Report
+description: Report a real product bug in the contextual RAG system.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. If you are reviewing this repo for hiring/portfolio purposes, see [`docs/review/ACCESS_FOR_REVIEWERS.md`](../../docs/review/ACCESS_FOR_REVIEWERS.md) first.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened? What did you expect?
+      placeholder: A clear, concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: How can someone else reproduce this?
+      placeholder: |
+        1. Start services with `make local-up`
+        2. Run `make test-bot-health`
+        3. Observe error ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Local dev, Docker, VPS, or CI?
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Docker version: 24.x
+        - Branch: dev
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Trace IDs
+      description: Relevant log snippets or Langfuse trace IDs.
+      placeholder: Paste logs or trace links here.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-report checks
+      description: Please confirm the following before submitting.
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I ran `make check` and the bug persists.
+          required: false
+        - label: I can reproduce this on the latest `dev` branch.
+          required: true
