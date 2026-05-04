@@ -53,3 +53,7 @@ Start here if you are reviewing the project for hiring, portfolio, or collaborat
 - [`docs/HITL_CRM_FLOW.md`](HITL_CRM_FLOW.md) — CRM-specific HITL flow.
 - [`docs/CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
 - [`docs/CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
+
+## Archive
+
+- [`docs/archive/`](archive/) — Historical documentation and retired CI workflows that are preserved for context but are not active runtime or CI configuration.
