@@ -79,8 +79,13 @@ jobs:
       - name: Install dev dependencies
         run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv sync --python 3.12 --frozen
 
-      - name: Unit tests
-        run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30
+      - name: Unit tests (core)
+        run: UV_PROJECT_ENVIRONMENT=.venv-py312 make test-unit
+
+      - name: Unit tests (optional extras)
+        run: |
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv sync --extra voice --extra ingest --extra eval --all-groups
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30 -m "requires_extras"
 
       - name: Security scan (bandit + vulture)
         run: |
