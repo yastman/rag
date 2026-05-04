@@ -180,8 +180,15 @@ test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse loca
 
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
 	@echo "$(BLUE)Running full unit tests (all extras)...$(NC)"
+	uv sync --extra voice --extra ingest --extra eval --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Full unit tests complete$(NC)"
+
+test-unit-extras: ## Run optional-extra unit tests only
+	@echo "$(BLUE)Running optional-extra unit tests...$(NC)"
+	uv sync --extra voice --extra ingest --extra eval --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "requires_extras"
+	@echo "$(GREEN)✓ Optional-extra unit tests complete$(NC)"
 
 test-contract: ## Run trace contract tests (static analysis, no Docker)
 	@echo "$(BLUE)Running trace contract tests...$(NC)"
