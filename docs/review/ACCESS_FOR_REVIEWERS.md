@@ -3,6 +3,10 @@
 Use this file when someone receives repository access for technical review,
 portfolio review, or hiring evaluation.
 
+> **Start here.** Read this file first, then `README.md` and
+> `docs/review/PROJECT_GUIDE.md`, before running any commands or inspecting
+> code folders.
+
 ## Recommended Review Path
 
 If you have 10 minutes:
@@ -25,15 +29,16 @@ If you have more time:
 ## Safe Commands
 
 These commands are intended for local review and should not call production
-systems when the environment is configured safely:
+systems when the environment is configured safely. Approximate run times on a
+modern laptop:
 
-```bash
-uv sync
-make check
-uv run pytest tests/unit
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services
-COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services
-```
+| Command | ~Duration | What it proves |
+|---------|-----------|----------------|
+| `uv sync` | 30–60 s | Dependencies resolve and lock |
+| `make check` | 45–90 s | Lint and type-check pass |
+| `uv run pytest tests/unit` | 1–3 min | Unit tests pass |
+| `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services` | <5 s | Dev Compose config is valid |
+| `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services` | <5 s | VPS Compose config is valid |
 
 For a narrower first pass, prefer focused tests around the subsystem being
 reviewed, then `make check`.
@@ -54,6 +59,12 @@ reviewed, then `make check`.
 - Use fake/demo credentials for local inspection.
 - Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external
   secrets, not repository content.
+
+## Branch Context
+
+- `dev` is the active integration branch; `main` lags behind and is used for
+  stable snapshots. Reviewers inspecting recent work should look at `dev` and
+  open PRs against it.
 
 ## What To Look At For Senior-Level Review
 

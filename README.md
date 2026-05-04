@@ -280,7 +280,7 @@ make test-unit   # Unit tests (parallel via pytest-xdist)
 make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
-Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `main` or deploying to VPS.
+Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `dev` (the active integration branch) or deploying to VPS.
 
 CI is intentionally lightweight. It should stay fast and is used as a guardrail for lint, format, type-check, security, and other short checks, not as the authoritative full-suite signal.
 
