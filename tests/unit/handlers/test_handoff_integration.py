@@ -57,3 +57,104 @@ def mock_redis():
     import fakeredis.aioredis
 
     return fakeredis.aioredis.FakeRedis(decode_responses=True)
+
+
+# --- parse_qual_callback ---
+
+
+def test_parse_qual_callback_valid():
+    """parse_qual_callback returns tuple for valid qual callback."""
+    from telegram_bot.handlers.handoff import parse_qual_callback
+
+    result = parse_qual_callback("qual:goal:search")
+    assert result == ("goal", "search")
+
+
+def test_parse_qual_callback_invalid_format():
+    """parse_qual_callback returns None for wrong segment count."""
+    from telegram_bot.handlers.handoff import parse_qual_callback
+
+    result = parse_qual_callback("qual:goal")
+    assert result is None
+
+
+def test_parse_qual_callback_wrong_prefix():
+    """parse_qual_callback returns None for non-qual prefix."""
+    from telegram_bot.handlers.handoff import parse_qual_callback
+
+    result = parse_qual_callback("other:goal:search")
+    assert result is None
+
+
+# --- start_qualification ---
+
+
+@pytest.mark.asyncio
+async def test_start_qualification_active_fsm_guard():
+    """start_qualification returns early when FSM state is already active."""
+    from telegram_bot.handlers.handoff import HandoffStates, start_qualification
+
+    state = AsyncMock()
+    state.get_state = AsyncMock(return_value=HandoffStates.active)
+
+    message = AsyncMock(spec=["answer"])
+    message.answer = AsyncMock()
+
+    await start_qualification(message, state=state)
+
+    message.answer.assert_awaited_once_with("Вы уже на связи с менеджером, ожидайте ответа 💬")
+
+
+@pytest.mark.asyncio
+async def test_start_qualification_with_goal():
+    """start_qualification starts HandoffSG.contact when goal is provided."""
+    from telegram_bot.handlers.handoff import start_qualification
+
+    state = AsyncMock()
+    state.get_state = AsyncMock(return_value=None)
+
+    dialog_manager = AsyncMock()
+
+    message = MagicMock()
+
+    await start_qualification(message, state=state, dialog_manager=dialog_manager, goal="services")
+
+    dialog_manager.start.assert_awaited_once()
+    call_args = dialog_manager.start.call_args
+    assert call_args.kwargs["data"] == {"goal": "services"}
+
+
+@pytest.mark.asyncio
+async def test_start_qualification_without_goal():
+    """start_qualification starts HandoffSG.goal when no goal is provided."""
+    from telegram_bot.dialogs.states import HandoffSG
+    from telegram_bot.handlers.handoff import start_qualification
+
+    state = AsyncMock()
+    state.get_state = AsyncMock(return_value=None)
+
+    dialog_manager = AsyncMock()
+
+    message = MagicMock()
+
+    await start_qualification(message, state=state, dialog_manager=dialog_manager)
+
+    dialog_manager.start.assert_awaited_once()
+    call_args = dialog_manager.start.call_args
+    assert call_args.args[0] is HandoffSG.goal
+
+
+@pytest.mark.asyncio
+async def test_start_qualification_fallback_without_dialog_manager():
+    """start_qualification sends plain text when dialog_manager is None."""
+    from telegram_bot.handlers.handoff import start_qualification
+
+    state = AsyncMock()
+    state.get_state = AsyncMock(return_value=None)
+
+    message = AsyncMock(spec=["answer"])
+    message.answer = AsyncMock()
+
+    await start_qualification(message, state=state, dialog_manager=None)
+
+    message.answer.assert_awaited_once_with("📋 Какая тема вас интересует?")
