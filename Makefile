@@ -37,6 +37,20 @@ export TMPDIR TMP TEMP
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
+PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
+	tests/unit/test_document_parser.py \
+	tests/unit/test_evaluator.py \
+	tests/unit/evaluation/test_ragas_evaluation.py \
+	tests/unit/voice/test_sip_setup.py \
+	tests/unit/voice/test_voice_agent.py \
+	tests/unit/ingestion/test_cocoindex_init.py \
+	tests/unit/ingestion/test_qdrant_hybrid_target.py \
+	tests/unit/ingestion/test_qdrant_hybrid_target_helpers.py \
+	tests/unit/ingestion/test_qdrant_hybrid_target_state_paths.py \
+	tests/unit/ingestion/test_target_sync_execution.py \
+	tests/unit/ingestion/test_unified_cli.py \
+	tests/unit/ingestion/test_unified_flow.py \
+	tests/unit/ingestion/test_unified_flow_wiring.py)
 
 help: ## Show this help message
 	@echo "$(BLUE)Contextual RAG v$(PROJECT_VERSION) - Development Commands$(NC)"
@@ -170,7 +184,7 @@ test-cov: ## Run tests with coverage
 
 test-unit: ## Run core unit tests locally in parallel (fast default gate)
 	@echo "$(BLUE)Running core unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
@@ -180,8 +194,15 @@ test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse loca
 
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
 	@echo "$(BLUE)Running full unit tests (all extras)...$(NC)"
+	uv sync --extra voice --extra ingest --extra eval --all-groups
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Full unit tests complete$(NC)"
+
+test-unit-extras: ## Run optional-extra unit tests only
+	@echo "$(BLUE)Running optional-extra unit tests...$(NC)"
+	uv sync --extra voice --extra ingest --extra eval --all-groups
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "requires_extras"
+	@echo "$(GREEN)✓ Optional-extra unit tests complete$(NC)"
 
 test-contract: ## Run trace contract tests (static analysis, no Docker)
 	@echo "$(BLUE)Running trace contract tests...$(NC)"
