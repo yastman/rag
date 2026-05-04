@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Reviewer Access Guide
-    url: https://github.com/yastman/rag-fresh/blob/dev/docs/review/ACCESS_FOR_REVIEWERS.md
+    url: https://github.com/yastman/rag/blob/dev/docs/review/ACCESS_FOR_REVIEWERS.md
     about: If you are reviewing this repo for hiring or portfolio evaluation, start here.
   - name: Project Guide
-    url: https://github.com/yastman/rag-fresh/blob/dev/docs/review/PROJECT_GUIDE.md
+    url: https://github.com/yastman/rag/blob/dev/docs/review/PROJECT_GUIDE.md
     about: High-level architecture and subsystem map.
   - name: Test Writing Guide
-    url: https://github.com/yastman/rag-fresh/blob/dev/docs/engineering/test-writing-guide.md
+    url: https://github.com/yastman/rag/blob/dev/docs/engineering/test-writing-guide.md
     about: Conventions for writing and placing tests in this repo.
