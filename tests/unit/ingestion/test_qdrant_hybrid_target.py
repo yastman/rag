@@ -21,6 +21,9 @@ from src.ingestion.unified.targets.qdrant_hybrid_target import (
 )
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 # ---------------------------------------------------------------------------
 # compute_content_hash
 # ---------------------------------------------------------------------------
