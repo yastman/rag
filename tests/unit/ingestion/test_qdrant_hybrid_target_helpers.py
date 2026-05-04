@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
 
 from src.ingestion.unified.config import UnifiedConfig
