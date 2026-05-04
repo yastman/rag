@@ -11,6 +11,9 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 cocoindex = pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
 
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
@@ -19,9 +22,6 @@ from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetValues,
     compute_content_hash,
 )
-
-
-pytestmark = pytest.mark.requires_extras
 
 
 # ---------------------------------------------------------------------------

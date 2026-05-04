@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
 
 from src.ingestion.unified.config import UnifiedConfig
@@ -15,9 +18,6 @@ from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetSpec,
     compute_content_hash,
 )
-
-
-pytestmark = pytest.mark.requires_extras
 
 
 def test_compute_content_hash_is_stable(tmp_path: Path) -> None:
