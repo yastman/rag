@@ -44,18 +44,18 @@ Pin or link these prominently:
 
 ## Branch And Release Hygiene
 
-Recommended setup:
+For **this** repository:
 
-- default branch: `main` for public portfolio repos, or document clearly if
-  `dev` is the active integration branch.
-- protect the default branch.
-- require PRs for changes.
+- active integration branch: `dev` (reviewers should look here for recent work).
+- stable snapshot branch: `main` (lags behind `dev`).
+- protect both branches.
+- require PRs against `dev` for changes.
 - require fast CI checks before merge.
 - disallow force pushes to protected branches.
 - create a review snapshot tag such as `portfolio-review-2026-05`.
 
-If the everyday integration branch is not `main`, explain that in `README.md`
-and keep PR/release instructions consistent.
+Keep PR and release instructions consistent: if the everyday integration branch
+is `dev`, every doc that mentions merging should say `dev`, not `main`.
 
 ## CI Expectations
 
