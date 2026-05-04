@@ -17,6 +17,9 @@ from src.ingestion.unified.targets.qdrant_hybrid_target import (
 )
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 def test_compute_content_hash_is_stable(tmp_path: Path) -> None:
     file_path = tmp_path / "doc.txt"
     file_path.write_text("payload", encoding="utf-8")
