@@ -3,16 +3,18 @@
 import json
 import tempfile
 
-import numpy as np
 import pytest
+
+
+pytestmark = pytest.mark.requires_extras
+
+
+import numpy as np
 
 
 pytest.importorskip("pandas", reason="pandas not installed (eval extra)")
 
 from src.evaluation.evaluator import SearchEvaluator
-
-
-pytestmark = pytest.mark.requires_extras
 
 
 class TestSearchEvaluatorInit:
