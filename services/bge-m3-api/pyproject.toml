@@ -11,12 +11,12 @@ dependencies = [
     "sentence-transformers==3.4.1",
     # FastAPI & Web Server
     "fastapi==0.135.3",
-    "uvicorn[standard]==0.41.0",
+    "uvicorn[standard]==0.46.0",
     "python-multipart==0.0.27",
-    "pydantic==2.12.5",
-    "pydantic-settings==2.12.0",
+    "pydantic==2.13.3",
+    "pydantic-settings==2.14.0",
     # Monitoring & Metrics
-    "prometheus-client==0.24.1",
+    "prometheus-client==0.25.0",
     # Utilities
     "numpy==1.26.4",
     "scipy==1.17.1",
