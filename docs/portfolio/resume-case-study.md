@@ -7,7 +7,8 @@ case study, not as developer setup documentation.
 
 AI-native real-estate automation platform combining Telegram, RAG search,
 apartment matching, CRM automation, voice input, observability, and Dockerized
-AI infrastructure.
+AI infrastructure. Built with an AI-assisted engineering workflow using Codex,
+Claude Code CLI, OpenCode workers, PR review loops, and CI verification.
 
 ## Resume Summary - English
 
@@ -19,6 +20,11 @@ Redis caching, semantic conversation memory, CRM lead automation with
 human-in-the-loop confirmation, Langfuse tracing, gold-set/evaluation tooling,
 and unified document ingestion. The system includes 20+ Docker services,
 local/dev observability and monitoring, and 400+ test files.
+Developed using an AI-native engineering workflow: task decomposition into
+focused worker prompts, parallel OpenCode worker swarms, PR review loops with
+self-review and verification gates, and CI-driven quality checks. Treats Codex
+and Claude Code CLI as structured engineering tools—not unsupervised
+auto-pilot—within a disciplined development process.
 
 ## Resume Summary - Russian
 
@@ -29,6 +35,12 @@ self-hosted BGE-M3 embeddings, Qdrant hybrid retrieval с dense/sparse/ColBERT
 векторами, многоуровневое Redis-кеширование, семантическую память диалогов,
 автоматизацию лидов в CRM с human-in-the-loop подтверждением, Langfuse
 трассировку, gold-set/evaluation tooling и unified ingestion документов.
+Платформа разработана с использованием AI-native workflow: декомпозиция задач
+в фокусированные worker-запросы, параллельные OpenCode worker swarms,
+PR review loops с self-review и verification gates, а также CI-driven quality
+checks. Codex и Claude Code CLI используются как структурированные
+инженерные инструменты — не как unsupervised auto-pilot — в рамках
+дисциплинированного development process.
 
 ## Best Resume Bullets
 
@@ -49,6 +61,63 @@ self-hosted BGE-M3 embeddings, Qdrant hybrid retrieval с dense/sparse/ColBERT
 - Dockerized the system with Compose profiles for bot, ingestion, voice, ML
   observability, monitoring, and full-stack runtime; k3s manifests cover core
   services as an incremental migration path.
+- Applied AI-assisted engineering workflows using Codex, Claude Code CLI, and
+  OpenCode workers with PR review loops, verification gates, and CI quality
+  checks. Decomposed large features into focused worker tasks with reserved
+  files, explicit acceptance criteria, and traceable commits.
+- Orchestrated parallel worker swarms for test writing, documentation updates,
+  and focused implementation, treating agent tooling as an accelerator for
+  decomposition and review rather than unsupervised code generation.
+
+## AI-Native Engineering Workflow
+
+This project is built with AI-assisted engineering as a first-class practice,
+not as a replacement for engineering judgment.
+
+### Workflow Summary — English
+
+- **Task decomposition:** Large features are split into focused worker prompts
+  with explicit acceptance criteria, reserved files, and verification ladders.
+- **Worker swarms:** OpenCode workers run in isolated branches to implement,
+  test, and document changes in parallel. Each worker owns a narrow scope and
+  produces traceable commits.
+- **Self-review and verification:** Workers run `git diff --check`, focused
+  pytest, and linting before claiming completion. No success claims without
+  fresh evidence.
+- **PR review loops:** Changes are committed, pushed, and opened as PRs against
+  `dev`. Review includes diff inspection, test results, and adherence to
+  acceptance criteria before merge.
+- **CI quality gates:** GitHub Actions provide fast lint/test guardrails on
+  every PR. Runtime-impacting changes additionally require documented Compose
+  contract validation and service-level verification before merge. The project
+  treats CI as a mandatory gate, not a post-merge check.
+- **Responsible agent use:** Codex and Claude Code CLI are used as structured
+  engineering tools for drafting, decomposition, and review. Humans approve
+  merges, set acceptance criteria, and verify outcomes.
+
+### Workflow Summary — Russian
+
+- **Декомпозиция задач:** Большие фичи разбиваются на фокусированные
+  worker-запросы с четкими критериями приемки, зарезервированными файлами и
+  verification ladders.
+- **Worker swarms:** OpenCode workers работают в изолированных ветках для
+  параллельной имплементации, написания тестов и обновления документации.
+  Каждый worker владеет узким скоупом и производит traceable commits.
+- **Self-review и verification:** Workers запускают `git diff --check`, focused
+  pytest и линтинг перед тем, как заявлять о завершении. Никаких заявлений об
+  успехе без свежих доказательств.
+- **PR review loops:** Изменения коммитятся, пушатся и открываются как PRы в
+  `dev`. Ревью включает инспекцию diff, результаты тестов и соответствие
+  критериям приемки перед мержем.
+- **CI quality gates:** GitHub Actions обеспечивают быстрые lint/test
+  guardrails на каждом PR. Изменения, затрагивающие runtime, дополнительно
+  требуют документированной Compose contract validation и service-level
+  verification перед мержем. Проект рассматривает CI как обязательный gate,
+  а не как post-merge check.
+- **Ответственное использование агентов:** Codex и Claude Code CLI
+  используются как структурированные инженерные инструменты для драфтинга,
+  декомпозиции и ревью. Человек утверждает мержи, задает критерии приемки и
+  верифицирует результаты.
 
 ## Feature Cards
 
@@ -241,6 +310,9 @@ monitoring unless production deployment evidence is added.
   metrics, judge calibration scripts.
 - **Ops:** Docker Compose profiles, healthchecks, pinned images, non-root
   runtime users, VPS Docker Compose deployment path, partial k3s manifests.
+- **AI-native workflow:** Codex, Claude Code CLI, OpenCode workers, task
+  decomposition, PR review loops, verification gates, CI quality checks,
+  traceable commits, and responsible agent orchestration.
 
 ## Interview Talking Points
 
@@ -268,6 +340,22 @@ monitoring unless production deployment evidence is added.
 6. **What makes this more than a chatbot?**
    It has ingestion, retrieval infrastructure, CRM automation, voice channel,
    memory, evaluation, observability, and Dockerized runtime services.
+
+7. **How do you use AI agents responsibly?**
+   The project uses Codex, Claude Code CLI, and OpenCode workers within a
+   structured workflow: task decomposition, reserved files, explicit acceptance
+   criteria, verification ladders, and PR review loops. Agents draft and review;
+   humans approve merges and verify outcomes. This demonstrates agent
+   orchestration, not agent replacement.
+
+8. **What does your AI-native development workflow look like?**
+   Features start as worker prompts with acceptance criteria. Workers run in
+   isolated branches, verify with fresh tests and `git diff --check`, and open
+   PRs. CI provides fast lint/test guardrails on every PR, while
+   runtime-impacting changes also require documented Compose contract
+   validation and service-level verification before merge. The workflow treats
+   AI as a pair-programming and review accelerator, not as unsupervised
+   auto-pilot.
 
 ## Honest Limitations / Next Improvements
 
