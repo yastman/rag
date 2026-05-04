@@ -250,3 +250,10 @@ docs/artifacts/*.md
 .claude/hooks/
 .grepai/
 .signals/
+
+# Local AI/orchestration tool directories
+.planning/
+.codex/
+.opencode/node_modules/
+projects/
+tmp.*
