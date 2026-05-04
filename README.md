@@ -1,8 +1,8 @@
 <div align="center">
 
-# Contextual RAG Pipeline
+# AI Real Estate Automation Platform
 
-**AI-powered Telegram bot for real estate — RAG search, apartment finder, voice calls, CRM automation**
+**Telegram + RAG + apartment search + CRM automation + voice + production-like AI infrastructure**
 
 [![CI](https://github.com/yastman/rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yastman/rag/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -13,9 +13,12 @@
 
 ---
 
-## What is this?
+## What Is This?
 
-A **production system** that lets real estate clients ask questions in natural language via Telegram — about properties, legal processes, immigration, and more — and get accurate, sourced answers powered by RAG.
+An AI-native real-estate automation platform that lets clients ask questions in
+natural language via Telegram, search apartment listings, move qualified leads
+into Kommo CRM workflows, and use the same RAG stack from text and voice
+channels.
 
 **The problem:** Real estate agencies drown in repetitive client questions across Telegram, phone, and CRM. Agents spend hours answering the same things.
 
@@ -23,9 +26,38 @@ A **production system** that lets real estate clients ask questions in natural l
 - Answers knowledge-base questions with source citations (RAG)
 - Searches apartment listings with natural language — *"2-bedroom in Sofia under €80k"*
 - Scores and nurtures leads automatically via CRM integration
-- Handles voice calls with a LiveKit-powered voice agent
+- Supports Telegram voice input and a LiveKit-powered voice agent path
+- Runs as a Docker Compose based local/VPS stack with observability, ingestion,
+  vector search, and local ML services
 
-> This runs in production, handles real users, and deploys automatically via CI/CD to a VPS.
+> The primary runtime is Docker Compose on local/VPS environments. k3s manifests
+> exist for core services as an incremental migration path, not full parity with
+> the Compose stack.
+
+---
+
+## For Reviewers
+
+If you have limited time, read the repository in this order:
+
+1. [Portfolio case study](docs/portfolio/resume-case-study.md) — concise
+   project narrative, feature cards, trade-offs, and honest limitations.
+2. [Project guide](docs/review/PROJECT_GUIDE.md) — folder map and subsystem ownership.
+3. `telegram_bot/graph/` — LangGraph orchestration and routing.
+4. `telegram_bot/agents/` and `telegram_bot/services/` — CRM tools, apartment
+   search, cache, lead scoring, handoff, and business logic.
+5. `src/ingestion/unified/` — deterministic document ingestion and Qdrant writes.
+6. `compose.yml`, `compose.dev.yml`, `compose.vps.yml`, and [DOCKER.md](DOCKER.md)
+   — runtime architecture.
+
+Safe review notes:
+
+- Do not run production deploy scripts or real CRM write paths without a
+  dedicated review environment.
+- Start with [ACCESS_FOR_REVIEWERS.md](docs/review/ACCESS_FOR_REVIEWERS.md) before
+  executing commands.
+- GitHub repository presentation checklist lives in
+  [GITHUB_REPO_SETUP.md](docs/review/GITHUB_REPO_SETUP.md).
 
 ---
 
@@ -47,7 +79,7 @@ graph TB
         QC[Query Classifier]
         QC -->|Knowledge| RAG[RAG Pipeline]
         QC -->|Apartment| APT["Apartment Search<br/>regex filters → hybrid search"]
-        QC -->|CRM Action| AG["LangGraph Agent<br/>8 CRM tools"]
+        QC -->|CRM Action| AG["LangGraph Agent<br/>CRM tools"]
     end
 
     subgraph "Retrieval"
@@ -84,23 +116,35 @@ graph TB
 ### Hybrid Search with ColBERT Reranking
 Dense + sparse vectors fused via RRF, with optional ColBERT multi-vector reranking — all server-side in Qdrant. No external reranking API needed.
 
-### Zero-Cost Apartment Search
-Natural language queries like *"3 rooms in Burgas under 100k"* are parsed with regex first (zero LLM cost). LLM extraction kicks in only for complex queries. Results come from hybrid vector search over property listings.
+### Cheap-First Apartment Search
+Natural language queries like *"3 rooms in Burgas under 100k"* use
+deterministic regex parsing for common filters before falling back to LLM
+extraction for complex queries. Results come from hybrid vector search over
+property listings.
 
 ### Agentic RAG with CRM Tools
-LangGraph state graph with 8 tools: create leads, schedule viewings, search history, escalate to human agent. Full HITL (human-in-the-loop) support via `interrupt()`.
+LangGraph state graph with CRM tools for leads, contacts, tasks, notes, and
+history. Write operations use HITL confirmation via `interrupt()`.
 
 ### Multi-Level Semantic Cache
-Two-tier caching via RedisVL: embedding cache (skip re-encoding) + query result cache (skip retrieval + generation). Distance thresholds tuned per query type. ~60% hit rate in production.
+Tiered caching via RedisVL: semantic answer cache, embedding caches, search
+result cache, and rerank result cache. Distance thresholds are tuned per query
+type.
 
 ### Voice Assistant
-LiveKit Agents + ElevenLabs TTS + OpenAI STT. Handles inbound SIP calls, routes through the same RAG pipeline, responds with natural speech.
+LiveKit agent path with ElevenLabs STT/TTS and shared RAG API integration. SIP
+support is represented as outbound trunk provisioning; inbound call routing
+should be described only after a dedicated production review.
 
-### Full Observability
-Every LLM call, retrieval, and cache hit/miss traced in Langfuse. 14 RAG quality scores computed per query. Loki + Alertmanager for infrastructure monitoring.
+### Observability
+Langfuse traces and quality/operational scores cover RAG, latency, cache,
+rerank, voice, security, CRM, history, nurturing, and source attribution when
+observability is configured. Loki + Alertmanager are available for local/dev
+monitoring.
 
-### i18n Ready
-Three languages (ru/uk/en) via Fluent `.ftl` files. Locale auto-detection with fallback chains.
+### Partial i18n
+Three language bundles (ru/uk/en) via Fluent `.ftl` files. Some operational and
+dialog strings are still hardcoded and should be treated as an ongoing migration.
 
 ### Unified Ingestion
 CocoIndex pipeline: Docling parses PDFs/DOCX → semantic chunking → BGE-M3 dense+sparse embeddings → Qdrant. Incremental updates, resumable.
@@ -112,16 +156,16 @@ CocoIndex pipeline: Docling parses PDFs/DOCX → semantic chunking → BGE-M3 de
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | **LLM** | Any model via LiteLLM | Provider-agnostic, easy switching |
-| **Embeddings** | BGE-M3 (self-hosted) | Dense + sparse + ColBER in one model, no API costs |
+| **Embeddings** | BGE-M3 (self-hosted) | Dense + sparse + ColBERT in one model, no API costs |
 | **Vector DB** | Qdrant | Native RRF fusion, ColBERT support, server-side reranking |
 | **Cache** | Redis + RedisVL | Semantic similarity cache, sub-ms latency |
 | **Bot** | aiogram 3 + aiogram-dialog | Async, dialog state machines, inline keyboards |
 | **Pipeline** | LangGraph | State graph with tools, checkpointing, HITL |
 | **Ingestion** | CocoIndex + Docling | Deterministic, resumable, multi-format parsing |
 | **Voice** | LiveKit Agents | WebRTC + SIP, plugin ecosystem |
-| **Observability** | Langfuse + Loki | LLM tracing + log aggregation + alerting |
+| **Observability** | Langfuse + Loki | LLM tracing + local/dev log aggregation + alerting |
 | **Database** | PostgreSQL | Lead scoring, graph checkpoints, user data |
-| **Deployment** | Docker Compose / k3s | Dev → VPS with CI/CD auto-deploy |
+| **Deployment** | Docker Compose / partial k3s | Local/VPS Compose primary, k3s core-service manifests |
 
 ---
 
@@ -151,7 +195,7 @@ make run-bot           # Run bot natively (fast iteration, no Docker rebuild)
 
 For native bot runs, `REDIS_URL` is optional in local development: when it is unset, the bot derives `redis://:REDIS_PASSWORD@localhost:6379` from `REDIS_PASSWORD` so it matches the password-protected Redis started by `make local-up`.
 
-`make test-bot-health` validates the published local prerequisites used by native bot runs. The authoritative startup preflight still runs in [`telegram_bot/preflight.py`](/home/user/projects/rag-fresh-issue-1198/telegram_bot/preflight.py) when the bot starts. That runtime preflight still owns the repo-local BGE-M3 contract because BGE-M3 is a service this repository depends on directly, not a generic upstream SDK health path.
+`make test-bot-health` validates the published local prerequisites used by native bot runs. The authoritative startup preflight still runs in [`telegram_bot/preflight.py`](telegram_bot/preflight.py) when the bot starts. That runtime preflight still owns the repo-local BGE-M3 contract because BGE-M3 is a service this repository depends on directly, not a generic upstream SDK health path.
 
 ### 3. Or Run Everything in Docker
 
@@ -246,6 +290,11 @@ CI is intentionally lightweight. It should stay fast and is used as a guardrail 
 
 | Document | Description |
 |----------|-------------|
+| [Reviewer Access Guide](docs/review/ACCESS_FOR_REVIEWERS.md) | Safe review path, commands, and boundaries for people with repo access |
+| [Project Guide](docs/review/PROJECT_GUIDE.md) | Folder map, subsystem ownership, and where the important code lives |
+| [Portfolio Case Study](docs/portfolio/resume-case-study.md) | Resume-ready project narrative and feature highlights |
+| [GitHub Repo Setup](docs/review/GITHUB_REPO_SETUP.md) | Repository metadata, topics, branch protection, release, and hygiene checklist |
+| [Docs Index](docs/README.md) | Concise map of all major documentation areas |
 | [DOCKER.md](DOCKER.md) | Docker Compose profiles, service map, env requirements |
 | [Architecture](docs/PROJECT_STACK.md) | System architecture and subsystem map |
 | [Pipeline Overview](docs/PIPELINE_OVERVIEW.md) | Ingestion, query, and voice runtime flows |
