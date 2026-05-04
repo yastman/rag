@@ -11,6 +11,9 @@ from pathlib import Path
 import pytest
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 cocoindex = pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
 
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
@@ -146,3 +149,31 @@ class TestConnectorStatics:
         spec = QdrantHybridTargetSpec()
         result = QdrantHybridTargetConnector.prepare(spec)
         assert result is spec
+
+    def test_mutate_annotation_is_runtime_type_not_string(self) -> None:
+        """The CocoIndex decorator reads mutate annotations at import time via
+        inspect.signature.  If from __future__ import annotations is active,
+        annotations are strings and CocoIndex rejects them as OtherType instead
+        of MappingType, producing:
+
+          ValueError: … parameter must be a tuple with 2 elements …
+
+        This test asserts that the annotation is a concrete callable, not a
+        string, so that the regression is caught immediately.
+        """
+        import inspect
+
+        sig = inspect.signature(QdrantHybridTargetConnector.mutate)
+        param = sig.parameters["all_mutations"]
+        anno = param.annotation
+        assert anno is not inspect.Parameter.empty, (
+            "mutate 'all_mutations' parameter is missing a type annotation"
+        )
+        assert not isinstance(anno, str), (
+            "mutate annotation is a string — from __future__ import annotations "
+            "is likely active and CocoIndex will reject it"
+        )
+        # The annotation should be a generic alias (tuple[...]) or similar.
+        assert hasattr(anno, "__origin__"), (
+            "mutate annotation should be a concrete generic type (e.g. tuple[...])"
+        )
