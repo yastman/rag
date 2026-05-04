@@ -251,3 +251,9 @@ docs/artifacts/*.md
 .claude/hooks/
 .grepai/
 .signals/
+
+# Local AI/orchestration tool directories
+.codex/
+.opencode/node_modules/
+projects/
+tmp.*
