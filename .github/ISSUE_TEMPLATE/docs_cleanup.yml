@@ -1,0 +1,35 @@
+name: Documentation / Portfolio Cleanup
+description: Suggest a repo polish task, documentation fix, or portfolio improvement.
+labels: [documentation]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for typo fixes, README improvements, portfolio formatting, or any task that improves repo presentation without changing runtime behavior.
+
+        For test-writing conventions, see [`docs/engineering/test-writing-guide.md`](../../docs/engineering/test-writing-guide.md). For Docker/runtime docs, see [`DOCKER.md`](../../DOCKER.md).
+  - type: textarea
+    id: scope
+    attributes:
+      label: What needs improvement?
+      description: Which file or section is affected?
+      placeholder: "e.g., README.md Docker section is outdated after compose.dev.yml changes"
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: What should it say or look like instead?
+      placeholder: A concise description of the fix or improvement.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: This change does not affect runtime code, tests, or deployment logic.
+          required: true
+        - label: I have checked `tests/README.md` for any related test implications.
+          required: false
