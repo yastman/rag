@@ -12,6 +12,9 @@ pytest.importorskip("pandas", reason="pandas not installed (eval extra)")
 from src.evaluation.evaluator import SearchEvaluator
 
 
+pytestmark = pytest.mark.requires_extras
+
+
 class TestSearchEvaluatorInit:
     """Test SearchEvaluator initialization."""
 
