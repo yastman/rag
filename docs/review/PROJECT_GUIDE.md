@@ -19,6 +19,16 @@ AI real-estate automation platform with:
 
 ## Recommended Reading Path
 
+**10 minutes:** `README.md` → `docs/portfolio/resume-case-study.md` → skim this guide.
+
+**30 minutes:** add `telegram_bot/graph/`, `telegram_bot/agents/`, and
+`telegram_bot/services/`.
+
+**Deep dive:** add `src/ingestion/unified/`, `src/voice/`, `compose*.yml`,
+`DOCKER.md`, and the test directories.
+
+Ordered list for sequential reading:
+
 1. `README.md` for the project overview and architecture diagram.
 2. `docs/portfolio/resume-case-study.md` for the resume-style narrative.
 3. `telegram_bot/graph/` for LangGraph routing and state contracts.
