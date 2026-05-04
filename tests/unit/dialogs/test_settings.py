@@ -134,3 +134,237 @@ async def test_language_selected_restarts_settings_root():
     )
     manager.start.assert_awaited_once_with(SettingsSG.main, mode=StartMode.RESET_STACK)
     manager.done.assert_not_called()
+
+
+# --- get_settings_data ---
+
+
+async def test_get_settings_data_without_i18n():
+    """get_settings_data returns default Russian labels without i18n."""
+    from telegram_bot.dialogs.settings import get_settings_data
+
+    result = await get_settings_data()
+
+    assert result["title"] == "Настройки"
+    assert result["btn_language"] == "Язык"
+    assert result["btn_crm"] == "🔔 CRM настройки"
+    assert result["btn_back"] == "Назад"
+
+
+async def test_get_settings_data_with_fake_i18n():
+    """get_settings_data uses i18n when provided."""
+    from telegram_bot.dialogs.settings import get_settings_data
+
+    i18n = MagicMock()
+    i18n.get = MagicMock(
+        side_effect=lambda key: {
+            "settings-title": "Settings",
+            "settings-language": "Language",
+            "back": "Back",
+        }.get(key, key)
+    )
+
+    result = await get_settings_data(i18n=i18n)
+
+    assert result["title"] == "Settings"
+    assert result["btn_language"] == "Language"
+    assert result["btn_back"] == "Back"
+
+
+# --- _get_redis ---
+
+
+def test_get_redis_returns_redis():
+    """_get_redis returns redis when property_bot and cache exist."""
+    from telegram_bot.dialogs.settings import _get_redis
+
+    redis = MagicMock()
+    cache = MagicMock()
+    cache.redis = redis
+    property_bot = MagicMock()
+    property_bot._cache = cache
+
+    manager = MagicMock()
+    manager.middleware_data = {"property_bot": property_bot}
+
+    assert _get_redis(manager) is redis
+
+
+def test_get_redis_returns_none_without_property_bot():
+    """_get_redis returns None when property_bot is absent."""
+    from telegram_bot.dialogs.settings import _get_redis
+
+    manager = MagicMock()
+    manager.middleware_data = {}
+
+    assert _get_redis(manager) is None
+
+
+def test_get_redis_returns_none_without_cache():
+    """_get_redis returns None when cache is absent."""
+    from telegram_bot.dialogs.settings import _get_redis
+
+    property_bot = MagicMock()
+    property_bot._cache = None
+
+    manager = MagicMock()
+    manager.middleware_data = {"property_bot": property_bot}
+
+    assert _get_redis(manager) is None
+
+
+# --- get_crm_settings_data ---
+
+
+async def test_get_crm_settings_data_with_mocked_redis():
+    """get_crm_settings_data loads settings from mocked redis."""
+    from telegram_bot.dialogs.settings import get_crm_settings_data
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=None)
+    cache = MagicMock()
+    cache.redis = redis
+    property_bot = MagicMock()
+    property_bot._cache = cache
+
+    event_from_user = MagicMock()
+    event_from_user.id = 42
+
+    result = await get_crm_settings_data(property_bot=property_bot, event_from_user=event_from_user)
+
+    assert result["crm_title"] == "🔔 CRM настройки"
+    assert "Уведомления" in result["notifications"]
+    assert "09:00" in result["briefing"]
+
+
+# --- CRM toggle handlers ---
+
+
+async def test_on_toggle_notifications():
+    """on_toggle_notifications flips notifications setting."""
+    from telegram_bot.dialogs.settings import on_toggle_notifications
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock()
+    cache = MagicMock()
+    cache.redis = redis
+    property_bot = MagicMock()
+    property_bot._cache = cache
+
+    manager = MagicMock()
+    manager.middleware_data = {"property_bot": property_bot}
+    manager.update = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user.id = 7
+
+    await on_toggle_notifications(callback, MagicMock(), manager)
+
+    redis.set.assert_called_once()
+    manager.update.assert_awaited_once_with({})
+
+
+async def test_on_cycle_briefing_time():
+    """on_cycle_briefing_time cycles to next briefing time."""
+    from telegram_bot.dialogs.settings import on_cycle_briefing_time
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock()
+    cache = MagicMock()
+    cache.redis = redis
+    property_bot = MagicMock()
+    property_bot._cache = cache
+
+    manager = MagicMock()
+    manager.middleware_data = {"property_bot": property_bot}
+    manager.update = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user.id = 7
+
+    await on_cycle_briefing_time(callback, MagicMock(), manager)
+
+    redis.set.assert_called_once()
+    manager.update.assert_awaited_once_with({})
+    # Default is 09:00, next should be 10:00
+    call_args = redis.set.call_args
+    stored = __import__("json").loads(call_args.args[1])
+    assert stored["briefing_time"] == "10:00"
+
+
+async def test_on_toggle_card_lang():
+    """on_toggle_card_lang toggles between ru and en."""
+    from telegram_bot.dialogs.settings import on_toggle_card_lang
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock()
+    cache = MagicMock()
+    cache.redis = redis
+    property_bot = MagicMock()
+    property_bot._cache = cache
+
+    manager = MagicMock()
+    manager.middleware_data = {"property_bot": property_bot}
+    manager.update = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user.id = 7
+
+    await on_toggle_card_lang(callback, MagicMock(), manager)
+
+    redis.set.assert_called_once()
+    manager.update.assert_awaited_once_with({})
+    call_args = redis.set.call_args
+    stored = __import__("json").loads(call_args.args[1])
+    assert stored["card_lang"] == "en"
+
+
+# --- Callback without from_user ---
+
+
+async def test_on_toggle_notifications_no_from_user_returns():
+    """on_toggle_notifications returns early when callback.from_user is None."""
+    from telegram_bot.dialogs.settings import on_toggle_notifications
+
+    manager = MagicMock()
+    manager.update = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = None
+
+    await on_toggle_notifications(callback, MagicMock(), manager)
+
+    manager.update.assert_not_called()
+
+
+async def test_on_cycle_briefing_time_no_from_user_returns():
+    """on_cycle_briefing_time returns early when callback.from_user is None."""
+    from telegram_bot.dialogs.settings import on_cycle_briefing_time
+
+    manager = MagicMock()
+    manager.update = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = None
+
+    await on_cycle_briefing_time(callback, MagicMock(), manager)
+
+    manager.update.assert_not_called()
+
+
+async def test_on_toggle_card_lang_no_from_user_returns():
+    """on_toggle_card_lang returns early when callback.from_user is None."""
+    from telegram_bot.dialogs.settings import on_toggle_card_lang
+
+    manager = MagicMock()
+    manager.update = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = None
+
+    await on_toggle_card_lang(callback, MagicMock(), manager)
+
+    manager.update.assert_not_called()
