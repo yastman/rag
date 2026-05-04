@@ -26,6 +26,9 @@ Start here if you are reviewing the project for hiring, portfolio, or collaborat
 
 - [`DOCKER.md`](../DOCKER.md) — Docker Compose profiles, service map, env requirements.
 - [`docs/LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) — Local setup and validation guide.
+- [`services/README.md`](../services/README.md) — Local service containers (BGE-M3, Docling, user-base).
+- [`docker/README.md`](../docker/README.md) — Helper runtime assets (configs, scripts, monitoring rules).
+- [`k8s/README.md`](../k8s/README.md) — Partial k3s manifests, overlays, and deploy commands.
 - [`docs/INGESTION.md`](INGESTION.md) — Unified ingestion guide and troubleshooting.
 - [`docs/GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`docs/QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
