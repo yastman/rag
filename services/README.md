@@ -27,7 +27,7 @@ They are referenced from the main [`compose.yml`](../compose.yml) and started as
 - **Entrypoint**: [`services/user-base/main.py`](user-base/main.py)
 - **Dockerfile**: [`services/user-base/Dockerfile`](user-base/Dockerfile)
 - **Runtime**: uv-synced multi-stage build, optional ONNX backend via `EMBEDDING_BACKEND=onnx`
-- **Health**: `http://localhost:8000/health`
+- **Health**: `http://localhost:8003/health` (container-internal: port `8000`)
 
 ## Validation Boundaries
 
@@ -35,17 +35,17 @@ These containers are safe to validate independently:
 
 ```bash
 # Build and health-check a single service
-docker compose build bge-m3
-docker compose up -d bge-m3
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build bge-m3
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d bge-m3
 curl -fsS http://localhost:8000/health
 
-docker compose build docling
-docker compose up -d docling
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build docling
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d docling
 curl -fsS http://localhost:5001/health
 
-docker compose build user-base
-docker compose up -d user-base
-curl -fsS http://localhost:8000/health
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build user-base
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d user-base
+curl -fsS http://localhost:8003/health
 ```
 
 Do not modify the application code in these directories without also verifying the corresponding Compose health checks and `make verify-compose-images` after image pin updates.
