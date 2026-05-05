@@ -292,9 +292,14 @@ async def _handle_catalog_home_message(
     manager: DialogManager,
 ) -> None:
     await clear_catalog_controls(message=message, dialog_manager=manager)
+    state = await _get_state(manager)
+    if state is not None:
+        maybe_clear = state.clear()
+        if inspect.isawaitable(maybe_clear):
+            await maybe_clear
     manager.show_mode = ShowMode.NO_UPDATE
     with contextlib.suppress(Exception):
-        await manager.done()
+        await manager.reset_stack(remove_keyboard=True)
     await show_client_main_menu(message, i18n=manager.middleware_data.get("i18n"))
 
 
@@ -445,7 +450,12 @@ async def on_catalog_text_input(
 ) -> None:
     if not message.text:
         return
-    if await dispatch_catalog_text_action(message=message, manager=manager):
+    i18n_hub = manager.middleware_data.get("i18n_hub")
+    if i18n_hub is None:
+        property_bot = manager.middleware_data.get("property_bot")
+        if property_bot is not None:
+            i18n_hub = getattr(property_bot, "_i18n_hub", None)
+    if await dispatch_catalog_text_action(message=message, manager=manager, i18n_hub=i18n_hub):
         return
 
     manager.show_mode = ShowMode.NO_UPDATE
