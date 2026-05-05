@@ -129,3 +129,16 @@ def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
     assert "python:3.14" not in text, (
         f"{dockerfile} uses Python 3.14 runtime which is incompatible with langfuse SDK"
     )
+
+
+@pytest.mark.parametrize("dockerfile", _LANGFUSE_RUNTIME_DOCKERFILES)
+def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
+    """Langfuse-importing app images must use Python 3.13 runtime (#1346-#1348).
+
+    Docker runtime is pinned to 3.13 while repo native dev may still use
+    a local uv environment with a different Python version.
+    """
+    text = Path(dockerfile).read_text()
+    assert "python3.13" in text or "python:3.13" in text, (
+        f"{dockerfile} must use Python 3.13 runtime for langfuse SDK compatibility"
+    )
