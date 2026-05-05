@@ -1,6 +1,6 @@
 .PHONY: help install install-dev install-all lint format type-check security test test-full test-cov clean all-checks \
-	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
-	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
+	test-preflight test-smoke test-load-eviction \
+	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
 	ingest-dir ingest-status ingest-services \
@@ -294,33 +294,10 @@ test-smoke: ## Run smoke tests (requires live services)
 	uv run pytest tests/smoke/ -v --tb=short
 	@echo "$(GREEN)✓ Smoke tests complete$(NC)"
 
-test-smoke-routing: ## Run smoke routing tests only (no deps)
-	@echo "$(BLUE)Running smoke routing tests...$(NC)"
-	uv run pytest tests/smoke/test_smoke_routing.py -v
-	@echo "$(GREEN)✓ Routing tests complete$(NC)"
-
-test-load: ## Run load tests (live services)
-	@echo "$(BLUE)Running load tests...$(NC)"
-	uv run pytest tests/load/test_load_conversations.py -v -s
-	@echo "$(GREEN)✓ Load tests complete$(NC)"
-
-test-load-ci: ## Run load tests in CI (mocked, fast)
-	@echo "$(BLUE)Running load tests (CI mode)...$(NC)"
-	LOAD_USE_MOCKS=1 LOAD_CHAT_COUNT=5 uv run pytest tests/load/test_load_conversations.py -v
-	@echo "$(GREEN)✓ Load tests (CI) complete$(NC)"
-
 test-load-eviction: ## Run Redis eviction tests
 	@echo "$(BLUE)Running Redis eviction tests...$(NC)"
 	uv run pytest tests/load/test_load_redis_eviction.py -v -s
 	@echo "$(GREEN)✓ Redis eviction tests complete$(NC)"
-
-test-load-update-baseline: ## Update load test baseline
-	@echo "$(BLUE)Updating baseline...$(NC)"
-	uv run pytest tests/load/test_load_conversations.py -v --update-baseline
-	@echo "$(GREEN)✓ Baseline updated$(NC)"
-
-test-all-smoke-load: test-preflight test-smoke test-load ## Full smoke+load suite
-	@echo "$(GREEN)✓✓✓ All smoke+load tests complete$(NC)"
 
 smoke-fast: ## Quick zoo smoke (~30 sec, bash only)
 	@echo "$(BLUE)Running quick zoo smoke...$(NC)"
@@ -941,14 +918,14 @@ qdrant-backup: ## Create Qdrant collection snapshots (all collections)
 
 validate-traces: ## Full rebuild + trace validation + report
 	@echo "$(BLUE)Full rebuild + validation...$(NC)"
-	$(COMPOSE_CMD) build --no-cache bot litellm bge-m3
-	$(COMPOSE_CMD) --profile core --profile bot --profile ml up -d --wait
+	$(LOCAL_COMPOSE_CMD) build --no-cache bot litellm bge-m3
+	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
 validate-traces-fast: ## No rebuild; trace validation fails if required trace families are missing
 	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
-	$(COMPOSE_CMD) --profile core --profile bot --profile ml up -d --wait
+	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
