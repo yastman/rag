@@ -23,7 +23,7 @@ Provides a voice interface to the RAG system using LiveKit Agents. The agent han
 
 - The voice agent is a **separate transport surface**. It calls the RAG API (`src/api/`) rather than embedding retrieval logic directly.
 - If LiveKit SDK is unavailable, imports degrade gracefully with stub classes.
-- No direct dependency on `telegram_bot/` code.
+- Voice reuses `telegram_bot.observability` for Langfuse tracing but calls the RAG API (`src/api/`) for all retrieval and generation logic.
 
 ## Related Runtime Services
 
