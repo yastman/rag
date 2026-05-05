@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +81,33 @@ class RuntimeEventWriter:
         today = datetime.now(UTC).date().isoformat()
         return self._dir / f"{today}.jsonl"
 
+    def _cleanup_old_files(self) -> None:
+        """Remove daily JSONL files older than *max_age_days*.
+
+        Failures are logged and never raised.
+        """
+        max_age = self._config.max_age_days
+        if not max_age or max_age <= 0:
+            return
+        try:
+            cutoff = datetime.now(UTC).date() - timedelta(days=max_age)
+            for entry in self._dir.iterdir():
+                if not entry.is_file() or not entry.name.endswith(".jsonl"):
+                    continue
+                try:
+                    file_date = datetime.strptime(entry.stem, "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                if file_date < cutoff:
+                    try:
+                        entry.unlink()
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to clean up old runtime event file %s: %s", entry, exc
+                        )
+        except Exception as exc:
+            logger.warning("Failed to clean up old runtime event files: %s", exc)
+
     def _scrub_payload(self, payload: Any) -> Any:
         """Recursively redact banned keys from *payload*.
 
@@ -133,6 +160,7 @@ class RuntimeEventWriter:
                 fh.write(line)
         except Exception as exc:  # pragma: no cover
             logger.warning("Failed to append runtime event: %s", exc)
+        self._cleanup_old_files()
 
 
 # Module-level singleton cache
