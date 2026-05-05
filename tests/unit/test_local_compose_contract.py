@@ -58,3 +58,19 @@ def test_docker_docs_default_stack_mentions_mini_app_services() -> None:
     assert "- `mini-app-frontend`" in text, (
         "DOCKER.md must list mini-app-frontend in the default stack"
     )
+
+
+def test_local_compose_cmd_uses_env_file_fallback() -> None:
+    text = MAKEFILE.read_text(encoding="utf-8")
+    assert "LOCAL_COMPOSE_CMD" in text
+    assert "--env-file" in text, (
+        "Makefile LOCAL_COMPOSE_CMD must specify --env-file so local compose commands "
+        "can render config even when .env is absent"
+    )
+    assert "compose.ci.env" in text, (
+        "Makefile must fall back to tests/fixtures/compose.ci.env when .env is absent"
+    )
+    assert (
+        "$$([ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)" in text
+        or "[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env" in text
+    ), "Makefile must evaluate the env-file fallback at recipe runtime"
