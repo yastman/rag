@@ -2714,7 +2714,8 @@ class PropertyBot:
         # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
         from .pipelines.client import detect_agent_intent, run_client_pipeline
 
-        if detect_agent_intent(user_text) == "apartment":
+        agent_intent = detect_agent_intent(user_text)
+        if agent_intent == "apartment":
             apt_answer = await self._handle_apartment_fast_path(
                 user_text=user_text,
                 message=message,
@@ -2741,6 +2742,7 @@ class PropertyBot:
             rag_result_store=rag_result_store,
             role=role,
             query_type=query_type,
+            agent_intent=agent_intent,
         )
         if result.needs_agent:
             return None  # caller falls through to sdk_agent path
@@ -2788,6 +2790,7 @@ class PropertyBot:
             # Text path must run guard BEFORE agent.ainvoke() so that
             # injection attempts never reach the LLM at all.
             user_text = message.text or ""
+            query_type = classify_query(user_text)
             if self.config.content_filter_enabled:
                 detected, risk_score, pattern = detect_injection(user_text)
                 if detected:
@@ -2829,6 +2832,26 @@ class PropertyBot:
                                 value=pattern or "unknown",
                                 data_type="CATEGORICAL",
                             )
+                            # Write full Langfuse score set for guard-blocked path (#1368)
+                            try:
+                                minimal_result = {
+                                    "query_type": query_type,
+                                    "pipeline_wall_ms": wall_ms,
+                                    "e2e_latency_ms": wall_ms,
+                                    "cache_hit": False,
+                                    "input_type": "text",
+                                    "search_results_count": 0,
+                                    "grade_confidence": 0.0,
+                                    "injection_detected": True,
+                                    "injection_risk_score": risk_score,
+                                    "injection_pattern": pattern,
+                                }
+                                write_langfuse_scores(lf, minimal_result, trace_id=tid)
+                            except Exception:
+                                logger.warning(
+                                    "Failed to write Langfuse scores in guard-blocked path",
+                                    exc_info=True,
+                                )
                         if root_trace_metadata is not None:
                             root_trace_metadata.update(
                                 {
@@ -2852,7 +2875,6 @@ class PropertyBot:
 
             # Pre-agent semantic cache check (#563) — skip agent entirely on HIT.
             # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
-            query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
                 extracted_filters: dict[str, Any] = {}
                 try:
@@ -3026,6 +3048,14 @@ class PropertyBot:
                                 data_type="CATEGORICAL",
                             )
                             score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+                            # Write full Langfuse score set for pre-agent cache hit (#1368)
+                            try:
+                                write_langfuse_scores(lf, rag_result_store, trace_id=tid)
+                            except Exception:
+                                logger.warning(
+                                    "Failed to write Langfuse scores in pre-agent cache hit",
+                                    exc_info=True,
+                                )
                         if root_trace_metadata is not None:
                             root_trace_metadata.update(cache_trace_metadata)
                         return cached
