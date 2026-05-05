@@ -7,13 +7,34 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from telegram_bot.observability import get_client, propagate_attributes
 from telegram_bot.tracing_context import classify_action, make_session_id
 
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_event_input(event: TelegramObject, action_type: str) -> dict[str, Any]:
+    """Build a safe, concise input dict from a Telegram event.
+
+    PII masking is delegated to the Langfuse SDK mask layer; this helper only
+    extracts coarse action/text metadata so the root trace is not empty.
+    """
+    if isinstance(event, Message):
+        text = event.text or event.caption or ""
+        return {
+            "action": action_type,
+            "content_type": event.content_type,
+            "text_preview": text[:500] if text else "",
+        }
+    if isinstance(event, CallbackQuery):
+        return {
+            "action": action_type,
+            "callback_data": (event.data or "")[:200],
+        }
+    return {"action": action_type}
 
 
 class LangfuseContextMiddleware(BaseMiddleware):
@@ -44,6 +65,7 @@ class LangfuseContextMiddleware(BaseMiddleware):
             lf.start_as_current_observation(
                 as_type="span",
                 name=f"telegram-{action_type}",
+                input=_extract_event_input(event, action_type),
             ),
             propagate_attributes(
                 session_id=session_id,
