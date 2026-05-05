@@ -36,7 +36,7 @@ Provides a voice interface to the RAG system using LiveKit Agents. The agent han
 
 ```bash
 # Import check (works even without LiveKit SDK installed)
-python -c "from src.voice.agent import PropertyVoiceAgent; print('ok')"
+python -c "from src.voice.agent import VoiceBot; print('ok')"
 
 # Type-check
 make check
