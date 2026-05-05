@@ -69,7 +69,7 @@ make test-bot-health
 - LiteLLM via proxy readiness (`/health/readiness`)
 - optional localhost Postgres note without turning DB reachability into a hard failure
 
-The authoritative startup preflight still lives in [`telegram_bot/preflight.py`](/home/user/projects/rag-fresh-issue-1198/telegram_bot/preflight.py) and runs when you start the bot. That runtime preflight also keeps the repo-local BGE-M3 health and warmup contract, because BGE-M3 is not a generic upstream SDK probe in this repo.
+The authoritative startup preflight still lives in [`telegram_bot/preflight.py`](../telegram_bot/preflight.py) and runs when you start the bot. That runtime preflight also keeps the repo-local BGE-M3 health and warmup contract, because BGE-M3 is not a generic upstream SDK probe in this repo.
 
 ## 4. Development Gates
 
@@ -104,7 +104,7 @@ lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 
 Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
 
-## 7. Running Components Without Docker Wrapper
+## 6. Running Components Without Docker Wrapper
 
 ```bash
 # Telegram bot
@@ -117,7 +117,7 @@ uv run python -m src.ingestion.unified.cli run --watch
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
 
-## 8. Minimal Stack (Fast Iteration)
+## 7. Minimal Stack (Fast Iteration)
 
 Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
 
@@ -137,7 +137,7 @@ make local-ps
 make local-down
 ```
 
-## 9. Common Issues
+## 8. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
