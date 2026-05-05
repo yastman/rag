@@ -46,7 +46,9 @@ def test_main_exits_nonzero_when_no_running_containers_checked(
 ) -> None:
     module = _load_module()
     monkeypatch.setattr(module, "_run", lambda *_args, **_kwargs: "27.0.0")
-    monkeypatch.setattr(module, "check_drift", lambda _compose: module.DriftReport("compose.yml"))
+    monkeypatch.setattr(
+        module, "check_drift", lambda *_args, **_kwargs: module.DriftReport("compose.yml")
+    )
     monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
 
     with pytest.raises(SystemExit) as exc_info:
@@ -63,7 +65,7 @@ def test_main_exits_zero_when_checked_containers_have_no_drift(
     monkeypatch.setattr(
         module,
         "check_drift",
-        lambda _compose: module.DriftReport(
+        lambda *_args, **_kwargs: module.DriftReport(
             "compose.yml",
             checked=[
                 module.DriftResult(
@@ -86,3 +88,24 @@ def test_main_exits_zero_when_checked_containers_have_no_drift(
         module.main()
 
     assert exc_info.value.code == 0
+
+
+def test_compose_ci_env_fixture_has_project_name() -> None:
+    """Blocker 2: verify the CI env fixture sets COMPOSE_PROJECT_NAME=dev so that
+    docker compose ps targets the canonical dev project from any worktree."""
+    env_path = ROOT / "tests" / "fixtures" / "compose.ci.env"
+    content = env_path.read_text()
+    lines = [line.strip() for line in content.splitlines()]
+    assert any(line == "COMPOSE_PROJECT_NAME=dev" for line in lines), (
+        f"{env_path} must contain COMPOSE_PROJECT_NAME=dev"
+    )
+
+
+def test_help_shows_default_env_file() -> None:
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "tests/fixtures/compose.ci.env" in result.stdout
