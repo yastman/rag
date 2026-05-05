@@ -51,3 +51,15 @@ def test_livekit_template_secret_has_no_hardcoded_fallback() -> None:
 
     assert "${LIVEKIT_API_SECRET:-secret}" not in config_text
     assert "LIVEKIT_API_SECRET" in config_text
+
+
+def test_clickhouse_command_has_no_invalid_listen_host_flag() -> None:
+    """ClickHouse 26.3.9 rejects --listen_host as a CLI flag; config file is the correct mechanism."""
+    compose = _load_compose()
+    clickhouse = compose["services"]["clickhouse"]
+    command = clickhouse.get("command", "")
+
+    assert "--listen_host=0.0.0.0" not in str(command), (
+        "compose.yml: clickhouse --listen_host=0.0.0.0 is not a valid CLI flag in ClickHouse 26.3.9 "
+        "and causes a crash-loop (issue #1340). Remove it and rely on the image default config."
+    )
