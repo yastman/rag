@@ -1,182 +1,63 @@
-# Telegram RAG Bot для недвижимости в Болгарии
+# telegram_bot/
 
-Бот на основе RAG (Retrieval-Augmented Generation) для поиска квартир в Болгарии через Telegram.
+Telegram transport layer and bot orchestration for the contextual RAG system.
 
-## 🏗️ Архитектура
+## Purpose
 
-```
-User Query → Filter Extraction → BGE-M3 Embedding → Qdrant Search → LLM Answer → Telegram
-```
+Handles Telegram updates (text, voice, callbacks), delegates all retrieval and generation to pipelines, and surfaces answers back to users. Keeps transport concerns separate from domain logic.
 
-## 🚀 Быстрый старт
+## Entrypoints
 
-### 1. Установка зависимостей
+| Entrypoint | Role |
+|------------|------|
+| [`main.py`](./main.py) `main()` | CLI entry point: configures logging, initializes Langfuse, starts `PropertyBot` with retry |
+| [`bot.py`](./bot.py) `PropertyBot` | Bot lifecycle, handlers, and dispatcher wiring |
+| [`graph/graph.py`](./graph/graph.py) `build_graph()` | LangGraph RAG pipeline assembly (cache → rewrite → retrieve → grade → respond) |
+| [`agents/rag_pipeline.py`](./agents/rag_pipeline.py) | Agent SDK RAG functions (alternative to full LangGraph) |
+| [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
+| [`preflight.py`](./preflight.py) | Startup health checks (Redis, Qdrant, Langfuse) |
 
-```bash
-cd telegram_bot
-pip install -r requirements.txt
-```
+## Boundaries
 
-### 2. Настройка .env
+- **Transport does not absorb retrieval/domain logic.** `bot.py` handlers call into `graph`, `agents`, or `pipelines/client`; they do not query Qdrant or run LLM prompts directly.
+- **LangGraph state contracts** (`graph/state.py`) must be preserved when adding new nodes or edges.
+- **Ingestion determinism** is owned by `src/ingestion/`; bot code must not modify collection schemas or manifest identity.
 
-Скопируй `.env.example` в `.env` и заполни:
+## Related Runtime Services
 
-```bash
-cp .env.example .env
-nano .env
-```
+- **Qdrant** — vector search (collections: documents, apartments, history)
+- **Redis** — caching, throttling, user context
+- **BGE-M3** — dense + sparse embeddings (local REST API)
+- **Langfuse** — tracing and observability (optional, graceful degradation)
+- **LiveKit** — voice calls (see `src/voice/`; deferred by default)
 
-**Обязательно:**
-- `TELEGRAM_BOT_TOKEN` - токен от @BotFather
-- `OPENAI_API_KEY` - API ключ OpenAI (или другого LLM)
-
-**Опционально (если не localhost):**
-- `BGE_M3_URL` - URL BGE-M3 API
-- `QDRANT_URL` - URL Qdrant
-- `QDRANT_COLLECTION` - название коллекции
-
-### 3. Создание бота в Telegram
-
-1. Открой @BotFather в Telegram
-2. Отправь `/newbot`
-3. Укажи имя и username бота
-4. Скопируй токен в `.env`
-
-### 4. Запуск бота
+## Focused Checks
 
 ```bash
-python -m telegram_bot.main
+# Lint and type-check
+make check
+
+# Unit tests for graph state and pipeline logic
+pytest telegram_bot/graph/state_contract.py telegram_bot/pipelines/
+
+# Preflight smoke test
+python -m telegram_bot.preflight
 ```
 
-Или из корня проекта:
+## Directory Guide
 
-```bash
-cd /home/admin/contextual_rag
-python -m telegram_bot.main
-```
+| Directory | Concern |
+|-----------|---------|
+| `agents/` | Agent SDK tools and RAG pipeline functions |
+| `dialogs/` | Funnel dialogs and filter extraction UI |
+| `graph/` | LangGraph runtime: nodes, edges, state, context |
+| `integrations/` | Langfuse, embeddings, cache, prompt manager |
+| `middlewares/` | Aiogram middlewares (throttling, errors, Langfuse trace root) |
+| `pipelines/` | Client-direct pipeline entrypoints |
+| `services/` | Bot services (Qdrant, cache, query analysis, response generation) |
 
-## 📝 Примеры запросов
+## See Also
 
-**По цене:**
-- Дешевле 100 000 евро
-- От 80к до 150к
-- Не дороже 100000
-
-**По комнатам:**
-- 3-комнатные квартиры
-- Студия
-- Двухкомнатная
-
-**По городу:**
-- В Солнечный берег
-- Несебр
-
-**Комбинированные:**
-- Трехкомнатная в Солнечный берег до 120к
-- Студия дешевле 60000 евро
-
-## 🛠️ Компоненты
-
-### Services
-
-- **EmbeddingService** - генерация embeddings через BGE-M3 API
-- **RetrieverService** - поиск в Qdrant с фильтрами
-- **generate_response()** - каноничный runtime-путь генерации ответов
-- **CacheService** - 4-уровневое кеширование (semantic, embeddings, analyzer, search)
-- **QueryAnalyzer** - анализ запросов и извлечение фильтров через LLM
-- **UserContextService** - управление контекстом пользователя (CESC)
-- **CESCPersonalizer** - персонализация кешированных ответов (CESC)
-
-### Фильтры
-
-Автоматически извлекаются:
-- Цена (lt, gt, range)
-- Количество комнат
-- Город
-- Площадь
-
-## 📊 Логи
-
-Логи выводятся в stdout с уровнем INFO:
-
-```
-14:23:45 - telegram_bot.bot - INFO - Query from 123456789: покажи студии
-14:23:45 - telegram_bot.bot - INFO - Extracted filters: {'rooms': 1}
-14:23:46 - telegram_bot.bot - INFO - Generated embedding: 1024-dim
-14:23:46 - telegram_bot.bot - INFO - Found 2 results
-```
-
-## 🔧 Конфигурация
-
-Все параметры в `config.py`:
-
-```python
-top_k: int = 5  # Количество результатов из Qdrant
-min_score: float = 0.5  # Минимальный score релевантности
-```
-
-## 🐛 Отладка
-
-1. Проверь, что сервисы запущены:
-```bash
-curl http://localhost:8001/health  # BGE-M3
-curl http://localhost:6333  # Qdrant
-```
-
-2. Проверь коллекцию Qdrant:
-```bash
-python test_filtering.py
-```
-
-3. Логи бота:
-```bash
-python -m telegram_bot.main 2>&1 | tee bot.log
-```
-
-## 📦 Структура проекта
-
-```
-telegram_bot/
-├── __init__.py
-├── main.py              # Точка входа
-├── bot.py               # Основная логика бота
-├── config.py            # Конфигурация
-├── middlewares.py       # Throttling, error handling
-├── services/
-│   ├── __init__.py      # Exports
-│   ├── embeddings.py    # BGE-M3 API
-│   ├── retriever.py     # Qdrant поиск
-│   ├── llm.py           # LLM генерация (streaming)
-│   ├── cache.py         # 4-tier caching
-│   ├── query_analyzer.py    # Query analysis via LLM
-│   ├── user_context.py  # CESC: User preferences (NEW)
-│   └── cesc.py          # CESC: Personalization (NEW)
-├── requirements.txt
-└── README.md
-```
-
-## 🔐 Безопасность
-
-- Никогда не коммить `.env` файл
-- Используй `.env.example` как шаблон
-- API ключи хранятся только локально
-- Бот работает через Telegram API (зашифровано)
-
-## 🚀 Production
-
-Для production используй:
-
-1. **Systemd service:**
-```bash
-sudo systemctl enable telegram-bot
-sudo systemctl start telegram-bot
-```
-
-2. **Docker:**
-```bash
-docker build -t telegram-bot .
-docker run -d --env-file .env telegram-bot
-```
-
-3. **Webhook mode** (вместо polling):
-Измени `bot.py` для использования webhook вместо long polling.
+- [`../DOCKER.md`](../DOCKER.md) — Docker bring-up and service dependencies
+- [`../src/retrieval/`](../src/retrieval/) — Search engine implementations
+- [`../src/ingestion/`](../src/ingestion/) — Document ingestion pipeline
