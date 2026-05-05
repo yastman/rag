@@ -22,6 +22,7 @@ DOCKERFILES = [
     "services/docling/Dockerfile",
     "src/voice/Dockerfile",
     "mini_app/Dockerfile",
+    "mini_app/frontend/Dockerfile",
 ]
 
 # Images that import telegram_bot.observability (which imports langfuse) must not
