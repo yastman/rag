@@ -13,7 +13,7 @@ Typical files placed here:
 
 ## Usage
 
-Index demo files via the unified ingestion pipeline or helper scripts in [`scripts/`](../scripts/):
+Index demo files via the unified ingestion pipeline or helper scripts in [`scripts/`](../../scripts/):
 
 ```bash
 uv run python scripts/index_test_data.py
@@ -21,5 +21,5 @@ uv run python scripts/index_test_data.py
 
 ## Related
 
-- [`docs/INGESTION.md`](../docs/INGESTION.md) — Ingestion runbook
-- [`src/ingestion/`](../src/ingestion/) — Ingestion modules
+- [`docs/INGESTION.md`](../../docs/INGESTION.md) — Ingestion runbook
+- [`src/ingestion/`](../../src/ingestion/) — Ingestion modules
