@@ -23,6 +23,7 @@ def _make_state(data: dict | None = None) -> MagicMock:
     state.get_data = AsyncMock(return_value=data or {})
     state.update_data = AsyncMock()
     state.set_state = AsyncMock()
+    state.clear = AsyncMock()
     return state
 
 
@@ -350,7 +351,8 @@ async def test_catalog_exit_returns_to_main_menu() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_home
 
     manager = AsyncMock()
-    manager.middleware_data = {"state": _make_state(), "i18n": None}
+    state = _make_state()
+    manager.middleware_data = {"state": state, "i18n": None}
     callback = MagicMock()
     callback.message = _make_message()
     callback.message.bot = MagicMock(delete_message=AsyncMock())
@@ -358,7 +360,8 @@ async def test_catalog_exit_returns_to_main_menu() -> None:
 
     await on_catalog_home(callback, MagicMock(), manager)
 
-    manager.done.assert_awaited_once()
+    state.clear.assert_awaited_once()
+    manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
     callback.message.answer.assert_awaited()
 
 
