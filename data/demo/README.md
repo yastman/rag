@@ -1,40 +1,25 @@
-# Demo Files
+# data/demo/
 
-This folder contains sample documents for testing the indexing pipeline.
+Demo data files for local indexing pipeline tests.
 
-## Files
+## Contents
 
-### demo_BG.csv
-- **Description:** 4 Bulgarian property listings (недвижимость в Болгарии)
-- **Columns:** Название, Город, Цена (€), Комнат, Площадь (м²), Этаж, Этажей, До моря (м), Поддержка (€), Санузлов, Мебель, Круглогодичность, Описание, Ссылка
-- **Format:** CSV with UTF-8 encoding
-- **Size:** ~1.8 KB
+This directory holds sample documents used to verify the ingestion pipeline end-to-end.
+Data files are excluded from Git (see `.gitignore`) to avoid committing large binaries.
 
-### info_bg_home.docx
-- **Description:** Company contact information (контакты компании BG-HOME)
-- **Content:** Office locations in Bulgaria, Russia, Ukraine, Poland, Kazakhstan, Belarus, USA
-- **Format:** DOCX (Microsoft Word)
-- **Size:** ~1.7 MB
+Typical files placed here:
+- `demo_BG.csv` — Sample property listings
+- `info_bg_home.docx` — Sample company contact document
 
 ## Usage
 
-Index both files to Qdrant:
+Index demo files via the unified ingestion pipeline or helper scripts in [`scripts/`](../scripts/):
 
 ```bash
-python simple_index_test.py \
-    data/demo/demo_BG.csv \
-    data/demo/info_bg_home.docx \
-    --collection bulgarian_properties \
-    --recreate
+uv run python scripts/index_test_data.py
 ```
 
-## Result
+## Related
 
-- **Collection:** `bulgarian_properties`
-- **Total chunks:** 2 (1 per file with current settings)
-- **Vectors:** BGE-M3 (dense 1024-dim + BM42 sparse + ColBERT)
-- **Format:** n8n/LangChain compatible (`page_content` + `metadata`)
-
-## Note
-
-This folder is excluded from Git (see `.gitignore`) to avoid committing large binary files.
+- [`docs/INGESTION.md`](../docs/INGESTION.md) — Ingestion runbook
+- [`src/ingestion/`](../src/ingestion/) — Ingestion modules
