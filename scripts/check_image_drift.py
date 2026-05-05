@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -110,7 +110,7 @@ class DriftReport:
 
 def _run(cmd: list[str], *, check: bool = True) -> str:
     """Run a command and return stripped stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True, check=check)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=check)  # nosec B603
     return result.stdout.strip()
 
 
@@ -155,7 +155,7 @@ def get_running_containers(compose_files: list[str], env_file: str) -> dict[str,
             if svc:
                 containers[svc] = c
         return containers
-    except subprocess.CalledProcessError, json.JSONDecodeError:
+    except (subprocess.CalledProcessError, json.JSONDecodeError):  # fmt: skip
         return {}
 
 
@@ -410,7 +410,7 @@ def main() -> None:
     # Verify docker is available (lightweight check)
     try:
         _run(["docker", "version", "--format", "{{.Server.Version}}"], check=True)
-    except subprocess.CalledProcessError, FileNotFoundError:
+    except (subprocess.CalledProcessError, FileNotFoundError):  # fmt: skip
         print("Error: docker is not available or not running", file=sys.stderr)
         sys.exit(2)
 
