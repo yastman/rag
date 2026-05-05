@@ -74,3 +74,4 @@ make verify-compose-images
 - [`../DOCKER.md`](../DOCKER.md) — Full Compose operations guide.
 - [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation.
 - [`../docs/ALERTING.md`](../docs/ALERTING.md) — Loki/Alertmanager setup details.
+- [`../services/README.md`](../services/README.md) — Service container index (bge-m3, docling, user-base).
