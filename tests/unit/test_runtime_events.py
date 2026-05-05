@@ -543,3 +543,149 @@ class TestWriterSingleton:
             assert list(tmp_path.iterdir()) == []
         finally:
             _reset_writer()
+
+
+class TestRuntimeEventWriterRetention:
+    """Test max_age_days retention cleanup."""
+
+    def test_cleanup_deletes_old_files(self, tmp_path):
+        """Old daily JSONL files beyond max_age_days are deleted on append."""
+        from datetime import timedelta
+
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path), max_age_days=7)
+        writer = RuntimeEventWriter(cfg)
+        today = dt.now(UTC).date()
+        old_date = (today - timedelta(days=10)).isoformat()
+        recent_date = (today - timedelta(days=3)).isoformat()
+        old_file = tmp_path / f"{old_date}.jsonl"
+        recent_file = tmp_path / f"{recent_date}.jsonl"
+        old_file.write_text("{}", encoding="utf-8")
+        recent_file.write_text("{}", encoding="utf-8")
+
+        event = RuntimeEvent(
+            ts="2026-05-01T12:00:00.000Z",
+            event_type="test.retention",
+            severity="info",
+            session_id=None,
+            source_file=__name__,
+            function="test_cleanup_deletes_old_files",
+            line=1,
+            message="trigger cleanup",
+            payload=None,
+        )
+        writer.append(event)
+        assert not old_file.exists()
+        assert recent_file.exists()
+
+    def test_cleanup_retains_recent_files(self, tmp_path):
+        """Recent daily JSONL files within max_age_days are retained."""
+        from datetime import timedelta
+
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path), max_age_days=5)
+        writer = RuntimeEventWriter(cfg)
+        today = dt.now(UTC).date()
+        for days_ago in (0, 1, 4):
+            date_str = (today - timedelta(days=days_ago)).isoformat()
+            (tmp_path / f"{date_str}.jsonl").write_text("{}", encoding="utf-8")
+
+        event = RuntimeEvent(
+            ts="2026-05-01T12:00:00.000Z",
+            event_type="test.retention",
+            severity="info",
+            session_id=None,
+            source_file=__name__,
+            function="test_cleanup_retains_recent_files",
+            line=1,
+            message="trigger cleanup",
+            payload=None,
+        )
+        writer.append(event)
+        for days_ago in (0, 1, 4):
+            date_str = (today - timedelta(days=days_ago)).isoformat()
+            assert (tmp_path / f"{date_str}.jsonl").exists()
+
+    def test_cleanup_retains_malformed_and_non_jsonl(self, tmp_path):
+        """Non-JSONL files and malformed date filenames are never deleted."""
+        from datetime import timedelta
+
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path), max_age_days=7)
+        writer = RuntimeEventWriter(cfg)
+        today = dt.now(UTC).date()
+        old_date = (today - timedelta(days=10)).isoformat()
+        # Malformed / non-jsonl files
+        (tmp_path / f"{old_date}.txt").write_text("log", encoding="utf-8")
+        (tmp_path / "not-a-date.jsonl").write_text("{}", encoding="utf-8")
+        (tmp_path / "2026-13-01.jsonl").write_text("{}", encoding="utf-8")
+        (tmp_path / "README.md").write_text("docs", encoding="utf-8")
+
+        event = RuntimeEvent(
+            ts="2026-05-01T12:00:00.000Z",
+            event_type="test.retention",
+            severity="info",
+            session_id=None,
+            source_file=__name__,
+            function="test_cleanup_retains_malformed_and_non_jsonl",
+            line=1,
+            message="trigger cleanup",
+            payload=None,
+        )
+        writer.append(event)
+        assert (tmp_path / f"{old_date}.txt").exists()
+        assert (tmp_path / "not-a-date.jsonl").exists()
+        assert (tmp_path / "2026-13-01.jsonl").exists()
+        assert (tmp_path / "README.md").exists()
+
+    def test_cleanup_skipped_when_disabled_or_no_max_age(self, tmp_path):
+        """Cleanup does not run when disabled or max_age_days is None."""
+        from datetime import timedelta
+
+        old_date = (dt.now(UTC).date() - timedelta(days=10)).isoformat()
+        old_file = tmp_path / f"{old_date}.jsonl"
+        old_file.write_text("{}", encoding="utf-8")
+
+        for cfg in (
+            RuntimeEventsConfig(enabled=False, dir=str(tmp_path), max_age_days=7),
+            RuntimeEventsConfig(enabled=True, dir=str(tmp_path), max_age_days=None),
+            RuntimeEventsConfig(enabled=True, dir=str(tmp_path), max_age_days=0),
+        ):
+            writer = RuntimeEventWriter(cfg)
+            event = RuntimeEvent(
+                ts="2026-05-01T12:00:00.000Z",
+                event_type="test.retention",
+                severity="info",
+                session_id=None,
+                source_file=__name__,
+                function="test_cleanup_skipped_when_disabled_or_no_max_age",
+                line=1,
+                message="trigger cleanup",
+                payload=None,
+            )
+            writer.append(event)
+            assert old_file.exists()
+
+    def test_cleanup_failure_does_not_raise(self, tmp_path, caplog):
+        """Cleanup failure is logged, not raised."""
+        from datetime import timedelta
+
+        cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path), max_age_days=7)
+        writer = RuntimeEventWriter(cfg)
+        today = dt.now(UTC).date()
+        old_date = (today - timedelta(days=10)).isoformat()
+        old_file = tmp_path / f"{old_date}.jsonl"
+        old_file.write_text("{}", encoding="utf-8")
+
+        event = RuntimeEvent(
+            ts="2026-05-01T12:00:00.000Z",
+            event_type="test.retention",
+            severity="info",
+            session_id=None,
+            source_file=__name__,
+            function="test_cleanup_failure_does_not_raise",
+            line=1,
+            message="trigger cleanup",
+            payload=None,
+        )
+        with patch.object(Path, "unlink", side_effect=OSError("permission denied")):
+            with caplog.at_level(logging.WARNING, logger="telegram_bot.runtime_events"):
+                writer.append(event)
+        assert "permission denied" in caplog.text or "Failed to clean up" in caplog.text
