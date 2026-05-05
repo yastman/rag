@@ -42,5 +42,5 @@ uv run pytest tests/unit/security/ -q
 
 ## Related
 
-- [`docs/ERROR_RESPONSES.md`](../docs/ERROR_RESPONSES.md) — Error taxonomy
-- [`telegram_bot/middlewares/`](../telegram_bot/middlewares/) — Request middleware
+- [`docs/ERROR_RESPONSES.md`](../../docs/ERROR_RESPONSES.md) — Error taxonomy
+- [`telegram_bot/middlewares/`](../../telegram_bot/middlewares/) — Request middleware
