@@ -430,7 +430,11 @@ class QdrantService:
                 "has_filters": bool(filters),
                 "group_by": group_by,
                 "rrf_k": rrf_k,
-            }
+            },
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
         )
         # Build prefetch queries
         prefetch = []
@@ -497,7 +501,11 @@ class QdrantService:
                         "results_count": len(results),
                         "top_score": results[0]["score"] if results else None,
                         "grouped": True,
-                    }
+                    },
+                    metadata={
+                        "collection": self._collection_name,
+                        "quantization_mode": self._quantization_mode,
+                    },
                 )
                 if return_meta:
                     return results, ok_meta
@@ -518,7 +526,11 @@ class QdrantService:
                     "results_count": len(results),
                     "top_score": results[0]["score"] if results else None,
                     "grouped": False,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             if return_meta:
                 return results, ok_meta
@@ -533,6 +545,10 @@ class QdrantService:
                     "results_count": 0,
                     "error": type(e).__name__,
                     "collection": self._collection_name,
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
                 },
             )
             if return_meta:
@@ -595,7 +611,11 @@ class QdrantService:
                 "has_filters": bool(filters),
                 "colbert_tokens": len(colbert_query) if colbert_query else 0,
                 "rrf_k": rrf_k,
-            }
+            },
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
         )
         if self._colbert_available is False:
             logger.debug(
@@ -618,7 +638,11 @@ class QdrantService:
                     "fallback_reason": "colbert_unavailable",
                     "results_count": len(fallback_results),
                     "top_score": fallback_results[0]["score"] if fallback_results else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return fallback
 
@@ -642,7 +666,11 @@ class QdrantService:
                     "fallback_reason": "empty_colbert_query",
                     "results_count": len(fallback_results),
                     "top_score": fallback_results[0]["score"] if fallback_results else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return fallback
 
@@ -730,7 +758,11 @@ class QdrantService:
                         "fallback_reason": "colbert_empty",
                         "results_count": len(fallback_results),
                         "top_score": fallback_results[0]["score"] if fallback_results else None,
-                    }
+                    },
+                    metadata={
+                        "collection": self._collection_name,
+                        "quantization_mode": self._quantization_mode,
+                    },
                 )
                 if fallback_results:
                     self._colbert_available = False
@@ -746,7 +778,11 @@ class QdrantService:
                     "fallback_reason": None,
                     "results_count": len(results),
                     "top_score": results[0]["score"] if results else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             if return_meta:
                 return results, ok_meta
@@ -767,6 +803,10 @@ class QdrantService:
             lf.update_current_span(
                 level="WARNING",
                 status_message=f"ColBERT search failed: {type(e).__name__}",
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             fallback = await self.hybrid_search_rrf(
                 dense_vector=dense_vector,
@@ -784,7 +824,11 @@ class QdrantService:
                     "fallback_reason": f"colbert_error:{type(e).__name__}",
                     "results_count": len(fallback_results),
                     "top_score": fallback_results[0]["score"] if fallback_results else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return fallback
 
@@ -832,7 +876,11 @@ class QdrantService:
                 "top_k": top_k,
                 "has_filters": bool(filters),
                 "rrf_k": rrf_k,
-            }
+            },
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
         )
 
         query_filter = self._build_filter(filters)
@@ -900,7 +948,11 @@ class QdrantService:
                     "results_count": len(result),
                     "unique_points": len(seen),
                     "top_score": result[0]["score"] if result else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return result
 
@@ -910,6 +962,10 @@ class QdrantService:
                 level="ERROR",
                 status_message=f"Batch search failed: {type(e).__name__}",
                 output={"results_count": 0, "error": type(e).__name__},
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return []
 
@@ -961,7 +1017,11 @@ class QdrantService:
                 "freshness_boost": freshness_boost,
                 "freshness_field": freshness_field,
                 "freshness_scale_days": freshness_scale_days,
-            }
+            },
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
         )
 
         if not freshness_boost:
@@ -979,7 +1039,11 @@ class QdrantService:
                     "mode": "plain",
                     "results_count": len(plain_results),
                     "top_score": plain_results[0]["score"] if plain_results else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return plain_results
 
@@ -1023,7 +1087,11 @@ class QdrantService:
                     "mode": "boosted",
                     "results_count": len(boosted_results),
                     "top_score": boosted_results[0]["score"] if boosted_results else None,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return boosted_results
 
@@ -1032,6 +1100,10 @@ class QdrantService:
             lf.update_current_span(
                 level="WARNING",
                 status_message=f"Score boosting fallback: {type(e).__name__}",
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -1048,7 +1120,11 @@ class QdrantService:
                     "results_count": len(fallback_results),
                     "top_score": fallback_results[0]["score"] if fallback_results else None,
                     "fallback_error": type(e).__name__,
-                }
+                },
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
             )
             return fallback_results
 
@@ -1085,11 +1161,21 @@ class QdrantService:
                 "embeddings_count": len(embeddings),
                 "top_k": top_k,
                 "lambda_mult": lambda_mult,
-            }
+            },
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
         )
 
         if not points or len(points) <= top_k:
-            lf.update_current_span(output={"results_count": len(points), "rerank_applied": False})
+            lf.update_current_span(
+                output={"results_count": len(points), "rerank_applied": False},
+                metadata={
+                    "collection": self._collection_name,
+                    "quantization_mode": self._quantization_mode,
+                },
+            )
             return points
 
         embeddings_array = np.array(embeddings)
@@ -1141,7 +1227,13 @@ class QdrantService:
                 selected_embeddings.append(embeddings_array[best_idx])
 
         reranked = [points[i] for i in selected_indices]
-        lf.update_current_span(output={"results_count": len(reranked), "rerank_applied": True})
+        lf.update_current_span(
+            output={"results_count": len(reranked), "rerank_applied": True},
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
+        )
         return reranked
 
     def _build_filter(self, filters: dict | None) -> models.Filter | None:
