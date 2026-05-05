@@ -47,6 +47,8 @@ SENSITIVE_SPANS = [
     "client-direct-pipeline",
     # Classify
     "classify-query",
+    # Graph node (sensitive)
+    "node-rewrite",
     # Cache (all 12)
     "cache-semantic-check",
     "cache-semantic-store",
@@ -143,7 +145,6 @@ LIGHT_SPANS = [
     "node-classify",
     "node-grade",
     "node-rerank",
-    "node-rewrite",
     "node-guard",
     "crm-get-deal",
     "crm-create-lead",
