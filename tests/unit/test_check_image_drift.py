@@ -90,6 +90,17 @@ def test_main_exits_zero_when_checked_containers_have_no_drift(
     assert exc_info.value.code == 0
 
 
+def test_compose_ci_env_fixture_has_project_name() -> None:
+    """Blocker 2: verify the CI env fixture sets COMPOSE_PROJECT_NAME=dev so that
+    docker compose ps targets the canonical dev project from any worktree."""
+    env_path = ROOT / "tests" / "fixtures" / "compose.ci.env"
+    content = env_path.read_text()
+    lines = [line.strip() for line in content.splitlines()]
+    assert any(line == "COMPOSE_PROJECT_NAME=dev" for line in lines), (
+        f"{env_path} must contain COMPOSE_PROJECT_NAME=dev"
+    )
+
+
 def test_help_shows_default_env_file() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--help"],
