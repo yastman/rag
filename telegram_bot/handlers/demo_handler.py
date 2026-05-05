@@ -203,6 +203,7 @@ async def _run_demo_search(
                 "К сожалению, ничего не найдено по вашему запросу.\n"
                 "Попробуйте изменить параметры или напишите другой запрос."
             )
+            await state.set_state(None)
         return
 
     runtime = build_catalog_runtime(
@@ -234,6 +235,8 @@ async def _run_demo_search(
     if dialog_manager is not None:
         await show_catalog_controls(message=message, dialog_manager=dialog_manager, runtime=runtime)
         await activate_catalog_state(dialog_manager=dialog_manager, state=CatalogSG.results)
+    else:
+        await state.set_state(None)
 
 
 async def handle_demo_search_voice(
