@@ -1,6 +1,7 @@
 """Groq-based contextualization provider (high-speed alternative)."""
 
 from groq import APIStatusError, AsyncGroq, Groq, RateLimitError
+from langfuse import observe
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
@@ -52,6 +53,7 @@ class GroqContextualizer(ContextualizeProvider):
                 )
         return results
 
+    @observe(name="groq-contextualize", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -89,6 +91,7 @@ class GroqContextualizer(ContextualizeProvider):
             context_method="groq",
         )
 
+    @observe(name="groq-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
