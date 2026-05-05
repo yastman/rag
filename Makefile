@@ -916,6 +916,18 @@ qdrant-backup: ***REMOVED******REMOVED*** Create Qdrant collection snapshots (al
 
 .PHONY: validate-traces validate-traces-fast
 
+***REMOVED*** Local host overrides for native trace validation (issue ***REMOVED***1380).
+***REMOVED*** These default to localhost ports so validate-traces-fast works from the Docker host.
+***REMOVED*** Callers can override per-variable: make validate-traces-fast QDRANT_URL=http://custom:6333
+VALIDATE_TRACES_QDRANT_URL ?= http://localhost:6333
+VALIDATE_TRACES_BGE_M3_URL ?= http://localhost:8000
+VALIDATE_TRACES_REDIS_URL ?= redis://localhost:6379
+VALIDATE_TRACES_REDIS_PASSWORD ?= dev_redis_pass
+VALIDATE_TRACES_LLM_BASE_URL ?= http://localhost:4000
+VALIDATE_TRACES_LANGFUSE_HOST ?= http://localhost:3001
+VALIDATE_TRACES_LANGFUSE_PUBLIC_KEY ?= [REDACTED-LANGFUSE-KEY]
+VALIDATE_TRACES_LANGFUSE_SECRET_KEY ?= [REDACTED-LANGFUSE-KEY]
+
 validate-traces: ***REMOVED******REMOVED*** Full rebuild + trace validation + report
 	@echo "$(BLUE)Full rebuild + validation...$(NC)"
 	$(LOCAL_COMPOSE_CMD) build --no-cache bot litellm bge-m3
@@ -926,6 +938,14 @@ validate-traces: ***REMOVED******REMOVED*** Full rebuild + trace validation + re
 validate-traces-fast: ***REMOVED******REMOVED*** No rebuild; trace validation fails if required trace families are missing
 	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
+	QDRANT_URL="$(VALIDATE_TRACES_QDRANT_URL)" \
+	BGE_M3_URL="$(VALIDATE_TRACES_BGE_M3_URL)" \
+	REDIS_URL="$(VALIDATE_TRACES_REDIS_URL)" \
+	REDIS_PASSWORD="$(VALIDATE_TRACES_REDIS_PASSWORD)" \
+	LLM_BASE_URL="$(VALIDATE_TRACES_LLM_BASE_URL)" \
+	LANGFUSE_HOST="$(VALIDATE_TRACES_LANGFUSE_HOST)" \
+	LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY] \
+	LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY] \
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
