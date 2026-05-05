@@ -1,6 +1,6 @@
-# Deployment Configuration
+# deploy/
 
-This directory contains server deployment configuration files for the RAG Telegram Bot.
+Server deployment configuration for the RAG Telegram Bot.
 
 ## Files
 
@@ -9,119 +9,37 @@ This directory contains server deployment configuration files for the RAG Telegr
 | `telegram-bot.service` | Systemd service unit for the bot |
 | `sudoers-telegram-bot` | Sudoers rule for passwordless service management |
 
-## Installation Steps
+## Quick start
 
-### 1. Install Systemd Service
-
-```bash
-# Copy service file
-sudo cp deploy/telegram-bot.service /etc/systemd/system/
-
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable service (start on boot)
-sudo systemctl enable telegram-bot
-
-# Start service
-sudo systemctl start telegram-bot
-
-# Check status
-sudo systemctl status telegram-bot
-```
-
-### 2. Install Sudoers Rule
-
-```bash
-# Copy sudoers file
-sudo cp deploy/sudoers-telegram-bot /etc/sudoers.d/telegram-bot
-
-# Set correct permissions (required!)
-sudo chmod 440 /etc/sudoers.d/telegram-bot
-
-# Verify syntax (optional but recommended)
-sudo visudo -c
-```
-
-### 3. Configure SSH Key for GitHub Actions
-
-Generate a dedicated SSH key for deployments:
-
-```bash
-# Generate SSH key (on server)
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_deploy -N ""
-
-# Add public key to authorized_keys
-cat ~/.ssh/github_actions_deploy.pub >> ~/.ssh/authorized_keys
-
-# Display private key (copy this to GitHub Secrets)
-cat ~/.ssh/github_actions_deploy
-```
-
-### 4. Configure GitHub Secrets
-
-Go to your repository: **Settings** > **Secrets and variables** > **Actions**
-
-Add the following secrets:
-
-| Secret Name | Value |
-|-------------|-------|
-| `SERVER_HOST` | Your server IP or hostname |
-| `SERVER_USER` | `admin` |
-| `SERVER_SSH_KEY` | Contents of `~/.ssh/github_actions_deploy` (private key) |
-| `TELEGRAM_BOT_TOKEN` | Your Telegram bot token from @BotFather |
-| `ALLOWED_USER_IDS` | Comma-separated list of allowed Telegram user IDs |
-
-### 5. Verify Deployment
-
-After pushing to `main` branch:
-
-1. Check GitHub Actions workflow status
-2. On server, verify service is running:
+1. Copy the service file and reload systemd:
    ```bash
-   sudo systemctl status telegram-bot
-   journalctl -u telegram-bot -f
+   sudo cp deploy/telegram-bot.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now telegram-bot
    ```
 
-## Service Management Commands
+2. Copy the sudoers file:
+   ```bash
+   sudo cp deploy/sudoers-telegram-bot /etc/sudoers.d/telegram-bot
+   sudo chmod 440 /etc/sudoers.d/telegram-bot
+   sudo visudo -c
+   ```
+
+3. Configure GitHub Secrets for CI/CD:
+   - `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`
+   - `TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_IDS`
+
+## Service management
 
 ```bash
-# Start bot
 sudo systemctl start telegram-bot
-
-# Stop bot
 sudo systemctl stop telegram-bot
-
-# Restart bot
 sudo systemctl restart telegram-bot
-
-# View logs
-journalctl -u telegram-bot -f
-
-# View last 100 lines
-journalctl -u telegram-bot -n 100
+sudo journalctl -u telegram-bot -f
 ```
 
-## Troubleshooting
+## Related
 
-### Service fails to start
-
-1. Check logs: `journalctl -u telegram-bot -n 50`
-2. Verify `.env` file exists: `ls -la /home/admin/contextual_rag/telegram_bot/.env`
-3. Test manually:
-   ```bash
-   cd /home/admin/contextual_rag
-   source venv/bin/activate
-   python -m telegram_bot.main
-   ```
-
-### Permission denied errors
-
-1. Verify user/group in service file matches actual user
-2. Check `ReadWritePaths` includes all directories the bot needs to write to
-
-### SSH deployment fails
-
-1. Verify SSH key is correctly added to `~/.ssh/authorized_keys`
-2. Check server firewall allows SSH (port 22)
-3. Verify `SERVER_HOST` secret is correct
+- [`DOCKER.md`](../DOCKER.md) — Docker Compose profiles and local runtime
+- [`k8s/README.md`](../k8s/README.md) — k3s manifests and overlays
+- [`docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup guide
