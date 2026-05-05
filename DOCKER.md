@@ -100,6 +100,26 @@ Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to 
 - `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` (dev defaults exist)
 - `ELEVENLABS_API_KEY` (if ElevenLabs is used)
 
+### OpenTelemetry Service Identity (`OTEL_SERVICE_NAME`)
+
+Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in Compose so traces and observations are consistently attributed. The variable is optional — every service falls back to its default when `OTEL_SERVICE_NAME` is unset.
+
+| Service | Default `OTEL_SERVICE_NAME` |
+| --- | --- |
+| `bot` | `telegram-bot` |
+| `mini-app-api` | `mini-app-api` |
+| `ingestion` | `ingestion` |
+| `rag-api` | `rag-api` |
+
+The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `k8s/` additionally hard-code the `telegram-bot` identity.
+
+To override, export `OTEL_SERVICE_NAME` in the shell or set it in `.env` before starting services:
+
+```bash
+export OTEL_SERVICE_NAME=custom-bot-name
+make docker-bot-up
+```
+
 ## Health Checks
 
 ```bash
