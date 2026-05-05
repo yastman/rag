@@ -227,13 +227,14 @@ spans:
 # Spans that must set capture_input=False, capture_output=False in production.
 # These spans handle PII, raw embeddings, or security-sensitive payloads.
 sensitive_spans:
-  # graph_nodes (excluding node-guard, node-classify, node-grade, node-rerank, node-rewrite)
+  # graph_nodes (excluding node-guard, node-classify, node-grade, node-rerank)
   - transcribe
   - classify-query
   - node-cache-check
   - node-cache-store
   - node-retrieve
   - node-generate
+  - node-rewrite
   - node-respond
   - node-summarize
   # agent_pipeline
