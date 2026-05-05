@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Any
 
+import httpx
 from aiogram import F, Router
 from aiogram.enums import ContentType
 from aiogram.fsm.context import FSMContext
@@ -266,6 +267,15 @@ async def _process_valid_phone(
                     complete_till=due,
                 )
             )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                logger.warning(
+                    "CRM degraded: Kommo 401 Unauthorized for phone=%s "
+                    "(local/test credentials expected)",
+                    phone,
+                )
+            else:
+                logger.exception("CRM lead creation failed for phone=%s", phone)
         except Exception:
             logger.exception("CRM lead creation failed for phone=%s", phone)
 
