@@ -7,7 +7,7 @@ Demo data files for local indexing pipeline tests.
 This directory holds sample documents used to verify the ingestion pipeline end-to-end.
 Data files are excluded from Git (see `.gitignore`) to avoid committing large binaries.
 
-Typical files placed here:
+Typical local filenames you can place here (these are not committed):
 - `demo_BG.csv` — Sample property listings
 - `info_bg_home.docx` — Sample company contact document
 

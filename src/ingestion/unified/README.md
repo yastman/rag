@@ -10,7 +10,7 @@ Incremental, resumable document ingestion with stable file identity and hybrid v
 
 | Entrypoint | Role |
 |------------|------|
-| [`cli.py`](./cli.py) `main()` | CLI: `run`, `watch`, `backfill`, `status`, `inspect` |
+| [`cli.py`](./cli.py) `main()` | CLI: `run`, `run --watch`, `backfill-colbert`, `status`, `preflight` |
 | [`flow.py`](./flow.py) `build_flow()` | Assemble the CocoIndex flow for a given config |
 | [`flow.py`](./flow.py) `run_once()` | Single-pass ingestion |
 | [`flow.py`](./flow.py) `run_watch()` | Continuous watch mode via `FlowLiveUpdater` |
@@ -50,10 +50,10 @@ Incremental, resumable document ingestion with stable file identity and hybrid v
 python -m src.ingestion.unified.cli run --dry-run
 
 # Watch mode
-python -m src.ingestion.unified.cli watch
+python -m src.ingestion.unified.cli run --watch
 
 # Backfill ColBERT vectors
-python -m src.ingestion.unified.cli colbert-backfill
+python -m src.ingestion.unified.cli backfill-colbert
 
 # Tests
 pytest src/ingestion/unified/
