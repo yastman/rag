@@ -133,6 +133,7 @@ spans:
     - detect-response-style
     - get-prompt
     - kommo-token-refresh
+    - cross-encoder-rerank
     - colbert-rerank
     - session-summary-check
     - lead-score-upsert
@@ -300,6 +301,7 @@ sensitive_spans:
   - detect-response-style
   - get-prompt
   - kommo-token-refresh
+  - cross-encoder-rerank
   - apartments-hybrid-search
   - apartments-scroll
   - apartment-filter-parse
