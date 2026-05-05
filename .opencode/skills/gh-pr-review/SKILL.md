@@ -262,7 +262,7 @@ Prefer the repo contract over generic advice. Known `rag-fresh` checks:
 - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 - `uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q` for graph flow changes
 - `make ingest-unified-status` and `python -m src.ingestion.unified.cli preflight` for ingestion behavior
-- `make test-smoke` or `make test-smoke-routing` for live-routing or release-surface changes
+- `make test-smoke` for live-routing or release-surface changes
 - `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config >/tmp/compose.dev.yaml`
 - `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config >/tmp/compose.vps.yaml`
 - `make verify-compose-images` when compose pins, images, or runtime services are in play
