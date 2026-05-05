@@ -15,7 +15,7 @@ Provides high-quality Russian dense embeddings (768-dim) for retrieval and seman
 
 - **Service name**: `user-base`
 - **Profile**: — (default, unprofiled)
-- **Compose project**: `dev` (see [`../DOCKER.md`](../DOCKER.md) for contract details)
+- **Compose project**: `dev` (see [`../../DOCKER.md`](../../DOCKER.md) for contract details)
 - **Local port**: `8003` (host) mapped from container port `8000`
 - **Health**: `GET http://localhost:8003/health`
 
