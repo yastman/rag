@@ -104,7 +104,9 @@ class BGEM3Client:
             )
         return self._client
 
-    @observe(name="bge-m3-encode-dense", capture_input=False, capture_output=False)
+    @observe(
+        name="bge-m3-encode-dense", as_type="embedding", capture_input=False, capture_output=False
+    )
     @bge_retry
     async def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors via /encode/dense."""
@@ -141,7 +143,9 @@ class BGEM3Client:
         )
         return DenseResult(vectors=all_vecs, processing_time=processing_time)
 
-    @observe(name="bge-m3-encode-sparse", capture_input=False, capture_output=False)
+    @observe(
+        name="bge-m3-encode-sparse", as_type="embedding", capture_input=False, capture_output=False
+    )
     @bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors via /encode/sparse."""
@@ -174,7 +178,9 @@ class BGEM3Client:
         )
         return SparseResult(weights=all_weights, processing_time=processing_time)
 
-    @observe(name="bge-m3-encode-hybrid", capture_input=False, capture_output=False)
+    @observe(
+        name="bge-m3-encode-hybrid", as_type="embedding", capture_input=False, capture_output=False
+    )
     @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse via /encode/hybrid (single call)."""
@@ -212,7 +218,7 @@ class BGEM3Client:
         )
         return result
 
-    @observe(name="bge-m3-rerank", capture_input=False, capture_output=False)
+    @observe(name="bge-m3-rerank", as_type="embedding", capture_input=False, capture_output=False)
     @bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
         """Rerank documents via ColBERT MaxSim /rerank endpoint."""
@@ -253,7 +259,9 @@ class BGEM3Client:
         )
         return result
 
-    @observe(name="bge-m3-encode-colbert", capture_input=False, capture_output=False)
+    @observe(
+        name="bge-m3-encode-colbert", as_type="embedding", capture_input=False, capture_output=False
+    )
     @bge_retry
     async def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors via /encode/colbert."""
