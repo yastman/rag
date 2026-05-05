@@ -246,7 +246,7 @@ make docker-full-up    # All 23 services
 telegram_bot/              # Telegram bot (aiogram 3 + aiogram-dialog)
 ├── handlers/              #   Message & callback handlers
 ├── services/              #   Business logic (search, LLM, cache, apartments, CRM)
-├── graph/                 #   LangGraph voice RAG pipeline (11 nodes)
+├── graph/                 #   LangGraph voice RAG pipeline
 ├── agents/                #   Sub-agents (history search, HITL)
 ├── dialogs/               #   Dialog UI (menus, filters, settings)
 ├── integrations/          #   External clients (Redis, Postgres, Langfuse)
