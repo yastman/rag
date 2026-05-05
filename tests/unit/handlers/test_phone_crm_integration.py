@@ -6,6 +6,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 from telegram_bot.services.kommo_models import Contact, Lead, Note, Task
@@ -117,6 +118,30 @@ async def test_graceful_on_kommo_error(mock_kommo, mock_message, mock_state, moc
     mock_message.answer.assert_awaited_once()
     text = mock_message.answer.call_args[0][0]
     assert "Заявка оформлена" in text
+
+
+async def test_graceful_on_kommo_401(mock_kommo, mock_message, mock_state, mock_config, caplog):
+    """Kommo 401 is handled as a known degraded state: user gets success, log is warning."""
+    from telegram_bot.handlers.phone_collector import on_phone_received
+
+    req = httpx.Request("GET", "https://test.kommo.com/api/v4/contacts")
+    resp = httpx.Response(401, request=req)
+    exc = httpx.HTTPStatusError("401 Unauthorized", request=req, response=resp)
+    mock_kommo.upsert_contact.side_effect = exc
+
+    with patch(
+        "telegram_bot.services.content_loader.load_services_config", return_value=mock_config
+    ):
+        with caplog.at_level("DEBUG", logger="telegram_bot.handlers.phone_collector"):
+            await on_phone_received(mock_message, mock_state, kommo_client=mock_kommo)
+
+    mock_message.answer.assert_awaited_once()
+    text = mock_message.answer.call_args[0][0]
+    assert "Заявка оформлена" in text
+
+    # 401 should be logged as warning, not error with traceback
+    assert any("401" in rec.message and rec.levelname == "WARNING" for rec in caplog.records)
+    assert not any(rec.levelname == "ERROR" for rec in caplog.records)
 
 
 async def test_source_tracking_in_lead_name(mock_kommo, mock_message, mock_state, mock_config):
