@@ -138,6 +138,13 @@ SENSITIVE_SPANS = [
     "ingestion-flow-watch",
     "ingestion-qdrant-delete-file",
     "ingestion-qdrant-upsert-chunks",
+    # Contextualization (raw text chunks and queries)
+    "claude-contextualize",
+    "claude-contextualize-sync",
+    "openai-contextualize",
+    "openai-contextualize-sync",
+    "groq-contextualize",
+    "groq-contextualize-sync",
 ]
 
 # Light spans — use auto-capture (capture_input should NOT be explicitly set to False)
