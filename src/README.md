@@ -4,7 +4,7 @@ Shared domain, retrieval, ingestion, and API code for the contextual RAG system.
 
 ## Purpose
 
-Contains all non-transport logic: document ingestion, vector search, model contextualization, evaluation, and the standalone RAG API. `telegram_bot/` imports from here; nothing in `src/` imports from `telegram_bot/`.
+Contains all non-transport logic: document ingestion, vector search, model contextualization, evaluation, and the standalone RAG API. `telegram_bot/` imports from here; most of `src/` stays Telegram-agnostic. `src/api/` is an adapter that intentionally reuses the Telegram LangGraph pipeline (via `telegram_bot.graph.graph.build_graph()`) until that pipeline is extracted into a shared location.
 
 ## Entrypoints
 
