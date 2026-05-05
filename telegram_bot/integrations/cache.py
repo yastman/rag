@@ -537,19 +537,25 @@ class CacheLayerManager:
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:
         """Get cached dense embedding via RedisVL EmbeddingsCache."""
         lf = get_client()
-        lf.update_current_span(input={"model": model, "text_length": len(text)})
+        lf.update_current_span(
+            input={"model": model, "text_length": len(text)},
+            metadata={"model": model},
+        )
         if self.embed_cache is None:
-            lf.update_current_span(output={"hit": False, "embed_cache_enabled": False})
+            lf.update_current_span(
+                output={"hit": False, "embed_cache_enabled": False},
+                metadata={"model": model},
+            )
             return None
         try:
             normalized = _normalize_query_for_cache(text)
             result = await self.embed_cache.aget(content=normalized, model_name=model)
             if result is not None:
                 self._metrics["embeddings"]["hits"] += 1
-                lf.update_current_span(output={"hit": True})
+                lf.update_current_span(output={"hit": True}, metadata={"model": model})
                 return list(result["embedding"])
             self._metrics["embeddings"]["misses"] += 1
-            lf.update_current_span(output={"hit": False})
+            lf.update_current_span(output={"hit": False}, metadata={"model": model})
             return None
         except Exception as e:
             logger.error("EmbeddingsCache get error: %s: %s", type(e).__name__, e)
@@ -558,6 +564,7 @@ class CacheLayerManager:
                 level="ERROR",
                 status_message=f"EmbeddingsCache get error: {type(e).__name__}",
                 output={"hit": False, "error": type(e).__name__},
+                metadata={"model": model},
             )
             return None
 
@@ -568,10 +575,14 @@ class CacheLayerManager:
         """Store dense embedding via RedisVL EmbeddingsCache."""
         lf = get_client()
         lf.update_current_span(
-            input={"model": model, "text_length": len(text), "embedding_dim": len(embedding)}
+            input={"model": model, "text_length": len(text), "embedding_dim": len(embedding)},
+            metadata={"model": model},
         )
         if self.embed_cache is None:
-            lf.update_current_span(output={"stored": False, "embed_cache_enabled": False})
+            lf.update_current_span(
+                output={"stored": False, "embed_cache_enabled": False},
+                metadata={"model": model},
+            )
             return
         try:
             normalized = _normalize_query_for_cache(text)
@@ -582,13 +593,14 @@ class CacheLayerManager:
                 embedding=embedding,
                 ttl=ttl,
             )
-            lf.update_current_span(output={"stored": True})
+            lf.update_current_span(output={"stored": True}, metadata={"model": model})
         except Exception as e:
             logger.error("EmbeddingsCache store error: %s: %s", type(e).__name__, e)
             lf.update_current_span(
                 level="ERROR",
                 status_message=f"EmbeddingsCache store error: {type(e).__name__}",
                 output={"stored": False, "error": type(e).__name__},
+                metadata={"model": model},
             )
 
     # ========== Convenience: Sparse Embeddings ==========
@@ -599,11 +611,17 @@ class CacheLayerManager:
     ) -> dict[str, Any] | None:
         """Get cached sparse embedding."""
         lf = get_client()
-        lf.update_current_span(input={"model": model, "text_length": len(text)})
+        lf.update_current_span(
+            input={"model": model, "text_length": len(text)},
+            metadata={"model": model},
+        )
         result = await self.get_exact(
             "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}")
         )
-        lf.update_current_span(output={"hit": result is not None})
+        lf.update_current_span(
+            output={"hit": result is not None},
+            metadata={"model": model},
+        )
         return result
 
     @observe(name="cache-sparse-store", capture_input=False, capture_output=False)
@@ -617,12 +635,13 @@ class CacheLayerManager:
                 "model": model,
                 "text_length": len(text),
                 "sparse_indices_count": len(sparse_vector.get("indices", [])),
-            }
+            },
+            metadata={"model": model},
         )
         await self.store_exact(
             "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"), sparse_vector
         )
-        lf.update_current_span(output={"stored": True})
+        lf.update_current_span(output={"stored": True}, metadata={"model": model})
 
     # ========== Convenience: Search Results ==========
 
