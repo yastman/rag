@@ -23,6 +23,8 @@ Minimum env for bot profile:
 - at least one provider key: `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 - optional `QDRANT_COLLECTION` (defaults to `gdrive_documents_bge` from `compose.yml` if unset)
 
+The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which `make` targets use as a fallback when `.env` is absent. Do not create worktree-named Docker projects.
+
 Secret model by compose file:
 - `compose.yml` is the secure baseline: no predictable built-in secret defaults.
 - `compose.dev.yml` may provide local-only defaults for development convenience (`pk-lf-dev`, `sk-lf-dev`, `clickhouse`, `miniosecret`, `langfuseredis`, `devkey`).
@@ -40,8 +42,10 @@ make docker-bot-up
 # Optional profiles
 make docker-ml-up
 make docker-ingest-up
-make docker-voice-up
 make monitoring-up
+
+# Voice is intentionally off by default; start separately when needed:
+# make docker-voice-up
 ```
 
 ## 3. Validate Runtime
@@ -65,7 +69,7 @@ make test-bot-health
 - LiteLLM via proxy readiness (`/health/readiness`)
 - optional localhost Postgres note without turning DB reachability into a hard failure
 
-The authoritative startup preflight still lives in [`telegram_bot/preflight.py`](/home/user/projects/rag-fresh-issue-1198/telegram_bot/preflight.py) and runs when you start the bot. That runtime preflight also keeps the repo-local BGE-M3 health and warmup contract, because BGE-M3 is not a generic upstream SDK probe in this repo.
+The authoritative startup preflight still lives in [`telegram_bot/preflight.py`](../telegram_bot/preflight.py) and runs when you start the bot. That runtime preflight also keeps the repo-local BGE-M3 health and warmup contract, because BGE-M3 is not a generic upstream SDK probe in this repo.
 
 ## 4. Development Gates
 
@@ -96,7 +100,11 @@ If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
 lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 ```
 
-## 5. Running Components Without Docker Wrapper
+## 5. Python Runtime Note
+
+Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
+
+## 6. Running Components Without Docker Wrapper
 
 ```bash
 # Telegram bot
@@ -109,7 +117,7 @@ uv run python -m src.ingestion.unified.cli run --watch
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
 
-## 6. Minimal Stack (Fast Iteration)
+## 7. Minimal Stack (Fast Iteration)
 
 Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
 
@@ -129,7 +137,7 @@ make local-ps
 make local-down
 ```
 
-## 7. Common Issues
+## 8. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
