@@ -69,7 +69,7 @@ class QdrantHybridTargetSpec(TargetSpec):
     pipeline_version: str = "v3.2.1"
 
     @classmethod
-    def from_config(cls, config: UnifiedConfig) -> "QdrantHybridTargetSpec":  # noqa: UP037
+    def from_config(cls, config: UnifiedConfig) -> "QdrantHybridTargetSpec":
         """Create spec from UnifiedConfig."""
         return cls(
             qdrant_url=config.qdrant_url,
