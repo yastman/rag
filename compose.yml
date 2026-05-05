@@ -269,6 +269,7 @@ services:
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
       LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
       # CRM — Kommo integration
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
@@ -348,6 +349,7 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-mini-app-api}"
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
@@ -415,6 +417,7 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-ingestion}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -762,6 +765,7 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-rag-api}"
     depends_on:
       redis:
         condition: service_healthy
