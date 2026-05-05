@@ -824,3 +824,43 @@ class TestLangfuseImportFailure:
         """traced_pipeline should work when propagate_attributes is a fallback."""
         with observability_without_langfuse.traced_pipeline(session_id="s", user_id="u"):
             pass
+
+
+class TestOtelServiceName:
+    """Tests for OTEL_SERVICE_NAME handling (#1370)."""
+
+    def test_initialize_langfuse_sets_otel_service_name_when_absent(self, monkeypatch):
+        """When OTEL_SERVICE_NAME is unset, initialize_langfuse sets it to telegram-bot."""
+        import os
+
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("OTEL_SERVICE_NAME", raising=False)
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client):
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert os.environ.get("OTEL_SERVICE_NAME") == "telegram-bot"
+
+    def test_initialize_langfuse_does_not_override_existing_otel_service_name(self, monkeypatch):
+        """When OTEL_SERVICE_NAME is already set, initialize_langfuse preserves it."""
+        import os
+
+        import telegram_bot.observability as observability
+
+        monkeypatch.setenv("OTEL_SERVICE_NAME", "custom-service")
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client):
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert os.environ.get("OTEL_SERVICE_NAME") == "custom-service"
