@@ -1153,3 +1153,69 @@ class TestRedisPoolConfig:
             call_kwargs = mock_redis.from_url.call_args[1]
             assert "max_connections" in call_kwargs
             assert call_kwargs["max_connections"] == 20
+
+
+class TestCacheSpanMetadata:
+    """Runtime tests for cache embedding span metadata (#1365)."""
+
+    @pytest.fixture
+    def mock_lf(self):
+        mock = MagicMock()
+        mock.update_current_span = MagicMock()
+        return mock
+
+    async def test_get_embedding_exposes_model_metadata(self, mock_lf):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_ec = AsyncMock()
+        mock_ec.aget = AsyncMock(return_value={"embedding": [0.1] * 1024})
+        mgr.embed_cache = mock_ec
+
+        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+            await mgr.get_embedding("тест", model="bge-m3")
+
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == "bge-m3" for c in metadata_calls)
+
+    async def test_store_embedding_exposes_model_metadata(self, mock_lf):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_ec = AsyncMock()
+        mock_ec.aset = AsyncMock()
+        mgr.embed_cache = mock_ec
+
+        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+            await mgr.store_embedding("тест", [0.2] * 1024, model="bge-m3")
+
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == "bge-m3" for c in metadata_calls)
+
+    async def test_get_sparse_embedding_exposes_model_metadata(self, mock_lf):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+        mgr.redis.get = AsyncMock(return_value=None)
+
+        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+            await mgr.get_sparse_embedding("тест", model="bge_m3_sparse")
+
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == "bge_m3_sparse" for c in metadata_calls)
+
+    async def test_store_sparse_embedding_exposes_model_metadata(self, mock_lf):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+        mgr.redis.setex = AsyncMock()
+
+        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+            await mgr.store_sparse_embedding(
+                "тест", {"indices": [1], "values": [0.5]}, model="bge_m3_sparse"
+            )
+
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == "bge_m3_sparse" for c in metadata_calls)
