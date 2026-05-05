@@ -299,6 +299,56 @@ class TestHandoffComposeContract:
         assert "MANAGERS_GROUP_ID" in bot_env
 
 
+class TestOtelServiceNameDefaults:
+    """Services that emit Langfuse/OTel traces must have stable OTEL_SERVICE_NAME defaults (#1370)."""
+
+    _EXPECTED = {
+        "bot": "telegram-bot",
+        "mini-app-api": "mini-app-api",
+        "ingestion": "ingestion",
+        "rag-api": "rag-api",
+    }
+
+    def _get_env(self, svc: dict) -> dict:
+        env = svc.get("environment", {})
+        if isinstance(env, list):
+            result = {}
+            for item in env:
+                if isinstance(item, str) and "=" in item:
+                    key, val = item.split("=", 1)
+                    result[key] = val
+            return result
+        return env
+
+    @pytest.mark.parametrize("svc_name,expected", _EXPECTED.items())
+    def test_vps_service_has_otel_service_name_default(
+        self, vps: dict, svc_name: str, expected: str
+    ) -> None:
+        if svc_name not in vps["services"]:
+            pytest.skip(f"Service {svc_name} not present in vps compose")
+        svc = vps["services"][svc_name]
+        env = self._get_env(svc)
+        assert "OTEL_SERVICE_NAME" in env, f"vps:{svc_name} missing OTEL_SERVICE_NAME"
+        assert expected in env["OTEL_SERVICE_NAME"], (
+            f"vps:{svc_name} OTEL_SERVICE_NAME default should include {expected!r}; "
+            f"got {env['OTEL_SERVICE_NAME']!r}"
+        )
+
+    @pytest.mark.parametrize("svc_name,expected", _EXPECTED.items())
+    def test_dev_service_has_otel_service_name_default(
+        self, dev: dict, svc_name: str, expected: str
+    ) -> None:
+        if svc_name not in dev["services"]:
+            pytest.skip(f"Service {svc_name} not present in dev compose")
+        svc = dev["services"][svc_name]
+        env = self._get_env(svc)
+        assert "OTEL_SERVICE_NAME" in env, f"dev:{svc_name} missing OTEL_SERVICE_NAME"
+        assert expected in env["OTEL_SERVICE_NAME"], (
+            f"dev:{svc_name} OTEL_SERVICE_NAME default should include {expected!r}; "
+            f"got {env['OTEL_SERVICE_NAME']!r}"
+        )
+
+
 # =============================================================================
 # #1307 — Langfuse web memory contract
 # =============================================================================
