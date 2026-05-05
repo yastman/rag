@@ -6,6 +6,8 @@ import html
 import logging
 from typing import Any
 
+from telegram_bot.observability import get_client
+
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +144,40 @@ def build_html_messages(
     return rendered
 
 
+def _record_langfuse_response_output(answer_text: str, chunks_count: int) -> None:
+    """Best-effort update of the current Langfuse trace/span output after a send.
+
+    Uses ``update_current_trace`` when present, falls back to ``update_current_span``,
+    and is a no-op when the client or method is missing so Telegram sending never
+    breaks because of observability.
+    """
+    lf = get_client()
+    if lf is None:
+        return
+
+    output = {
+        "response_preview": (answer_text or "")[:800],
+        "chunks_count": chunks_count,
+    }
+
+    update_trace = getattr(lf, "update_current_trace", None)
+    if callable(update_trace):
+        try:
+            update_trace(output=output)
+            return
+        except Exception:
+            logger.debug(
+                "update_current_trace failed, falling back to update_current_span", exc_info=True
+            )
+
+    update_span = getattr(lf, "update_current_span", None)
+    if callable(update_span):
+        try:
+            update_span(output=output)
+        except Exception:
+            logger.debug("update_current_span failed", exc_info=True)
+
+
 async def send_html_messages(
     message: Any,
     answer_text: str,
@@ -179,4 +215,9 @@ async def send_html_messages(
             except Exception:
                 logger.exception("Failed to send formatted response chunk")
                 await message.answer(html.unescape(html_text))
+
+    try:
+        _record_langfuse_response_output(answer_text, len(html_messages))
+    except Exception:
+        logger.debug("Failed to record Langfuse output", exc_info=True)
     return True
