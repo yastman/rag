@@ -1,13 +1,19 @@
-"""Static tests for observability span metadata.
+"""Static and runtime tests for observability span metadata.
 
 AST-based tests for @observe decorator metadata (as_type, capture_input, capture_output)
-on BGE-M3, Qdrant, and RAG pipeline spans. No runtime SDK calls or network I/O.
+on BGE-M3, Qdrant, and RAG pipeline spans.
+
+Runtime tests verify model/collection metadata is passed to update_current_span.
 """
 
 import ast
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from telegram_bot.services.bge_m3_client import BGE_M3_MODEL_NAME, BGEM3Client
+from telegram_bot.services.qdrant import QdrantService
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -177,3 +183,165 @@ class TestBGEServiceWarmup:
         assert found_bare_encode, (
             "lifespan warmup must call model.encode() as a bare expression (discarded)"
         )
+
+
+class TestBGEM3SpanRuntimeMetadata:
+    """Runtime tests for BGE-M3 span metadata."""
+
+    @pytest.fixture
+    def mock_lf(self):
+        mock = MagicMock()
+        mock.update_current_span = MagicMock()
+        return mock
+
+    @pytest.fixture
+    def bge_client(self):
+        client = BGEM3Client(base_url="http://test")
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(
+            return_value={"dense_vecs": [[0.1] * 1024], "processing_time": 0.1}
+        )
+        client._client = AsyncMock()
+        client._client.is_closed = False
+        client._client.post = AsyncMock(return_value=mock_resp)
+        return client
+
+    async def test_encode_dense_exposes_model_metadata(self, mock_lf, bge_client):
+        with patch("telegram_bot.services.bge_m3_client.get_client", return_value=mock_lf):
+            await bge_client.encode_dense(["hello"])
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == BGE_M3_MODEL_NAME for c in metadata_calls)
+
+    async def test_encode_sparse_exposes_model_metadata(self, mock_lf, bge_client):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(
+            return_value={"lexical_weights": [{"a": 0.1}], "processing_time": 0.1}
+        )
+        bge_client._client.post = AsyncMock(return_value=mock_resp)
+        with patch("telegram_bot.services.bge_m3_client.get_client", return_value=mock_lf):
+            await bge_client.encode_sparse(["hello"])
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == BGE_M3_MODEL_NAME for c in metadata_calls)
+
+    async def test_encode_hybrid_exposes_model_metadata(self, mock_lf, bge_client):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(
+            return_value={
+                "dense_vecs": [[0.1] * 1024],
+                "lexical_weights": [{"a": 0.1}],
+                "processing_time": 0.1,
+            }
+        )
+        bge_client._client.post = AsyncMock(return_value=mock_resp)
+        with patch("telegram_bot.services.bge_m3_client.get_client", return_value=mock_lf):
+            await bge_client.encode_hybrid(["hello"])
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == BGE_M3_MODEL_NAME for c in metadata_calls)
+
+    async def test_rerank_exposes_model_metadata(self, mock_lf, bge_client):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(
+            return_value={"results": [{"index": 0, "score": 0.9}], "processing_time": 0.1}
+        )
+        bge_client._client.post = AsyncMock(return_value=mock_resp)
+        with patch("telegram_bot.services.bge_m3_client.get_client", return_value=mock_lf):
+            await bge_client.rerank("query", ["doc1", "doc2"])
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == BGE_M3_MODEL_NAME for c in metadata_calls)
+
+    async def test_encode_colbert_exposes_model_metadata(self, mock_lf, bge_client):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = MagicMock(
+            return_value={"colbert_vecs": [[[0.1] * 1024]], "processing_time": 0.1}
+        )
+        bge_client._client.post = AsyncMock(return_value=mock_resp)
+        with patch("telegram_bot.services.bge_m3_client.get_client", return_value=mock_lf):
+            await bge_client.encode_colbert(["hello"])
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(c.kwargs["metadata"].get("model") == BGE_M3_MODEL_NAME for c in metadata_calls)
+
+
+class TestQdrantSpanRuntimeMetadata:
+    """Runtime tests for Qdrant retrieval span metadata."""
+
+    @pytest.fixture
+    def mock_lf(self):
+        mock = MagicMock()
+        mock.update_current_span = MagicMock()
+        return mock
+
+    @pytest.fixture
+    def qdrant_service(self):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            svc = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+                quantization_mode="scalar",
+            )
+            svc._client = AsyncMock()
+            svc._collection_validated = True
+            return svc
+
+    def _assert_collection_metadata(self, mock_lf, collection_name, quantization_mode):
+        metadata_calls = [
+            c for c in mock_lf.update_current_span.call_args_list if "metadata" in c.kwargs
+        ]
+        assert any(
+            c.kwargs["metadata"].get("collection") == collection_name
+            and c.kwargs["metadata"].get("quantization_mode") == quantization_mode
+            for c in metadata_calls
+        )
+
+    async def test_hybrid_search_rrf_exposes_collection_metadata(self, mock_lf, qdrant_service):
+        qdrant_service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
+            await qdrant_service.hybrid_search_rrf(dense_vector=[0.1] * 1024)
+        self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")
+
+    async def test_hybrid_search_rrf_colbert_exposes_collection_metadata(
+        self, mock_lf, qdrant_service
+    ):
+        qdrant_service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
+            await qdrant_service.hybrid_search_rrf_colbert(
+                dense_vector=[0.1] * 1024,
+                colbert_query=[[0.1] * 1024],
+            )
+        self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")
+
+    async def test_batch_search_rrf_exposes_collection_metadata(self, mock_lf, qdrant_service):
+        qdrant_service._client.query_batch_points = AsyncMock(return_value=[])
+        with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
+            await qdrant_service.batch_search_rrf(queries=[{"dense_vector": [0.1] * 1024}])
+        self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")
+
+    async def test_search_with_score_boosting_exposes_collection_metadata(
+        self, mock_lf, qdrant_service
+    ):
+        qdrant_service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
+            await qdrant_service.search_with_score_boosting(dense_vector=[0.1] * 1024)
+        self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")
+
+    def test_mmr_rerank_exposes_collection_metadata(self, mock_lf, qdrant_service):
+        with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
+            qdrant_service.mmr_rerank(
+                points=[{"id": "1", "score": 0.9, "text": "a", "metadata": {}}],
+                embeddings=[[0.1] * 1024],
+            )
+        self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")
