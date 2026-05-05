@@ -189,7 +189,7 @@ For local development, the canonical environment file is `.env` in the repo root
 ### 2. Start Services
 
 ```bash
-make local-up    # Redis, Qdrant, BGE-M3, Docling, LiteLLM
+make local-up    # Redis, Qdrant, BGE-M3, LiteLLM
 make test-bot-health   # Local helper: Redis, Qdrant, LiteLLM + optional Postgres note
 make run-bot           # Run bot natively (fast iteration, no Docker rebuild)
 ```
