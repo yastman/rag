@@ -25,6 +25,7 @@ def message_event():
 
     msg = MagicMock(spec=Message)
     msg.text = "/start"
+    msg.content_type = "text"
     return msg
 
 
@@ -72,6 +73,11 @@ async def test_creates_span_when_langfuse_enabled(middleware, handler, message_e
     mock_lf.start_as_current_observation.assert_called_once_with(
         as_type="span",
         name="telegram-cmd-start",
+        input={
+            "action": "cmd-start",
+            "content_type": "text",
+            "text_preview": "/start",
+        },
     )
     mock_propagate.assert_called_once()
     call_kwargs = mock_propagate.call_args[1]
@@ -117,4 +123,8 @@ async def test_callback_action_type(middleware, handler, event_data):
     mock_lf.start_as_current_observation.assert_called_once_with(
         as_type="span",
         name="telegram-callback-fav",
+        input={
+            "action": "callback-fav",
+            "callback_data": "fav:add:123",
+        },
     )
