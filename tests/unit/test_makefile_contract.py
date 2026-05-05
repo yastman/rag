@@ -114,3 +114,49 @@ def test_local_ps_uses_all_services() -> None:
     assert "$(LOCAL_ALL_SERVICES)" in block, (
         "local-ps must reference $(LOCAL_ALL_SERVICES) for coherence"
     )
+
+
+# --- Makefile drift contract tests ---
+
+
+def test_makefile_targets_refer_only_to_existing_test_files() -> None:
+    """Every test file path referenced by a Makefile target must exist."""
+    text = _makefile_text()
+    # Find pytest invocations with explicit test file paths
+    referenced = set(re.findall(r"pytest\s+([\w\-/]+\.py)", text))
+    missing = []
+    for ref in referenced:
+        if not Path(ref).exists():
+            missing.append(ref)
+    assert not missing, (
+        f"Makefile references missing test files: {missing}. "
+        "Remove or rewrite the affected targets."
+    )
+
+
+def test_makefile_does_not_use_invalid_core_profile() -> None:
+    """`core` is not a defined Compose profile; targets must not reference it."""
+    text = _makefile_text()
+    matches = list(re.finditer(r"--profile\s+core", text))
+    assert not matches, (
+        f"Makefile references invalid Compose profile 'core' at position(s) "
+        f"{[m.start() for m in matches]}. Use existing profiles (bot, ml, obs, ingest, voice, full) "
+        f"or unprofiled services via $(LOCAL_COMPOSE_CMD) up -d."
+    )
+
+
+def test_validate_traces_targets_use_local_compose_cmd() -> None:
+    """Trace validation targets must use the local Compose contract (LOCAL_COMPOSE_CMD)."""
+    text = _makefile_text()
+    for target in ("validate-traces", "validate-traces-fast"):
+        block_match = re.search(
+            rf"^{re.escape(target)}:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+            text,
+            re.MULTILINE | re.DOTALL,
+        )
+        assert block_match, f"{target} target not found in Makefile"
+        block = block_match.group(0)
+        assert "$(LOCAL_COMPOSE_CMD)" in block, (
+            f"{target} must use $(LOCAL_COMPOSE_CMD) to respect the local Compose contract "
+            f"(compose.yml:compose.dev.yml with env-file handling)."
+        )
