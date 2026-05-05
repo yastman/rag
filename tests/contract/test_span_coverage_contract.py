@@ -47,6 +47,8 @@ SENSITIVE_SPANS = [
     "client-direct-pipeline",
     # Classify
     "classify-query",
+    # Graph node (sensitive)
+    "node-rewrite",
     # Cache (all 12)
     "cache-semantic-check",
     "cache-semantic-store",
@@ -143,7 +145,6 @@ LIGHT_SPANS = [
     "node-classify",
     "node-grade",
     "node-rerank",
-    "node-rewrite",
     "node-guard",
     "crm-get-deal",
     "crm-create-lead",
@@ -165,7 +166,7 @@ def collect_observe_decorators(
     directories: list[Path],
     exclude_dirs: list[str] | None = None,
 ) -> dict[str, dict]:
-    """Return dict: span_name -> {capture_input, capture_output, file, line}."""
+    """Return dict: span_name -> {as_type, capture_input, capture_output, file, line}."""
     results: dict[str, dict] = {}
     exclude = set(exclude_dirs or [])
     for directory in directories:
@@ -192,9 +193,11 @@ def collect_observe_decorators(
                 if not isinstance(name_node, ast.Constant):
                     continue
                 span_name = name_node.value
+                at = kwargs.get("as_type")
                 ci = kwargs.get("capture_input")
                 co = kwargs.get("capture_output")
                 results[span_name] = {
+                    "as_type": getattr(at, "value", None) if at else None,
                     "capture_input": getattr(ci, "value", None) if ci else None,
                     "capture_output": getattr(co, "value", None) if co else None,
                     "file": str(py_file),
@@ -277,4 +280,65 @@ def test_sensitive_spans_match_yaml_contract(sensitive_spans: list[str]) -> None
         f"SENSITIVE_SPANS drift between test and YAML contract.\n"
         f"Only in Python constant: {sorted(only_python)}\n"
         f"Only in YAML contract: {sorted(only_yaml)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# as_type contract checks (#1364)
+# ---------------------------------------------------------------------------
+
+EMBEDDING_SPANS = [
+    "bge-m3-encode-dense",
+    "bge-m3-encode-sparse",
+    "bge-m3-encode-hybrid",
+    "bge-m3-rerank",
+    "bge-m3-encode-colbert",
+]
+
+RETRIEVER_SPANS = [
+    "qdrant-hybrid-search-rrf",
+    "qdrant-hybrid-search-rrf-colbert",
+    "qdrant-batch-search-rrf",
+    "qdrant-search-score-boosting",
+    "qdrant-mmr-rerank",
+]
+
+EVALUATOR_SPANS = [
+    "grade-documents",
+]
+
+
+@pytest.mark.parametrize("span_name", EMBEDDING_SPANS)
+def test_embedding_spans_have_as_type_embedding(
+    observed_spans: dict[str, dict], span_name: str
+) -> None:
+    assert span_name in observed_spans, f"Span '{span_name}' not found"
+    info = observed_spans[span_name]
+    assert info["as_type"] == "embedding", (
+        f"Span '{span_name}' at {info['file']}:{info['line']} "
+        f"must have as_type='embedding' (got {info['as_type']!r})"
+    )
+
+
+@pytest.mark.parametrize("span_name", RETRIEVER_SPANS)
+def test_retriever_spans_have_as_type_retriever(
+    observed_spans: dict[str, dict], span_name: str
+) -> None:
+    assert span_name in observed_spans, f"Span '{span_name}' not found"
+    info = observed_spans[span_name]
+    assert info["as_type"] == "retriever", (
+        f"Span '{span_name}' at {info['file']}:{info['line']} "
+        f"must have as_type='retriever' (got {info['as_type']!r})"
+    )
+
+
+@pytest.mark.parametrize("span_name", EVALUATOR_SPANS)
+def test_evaluator_spans_have_as_type_evaluator(
+    observed_spans: dict[str, dict], span_name: str
+) -> None:
+    assert span_name in observed_spans, f"Span '{span_name}' not found"
+    info = observed_spans[span_name]
+    assert info["as_type"] == "evaluator", (
+        f"Span '{span_name}' at {info['file']}:{info['line']} "
+        f"must have as_type='evaluator' (got {info['as_type']!r})"
     )
