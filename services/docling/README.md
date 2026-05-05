@@ -15,7 +15,7 @@ Feeds the unified ingestion pipeline with structured text extracted from uploade
 
 - **Service name**: `docling`
 - **Profile**: — (default, unprofiled)
-- **Compose project**: `dev` (see [`../DOCKER.md`](../DOCKER.md) for contract details)
+- **Compose project**: `dev` (see [`../../DOCKER.md`](../../DOCKER.md) for contract details)
 - **Local port**: `5001` (mapped in `compose.dev.yml`)
 - **Health**: `GET http://localhost:5001/health`
 
