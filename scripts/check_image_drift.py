@@ -9,6 +9,7 @@ Usage:
     python scripts/check_image_drift.py                         # Human-readable
     python scripts/check_image_drift.py --json                  # JSON output
     python scripts/check_image_drift.py -f compose.vps.yml      # Custom file
+    python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml  # Multiple files
     python scripts/check_image_drift.py --fix                   # Show fix commands
 
 Exit codes:
@@ -22,7 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -88,6 +89,7 @@ class DriftReport:
     """Aggregated drift findings."""
 
     compose_file: str
+    compose_files: list[str] = field(default_factory=list)
     checked: list[DriftResult] = field(default_factory=list)
     skipped_build: list[str] = field(default_factory=list)
     skipped_not_running: list[str] = field(default_factory=list)
@@ -108,50 +110,38 @@ class DriftReport:
 
 def _run(cmd: list[str], *, check: bool = True) -> str:
     """Run a command and return stripped stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True, check=check)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=check)  # nosec B603
     return result.stdout.strip()
 
 
-def get_compose_services(compose_file: str) -> dict[str, dict[str, object]]:
+def get_compose_services(compose_files: list[str], env_file: str) -> dict[str, dict[str, object]]:
     """Parse compose file via `docker compose config` for normalized output."""
     try:
-        out = _run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                compose_file,
-                "config",
-                "--format",
-                "json",
-            ]
-        )
+        cmd = ["docker", "compose", "--env-file", env_file]
+        for f in compose_files:
+            cmd.extend(["-f", f])
+        cmd.extend(["config", "--format", "json"])
+        out = _run(cmd)
         data: dict[str, object] = json.loads(out)
         services: dict[str, dict[str, object]] = data.get("services", {})  # type: ignore[assignment]
         return services
     except subprocess.CalledProcessError as exc:
-        print(f"Error: cannot parse {compose_file}: {exc.stderr}", file=sys.stderr)
+        files_str = ":".join(compose_files)
+        print(f"Error: cannot parse {files_str}: {exc.stderr}", file=sys.stderr)
         sys.exit(2)
     except json.JSONDecodeError:
         print("Error: invalid JSON from docker compose config", file=sys.stderr)
         sys.exit(2)
 
 
-def get_running_containers(compose_file: str) -> dict[str, dict]:
+def get_running_containers(compose_files: list[str], env_file: str) -> dict[str, dict]:
     """Get running containers for this compose project."""
     try:
-        out = _run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                compose_file,
-                "ps",
-                "--format",
-                "json",
-            ],
-            check=False,
-        )
+        cmd = ["docker", "compose", "--env-file", env_file]
+        for f in compose_files:
+            cmd.extend(["-f", f])
+        cmd.extend(["ps", "--format", "json"])
+        out = _run(cmd, check=False)
         if not out:
             return {}
         # docker compose ps --format json can return one JSON per line or an array
@@ -165,7 +155,7 @@ def get_running_containers(compose_file: str) -> dict[str, dict]:
             if svc:
                 containers[svc] = c
         return containers
-    except (subprocess.CalledProcessError, json.JSONDecodeError):
+    except (subprocess.CalledProcessError, json.JSONDecodeError):  # fmt: skip
         return {}
 
 
@@ -219,12 +209,15 @@ def get_container_image_digest(container_id: str) -> tuple[str, str]:
         return "", ""
 
 
-def check_drift(compose_file: str) -> DriftReport:
+def check_drift(compose_files: list[str], env_file: str) -> DriftReport:
     """Compare compose-pinned images against running containers."""
-    report = DriftReport(compose_file=compose_file)
+    report = DriftReport(
+        compose_file=":".join(compose_files),
+        compose_files=compose_files,
+    )
 
-    services = get_compose_services(compose_file)
-    containers = get_running_containers(compose_file)
+    services = get_compose_services(compose_files, env_file)
+    containers = get_running_containers(compose_files, env_file)
 
     for svc_name, svc_config in sorted(services.items()):
         image_str = svc_config.get("image", "")
@@ -318,15 +311,19 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
     if show_fix and report.drifted:
         drifted_names = [r.service for r in report.drifted]
         names_str = " ".join(drifted_names)
+        if report.compose_files:
+            file_flags = " ".join(f"-f {f}" for f in report.compose_files)
+        else:
+            file_flags = f"-f {compose}"
         print("\n\033[36mFix commands:\033[0m")
         print("  # Pull fresh images")
-        print(f"  docker compose -f {compose} pull {names_str}")
+        print(f"  docker compose {file_flags} pull {names_str}")
         print("  # Recreate drifted containers")
-        print(f"  docker compose -f {compose} up -d --force-recreate {names_str}")
+        print(f"  docker compose {file_flags} up -d --force-recreate {names_str}")
         print("  # Or recreate all:")
-        print(f"  docker compose -f {compose} down --remove-orphans")
-        print(f"  docker compose -f {compose} pull")
-        print(f"  docker compose -f {compose} up -d")
+        print(f"  docker compose {file_flags} down --remove-orphans")
+        print(f"  docker compose {file_flags} pull")
+        print(f"  docker compose {file_flags} up -d")
 
     # Summary
     print(f"\n{'─' * 60}")
@@ -379,8 +376,14 @@ def main() -> None:
     parser.add_argument(
         "-f",
         "--file",
-        default="compose.yml",
+        action="append",
+        default=None,
         help="Compose file to check (default: compose.yml)",
+    )
+    parser.add_argument(
+        "--env-file",
+        default="tests/fixtures/compose.ci.env",
+        help="Env file for compose variable interpolation (default: tests/fixtures/compose.ci.env)",
     )
     parser.add_argument(
         "--json",
@@ -395,19 +398,23 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    compose_path = Path(args.file)
-    if not compose_path.exists():
-        print(f"Error: {args.file} not found", file=sys.stderr)
-        sys.exit(2)
+    compose_files = args.file or ["compose.yml"]
+    env_file = args.env_file
+
+    for f in compose_files:
+        compose_path = Path(f)
+        if not compose_path.exists():
+            print(f"Error: {f} not found", file=sys.stderr)
+            sys.exit(2)
 
     # Verify docker is available (lightweight check)
     try:
         _run(["docker", "version", "--format", "{{.Server.Version}}"], check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError):  # fmt: skip
         print("Error: docker is not available or not running", file=sys.stderr)
         sys.exit(2)
 
-    report = check_drift(args.file)
+    report = check_drift(compose_files, env_file)
 
     if args.json_output:
         print_json(report)
