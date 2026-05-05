@@ -59,6 +59,7 @@ services:
       COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
 
   # ML services — profile-gated on dev (VPS: always-on via compose.yml base)
   clickhouse:
@@ -116,6 +117,7 @@ services:
     environment:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-ingestion}"
 
   loki:
     ports:
@@ -127,6 +129,7 @@ services:
     environment:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-rag-api}"
 
   livekit-server:
     ports:
@@ -159,6 +162,7 @@ services:
     environment:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-mini-app-api}"
 
   mini-app-frontend:
     ports:
