@@ -118,6 +118,8 @@ spec:
                 secretKeyRef:
                   name: api-keys
                   key: LANGFUSE_HOST
+            - name: OTEL_SERVICE_NAME
+              value: "telegram-bot"
             # CRM — Kommo
             - name: KOMMO_ENABLED
               value: "false"
