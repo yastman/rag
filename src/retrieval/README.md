@@ -1,37 +1,63 @@
-# retrieval/
+# src/retrieval/
 
-Search engine implementations: baseline, hybrid RRF, ColBERT reranking.
+Search engine implementations for vector retrieval.
+
+## Purpose
+
+Execute hybrid and dense vector searches against Qdrant, with optional reranking. Consumes chunks produced by `src/ingestion/`.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| [\_\_init\_\_.py](./__init__.py) | Exports create_search_engine, SearchResult, rerank_results |
-| [search_engines.py](./search_engines.py) | 4 search variants: Baseline, HybridRRF, HybridRRFColBERT, DBSFColBERT |
-| [reranker.py](./reranker.py) | Cross-encoder reranking (ms-marco-MiniLM, +10-15% NDCG) |
+| [`__init__.py`](./__init__.py) | Exports `create_search_engine`, `SearchResult`, `rerank_results` |
+| [`search_engines.py`](./search_engines.py) | 4 search variants: Baseline, HybridRRF, HybridRRFColBERT, DBSFColBERT |
+| [`search_engine_shared.py`](./search_engine_shared.py) | Shared primitives: sparse vector conversion, result shaping |
+| [`reranker.py`](./reranker.py) | Cross-encoder reranking (ms-marco-MiniLM, +10-15% NDCG) |
+| [`topic_classifier.py`](./topic_classifier.py) | Lightweight topic/doc-type classification for retrieval tuning |
 
 ## Search Engine Variants
 
-| Engine | Method | Recall@1 | Latency |
-|--------|--------|----------|---------|
-| `BaselineSearchEngine` | Dense only | 91.3% | ~0.5s |
-| `HybridRRFSearchEngine` | Dense + Sparse (RRF) | 92.5% | ~0.7s |
-| `HybridRRFColBERTSearchEngine` | Dense + Sparse + ColBERT | 94.0% | ~1.0s |
-| `DBSFColBERTSearchEngine` | DBSF + ColBERT | 93.5% | ~0.9s |
+| Engine | Method | Typical Latency |
+|--------|--------|-----------------|
+| `BaselineSearchEngine` | Dense only | ~0.5s |
+| `HybridRRFSearchEngine` | Dense + Sparse (RRF) | ~0.7s |
+| `HybridRRFColBERTSearchEngine` | Dense + Sparse + ColBERT rerank | ~1.0s |
+| `DBSFColBERTSearchEngine` | DBSF + ColBERT | ~0.9s |
 
-## Usage
+## Entrypoints
 
-```python
-from src.retrieval import create_search_engine
-from src.config import Settings, SearchEngine
+| Entrypoint | Role |
+|------------|------|
+| `src.retrieval.create_search_engine(settings)` | Factory that returns the configured engine |
+| `search_engines.py` engine classes | Direct instantiation for evaluation and testing |
 
-settings = Settings(search_engine=SearchEngine.HYBRID_RRF_COLBERT)
-engine = create_search_engine(settings)
+## Boundaries
 
-results = engine.search(query_embedding, top_k=10)
+- Retrieval code is **query-only**. It must not write to Qdrant or modify collections.
+- **Score shapes and payload fields** are coupled to `src/ingestion/unified/qdrant_writer.py`. If the ingestion payload contract changes, retrieval filters and result parsing may need updates.
+- `topic_classifier.py` is advisory only; retrieval must still work when classification returns `None`.
+
+## Related Runtime Services
+
+- **Qdrant** — vector database
+- **BGE-M3** — embeddings provider (local REST)
+- **Voyage** — alternative embeddings provider
+
+## Focused Checks
+
+```bash
+# Unit tests
+pytest src/retrieval/
+
+# Type-check
+make check
+
+# Evaluation AB test (heavy, requires populated collection)
+python -m src.evaluation.run_ab_test --help
 ```
 
-## Related
+## See Also
 
-- [src/models/](../models/) — BGE-M3 embedding model
-- [telegram_bot/services/qdrant.py](../../telegram_bot/services/qdrant.py) — Async Qdrant service
+- [`../ingestion/`](../ingestion/) — Chunk production and payload contract
+- [`../../telegram_bot/services/qdrant.py`](../../telegram_bot/services/qdrant.py) — Async Qdrant service used by the bot
