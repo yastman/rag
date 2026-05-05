@@ -87,6 +87,7 @@ SENSITIVE_SPANS = [
     "detect-response-style",
     "get-prompt",
     "kommo-token-refresh",
+    "cross-encoder-rerank",
     "apartments-hybrid-search",
     "apartments-scroll",
     "apartment-filter-parse",
@@ -296,6 +297,7 @@ EMBEDDING_SPANS = [
 ]
 
 RETRIEVER_SPANS = [
+    "cross-encoder-rerank",
     "qdrant-hybrid-search-rrf",
     "qdrant-hybrid-search-rrf-colbert",
     "qdrant-batch-search-rrf",
