@@ -125,6 +125,17 @@ class FakeSentMessage:
         pass
 
 
+class FakeChat:
+    """Minimal aiogram Chat stand-in for streaming validation.
+
+    Provides a stable chat.id so graph nodes that read message.chat.id
+    do not fall back to non-streaming mode.
+    """
+
+    def __init__(self, chat_id: int = 0) -> None:
+        self.id: int = chat_id
+
+
 class FakeMessage:
     """Minimal aiogram Message stand-in for streaming validation.
 
@@ -135,6 +146,7 @@ class FakeMessage:
     def __init__(self) -> None:
         self.t_answer_called: float | None = None
         self.sent: FakeSentMessage | None = None
+        self.chat = FakeChat(chat_id=0)
 
     async def answer(self, text: str, **kwargs: Any) -> FakeSentMessage:
         self.t_answer_called = time.monotonic()
