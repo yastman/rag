@@ -410,6 +410,59 @@ def test_demo_dialog_has_voice_input() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Task 7: Legacy demo state must be cleared so catalog keyboard doesn't loop
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_legacy_demo_exit_clears_fsm_state() -> None:
+    """After legacy _run_demo_search (dialog_manager=None), FSM state is cleared
+    so that subsequent '🏠 Главное меню' catalog keyboard text is NOT
+    re-interpreted as a new apartment query."""
+    from telegram_bot.handlers.demo_handler import _run_demo_search
+
+    msg = _make_message()
+    state = _make_state()
+
+    svc = _make_svc(results=[_APT] * 5, total=15)
+
+    await _run_demo_search(
+        "двушка",
+        msg,
+        state,
+        pipeline=_make_pipeline(),
+        apartments_service=svc,
+        dialog_manager=None,
+    )
+
+    state.set_state.assert_awaited_once_with(None)
+
+
+@pytest.mark.asyncio
+async def test_dialog_demo_exit_does_not_clear_raw_fsm() -> None:
+    """Dialog-managed path must NOT touch raw FSM state; dialog manages lifecycle."""
+    from telegram_bot.handlers.demo_handler import _run_demo_search
+
+    msg = _make_message()
+    state = _make_state()
+    manager = AsyncMock()
+    manager.middleware_data = {}
+
+    svc = _make_svc(results=[_APT] * 5, total=15)
+
+    await _run_demo_search(
+        "двушка",
+        msg,
+        state,
+        pipeline=_make_pipeline(),
+        apartments_service=svc,
+        dialog_manager=manager,
+    )
+
+    state.set_state.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Task 8: Full flow integration test
 # ---------------------------------------------------------------------------
 
