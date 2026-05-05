@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
+from telegram_bot.observability import get_client, observe
+
 
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder
@@ -62,6 +64,12 @@ def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") 
     return cast("CrossEncoder", _cross_encoder)
 
 
+@observe(
+    name="cross-encoder-rerank",
+    as_type="retriever",
+    capture_input=False,
+    capture_output=False,
+)
 def rerank_results(
     query: str,
     results: list[dict[str, Any]],
@@ -108,6 +116,17 @@ def rerank_results(
         reranked.extend(results[top_k:])
 
         logger.info(f"Reranked top {top_k} results with cross-encoder")
+
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                metadata={
+                    "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    "results_count": len(reranked),
+                    "top_k": top_k,
+                }
+            )
+
         return reranked
 
     except Exception as e:
