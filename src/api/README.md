@@ -38,7 +38,7 @@ make check
 pytest src/api/
 
 ***REMOVED*** Health check (when running)
-curl http://localhost:8000/health
+curl http://localhost:8080/health
 ```
 
 ***REMOVED******REMOVED*** See Also
