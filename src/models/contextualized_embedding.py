@@ -162,6 +162,7 @@ class ContextualizedEmbeddingService:
                 "total_chunks": total_chunks,
                 "output_dimension": self._output_dimension,
             },
+            metadata={"model": self.MODEL_NAME},
         )
 
         if not document_chunks:
@@ -197,6 +198,7 @@ class ContextualizedEmbeddingService:
                 "embeddings_count": len(all_embeddings),
                 "dimensions": self._output_dimension,
             },
+            metadata={"model": self.MODEL_NAME},
         )
 
         logger.info(
@@ -238,6 +240,7 @@ class ContextualizedEmbeddingService:
         get_client().update_current_generation(
             model=self.MODEL_NAME,
             input={"query": query[:200], "output_dimension": self._output_dimension},
+            metadata={"model": self.MODEL_NAME},
         )
 
         # Wrap query in expected format: [[query]]
@@ -257,6 +260,7 @@ class ContextualizedEmbeddingService:
         get_client().update_current_generation(
             usage_details={"input": total_tokens},
             output={"dimensions": len(embedding)},
+            metadata={"model": self.MODEL_NAME},
         )
 
         return embedding
@@ -296,6 +300,7 @@ class ContextualizedEmbeddingService:
                 "queries_count": len(queries),
                 "output_dimension": self._output_dimension,
             },
+            metadata={"model": self.MODEL_NAME},
         )
 
         # Wrap each query in its own list: [["q1"], ["q2"], ...]
@@ -323,6 +328,7 @@ class ContextualizedEmbeddingService:
                 "embeddings_count": len(embeddings),
                 "dimensions": self._output_dimension,
             },
+            metadata={"model": self.MODEL_NAME},
         )
 
         logger.info(f"Embedded {len(queries)} queries with {self.MODEL_NAME}")
