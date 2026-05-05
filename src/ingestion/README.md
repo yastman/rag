@@ -6,7 +6,7 @@ Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 
 Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
 
-1. **Legacy path** (`pdf_parser.py`, `chunker.py`, `indexer.py`, `gdrive_flow.py`) — standalone scripts, being phased out.
+1. **Legacy path** (`chunker.py`, `indexer.py`, `gdrive_flow.py`) — standalone scripts, being phased out.
 2. **Current path** (`unified/`) — CocoIndex-based incremental pipeline with deterministic file identity and replace semantics.
 
 ***REMOVED******REMOVED*** Entrypoints
@@ -51,8 +51,8 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 ***REMOVED*** Unified pipeline dry-run
 python -m src.ingestion.unified.cli run --dry-run
 
-***REMOVED*** ColBERT backfill status
-python -m src.ingestion.unified.cli colbert-status
+***REMOVED*** Status check
+python -m src.ingestion.unified.cli status
 
 ***REMOVED*** Tests
 pytest src/ingestion/unified/
