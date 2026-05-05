@@ -89,8 +89,7 @@ make test-preflight          # Qdrant/Redis config checks
 
 ### Load / chaos / nightly
 ```bash
-make test-load               # live services
-make test-load-ci            # mocked/fast CI mode
+make test-load-eviction      # Redis eviction tests
 make test-nightly            # chaos + smoke + slow unit
 ```
 
