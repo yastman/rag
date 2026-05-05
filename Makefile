@@ -1024,10 +1024,10 @@ k3s-push-%: ***REMOVED******REMOVED*** Build and push a versioned GHCR image: ma
 .PHONY: verify-compose-images verify-compose-images-json
 
 verify-compose-images: ***REMOVED******REMOVED*** Check running containers match compose-pinned images
-	@uv run python scripts/check_image_drift.py --fix
+	@uv run python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --fix
 
 verify-compose-images-json: ***REMOVED******REMOVED*** Check image drift (JSON output for CI)
-	@uv run python scripts/check_image_drift.py --json
+	@uv run python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --json
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** GIT HYGIENE
