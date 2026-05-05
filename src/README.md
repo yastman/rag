@@ -36,7 +36,7 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 
 ## Boundaries
 
-- **`src/` must not depend on `telegram_bot/`**. All Telegram-specific code lives in `telegram_bot/`.
+- **Shared/domain `src/` modules should stay Telegram-agnostic.** `src/api/` is an explicit adapter exception: it reuses the Telegram LangGraph pipeline (graph, state, observability, scoring) until that pipeline is extracted into a shared location.
 - **Ingestion determinism and resumability** are owned by `src/ingestion/` and `src/ingestion/unified/`. Do not change manifest identity, hashing, or collection semantics without careful review.
 - **LangGraph state contracts** are defined in `telegram_bot/graph/state.py`; `src/api/` reuses the same pipeline but does not redefine state shapes.
 
