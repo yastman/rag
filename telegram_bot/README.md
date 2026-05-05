@@ -38,7 +38,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 make check
 
 # Unit tests for graph state and pipeline logic
-pytest telegram_bot/graph/state_contract.py telegram_bot/pipelines/
+pytest telegram_bot/graph/state.py telegram_bot/pipelines/
 
 # Preflight smoke test
 python -m telegram_bot.preflight
