@@ -10,7 +10,7 @@ Execute hybrid and dense vector searches against Qdrant, with optional reranking
 
 | File | Purpose |
 |------|---------|
-| [`__init__.py`](./__init__.py) | Exports `create_search_engine`, `SearchResult`, `rerank_results` |
+| [`__init__.py`](./__init__.py) | Exports `create_search_engine` and search engine classes |
 | [`search_engines.py`](./search_engines.py) | 4 search variants: Baseline, HybridRRF, HybridRRFColBERT, DBSFColBERT |
 | [`search_engine_shared.py`](./search_engine_shared.py) | Shared primitives: sparse vector conversion, result shaping |
 | [`reranker.py`](./reranker.py) | Cross-encoder reranking (ms-marco-MiniLM, +10-15% NDCG) |
