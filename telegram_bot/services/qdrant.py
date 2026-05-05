@@ -370,7 +370,12 @@ class QdrantService:
         msg = str(exc).lower()
         return "not existing vector name" in msg or "requires specified vector name" in msg
 
-    @observe(name="qdrant-hybrid-search-rrf", capture_input=False, capture_output=False)
+    @observe(
+        name="qdrant-hybrid-search-rrf",
+        as_type="retriever",
+        capture_input=False,
+        capture_output=False,
+    )
     async def hybrid_search_rrf(
         self,
         dense_vector: list[float],
@@ -538,7 +543,12 @@ class QdrantService:
                 }
             return []
 
-    @observe(name="qdrant-hybrid-search-rrf-colbert", capture_input=False, capture_output=False)
+    @observe(
+        name="qdrant-hybrid-search-rrf-colbert",
+        as_type="retriever",
+        capture_input=False,
+        capture_output=False,
+    )
     async def hybrid_search_rrf_colbert(
         self,
         dense_vector: list[float],
@@ -778,7 +788,12 @@ class QdrantService:
             )
             return fallback
 
-    @observe(name="qdrant-batch-search-rrf", capture_input=False, capture_output=False)
+    @observe(
+        name="qdrant-batch-search-rrf",
+        as_type="retriever",
+        capture_input=False,
+        capture_output=False,
+    )
     async def batch_search_rrf(
         self,
         queries: list[dict],
@@ -898,7 +913,12 @@ class QdrantService:
             )
             return []
 
-    @observe(name="qdrant-search-score-boosting", capture_input=False, capture_output=False)
+    @observe(
+        name="qdrant-search-score-boosting",
+        as_type="retriever",
+        capture_input=False,
+        capture_output=False,
+    )
     async def search_with_score_boosting(
         self,
         dense_vector: list[float],
@@ -1032,7 +1052,9 @@ class QdrantService:
             )
             return fallback_results
 
-    @observe(name="qdrant-mmr-rerank", capture_input=False, capture_output=False)
+    @observe(
+        name="qdrant-mmr-rerank", as_type="retriever", capture_input=False, capture_output=False
+    )
     def mmr_rerank(
         self,
         points: list[dict],

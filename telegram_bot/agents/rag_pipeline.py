@@ -598,7 +598,7 @@ async def _hybrid_retrieve(
 # ---------------------------------------------------------------------------
 
 
-@observe(name="grade-documents")
+@observe(name="grade-documents", as_type="evaluator")
 async def _grade_documents(
     documents: list[dict[str, Any]],
     prev_confidence: float,
