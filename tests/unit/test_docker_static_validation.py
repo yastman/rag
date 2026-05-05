@@ -24,6 +24,16 @@ DOCKERFILES = [
     "mini_app/Dockerfile",
 ]
 
+# Images that import telegram_bot.observability (which imports langfuse) must not
+# use Python 3.14 because langfuse SDK exercises Pydantic v1 compatibility code
+# that is incompatible with Python 3.14.
+_LANGFUSE_RUNTIME_DOCKERFILES = [
+    "telegram_bot/Dockerfile",
+    "mini_app/Dockerfile",
+    "src/api/Dockerfile",
+    "Dockerfile.ingestion",
+]
+
 COMPOSE_CI_ENV = Path("tests/fixtures/compose.ci.env")
 
 
@@ -101,4 +111,21 @@ def test_compose_dev_config_renders_with_full_profile() -> None:
     )
     assert result.returncode == 0, (
         f"Compose dev config with --profile full failed:\n{result.stderr}"
+    )
+
+
+@pytest.mark.parametrize("dockerfile", _LANGFUSE_RUNTIME_DOCKERFILES)
+def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
+    """Langfuse SDK uses Pydantic v1 compatibility that crashes under Python 3.14.
+
+    Regression test for #1307: bot and mini-app-api containers fail to start
+    because `from langfuse import Langfuse` raises
+    `pydantic.v1.errors.ConfigError` on Python 3.14.
+    """
+    text = Path(dockerfile).read_text()
+    assert "python3.14" not in text, (
+        f"{dockerfile} uses Python 3.14 runtime which is incompatible with langfuse SDK"
+    )
+    assert "python:3.14" not in text, (
+        f"{dockerfile} uses Python 3.14 runtime which is incompatible with langfuse SDK"
     )
