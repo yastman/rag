@@ -12,6 +12,7 @@ def _make_state(data: dict) -> MagicMock:
     state = MagicMock()
     state.get_data = AsyncMock(return_value=data)
     state.update_data = AsyncMock()
+    state.clear = AsyncMock()
     return state
 
 
@@ -205,3 +206,31 @@ async def test_catalog_text_input_routes_actions_before_search() -> None:
         await on_catalog_text_input(message, MagicMock(), manager)
 
     search_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_catalog_text_input_routes_home_before_search() -> None:
+    """Regression #1298: '🏠 Главное меню' must not fall through to _run_demo_search."""
+    from telegram_bot.dialogs.catalog import on_catalog_text_input
+
+    message = MagicMock()
+    message.text = "🏠 Главное меню"
+    message.answer = AsyncMock(return_value=MagicMock(delete=AsyncMock()))
+    message.chat = MagicMock(id=456)
+    message.bot = MagicMock(delete_message=AsyncMock())
+    message.from_user = MagicMock(first_name="Test")
+    state = _make_state({"catalog_runtime": {"filters": {}}})
+    manager = AsyncMock()
+    manager.middleware_data = {
+        "state": state,
+        "i18n": None,
+    }
+
+    with patch(
+        "telegram_bot.handlers.demo_handler._run_demo_search", new=AsyncMock()
+    ) as search_mock:
+        await on_catalog_text_input(message, MagicMock(), manager)
+
+    search_mock.assert_not_awaited()
+    state.clear.assert_awaited_once()
+    manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
