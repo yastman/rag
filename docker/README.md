@@ -63,7 +63,7 @@ Ingestion service wrapper assets.
 
 ```bash
 # Verify Compose still resolves all configs correctly
-COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config > /dev/null
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --env-file tests/fixtures/compose.ci.env --compatibility config > /dev/null
 
 # Check image pins match running containers
 make verify-compose-images
