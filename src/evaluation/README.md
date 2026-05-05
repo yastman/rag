@@ -27,5 +27,5 @@ uv run pytest tests/unit/evaluation/ -q
 
 ***REMOVED******REMOVED*** Related
 
-- [`docs/RAG_QUALITY_SCORES.md`](../docs/RAG_QUALITY_SCORES.md) — Scoring taxonomy
-- [`tests/README.md`](../tests/README.md) — Test tiers and commands
+- [`docs/RAG_QUALITY_SCORES.md`](../../docs/RAG_QUALITY_SCORES.md) — Scoring taxonomy
+- [`tests/README.md`](../../tests/README.md) — Test tiers and commands
