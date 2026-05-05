@@ -23,6 +23,7 @@ from telegram_bot.services._retry import bge_retry
 DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_MAX_LENGTH = 512
+BGE_M3_MODEL_NAME = "BAAI/bge-m3"
 
 
 @dataclass
@@ -116,10 +117,14 @@ class BGEM3Client:
                 "texts_count": len(texts),
                 "batch_size": self.batch_size,
                 "max_length": self.max_length,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         if not texts:
-            lf.update_current_span(output={"vectors_count": 0, "vector_dim": 0})
+            lf.update_current_span(
+                output={"vectors_count": 0, "vector_dim": 0},
+                metadata={"model": BGE_M3_MODEL_NAME},
+            )
             return DenseResult(vectors=[])
         client = self._get_client()
         all_vecs: list[list[float]] = []
@@ -139,7 +144,8 @@ class BGEM3Client:
                 "vectors_count": len(all_vecs),
                 "vector_dim": len(all_vecs[0]) if all_vecs else 0,
                 "processing_time": processing_time,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         return DenseResult(vectors=all_vecs, processing_time=processing_time)
 
@@ -155,10 +161,14 @@ class BGEM3Client:
                 "texts_count": len(texts),
                 "batch_size": self.batch_size,
                 "max_length": self.max_length,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         if not texts:
-            lf.update_current_span(output={"weights_count": 0})
+            lf.update_current_span(
+                output={"weights_count": 0},
+                metadata={"model": BGE_M3_MODEL_NAME},
+            )
             return SparseResult(weights=[])
         client = self._get_client()
         all_weights: list[dict[str, Any]] = []
@@ -174,7 +184,8 @@ class BGEM3Client:
             all_weights.extend(data["lexical_weights"])
             processing_time = data.get("processing_time")
         lf.update_current_span(
-            output={"weights_count": len(all_weights), "processing_time": processing_time}
+            output={"weights_count": len(all_weights), "processing_time": processing_time},
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         return SparseResult(weights=all_weights, processing_time=processing_time)
 
@@ -189,10 +200,14 @@ class BGEM3Client:
             input={
                 "texts_count": len(texts),
                 "max_length": self.max_length,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         if not texts:
-            lf.update_current_span(output={"dense_count": 0, "sparse_count": 0, "colbert_count": 0})
+            lf.update_current_span(
+                output={"dense_count": 0, "sparse_count": 0, "colbert_count": 0},
+                metadata={"model": BGE_M3_MODEL_NAME},
+            )
             return HybridResult(dense_vecs=[], lexical_weights=[])
         client = self._get_client()
         resp = await client.post(
@@ -214,7 +229,8 @@ class BGEM3Client:
                 "sparse_count": len(result.lexical_weights),
                 "colbert_count": len(result.colbert_vecs or []),
                 "processing_time": result.processing_time,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         return result
 
@@ -229,10 +245,14 @@ class BGEM3Client:
                 "documents_count": len(documents),
                 "top_k": top_k,
                 "max_length": self.max_length,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         if not documents:
-            lf.update_current_span(output={"results_count": 0, "top_score": None})
+            lf.update_current_span(
+                output={"results_count": 0, "top_score": None},
+                metadata={"model": BGE_M3_MODEL_NAME},
+            )
             return RerankResult()
         client = self._get_client()
         resp = await client.post(
@@ -255,7 +275,8 @@ class BGEM3Client:
                 "results_count": len(result.results),
                 "top_score": result.results[0]["score"] if result.results else None,
                 "processing_time": result.processing_time,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         return result
 
@@ -270,10 +291,14 @@ class BGEM3Client:
             input={
                 "texts_count": len(texts),
                 "max_length": self.max_length,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         if not texts:
-            lf.update_current_span(output={"colbert_count": 0, "colbert_vector_count": 0})
+            lf.update_current_span(
+                output={"colbert_count": 0, "colbert_vector_count": 0},
+                metadata={"model": BGE_M3_MODEL_NAME},
+            )
             return ColbertResult(colbert_vecs=[])
         client = self._get_client()
         resp = await client.post(
@@ -291,7 +316,8 @@ class BGEM3Client:
                 "colbert_count": len(result.colbert_vecs),
                 "colbert_vector_count": len(result.colbert_vecs[0]) if result.colbert_vecs else 0,
                 "processing_time": result.processing_time,
-            }
+            },
+            metadata={"model": BGE_M3_MODEL_NAME},
         )
         return result
 
