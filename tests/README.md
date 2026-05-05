@@ -89,8 +89,7 @@ make test-preflight          ***REMOVED*** Qdrant/Redis config checks
 
 ***REMOVED******REMOVED******REMOVED*** Load / chaos / nightly
 ```bash
-make test-load               ***REMOVED*** live services
-make test-load-ci            ***REMOVED*** mocked/fast CI mode
+make test-load-eviction      ***REMOVED*** Redis eviction tests
 make test-nightly            ***REMOVED*** chaos + smoke + slow unit
 ```
 
