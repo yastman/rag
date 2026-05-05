@@ -15,7 +15,7 @@ Used by the ingestion pipeline and query contextualization to produce multi-vect
 
 - **Service name**: `bge-m3`
 - **Profile**: — (default, unprofiled)
-- **Compose project**: `dev` (see [`../DOCKER.md`](../DOCKER.md) for contract details)
+- **Compose project**: `dev` (see [`../../DOCKER.md`](../../DOCKER.md) for contract details)
 - **Local port**: `8000` (mapped in `compose.dev.yml`)
 - **Health**: `GET http://localhost:8000/health`
 - **Metrics**: Prometheus metrics exposed internally (ASGI app mounted at `/metrics`)
