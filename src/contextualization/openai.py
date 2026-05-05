@@ -1,5 +1,6 @@
 """OpenAI-based contextualization provider."""
 
+from langfuse import observe
 from openai import APIStatusError, AsyncOpenAI, OpenAI, RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
@@ -51,6 +52,7 @@ class OpenAIContextualizer(ContextualizeProvider):
                 )
         return results
 
+    @observe(name="openai-contextualize", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
@@ -94,6 +96,7 @@ class OpenAIContextualizer(ContextualizeProvider):
             context_method="openai",
         )
 
+    @observe(name="openai-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),
         wait=wait_random_exponential(multiplier=1, max=60),
