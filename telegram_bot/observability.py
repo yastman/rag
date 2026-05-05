@@ -127,6 +127,12 @@ def _resolve_config_value(explicit: str | None, env_name: str) -> str | None:
     return normalized or None
 
 
+def _ensure_otel_service_name(default: str) -> None:
+    """Set OTEL_SERVICE_NAME to default when absent, preserving explicit config."""
+    if not os.environ.get("OTEL_SERVICE_NAME"):
+        os.environ["OTEL_SERVICE_NAME"] = default
+
+
 def _to_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -419,6 +425,7 @@ def initialize_langfuse(
     if tracing_env:
         kwargs["environment"] = tracing_env
 
+    _ensure_otel_service_name("telegram-bot")
     try:
         kwargs["flush_at"] = int(os.environ.get("LANGFUSE_FLUSH_AT", "512"))
         kwargs["flush_interval"] = float(os.environ.get("LANGFUSE_FLUSH_INTERVAL", "5.0"))
