@@ -260,7 +260,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "src/ingestion/docling_client.py" = ["ASYNC240"]  # Legacy ingestion (replaced by unified pipeline)
 "src/ingestion/gdrive_flow.py" = ["ASYNC240"]     # Legacy ingestion (replaced by unified pipeline)
 "src/ingestion/service.py" = ["ASYNC240"]          # Legacy ingestion (replaced by unified pipeline)
-"src/ingestion/unified/targets/qdrant_hybrid_target.py" = ["RUF100"]  # Unused noqa:UP037 — UP037 only triggers at py314+
+
 "*.py" = ["ARG001"]               # Allow unused function arguments (common in callbacks)
 
 # Import sorting configuration (isort replacement)
