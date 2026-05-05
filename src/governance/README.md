@@ -8,5 +8,5 @@ This directory is reserved for governance utilities. Currently no source files a
 
 ## Related
 
-- [`docs/ADRS.md`](../docs/ADRS.md) — Architecture decision records
+- [`docs/ADRS.md`](../../docs/ADRS.md) — Architecture decision records
 - [`src/evaluation/`](../evaluation/) — A/B testing and experiment tracking
