@@ -108,6 +108,18 @@ setup-hooks: ## Install pre-commit hooks
 	uv run pre-commit install --hook-type pre-push
 	@echo "$(GREEN)✓ Pre-commit hooks installed$(NC)"
 
+local-pre-push: ## Fast local pre-push sanity gate (check + compose validate)
+	@echo "$(BLUE)Running fast local pre-push sanity gate...$(NC)"
+	./scripts/local_pre_push.sh
+	@echo "$(GREEN)✓ Fast local pre-push sanity gate passed$(NC)"
+
+local-pr-ready: ## Full PR readiness gate (fast gate + unit tests) — run manually
+	@echo "$(BLUE)Running full PR readiness gate...$(NC)"
+	./scripts/local_pre_push.sh
+	@echo "$(BLUE)Running core unit tests...$(NC)"
+	make test-unit
+	@echo "$(GREEN)✓ Full PR readiness gate passed$(NC)"
+
 # =============================================================================
 # CODE QUALITY CHECKS
 # =============================================================================
