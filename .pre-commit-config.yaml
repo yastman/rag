@@ -129,9 +129,9 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-      - id: mypy
-        name: MyPy Type Checker
-        entry: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
+      - id: local-pre-push
+        name: Fast local pre-push sanity gate
+        entry: make local-pre-push
         language: system
         pass_filenames: false
         stages: [pre-push]
