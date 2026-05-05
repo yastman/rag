@@ -432,6 +432,120 @@ class TestKwargsPassthrough:
             pipeline.extract.assert_awaited_once()
 
 
+class TestDemoStateClear:
+    @pytest.mark.asyncio
+    async def test_run_demo_search_clears_fsm_without_dialog_manager(self) -> None:
+        """Legacy path (dialog_manager=None) must clear DemoStates.waiting_query."""
+        from telegram_bot.handlers.demo_handler import _run_demo_search
+
+        message = AsyncMock()
+        message.text = "двушка"
+        state = AsyncMock()
+        pipeline = AsyncMock()
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(rooms=2),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+        apartments_service = AsyncMock()
+        apartments_service.scroll_with_filters.return_value = (
+            [
+                {
+                    "payload": {
+                        "complex_name": "Test",
+                        "rooms": 2,
+                        "price_eur": 95000,
+                        "area_m2": 60,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
+                }
+            ],
+            1,
+            95000.0,
+            ["1"],
+        )
+
+        await _run_demo_search(
+            "двушка",
+            message,
+            state,
+            pipeline=pipeline,
+            apartments_service=apartments_service,
+            dialog_manager=None,
+        )
+        state.set_state.assert_awaited_once_with(None)
+
+    @pytest.mark.asyncio
+    async def test_run_demo_search_clears_fsm_without_dialog_manager_empty_results(self) -> None:
+        """Legacy path must clear state even when search returns 0 results."""
+        from telegram_bot.handlers.demo_handler import _run_demo_search
+
+        message = AsyncMock()
+        message.text = "пентхаус в Бургасе"
+        state = AsyncMock()
+        pipeline = AsyncMock()
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+        apartments_service = AsyncMock()
+        apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
+
+        await _run_demo_search(
+            "пентхаус в Бургасе",
+            message,
+            state,
+            pipeline=pipeline,
+            apartments_service=apartments_service,
+            dialog_manager=None,
+        )
+        state.set_state.assert_awaited_once_with(None)
+
+    @pytest.mark.asyncio
+    async def test_run_demo_search_preserves_fsm_with_dialog_manager(self) -> None:
+        """Dialog-managed path must NOT clear state; dialog handles its own lifecycle."""
+        from telegram_bot.handlers.demo_handler import _run_demo_search
+
+        message = AsyncMock()
+        message.text = "двушка"
+        state = AsyncMock()
+        pipeline = AsyncMock()
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(rooms=2),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+        apartments_service = AsyncMock()
+        apartments_service.scroll_with_filters.return_value = (
+            [
+                {
+                    "payload": {
+                        "complex_name": "Test",
+                        "rooms": 2,
+                        "price_eur": 95000,
+                        "area_m2": 60,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
+                }
+            ],
+            1,
+            95000.0,
+            ["1"],
+        )
+        dialog_manager = AsyncMock()
+        dialog_manager.middleware_data = {}
+
+        await _run_demo_search(
+            "двушка",
+            message,
+            state,
+            pipeline=pipeline,
+            apartments_service=apartments_service,
+            dialog_manager=dialog_manager,
+        )
+        state.set_state.assert_not_awaited()
+
+
 class TestDemoSearchObservability:
     def test_run_demo_search_is_observed(self) -> None:
         """_run_demo_search must be @observe-decorated (span: demo-search)."""
