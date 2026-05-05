@@ -6,7 +6,7 @@ import logging
 from contextlib import suppress
 from typing import Any, cast
 
-from telegram_bot.observability import get_client, propagate_attributes
+from telegram_bot.observability import get_client, observe, propagate_attributes
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ def build_voice_trace_metadata(
     return metadata
 
 
+@observe(name="voice-session", capture_input=False, capture_output=False)
 def update_voice_trace(
     *,
     call_id: str,
