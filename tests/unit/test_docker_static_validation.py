@@ -76,3 +76,29 @@ def test_compose_vps_config_renders() -> None:
         text=True,
     )
     assert result.returncode == 0, f"Compose VPS config failed:\n{result.stderr}"
+
+
+@pytest.mark.skipif(not _docker_available(), reason="Docker not available")
+def test_compose_dev_config_renders_with_full_profile() -> None:
+    """Profile-gated services must not fail merely because required env vars are unset (#1341)."""
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "--profile",
+            "full",
+            "config",
+            "--quiet",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"Compose dev config with --profile full failed:\n{result.stderr}"
+    )
