@@ -203,6 +203,76 @@ class TestPipelineNonRagPaths:
         assert result.response_sent is True
         assert "недвижимост" in result.answer
 
+    async def test_pipeline_chitchat_writes_langfuse_scores(self):
+        """CHITCHAT early return writes minimal Langfuse scores (#1368)."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-chitchat"
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
+            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="привет",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=MagicMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="CHITCHAT",
+            )
+
+        mock_rag.assert_not_called()
+        mock_write.assert_called_once()
+        call_args = mock_write.call_args
+        assert call_args.kwargs["trace_id"] == "trace-chitchat"
+        minimal_result = call_args.args[1]
+        assert minimal_result["query_type"] == "CHITCHAT"
+        assert minimal_result["cache_hit"] is False
+        assert minimal_result["input_type"] == "text"
+        assert minimal_result["search_results_count"] == 0
+
+    async def test_pipeline_off_topic_writes_langfuse_scores(self):
+        """OFF_TOPIC early return writes minimal Langfuse scores (#1368)."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-offtopic"
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
+            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="расскажи анекдот",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=MagicMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="OFF_TOPIC",
+            )
+
+        mock_rag.assert_not_called()
+        mock_write.assert_called_once()
+        minimal_result = mock_write.call_args.args[1]
+        assert minimal_result["query_type"] == "OFF_TOPIC"
+        assert minimal_result["cache_hit"] is False
+
 
 # ---------------------------------------------------------------------------
 # run_client_pipeline — Agent intent gate
@@ -268,6 +338,72 @@ class TestPipelineAgentIntentGate:
         msg.answer.assert_not_called()
         assert result.needs_agent is True
         assert result.agent_intent == "handoff"
+
+    async def test_pipeline_agent_intent_gate_writes_langfuse_scores(self):
+        """Agent intent early return writes minimal Langfuse scores (#1368)."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-intent"
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
+            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="хочу взять ипотеку",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=MagicMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+            )
+
+        mock_rag.assert_not_called()
+        mock_write.assert_called_once()
+        minimal_result = mock_write.call_args.args[1]
+        assert minimal_result["query_type"] == "GENERAL"
+        assert minimal_result["cache_hit"] is False
+        assert minimal_result["input_type"] == "text"
+        assert minimal_result["search_results_count"] == 0
+
+    async def test_pipeline_precomputed_agent_intent_skips_detection(self):
+        """Pre-computed agent_intent skips duplicate detect_agent_intent call (#1369)."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.detect_agent_intent") as mock_detect,
+            patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
+        ):
+            result = await run_client_pipeline(
+                user_text="хочу взять ипотеку",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=MagicMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                agent_intent="mortgage",
+            )
+
+        mock_detect.assert_not_called()
+        mock_rag.assert_not_called()
+        assert result.needs_agent is True
+        assert result.agent_intent == "mortgage"
 
 
 # ---------------------------------------------------------------------------

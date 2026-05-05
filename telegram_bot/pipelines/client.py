@@ -201,6 +201,7 @@ async def run_client_pipeline(
     rag_result_store: dict[str, Any] | None = None,
     role: str = "client",
     query_type: str = "GENERAL",
+    agent_intent: str = "",
 ) -> PipelineResult:
     """Execute deterministic client pipeline.
 
@@ -228,6 +229,8 @@ async def run_client_pipeline(
         rag_result_store: Dict with pre-computed embeddings from pre-agent cache check.
         role: User role ("client" or "manager").
         query_type: Pre-classified query type from classify_query().
+        agent_intent: Pre-computed intent from detect_agent_intent() to avoid
+            duplicate observation (#1369). Empty string triggers detection.
 
     Returns:
         PipelineResult with answer, metadata, and routing signals.
@@ -258,6 +261,25 @@ async def run_client_pipeline(
                 "Failed to update Langfuse trace metadata in client-direct non-RAG path",
                 exc_info=True,
             )
+        # Write minimal scores for non-RAG early-return paths (#1368)
+        tid = lf.get_current_trace_id() or ""
+        if tid:
+            try:
+                minimal_result = {
+                    "query_type": query_type,
+                    "pipeline_wall_ms": latency_ms,
+                    "e2e_latency_ms": latency_ms,
+                    "cache_hit": False,
+                    "input_type": "text",
+                    "search_results_count": 0,
+                    "grade_confidence": 0.0,
+                }
+                write_langfuse_scores(lf, minimal_result, trace_id=tid)
+            except Exception:
+                logger.warning(
+                    "Failed to write Langfuse scores in client-direct non-RAG path",
+                    exc_info=True,
+                )
         return PipelineResult(
             answer=response_text,
             query_type=query_type,
@@ -266,12 +288,31 @@ async def run_client_pipeline(
         )
 
     # --- Step b) Agent intent gate ---
-    agent_intent = detect_agent_intent(user_text)
-    if agent_intent:
+    resolved_intent = agent_intent or detect_agent_intent(user_text)
+    if resolved_intent:
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
+        # Write minimal scores for agent-intent early-return paths (#1368)
+        tid = lf.get_current_trace_id() or ""
+        if tid:
+            try:
+                minimal_result = {
+                    "query_type": query_type,
+                    "pipeline_wall_ms": latency_ms,
+                    "e2e_latency_ms": latency_ms,
+                    "cache_hit": False,
+                    "input_type": "text",
+                    "search_results_count": 0,
+                    "grade_confidence": 0.0,
+                }
+                write_langfuse_scores(lf, minimal_result, trace_id=tid)
+            except Exception:
+                logger.warning(
+                    "Failed to write Langfuse scores in client-direct intent gate",
+                    exc_info=True,
+                )
         return PipelineResult(
             needs_agent=True,
-            agent_intent=agent_intent,
+            agent_intent=resolved_intent,
             query_type=query_type,
             latency_ms=latency_ms,
         )
