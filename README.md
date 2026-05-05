@@ -174,6 +174,7 @@ CocoIndex pipeline: Docling parses PDFs/DOCX → semantic chunking → BGE-M3 de
 ### Prerequisites
 
 - Python 3.11+ (3.12 recommended), [uv](https://docs.astral.sh/uv/), Docker
+  - Docker runtime for Langfuse-importing services uses Python 3.13; local `uv` environment may use a different Python version
 
 ### 1. Install & Configure
 
@@ -212,7 +213,7 @@ make docker-full-up    # All 23 services
 | ML/Observability | `make docker-ml-up` | Langfuse, ClickHouse, MinIO |
 | Monitoring | `make monitoring-up` | Loki, Promtail, Alertmanager |
 | Ingestion | `make docker-ingest-up` | Unified ingestion service |
-| Voice | `make docker-voice-up` | RAG API, LiveKit, SIP, Voice Agent |
+| Voice | `make docker-voice-up` | RAG API, LiveKit, SIP, Voice Agent — **intentionally off by default** |
 
 </details>
 

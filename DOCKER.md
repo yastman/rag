@@ -10,6 +10,10 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 | `compose.dev.yml` | Development overrides (ports, profile gating, local defaults) | Local development and integration testing |
 | `compose.vps.yml` | VPS production-like overrides | Server deployment and operations |
 
+## Compose Project Name
+
+The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which is the fallback env file used by local `make` targets when `.env` is absent. There is only one local stack; do not create worktree-named Docker projects.
+
 ## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:
@@ -23,7 +27,7 @@ Optional profiles add scoped services:
 | --- | --- |
 | `bot` | `litellm`, `bot` |
 | `ingest` | `ingestion` |
-| `voice` | `rag-api`, `livekit-server`, `livekit-sip`, `voice-agent`, `litellm` |
+| `voice` | `rag-api`, `livekit-server`, `livekit-sip`, `voice-agent`, `litellm` — **intentionally separate/off for now** |
 | `ml` | `clickhouse`, `minio`, `redis-langfuse`, `langfuse-worker`, `langfuse` |
 | `obs` | `loki`, `promtail`, `alertmanager` |
 | `full` | all profile-gated services |
@@ -163,7 +167,7 @@ COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility logs -f 
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility build bot litellm bge-m3
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility up -d --force-recreate bot litellm bge-m3
 
-# Image drift check against compose-pinned images
+# Image drift check against compose-pinned images (uses compose.yml + compose.dev.yml + tests/fixtures/compose.ci.env)
 make verify-compose-images
 ```
 
@@ -172,3 +176,5 @@ make verify-compose-images
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
+- Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).
+- The `voice` profile (LiveKit, SIP, voice agent) is intentionally not part of the current local bring-up. Bring it up separately only when explicitly needed.
