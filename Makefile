@@ -113,7 +113,7 @@ local-pre-push: ## Fast local pre-push sanity gate (check + compose validate)
 	./scripts/local_pre_push.sh
 	@echo "$(GREEN)✓ Fast local pre-push sanity gate passed$(NC)"
 
-local-pr-ready: ## Full PR readiness gate (fast gate + unit tests) — run manually
+local-pr-ready: ## Full PR readiness gate (fast gate + unit tests) - run manually
 	@echo "$(BLUE)Running full PR readiness gate...$(NC)"
 	./scripts/local_pre_push.sh
 	@echo "$(BLUE)Running core unit tests...$(NC)"
@@ -146,7 +146,7 @@ format-check: ## Check if code is formatted
 
 type-check: ## Run MyPy type checking
 	@echo "$(BLUE)Running MyPy type checking...$(NC)"
-	uv run mypy src/ --ignore-missing-imports
+	uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Type check complete$(NC)"
 
 pylint: ## Run Pylint (comprehensive linting)
