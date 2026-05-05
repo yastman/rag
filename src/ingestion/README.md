@@ -1,215 +1,66 @@
-# Ingestion Module
+# src/ingestion/
 
-> **Парсинг, чанкинг и индексация документов в Qdrant**
+Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 
----
+## Purpose
 
-## 📂 Скрипты
+Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
 
-### 1. **pdf_parser.py** - PDF парсер (PyMuPDF)
+1. **Legacy path** (`pdf_parser.py`, `chunker.py`, `indexer.py`, `gdrive_flow.py`) — standalone scripts, being phased out.
+2. **Current path** (`unified/`) — CocoIndex-based incremental pipeline with deterministic file identity and replace semantics.
 
-**Что делает:** Парсит PDF документы через PyMuPDF (fitz)
+## Entrypoints
 
-**Класс:** `PDFParser`
+| Entrypoint | Role |
+|------------|------|
+| `src.ingestion.service` | High-level service for directory and Google Drive ingestion (legacy wrapper) |
+| `src.ingestion.unified.cli` | Unified pipeline CLI: `run`, `watch`, `backfill`, `status` |
+| `src.ingestion.unified.flow` `build_flow()` / `run_once()` / `run_watch()` | CocoIndex flow assembly and execution |
+| `src.ingestion.unified.qdrant_writer` `QdrantHybridWriter` | Writes hybrid vectors (dense + sparse + ColBERT) to Qdrant |
 
-**Поддерживаемые форматы:** `.pdf`, `.docx`, `.epub`, `.txt`
+## Key Files
 
-**Output:** `ParsedDocument` (filename, title, content, num_pages, metadata)
+| File | Purpose |
+|------|---------|
+| [`chunker.py`](./chunker.py) | Document chunking strategies (fixed, semantic, sliding window) |
+| [`document_parser.py`](./document_parser.py) | Docling-based document parsing |
+| [`service.py`](./service.py) | Legacy ingestion service wrapper |
+| [`unified/config.py`](./unified/config.py) | Unified pipeline configuration |
+| [`unified/flow.py`](./unified/flow.py) | CocoIndex flow definition |
+| [`unified/manifest.py`](./unified/manifest.py) | Content-hash-based stable file identity |
+| [`unified/qdrant_writer.py`](./unified/qdrant_writer.py) | Qdrant upsert/delete with payload contract |
+| [`unified/state_manager.py`](./unified/state_manager.py) | Ingestion state and resume tracking |
+| [`unified/targets/qdrant_hybrid_target.py`](./unified/targets/qdrant_hybrid_target.py) | Custom CocoIndex target connector |
 
-**Использование:**
-```python
-from src.ingestion import PDFParser
+## Boundaries
 
-parser = PDFParser()
-doc = parser.parse_file("document.pdf")
-print(doc.content)
-```
+- **Ingestion determinism and resumability** are critical. File identity uses content hashes (`manifest.py`); renames/moves do not create duplicates.
+- **Do not change collection schema**, manifest hashing, or payload contract without updating downstream retrieval assumptions.
+- `QdrantHybridWriter` enforces replace semantics: a file re-ingestion deletes old chunks before inserting new ones.
 
-**Статус:** ⚠️ Устаревает - планируется замена на Docling
+## Related Runtime Services
 
----
+- **Qdrant** — target vector database
+- **PostgreSQL** — CocoIndex flow state database
+- **BGE-M3** — dense + sparse embeddings (or Voyage when configured)
+- **Docling** — document parsing (HTTP or native backend)
 
-### 2. **csv_to_qdrant.py** - CSV → Qdrant индексатор
+## Focused Checks
 
-**Что делает:** Прямая индексация CSV файлов в Qdrant (standalone)
-
-**Класс:** `CSVToQdrantIndexer`
-
-**Workflow:**
-1. Читает CSV файл
-2. Конвертирует строки в natural language text
-3. Генерирует BGE-M3 embeddings (1024-dim)
-4. Индексирует в Qdrant с metadata
-
-**CLI:**
 ```bash
-python src/ingestion/csv_to_qdrant.py \
-    --input demo_BG.csv \
-    --collection bulgarian_properties \
-    --recreate
+# Unified pipeline dry-run
+python -m src.ingestion.unified.cli run --dry-run
+
+# ColBERT backfill status
+python -m src.ingestion.unified.cli colbert-status
+
+# Tests
+pytest src/ingestion/unified/
+make check
 ```
 
-**Статус:** ⚠️ Дубликат - планируется удаление после рефакторинга
+## See Also
 
----
-
-### 3. **chunker.py** - Стратегии чанкинга
-
-**Что делает:** Разбивает документы на chunks для индексации
-
-**Класс:** `DocumentChunker`
-
-**Стратегии:**
-- `FIXED_SIZE` - Фиксированный размер (512 chars, 128 overlap)
-- `SEMANTIC` - По семантическим границам (параграфы, секции)
-- `SLIDING_WINDOW` - Скользящее окно с overlap
-
-**Output:** `List[Chunk]` с metadata (text, document_name, article_number, order)
-
-**Использование:**
-```python
-from src.ingestion import DocumentChunker
-from src.ingestion.chunker import ChunkingStrategy
-
-chunker = DocumentChunker(
-    chunk_size=512,
-    overlap=128,
-    strategy=ChunkingStrategy.SEMANTIC
-)
-
-chunks = chunker.chunk_text(
-    text=document.content,
-    document_name="document.pdf",
-    article_number="1"
-)
-```
-
-**Статус:** ✅ Активен
-
----
-
-### 4. **indexer.py** - Индексация в Qdrant
-
-**Что делает:** Индексирует chunks в Qdrant vector database
-
-**Класс:** `DocumentIndexer`
-
-**Возможности:**
-- BGE-M3 embeddings (1024-dim)
-- Batch processing
-- Automatic collection creation
-- Payload indexes (article_number, document_name)
-- Async processing
-
-**Workflow:**
-```python
-from src.ingestion import DocumentIndexer
-
-indexer = DocumentIndexer()
-
-# Создать коллекцию
-indexer.create_collection("my_collection", recreate=False)
-
-# Индексировать chunks
-stats = await indexer.index_chunks(
-    chunks=chunks,
-    collection_name="my_collection",
-    batch_size=32
-)
-
-print(f"Indexed: {stats.indexed_chunks} chunks")
-```
-
-**Статус:** ✅ Активен
-
----
-
-## 🔄 Типичный Pipeline
-
-```python
-from src.ingestion import PDFParser, DocumentChunker, DocumentIndexer
-
-# 1. Парсинг
-parser = PDFParser()
-doc = parser.parse_file("document.pdf")
-
-# 2. Чанкинг
-chunker = DocumentChunker(chunk_size=512, overlap=128)
-chunks = chunker.chunk_text(
-    text=doc.content,
-    document_name=doc.filename,
-    article_number="1"
-)
-
-# 3. Индексация
-indexer = DocumentIndexer()
-await indexer.index_chunks(
-    chunks=chunks,
-    collection_name="legal_documents"
-)
-```
-
----
-
-## 🎯 Планируемые изменения
-
-### Рефакторинг на Docling
-
-**Цель:** Универсальный парсер для всех форматов
-
-**План:**
-1. ✅ Изучена документация Docling через MCP Context7
-2. ⏳ Обновить `pdf_parser.py` → `document_parser.py` (Docling-based)
-3. ⏳ Удалить `csv_to_qdrant.py` (дубликат)
-4. ⏳ Обновить импорты в `__init__.py` и `pipeline.py`
-
-**Преимущества Docling:**
-- Автоматическое определение формата (PDF, CSV, DOCX, HTML, etc.)
-- Лучший парсинг таблиц и структуры
-- Единый интерфейс для всех форматов
-- Chunking из коробки
-
----
-
-## 📊 Статистика
-
-| Скрипт | Размер | Строк кода | Статус |
-|--------|--------|-----------|--------|
-| pdf_parser.py | 3.4K | ~127 | ⚠️ Устаревает |
-| csv_to_qdrant.py | 9.6K | ~280 | ⚠️ Дубликат |
-| chunker.py | 7.0K | ~229 | ✅ Активен |
-| indexer.py | 7.1K | ~219 | ✅ Активен |
-
----
-
-## 🔗 Связанные модули
-
-- **src/retrieval/** - Поиск по проиндексированным документам
-- **src/config/** - Конфигурация (Settings, VectorDimensions)
-- **src/core/pipeline.py** - Использует PDFParser, DocumentChunker, DocumentIndexer
-
----
-
-## 🚀 Быстрые команды
-
-### Проверить текущую коллекцию
-```python
-indexer = DocumentIndexer()
-stats = indexer.get_collection_stats("legal_documents")
-print(stats)
-```
-
-### Batch индексация
-```bash
-# Использовать существующий workflow из pipeline.py
-python -c "
-from src.core import RAGPipeline
-pipeline = RAGPipeline()
-# pipeline имеет indexer, chunker, parser
-"
-```
-
----
-
-**Last Updated:** 2025-11-04
-**Maintainer:** yastman
+- [`./unified/README.md`](./unified/README.md) — Detailed unified pipeline docs
+- [`../retrieval/`](../retrieval/) — Search engines that consume ingested data
+- [`../../docs/engineering/test-writing-guide.md`](../../docs/engineering/test-writing-guide.md) — Test conventions
