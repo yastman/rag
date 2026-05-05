@@ -54,6 +54,8 @@ make local-down
 
 For local development, the canonical local env file is `.env` in the repo root. `.env.local` is not auto-loaded by the documented `make` and `uv run` workflows.
 
+Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
+
 ## Service Endpoints (Host)
 
 | Service | URL/Port |
