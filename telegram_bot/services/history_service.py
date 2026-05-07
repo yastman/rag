@@ -38,7 +38,7 @@ class HistoryService:
         self._ensured = False
 
     async def ensure_collection(self) -> None:
-        """Create history collection if it doesn't exist."""
+        """Create history collection and payload indexes if not present."""
         if self._ensured:
             return
         exists = await self._client.collection_exists(self._collection_name)
@@ -53,6 +53,27 @@ class HistoryService:
                 },
             )
             logger.info("Created history collection: %s", self._collection_name)
+
+        # Idempotently ensure payload indexes for filter fields
+        for field_name, field_schema in (
+            ("metadata.user_id", models.PayloadSchemaType.INTEGER),
+            ("metadata.session_id", models.PayloadSchemaType.KEYWORD),
+            ("metadata.deal_id", models.PayloadSchemaType.INTEGER),
+        ):
+            try:
+                await self._client.create_payload_index(
+                    collection_name=self._collection_name,
+                    field_name=field_name,
+                    field_schema=field_schema,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to ensure payload index %s on %s",
+                    field_name,
+                    self._collection_name,
+                    exc_info=True,
+                )
+
         self._ensured = True
 
     @observe(name="history-save", capture_input=False, capture_output=False)
