@@ -42,12 +42,25 @@ done
 ### 3. Latest Trace API Fast Path
 
 ```bash
-# List the most recent trace of each family
-langfuse api traces list --limit 20 --order-by timestamp.desc
+# List the most recent traces with full inline fields
+langfuse api traces list --limit 20 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
+
+# Filter to a specific required trace family
+langfuse api traces list --name rag-api-query --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
+langfuse api traces list --name voice-session --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
+langfuse api traces list --name ingestion-cli-run --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 
 # Get a specific trace with inline observations and scores
 langfuse api traces get <trace-id> --fields core,io,scores,observations,metrics --json
+
+# List scores for a trace
+langfuse api scores list --trace-id <trace-id> --json
+
+# List observations for a trace
+langfuse api observations list --trace-id <trace-id> --fields core,basic,io,metadata,usage,metrics --json
 ```
+
+**Validation focus:** When triaging gaps, check first for missing or stale `rag-api-query`, `voice-session`, and `ingestion-cli-run`. Proxy-generated `litellm-acompletion` traces are expected flat noise and should not be treated as missing app instrumentation.
 
 ### 4. Trace Interpretation Matrix
 
@@ -78,10 +91,12 @@ print(f"Current trace: {lf.get_current_trace_id()}")
 make validate-traces-fast
 ```
 
-This checks that required trace families exist:
+This checks that required trace families exist and are not stale. Validation should focus on missing or outdated:
 - `rag-api-query`
 - `voice-session`
 - `ingestion-cli-run`
+
+If these are present and fresh, flat `litellm-acompletion` traces are expected proxy-generated noise and do not indicate a defect.
 
 ## Common Issues
 
