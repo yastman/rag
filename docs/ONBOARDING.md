@@ -63,23 +63,24 @@ See `.env.example` for full variable documentation.
 make docker-up
 
 # Or with monitoring (Grafana, Loki)
-make docker-up-dev
+make docker-full-up
 ```
 
 Verify services are healthy:
 
 ```bash
-make docker-health
+make test-bot-health
+make docker-ps
 ```
 
 ## Step 4: Run Preflight Checks
 
 ```bash
 # Check all dependencies
-make preflight
+make test-preflight
 
 # Verify embeddings service
-make embeddings-health
+curl -fsS http://localhost:8000/health
 ```
 
 ## Step 5: Start the Bot
