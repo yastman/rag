@@ -59,7 +59,7 @@ uv run python -m telegram_bot.main
 
 If you do set `REDIS_URL` manually for native runs, it must include the Redis password. Otherwise the bot derives the local URL from `REDIS_PASSWORD`.
 
-`make test-bot-health` is the local helper for Redis/Qdrant/LiteLLM plus the optional localhost Postgres note. The full startup preflight still runs in [`telegram_bot/preflight.py`](/home/user/projects/rag-fresh-issue-1198/telegram_bot/preflight.py) when the bot starts, and that runtime path keeps the repo-local BGE-M3 health contract.
+`make test-bot-health` is the local helper for Redis/Qdrant/LiteLLM plus the optional localhost Postgres note. The full startup preflight still runs in [`telegram_bot/preflight.py`](../telegram_bot/preflight.py) when the bot starts, and that runtime path keeps the repo-local BGE-M3 health contract.
 
 ## 5. Validation
 
@@ -73,6 +73,8 @@ make test-unit
 # Run full test suite
 make test-full
 ```
+
+For trace validation and the canonical Compose env override pattern, see [`DOCKER.md`](../DOCKER.md).
 
 ## 6. Key Files to Understand
 
