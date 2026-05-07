@@ -201,3 +201,53 @@ class TestLiteLLMConfigSync:
                 mismatches.append(f"  '{name}': docker uses {docker_key!r}, k8s uses {k8s_key!r}")
 
         assert not mismatches, "Token limit key name drift detected:\n" + "\n".join(mismatches)
+
+    def test_gpt_4o_mini_primary_is_cerebras_zai_glm_47(self):
+        """Guard: gpt-4o-mini must route to Cerebras zai-glm-4.7 as primary."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        for source, cfg in (("docker", docker), ("k8s", k8s)):
+            entries = [e for e in cfg["model_list"] if e["model_name"] == "gpt-4o-mini"]
+            assert len(entries) == 1, f"Expected exactly one gpt-4o-mini entry in {source}"
+            params = entries[0]["litellm_params"]
+            assert params.get("model") == "cerebras/zai-glm-4.7", (
+                f"{source}: gpt-4o-mini primary model must be cerebras/zai-glm-4.7, "
+                f"got {params.get('model')!r}"
+            )
+
+    def test_gpt_4o_mini_max_completion_tokens_is_512(self):
+        """Guard: gpt-4o-mini token limit must stay at 512."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        for source, cfg in (("docker", docker), ("k8s", k8s)):
+            entries = [e for e in cfg["model_list"] if e["model_name"] == "gpt-4o-mini"]
+            assert entries, f"No gpt-4o-mini entry in {source}"
+            params = entries[0]["litellm_params"]
+            limit = _normalize_token_limit(params)
+            assert limit == 512, (
+                f"{source}: gpt-4o-mini max_completion_tokens must be 512, got {limit}"
+            )
+
+    def test_gpt_oss_120b_entries_use_cerebras_model_and_1024_limit(self):
+        """Guard: gpt-oss-120b and fallback alias use cerebras/gpt-oss-120b with 1024 limit."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        expected = {
+            "gpt-oss-120b": "cerebras/gpt-oss-120b",
+            "gpt-4o-mini-cerebras-oss": "cerebras/gpt-oss-120b",
+        }
+
+        for source, cfg in (("docker", docker), ("k8s", k8s)):
+            for alias, provider_model in expected.items():
+                entries = [e for e in cfg["model_list"] if e["model_name"] == alias]
+                assert entries, f"No {alias} entry in {source}"
+                params = entries[0]["litellm_params"]
+                assert params.get("model") == provider_model, (
+                    f"{source}: {alias} provider model must be {provider_model!r}, "
+                    f"got {params.get('model')!r}"
+                )
+                limit = _normalize_token_limit(params)
+                assert limit == 1024, f"{source}: {alias} token limit must be 1024, got {limit}"
