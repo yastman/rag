@@ -37,12 +37,13 @@ def service(mock_client, mock_embeddings):
 
 
 class TestEnsureCollection:
-    """Test ensure_collection creates collection if absent."""
+    """Test ensure_collection creates collection and indexes if absent."""
 
     async def test_creates_collection_when_missing(self, service, mock_client):
         """ensure_collection creates collection if it doesn't exist."""
         mock_client.collection_exists = AsyncMock(return_value=False)
         mock_client.create_collection = AsyncMock()
+        mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
 
@@ -55,6 +56,7 @@ class TestEnsureCollection:
     async def test_skips_if_collection_exists(self, service, mock_client):
         """ensure_collection skips creation if collection already exists."""
         mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
 
@@ -63,12 +65,72 @@ class TestEnsureCollection:
     async def test_idempotent_after_first_call(self, service, mock_client):
         """ensure_collection only checks once."""
         mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
         await service.ensure_collection()
 
         # Only called once due to _ensured flag
         assert mock_client.collection_exists.await_count == 1
+
+    async def test_creates_payload_indexes_when_collection_missing(self, service, mock_client):
+        """ensure_collection creates payload indexes for filter fields."""
+        mock_client.collection_exists = AsyncMock(return_value=False)
+        mock_client.create_collection = AsyncMock()
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        index_calls = mock_client.create_payload_index.call_args_list
+        assert len(index_calls) == 3
+        indexed_fields = {c.kwargs["field_name"] for c in index_calls}
+        assert indexed_fields == {"metadata.user_id", "metadata.session_id", "metadata.deal_id"}
+
+    async def test_creates_payload_indexes_when_collection_exists(self, service, mock_client):
+        """ensure_collection still creates payload indexes if collection already exists."""
+        mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        index_calls = mock_client.create_payload_index.call_args_list
+        assert len(index_calls) == 3
+        indexed_fields = {c.kwargs["field_name"] for c in index_calls}
+        assert indexed_fields == {"metadata.user_id", "metadata.session_id", "metadata.deal_id"}
+
+    async def test_payload_index_uses_correct_schema_types(self, service, mock_client):
+        """ensure_collection uses INTEGER for ids and KEYWORD for session_id."""
+        from qdrant_client import models
+
+        mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        schemas = {
+            c.kwargs["field_name"]: c.kwargs["field_schema"]
+            for c in mock_client.create_payload_index.call_args_list
+        }
+        assert schemas["metadata.user_id"] == models.PayloadSchemaType.INTEGER
+        assert schemas["metadata.session_id"] == models.PayloadSchemaType.KEYWORD
+        assert schemas["metadata.deal_id"] == models.PayloadSchemaType.INTEGER
+
+    async def test_payload_index_errors_are_caught(self, service, mock_client, caplog):
+        """ensure_collection must not raise when create_payload_index fails."""
+        mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock(side_effect=RuntimeError("already exists"))
+
+        await service.ensure_collection()
+
+    async def test_payload_indexes_idempotent_after_first_call(self, service, mock_client):
+        """ensure_collection only creates payload indexes once."""
+        mock_client.collection_exists = AsyncMock(return_value=True)
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+        await service.ensure_collection()
+
+        assert mock_client.create_payload_index.await_count == 3
 
 
 class TestSaveTurn:
