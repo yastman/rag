@@ -309,6 +309,11 @@ async def _chat_create_with_optional_name(
     Langfuse-wrapped clients accept it and use it for generation naming.
     """
     create_fn = llm.chat.completions.create
+    if getattr(llm, "_langfuse_auto_trace", True) is False:
+        # Plain client created via GraphConfig.create_llm(auto_trace=False).
+        # Skip the Langfuse ``name`` kwarg entirely to avoid a needless
+        # TypeError → retry round-trip on every call.
+        return await create_fn(**kwargs)
     try:
         return await create_fn(name=observation_name, **kwargs)
     except TypeError as exc:
@@ -694,7 +699,7 @@ async def generate_response(
     sent_msg: Any = None
 
     try:
-        llm = config.create_llm()
+        llm = config.create_llm(auto_trace=False)
 
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
