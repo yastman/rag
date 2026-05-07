@@ -13,7 +13,23 @@ Current Qdrant setup used by bot and ingestion flows.
 
 - Default runtime collection: `gdrive_documents_bge`
 - Alias: `gdrive_documents_bge_active` → `gdrive_documents_bge` (blue/green cutover ready)
+- Apartments collection: `apartments` (top-level payload, no `metadata.` prefix; created by `scripts/apartments/setup_collection.py`)
+- Conversation history collection: `conversation_history` (payload under `metadata.user_id` / `metadata.session_id`; created on-demand by `telegram_bot/services/history_service.py`)
 - Additional collections may exist for evaluation or legacy flows.
+
+## Collection Naming Policy
+
+Defined in `src/config/qdrant_policy.py` (`resolve_collection_name`):
+
+| Mode | Suffix | Example |
+|------|--------|---------|
+| `off` (default) | none | `gdrive_documents_bge` |
+| `scalar` | `_scalar` | `gdrive_documents_bge_scalar` |
+| `binary` | `_binary` | `gdrive_documents_bge_binary` |
+
+Rules:
+- Any existing `_binary` or `_scalar` suffix is stripped from the base name before applying the new mode suffix.
+- This prevents double suffixes like `gdrive_documents_bge_scalar_binary`.
 
 ## Vector Schema (Unified Bootstrap)
 
@@ -23,15 +39,156 @@ Collection bootstrap (`src/ingestion/unified/cli.py bootstrap`) creates:
 - Multivector rerank field: name `colbert`, size `1024`, MaxSim comparator
 - Sparse vector: name `bm42`, IDF modifier
 
-Payload indexes created by bootstrap include:
-- `file_id`
-- `metadata.file_id`
-- `metadata.doc_id`
-- `metadata.source`
-- `metadata.file_name`
-- `metadata.mime_type`
-- `metadata.order`
-- `metadata.chunk_id`
+## Payload-Index Contract Matrix
+
+The table below shows which payload indexes each origin creates, their Qdrant schema type, and where they are used in filters or queries.
+
+### Legend
+
+- **Origin:**
+  - `unified` — `src/ingestion/unified/cli.py bootstrap`
+  - `legacy` — `scripts/setup_qdrant_collection.py`
+  - `ensure` — `scripts/qdrant_ensure_indexes.py` (idempotent fallback/ensure)
+  - `scalar` — `scripts/setup_scalar_collection.py`
+  - `binary` — `scripts/setup_binary_collection.py`
+  - `apartment` — `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`
+- **Type:** Qdrant `PayloadSchemaType` (`keyword`, `integer`, `float`, `bool`)
+- **Runtime use:** Where the field is actively referenced in filters, `group_by`, or `order_by`
+
+### Unified / Legacy / Ensure (document chunking)
+
+| Field | Type | unified | legacy | ensure | Runtime use |
+|-------|------|:-------:|:------:|:------:|-------------|
+| `file_id` (flat) | `keyword` | ✓ | ✓ | ✓ | `qdrant_writer.delete_file` — count + delete filter |
+| `metadata.file_id` | `keyword` | ✓ | ✓ | ✓ | `qdrant_writer.delete_file` — count + delete filter |
+| `metadata.doc_id` | `keyword` | ✓ | ✓ | ✓ | `small_to_big` grouping; `retrieve.py` `group_by` |
+| `metadata.source` | `keyword` | ✓ | ✓ | ✓ | Citation source resolution |
+| `metadata.file_name` | `keyword` | ✓ | ✓ | ✓ | — |
+| `metadata.mime_type` | `keyword` | ✓ | ✓ | ✓ | — |
+| `metadata.topic` | `keyword` | ✓ | ✓ | ✓ | `qdrant_writer` sets via `classify_chunk_topic` |
+| `metadata.doc_type` | `keyword` | ✓ | ✓ | ✓ | `qdrant_writer` sets via `classify_doc_type` |
+| `metadata.source_type` | `keyword` | ✓ | — | — | `qdrant_writer` infers from path/extension |
+| `metadata.jurisdiction` | `keyword` | ✓ | — | — | `qdrant_writer` infers from file metadata |
+| `metadata.audience` | `keyword` | ✓ | — | — | `qdrant_writer` infers from path + text |
+| `metadata.language` | `keyword` | ✓ | — | — | `qdrant_writer` infers from path |
+| `metadata.order` | `integer` | ✓ | ✓ | ✓ | `small_to_big` `order_by` for neighbor chunks |
+| `metadata.chunk_id` | `integer` | ✓ | ✓ | ✓ | — |
+
+### Scalar / Binary (quantized evaluation collections)
+
+| Field | Type | scalar | binary | Runtime use |
+|-------|------|:------:|:------:|-------------|
+| `file_id` (flat) | `keyword` | ✓ | ✓ | Same as above |
+| `metadata.file_id` | `keyword` | ✓ | ✓ | Same as above |
+| `metadata.doc_id` | `keyword` | ✓ | ✓ | Same as above |
+| `metadata.source` | `keyword` | ✓ | ✓ | Same as above |
+| `metadata.chunk_order` | `integer` | ✓ | ✓ | Alias for `metadata.order` |
+| `metadata.document_name` | `keyword` | ✓ | ✓ | — |
+| `metadata.article_number` | `keyword` | ✓ | ✓ | — |
+| `metadata.city` | `keyword` | ✓ | ✓ | Apartment search keyword match |
+| `metadata.source_type` | `keyword` | ✓ | ✓ | — |
+| `metadata.topic` | `keyword` | ✓ | ✓ | Same as above |
+| `metadata.doc_type` | `keyword` | ✓ | ✓ | Same as above |
+| `metadata.jurisdiction` | `keyword` | ✓ | ✓ | — |
+| `metadata.audience` | `keyword` | ✓ | ✓ | — |
+| `metadata.language` | `keyword` | ✓ | ✓ | — |
+| `metadata.price` | `integer` | ✓ | ✓ | Apartment search range filter |
+| `metadata.rooms` | `integer` | ✓ | ✓ | Apartment search range/exact filter |
+| `metadata.area` | `integer` | ✓ | ✓ | Apartment search range filter |
+| `metadata.floor` | `integer` | ✓ | ✓ | Apartment search range/exact filter |
+| `metadata.floors` | `integer` | ✓ | ✓ | — |
+| `metadata.distance_to_sea` | `integer` | ✓ | ✓ | Apartment search range filter |
+| `metadata.bathrooms` | `integer` | ✓ | ✓ | Apartment search exact filter |
+| `metadata.chunk_id` | `integer` | ✓ | ✓ | — |
+| `metadata.order` | `integer` | ✓ | ✓ | Same as above |
+| `metadata.furnished` | `bool` | — | ✓ | Apartment search exact match (bool) |
+| `metadata.year_round` | `bool` | — | ✓ | Apartment search exact match (bool) |
+
+### Apartment / CSV-only indexes
+
+Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`. These fields are populated by CSV apartment ingestion and used by the apartment search pipeline.
+
+| Field | Type | setup_qdrant_indexes | indexer | Runtime use |
+|-------|------|:--------------------:|:-------:|-------------|
+| `metadata.source_type` | `keyword` | ✓ | ✓ | Source type discrimination |
+| `metadata.jurisdiction` | `keyword` | ✓ | ✓ | — |
+| `metadata.audience` | `keyword` | ✓ | ✓ | — |
+| `metadata.language` | `keyword` | ✓ | ✓ | — |
+| `metadata.city` | `keyword` | ✓ | ✓ | `filter_extractor._extract_city`; `query_analyzer` |
+| `metadata.price` | `integer` | ✓ | ✓ | `filter_extractor._extract_price`; `query_analyzer` |
+| `metadata.rooms` | `integer` | ✓ | ✓ | `filter_extractor._extract_rooms`; `query_analyzer` |
+| `metadata.area` | `float` | ✓ | `integer` | `filter_extractor._extract_area`; `query_analyzer` |
+| `metadata.floor` | `integer` | ✓ | ✓ | `filter_extractor._extract_floor`; `query_analyzer` |
+| `metadata.distance_to_sea` | `integer` | ✓ | ✓ | `filter_extractor._extract_distance_to_sea`; `query_analyzer` |
+| `metadata.maintenance` | `float` | ✓ | — | `filter_extractor._extract_maintenance`; `query_analyzer` |
+| `metadata.bathrooms` | `integer` | ✓ | ✓ | `filter_extractor._extract_bathrooms`; `query_analyzer` |
+| `metadata.furniture` | `keyword` | ✓ | — | `filter_extractor._extract_furniture`; `query_analyzer` |
+| `metadata.year_round` | `keyword` | ✓ | `bool` | `filter_extractor._extract_year_round`; `query_analyzer` |
+
+**Important discrepancies:**
+- `metadata.area` is `float` in `setup_qdrant_indexes.py` but `integer` in `indexer.py`, `setup_scalar_collection.py`, and `setup_binary_collection.py`.
+- `metadata.furniture` (keyword, "Есть") is created by `setup_qdrant_indexes.py`, while `indexer.py` and `setup_binary_collection.py` create `metadata.furnished` (bool). The runtime apartment pipeline uses `is_furnished` (bool) in dialog filters and `furniture` (string) in the heuristic extractor.
+- `metadata.maintenance` (float) is only created by `setup_qdrant_indexes.py`; none of the scalar/binary/indexer scripts index it.
+
+## Other Qdrant Collections
+
+### `apartments` (standalone apartment collection)
+
+Created by `scripts/apartments/setup_collection.py`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `complex_name` | `keyword` | — |
+| `city` | `keyword` | — |
+| `section` | `keyword` | — |
+| `apartment_number` | `keyword` | — |
+| `view_primary` | `keyword` | — |
+| `view_tags` | `keyword` | — |
+| `rooms` | `integer` | — |
+| `floor` | `integer` | — |
+| `price_eur` | `float` | — |
+| `area_m2` | `float` | — |
+| `is_furnished` | `bool` (intended) | **Bug:** script passes string `"bool"` instead of `models.PayloadSchemaType.BOOL` (line 71). `is_promotion` correctly uses the enum. |
+| `is_promotion` | `bool` | Correctly uses `models.PayloadSchemaType.BOOL` |
+
+### `conversation_history`
+
+Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collection`).
+
+- Vectors: `dense` (1024-dim, cosine)
+- Payload: `page_content`, `metadata.user_id`, `metadata.session_id`, `metadata.query`, `metadata.response`, `metadata.timestamp`, `metadata.input_type`
+- **Index gap:** `ensure_collection` does **not** create payload indexes for `metadata.user_id` or `metadata.session_id`. These fields are used heavily in `query_points` filters (`search_user_history`, `delete_user_history`) and `scroll` (`get_session_turns`), so missing indexes means full payload scans. This appears to be an omission rather than intentional — the history collection is created lazily and never runs an index-setup step.
+
+## SQL Index Navigation (Postgres Init Drift)
+
+`k8s/base/configmaps/postgres-init.yaml` only embeds `00-init-databases.sql`, `02-cocoindex.sql`, and `03-unified-ingestion-alter.sql`. `docker/postgres/init/` additionally contains `04-voice-schema.sql`, `05-realestate-schema.sql`, `06-lead-scoring-sync.sql`, `07-nurturing-funnel-analytics.sql`, and `08-user-favorites.sql`. The K8s init ConfigMap is missing scripts 04–08, which means voice transcripts, real-estate users/leads, lead scoring, nurturing analytics, and user favorites tables will not be created in K8s-deployed Postgres unless they are provisioned separately.
+
+## Runtime-Required vs Legacy-Only Fields
+
+**Runtime-required** (bot and unified ingestion depend on these):
+- `file_id` (flat) — fast delete
+- `metadata.file_id` — delete/count filter
+- `metadata.doc_id` — small-to-big grouping
+- `metadata.order` — small-to-big neighbor sorting
+- `metadata.source` — citation resolution
+
+**Legacy / CSV / apartment-only** (not used by unified document ingestion):
+- `metadata.city`, `metadata.price`, `metadata.rooms`, `metadata.area`, `metadata.floor`, `metadata.distance_to_sea`, `metadata.bathrooms`, `metadata.furniture`/`furnished`, `metadata.year_round`, `metadata.maintenance`
+- `metadata.article_number`, `metadata.document_name`
+
+**Best-effort / classifier-populated** (unified ingestion writes these, but bot does not filter on them today):
+- `metadata.topic`, `metadata.doc_type`, `metadata.jurisdiction`, `metadata.audience`, `metadata.language`, `metadata.source_type`
+
+## Bot Fallback Behavior
+
+`telegram_bot/services/qdrant.py` (`QdrantService.ensure_collection()`):
+
+1. **Validation:** On first search, lists collections and checks whether the computed collection name (base + quantization suffix) exists.
+2. **Fallback to base:** If the suffixed collection is missing but the base collection exists, the service logs a warning and falls back to the base name, resetting `quantization_mode` to `"off"`.
+3. **Alias management:** After validation (or fallback), `_ensure_alias()` creates or updates `{collection_name}_active` → current collection name. If the alias already points to the same collection, it is skipped; otherwise it is deleted and recreated.
+4. **Strict mode:** After successful collection resolution, `_apply_strict_mode()` sets server-side limits (`max_query_limit=100`, `max_timeout=30`, `search_max_hnsw_ef=512`).
+
+All three steps are non-blocking: failures are logged as warnings and do not prevent startup.
 
 ## Strict Mode
 
