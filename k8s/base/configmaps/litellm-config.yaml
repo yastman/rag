@@ -8,7 +8,7 @@ data:
       # Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
       # ALIAS: "gpt-4o-mini" is an internal alias — it does NOT call OpenAI.
       # The bot sends requests to "gpt-4o-mini" which LiteLLM routes to Cerebras.
-      # See fallbacks below for the actual OpenAI fallback (gpt-4o-mini-openai).
+      # See router_settings.fallbacks for the actual OpenAI fallback (gpt-4o-mini-openai).
       - model_name: gpt-4o-mini
         litellm_params:
           model: cerebras/zai-glm-4.7
