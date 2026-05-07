@@ -1,6 +1,6 @@
 # Project Stack
 
-Current stack snapshot for this repository as of 2026-02-18.
+Current stack snapshot for this repository as of 2026-05-07.
 
 ## Runtime And Tooling
 
@@ -9,7 +9,7 @@ Current stack snapshot for this repository as of 2026-02-18.
 | Language | Python `>=3.11` (recommended `3.12`) |
 | Package/deps | `uv`, `pyproject.toml`, `uv.lock` |
 | Lint/type/tests | Ruff, MyPy, pytest + xdist |
-| Local orchestration | Docker Compose v2 (`docker-compose.dev.yml`) |
+| Local orchestration | Docker Compose v2 (`compose.yml` + `compose.dev.yml`) |
 | Server orchestration | k3s + Kustomize (`k8s/overlays/*`) |
 
 ## Core Application Components
@@ -39,9 +39,9 @@ Current stack snapshot for this repository as of 2026-02-18.
 
 ## Deployment Surfaces
 
-- Local dev: `docker-compose.dev.yml` via `make docker-up` / `make docker-bot-up` / `make docker-full-up`
-- Minimal local: same `docker-compose.dev.yml` via `make local-up` / `make local-down`
-- VPS compose: `docker-compose.vps.yml`
+- Local dev: `compose.yml:compose.dev.yml` via `make docker-up` / `make docker-bot-up` / `make docker-full-up`
+- Minimal local: same `compose.yml:compose.dev.yml` via `make local-up` / `make local-down`
+- VPS compose: `compose.vps.yml`
 - k3s overlays: `k8s/overlays/core`, `k8s/overlays/bot`, `k8s/overlays/ingest`, `k8s/overlays/full`
 
 ## Canonical Operations Docs

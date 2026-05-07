@@ -189,6 +189,9 @@ COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility up -d --
 
 # Image drift check against compose-pinned images (uses compose.yml + compose.dev.yml + tests/fixtures/compose.ci.env)
 make verify-compose-images
+
+# Validate required Langfuse trace families (fast, no rebuild)
+make validate-traces-fast
 ```
 
 ## Notes
