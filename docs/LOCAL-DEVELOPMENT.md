@@ -94,6 +94,8 @@ Trace coverage gate:
 make validate-traces-fast
 ```
 
+This target runs natively on the host and automatically points to local Docker service endpoints (`localhost:6333`, `localhost:8000`, `localhost:4000`, etc.). You can override individual endpoints if needed: `make validate-traces-fast QDRANT_URL=http://custom:6333`.
+
 If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
 
 ```bash
