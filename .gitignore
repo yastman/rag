@@ -253,7 +253,6 @@ docs/artifacts/*.md
 .claude/hooks/
 .grepai/
 .signals/
-!.signals/decomposition-langfuse-coverage-20260507.json
 
 # Local AI/orchestration tool directories
 .planning/
