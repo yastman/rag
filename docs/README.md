@@ -40,6 +40,8 @@ Project documentation index for humans and agents. Use this page to understand t
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
 - [`ALERTING.md`](ALERTING.md) — Loki/Alertmanager setup.
+- [`INFRA_ISSUES_REPORT_1113_1126.md`](INFRA_ISSUES_REPORT_1113_1126.md) — Infrastructure issues report.
+- [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 
 ## Quality & Evaluation
