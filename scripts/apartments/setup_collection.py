@@ -68,7 +68,7 @@ def create_payload_indexes(client: QdrantClient) -> None:
         "price_eur": models.PayloadSchemaType.FLOAT,
         "area_m2": models.PayloadSchemaType.FLOAT,
         # Bool
-        "is_furnished": "bool",
+        "is_furnished": models.PayloadSchemaType.BOOL,
         "is_promotion": models.PayloadSchemaType.BOOL,
     }
 
