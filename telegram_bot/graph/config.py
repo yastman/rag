@@ -145,16 +145,32 @@ class GraphConfig:
             ),
         )
 
-    def create_llm(self, model_override: str | None = None) -> Any:
-        """Create AsyncOpenAI client for graph nodes that call chat.completions."""
-        from langfuse.openai import AsyncOpenAI
+    def create_llm(self, model_override: str | None = None, *, auto_trace: bool = True) -> Any:
+        """Create AsyncOpenAI client for graph nodes that call chat.completions.
 
-        return AsyncOpenAI(
+        Args:
+            model_override: Optional model name override.
+            auto_trace: When True (default), returns the Langfuse-wrapped client
+                that auto-traces every completion call. When False, returns a plain
+                ``openai.AsyncOpenAI`` client so the caller can manage observations
+                explicitly via ``update_current_generation`` without creating orphan
+                root traces.
+        """
+        if auto_trace:
+            from langfuse.openai import AsyncOpenAI
+        else:
+            from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(
             api_key=self.llm_api_key or "no-key",
             base_url=self.llm_base_url,
             max_retries=2,
             timeout=60.0,
         )
+        if not auto_trace:
+            # Mark plain client so helpers can skip Langfuse-specific kwargs safely.
+            object.__setattr__(client, "_langfuse_auto_trace", False)
+        return client
 
     def create_supervisor_llm(self, model_override: str | None = None) -> Any:
         """Create LangChain chat model for supervisor graph tool routing."""

@@ -213,6 +213,9 @@ async def _chat_create_with_optional_name(
 ) -> Any:
     """Call chat.completions.create with Langfuse `name` when supported."""
     create_fn = llm.chat.completions.create
+    if getattr(llm, "_langfuse_auto_trace", True) is False:
+        # Plain client created via GraphConfig.create_llm(auto_trace=False).
+        return await create_fn(**kwargs)
     try:
         return await create_fn(name=observation_name, **kwargs)
     except TypeError as exc:
