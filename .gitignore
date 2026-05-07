@@ -211,6 +211,7 @@ docs/archive/
 !docs/plans/2026-03-13-issue-728-sdk-realignment-plan.md
 !docs/plans/2026-03-13-sdk-first-remediation-plan.md
 !docs/plans/2026-03-15-sdk-canonical-remediation-plan.md
+!docs/plans/2026-05-07-langfuse-coverage-trace-quality-plan.md
 
 # Build artifacts & test outputs
 test_output*.txt
@@ -252,6 +253,7 @@ docs/artifacts/*.md
 .claude/hooks/
 .grepai/
 .signals/
+!.signals/decomposition-langfuse-coverage-20260507.json
 
 # Local AI/orchestration tool directories
 .planning/

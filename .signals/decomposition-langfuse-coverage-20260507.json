@@ -1,0 +1,267 @@
+{
+  "meta": {
+    "plan_date": "2026-05-07",
+    "branch": "plan/langfuse-coverage-trace-quality",
+    "base": "dev",
+    "planner": "W-langfuse-coverage-plan",
+    "parent_roadmap": "#1415"
+  },
+  "issue_states": {
+    "1307": {
+      "state": "OPEN",
+      "labels": ["enhancement", "infra", "P1-next", "in-progress", "lane:plan-needed"],
+      "stale_comments": [],
+      "done_so_far": [
+        "PR #1383 merged: local Langfuse + Telethon bot trace coverage audit",
+        "Audit trace 8d79036a confirms flat litellm-acompletion traces missing RAG observations/scores",
+        "PR #1347 merged: Langfuse web memory limit raised"
+      ],
+      "blocked_by": [
+        "Local dev stack non-functional: stale Python 3.14 images, Postgres password drift, invalid Langfuse secrets (see docs/audits/2026-05-07-docker-langfuse-health-audit.md)"
+      ],
+      "remaining_slices": [
+        {
+          "id": "1307-A",
+          "task": "Rebuild Python images and fix Langfuse secrets/Postgres credentials",
+          "type": "runtime_validation",
+          "reserved_files": [],
+          "tests": ["docker compose ps", "curl ${LANGFUSE_HOST}/api/public/health"]
+        },
+        {
+          "id": "1307-B",
+          "task": "Run make run-bot with Langfuse enabled and exercise representative flows",
+          "type": "runtime_validation",
+          "reserved_files": [],
+          "tests": ["logs/bot-run.log shows Startup verdict: OK and no 401 OTEL errors"]
+        },
+        {
+          "id": "1307-C",
+          "task": "Validate traces using make validate-traces-fast and trace-contract tests",
+          "type": "heavy_check",
+          "reserved_files": ["tests/contract/test_trace_families_contract.py", "tests/contract/test_span_coverage_contract.py", "tests/observability/trace_contract.yaml"],
+          "tests": ["pytest tests/contract/test_trace_families_contract.py -v", "pytest tests/contract/test_span_coverage_contract.py -v"]
+        },
+        {
+          "id": "1307-D",
+          "task": "Correlate Langfuse traces with #1305 runtime-events analyzer output",
+          "type": "runtime_validation",
+          "reserved_files": [],
+          "tests": ["Cross-reference telegram_bot/runtime_events JSON with trace IDs"]
+        },
+        {
+          "id": "1307-E",
+          "task": "Produce coverage gap report with covered vs missing spans/paths",
+          "type": "docs",
+          "reserved_files": ["docs/runbooks/LANGFUSE_TRACING_GAPS.md"],
+          "tests": ["Markdown report with exact file/function references"]
+        }
+      ]
+    },
+    "1367": {
+      "state": "OPEN",
+      "labels": ["domain:observability", "P2-backlog", "lane:plan-needed"],
+      "stale_comments": [],
+      "done_so_far": [
+        "PR #1374 merged: Langfuse @observe coverage added to contextualization providers (claude, openai, groq)",
+        "PR #1375 merged: Langfuse @observe coverage added to cross-encoder reranker"
+      ],
+      "blocked_by": [],
+      "remaining_slices": [
+        {
+          "id": "1367-A",
+          "task": "Add @observe on search_engines.py embedding_model.encode() calls",
+          "type": "implementation",
+          "reserved_files": ["src/retrieval/search_engines.py", "tests/contract/test_trace_families_contract.py", "tests/observability/trace_contract.yaml"],
+          "tests": ["pytest tests/contract/test_trace_families_contract.py -v", "pytest tests/contract/test_span_coverage_contract.py -v"]
+        },
+        {
+          "id": "1367-B",
+          "task": "Add @observe on core/pipeline.py embedding_model.encode()",
+          "type": "implementation",
+          "reserved_files": ["src/core/pipeline.py", "tests/contract/test_trace_families_contract.py", "tests/observability/trace_contract.yaml"],
+          "tests": ["pytest tests/contract/test_trace_families_contract.py -v"]
+        },
+        {
+          "id": "1367-C",
+          "task": "Add @observe on ingestion/indexer.py embedding_model.encode()",
+          "type": "implementation",
+          "reserved_files": ["src/ingestion/indexer.py", "tests/contract/test_trace_families_contract.py", "tests/observability/trace_contract.yaml"],
+          "tests": ["pytest tests/contract/test_trace_families_contract.py -v"]
+        },
+        {
+          "id": "1367-D",
+          "task": "Add @observe on services/bge-m3-api/app.py FastAPI endpoints",
+          "type": "implementation",
+          "reserved_files": ["services/bge-m3-api/app.py", "tests/contract/test_trace_families_contract.py", "tests/observability/trace_contract.yaml"],
+          "tests": ["pytest tests/contract/test_trace_families_contract.py -v"]
+        },
+        {
+          "id": "1367-E",
+          "task": "Add @observe on services/user-base/main.py embed endpoints",
+          "type": "implementation",
+          "reserved_files": ["services/user-base/main.py", "tests/contract/test_trace_families_contract.py", "tests/observability/trace_contract.yaml"],
+          "tests": ["pytest tests/contract/test_trace_families_contract.py -v"]
+        },
+        {
+          "id": "1367-F",
+          "task": "Switch src/contextualization/openai.py to langfuse.openai.AsyncOpenAI or verify plain client is intentional",
+          "type": "implementation",
+          "reserved_files": ["src/contextualization/openai.py", "tests/contract/test_trace_families_contract.py"],
+          "tests": ["Unit test for contextualization path"]
+        }
+      ]
+    },
+    "1369": {
+      "state": "OPEN",
+      "labels": ["domain:observability", "P2-backlog", "lane:plan-needed"],
+      "stale_comments": [],
+      "done_so_far": [
+        "PR #1376 merged: duplicate detect-agent-intent removed by passing precomputed agent_intent into run_client_pipeline"
+      ],
+      "blocked_by": [],
+      "remaining_slices": [
+        {
+          "id": "1369-A",
+          "task": "Audit service-generate-response WARNING-level semantics: streaming fallback (line 829) and TTFT drift (line 979)",
+          "type": "review",
+          "reserved_files": ["telegram_bot/services/generate_response.py", "tests/observability/trace_contract.yaml", "tests/unit/services/test_generate_response.py"],
+          "tests": ["pytest tests/unit/services/test_generate_response.py -v", "pytest tests/contract/test_error_contract.py -v"]
+        }
+      ]
+    },
+    "1253": {
+      "state": "OPEN",
+      "labels": ["bug", "domain:observability", "P1-next", "has-pr", "in-progress", "langgraph", "SDK-audit", "lane:plan-needed"],
+      "stale_comments": [
+        {
+          "comment_url": "https://github.com/yastman/rag/issues/1253#issuecomment-4370676077",
+          "stale_assertion": "PR #1290 is open against dev",
+          "current_fact": "PR #1290 is CLOSED unmerged as of 2026-05-04T15:31:59Z (mergedAt: null)"
+        }
+      ],
+      "done_so_far": [],
+      "blocked_by": [],
+      "remaining_slices": [
+        {
+          "id": "1253-A",
+          "task": "Extract current trace ID in telegram_bot/agents/rag_tool.py and pass into pipeline invocation",
+          "type": "implementation",
+          "reserved_files": ["telegram_bot/agents/rag_tool.py"],
+          "tests": ["Unit test mocking get_client().get_current_trace_id()"]
+        },
+        {
+          "id": "1253-B",
+          "task": "Accept langfuse_trace_id in telegram_bot/pipelines/client.py and wrap with propagate_attributes",
+          "type": "implementation",
+          "reserved_files": ["telegram_bot/pipelines/client.py"],
+          "tests": ["Unit test for trace ID propagation"]
+        },
+        {
+          "id": "1253-C",
+          "task": "Verify graph.py compiled graph respects propagated context",
+          "type": "review",
+          "reserved_files": ["telegram_bot/graph/graph.py"],
+          "tests": ["pytest tests/unit/graph/test_error_spans.py -v"]
+        },
+        {
+          "id": "1253-D",
+          "task": "Add contract test for agent-to-pipeline trace propagation",
+          "type": "implementation",
+          "reserved_files": ["tests/contract/test_trace_context_propagation.py"],
+          "tests": ["pytest tests/contract/test_trace_context_propagation.py -v"]
+        },
+        {
+          "id": "1253-E",
+          "task": "Runtime validation: inspect Langfuse trace tree for nested agent-to-pipeline spans",
+          "type": "heavy_check",
+          "reserved_files": [],
+          "tests": ["Manual Langfuse CLI check of trace tree"]
+        }
+      ]
+    }
+  },
+  "closed_context": {
+    "1305": {
+      "state": "CLOSED",
+      "title": "observability: add structured runtime events and bot log analyzer"
+    },
+    "1362": {
+      "state": "CLOSED",
+      "title": "observability: langfuse.openai AsyncOpenAI creates orphaned traces — LLM cost lost"
+    },
+    "1290": {
+      "state": "CLOSED",
+      "merged": false,
+      "title": "fix(trace): propagate Langfuse trace context from agent to RAG pipeline (#1253)"
+    }
+  },
+  "sdk_native_check": true,
+  "sdk_docs_evidence": [
+    "Langfuse Python SDK v4 baseline from Context7 (2026-05-07): @observe supports sync/async; capture_input/output=False valid; propagate_attributes propagates user/session/tags/metadata; explicit trace IDs via langfuse_trace_id header",
+    "SDK registry (docs/engineering/sdk-registry.md): telegram_bot/observability.py is central module; @observe(name=..., capture_input=False, capture_output=False) on nodes/steps; propagate_attributes() wraps entry-points; langfuse.openai.AsyncOpenAI is adopted drop-in"
+  ],
+  "task_dag": {
+    "blockers": ["1307-A"],
+    "parallel_slices": [
+      "1307-B", "1307-C", "1367-A", "1367-B", "1367-C", "1367-D", "1367-E", "1367-F",
+      "1369-A", "1253-A", "1253-B", "1253-C", "1253-D"
+    ],
+    "post_blocker": ["1307-D", "1307-E", "1253-E"]
+  },
+  "new_bugs": [
+    {
+      "title": "Stale has-pr label on #1253 after PR #1290 closed unmerged",
+      "impact": "Issue tracking accuracy: #1253 still appears as having an open PR, confusing sprint planning and worker dispatch",
+      "evidence": "gh pr view 1290 --json state,mergedAt returns {\"state\":\"CLOSED\",\"mergedAt\":null}; issue #1253 labels include 'has-pr'",
+      "reproduction": "gh issue view 1253 --json labels; gh pr view 1290 --json state,mergedAt",
+      "expected": "#1253 should not have 'has-pr' label when its associated PR is closed unmerged",
+      "actual": "#1253 retains 'has-pr' label and a 2026-05-04 comment asserting PR #1290 is open",
+      "suspected_files": ["GitHub issue metadata"],
+      "blocks_current_pr": false,
+      "in_scope_for_current_task": false,
+      "recommended_disposition": "new_or_existing_issue"
+    },
+    {
+      "title": "src/contextualization/openai.py uses plain openai.AsyncOpenAI instead of langfuse.openai.AsyncOpenAI",
+      "impact": "LLM calls in contextualization path bypass Langfuse auto-tracing, creating blind spots even though @observe decorates the function boundary",
+      "evidence": "src/contextualization/openai.py line 4: from openai import AsyncOpenAI; line 25: self.client = AsyncOpenAI(...). SDK registry says 'langfuse.openai.AsyncOpenAI is the adopted drop-in'",
+      "reproduction": "rg -n 'from openai import AsyncOpenAI' src/contextualization/openai.py",
+      "expected": "Contextualization providers should use langfuse.openai.AsyncOpenAI for auto-tracing, or have an explicit ADR documenting why plain client is required",
+      "actual": "Plain openai.AsyncOpenAI is used; inner LLM call is not auto-traced by Langfuse",
+      "suspected_files": ["src/contextualization/openai.py"],
+      "blocks_current_pr": false,
+      "in_scope_for_current_task": false,
+      "recommended_disposition": "new_or_existing_issue"
+    },
+    {
+      "title": "Local dev stack non-functional due to stale images, Postgres password drift, invalid Langfuse secrets",
+      "impact": "Blocks all local Langfuse trace validation work for #1307, #1253-E, and any runtime observability testing",
+      "evidence": "docs/audits/2026-05-07-docker-langfuse-health-audit.md: dev_bot image built 2026-04-17 with Python 3.14; langfuse v4 crashes with pydantic.v1 ConfigError. Postgres data volume password mismatch causes Prisma P1000. ENCRYPTION_KEY is 19 chars (needs 64 hex).",
+      "reproduction": "docker run --rm dev_bot python -c 'import langfuse' # ConfigError. docker logs dev_langfuse_1 # P1000. docker logs dev_langfuse-worker_1 # ZodError ENCRYPTION_KEY too small.",
+      "expected": "Local make local-up and make run-bot should produce healthy containers and OTEL 200 responses",
+      "actual": "bot, langfuse, langfuse-worker all in restart loops; Langfuse UI unreachable",
+      "suspected_files": ["docker/litellm/config.yaml", "compose.yml", "compose.dev.yml", "telegram_bot/Dockerfile"],
+      "blocks_current_pr": false,
+      "in_scope_for_current_task": false,
+      "recommended_disposition": "new_or_existing_issue"
+    }
+  ],
+  "bug_disposition_recommendations": [
+    {
+      "bug": "Stale has-pr label on #1253 after PR #1290 closed unmerged",
+      "disposition": "new_or_existing_issue",
+      "reason": "GitHub metadata maintenance is outside current reserved files; requires issue admin action"
+    },
+    {
+      "bug": "src/contextualization/openai.py uses plain openai.AsyncOpenAI instead of langfuse.openai.AsyncOpenAI",
+      "disposition": "new_or_existing_issue",
+      "reason": "Fix is planned as slice 1367-F but is a separate scoped issue; can be tracked under #1367 or a new follow-up"
+    },
+    {
+      "bug": "Local dev stack non-functional due to stale images, Postgres password drift, invalid Langfuse secrets",
+      "disposition": "new_or_existing_issue",
+      "reason": "Runtime infrastructure fix is pre-existing and broader than current planning scope; documented in dedicated audit already"
+    }
+  ],
+  "docs_impact_check": "Docs impact check: no documented contract changed. This planner created a new plan document and JSON decomposition; it did not modify canonical docs, Compose files, Dockerfiles, or runtime contracts."
+}
