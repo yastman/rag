@@ -4,7 +4,7 @@
 > **Last verified:** 2026-05-07
 > **Verification command:**
 > ```bash
-> COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS http://localhost:6333/collections/gdrive_documents_bge
+> curl -fsS http://localhost:6333/collections/gdrive_documents_bge
 > ```
 
 Use this runbook when Qdrant collection has issues or monitoring shows anomalies.
@@ -36,24 +36,24 @@ Run these commands before deciding whether the issue is a service failure or an 
 # Check service status with deterministic CI env (read-only, no local .env required)
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps qdrant
 
-# Health check from inside the container
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant bash -c "exec 3<>/dev/tcp/localhost/6333 && printf 'GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && head -1 <&3"
+# Health check (host-side; dev Compose publishes Qdrant REST on localhost:6333)
+curl -fsS http://localhost:6333/readyz
 ```
 
-Expected: `HTTP/1.1 200 OK`.
+Expected: exit code `0` (HTTP 200 OK).
 If this fails, treat as **service failure** (container down, disk full, or OOM).
 
 ### 2. Collection and points count
 
 ```bash
 # List all collections
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS http://localhost:6333/collections | jq
+curl -fsS http://localhost:6333/collections | jq
 
 # Check specific collection metadata
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS http://localhost:6333/collections/gdrive_documents_bge | jq
+curl -fsS http://localhost:6333/collections/gdrive_documents_bge | jq
 
 # Get points count
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS 'http://localhost:6333/collections/gdrive_documents_bge/points/count' | jq
+curl -fsS 'http://localhost:6333/collections/gdrive_documents_bge/points/count' | jq
 ```
 
 If `count: 0` but ingestion succeeded, see [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md).
@@ -61,8 +61,8 @@ If `count: 0` but ingestion succeeded, see [VPS Google Drive Ingestion Recovery]
 ### 3. Cluster health (single-node deployments)
 
 ```bash
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS http://localhost:6333/cluster | jq
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS http://localhost:6333/cluster/status | jq
+curl -fsS http://localhost:6333/cluster | jq
+curl -fsS http://localhost:6333/cluster/status | jq
 ```
 
 On a single-node dev setup the cluster should show itself as the only peer.
@@ -71,7 +71,7 @@ If Raft consensus is unhealthy, treat as **service failure** (restart Qdrant aft
 ### 4. Query latency metrics
 
 ```bash
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec qdrant curl -fsS http://localhost:6333/metrics | grep -E "(query_latency|search_latency)"
+curl -fsS http://localhost:6333/metrics | grep -E "(query_latency|search_latency)"
 ```
 
 ### 5. Logs (read-only)
@@ -90,7 +90,7 @@ Check for:
 
 | Observation | Interpretation | Next step |
 |---|---|---|
-| `/readyz` or `/collections` fails from **inside** the Qdrant container | Service failure | Check host disk/memory; restart Qdrant |
+| `/readyz` or `/collections` fails from the host | Service failure | Check host disk/memory; restart Qdrant |
 | Qdrant is healthy, but bot logs show `Connection refused` | App bug | Verify `QDRANT_URL` and `QDRANT_COLLECTION` in bot / API env |
 | `points/count` is 0 after ingestion reported success | App bug / ingestion failure | Check ingestion manifest and logs; see [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md) |
 | `points/count` drops suddenly (>5%) | Service failure or data loss | Inspect Qdrant storage volume; check for accidental collection deletion |
@@ -116,7 +116,7 @@ Check for:
 | Runtime logs | `docker compose logs qdrant --tail=200` |
 | Qdrant storage volume | `qdrant_data` (managed volume, inspect with `docker volume inspect dev_qdrant_data`) |
 | Collection snapshots | Inside container at `/qdrant/storage/snapshots/` |
-| Query metrics | `curl http://localhost:6333/metrics` (dev only, or from inside container) |
+| Query metrics | `curl http://localhost:6333/metrics` (dev only) |
 | Ingestion manifest | `ingestion` service volume `ingestion-manifest`; check with `make ingest-unified-status` |
 
 ## Remediation
