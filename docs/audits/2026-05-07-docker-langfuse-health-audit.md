@@ -16,7 +16,7 @@ The three drifts, in order of impact:
 
 1. **Stale custom images (primary Langfuse-adjacent blocker):** `dev_bot`, `dev_mini-app-api`, and `dev_rag-api` images were built on **2026-04-17 with Python 3.14.4** and contain the `langfuse` v4 SDK. Current Dockerfiles were downgraded to **Python 3.13** on 2026-05-05 (commit `546fba07`) specifically because `langfuse` v4 exercises Pydantic v1 code that crashes under Python 3.14 (`pydantic.v1.errors.ConfigError: unable to infer type for attribute "description"`). **The images were never rebuilt after the downgrade.** Every Python service that imports `telegram_bot.observability` (which imports `langfuse`) dies within 1–5 seconds of startup.
 
-2. **Postgres data volume password mismatch (Langfuse web/worker blocker):** The `dev_postgres_data` volume was initialized on **2026-03-05** with a password from an older environment. On 2026-05-05 new containers were created using the current `tests/fixtures/compose.ci.env` password (`test-postgres-password`), but Postgres ignores `POSTGRES_PASSWORD` when data already exists. Langfuse web and worker therefore receive `DATABASE_URL` containing the current env password, which is rejected by the actual database over the Docker network (verified by TCP test from a transient container on `dev_default`). This produces Prisma error `P1000: Authentication failed ... the provided database credentials for postgres are not valid`.
+2. **Postgres data volume password mismatch (Langfuse web/worker blocker):** The `dev_postgres_data` volume was initialized on **2026-03-05** with a password from an older environment. On 2026-05-05 new containers were created using the current `tests/fixtures/compose.ci.env` password (`<redacted>`), but Postgres ignores `POSTGRES_PASSWORD` when data already exists. Langfuse web and worker therefore receive `DATABASE_URL` containing the current env password, which is rejected by the actual database over the Docker network (verified by TCP test from a transient container on `dev_default`). This produces Prisma error `P1000: Authentication failed ... the provided database credentials for postgres are not valid`.
 
 3. **Langfuse v3.172.1 secret validation failure (Langfuse web/worker blocker):** The `ENCRYPTION_KEY`, `SALT`, and `NEXTAUTH_SECRET` values in the running container env are 19, 9, and 20 characters respectively. Langfuse v3.172.1 validates `ENCRYPTION_KEY` at exactly 64 hex characters (256 bits) and fails on startup with a Zod schema error before it even attempts to serve traffic.
 
@@ -120,11 +120,11 @@ Datasource "db": PostgreSQL database "langfuse", schema "public" at "postgres:54
 docker volume inspect dev_postgres_data --format='{{.CreatedAt}}'
 # 2026-03-05T14:23:08Z  (two months older than containers)
 
-docker exec -i dev_postgres_1 psql "postgresql://postgres:test-postgres-password@localhost:5432/langfuse" -c "SELECT 1;"
+docker exec -i dev_postgres_1 psql "postgresql://postgres:<redacted>@localhost:5432/langfuse" -c "SELECT 1;"
 # Succeeds because localhost is trust-authenticated (pg_hba.conf: host all all 127.0.0.1/32 trust)
 
 docker run --rm --network dev_default postgres:17-alpine \
-  psql "postgresql://postgres:test-postgres-password@postgres:5432/langfuse" -c "SELECT 1;"
+  psql "postgresql://postgres:<redacted>@postgres:5432/langfuse" -c "SELECT 1;"
 # FAILS: FATAL:  password authentication failed for user "postgres"
 ```
 This proves the env password does **not** match the actual database password over the Docker network.
@@ -222,7 +222,7 @@ git diff --check
      docker compose -f compose.yml -f compose.dev.yml up -d postgres
      ```
      *Warning: this deletes all local Postgres data (including the `langfuse` DB, Qdrant metadata, LiteLLM config, etc. if shared).*
-   - **Option B (preservative):** Connect to Postgres and `ALTER USER postgres WITH PASSWORD 'test-postgres-password';` to align the DB with the current env, then restart Langfuse.
+   - **Option B (preservative):** Connect to Postgres and `ALTER USER postgres WITH PASSWORD '<redacted>';` to align the DB with the current env, then restart Langfuse.
 
 4. **Create `.env` file**
    Copy `.env.example` to `.env` and fill in all required variables (at minimum: `REDIS_PASSWORD`, `CLICKHOUSE_PASSWORD`, `MINIO_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `ENCRYPTION_KEY`, `SALT`, `NEXTAUTH_SECRET`, `LITELLM_MASTER_KEY`, `TELEGRAM_BOT_TOKEN`, `GDRIVE_SYNC_DIR`).
