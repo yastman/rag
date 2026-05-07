@@ -189,7 +189,7 @@ The `/health` endpoint checks:
 For full dependency health checks, use the preflight command:
 
 ```bash
-make preflight
+make test-preflight
 ```
 
 ## Langfuse Tracing

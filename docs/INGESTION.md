@@ -90,7 +90,7 @@ Commonly used:
 
 ## Docker Service
 
-`docker-compose.dev.yml` includes `ingestion` service under profile `ingest`.
+`compose.yml` + `compose.dev.yml` include the `ingestion` service under profile `ingest`.
 
 ```bash
 make docker-ingest-up
