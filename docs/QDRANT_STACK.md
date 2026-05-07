@@ -13,6 +13,8 @@ Current Qdrant setup used by bot and ingestion flows.
 
 - Default runtime collection: `gdrive_documents_bge`
 - Alias: `gdrive_documents_bge_active` → `gdrive_documents_bge` (blue/green cutover ready)
+- Apartments collection: `apartments` (top-level payload, no `metadata.` prefix; created by `scripts/apartments/setup_collection.py`)
+- Conversation history collection: `conversation_history` (payload under `metadata.user_id` / `metadata.session_id`; created on-demand by `telegram_bot/services/history_service.py`)
 - Additional collections may exist for evaluation or legacy flows.
 
 ## Collection Naming Policy
@@ -127,6 +129,39 @@ Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`
 - `metadata.area` is `float` in `setup_qdrant_indexes.py` but `integer` in `indexer.py`, `setup_scalar_collection.py`, and `setup_binary_collection.py`.
 - `metadata.furniture` (keyword, "Есть") is created by `setup_qdrant_indexes.py`, while `indexer.py` and `setup_binary_collection.py` create `metadata.furnished` (bool). The runtime apartment pipeline uses `is_furnished` (bool) in dialog filters and `furniture` (string) in the heuristic extractor.
 - `metadata.maintenance` (float) is only created by `setup_qdrant_indexes.py`; none of the scalar/binary/indexer scripts index it.
+
+## Other Qdrant Collections
+
+### `apartments` (standalone apartment collection)
+
+Created by `scripts/apartments/setup_collection.py`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `complex_name` | `keyword` | — |
+| `city` | `keyword` | — |
+| `section` | `keyword` | — |
+| `apartment_number` | `keyword` | — |
+| `view_primary` | `keyword` | — |
+| `view_tags` | `keyword` | — |
+| `rooms` | `integer` | — |
+| `floor` | `integer` | — |
+| `price_eur` | `float` | — |
+| `area_m2` | `float` | — |
+| `is_furnished` | `bool` (intended) | **Bug:** script passes string `"bool"` instead of `models.PayloadSchemaType.BOOL` (line 71). `is_promotion` correctly uses the enum. |
+| `is_promotion` | `bool` | Correctly uses `models.PayloadSchemaType.BOOL` |
+
+### `conversation_history`
+
+Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collection`).
+
+- Vectors: `dense` (1024-dim, cosine)
+- Payload: `page_content`, `metadata.user_id`, `metadata.session_id`, `metadata.query`, `metadata.response`, `metadata.timestamp`, `metadata.input_type`
+- **Index gap:** `ensure_collection` does **not** create payload indexes for `metadata.user_id` or `metadata.session_id`. These fields are used heavily in `query_points` filters (`search_user_history`, `delete_user_history`) and `scroll` (`get_session_turns`), so missing indexes means full payload scans. This appears to be an omission rather than intentional — the history collection is created lazily and never runs an index-setup step.
+
+## SQL Index Navigation (Postgres Init Drift)
+
+`k8s/base/configmaps/postgres-init.yaml` only embeds `00-init-databases.sql`, `02-cocoindex.sql`, and `03-unified-ingestion-alter.sql`. `docker/postgres/init/` additionally contains `04-voice-schema.sql`, `05-realestate-schema.sql`, `06-lead-scoring-sync.sql`, `07-nurturing-funnel-analytics.sql`, and `08-user-favorites.sql`. The K8s init ConfigMap is missing scripts 04–08, which means voice transcripts, real-estate users/leads, lead scoring, nurturing analytics, and user favorites tables will not be created in K8s-deployed Postgres unless they are provisioned separately.
 
 ## Runtime-Required vs Legacy-Only Fields
 
