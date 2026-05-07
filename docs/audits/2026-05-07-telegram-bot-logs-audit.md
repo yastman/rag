@@ -72,10 +72,10 @@ The `langfuse` database **does exist** and is reachable from the postgres contai
 
 ### Root-Cause Analysis
 
-- Postgres container env: `POSTGRES_PASSWORD=test-postgres-password`.
-- Langfuse `DATABASE_URL` contains the same `test-postgres-password`.
+- Postgres container env: `POSTGRES_PASSWORD=<redacted>` (short placeholder).
+- Langfuse `DATABASE_URL` contains the same placeholder password.
 - Postgres is using `scram-sha-256` for host connections (`pg_hba.conf`).
-- The postgres data is stored in a **named volume** (`dev_postgres_data`). If the volume was first initialized with a different password (e.g., the older default `postgres` from `compose.dev.yml`), changing the env var later does **not** update the already-hashed password in the volume.
+- The postgres data is stored in a **named volume** (`dev_postgres_data`). If the volume was first initialized with a different password (e.g., an older default from `compose.dev.yml`), changing the env var later does **not** update the already-hashed password in the volume.
 - This explains why local `trust` connections work but password-over-TCP connections fail.
 
 ### Category
@@ -109,11 +109,11 @@ ZodError: [
 ]
 ```
 
-Current env value: `ENCRYPTION_KEY=test-encryption-key` (20 characters).
+Current env value: `ENCRYPTION_KEY=<redacted>` (non-64-hex placeholder, 20 characters).
 
 ### Root-Cause Analysis
 
-Langfuse `3.172.1` enforces a strict 64-character hex `ENCRYPTION_KEY`. The test fixture (`tests/fixtures/compose.ci.env`) sets `ENCRYPTION_KEY=test-encryption-key`, which satisfies the `?required` interpolation but fails Langfuse’s runtime validation.
+Langfuse `3.172.1` enforces a strict 64-character hex `ENCRYPTION_KEY`. The test fixture (`tests/fixtures/compose.ci.env`) sets `ENCRYPTION_KEY=<redacted>` (non-64-hex placeholder), which satisfies the `?required` interpolation but fails Langfuse’s runtime validation.
 
 ### Category
 **External access / secrets configuration issue**.
@@ -163,7 +163,7 @@ No new product bugs were found in the current branch code. The failures are **ru
 - `docker logs --tail 300 dev_bot_1` — showed identical pydantic crash on every restart.
 - `docker inspect dev_bot --format '{{.Created}}'` — image created `2026-04-17`.
 - `docker run --rm dev_bot python --version` — `Python 3.14.4` despite `Dockerfile` pinning `3.13`.
-- `docker inspect dev_langfuse_1 --format '{{range .Config.Env}}{{.}}{{"\n"}}{{end}}'` — `ENCRYPTION_KEY=test-encryption-key`.
+- `docker inspect dev_langfuse_1 --format '{{range .Config.Env}}{{.}}{{"\n"}}{{end}}'` — `ENCRYPTION_KEY=<redacted>`.
 - `docker logs --tail 50 dev_langfuse_1` — repeated Prisma `P1000` auth failure.
 - `docker exec dev_postgres_1 psql -U postgres -d langfuse -c "SELECT 1"` — DB exists and local trust connections work.
 - `docker inspect dev_postgres_1` — mounts persistent volume `dev_postgres_data`.
