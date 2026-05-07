@@ -1,5 +1,9 @@
 # Runbook: LiteLLM Failure and Fallback Behavior
 
+- **Owner:** LLM Proxy / On-call
+- **Last verified:** 2026-05-07
+- **Verification command:** `curl -s http://localhost:4000/health`
+
 Use this runbook when LiteLLM provider has outages or LLM calls are failing.
 
 ## Symptoms
@@ -8,16 +12,18 @@ Use this runbook when LiteLLM provider has outages or LLM calls are failing.
 - `Model not found` (404) errors
 - Extremely high latency on all LLM calls
 - No responses from bot despite successful retrieval
+- Traces show `LLM failed: Connection error` while Langfuse ingestion appears healthy
+- LiteLLM container exits with code `137` (`OOMKilled`)
 
 ## Diagnosis
 
-### 1. Check LiteLLM Logs
+### 1. Check LiteLLM Container State
 
 ```bash
 # Check if LiteLLM container is running
 docker compose ps litellm
 
-# View LiteLLM logs
+# View bounded LiteLLM logs
 docker compose logs litellm --tail=100
 ```
 
@@ -25,17 +31,17 @@ docker compose logs litellm --tail=100
 
 ```bash
 # Health check
-curl http://localhost:4000/health
+curl -s http://localhost:4000/health | jq
 
 # Or your configured LiteLLM URL
-curl ${LITELLM_URL}/health
+curl -s ${LITELLM_URL}/health | jq
 ```
 
 ### 3. Check Model Availability
 
 ```bash
 # List available models via LiteLLM proxy
-curl http://localhost:4000/v1/models
+curl -s http://localhost:4000/v1/models | jq
 ```
 
 ### 4. Check Bot Logs for LLM Errors
@@ -43,6 +49,52 @@ curl http://localhost:4000/v1/models
 ```bash
 docker compose logs bot 2>&1 | grep -i "llm\|openai\|timeout" | tail -50
 ```
+
+### 5. OOM / Exit 137 Diagnosis
+
+If the LiteLLM container is restarting or missing:
+
+```bash
+# Inspect exit status and OOM flag
+docker inspect <litellm-container> --format '
+  Name={{.Name}}
+  OOMKilled={{.State.OOMKilled}}
+  ExitCode={{.State.ExitCode}}
+  Status={{.State.Status}}
+'
+
+# Bounded recent logs around the crash
+docker compose logs litellm --tail=200 | grep -i "killed\|oom\|memory\|137"
+```
+
+**Interpretation:**
+- `OOMKilled=true` or `ExitCode=137` → LiteLLM was killed by the kernel due to memory exhaustion.
+- `Status=restarting` with `OOMKilled=false` → Likely a configuration or upstream provider error; inspect logs for `ZodError`, `P1000`, or connection refused messages.
+- If health endpoint returns `200` but models list is empty → LiteLLM is alive but cannot reach upstream providers.
+
+### 6. Verify Environment Variables (Presence Only)
+
+```bash
+# Check that required variables are present (do not print values)
+for v in LLM_BASE_URL LITELLM_URL LITELLM_MASTER_KEY; do
+  grep -q "^${v}=" .env && echo "${v}: present" || echo "${v}: MISSING"
+done
+
+# Should be:
+# LLM_BASE_URL=http://litellm:4000
+# Not pointing directly to an upstream provider
+```
+
+### 7. Distinguish Langfuse Healthy vs LLM Unhealthy
+
+Langfuse ingestion can be **fully healthy** while traces show `LLM failed: Connection error`.
+
+**Why:** Langfuse traces capture the *attempt* to call the LLM. If LiteLLM or the upstream provider is unreachable, the trace still ingests, but the LLM span records a connection failure. The ingestion pipeline itself is independent of the LLM proxy's availability.
+
+**Fast path to confirm:**
+1. Check Langfuse health: `curl -s ${LANGFUSE_HOST}/api/public/health` → expect `{"status": "ok"}`
+2. Check LiteLLM health: `curl -s http://localhost:4000/health` → expect `true` or a healthy body
+3. If Langfuse is OK but LiteLLM health fails → root cause is LiteLLM or upstream provider, not Langfuse
 
 ## Common Error Patterns
 
@@ -52,8 +104,9 @@ docker compose logs bot 2>&1 | grep -i "llm\|openai\|timeout" | tail -50
 
 **Fix:**
 ```bash
-# Check LITELLM configuration
-grep -E "LLM_BASE_URL|LITELLM" .env
+# Check LITELLM configuration (presence only)
+grep -q "^LLM_BASE_URL=" .env && echo "LLM_BASE_URL: present" || echo "LLM_BASE_URL: MISSING"
+grep -q "^LITELLM" .env && echo "LITELLM vars: present" || echo "LITELLM vars: MISSING"
 
 # Should be:
 # LLM_BASE_URL=http://litellm:4000
@@ -79,17 +132,27 @@ The bot has graceful degradation for LLM failures:
 
 ## Remediation
 
+> **Caution:** Mutating commands below. Run only after confirming the diagnosis above.
+
 ### Restart LiteLLM
 
 ```bash
 docker compose restart litellm
 ```
 
+### Increase LiteLLM Memory Limit
+
+If OOM is confirmed, raise the memory limit in `compose.yml` or `compose.override.yml` and recreate:
+
+```bash
+docker compose up -d --force-recreate litellm
+```
+
 ### Switch LLM Provider
 
 If using multiple providers:
 
-1. Update `LLM_BASE_URL` to new provider
+1. Update `LLM_BASE_URL` to new provider in `.env` (do not commit)
 2. Restart bot:
    ```bash
    docker compose restart bot
@@ -104,6 +167,12 @@ LITELLM_MODEL=azure/gpt-4o-mini
 LITELLM_FALLBACK_MODELS=gpt-4o,gpt-4o-mini
 ```
 
+Then restart LiteLLM:
+
+```bash
+docker compose restart litellm
+```
+
 ## Impact on RAG Quality
 
 When LLM fallback occurs:
@@ -115,4 +184,5 @@ When LLM fallback occurs:
 
 - Monitor LiteLLM uptime
 - Set up alerts for LLM timeout rates
-- Regular health checks: `curl ${LLM_BASE_URL}/health`
+- Regular health checks: `curl -s ${LLM_BASE_URL}/health`
+- Watch for `OOMKilled` in container state after deploys or traffic spikes
