@@ -136,13 +136,14 @@ SENSITIVE_SPANS = [
     ***REMOVED*** Entry points
     "voice-session",
     "rag-api-query",
-    ***REMOVED*** Ingestion (all 6)
+    ***REMOVED*** Ingestion (all 7)
     "ingestion-cli-run",
     "ingestion-cli-preflight",
     "ingestion-flow-run-once",
     "ingestion-flow-watch",
     "ingestion-qdrant-delete-file",
     "ingestion-qdrant-upsert-chunks",
+    "ingestion-indexer-embed-texts",
     ***REMOVED*** Contextualization (raw text chunks and queries)
     "claude-contextualize",
     "claude-contextualize-sync",
@@ -308,6 +309,7 @@ EMBEDDING_SPANS = [
     "search-engine-encode-hybrid",
     "search-engine-encode-hybrid-colbert",
     "search-engine-encode-dbsf-colbert",
+    "ingestion-indexer-embed-texts",
 ]
 
 RETRIEVER_SPANS = [
