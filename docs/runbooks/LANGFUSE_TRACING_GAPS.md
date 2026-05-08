@@ -124,6 +124,20 @@ If these are present and fresh, flat `litellm-acompletion` traces are expected p
    ```
 3. Restart bot
 
+### Prisma `P1000 Authentication failed against database server` During `make validate-traces-fast`
+
+**Cause:** `validate-traces-fast` fell back to `tests/fixtures/compose.ci.env` (no `.env` present), while an existing local Postgres volume (`dev_postgres_data`) was initialized with a password that does not match the fallback `POSTGRES_PASSWORD`.
+
+**Fix:**
+1. Create/update `.env` with the `POSTGRES_PASSWORD` used when the volume was initialized.
+2. Or delete the stale local volume and let Compose reinitialize it:
+   ```bash
+   docker volume rm dev_postgres_data
+   ```
+3. Re-run `make validate-traces-fast`.
+
+`validate-traces-fast` includes a preflight guard that allows the known-safe fallback (`POSTGRES_PASSWORD=postgres`) with existing `dev_postgres_data`, and fails early when fallback password and existing volume credentials can mismatch.
+
 ### Trace Family Missing
 
 **Cause:** Span not properly decorated with `@observe`.
