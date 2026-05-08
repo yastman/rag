@@ -43,5 +43,5 @@ curl http://localhost:8080/health
 
 ## See Also
 
-- [`../telegram_bot/graph/`](../telegram_bot/graph/) — LangGraph pipeline implementation
-- [`../telegram_bot/services/`](../telegram_bot/services/) — Services reused by the API lifespan
+- [`../../telegram_bot/graph/`](../../telegram_bot/graph/) — LangGraph pipeline implementation
+- [`../../telegram_bot/services/`](../../telegram_bot/services/) — Services reused by the API lifespan

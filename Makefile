@@ -8,7 +8,8 @@
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
-	test-contract
+	test-contract \
+	docs-check
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
@@ -476,6 +477,11 @@ docs-build: ## Build documentation
 	@echo "$(BLUE)Building documentation...$(NC)"
 	uv run mkdocs build
 	@echo "$(GREEN)✓ Documentation built in site/$(NC)"
+
+docs-check: ## Check Markdown relative links for broken targets
+	@echo "$(BLUE)Checking documentation links...$(NC)"
+	python3 scripts/check_markdown_links.py
+	@echo "$(GREEN)✓ Documentation links OK$(NC)"
 
 # =============================================================================
 # QUICK COMMANDS
