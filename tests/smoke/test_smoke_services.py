@@ -120,21 +120,19 @@ class TestSmokeServices:
 
     @pytest.mark.asyncio
     async def test_llm_api_health(self):
-        """LLM API responds (minimal completion call)."""
+        """LiteLLM/OpenAI-compatible API responds (minimal completion call)."""
         api_key = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-        base_url = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", ""))
+        base_url = os.getenv("LLM_BASE_URL", "")
         model = os.getenv("LLM_MODEL", "")
 
         if not api_key:
             pytest.skip("LLM_API_KEY not set")
+        if not base_url:
+            pytest.skip("LLM_BASE_URL not set (LiteLLM-targeted smoke check)")
 
         # If custom model but no custom base_url, skip (misconfigured)
         if model and not model.startswith("gpt") and not base_url:
-            pytest.skip(f"Custom model '{model}' requires LLM_BASE_URL or OPENAI_BASE_URL")
-
-        # Use defaults if not set
-        if not base_url:
-            base_url = "https://api.openai.com/v1"
+            pytest.skip(f"Custom model '{model}' requires LLM_BASE_URL")
         if not model:
             model = "gpt-4o-mini"
 
