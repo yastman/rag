@@ -411,7 +411,7 @@ def initialize_langfuse(
                 "Start Langfuse locally or unset LANGFUSE_HOST to suppress this warning.",
                 resolved_host,
             )
-        _disable_otel_exporter()
+        _disable_otel_exporter(shutdown=False)
         return None
 
     kwargs: dict[str, Any] = {
@@ -441,7 +441,7 @@ def initialize_langfuse(
         logger.warning("Failed to initialize Langfuse client", exc_info=True)
         _langfuse_client = None
         _langfuse_init_attempted = True
-        _disable_otel_exporter()
+        _disable_otel_exporter(shutdown=False)
         return None
 
 
