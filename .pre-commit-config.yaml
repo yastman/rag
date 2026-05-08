@@ -106,11 +106,10 @@ repos:
     hooks:
       - id: hadolint
         name: Hadolint Dockerfile linter
-        entry: hadolint/hadolint:v2.12.0
+        entry: hadolint/hadolint:v2.12.0 hadolint --failure-threshold error
         language: docker_image
         files: Dockerfile.*|.*Dockerfile
         pass_filenames: true
-        args: ["--failure-threshold", "error"]
 
   # =============================================================================
   # PRE-PUSH HOOKS (Run before git push)
