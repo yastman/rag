@@ -80,6 +80,32 @@ class TestOpenAIContextualizerInit:
 
             assert contextualizer.sync_client == mock_client
 
+    def test_init_uses_langfuse_openai_drop_in(self):
+        """Test that contextualizer uses langfuse.openai clients for auto-tracing.
+
+        This prevents orphan litellm-acompletion traces by ensuring inner
+        completion calls are nested under the active @observe span.
+        """
+        import importlib
+
+        import src.contextualization.openai as ctx_mod
+
+        mock_settings = MagicMock()
+        mock_settings.openai_api_key = "test-key"
+
+        with (
+            patch("langfuse.openai.AsyncOpenAI") as mock_lf_async,
+            patch("langfuse.openai.OpenAI") as mock_lf_sync,
+        ):
+            mock_lf_async.return_value = MagicMock()
+            mock_lf_sync.return_value = MagicMock()
+
+            importlib.reload(ctx_mod)
+            ctx_mod.OpenAIContextualizer(settings=mock_settings)
+
+            mock_lf_async.assert_called_once_with(api_key="test-key")
+            mock_lf_sync.assert_called_once_with(api_key="test-key")
+
 
 class TestOpenAIContextualizerContextualize:
     """Tests for OpenAIContextualizer.contextualize method."""
