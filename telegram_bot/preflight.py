@@ -4,6 +4,7 @@ import contextlib
 import inspect
 import logging
 import os
+import re
 from enum import StrEnum
 from urllib.parse import urlparse
 
@@ -26,6 +27,26 @@ _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
 
 # BGE-M3 dense vector dimensionality (used when auto-creating missing collections)
 _BGEM3_DENSE_DIM = 1024
+_REDIS_AUTH_FAILURE_HINT = (
+    "Redis auth failed: .env REDIS_PASSWORD may not match the running Redis container password. "
+    "Run `make local-redis-recreate` and then `make test-bot-health`."
+)
+_REDIS_URL_CREDENTIALS_RE = re.compile(r"(redis://)([^@\s]+)@")
+_REDIS_AUTH_TOKENS = (
+    "invalid username-password pair",
+    "wrongpass",
+    "authentication required",
+    "noauth",
+)
+
+
+def _redact_redis_credentials(text: str) -> str:
+    return _REDIS_URL_CREDENTIALS_RE.sub(r"\1***@", text)
+
+
+def _is_redis_auth_failure(message: str) -> bool:
+    lowered = message.lower()
+    return any(token in lowered for token in _REDIS_AUTH_TOKENS)
 
 
 def _read_colbert_coverage_warn_threshold() -> float:
@@ -194,7 +215,7 @@ async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
         return True, details
 
     except Exception as exc:
-        details["error"] = str(exc)
+        details["error"] = _redact_redis_credentials(str(exc))
         return False, details
     finally:
         await r.aclose()
@@ -246,7 +267,7 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
                     continue
 
             except Exception as exc:
-                errors.append(f"{prefix} error: {exc}")
+                errors.append(f"{prefix} error: {_redact_redis_credentials(str(exc))}")
                 # Best-effort cleanup
                 with contextlib.suppress(Exception):
                     await r.delete(test_key)
@@ -306,6 +327,8 @@ async def _check_single_dep(
     if name == "redis":
         passed, details = await _check_redis_deep(config.redis_url)
         if not passed:
+            if _is_redis_auth_failure(details.get("error", "")):
+                logger.error("Preflight FAIL: %s", _REDIS_AUTH_FAILURE_HINT)
             logger.error("Preflight FAIL: Redis deep check — %s", details)
         return passed
 
