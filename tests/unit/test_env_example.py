@@ -25,6 +25,7 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     local_dev = Path("docs/LOCAL-DEVELOPMENT.md").read_text(encoding="utf-8")
     docker_doc = Path("DOCKER.md").read_text(encoding="utf-8")
     makefile = Path("Makefile").read_text(encoding="utf-8")
+    env_example = Path(".env.example").read_text(encoding="utf-8")
     bot_config = Path("telegram_bot/config.py").read_text(encoding="utf-8")
 
     assert "cp .env.example .env" in readme
@@ -35,6 +36,9 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     assert 'env_file=".env"' in bot_config
     assert "uv run --env-file .env python -m telegram_bot.main" in makefile
     assert "[ -f ./.env ] && . ./.env" in makefile
+    assert "local-redis-recreate" in makefile
+    assert "make local-redis-recreate" in env_example
+    assert "make local-redis-recreate" in local_dev
     assert ".env.local" not in bot_config
     assert ".env.local" not in makefile
     assert ".env -> .env.local symlink" not in makefile
