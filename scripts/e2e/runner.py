@@ -262,15 +262,19 @@ def main():
     else:
         scenarios = SCENARIOS
 
-    console.print(f"\n[bold]Running {len(scenarios)} E2E tests against {config.bot_username}[/]\n")
+    console.print(f"\n[bold]Running {len(scenarios)} E2E tests against configured bot target[/]\n")
 
     ***REMOVED*** Check if trace validation is enabled
     validate_traces = is_validation_enabled()
 
     ***REMOVED*** Run tests
-    report = asyncio.run(
-        run_tests(config, scenarios, validate_traces=validate_traces, no_judge=args.no_judge)
-    )
+    try:
+        report = asyncio.run(
+            run_tests(config, scenarios, validate_traces=validate_traces, no_judge=args.no_judge)
+        )
+    except RuntimeError as exc:
+        console.print(f"[red]E2E runner blocked:[/] {exc}")
+        sys.exit(1)
 
     ***REMOVED*** Generate reports
     generator = ReportGenerator(config.reports_dir)

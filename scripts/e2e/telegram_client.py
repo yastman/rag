@@ -39,9 +39,14 @@ class E2ETelegramClient:
             self.config.telegram_api_id,
             self.config.telegram_api_hash,
         )
-        await self._client.start()
-        me = await self._client.get_me()
-        logger.info(f"Connected as {me.username or me.phone}")
+        await self._client.connect()
+        authorized = await self._client.is_user_authorized()
+        if not authorized:
+            await self._client.disconnect()
+            raise RuntimeError(
+                "Telethon session is not authorized. Run scripts/e2e/auth.py to refresh e2e_tester.session."
+            )
+        logger.info("Connected to Telegram (authorized=True)")
 
     async def disconnect(self) -> None:
         """Disconnect from Telegram."""
