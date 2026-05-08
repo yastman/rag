@@ -101,6 +101,15 @@ def test_compose_ci_env_fixture_has_project_name() -> None:
     )
 
 
+def test_compose_ci_env_fixture_has_langfuse_dev_keys() -> None:
+    env_path = ROOT / "tests" / "fixtures" / "compose.ci.env"
+    lines = [line.strip() for line in env_path.read_text().splitlines()]
+    expected = {"LANGFUSE_PUBLIC_KEY=pk-lf-dev", "LANGFUSE_SECRET_KEY=sk-lf-dev"}
+    assert expected.issubset(set(lines)), (
+        f"{env_path} must contain safe Langfuse dev key placeholders for fixture mode"
+    )
+
+
 def test_help_shows_default_env_file() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--help"],
