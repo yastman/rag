@@ -826,10 +826,8 @@ async def generate_response(
                     response_sent = delivered
                 else:
                     logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
-                    lf_client.update_current_span(
-                        level="WARNING",
-                        status_message="Streaming failed, using non-streaming fallback",
-                    )
+                    # Recovery path succeeded below; keep normal-success span level.
+                    # Degraded mode is tracked via llm_stream_recovery=True.
                     t_llm_start = time.monotonic()
                     response_obj = await _chat_create_with_optional_name(
                         llm,
