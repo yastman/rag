@@ -1,7 +1,8 @@
 """OpenAI-based contextualization provider."""
 
 from langfuse import observe
-from openai import APIStatusError, AsyncOpenAI, OpenAI, RateLimitError
+from langfuse.openai import AsyncOpenAI, OpenAI
+from openai import APIStatusError, RateLimitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
