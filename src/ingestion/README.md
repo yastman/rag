@@ -61,6 +61,11 @@ make check
 
 ## See Also
 
+- [`./unified/AGENTS.override.md`](./unified/AGENTS.override.md) — Ingestion-specific scope rules and validation
 - [`./unified/README.md`](./unified/README.md) — Detailed unified pipeline docs
 - [`../retrieval/`](../retrieval/) — Search engines that consume ingested data
+- [`../../DOCKER.md`](../../DOCKER.md) — Docker orchestration and service dependencies
+- [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
+- [`../../docs/runbooks/README.md`](../../docs/runbooks/README.md) — Operational troubleshooting
+- [`../../docs/INGESTION.md`](../../docs/INGESTION.md) — Unified ingestion guide and troubleshooting
 - [`../../docs/engineering/test-writing-guide.md`](../../docs/engineering/test-writing-guide.md) — Test conventions

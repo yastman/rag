@@ -61,3 +61,5 @@ pytest src/retrieval/ src/ingestion/unified/ src/api/
 
 - [`../telegram_bot/README.md`](../telegram_bot/README.md) — Telegram transport layer
 - [`../DOCKER.md`](../DOCKER.md) — Docker orchestration and service dependencies
+- [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
+- [`../docs/runbooks/README.md`](../docs/runbooks/README.md) — Operational troubleshooting

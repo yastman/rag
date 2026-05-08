@@ -46,3 +46,5 @@ make check
 
 - [`../api/`](../api/) — RAG API that the voice agent consumes
 - [`../../DOCKER.md`](../../DOCKER.md) — Docker profiles and service orchestration
+- [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
+- [`../../docs/runbooks/README.md`](../../docs/runbooks/README.md) — Operational troubleshooting
