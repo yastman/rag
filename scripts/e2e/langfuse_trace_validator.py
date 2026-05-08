@@ -6,10 +6,13 @@ Validation is done via Langfuse SDK v3 API client (Langfuse().api.trace.list/get
 
 from __future__ import annotations
 
+import json
 import os
 import time
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 from langfuse import Langfuse
 
@@ -40,6 +43,16 @@ class TraceValidationResult:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class LiteLLMRouteProof:
+    """Alias-to-provider model mapping proof from LiteLLM /model/info."""
+
+    alias: str
+    route_model: str | None
+    info_url: str
+    source: str
+
+
 def _langfuse_is_configured() -> bool:
     # Langfuse SDK can be configured via env. If keys are missing, validation is meaningless.
     return bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
@@ -48,6 +61,60 @@ def _langfuse_is_configured() -> bool:
 def is_validation_enabled() -> bool:
     """True when E2E should validate Langfuse traces."""
     return os.getenv("E2E_VALIDATE_LANGFUSE", "0").lower() in {"1", "true", "yes"}
+
+
+def probe_litellm_route(
+    *, base_url: str, model_alias: str, timeout_s: float = 2.0
+) -> LiteLLMRouteProof | None:
+    """Best-effort local probe for LiteLLM route mapping.
+
+    Returns None when probing is not possible/safe (for example non-local URL).
+    """
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    host = (parsed.hostname or "").lower()
+    if host not in {"localhost", "127.0.0.1"}:
+        return None
+
+    base = base_url.rstrip("/").removesuffix("/v1")
+    info_url = f"{base}/model/info"
+
+    request = urllib.request.Request(info_url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
+            raw_payload = response.read().decode("utf-8")
+    except Exception:
+        return None
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return LiteLLMRouteProof(
+            alias=model_alias,
+            route_model=None,
+            info_url=info_url,
+            source="local-probe-invalid-json",
+        )
+
+    model_list = payload.get("data") if isinstance(payload, dict) else None
+    route_model: str | None = None
+    if isinstance(model_list, list):
+        for item in model_list:
+            if not isinstance(item, dict):
+                continue
+            if item.get("model_name") == model_alias:
+                params = item.get("litellm_params") or {}
+                if isinstance(params, dict):
+                    route_model = params.get("model")
+                break
+
+    return LiteLLMRouteProof(
+        alias=model_alias,
+        route_model=route_model,
+        info_url=info_url,
+        source="local-probe",
+    )
 
 
 def _as_bool(value: object) -> bool | None:
