@@ -172,6 +172,20 @@ class TestCheckRedisDeep:
         assert "supersecret" not in details["error"]
         assert "redis://***@localhost:6379" in details["error"]
 
+    async def test_error_text_redacts_redis_password_from_rediss_uri(self):
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(
+            side_effect=RuntimeError("error for rediss://:supersecret@localhost:6379")
+        )
+        mock_redis.aclose = AsyncMock()
+
+        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+            passed, details = await _check_redis_deep("redis://localhost")
+
+        assert passed is False
+        assert "supersecret" not in details["error"]
+        assert "rediss://***@localhost:6379" in details["error"]
+
     async def test_noeviction_policy_warning(self):
         mock_redis = AsyncMock()
         mock_redis.ping = AsyncMock(return_value=True)

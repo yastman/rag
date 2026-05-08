@@ -50,7 +50,7 @@ DEFAULT_TTLS: dict[str, int] = {
 }
 
 _METRIC_TIERS = ("semantic", "embeddings", "sparse", "search", "rerank")
-_REDIS_URL_CREDENTIALS_RE = re.compile(r"(redis://)([^@\s]+)@")
+_REDIS_URL_CREDENTIALS_RE = re.compile(r"(rediss?://)([^@\s]+)@")
 
 
 def _hash(data: str) -> str:
