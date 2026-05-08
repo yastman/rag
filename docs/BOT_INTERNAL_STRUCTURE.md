@@ -173,6 +173,6 @@ grep -n "dp.message_handlers" telegram_bot/bot.py
 
 ## Related Documentation
 
-- [Telegram Bot Feature Doc](../.claude/rules/features/telegram-bot.md)
+- [Bot Architecture](BOT_ARCHITECTURE.md)
 - [Client Pipeline](CLIENT_PIPELINE.md)
 - [Pipeline Overview](PIPELINE_OVERVIEW.md)
