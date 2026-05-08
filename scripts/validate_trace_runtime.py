@@ -12,6 +12,7 @@ from pathlib import Path
 
 CI_ENV_FILE = Path("tests/fixtures/compose.ci.env")
 POSTGRES_VOLUME_SUFFIX = "postgres_data"
+LOCAL_DEFAULT_POSTGRES_VALUE = "postgres"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -91,11 +92,18 @@ def run_guard(
     if not _volume_exists(volume_name):
         return True, f"volume {volume_name} not found; no auth-mismatch risk from reused volume."
 
+    fallback_password = env_values.get("POSTGRES_PASSWORD", "")
+    if fallback_password == LOCAL_DEFAULT_POSTGRES_VALUE:
+        return (
+            True,
+            "fallback env uses local default POSTGRES_PASSWORD=postgres; existing dev volume is compatible.",
+        )
+
     remediation = (
         "Postgres auth mismatch risk: validate-traces-fast is using "
         f"{CI_ENV_FILE}, but Docker volume '{volume_name}' already exists.\n"
         "This commonly means the volume was initialized with a different password "
-        "(often 'postgres'), and Langfuse will fail with Prisma P1000.\n"
+        f"than fallback POSTGRES_PASSWORD='{fallback_password or '<missing>'}', and Langfuse will fail with Prisma P1000.\n"
         "Remediation:\n"
         "1) Create/update .env with POSTGRES_PASSWORD matching the existing dev volume.\n"
         "2) Or remove the old dev Postgres volume before re-running:\n"
