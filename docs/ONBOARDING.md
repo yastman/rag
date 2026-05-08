@@ -168,18 +168,18 @@ rag/
 |-------|------|
 | Local development setup | [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) |
 | Pipeline architecture | [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) |
-| Troubleshooting | [.claude/rules/troubleshooting.md](../.claude/rules/troubleshooting.md) |
-| Feature documentation | [.claude/rules/features/telegram-bot.md](../.claude/rules/features/telegram-bot.md) |
+| Troubleshooting | [runbooks/README.md](runbooks/README.md) |
+| Feature documentation | [BOT_ARCHITECTURE.md](BOT_ARCHITECTURE.md) |
 
 ## Next Steps
 
 1. Read [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for detailed setup
 2. Review [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) to understand the architecture
-3. Check `.claude/rules/features/telegram-bot.md` for bot internals
+3. Check [BOT_ARCHITECTURE.md](BOT_ARCHITECTURE.md) for bot internals
 4. Explore `tests/` to understand testing patterns
 
 ## Getting Help
 
 - **Issues**: Create a GitHub issue for bugs or feature requests
-- **Internal docs**: See `.claude/rules/` for development guidelines
-- **Troubleshooting**: See `.claude/rules/troubleshooting.md` for common issues
+- **Internal docs**: See [docs/engineering/](engineering/) for development guidelines
+- **Troubleshooting**: See [runbooks/README.md](runbooks/README.md) for common issues
