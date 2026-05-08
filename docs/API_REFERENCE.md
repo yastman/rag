@@ -202,4 +202,4 @@ All queries are traced in Langfuse with:
 ***REMOVED******REMOVED*** Related Documentation
 
 - [Pipeline Overview](PIPELINE_OVERVIEW.md)
-- [Observability](../.claude/rules/features/telegram-bot.md***REMOVED***observability)
+- [Bot Architecture](BOT_ARCHITECTURE.md)
