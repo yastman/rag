@@ -73,6 +73,7 @@ Check for:
 |---|---|---|
 | `redis-cli ping` from **inside** the container fails | Service failure | Restart container, check disk/memory on host |
 | `redis-cli ping` works, but bot logs show `Connection refused` | App bug | Verify `REDIS_URL` in bot env; check password encoding |
+| Bot preflight shows `invalid username-password pair` / `WRONGPASS` / `NOAUTH` after local `.env` edit | Local auth drift | Run `make local-redis-recreate`, then `make test-bot-health` |
 | Redis memory is near limit and `evicted_keys` is rising | Service failure / capacity | Scale `maxmemory` or reduce TTL; see Remediation |
 | Cache hit rate is 0% but Redis is healthy and has keys | App bug | Check semantic cache threshold, query_type mapping, or `CACHE_VERSION` drift in `telegram_bot/integrations/cache.py` |
 | High latency **with** cache hits | App bug | Profile embedding or rerank tiers; latency may be upstream of Redis |
@@ -115,6 +116,19 @@ Check for:
 3. Verify network connectivity from the bot container:
    ```bash
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec bot redis-cli -h redis -a test-redis-password ping
+   ```
+
+### Local `REDIS_PASSWORD` Drift After `.env` Change
+
+When local bot preflight reports auth failures (`invalid username-password pair`, `WRONGPASS`, `NOAUTH`), your running Redis container may still use the previous password.
+
+1. Recreate local Redis with current `.env` values:
+   ```bash
+   make local-redis-recreate
+   ```
+2. Re-run local bot health:
+   ```bash
+   make test-bot-health
    ```
 
 ### Cache Corruption or Version Drift
