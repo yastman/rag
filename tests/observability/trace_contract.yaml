@@ -104,6 +104,11 @@ spans:
     - bge-m3-colbert-query-embed
     - bge-m3-hybrid-embed-batch
 
+  search_engines:
+    - search-engine-encode-hybrid
+    - search-engine-encode-hybrid-colbert
+    - search-engine-encode-dbsf-colbert
+
   qdrant:
     - qdrant-ensure-collection
     - qdrant-apply-strict-mode
@@ -279,6 +284,10 @@ sensitive_spans:
   - bge-m3-encode-hybrid
   - bge-m3-rerank
   - bge-m3-encode-colbert
+  # search_engines (raw vectors)
+  - search-engine-encode-hybrid
+  - search-engine-encode-hybrid-colbert
+  - search-engine-encode-dbsf-colbert
   # qdrant (raw search payloads + lifecycle)
   - qdrant-ensure-collection
   - qdrant-apply-strict-mode

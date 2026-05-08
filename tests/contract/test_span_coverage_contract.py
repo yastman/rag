@@ -68,6 +68,10 @@ SENSITIVE_SPANS = [
     "bge-m3-encode-hybrid",
     "bge-m3-rerank",
     "bge-m3-encode-colbert",
+    # Search engines (all 3)
+    "search-engine-encode-hybrid",
+    "search-engine-encode-hybrid-colbert",
+    "search-engine-encode-dbsf-colbert",
     # Qdrant (all 8)
     "qdrant-ensure-collection",
     "qdrant-apply-strict-mode",
@@ -301,6 +305,9 @@ EMBEDDING_SPANS = [
     "bge-m3-encode-hybrid",
     "bge-m3-rerank",
     "bge-m3-encode-colbert",
+    "search-engine-encode-hybrid",
+    "search-engine-encode-hybrid-colbert",
+    "search-engine-encode-dbsf-colbert",
 ]
 
 RETRIEVER_SPANS = [
