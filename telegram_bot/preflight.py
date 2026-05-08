@@ -31,7 +31,7 @@ _REDIS_AUTH_FAILURE_HINT = (
     "Redis auth failed: .env REDIS_PASSWORD may not match the running Redis container password. "
     "Run `make local-redis-recreate` and then `make test-bot-health`."
 )
-_REDIS_URL_CREDENTIALS_RE = re.compile(r"(redis://)([^@\s]+)@")
+_REDIS_URL_CREDENTIALS_RE = re.compile(r"(rediss?://)([^@\s]+)@")
 _REDIS_AUTH_TOKENS = (
     "invalid username-password pair",
     "wrongpass",
