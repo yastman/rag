@@ -2469,7 +2469,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
-    @observe(name="telegram-rag-query")
+    @observe(name="telegram-rag-query", capture_input=False, capture_output=False)
     async def handle_query(
         self,
         message: Message,
@@ -2748,7 +2748,7 @@ class PropertyBot:
             return None  # caller falls through to sdk_agent path
         return result.answer
 
-    @observe(name="telegram-rag-supervisor")
+    @observe(name="telegram-rag-supervisor", capture_input=False, capture_output=False)
     async def _handle_query_supervisor(
         self,
         message: Message,
