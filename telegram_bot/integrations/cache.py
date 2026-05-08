@@ -50,6 +50,7 @@ DEFAULT_TTLS: dict[str, int] = {
 }
 
 _METRIC_TIERS = ("semantic", "embeddings", "sparse", "search", "rerank")
+_REDIS_URL_CREDENTIALS_RE = re.compile(r"(redis://)([^@\s]+)@")
 
 
 def _hash(data: str) -> str:
@@ -65,6 +66,10 @@ def _normalize_query_for_cache(text: str) -> str:
     Applied ONLY to cache key generation, not to the query in the pipeline.
     """
     return re.sub(r"[^\w\s]+$", "", text.strip().lower()).strip()
+
+
+def _redact_redis_credentials(text: str) -> str:
+    return _REDIS_URL_CREDENTIALS_RE.sub(r"\1***@", text)
 
 
 def _create_semantic_cache(
@@ -184,9 +189,13 @@ class CacheLayerManager:
                 health_check_interval=30,
             )
             await self.redis.ping()  # type: ignore[misc]
-            logger.info("Redis connected: %s", self.redis_url)
+            logger.info("Redis connected: %s", _redact_redis_credentials(self.redis_url))
         except Exception as e:
-            logger.error("Redis connection failed: %s: %s", type(e).__name__, e)
+            logger.error(
+                "Redis connection failed: %s: %s",
+                type(e).__name__,
+                _redact_redis_credentials(str(e)),
+            )
             self.redis = None
             return
 
