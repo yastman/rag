@@ -500,7 +500,7 @@ qa: all-checks test ## Full quality assurance
 # Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
-.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build run-bot bot
+.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
 LOCAL_SERVICES := redis qdrant bge-m3 litellm
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
@@ -532,6 +532,11 @@ local-ps:  ## Show local Docker status
 
 local-build:  ## Rebuild local Docker services
 	$(LOCAL_COMPOSE_CMD) build bge-m3 docling
+
+local-redis-recreate:  ## Recreate local Redis container after REDIS_PASSWORD/.env changes
+	@echo "$(BLUE)Recreating local Redis container with current .env values...$(NC)"
+	$(LOCAL_COMPOSE_CMD) up -d --no-deps --force-recreate redis
+	@echo "$(GREEN)✓ Local Redis recreated. Next: make test-bot-health$(NC)"
 
 # =============================================================================
 # Deployment
