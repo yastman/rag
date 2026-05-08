@@ -19,9 +19,19 @@ def is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
         return False
 
 
-def disable_otel_exporter() -> None:
-    """Shutdown active OTel tracer provider and disable Langfuse tracing export."""
-    os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
+def disable_otel_exporter(*, shutdown: bool = True) -> None:
+    """Disable Langfuse/OTel export path and optionally shutdown active provider.
+
+    Use ``shutdown=False`` to avoid noisy exporter shutdown tracebacks when local
+    Langfuse endpoint is explicitly unreachable.
+    """
+    os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
+    os.environ["OTEL_SDK_DISABLED"] = "true"
+    os.environ["OTEL_TRACES_EXPORTER"] = "none"
+    os.environ["OTEL_METRICS_EXPORTER"] = "none"
+    os.environ["OTEL_LOGS_EXPORTER"] = "none"
+    if not shutdown:
+        return
     try:
         from opentelemetry import trace as otel_trace_api
         from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
