@@ -126,6 +126,59 @@ Langfuse ingestion can be **fully healthy** while traces show `LLM failed: Conne
 
 ## Common Error Patterns
 
+### WSL / Docker Desktop Stale Bind-Mount (`Exited 127`)
+
+**When:** Docker Desktop on WSL restarts, resumes from sleep, or updates; the host path for `./docker/litellm/config.yaml` becomes stale inside the VM.
+
+**Symptom chain:**
+
+1. Bot logs show `generate_response: LLM call failed, using fallback`.
+2. Stack trace contains `httpx.ConnectError: All connection attempts failed` or `openai.APIConnectionError`.
+3. `docker compose ps -a litellm` shows `dev-litellm-1 Exited (127)`.
+4. `docker inspect dev-litellm-1` may include a bind-mount error for `/app/config.yaml`:
+   ```
+   not a directory: Are you trying to mount a directory onto a file (or vice-versa)?
+   ```
+5. The host file `./docker/litellm/config.yaml` is still a regular file.
+
+**Diagnosis:**
+
+```bash
+# Verify exit code and bind-mount error
+docker compose ps -a litellm
+docker inspect dev-litellm-1 --format '
+  Name={{.Name}}
+  ExitCode={{.State.ExitCode}}
+  Status={{.State.Status}}
+  Error={{.State.Error}}
+'
+```
+
+**Remediation (safe):**
+
+> Do not restart Docker Desktop or the full stack. Recreate only the LiteLLM container so the bind-mount is re-evaluated.
+
+```bash
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d --force-recreate litellm
+```
+
+**Validation:**
+
+```bash
+# 1. Container is running
+docker compose ps litellm
+
+# 2. Liveliness returns 200
+curl -sS -m 5 -i http://127.0.0.1:4000/health/liveliness
+
+# 3. Local smoke test (redacted — do not print secrets)
+curl -sS -m 10 http://127.0.0.1:4000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}' \
+  -o /dev/null -w "HTTP_STATUS=%{http_code}\n"
+```
+
 ### "Model gpt-4o-mini not found" (404)
 
 **Cause:** `LLM_BASE_URL` points directly to Cerebras instead of LiteLLM proxy.
