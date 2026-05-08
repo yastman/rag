@@ -58,6 +58,9 @@ python -m telegram_bot.preflight
 
 ## See Also
 
+- [`AGENTS.override.md`](AGENTS.override.md) — Bot-specific scope rules and validation
 - [`../DOCKER.md`](../DOCKER.md) — Docker bring-up and service dependencies
+- [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
+- [`../docs/runbooks/README.md`](../docs/runbooks/README.md) — Operational troubleshooting
 - [`../src/retrieval/`](../src/retrieval/) — Search engine implementations
 - [`../src/ingestion/`](../src/ingestion/) — Document ingestion pipeline

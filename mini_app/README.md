@@ -56,5 +56,7 @@ Do not change the exposed port (`8090`), healthcheck path, or API response shape
 
 ## See Also
 
-- [`frontend/README.md`](frontend/README.md) — Frontend build, dev server, and test details.
-- [`../DOCKER.md`](../DOCKER.md) — Compose operations and service map.
+- [`frontend/README.md`](frontend/README.md) — Frontend build, dev server, and test details
+- [`../DOCKER.md`](../DOCKER.md) — Compose operations and service map
+- [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
+- [`../docs/runbooks/README.md`](../docs/runbooks/README.md) — Operational troubleshooting
