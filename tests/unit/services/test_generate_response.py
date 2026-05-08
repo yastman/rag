@@ -927,6 +927,49 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stream_recovery_success_does_not_set_warning_level() -> None:
+    """Successful stream recovery should record degradation metadata, not WARNING level."""
+    config, client = _make_non_streaming_config(answer="Нестриминговый fallback")
+    config.streaming_enabled = True
+    fallback_response = MagicMock()
+    fallback_response.choices = [MagicMock()]
+    fallback_response.choices[0].message.content = "Нестриминговый fallback"
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+    client.chat.completions.create = AsyncMock(
+        side_effect=[RuntimeError("LLM сервис недоступен"), fallback_response]
+    )
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    message = AsyncMock()
+    message.chat = MagicMock(id=1)
+    message.bot = bot
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест ошибки стрима",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки стрима"}],
+    )
+
+    warning_calls = [
+        c for c in lf.update_current_span.call_args_list if c.kwargs.get("level") == "WARNING"
+    ]
+    assert result["response"] == "Нестриминговый fallback"
+    assert result["llm_stream_recovery"] is True
+    assert warning_calls == []
+
+
+@pytest.mark.asyncio
 async def test_partial_stream_recovery_edits_existing_message_instead_of_sending_duplicate() -> (
     None
 ):
