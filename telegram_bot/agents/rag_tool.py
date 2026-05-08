@@ -157,26 +157,31 @@ async def rag_search(
                 result_store.get("semantic_cache_already_checked")
             )
 
+        trace_id = lf.get_current_trace_id() or ""
+
         invoke_start = time.perf_counter()
-        result = await rag_pipeline(
-            query,
-            user_id=ctx.telegram_user_id if ctx else 0,
-            session_id=ctx.session_id if ctx else "",
-            query_type=query_type,
-            original_query=ctx.original_query if ctx else "",
-            cache=ctx.cache if ctx else None,
-            embeddings=ctx.embeddings if ctx else None,
-            sparse_embeddings=ctx.sparse_embeddings if ctx else None,
-            qdrant=ctx.qdrant if ctx else None,
-            reranker=ctx.reranker if ctx else None,
-            llm=ctx.llm if ctx else None,
-            agent_role=ctx.role if ctx else None,
-            state_contract=state_contract,
-            pre_computed_embedding=pre_computed_embedding,
-            pre_computed_sparse=pre_computed_sparse,
-            pre_computed_colbert=pre_computed_colbert,
-            semantic_cache_already_checked=semantic_cache_already_checked,
-        )
+        pipeline_kwargs: dict[str, Any] = {
+            "user_id": ctx.telegram_user_id if ctx else 0,
+            "session_id": ctx.session_id if ctx else "",
+            "query_type": query_type,
+            "original_query": ctx.original_query if ctx else "",
+            "cache": ctx.cache if ctx else None,
+            "embeddings": ctx.embeddings if ctx else None,
+            "sparse_embeddings": ctx.sparse_embeddings if ctx else None,
+            "qdrant": ctx.qdrant if ctx else None,
+            "reranker": ctx.reranker if ctx else None,
+            "llm": ctx.llm if ctx else None,
+            "agent_role": ctx.role if ctx else None,
+            "state_contract": state_contract,
+            "pre_computed_embedding": pre_computed_embedding,
+            "pre_computed_sparse": pre_computed_sparse,
+            "pre_computed_colbert": pre_computed_colbert,
+            "semantic_cache_already_checked": semantic_cache_already_checked,
+        }
+        if trace_id:
+            pipeline_kwargs["langfuse_trace_id"] = trace_id
+
+        result = await rag_pipeline(query, **pipeline_kwargs)
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
         # Streaming hook (#428): when streaming is restored for the agent text path
