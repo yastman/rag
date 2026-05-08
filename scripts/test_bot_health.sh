@@ -34,7 +34,7 @@ AUTH_TOKENS = (
 )
 
 def redact_redis_credentials(text: str) -> str:
-    return re.sub(r"(redis://)([^@\s]+)@", r"\1***@", text)
+    return re.sub(r"(rediss?://)([^@\s]+)@", r"\1***@", text)
 
 config = BotConfig()
 client = redis.from_url(config.redis_url, decode_responses=True)
