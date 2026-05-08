@@ -17,6 +17,34 @@ Use this runbook when LiteLLM provider has outages or LLM calls are failing.
 
 ## Diagnosis
 
+### Verify Current Primary / Fallback Routing (read-only)
+
+Before restarting or editing config, confirm the active routing from the repo config files:
+
+```bash
+# Primary model for the gpt-4o-mini group (read-only)
+grep -A8 'model_name: gpt-4o-mini' docker/litellm/config.yaml
+
+# Fallback chain
+grep -A5 'fallbacks:' docker/litellm/config.yaml
+
+# Kubernetes equivalent
+grep -A8 'model_name: gpt-4o-mini' k8s/base/configmaps/litellm-config.yaml
+grep -A5 'fallbacks:' k8s/base/configmaps/litellm-config.yaml
+```
+
+Expected state (do **not** change without product decision):
+
+| Alias | Maps to | Role |
+|---|---|---|
+| `gpt-4o-mini` | `cerebras/zai-glm-4.7` (GLM 4.7) | **Primary** — low TTFT, reasoning disabled |
+| `gpt-4o-mini-cerebras-oss` | `cerebras/gpt-oss-120b` | Fallback 1 — reasoning, slower TTFT |
+| `gpt-4o-mini-fallback` | `groq/llama-3.1-70b-versatile` | Fallback 2 — fast, free tier |
+| `gpt-4o-mini-openai` | `openai/gpt-4o-mini` | Fallback 3 — reliable |
+
+- **Do not switch the primary back to a 120B model.** The `gpt-oss-120b` alias is reserved for benchmarking and fallback.
+- The bot sends requests to alias `gpt-4o-mini` (see `telegram_bot/graph/config.py`). `telegram_bot/config.py` sets a native default of `zai-glm-4.7` when running without the proxy.
+
 ### 1. Check LiteLLM Container State
 
 ```bash
@@ -160,14 +188,16 @@ If using multiple providers:
 
 ### Configure Fallback Models
 
-In `compose.yml` or `.env`:
+> **Caution:** Do not switch the primary model back to a 120B model (e.g., `cerebras/gpt-oss-120b`). GLM 4.7 (`cerebras/zai-glm-4.7`) remains the primary for low TTFT. Changing the primary requires a product decision.
+
+The canonical routing is defined in `docker/litellm/config.yaml` (Docker) and `k8s/base/configmaps/litellm-config.yaml` (K8s). Verify before editing:
 
 ```bash
-LITELLM_MODEL=azure/gpt-4o-mini
-LITELLM_FALLBACK_MODELS=gpt-4o,gpt-4o-mini
+grep -A8 'model_name: gpt-4o-mini' docker/litellm/config.yaml
+grep -A5 'fallbacks:' docker/litellm/config.yaml
 ```
 
-Then restart LiteLLM:
+If you must adjust fallback ordering, edit the config file and restart:
 
 ```bash
 docker compose restart litellm
@@ -186,3 +216,9 @@ When LLM fallback occurs:
 - Set up alerts for LLM timeout rates
 - Regular health checks: `curl -s ${LLM_BASE_URL}/health`
 - Watch for `OOMKilled` in container state after deploys or traffic spikes
+
+## See Also
+
+- [Langfuse Tracing Gaps](LANGFUSE_TRACING_GAPS.md)
+- [Docker Services Reference](../../DOCKER.md)
+- [Local Development Guide](../LOCAL-DEVELOPMENT.md)
