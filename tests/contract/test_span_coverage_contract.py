@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 SCAN_DIRS = [
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
+    REPO_ROOT / "services",
 ]
 EXCLUDE_DIRS = ["tests/", "src/evaluation/", ".venv/"]
 
@@ -68,6 +69,15 @@ SENSITIVE_SPANS = [
     "bge-m3-encode-hybrid",
     "bge-m3-rerank",
     "bge-m3-encode-colbert",
+    # BGE-M3 service (all 5)
+    "bge-m3-service-encode-dense",
+    "bge-m3-service-encode-sparse",
+    "bge-m3-service-encode-hybrid",
+    "bge-m3-service-rerank",
+    "bge-m3-service-encode-colbert",
+    # USER-base service (all 2)
+    "user-base-service-embed",
+    "user-base-service-embed-batch",
     # Search engines (all 3)
     "search-engine-encode-hybrid",
     "search-engine-encode-hybrid-colbert",
@@ -306,6 +316,13 @@ EMBEDDING_SPANS = [
     "bge-m3-encode-hybrid",
     "bge-m3-rerank",
     "bge-m3-encode-colbert",
+    "bge-m3-service-encode-dense",
+    "bge-m3-service-encode-sparse",
+    "bge-m3-service-encode-hybrid",
+    "bge-m3-service-rerank",
+    "bge-m3-service-encode-colbert",
+    "user-base-service-embed",
+    "user-base-service-embed-batch",
     "search-engine-encode-hybrid",
     "search-engine-encode-hybrid-colbert",
     "search-engine-encode-dbsf-colbert",
