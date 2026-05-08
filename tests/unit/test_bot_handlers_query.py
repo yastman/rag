@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -142,3 +143,37 @@ class TestHandleVoiceRecursionLimit:
             "recursion" in record.message.lower() or "limit" in record.message.lower()
             for record in caplog.records
         ), "Expected log mention of recursion limit"
+
+
+class TestClientDirectIntentPrecheck:
+    """Regression tests for client-direct pre-agent intent detection (#1369)."""
+
+    async def test_pre_agent_intent_check_does_not_call_traced_detector(self, mock_config):
+        """PropertyBot precheck must avoid creating extra detect-agent-intent spans."""
+        bot = _create_bot(mock_config)
+        message = MagicMock()
+
+        with (
+            patch(
+                "telegram_bot.pipelines.client.detect_agent_intent",
+                side_effect=AssertionError(
+                    "traced detect_agent_intent must not run in bot precheck"
+                ),
+            ),
+            patch(
+                "telegram_bot.pipelines.client.run_client_pipeline",
+                AsyncMock(return_value=SimpleNamespace(needs_agent=False, answer="ok")),
+            ) as mock_run_pipeline,
+        ):
+            result = await bot._handle_client_direct_pipeline(
+                message=message,
+                user_text="какие документы нужны",
+                user_id=123,
+                session_id="s1",
+                role="client",
+                query_type="GENERAL",
+                rag_result_store={},
+            )
+
+        assert result == "ok"
+        assert mock_run_pipeline.await_count == 1
