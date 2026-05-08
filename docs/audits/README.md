@@ -4,6 +4,7 @@ This directory contains timestamped operational and documentation audits. Audit 
 
 ## Recent Operational Audits
 
+- [2026-05-08 - Telethon Langfuse runtime loop audit](2026-05-08-telethon-langfuse-runtime-loop.md)
 - [2026-05-05 - Langfuse recent traces structure audit](2026-05-05-langfuse-recent-traces-structure-audit.md)
 - [2026-05-05 - Langfuse Telethon trace audit](2026-05-05-langfuse-telethon-trace-audit.md)
 - [2026-05-05 - Langfuse trace 8d79036a audit](2026-05-05-langfuse-trace-8d79036a-audit.md)
