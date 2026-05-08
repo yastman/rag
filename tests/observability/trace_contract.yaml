@@ -139,6 +139,7 @@ spans:
   pipeline:
     - detect-agent-intent
     - client-direct-pipeline
+    - core-pipeline-query-embedding
 
   services:
     - apartments-hybrid-search
@@ -326,6 +327,7 @@ sensitive_spans:
   # pipeline
   - detect-agent-intent
   - client-direct-pipeline
+  - core-pipeline-query-embedding
   # services
   - service-generate-response
   - detect-response-style

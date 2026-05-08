@@ -1,8 +1,11 @@
 """Main RAG pipeline orchestrator."""
 
 import asyncio
+import contextvars
 from dataclasses import dataclass
 from typing import Any
+
+from langfuse import observe
 
 from src.config import APIProvider, Settings
 from src.contextualization import (
@@ -75,6 +78,16 @@ class RAGPipeline:
         # Default to Claude
         return ClaudeContextualizer(self.settings)
 
+    @observe(
+        name="core-pipeline-query-embedding",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    def _encode_query(self, query: str) -> Any:
+        """Generate dense embedding for a query string."""
+        return self.embedding_model.encode(query, normalize_embeddings=True).tolist()
+
     async def search(
         self,
         query: str,
@@ -115,8 +128,9 @@ class RAGPipeline:
         else:
             # For other engines, generate dense embedding (async)
             loop = asyncio.get_event_loop()
+            ctx = contextvars.copy_context()
             query_embedding = await loop.run_in_executor(
-                None, lambda: self.embedding_model.encode(query, normalize_embeddings=True).tolist()
+                None, lambda: ctx.run(self._encode_query, query)
             )
 
             # Step 2: Search using configured search engine (async)

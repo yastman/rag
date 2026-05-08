@@ -78,6 +78,7 @@ langfuse api observations list --trace-id <trace-id> --fields core,basic,io,meta
 | `telegram-message` | Deeply structured (25–35 obs, depth 8, 30+ scores) | Missing when bot observability client fails to initialize or middleware is skipped |
 | `litellm-acompletion` | Flat (1 GENERATION, depth 0, 0 scores) | **Proxy-generated**, not app-instrumented; inherently flat and lacks session context. See [LiteLLM Failure Runbook](LITEllm_FAILURE.md) |
 | `rag-api-query` | Structured SPANs + GENERATION | Often missing if RAG API is not called or `@observe` decorator is bypassed |
+| `core-pipeline-query-embedding` | SPAN (`as_type="embedding"`, capture disabled) | Missing or orphaned when the embedding call runs inside `run_in_executor` without preserving `contextvars` |
 | `voice-session` | Structured (capture disabled) | Missing when voice/LiveKit is off by default or voice agent did not start |
 | `ingestion-cli-run` | Structured (capture disabled) | Becomes stale when unified ingestion CLI has not run recently; check `make ingest-unified-status` |
 | `openai-contextualize` | SPAN with nested GENERATION (auto-traced via `langfuse.openai` drop-in) | Missing if `OpenAIContextualizer` uses plain `openai` clients; inner completions would become orphan `litellm-acompletion` traces |
@@ -149,6 +150,37 @@ from telegram_bot.scoring import write_langfuse_scores
 result = await graph.ainvoke(state)
 write_langfuse_scores(lf, result, trace_id=trace_id)
 ```
+
+### Embedding Span Missing or Orphaned (`core-pipeline-query-embedding`)
+
+**Cause:** The core RAG pipeline runs query embedding inside a thread-pool via `run_in_executor`. Langfuse spans rely on `contextvars` for parent-trace linkage; standard `run_in_executor` drops that context, so the span becomes orphaned or invisible.
+
+**Fix:** Wrap the observed call with `contextvars.copy_context()` and `Context.run()`:
+
+```python
+import contextvars
+
+loop = asyncio.get_event_loop()
+ctx = contextvars.copy_context()
+query_embedding = await loop.run_in_executor(
+    None, lambda: ctx.run(self._encode_query, query)
+)
+```
+
+Where `_encode_query` is decorated as:
+
+```python
+@observe(
+    name="core-pipeline-query-embedding",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
+def _encode_query(self, query: str):
+    ...
+```
+
+**Prevention:** All embedding spans (including `bge-m3-*`, `search-engine-*`, and pipeline spans) must keep `capture_input=False` and `capture_output=False` to avoid leaking raw vectors or query text into Langfuse.
 
 ### Flat `litellm-acompletion` Traces Everywhere
 
