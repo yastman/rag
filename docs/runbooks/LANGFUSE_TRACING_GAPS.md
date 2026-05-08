@@ -13,6 +13,9 @@ Use this runbook when traces are missing from Langfuse or observability is broke
 - `make validate-traces-fast` failing
 - Missing scores in Langfuse
 - Traces show `LLM failed: Connection error` despite healthy Langfuse ingestion
+- Repeated traceback spam with `HTTPConnectionPool(host='localhost', port=3001)` when running bot natively and local Langfuse is down
+
+Expected local behavior after ***REMOVED***1446: one warning from `telegram_bot.observability` that the configured endpoint is unreachable, then tracing export is disabled for that process.
 
 ***REMOVED******REMOVED*** Quick Validation Focus
 
@@ -33,6 +36,10 @@ curl -s ${LANGFUSE_HOST}/api/public/health | jq
 
 ***REMOVED*** Should return {"status": "ok"}
 ```
+
+If `LANGFUSE_HOST` points to local Langfuse (for example `http://localhost:3001`) and health check fails, either:
+- start local observability stack (`make local-up`), or
+- disable Langfuse tracing for native local run (`unset LANGFUSE_HOST` or `LANGFUSE_TRACING_ENABLED=false`).
 
 ***REMOVED******REMOVED******REMOVED*** 2. Verify Environment Variables (Presence Only)
 
