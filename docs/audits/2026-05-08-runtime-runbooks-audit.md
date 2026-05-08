@@ -124,13 +124,13 @@
 
 ---
 
-### P1 — Two runbooks lack deterministic Compose env pattern used by all other runbooks
+### P1 — Two runbooks rely on non-deterministic Compose commands
 
 | | |
 |---|---|
 | **Doc** | `docs/runbooks/POSTGRESQL_WAL_RECOVERY.md` (lines 21, 46, 57, 79, 89); `docs/runbooks/vps-gdrive-ingestion-recovery.md` (lines 52, 74, 85, 93) |
 | **Claim** | Bare `docker compose logs postgres`, `docker compose stop postgres`, `docker compose exec ingestion ...`, etc. |
-| **Reality** | All other runbooks (`REDIS_CACHE_DEGRADATION.md`, `QDRANT_TROUBLESHOOTING.md`, `LANGFUSE_TRACING_GAPS.md`) and the repo contract (`AGENTS.md`, `Makefile:393`) use the deterministic pattern: `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ...` |
+| **Reality** | The repo contract (`AGENTS.md`, `Makefile:393`) expects deterministic Compose usage with `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ...`, but this pattern is not yet consistent across runbooks. In addition to the two runbooks listed in this finding, other runbooks still contain bare `docker compose` commands (for example `LITEllm_FAILURE.md` and `LANGFUSE_TRACING_GAPS.md`). |
 | **Evidence** | `docs/runbooks/REDIS_CACHE_DEGRADATION.md:36`: `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps redis`. `POSTGRESQL_WAL_RECOVERY.md:21`: `docker compose logs postgres --tail=100`. |
 | **Impact** | If `.env` is missing or incomplete, the bare `docker compose` commands fail because `POSTGRES_PASSWORD` and other required variables are undefined. This breaks the incident-response workflow when an operator is working from a fresh clone or CI environment. |
 | **Canonical owner** | `docs/runbooks/POSTGRESQL_WAL_RECOVERY.md`, `docs/runbooks/vps-gdrive-ingestion-recovery.md` |
