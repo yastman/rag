@@ -40,7 +40,10 @@ def userbase_env():
     mock_module.SentenceTransformer = mock_st_class
 
     with pytest.MonkeyPatch.context() as mp:
+        mock_lf = MagicMock()
+        mock_lf.observe = lambda *_a, **_k: lambda f: f
         mp.setitem(sys.modules, "sentence_transformers", mock_module)
+        mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_USERBASE_SERVICE_DIR)
 
         import main as userbase_main

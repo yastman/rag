@@ -65,9 +65,12 @@ def bge_app():
         mock_flag = MagicMock()
         mock_prom = MagicMock()
         mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
+        mock_lf = MagicMock()
+        mock_lf.observe = lambda *_a, **_k: lambda f: f
 
         mp.setitem(sys.modules, "FlagEmbedding", mock_flag)
         mp.setitem(sys.modules, "prometheus_client", mock_prom)
+        mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
 
         import app as app_module
