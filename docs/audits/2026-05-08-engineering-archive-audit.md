@@ -34,7 +34,7 @@ The engineering docs tree is **mostly healthy at the top level**, but **three ca
 | `docs/review/ACCESS_FOR_REVIEWERS.md` | Safe review commands and branch context | **Active, current** — correctly names `dev` as integration branch. |
 | `docs/review/GITHUB_REPO_SETUP.md` | Repo metadata and branch hygiene | **Active, current** — consistent with `ACCESS_FOR_REVIEWERS.md`. |
 | `docs/review/PROJECT_GUIDE.md` | Folder map and high-signal files | **Active, current** — lists real files and honest limitations. |
-| `docs/audits/README.md` | Audit index | **Partially stale** — missing four 2026-05-07 audits (see §3.6). |
+| `docs/audits/README.md` | Audit index | **Partially stale** — missing one 2026-05-07 audit entry (see §3.6). |
 | `docs/archive/README.md` | Archive purpose statement | **Active, appropriate** — short and clear. |
 | `docs/archive/workflows/README.md` | Disabled workflows explanation | **Active, appropriate** — lists real archived files. |
 
@@ -156,18 +156,19 @@ The engineering docs tree is **mostly healthy at the top level**, but **three ca
 - Convert `docs/ADRS.md` to a lightweight index linking to `docs/adr/`, or archive it.
 - **Priority:** MEDIUM. **Affects agent orientation:** Yes (broken links waste time).
 
-### 3.6 `docs/audits/README.md` is missing four 2026-05-07 audit entries
+### 3.6 `docs/audits/README.md` is missing one 2026-05-07 audit entry
 
 **Evidence:**
 - `docs/audits/README.md` lists 7 audits, all dated 2026-05-05 and 2026-05-08.
-- Four 2026-05-07 audits exist in the directory but are omitted:
+- `docs/audits/README.md` already includes these 2026-05-07 audits:
   - `2026-05-07-docker-langfuse-health-audit.md`
   - `2026-05-07-langfuse-real-env-otel-fix.md`
   - `2026-05-07-telegram-bot-logs-audit.md`
+- The only missing 2026-05-07 audit entry is:
   - `2026-05-07-project-docs-order-audit.md`
 
 **Proposed fix:**
-- Add the four missing entries to `docs/audits/README.md` under a "2026-05-07" subsection.
+- Add the missing `2026-05-07-project-docs-order-audit.md` entry to `docs/audits/README.md` under the "Recent Operational Audits" list.
 - **Priority:** LOW. **Affects agent orientation:** Yes (incomplete index).
 
 ### 3.7 `docs/superpowers/` plans and specs are current but unbounded
@@ -214,7 +215,7 @@ git diff --check
 | 3 | Delete or archive resolved dependency blockers file | `docs/engineering/dependency-upgrade-blockers-2026-04.md` | LOW | No |
 | 4 | Consolidate or archive root cache docs | `docs/TROUBLESHOOTING_CACHE.md`, `docs/CACHE_DEGRADATION.md` | LOW | Yes |
 | 5 | Fix broken `.claude/rules/` links and ADR mismatch | `docs/HITL.md`, `docs/API_REFERENCE.md`, `docs/BOT_INTERNAL_STRUCTURE.md`, `docs/ONBOARDING.md`, `docs/ADRS.md` | MEDIUM | Yes |
-| 6 | Add missing 2026-05-07 audits to index | `docs/audits/README.md` | LOW | Yes |
+| 6 | Add missing 2026-05-07 project-docs-order audit to index | `docs/audits/README.md` | LOW | Yes |
 | 7 | Document superpowers doc rotation policy | `docs/archive/README.md` or new `docs/superpowers/README.md` | LOW | No |
 
 ---
