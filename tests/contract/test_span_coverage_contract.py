@@ -132,6 +132,8 @@ SENSITIVE_SPANS = [
     "cb-feedback",
     "cb-feedback-reason",
     "cb-clearcache",
+    "telegram-rag-query",
+    "telegram-rag-supervisor",
     # Dialog/handler spans with capture disabled
     "dialog-crm-create-note",
     "dialog-crm-create-contact",
