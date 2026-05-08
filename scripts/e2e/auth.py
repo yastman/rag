@@ -35,9 +35,8 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
         print("Error: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in .env")
         sys.exit(1)
 
-    print(f"API ID: {API_ID}")
-    print(f"Phone: {phone}")
-    print(f"Session: {SESSION_NAME}.session")
+    print("Starting Telethon authentication flow...")
+    print(f"Session target: {SESSION_NAME}.session")
     print()
 
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
@@ -50,7 +49,6 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
             HASH_FILE.write_text(
                 json.dumps(
                     {
-                        "phone": phone,
                         "phone_code_hash": result.phone_code_hash,
                     }
                 )
@@ -58,7 +56,7 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
             print("Code sent to your Telegram app!")
             print()
             print("Run again with the code:")
-            print(f"  python scripts/e2e/auth.py --phone {phone} --code <CODE>")
+            print("  python scripts/e2e/auth.py --phone <PHONE> --code <CODE>")
             await client.disconnect()
             return
 
@@ -78,17 +76,17 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
             if not password:
                 print("2FA enabled! Run with --password:")
                 print(
-                    f"  python scripts/e2e/auth.py --phone {phone} --code {code} --password <PASSWORD>"
+                    "  python scripts/e2e/auth.py --phone <PHONE> --code <CODE> --password <PASSWORD>"
                 )
                 await client.disconnect()
                 return
             await client.sign_in(password=password)
             HASH_FILE.unlink()
 
-    me = await client.get_me()
+    authorized = await client.is_user_authorized()
     print()
-    print(f"Authenticated as: {me.first_name} (@{me.username})")
-    print(f"Session saved: {SESSION_NAME}.session")
+    print(f"Authenticated: {'yes' if authorized else 'no'}")
+    print("Session saved.")
     print()
     print("Run E2E tests: make e2e-test")
 
