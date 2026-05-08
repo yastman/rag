@@ -45,6 +45,7 @@ SENSITIVE_SPANS = [
     ***REMOVED*** Pipeline
     "detect-agent-intent",
     "client-direct-pipeline",
+    "core-pipeline-query-embedding",
     ***REMOVED*** Classify
     "classify-query",
     ***REMOVED*** Graph node (sensitive)
@@ -308,6 +309,7 @@ EMBEDDING_SPANS = [
     "search-engine-encode-hybrid",
     "search-engine-encode-hybrid-colbert",
     "search-engine-encode-dbsf-colbert",
+    "core-pipeline-query-embedding",
 ]
 
 RETRIEVER_SPANS = [
