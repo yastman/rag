@@ -80,6 +80,7 @@ langfuse api observations list --trace-id <trace-id> --fields core,basic,io,meta
 | `rag-api-query` | Structured SPANs + GENERATION | Often missing if RAG API is not called or `@observe` decorator is bypassed |
 | `voice-session` | Structured (capture disabled) | Missing when voice/LiveKit is off by default or voice agent did not start |
 | `ingestion-cli-run` | Structured (capture disabled) | Becomes stale when unified ingestion CLI has not run recently; check `make ingest-unified-status` |
+| `openai-contextualize` | SPAN with nested GENERATION (auto-traced via `langfuse.openai` drop-in) | Missing if `OpenAIContextualizer` uses plain `openai` clients; inner completions would become orphan `litellm-acompletion` traces |
 
 **Key distinction:** `litellm-acompletion` traces are created by the LiteLLM proxy's built-in Langfuse callback (`success_callback: ["langfuse"]`), not by the application's `@observe` decorators. They will never contain child spans, scores, or session attribution.
 
