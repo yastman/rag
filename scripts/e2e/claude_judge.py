@@ -1,10 +1,12 @@
-"""Claude Judge for evaluating bot responses."""
+"""Judge implementations for evaluating bot responses."""
+
+from __future__ import annotations
 
 import json
 import logging
 from dataclasses import dataclass
 
-import anthropic
+from openai import AsyncOpenAI
 
 from .config import E2EConfig
 from .test_scenarios import TestScenario
@@ -74,7 +76,7 @@ class CriterionScore:
 
 @dataclass
 class JudgeResult:
-    """Result from Claude Judge."""
+    """Result from judge model."""
 
     relevance: CriterionScore
     completeness: CriterionScore
@@ -86,7 +88,7 @@ class JudgeResult:
     summary: str
 
     @classmethod
-    def from_dict(cls, data: dict) -> "JudgeResult":
+    def from_dict(cls, data: dict) -> JudgeResult:
         """Create from dict."""
         return cls(
             relevance=CriterionScore(**data["relevance"]),
@@ -100,38 +102,14 @@ class JudgeResult:
         )
 
 
-class ClaudeJudge:
-    """Claude-based judge for evaluating bot responses."""
-
-    # Weights for criteria
-    WEIGHTS = {
-        "relevance": 0.30,
-        "completeness": 0.25,
-        "filter_accuracy": 0.20,
-        "tone_format": 0.15,
-        "no_hallucination": 0.10,
-    }
+class _BaseLLMJudge:
+    """Shared logic for judge implementations."""
 
     def __init__(self, config: E2EConfig):
-        """Initialize judge."""
         self.config = config
-        self._client = anthropic.Anthropic(api_key=config.anthropic_api_key)
 
-    async def evaluate(
-        self,
-        scenario: TestScenario,
-        bot_response: str,
-    ) -> JudgeResult:
-        """Evaluate bot response against scenario.
-
-        Args:
-            scenario: Test scenario with query and expectations
-            bot_response: Bot's response text
-
-        Returns:
-            JudgeResult with scores and verdict
-        """
-        # Build evaluation prompt
+    @staticmethod
+    def _build_user_prompt(scenario: TestScenario, bot_response: str) -> str:
         filters_str = "Нет"
         if scenario.expected_filters:
             filters_parts = []
@@ -148,7 +126,7 @@ class ClaudeJudge:
                 filters_parts.append(f"до моря <= {ef.distance_to_sea_max}м")
             filters_str = ", ".join(filters_parts) if filters_parts else "Нет"
 
-        user_prompt = f"""## Запрос пользователя
+        return f"""## Запрос пользователя
 {scenario.query}
 
 ## Ожидаемые фильтры
@@ -159,23 +137,11 @@ class ClaudeJudge:
 
 Оцени ответ по критериям. Ответь ТОЛЬКО валидным JSON."""
 
-        # Call Claude
-        import asyncio
-
-        response = await asyncio.to_thread(
-            self._client.messages.create,
-            model=self.config.judge_model,
-            max_tokens=1024,
-            system=JUDGE_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-
-        # Parse response
-        response_text = response.content[0].text
-        logger.debug(f"Judge response: {response_text[:200]}...")
+    @staticmethod
+    def _parse_judge_response(response_text: str) -> JudgeResult:
+        logger.debug("Judge response: %s...", response_text[:200])
 
         try:
-            # Try to extract JSON from response
             json_start = response_text.find("{")
             json_end = response_text.rfind("}") + 1
             if json_start >= 0 and json_end > json_start:
@@ -183,9 +149,8 @@ class ClaudeJudge:
                 data = json.loads(json_str)
             else:
                 raise ValueError("No JSON found in response")
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Failed to parse judge response: {e}")
-            # Return default failing result
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.error("Failed to parse judge response: %s", exc)
             return JudgeResult(
                 relevance=CriterionScore(score=0, reason="Parse error"),
                 completeness=CriterionScore(score=0, reason="Parse error"),
@@ -194,10 +159,74 @@ class ClaudeJudge:
                 no_hallucination=CriterionScore(score=0, reason="Parse error"),
                 total_score=0.0,
                 passed=False,
-                summary=f"Failed to parse judge response: {e}",
+                summary=f"Failed to parse judge response: {exc}",
             )
 
         return JudgeResult.from_dict(data)
+
+
+class LiteLLMJudge(_BaseLLMJudge):
+    """OpenAI-compatible judge routed through LiteLLM or another proxy."""
+
+    def __init__(self, config: E2EConfig):
+        super().__init__(config)
+        self._client = AsyncOpenAI(
+            api_key=config.judge_api_key,
+            base_url=config.judge_base_url,
+            timeout=60.0,
+        )
+
+    async def evaluate(self, scenario: TestScenario, bot_response: str) -> JudgeResult:
+        user_prompt = self._build_user_prompt(scenario, bot_response)
+
+        response = await self._client.chat.completions.create(
+            model=self.config.judge_model,
+            messages=[
+                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=1024,
+        )
+        response_text = response.choices[0].message.content or ""
+        return self._parse_judge_response(response_text)
+
+
+class ClaudeJudge(_BaseLLMJudge):
+    """Direct Anthropic judge (explicit opt-in mode only)."""
+
+    def __init__(self, config: E2EConfig):
+        super().__init__(config)
+        import anthropic
+
+        self._client = anthropic.Anthropic(api_key=config.anthropic_api_key)
+
+    async def evaluate(self, scenario: TestScenario, bot_response: str) -> JudgeResult:
+        import asyncio
+
+        user_prompt = self._build_user_prompt(scenario, bot_response)
+
+        response = await asyncio.to_thread(
+            self._client.messages.create,
+            model=self.config.judge_model,
+            max_tokens=1024,
+            system=JUDGE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        response_text = response.content[0].text
+        return self._parse_judge_response(response_text)
+
+
+def build_judge(config: E2EConfig) -> LiteLLMJudge | ClaudeJudge:
+    """Build judge instance for configured provider."""
+    provider = (config.judge_provider or "").strip().lower()
+    if provider in {"", "litellm", "openai-compatible", "openai"}:
+        return LiteLLMJudge(config)
+    if provider == "anthropic-direct":
+        return ClaudeJudge(config)
+    raise ValueError(
+        f"Unsupported E2E_JUDGE_PROVIDER '{config.judge_provider}'. "
+        "Use 'litellm' or 'anthropic-direct'."
+    )
 
 
 class PassthroughJudge:
