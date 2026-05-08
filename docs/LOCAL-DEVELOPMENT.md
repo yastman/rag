@@ -135,10 +135,12 @@ Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:com
 ```bash
 make local-up
 make test-bot-health
-make run-bot
+make bot
 make local-ps
 make local-down
 ```
+
+`make bot` is the operator-facing command for this local loop; `make run-bot` remains the lower-level/native target.
 
 For ingestion workflows that require docling:
 
