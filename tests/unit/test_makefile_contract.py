@@ -160,3 +160,18 @@ def test_validate_traces_targets_use_local_compose_cmd() -> None:
             f"{target} must use $(LOCAL_COMPOSE_CMD) to respect the local Compose contract "
             f"(compose.yml:compose.dev.yml with env-file handling)."
         )
+
+
+def test_validate_traces_fast_runs_postgres_auth_preflight() -> None:
+    text = _makefile_text()
+    block_match = re.search(
+        r"^validate-traces-fast:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "validate-traces-fast target not found in Makefile"
+    block = block_match.group(0)
+    assert "scripts/validate_trace_runtime.py" in block, (
+        "validate-traces-fast must run scripts/validate_trace_runtime.py preflight "
+        "before docker compose up to avoid silent Postgres auth mismatch loops."
+    )
