@@ -155,13 +155,13 @@ def test_mini_app_frontend_dockerfile_runs_as_unprivileged_nginx_user() -> None:
     assert "COPY nginx.conf /etc/nginx/nginx.conf" in text, (
         "mini_app/frontend/Dockerfile must install the hardened main nginx.conf"
     )
-    assert "/tmp/nginx/client_temp" in text, (
-        "mini_app/frontend/Dockerfile must pre-create /tmp/nginx temp directories for nginx startup"
+    assert "mkdir -p /tmp/nginx" not in text and "/tmp/nginx/client_temp" not in text, (
+        "mini_app/frontend/Dockerfile must not pre-create legacy /tmp/nginx temp directories"
     )
 
 
 def test_mini_app_frontend_nginx_runtime_paths_use_tmp() -> None:
     text = MINI_APP_FRONTEND_NGINX_CONF.read_text()
     assert "pid /tmp/nginx.pid;" in text
-    assert "client_body_temp_path /tmp/nginx/client_temp;" in text
-    assert "proxy_temp_path /tmp/nginx/proxy_temp;" in text
+    assert "client_body_temp_path /tmp/client_temp;" in text
+    assert "proxy_temp_path /tmp/proxy_temp;" in text
