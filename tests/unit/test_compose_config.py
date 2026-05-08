@@ -285,6 +285,23 @@ class TestMiniAppFrontendHealthcheck:
         assert self._EXPECTED_PROBE in content
 
 
+class TestMiniAppFrontendSecurityContract:
+    """Frontend nginx must stay compatible with hardened capability settings (#1431)."""
+
+    def test_compose_runs_frontend_as_nginx_uid_gid(self, vps: dict) -> None:
+        svc = vps["services"]["mini-app-frontend"]
+        assert svc.get("user") == "101:101", (
+            "mini-app-frontend must run as nginx user to avoid root chown/setuid startup paths"
+        )
+
+    def test_compose_frontend_drops_all_and_readds_only_bind_capability(self, vps: dict) -> None:
+        svc = vps["services"]["mini-app-frontend"]
+        assert "ALL" in svc.get("cap_drop", []), "mini-app-frontend must keep cap_drop: [ALL]"
+        assert svc.get("cap_add") == ["NET_BIND_SERVICE"], (
+            "mini-app-frontend must only add NET_BIND_SERVICE to bind port 80 as non-root"
+        )
+
+
 class TestHandoffComposeContract:
     """Bot compose env must expose the production handoff contract."""
 
