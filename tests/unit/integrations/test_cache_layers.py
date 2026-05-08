@@ -162,6 +162,22 @@ class TestCacheLayerManagerInitialize:
 
         assert mgr.redis is None
 
+    async def test_initialize_redacts_redis_credentials_in_logs(self, caplog):
+        mgr = CacheLayerManager(redis_url="redis://:supersecret@localhost:6379/0")
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+
+        with (
+            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+            caplog.at_level("INFO", logger="telegram_bot.integrations.cache"),
+        ):
+            await mgr.initialize()
+
+        assert "Redis connected:" in caplog.text
+        assert "supersecret" not in caplog.text
+        assert "localhost:6379" in caplog.text
+
 
 class TestSemanticCache:
     """Test semantic cache check/store."""
