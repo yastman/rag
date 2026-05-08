@@ -61,3 +61,6 @@ python -m src.evaluation.run_ab_test --help
 
 - [`../ingestion/`](../ingestion/) — Chunk production and payload contract
 - [`../../telegram_bot/services/qdrant.py`](../../telegram_bot/services/qdrant.py) — Async Qdrant service used by the bot
+- [`../../DOCKER.md`](../../DOCKER.md) — Docker orchestration and service dependencies
+- [`../../docs/LOCAL-DEVELOPMENT.md`](../../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation ladder
+- [`../../docs/runbooks/README.md`](../../docs/runbooks/README.md) — Operational troubleshooting
