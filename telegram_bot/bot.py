@@ -2712,9 +2712,10 @@ class PropertyBot:
             None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
         """
         # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
-        from .pipelines.client import detect_agent_intent, run_client_pipeline
+        from .pipelines.client import infer_agent_intent, run_client_pipeline
 
-        agent_intent = detect_agent_intent(user_text)
+        # Pre-agent branch selection should not emit an extra detect-agent-intent span.
+        agent_intent = infer_agent_intent(user_text)
         if agent_intent == "apartment":
             apt_answer = await self._handle_apartment_fast_path(
                 user_text=user_text,
