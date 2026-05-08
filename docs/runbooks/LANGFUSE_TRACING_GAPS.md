@@ -21,10 +21,13 @@ Expected local behavior after #1446: one warning from `telegram_bot.observabilit
 
 When traces appear missing, validate **app pipeline coverage** first:
 
-- Required trace families: **`rag-api-query`**, **`voice-session`**, **`ingestion-cli-run`**
+- Required direct trace families: **`rag-api-query`**, **`voice-session`**, **`ingestion-cli-run`**
+- Required Telegram families under `telegram-message` observations: **`telegram-rag-query`**, **`telegram-rag-supervisor`**
+- Required sanitized root fields on `telegram-message.input`: **`content_type`**, **`query_preview`**, **`query_hash`**, **`query_len`**, **`route`**
+- Forbidden raw root fields on `telegram-message.input`: **`user`**, **`chat`**, **`message`**, **`event_from_user`**, **`event_chat`**, **`raw_update`**
 - Expected LiteLLM callback noise: **`litellm-acompletion`** (flat, proxy-generated, no session context)
 
-If the three required families are present and fresh, flat `litellm-acompletion` traces do **not** indicate a defect.
+If direct families and nested Telegram families are present and root input is sanitized, flat `litellm-acompletion` traces do **not** indicate a defect.
 
 ## Diagnosis
 
@@ -76,13 +79,13 @@ langfuse api scores list --trace-id <trace-id> --json
 langfuse api observations list --trace-id <trace-id> --fields core,basic,io,metadata,usage,metrics --json
 ```
 
-**Validation focus:** When triaging gaps, check first for missing or stale `rag-api-query`, `voice-session`, and `ingestion-cli-run`. Proxy-generated `litellm-acompletion` traces are expected flat noise and should not be treated as missing app instrumentation.
+**Validation focus:** Check missing/stale `rag-api-query`, `voice-session`, `ingestion-cli-run`, then inspect recent `telegram-message` traces for nested `telegram-rag-query`/`telegram-rag-supervisor` observations plus sanitized root fields. Proxy-generated `litellm-acompletion` traces are expected flat noise and should not be treated as app coverage.
 
 ### 4. Trace Interpretation Matrix
 
 | Trace Name | Expected Structure | Common Gaps |
 |---|---|---|
-| `telegram-message` | Deeply structured (25–35 obs, depth 8, 30+ scores) | Missing when bot observability client fails to initialize or middleware is skipped |
+| `telegram-message` | Deeply structured (25–35 obs, depth 8, 30+ scores) with sanitized root input (`content_type`, `query_preview`, `query_hash`, `query_len`, `route`) | Missing when bot observability client fails to initialize or middleware is skipped; contract fails if raw `user/chat/message` payloads appear |
 | `litellm-acompletion` | Flat (1 GENERATION, depth 0, 0 scores) | **Proxy-generated**, not app-instrumented; inherently flat and lacks session context. See [LiteLLM Failure Runbook](LITEllm_FAILURE.md) |
 | `rag-api-query` | Structured SPANs + GENERATION | Often missing if RAG API is not called or `@observe` decorator is bypassed |
 | `core-pipeline-query-embedding` | SPAN (`as_type="embedding"`, capture disabled) | Missing or orphaned when the embedding call runs inside `run_in_executor` without preserving `contextvars` |
@@ -109,10 +112,12 @@ print(f"Current trace: {lf.get_current_trace_id()}")
 make validate-traces-fast
 ```
 
-This checks that required trace families exist and are not stale. Validation should focus on missing or outdated:
+This checks required direct families plus Telegram nested-family/root-context contract. Validation should focus on missing or outdated:
 - `rag-api-query`
 - `voice-session`
 - `ingestion-cli-run`
+- `telegram-rag-query` and `telegram-rag-supervisor` under `telegram-message` observations
+- sanitized `telegram-message.input` fields (`content_type`, `query_preview`, `query_hash`, `query_len`, `route`)
 
 If these are present and fresh, flat `litellm-acompletion` traces are expected proxy-generated noise and do not indicate a defect.
 
