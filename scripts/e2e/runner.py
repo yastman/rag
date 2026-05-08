@@ -17,10 +17,16 @@ from rich.table import Table
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.e2e.claude_judge import ClaudeJudge, CriterionScore, JudgeResult, PassthroughJudge
+from scripts.e2e.claude_judge import (
+    CriterionScore,
+    JudgeResult,
+    PassthroughJudge,
+    build_judge,
+)
 from scripts.e2e.config import E2EConfig
 from scripts.e2e.langfuse_trace_validator import (
     is_validation_enabled,
+    probe_litellm_route,
     validate_latest_trace,
 )
 from scripts.e2e.report_generator import ReportGenerator, TestReport, TestResult
@@ -40,7 +46,7 @@ console = Console()
 
 async def run_single_test(
     client: E2ETelegramClient,
-    judge: ClaudeJudge,
+    judge,
     scenario,
     progress,
     task_id,
@@ -146,6 +152,7 @@ async def run_tests(
     scenarios: list,
     validate_traces: bool = False,
     no_judge: bool = False,
+    route_proof: dict[str, str | None] | None = None,
 ) -> TestReport:
     """Run all test scenarios."""
     results = []
@@ -155,9 +162,17 @@ async def run_tests(
         console.print("[yellow]Langfuse trace validation enabled[/]")
     if no_judge:
         console.print("[yellow]No-judge mode: skipping LLM evaluation[/]")
+    else:
+        console.print(f"[cyan]Judge provider:[/] {config.judge_provider} ({config.judge_model})")
+    if route_proof:
+        console.print(
+            "[cyan]LiteLLM route proof:[/] "
+            f"{route_proof.get('alias')} -> {route_proof.get('route_model') or 'unresolved'} "
+            f"({route_proof.get('info_url')})"
+        )
 
     async with E2ETelegramClient(config) as client:
-        judge = PassthroughJudge(config) if no_judge else ClaudeJudge(config)
+        judge = PassthroughJudge(config) if no_judge else build_judge(config)
 
         with Progress(
             SpinnerColumn(),
@@ -194,6 +209,9 @@ async def run_tests(
     return TestReport(
         timestamp=datetime.now(),
         bot_username=config.bot_username,
+        judge_provider=config.judge_provider,
+        judge_mode="no-judge" if no_judge else "llm-judge",
+        litellm_route_proof=route_proof,
         results=results,
         total_duration_ms=total_duration_ms,
     )
@@ -213,6 +231,16 @@ def print_summary(report: TestReport):
     table.add_row("Pass Rate", f"{report.pass_rate:.1f}%")
     table.add_row("Average Score", f"{report.average_score:.2f}")
     table.add_row("Duration", f"{report.total_duration_ms / 1000:.1f}s")
+    table.add_row("Bot Target", report.bot_username)
+    table.add_row("Judge", f"{report.judge_provider} ({report.judge_mode})")
+    if report.litellm_route_proof:
+        table.add_row(
+            "LiteLLM Route",
+            (
+                f"{report.litellm_route_proof.get('alias')} -> "
+                f"{report.litellm_route_proof.get('route_model') or 'unresolved'}"
+            ),
+        )
 
     console.print(table)
 
@@ -234,15 +262,21 @@ def main():
     parser.add_argument(
         "--no-judge",
         action="store_true",
-        help="Skip LLM judge — pass any non-empty bot response (no ANTHROPIC_API_KEY needed)",
+        help="Skip LLM judge — pass any non-empty bot response (no judge credentials needed)",
+    )
+    parser.add_argument(
+        "--judge-provider",
+        type=str,
+        choices=["litellm", "anthropic-direct"],
+        help="Override E2E_JUDGE_PROVIDER for this run",
     )
     args = parser.parse_args()
 
     # Load config
     config = E2EConfig()
-    errors = config.validate()
-    if args.no_judge:
-        errors = [e for e in errors if "ANTHROPIC_API_KEY" not in e]
+    if args.judge_provider:
+        config.judge_provider = args.judge_provider
+    errors = config.validate(judge_required=not args.no_judge)
     if errors:
         console.print("[red]Configuration errors:[/]")
         for e in errors:
@@ -262,15 +296,38 @@ def main():
     else:
         scenarios = SCENARIOS
 
-    console.print(f"\n[bold]Running {len(scenarios)} E2E tests against configured bot target[/]\n")
+    console.print(
+        "\n[bold]Running "
+        f"{len(scenarios)} E2E tests against {config.bot_username} "
+        f"(judge={config.judge_provider}, mode={'no-judge' if args.no_judge else 'llm'})[/]\n"
+    )
 
     # Check if trace validation is enabled
     validate_traces = is_validation_enabled()
+    route_proof: dict[str, str | None] | None = None
+    should_probe_route = (
+        validate_traces or not args.no_judge
+    ) and config.judge_provider.strip().lower() in {"", "litellm", "openai-compatible", "openai"}
+    if should_probe_route:
+        proof = probe_litellm_route(base_url=config.judge_base_url, model_alias=config.judge_model)
+        if proof is not None:
+            route_proof = {
+                "alias": proof.alias,
+                "route_model": proof.route_model,
+                "info_url": proof.info_url,
+                "source": proof.source,
+            }
 
     # Run tests
     try:
         report = asyncio.run(
-            run_tests(config, scenarios, validate_traces=validate_traces, no_judge=args.no_judge)
+            run_tests(
+                config,
+                scenarios,
+                validate_traces=validate_traces,
+                no_judge=args.no_judge,
+                route_proof=route_proof,
+            )
         )
     except RuntimeError as exc:
         console.print(f"[red]E2E runner blocked:[/] {exc}")

@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import os
 import time
 from typing import Any
 
@@ -264,8 +265,9 @@ class AIAdvisorService:
     async def _call_llm(self, system_prompt: str, user_text: str) -> str:
         """Call LLM with system+user prompt, return response text."""
         try:
+            model = os.getenv("LLM_MODEL", "gpt-4o-mini")
             response = await self._llm.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_text},

@@ -30,6 +30,14 @@ Minimum env for Telegram E2E (Telethon userbot):
 - an authorized Telethon session file (e.g., `e2e_tester.session`)
 - if the session is present but unauthorized, refresh it with `uv run python scripts/e2e/auth.py --phone <PHONE>`
 
+E2E judge routing defaults:
+- `E2E_JUDGE_PROVIDER=litellm` (default)
+- `E2E_JUDGE_BASE_URL=http://localhost:4000/v1` (default)
+- `E2E_JUDGE_MODEL=gpt-4o-mini` (default)
+- `E2E_JUDGE_API_KEY` (or `LLM_API_KEY` / `OPENAI_API_KEY` / `LITELLM_MASTER_KEY`)
+- direct Anthropic judge is opt-in only: `E2E_JUDGE_PROVIDER=anthropic-direct` + `ANTHROPIC_API_KEY`
+- for transport-only Telethon checks without LLM judge: run `uv run python scripts/e2e/runner.py --no-judge`
+
 The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which `make` targets use as a fallback when `.env` is absent. Do not create worktree-named Docker projects.
 
 Secret model by compose file:
