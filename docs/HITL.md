@@ -134,6 +134,6 @@ HITL is enabled by default for all CRM write tools. No configuration required.
 
 ## Related Documentation
 
-- [CRM Integration](.claude/rules/features/telegram-bot.md#crm-integration)
+- [HITL CRM Flow](HITL_CRM_FLOW.md)
 - [LangGraph Interrupt](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/#interrupt)
 - Bot source: `telegram_bot/agents/hitl.py`
