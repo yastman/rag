@@ -126,7 +126,7 @@ If these are present and fresh, flat `litellm-acompletion` traces are expected p
 
 ### Prisma `P1000 Authentication failed against database server` During `make validate-traces-fast`
 
-**Cause:** `validate-traces-fast` fell back to `tests/fixtures/compose.ci.env` (no `.env` present), while an existing local Postgres volume (`dev_postgres_data`) was initialized with a different password (commonly `postgres`).
+**Cause:** `validate-traces-fast` fell back to `tests/fixtures/compose.ci.env` (no `.env` present), while an existing local Postgres volume (`dev_postgres_data`) was initialized with a password that does not match the fallback `POSTGRES_PASSWORD`.
 
 **Fix:**
 1. Create/update `.env` with the `POSTGRES_PASSWORD` used when the volume was initialized.
@@ -136,7 +136,7 @@ If these are present and fresh, flat `litellm-acompletion` traces are expected p
    ```
 3. Re-run `make validate-traces-fast`.
 
-`validate-traces-fast` now includes a preflight guard that fails early with this remediation before Langfuse enters an unhealthy auth loop.
+`validate-traces-fast` includes a preflight guard that allows the known-safe fallback (`POSTGRES_PASSWORD=postgres`) with existing `dev_postgres_data`, and fails early when fallback password and existing volume credentials can mismatch.
 
 ### Trace Family Missing
 
