@@ -14,6 +14,15 @@ Use this runbook when traces are missing from Langfuse or observability is broke
 - Missing scores in Langfuse
 - Traces show `LLM failed: Connection error` despite healthy Langfuse ingestion
 
+## Quick Validation Focus
+
+When traces appear missing, validate **app pipeline coverage** first:
+
+- Required trace families: **`rag-api-query`**, **`voice-session`**, **`ingestion-cli-run`**
+- Expected LiteLLM callback noise: **`litellm-acompletion`** (flat, proxy-generated, no session context)
+
+If the three required families are present and fresh, flat `litellm-acompletion` traces do **not** indicate a defect.
+
 ## Diagnosis
 
 ### 1. Check Langfuse Connectivity
@@ -189,3 +198,9 @@ docker compose restart bot
 - Monitor Langfuse ingestion rate
 - Alert on trace family gaps
 - Distinguish proxy-generated `litellm-acompletion` traces from app-instrumented `telegram-message` traces when triaging gaps
+
+## See Also
+
+- [Docker Services Reference](../../DOCKER.md)
+- [Local Development Guide](../LOCAL-DEVELOPMENT.md)
+- [LiteLLM Failure Runbook](LITEllm_FAILURE.md)
