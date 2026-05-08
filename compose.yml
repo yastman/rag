@@ -384,6 +384,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     read_only: false
+    user: "101:101"
+    cap_add: ["NET_BIND_SERVICE"]
     logging: *default-logging
     depends_on:
       mini-app-api:
