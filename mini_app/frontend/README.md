@@ -19,6 +19,8 @@ Renders the expert-selection UI, deep-link flow, and phone-capture form inside T
 - **Compose project**: `dev` (see [`../../DOCKER.md`](../../DOCKER.md) for contract details)
 - **Local port**: `8091` (host) mapped from container port `80`
 - **Health**: `GET http://localhost:8091/health` (nginx internal)
+- **Runtime security**: runs as `uid:gid 101:101` with `cap_drop: [ALL]` and only `cap_add: [NET_BIND_SERVICE]`
+- **Writable runtime paths**: nginx PID and temp/cache paths are rooted under `/tmp/nginx*`
 
 ## Local Development
 

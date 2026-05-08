@@ -201,3 +201,4 @@ make validate-traces-fast
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).
 - The `voice` profile (LiveKit, SIP, voice agent) is intentionally not part of the current local bring-up. Bring it up separately only when explicitly needed.
+- `mini-app-frontend` runs nginx as `101:101` with `cap_drop: [ALL]` and `cap_add: [NET_BIND_SERVICE]`; nginx runtime PID/temp paths are kept under `/tmp` to avoid privileged `chown` startup paths.
