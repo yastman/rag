@@ -70,6 +70,13 @@ Bot preflight:
 make test-bot-health
 ```
 
+If `make test-bot-health` reports Redis auth failure after editing `.env`:
+
+```bash
+make local-redis-recreate
+make test-bot-health
+```
+
 `make test-bot-health` is a local helper for the published native bot prerequisites:
 - Redis via the same `BotConfig` + `redis.from_url(...)` path used by native startup
 - Qdrant via `BotConfig.get_collection_name()` + `qdrant-client`
@@ -140,6 +147,13 @@ make local-ps
 make local-down
 ```
 
+If you changed `.env` `REDIS_PASSWORD`, recreate local Redis before retrying bot health:
+
+```bash
+make local-redis-recreate
+make test-bot-health
+```
+
 `make bot` is the operator-facing command for this local loop; `make run-bot` remains the lower-level/native target.
 
 For ingestion workflows that require docling:
@@ -155,3 +169,4 @@ make local-down
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
 - Ingestion status empty: verify `GDRIVE_SYNC_DIR` and collection bootstrap.
+- Redis auth error (`WRONGPASS` / `NOAUTH`) after changing `.env` `REDIS_PASSWORD`: run `make local-redis-recreate`, then `make test-bot-health`.
