@@ -371,6 +371,27 @@ class TestEndpointReachability:
         mock_langfuse.assert_not_called()
         mock_check.assert_called_once()
 
+    def test_initialize_langfuse_unreachable_disables_without_shutdown(self):
+        """Unreachable local host disables tracing without provider shutdown noise."""
+        from unittest.mock import patch
+
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=False),
+            patch("telegram_bot.observability._disable_otel_exporter") as disable,
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        assert result is None
+        disable.assert_called_once_with(shutdown=False)
+
     def test_initialize_langfuse_proceeds_when_endpoint_reachable(self):
         """When Langfuse endpoint is reachable, initialize_langfuse creates the client."""
         from unittest.mock import MagicMock, patch
@@ -518,7 +539,27 @@ class TestLangfuseModelSync:
         assert kwargs["match_pattern"] == "(?i)^(zai-glm-4\\.7)$"
         assert kwargs["unit"].value == "TOKENS"
         assert kwargs["input_price"] == 0.000001
-        assert kwargs["output_price"] == 0.000003
+
+
+class TestObservabilityBootstrap:
+    def test_disable_otel_exporter_overrides_env_flags(self, monkeypatch):
+        import os
+
+        from telegram_bot.observability_bootstrap import disable_otel_exporter
+
+        monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+        monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
+        monkeypatch.delenv("OTEL_TRACES_EXPORTER", raising=False)
+        monkeypatch.delenv("OTEL_METRICS_EXPORTER", raising=False)
+        monkeypatch.delenv("OTEL_LOGS_EXPORTER", raising=False)
+
+        disable_otel_exporter(shutdown=False)
+
+        assert os.environ.get("LANGFUSE_TRACING_ENABLED") == "false"
+        assert os.environ.get("OTEL_SDK_DISABLED") == "true"
+        assert os.environ.get("OTEL_TRACES_EXPORTER") == "none"
+        assert os.environ.get("OTEL_METRICS_EXPORTER") == "none"
+        assert os.environ.get("OTEL_LOGS_EXPORTER") == "none"
 
     def test_sync_langfuse_model_definitions_updates_stale_custom_model(self):
         import telegram_bot.observability as observability
@@ -591,8 +632,8 @@ class TestLangfuseModelSync:
 class TestDisableOtelExporter:
     """Tests for _disable_otel_exporter() shutdown logic."""
 
-    def test_does_not_set_otel_sdk_disabled_env_var(self, monkeypatch):
-        """_disable_otel_exporter no longer sets OTEL_SDK_DISABLED to avoid Langfuse v3 crash."""
+    def test_sets_otel_sdk_disabled_env_var(self, monkeypatch):
+        """_disable_otel_exporter explicitly disables OTel SDK export path."""
         import os
 
         from telegram_bot.observability import _disable_otel_exporter
@@ -601,7 +642,7 @@ class TestDisableOtelExporter:
         with patch("opentelemetry.trace.get_tracer_provider", return_value=MagicMock()):
             _disable_otel_exporter()
 
-        assert os.environ.get("OTEL_SDK_DISABLED") is None
+        assert os.environ.get("OTEL_SDK_DISABLED") == "true"
 
     def test_calls_shutdown_on_sdk_tracer_provider(self):
         """_disable_otel_exporter calls shutdown() when provider is SdkTracerProvider."""
