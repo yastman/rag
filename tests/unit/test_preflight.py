@@ -158,6 +158,20 @@ class TestCheckRedisDeep:
         assert passed is False
         assert "error" in details
 
+    async def test_error_text_redacts_redis_password_from_uri(self):
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(
+            side_effect=RuntimeError("error for redis://:supersecret@localhost:6379")
+        )
+        mock_redis.aclose = AsyncMock()
+
+        with patch("telegram_bot.preflight.aioredis.from_url", return_value=mock_redis):
+            passed, details = await _check_redis_deep("redis://localhost")
+
+        assert passed is False
+        assert "supersecret" not in details["error"]
+        assert "redis://***@localhost:6379" in details["error"]
+
     async def test_noeviction_policy_warning(self):
         mock_redis = AsyncMock()
         mock_redis.ping = AsyncMock(return_value=True)
@@ -320,6 +334,30 @@ class TestCheckSingleDep:
 
         assert result is True
         mock_deep.assert_awaited_once_with(config.redis_url)
+
+    async def test_redis_auth_error_logs_password_drift_remediation(self, caplog):
+        import logging
+
+        config = _make_config(redis_url="redis://:verysecret@localhost:6379/0")
+        client = AsyncMock(spec=httpx.AsyncClient)
+
+        with (
+            patch(
+                "telegram_bot.preflight._check_redis_deep",
+                new_callable=AsyncMock,
+                return_value=(
+                    False,
+                    {"error": "invalid username-password pair or user is disabled."},
+                ),
+            ),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = await _check_single_dep("redis", config, client)
+
+        assert result is False
+        assert "make local-redis-recreate" in caplog.text
+        assert "REDIS_PASSWORD" in caplog.text
+        assert "verysecret" not in caplog.text
 
     async def test_redis_cache_delegates_to_verify_cache(self):
         config = _make_config()
