@@ -21,6 +21,7 @@ CONTRACT_PATH = Path(__file__).resolve().parent.parent / "observability" / "trac
 _SCAN_DIRS = [
     Path(__file__).resolve().parent.parent.parent / "telegram_bot",
     Path(__file__).resolve().parent.parent.parent / "src",
+    Path(__file__).resolve().parent.parent.parent / "services",
 ]
 # Exclude non-production code from the undocumented-spans check
 _EXCLUDE_PATTERNS = ["src/evaluation", ".venv/"]
