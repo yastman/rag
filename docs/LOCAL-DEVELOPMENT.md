@@ -27,7 +27,8 @@ Minimum env for Telegram E2E (Telethon userbot):
 - `TELEGRAM_API_ID` (from [my.telegram.org](https://my.telegram.org))
 - `TELEGRAM_API_HASH` (from [my.telegram.org](https://my.telegram.org))
 - `E2E_BOT_USERNAME` (defaults to `@test_nika_homes_bot`)
-- a pre-created Telethon session file (e.g., `e2e_tester.session`)
+- an authorized Telethon session file (e.g., `e2e_tester.session`)
+- if the session is present but unauthorized, refresh it with `uv run python scripts/e2e/auth.py --phone <PHONE>`
 
 The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which `make` targets use as a fallback when `.env` is absent. Do not create worktree-named Docker projects.
 
