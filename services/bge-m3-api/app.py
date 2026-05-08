@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from FlagEmbedding import BGEM3FlagModel
+from langfuse import observe
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 
@@ -177,6 +178,12 @@ async def health():
 
 
 @app.post("/encode/dense", response_model=DenseResponse)
+@observe(
+    name="bge-m3-service-encode-dense",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def encode_dense(request: EncodeRequest):
     """
     Encode texts to dense vectors (1024-dim)
@@ -212,6 +219,12 @@ async def encode_dense(request: EncodeRequest):
 
 
 @app.post("/encode/sparse", response_model=SparseResponse)
+@observe(
+    name="bge-m3-service-encode-sparse",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def encode_sparse(request: EncodeRequest):
     """
     Encode texts to sparse vectors (BM25-style)
@@ -255,6 +268,12 @@ async def encode_sparse(request: EncodeRequest):
 
 
 @app.post("/encode/colbert", response_model=ColbertResponse)
+@observe(
+    name="bge-m3-service-encode-colbert",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def encode_colbert(request: EncodeRequest):
     """
     Encode texts to ColBERT multivectors
@@ -291,6 +310,12 @@ async def encode_colbert(request: EncodeRequest):
 
 
 @app.post("/encode/hybrid", response_model=HybridResponse)
+@observe(
+    name="bge-m3-service-encode-hybrid",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def encode_hybrid(request: EncodeRequest):
     """
     Encode texts to all three representations at once
@@ -343,6 +368,12 @@ async def encode_hybrid(request: EncodeRequest):
 
 
 @app.post("/rerank", response_model=RerankResponse)
+@observe(
+    name="bge-m3-service-rerank",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def rerank(request: RerankRequest):
     """
     Rerank documents using ColBERT MaxSim.
