@@ -210,12 +210,16 @@ class TestMainFunction:
             mock_property_bot_instance.start.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
 
-    async def test_main_propagates_polling_lock_busy(self):
-        """Polling lock conflicts should fail fast without retry."""
+    async def test_main_handles_polling_lock_busy_without_traceback(self):
+        """Polling lock conflicts should exit non-zero with concise operator log."""
         from telegram_bot.integrations.polling_lock import PollingLockBusy
 
         mock_property_bot_instance = AsyncMock()
-        mock_property_bot_instance.start = AsyncMock(side_effect=PollingLockBusy("lock busy"))
+        lock_error = PollingLockBusy(
+            "Polling lock busy key='telegram-bot:polling' owner='host:456' pttl_ms=52000 ttl_sec=None;"
+            " stop the other bot instance first"
+        )
+        mock_property_bot_instance.start = AsyncMock(side_effect=lock_error)
         mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
         mock_bot_config = MagicMock()
         mock_setup_logging = MagicMock()
@@ -249,9 +253,12 @@ class TestMainFunction:
             from telegram_bot import main as main_module
 
             with patch.object(main_module.logging, "getLogger", return_value=mock_logger):
-                with pytest.raises(PollingLockBusy, match="lock busy"):
+                with pytest.raises(SystemExit, match="2"):
                     await main_module.main()
 
             mock_property_bot_instance.start.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
-            mock_logger.exception.assert_called_once()
+            mock_logger.error.assert_called_once_with(
+                "Polling lock is busy; another bot instance is active: %s", lock_error
+            )
+            mock_logger.exception.assert_not_called()
