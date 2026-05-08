@@ -102,6 +102,8 @@ make validate-traces-fast
 
 This target runs natively on the host and automatically points to local Docker service endpoints (`localhost:6333`, `localhost:8000`, `localhost:4000`, etc.). You can override individual endpoints if needed: `make validate-traces-fast QDRANT_URL=http://custom:6333`.
 
+When `.env` is absent, `validate-traces-fast` now runs a preflight guard before `docker compose up`. If the fallback env file is `tests/fixtures/compose.ci.env` and an existing `dev_postgres_data` volume is present, the command fails fast with remediation steps instead of starting an unhealthy Langfuse/Postgres auth loop.
+
 If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
 
 ```bash
