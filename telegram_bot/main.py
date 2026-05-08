@@ -78,7 +78,10 @@ async def main():
 
     try:
         await _start_with_retry()
-    except (TelegramUnauthorizedError, TelegramConflictError, PollingLockBusy):
+    except PollingLockBusy:
+        logger.exception("Polling lock is busy; another bot instance is active")
+        raise
+    except (TelegramUnauthorizedError, TelegramConflictError):
         logger.error("Fatal Telegram error — check bot token or stop other instances")
         raise
     except KeyboardInterrupt:
