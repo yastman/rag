@@ -104,6 +104,17 @@ spans:
     - bge-m3-colbert-query-embed
     - bge-m3-hybrid-embed-batch
 
+  bge_m3_service:
+    - bge-m3-service-encode-dense
+    - bge-m3-service-encode-sparse
+    - bge-m3-service-encode-colbert
+    - bge-m3-service-encode-hybrid
+    - bge-m3-service-rerank
+
+  user_base_service:
+    - user-base-service-embed
+    - user-base-service-embed-batch
+
   search_engines:
     - search-engine-encode-hybrid
     - search-engine-encode-hybrid-colbert
@@ -285,6 +296,15 @@ sensitive_spans:
   - bge-m3-encode-hybrid
   - bge-m3-rerank
   - bge-m3-encode-colbert
+  # bge_m3_service (raw vectors)
+  - bge-m3-service-encode-dense
+  - bge-m3-service-encode-sparse
+  - bge-m3-service-encode-hybrid
+  - bge-m3-service-rerank
+  - bge-m3-service-encode-colbert
+  # user_base_service (raw vectors)
+  - user-base-service-embed
+  - user-base-service-embed-batch
   # search_engines (raw vectors)
   - search-engine-encode-hybrid
   - search-engine-encode-hybrid-colbert

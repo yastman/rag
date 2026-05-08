@@ -22,8 +22,11 @@ _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 def bge_rerank_app():
     """Mock heavy deps and add bge-m3-api to sys.path for imports."""
     with pytest.MonkeyPatch.context() as mp:
+        mock_lf = MagicMock()
+        mock_lf.observe = lambda *_a, **_k: lambda f: f
         mp.setitem(sys.modules, "FlagEmbedding", MagicMock())
         mp.setitem(sys.modules, "prometheus_client", MagicMock())
+        mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
         yield
         # Clean up cached service imports (not mocks — real modules imported
