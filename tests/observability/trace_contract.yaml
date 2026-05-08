@@ -230,6 +230,7 @@ spans:
     - ingestion-flow-watch
     - ingestion-qdrant-delete-file
     - ingestion-qdrant-upsert-chunks
+    - ingestion-indexer-embed-texts
 
   contextualization:
     - claude-contextualize
@@ -364,6 +365,7 @@ sensitive_spans:
   - ingestion-flow-watch
   - ingestion-qdrant-delete-file
   - ingestion-qdrant-upsert-chunks
+  - ingestion-indexer-embed-texts
   # contextualization (raw text chunks and queries)
   - claude-contextualize
   - claude-contextualize-sync
