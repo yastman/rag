@@ -4,6 +4,7 @@ This directory contains timestamped operational and documentation audits. Audit 
 
 ## Recent Operational Audits
 
+- [2026-05-08 - Telethon readiness gate](2026-05-08-telethon-readiness-gate.md)
 - [2026-05-08 - Full docs actualization audit](2026-05-08-full-docs-actualization-audit.md)
 - [2026-05-08 - Telethon Langfuse runtime loop audit](2026-05-08-telethon-langfuse-runtime-loop.md)
 - [2026-05-08 - Docs index and gateway audit](2026-05-08-docs-index-gateway-audit.md)
