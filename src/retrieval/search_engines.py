@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Union
 
+from langfuse import observe
 from qdrant_client import QdrantClient, models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
@@ -268,6 +269,18 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
+    @observe(
+        name="search-engine-encode-hybrid",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    def _encode_query(self, query: str) -> Any:
+        """Generate embeddings for hybrid RRF search."""
+        return self.embedding_model.encode(
+            query, return_dense=True, return_sparse=True, return_colbert_vecs=False
+        )
+
     def search(
         self,
         query_embedding: str | list[float],
@@ -356,9 +369,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         import logging
 
         # Generate all embeddings for query
-        query_embeddings = self.embedding_model.encode(
-            query, return_dense=True, return_sparse=True, return_colbert_vecs=False
-        )
+        query_embeddings = self._encode_query(query)
 
         # Convert to Python/Qdrant types
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
@@ -449,6 +460,18 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
+    @observe(
+        name="search-engine-encode-hybrid-colbert",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    def _encode_query(self, query: str) -> Any:
+        """Generate embeddings for hybrid RRF + ColBERT search."""
+        return self.embedding_model.encode(
+            query, return_dense=True, return_sparse=True, return_colbert_vecs=True
+        )
+
     def search(
         self,
         query_embedding: str | list[float],
@@ -529,9 +552,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         import logging
 
         # Generate all embeddings for query (dense + sparse + colbert)
-        query_embeddings = self.embedding_model.encode(
-            query, return_dense=True, return_sparse=True, return_colbert_vecs=True
-        )
+        query_embeddings = self._encode_query(query)
 
         # Convert to Python/Qdrant types
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
@@ -630,6 +651,18 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
+    @observe(
+        name="search-engine-encode-dbsf-colbert",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    def _encode_query(self, query: str) -> Any:
+        """Generate embeddings for DBSF + ColBERT search."""
+        return self.embedding_model.encode(
+            query, return_dense=True, return_sparse=True, return_colbert_vecs=True
+        )
+
     def search(
         self,
         query_embedding: str | list[float],
@@ -706,9 +739,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         import logging
 
         # Generate all embeddings
-        query_embeddings = self.embedding_model.encode(
-            query, return_dense=True, return_sparse=True, return_colbert_vecs=True
-        )
+        query_embeddings = self._encode_query(query)
 
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
         sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
