@@ -23,8 +23,8 @@ Use this runbook when Qdrant collection has issues or monitoring shows anomalies
 |---|---|
 | `qdrant` | `dev-qdrant-1` (Compose v2+), `dev_qdrant_1` (legacy) |
 
-> Qdrant listens on `6333` (REST) and `6334` (gRPC).
-> Dev exposes both to `127.0.0.1`; base `compose.yml` keeps them internal.
+> For service endpoints, ports, and Compose profiles, see the canonical [`DOCKER.md`](../../DOCKER.md).
+> For local development commands and the validation ladder, see [`docs/LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
 
 ## Fast-Path Diagnosis (read-only)
 
@@ -201,3 +201,5 @@ If Qdrant logs show storage or memory errors:
 
 - [Redis Cache Degradation](REDIS_CACHE_DEGRADATION.md)
 - [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md)
+- [Docker Services Reference](../../DOCKER.md)
+- [Local Development Guide](../LOCAL-DEVELOPMENT.md)

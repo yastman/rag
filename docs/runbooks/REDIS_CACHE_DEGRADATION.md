@@ -52,8 +52,8 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 ```
 
 Look for:
-- `used_memory_human` — near the 300M limit in `compose.yml` indicates memory pressure
-- `maxmemory` — should match `256mb` (base) or `512mb` (dev override)
+- `used_memory_human` — compare against the `redis` service `deploy.resources.limits.memory` in [`compose.yml`](../../compose.yml)
+- `maxmemory` — verify against the `redis` service definition in [`compose.yml`](../../compose.yml) and dev overrides in [`compose.dev.yml`](../../compose.dev.yml); canonical values are in [`DOCKER.md`](../../DOCKER.md)
 - `evicted_keys` > 0 — confirms aggressive eviction due to memory pressure
 
 ### 3. Logs (read-only)
@@ -172,3 +172,5 @@ The system degrades gracefully — users still get responses, just without cache
 
 - [Qdrant Troubleshooting](QDRANT_TROUBLESHOOTING.md)
 - [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md)
+- [Docker Services Reference](../../DOCKER.md)
+- [Local Development Guide](../LOCAL-DEVELOPMENT.md)
