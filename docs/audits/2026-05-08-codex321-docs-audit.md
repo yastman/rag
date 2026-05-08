@@ -2,7 +2,7 @@
 
 Scope:
 - Full docs actualization status on branch `docs/codex321-docs-audit-20260508`.
-- Cross-check with existing PR-audit PRs #1433, #1434, #1435 and current working tree.
+- Cross-check with existing PR-audit PRs #1433-#1437 and current working tree.
 - Focus on fast orientation paths for prompts like "изучи последние трейсы", Qdrant/Redis/Docker failures, and worker/PR docs usage.
 
 ## Executive Summary
@@ -14,12 +14,16 @@ Scope:
 
 ## Cross-reference against existing PR-audit branches
 
-- `#1433` (`docs/full-actualization-audit-20260508`): open, not merged.
+- `#1433` (`docs/full-actualization-audit-20260508`): open at the time of this audit; later updated to include merged audit artifacts in `docs/audits/README.md`.
   - Adds `docs/audits/2026-05-08-full-docs-actualization-audit.md` for a superset of findings.
-- `#1434` (`docs/docs-index-gateway-audit-20260508`): open, not merged.
+- `#1434` (`docs/docs-index-gateway-audit-20260508`): merged to `dev` after this audit was produced.
   - Confirmed finding: `docs/indexes/` exists and is current.
-- `#1435` (`docs/docs-engineering-archive-audit-20260508`): open, not merged.
+- `#1435` (`docs/docs-engineering-archive-audit-20260508`): merged to `dev` after review-fix.
   - Confirms recurring engineering/archive hygiene gaps in canonicalization and discoverability.
+- `#1436` (`docs/docs-subsystem-readmes-audit-20260508`): merged to `dev` after review-fix.
+  - Confirms lower-priority subsystem README discoverability gaps.
+- `#1437` (`docs/docs-runtime-runbooks-audit-20260508`): merged to `dev` after review-fix.
+  - Confirms runtime/runbook command drift against Compose contracts.
 
 ## Verification Commands Run (required)
 
@@ -80,9 +84,10 @@ Results:
 - Impact: low/medium (navigation friction for worker/agent orientation).
 
 ### F7 — `docs/audits/README.md` is incomplete
-- Evidence: missing explicit link to `2026-05-07-project-docs-order-audit.md`.
+- Evidence: at the time of this audit, the index missed an explicit link to `2026-05-07-project-docs-order-audit.md`.
 - Command-backed check: script against `docs/audits/*.md` names.
 - Impact: low (time-to-trace history regression).
+- Disposition: covered by #1433, which updates `docs/audits/README.md`.
 
 ## Fix Wave Plan
 
@@ -132,7 +137,7 @@ Waves are disjoint by reserved files to support parallel execution.
   - `docs/superpowers/README.md`
   - `docs/superpowers/plans/README.md`
   - `docs/superpowers/specs/README.md`
-  - `docs/audits/README.md`
+  - `docs/audits/README.md` only if #1433 has not already landed
 - Verification commands:
   - `python3 - <<'PY'
 from pathlib import Path
@@ -159,5 +164,5 @@ PY`
 
 ## Notes for continuation
 
-- Existing branch PR #1434 is a useful baseline for index verification and can be used as first-wave dependency if any of this worker's planned changes touch index docs.
-- Open issues in other areas are tracked by the already-open audit PRs, but this artifact is intended as the next coordinated plan pass for the docs team to execute with disjoint workers.
+- Merged audit PRs #1434-#1437 are useful baselines for index/runtime/subsystem/archive verification.
+- Open issues in other areas are tracked by the audit PRs above and #1433; this artifact is intended as the next coordinated plan pass for the docs team to execute with disjoint workers.
