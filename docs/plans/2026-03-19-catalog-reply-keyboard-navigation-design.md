@@ -167,7 +167,7 @@ This file is the primary place to absorb the old reply-keyboard behavior contrac
 
 ### `telegram_bot/keyboards/`
 
-Add a dedicated catalog keyboard module, either by extending [client_keyboard.py](/home/user/projects/rag-fresh/telegram_bot/keyboards/client_keyboard.py) or creating a sibling module.
+Add a dedicated catalog keyboard module, either by extending [client_keyboard.py](../../telegram_bot/keyboards/client_keyboard.py) or creating a sibling module.
 
 Required responsibilities:
 
