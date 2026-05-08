@@ -233,6 +233,7 @@ class TestMainFunction:
         mock_config_instance.telegram_token = "test-token"
         mock_config_instance.llm_api_key = "test-api-key"
         mock_bot_config.return_value = mock_config_instance
+        mock_logger = MagicMock()
 
         with (
             patch.dict(
@@ -247,8 +248,10 @@ class TestMainFunction:
         ):
             from telegram_bot import main as main_module
 
-            with pytest.raises(PollingLockBusy, match="lock busy"):
-                await main_module.main()
+            with patch.object(main_module.logging, "getLogger", return_value=mock_logger):
+                with pytest.raises(PollingLockBusy, match="lock busy"):
+                    await main_module.main()
 
             mock_property_bot_instance.start.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
+            mock_logger.exception.assert_called_once()
