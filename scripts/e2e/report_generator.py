@@ -41,6 +41,9 @@ class TestReport:
 
     timestamp: datetime
     bot_username: str
+    judge_provider: str
+    judge_mode: str
+    litellm_route_proof: dict[str, str | None] | None
     results: list[TestResult]
     total_duration_ms: int
 
@@ -170,9 +173,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <h1>E2E Test Report</h1>
             <div class="meta">
                 Bot: {{ report.bot_username }} |
+                Judge: {{ report.judge_provider }} ({{ report.judge_mode }}) |
                 {{ report.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} |
                 Duration: {{ "%.1f"|format(report.total_duration_ms / 1000) }}s
             </div>
+            {% if report.litellm_route_proof %}
+            <div class="meta">
+                LiteLLM route proof:
+                alias={{ report.litellm_route_proof.alias }} →
+                {{ report.litellm_route_proof.route_model or "unresolved" }}
+                ({{ report.litellm_route_proof.info_url }})
+            </div>
+            {% endif %}
         </div>
 
         <div class="stats">
@@ -275,6 +287,9 @@ class ReportGenerator:
         json_data = {
             "timestamp": report.timestamp.isoformat(),
             "bot_username": report.bot_username,
+            "judge_provider": report.judge_provider,
+            "judge_mode": report.judge_mode,
+            "litellm_route_proof": report.litellm_route_proof,
             "total_tests": report.total_tests,
             "passed_tests": report.passed_tests,
             "failed_tests": report.failed_tests,
