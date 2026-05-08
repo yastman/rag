@@ -1,6 +1,7 @@
 """Main RAG pipeline orchestrator."""
 
 import asyncio
+import contextvars
 from dataclasses import dataclass
 from typing import Any
 
@@ -127,7 +128,10 @@ class RAGPipeline:
         else:
             # For other engines, generate dense embedding (async)
             loop = asyncio.get_event_loop()
-            query_embedding = await loop.run_in_executor(None, lambda: self._encode_query(query))
+            ctx = contextvars.copy_context()
+            query_embedding = await loop.run_in_executor(
+                None, lambda: ctx.run(self._encode_query, query)
+            )
 
             # Step 2: Search using configured search engine (async)
             search_results = await loop.run_in_executor(
