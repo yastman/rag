@@ -36,6 +36,8 @@ _LANGFUSE_RUNTIME_DOCKERFILES = [
 ]
 
 COMPOSE_CI_ENV = Path("tests/fixtures/compose.ci.env")
+MINI_APP_FRONTEND_DOCKERFILE = Path("mini_app/frontend/Dockerfile")
+MINI_APP_FRONTEND_NGINX_CONF = Path("mini_app/frontend/nginx.conf")
 
 
 def _docker_available() -> bool:
@@ -143,3 +145,23 @@ def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
     assert "python3.13" in text or "python:3.13" in text, (
         f"{dockerfile} must use Python 3.13 runtime for langfuse SDK compatibility"
     )
+
+
+def test_mini_app_frontend_dockerfile_runs_as_unprivileged_nginx_user() -> None:
+    text = MINI_APP_FRONTEND_DOCKERFILE.read_text()
+    assert "USER 101:101" in text, (
+        "mini_app/frontend/Dockerfile must run nginx as uid/gid 101 to avoid root-only startup paths"
+    )
+    assert "COPY nginx.conf /etc/nginx/nginx.conf" in text, (
+        "mini_app/frontend/Dockerfile must install the hardened main nginx.conf"
+    )
+    assert "/tmp/nginx/client_temp" in text, (
+        "mini_app/frontend/Dockerfile must pre-create /tmp/nginx temp directories for nginx startup"
+    )
+
+
+def test_mini_app_frontend_nginx_runtime_paths_use_tmp() -> None:
+    text = MINI_APP_FRONTEND_NGINX_CONF.read_text()
+    assert "pid /tmp/nginx.pid;" in text
+    assert "client_body_temp_path /tmp/nginx/client_temp;" in text
+    assert "proxy_temp_path /tmp/nginx/proxy_temp;" in text

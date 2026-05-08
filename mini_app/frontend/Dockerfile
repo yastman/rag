@@ -18,11 +18,13 @@ RUN npm run build
 # ====== RUNTIME STAGE ======
 FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de AS runtime
 
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
-
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/app.conf
+COPY nginx.conf /etc/nginx/nginx.conf
+
+RUN mkdir -p /tmp/nginx/client_temp /tmp/nginx/proxy_temp /tmp/nginx/fastcgi_temp /tmp/nginx/uwsgi_temp /tmp/nginx/scgi_temp \
+    && chown -R 101:101 /tmp/nginx
+
+USER 101:101
 
 EXPOSE 80
 
