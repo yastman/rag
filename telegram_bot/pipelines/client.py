@@ -59,9 +59,20 @@ def detect_agent_intent(user_text: str) -> str:
     Returns:
         Intent string: "mortgage" | "handoff" | "daily_summary" | "apartment" | "".
     """
-    text = user_text.lower()
+    intent = infer_agent_intent(user_text)
     lf = get_client()
     lf.update_current_span(input={"query_length": len(user_text)})
+    lf.update_current_span(output={"intent": intent or "none"})
+    return intent
+
+
+def infer_agent_intent(user_text: str) -> str:
+    """Pure intent classifier without tracing side-effects.
+
+    Used by pre-agent branching code paths that must not emit an additional
+    ``detect-agent-intent`` span outside ``client-direct-pipeline``.
+    """
+    text = user_text.lower()
     if any(kw in text for kw in ("ипотек", "кредит", "рассрочк")):
         intent = "mortgage"
     elif any(kw in text for kw in ("менеджер", "позвон", "связаться")):
@@ -85,7 +96,6 @@ def detect_agent_intent(user_text: str) -> str:
         intent = "apartment"
     else:
         intent = ""
-    lf.update_current_span(output={"intent": intent or "none"})
     return intent
 
 
