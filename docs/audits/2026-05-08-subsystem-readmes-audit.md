@@ -76,56 +76,44 @@ git diff --check
 
 ## Findings
 
-### F1: `telegram_bot/middlewares/README.md` missing nearest `AGENTS.override.md` and canonical doc links
+`telegram_bot/middlewares/README.md` and `src/ingestion/unified/README.md` were rechecked against current `origin/dev` and already include "See Also" sections, so the previously reported F1/F2 are removed as stale.
 
-- **Evidence**: The nearest override is `telegram_bot/AGENTS.override.md`. The middlewares README has no "See Also" section and no links to `AGENTS.override.md`, `DOCKER.md`, `docs/LOCAL-DEVELOPMENT.md`, or `docs/runbooks/README.md`. Other `telegram_bot/` sub-READMEs (e.g. `services/README.md`) include these links.
-- **Proposed fix**: Add a "See Also" section linking to `../AGENTS.override.md`, `../../DOCKER.md`, `../../docs/LOCAL-DEVELOPMENT.md`, and `../../docs/runbooks/README.md`.
-- **Files to reserve**: `telegram_bot/middlewares/README.md`
-- **Priority**: medium
-
-### F2: `src/ingestion/unified/README.md` missing nearest `AGENTS.override.md` and canonical doc links
-
-- **Evidence**: The file `src/ingestion/unified/AGENTS.override.md` exists but `src/ingestion/unified/README.md` does not reference it. The README also lacks links to `DOCKER.md`, `docs/LOCAL-DEVELOPMENT.md`, and `docs/runbooks/README.md`.
-- **Proposed fix**: Add a "See Also" section linking to `AGENTS.override.md`, `../../../DOCKER.md`, `../../../docs/LOCAL-DEVELOPMENT.md`, and `../../../docs/runbooks/README.md`.
-- **Files to reserve**: `src/ingestion/unified/README.md`
-- **Priority**: medium
-
-### F3: `src/evaluation/README.md` file list uses plain text instead of Markdown links
+### F1: `src/evaluation/README.md` file list uses plain text instead of Markdown links
 
 - **Evidence**: The file list uses bare backtick names (`evaluator.py`, `ragas_evaluation.py`, etc.) instead of linked references like `[`evaluator.py`](./evaluator.py)`. This is inconsistent with the README Index Contract used by every other scoped README (e.g. `src/retrieval/README.md`, `src/core/README.md`).
 - **Proposed fix**: Convert each bare filename to a relative Markdown link.
 - **Files to reserve**: `src/evaluation/README.md`
 - **Priority**: low
 
-### F4: `src/security/README.md` file reference is unlinked
+### F2: `src/security/README.md` file reference is unlinked
 
 - **Evidence**: `pii_redaction.py` is listed as a bare backtick name without a relative link (`[`pii_redaction.py`](./pii_redaction.py)`), inconsistent with the index contract.
 - **Proposed fix**: Link the filename.
 - **Files to reserve**: `src/security/README.md`
 - **Priority**: low
 
-### F5: `src/contextualization/README.md` has escaped underscores in `__init__.py` link
+### F3: `src/contextualization/README.md` has escaped underscores in `__init__.py` link
 
 - **Evidence**: Line 9 shows `[\\_\\_init\\_\\_.py](./__init__.py)`. In standard Markdown renderers this displays literal backslashes and underscores instead of a clean link label.
 - **Proposed fix**: Use backtick code spans inside the link label: ``[`__init__.py`](./__init__.py)``.
 - **Files to reserve**: `src/contextualization/README.md`
 - **Priority**: low
 
-### F6: `src/api/README.md` missing canonical doc links
+### F4: `src/api/README.md` missing canonical doc links
 
 - **Evidence**: No "See Also" section. Missing links to `../../DOCKER.md`, `../../docs/LOCAL-DEVELOPMENT.md`, and `../../docs/runbooks/README.md`. This is a transport/runtime-impacting surface (FastAPI app with health endpoint).
 - **Proposed fix**: Add a "See Also" section with the three canonical doc links.
 - **Files to reserve**: `src/api/README.md`
 - **Priority**: medium
 
-### F7: `mini_app/frontend/README.md` missing canonical doc links
+### F5: `mini_app/frontend/README.md` missing canonical doc links
 
 - **Evidence**: No "See Also" section. Missing links to `../../DOCKER.md`, `../../docs/LOCAL-DEVELOPMENT.md`, and `../../docs/runbooks/README.md`.
 - **Proposed fix**: Add a "See Also" section with the three canonical doc links.
 - **Files to reserve**: `mini_app/frontend/README.md`
 - **Priority**: low
 
-### F8: `k8s/README.md` missing `docs/runbooks/README.md` link
+### F6: `k8s/README.md` missing `docs/runbooks/README.md` link
 
 - **Evidence**: The README links to `DOCKER.md` and `LOCAL-DEVELOPMENT.md` but does not link to `docs/runbooks/README.md`, which is the canonical entry point for operational investigations.
 - **Proposed fix**: Add `- [../docs/runbooks/README.md](../docs/runbooks/README.md) — Operational troubleshooting` to the See Also section.
@@ -141,11 +129,11 @@ git diff --check
 - **No broken relative Markdown links** (confirmed by `make docs-check`).
 - **No absolute local paths** found.
 - **No duplicated Compose/env matrices** found.
-- **Findings**: 8 (2 medium, 6 low). None are blockers for runtime or deployment.
+- **Findings**: 6 (1 medium, 5 low). None are blockers for runtime or deployment.
 - **No new bugs** requiring code/config changes.
 
 ---
 
 ## Next Action
 
-Apply the 8 proposed fixes in a follow-up PR. The two medium-priority items (F1, F2) should be fixed first because they break the nearest-`AGENTS.override.md` lookup contract.
+Apply the 6 proposed fixes in a follow-up PR. The medium-priority item (F4) should be fixed first because it affects a runtime-impacting API surface.
