@@ -24,12 +24,33 @@ fi
 uv run --no-sync python - <<'PY' || fail "Redis is unreachable or auth failed for native bot startup"
 from telegram_bot.config import BotConfig
 import redis
+import re
+
+AUTH_TOKENS = (
+    "invalid username-password pair",
+    "wrongpass",
+    "authentication required",
+    "noauth",
+)
+
+def redact_redis_credentials(text: str) -> str:
+    return re.sub(r"(rediss?://)([^@\s]+)@", r"\1***@", text)
 
 config = BotConfig()
 client = redis.from_url(config.redis_url, decode_responses=True)
 try:
     if client.ping() is not True:
         raise RuntimeError("unexpected Redis ping response")
+except Exception as exc:
+    message = redact_redis_credentials(str(exc))
+    lowered = message.lower()
+    if any(token in lowered for token in AUTH_TOKENS):
+        raise RuntimeError(
+            "Redis auth failed for native bot startup. "
+            ".env REDIS_PASSWORD likely differs from running Redis container password. "
+            "Run `make local-redis-recreate` and retry `make test-bot-health`."
+        ) from None
+    raise RuntimeError(f"Redis check failed: {message}") from None
 finally:
     client.close()
 PY
