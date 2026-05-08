@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.ingestion.chunker import Chunk
 from src.ingestion.indexer import DocumentIndexer, IndexStats
 
@@ -429,6 +431,36 @@ class TestIndexBatch:
 
         captured = capsys.readouterr()
         assert "Failed to index batch" in captured.out
+
+
+class TestEmbedTextsObservability:
+    """Test _embed_texts observability decorator."""
+
+    def test_embed_texts_has_observe_decorator(self):
+        """Test that _embed_texts has @observe with correct config."""
+        import ast
+        from pathlib import Path
+
+        source = Path("src/ingestion/indexer.py").read_text()
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == "_embed_texts"
+            ):
+                decorators = node.decorator_list
+                assert len(decorators) >= 1
+                observe_call = decorators[0]
+                assert isinstance(observe_call, ast.Call)
+                assert isinstance(observe_call.func, ast.Name)
+                assert observe_call.func.id == "observe"
+                kwargs = {kw.arg: kw.value for kw in observe_call.keywords}
+                assert kwargs["name"].value == "ingestion-indexer-embed-texts"
+                assert kwargs["as_type"].value == "embedding"
+                assert kwargs["capture_input"].value is False
+                assert kwargs["capture_output"].value is False
+                return
+        pytest.fail("_embed_texts not found or missing @observe decorator")
 
 
 class TestEmbedTexts:
