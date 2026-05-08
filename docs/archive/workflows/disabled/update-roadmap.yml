@@ -106,4 +106,4 @@ jobs:
           echo "- **Completed:** ${{ steps.progress.outputs.done }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Progress:** ${{ steps.progress.outputs.percent }}%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 [View ROADMAP.md](../../ROADMAP.md)" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 ROADMAP.md is not present in the current repository snapshot." >> $GITHUB_STEP_SUMMARY
