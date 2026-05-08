@@ -206,6 +206,24 @@ class TestRAGPipelineSearch:
 
         assert result.search_method == "mock_engine"
 
+    async def test_search_uses_encode_query_span(self, mock_pipeline):
+        """Test search uses _encode_query for non-hybrid engines."""
+        mock_pipeline.embedding_model.encode.return_value = MagicMock(
+            tolist=lambda: [0.1, 0.2, 0.3]
+        )
+
+        result = await mock_pipeline.search("test query")
+
+        mock_pipeline.embedding_model.encode.assert_called_once_with(
+            "test query", normalize_embeddings=True
+        )
+        assert isinstance(result, RAGResult)
+
+    def test_encode_query_method_exists(self, mock_pipeline):
+        """Test _encode_query method exists and is callable."""
+        assert hasattr(mock_pipeline, "_encode_query")
+        assert callable(mock_pipeline._encode_query)
+
 
 class TestRAGPipelineStats:
     """Tests for pipeline statistics methods."""
