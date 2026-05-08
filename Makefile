@@ -934,6 +934,8 @@ validate-traces: ## Full rebuild + trace validation + report
 
 validate-traces-fast: ## No rebuild; trace validation fails if required trace families are missing
 	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
+	TRACE_ENV_FILE="$$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )"; \
+	uv run python scripts/validate_trace_runtime.py --env-file "$$TRACE_ENV_FILE"
 	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
 	QDRANT_URL="$(or $(QDRANT_URL),http://localhost:6333)" \
 	BGE_M3_URL="$(or $(BGE_M3_URL),http://localhost:8000)" \
