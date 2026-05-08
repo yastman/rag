@@ -2,6 +2,14 @@
 
 Project documentation index for humans and agents. Use this page to understand the system, find subsystem docs, and search the doc tree quickly.
 
+## Task-Oriented Indexes
+
+For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/):
+
+- [`indexes/fast-search.md`](indexes/fast-search.md) — "I need to find docs about X"
+- [`indexes/runtime-services.md`](indexes/runtime-services.md) — Docker, ingestion, mini app, bot, voice
+- [`indexes/observability-and-storage.md`](indexes/observability-and-storage.md) — Langfuse, Qdrant, Redis, LiteLLM, Postgres
+
 ## Understand the Project Fast
 
 - [`../README.md`](../README.md) — System overview, architecture diagram, quick start, and reviewer path.

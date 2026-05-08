@@ -62,8 +62,10 @@
 - `k8s/`, `compose*.yml`, `DOCKER.md`: deploy and environment orchestration.
 
 ## Documentation Entry Points
-- For project-wide docs navigation and fast doc search, start from [`docs/README.md`](docs/README.md).
-- For traces, cache, vector search, Compose/runtime, and service-health investigations, start from [`docs/runbooks/README.md`](docs/runbooks/README.md).
+- **Project-wide docs navigation** and fast doc search: start from [`docs/README.md`](docs/README.md).
+- **Goal/task-oriented fast lookup** (e.g. "изучи последние трейсы", "сломался Qdrant/Redis/LiteLLM", "понять Docker services"): start from [`docs/indexes/`](docs/indexes/).
+- **Operational investigations and runbooks** (traces, cache, vector search, Compose/runtime, service health): start from [`docs/runbooks/README.md`](docs/runbooks/README.md).
+- **Detailed folder ownership** and local checks: start from the nearest folder `README.md`.
 - Use these indexes before ad hoc log/code searching; keep `AGENTS.md` as a gateway, not a duplicated operations manual.
 
 ## Runtime And Compose Contract
