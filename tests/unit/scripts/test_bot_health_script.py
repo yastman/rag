@@ -32,3 +32,14 @@ def test_bot_health_reports_local_postgres_expectation() -> None:
     assert "REAL_ESTATE_DATABASE_URL" in text
     assert "localhost:5432" in text
     assert "optional" in text.lower()
+
+
+def test_bot_health_reports_redis_password_drift_remediation() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "REDIS_PASSWORD" in text
+    assert "make local-redis-recreate" in text
+
+
+def test_bot_health_redacts_redis_and_rediss_credentials() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert r"(rediss?://)([^@\s]+)@" in text
