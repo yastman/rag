@@ -16,10 +16,11 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -84,6 +85,24 @@ TRACKED_NODE_NAMES = [
 ]
 _TRACKED_NODE_SET = frozenset(TRACKED_NODE_NAMES)
 REQUIRED_TRACE_NAMES = ["rag-api-query", "voice-session", "ingestion-cli-run"]
+REQUIRED_TELEGRAM_OBSERVATION_FAMILIES = ["telegram-rag-query", "telegram-rag-supervisor"]
+TELEGRAM_ROOT_TRACE_NAME = "telegram-message"
+TELEGRAM_ROOT_CONTEXT_REQUIREMENT = "telegram-message-root-context"
+TELEGRAM_ROOT_CONTEXT_REQUIRED_FIELDS = (
+    "content_type",
+    "query_preview",
+    "query_hash",
+    "query_len",
+    "route",
+)
+TELEGRAM_ROOT_CONTEXT_FORBIDDEN_FIELDS = (
+    "user",
+    "chat",
+    "message",
+    "event_from_user",
+    "event_chat",
+    "raw_update",
+)
 
 GO_NO_GO_THRESHOLDS_PATH = (
     Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
@@ -233,7 +252,7 @@ def check_worktree_clean(strict: bool = False) -> None:
     Args:
         strict: If True, exit on dirty worktree. If False, log warning only.
     """
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 B607
         ["git", "status", "--porcelain", "--untracked-files=normal"],
         capture_output=True,
         text=True,
@@ -268,7 +287,7 @@ def detect_runner_mode(collection: str) -> str:
 
 def get_git_sha() -> str:
     """Get current git commit SHA."""
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 B607
         ["git", "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
@@ -781,16 +800,41 @@ def check_orphan_traces(results: list[TraceResult]) -> float:
 def check_required_trace_coverage(
     *,
     required_trace_names: list[str] | None = None,
+    required_observation_names: list[str] | None = None,
     lookback_hours: int = 24,
-) -> dict[str, list[str]]:
-    """Check that required trace families exist in Langfuse within lookback window."""
-    required = required_trace_names or REQUIRED_TRACE_NAMES
+) -> dict[str, Any]:
+    """Check required trace coverage in Langfuse within lookback window.
+
+    Coverage combines:
+    1) Direct trace-family names for non-Telegram roots.
+    2) Required observation families nested under telegram-message root traces.
+    3) Sanitized root input contract for telegram-message traces.
+    """
+    required_direct = REQUIRED_TRACE_NAMES if required_trace_names is None else required_trace_names
+    required_nested = (
+        REQUIRED_TELEGRAM_OBSERVATION_FAMILIES
+        if required_observation_names is None
+        else required_observation_names
+    )
+    required = [*required_direct, *required_nested]
+    include_root_context_contract = bool(required_nested)
+    if include_root_context_contract:
+        required.append(TELEGRAM_ROOT_CONTEXT_REQUIREMENT)
     from_timestamp = datetime.now(UTC) - timedelta(hours=lookback_hours)
     lf = Langfuse()
     present: list[str] = []
     missing: list[str] = []
+    nested_present: set[str] = set()
+    root_context_missing: dict[str, list[str]] = {}
+    root_context_pii_violations: dict[str, list[str]] = {}
+    observation_counts: Counter[str] = Counter()
+    warning_observation_count = 0
+    cache_hit_without_retrieve_generation = 0
+    non_cache_without_retrieve_generation = 0
+    root_traces_checked = 0
+    root_traces_with_required_families = 0
 
-    for trace_name in required:
+    for trace_name in required_direct:
         try:
             traces_page = lf.api.trace.list(
                 name=trace_name,
@@ -806,16 +850,129 @@ def check_required_trace_coverage(
             logger.warning("Failed to check required trace '%s': %s", trace_name, exc)
             missing.append(trace_name)
 
+    root_trace_refs: list[Any] = []
+    if required_nested:
+        try:
+            root_page = lf.api.trace.list(
+                name=TELEGRAM_ROOT_TRACE_NAME,
+                from_timestamp=from_timestamp,
+                order_by="timestamp.desc",
+                limit=50,
+            )
+            root_trace_refs = list(getattr(root_page, "data", None) or [])
+        except Exception as exc:
+            logger.warning(
+                "Failed to list '%s' root traces for nested coverage: %s",
+                TELEGRAM_ROOT_TRACE_NAME,
+                exc,
+            )
+
+    for trace_ref in root_trace_refs:
+        trace_id = getattr(trace_ref, "id", None)
+        if not trace_id:
+            continue
+        try:
+            trace = lf.api.trace.get(trace_id)
+        except Exception as exc:
+            logger.warning("Failed to fetch root trace '%s': %s", trace_id, exc)
+            continue
+
+        root_traces_checked += 1
+        observations = list(getattr(trace, "observations", None) or [])
+        observation_names: list[str] = []
+
+        for obs in observations:
+            obs_name = getattr(obs, "name", None)
+            if not obs_name:
+                continue
+            observation_names.append(obs_name)
+            observation_counts[obs_name] += 1
+            level = getattr(obs, "level", None)
+            if isinstance(level, str) and level.upper() == "WARNING":
+                warning_observation_count += 1
+
+        observation_name_set = set(observation_names)
+        trace_has_required_nested = False
+        for required_name in required_nested:
+            if required_name in observation_name_set:
+                nested_present.add(required_name)
+                trace_has_required_nested = True
+
+        if not trace_has_required_nested:
+            continue
+
+        root_traces_with_required_families += 1
+
+        trace_input = getattr(trace, "input", None)
+        trace_input = trace_input if isinstance(trace_input, dict) else {}
+
+        missing_fields = [
+            field
+            for field in TELEGRAM_ROOT_CONTEXT_REQUIRED_FIELDS
+            if field not in trace_input or trace_input.get(field) is None
+        ]
+        if missing_fields:
+            root_context_missing[trace_id] = sorted(missing_fields)
+
+        pii_fields = sorted(
+            key for key in trace_input if key in TELEGRAM_ROOT_CONTEXT_FORBIDDEN_FIELDS
+        )
+        if pii_fields:
+            root_context_pii_violations[trace_id] = pii_fields
+
+        route = str(trace_input.get("route", "")).lower()
+        is_cache_hit = route in {"cache_hit", "semantic_cache_hit", "search_cache_hit"}
+        has_retrieve_or_generate = bool(
+            {
+                "node-retrieve",
+                "node-generate",
+                "retrieve",
+                "generate",
+                "rag-pipeline",
+            }
+            & observation_name_set
+        )
+
+        if is_cache_hit and not has_retrieve_or_generate:
+            cache_hit_without_retrieve_generation += 1
+        elif not is_cache_hit and not has_retrieve_or_generate:
+            non_cache_without_retrieve_generation += 1
+
+    for required_name in required_nested:
+        if required_name in nested_present:
+            present.append(required_name)
+        else:
+            missing.append(required_name)
+
+    if include_root_context_contract:
+        has_root_contract_failures = bool(root_context_missing or root_context_pii_violations)
+        if root_traces_with_required_families > 0 and not has_root_contract_failures:
+            present.append(TELEGRAM_ROOT_CONTEXT_REQUIREMENT)
+        else:
+            missing.append(TELEGRAM_ROOT_CONTEXT_REQUIREMENT)
+
     lf.flush()
     logger.info("Required trace coverage: present=%s missing=%s", present, missing)
-    return {"required": required, "present": present, "missing": missing}
+    return {
+        "required": required,
+        "present": present,
+        "missing": missing,
+        "observation_counts": dict(sorted(observation_counts.items())),
+        "warning_observation_count": warning_observation_count,
+        "root_context_missing": root_context_missing,
+        "root_context_pii_violations": root_context_pii_violations,
+        "cache_hit_without_retrieve_generation": cache_hit_without_retrieve_generation,
+        "non_cache_without_retrieve_generation": non_cache_without_retrieve_generation,
+        "root_traces_checked": root_traces_checked,
+        "root_traces_with_required_families": root_traces_with_required_families,
+    }
 
 
 def evaluate_go_no_go(
     aggregates: dict[str, Any],
     results: list[TraceResult],
     orphan_rate: float = 0.0,
-    required_trace_coverage: dict[str, list[str]] | None = None,
+    required_trace_coverage: dict[str, Any] | None = None,
     thresholds: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Evaluate Go/No-Go criteria for Gate 1.
@@ -1437,8 +1594,8 @@ async def run_validation(args: argparse.Namespace) -> None:
         lf_client = get_langfuse_client()
         if lf_client:
             lf_client.flush()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Skipping final Langfuse flush: %s", exc)
     await asyncio.sleep(5)  # extra wait for async flush
 
     # Enrich results from Langfuse API (scores + node spans) before aggregates
