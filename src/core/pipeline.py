@@ -83,7 +83,7 @@ class RAGPipeline:
         capture_input=False,
         capture_output=False,
     )
-    def _encode_query(self, query: str) -> list[float]:
+    def _encode_query(self, query: str) -> Any:
         """Generate dense embedding for a query string."""
         return self.embedding_model.encode(query, normalize_embeddings=True).tolist()
 
