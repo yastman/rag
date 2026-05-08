@@ -91,11 +91,11 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
     )
     llm_base_url: str = Field(
-        default="https://api.cerebras.ai/v1",
+        default="http://localhost:4000/v1",
         validation_alias=AliasChoices("llm_base_url", "LLM_BASE_URL"),
     )
     llm_model: str = Field(
-        default="zai-glm-4.7", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
+        default="gpt-4o-mini", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
     )
 
     # Langfuse observability
