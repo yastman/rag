@@ -4,13 +4,19 @@ This directory contains timestamped operational and documentation audits. Audit 
 
 ## Recent Operational Audits
 
+- [2026-05-08 - Full docs actualization audit](2026-05-08-full-docs-actualization-audit.md)
 - [2026-05-08 - Telethon Langfuse runtime loop audit](2026-05-08-telethon-langfuse-runtime-loop.md)
-- [2026-05-05 - Langfuse recent traces structure audit](2026-05-05-langfuse-recent-traces-structure-audit.md)
-- [2026-05-05 - Langfuse Telethon trace audit](2026-05-05-langfuse-telethon-trace-audit.md)
-- [2026-05-05 - Langfuse trace 8d79036a audit](2026-05-05-langfuse-trace-8d79036a-audit.md)
+- [2026-05-08 - Docs index and gateway audit](2026-05-08-docs-index-gateway-audit.md)
+- [2026-05-08 - Engineering and archive docs audit](2026-05-08-engineering-archive-audit.md)
+- [2026-05-08 - Runtime runbooks audit](2026-05-08-runtime-runbooks-audit.md)
+- [2026-05-08 - Subsystem READMEs audit](2026-05-08-subsystem-readmes-audit.md)
+- [2026-05-07 - Project docs order audit](2026-05-07-project-docs-order-audit.md)
 - [2026-05-07 - Docker Langfuse health audit](2026-05-07-docker-langfuse-health-audit.md)
 - [2026-05-07 - Langfuse real env OTEL fix](2026-05-07-langfuse-real-env-otel-fix.md)
 - [2026-05-07 - Telegram bot logs audit](2026-05-07-telegram-bot-logs-audit.md)
+- [2026-05-05 - Langfuse recent traces structure audit](2026-05-05-langfuse-recent-traces-structure-audit.md)
+- [2026-05-05 - Langfuse Telethon trace audit](2026-05-05-langfuse-telethon-trace-audit.md)
+- [2026-05-05 - Langfuse trace 8d79036a audit](2026-05-05-langfuse-trace-8d79036a-audit.md)
 
 ## When To Use
 
