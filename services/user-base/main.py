@@ -13,6 +13,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from langfuse import observe
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
@@ -115,6 +116,12 @@ async def health():
 
 
 @app.post("/embed", response_model=EmbedResponse)
+@observe(
+    name="user-base-service-embed",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def embed(request: EmbedRequest):
     """Generate dense vector for single text."""
     if not model:
@@ -125,6 +132,12 @@ async def embed(request: EmbedRequest):
 
 
 @app.post("/embed_batch", response_model=EmbedBatchResponse)
+@observe(
+    name="user-base-service-embed-batch",
+    as_type="embedding",
+    capture_input=False,
+    capture_output=False,
+)
 async def embed_batch(request: EmbedBatchRequest):
     """Generate dense vectors for batch of texts."""
     if not model:
