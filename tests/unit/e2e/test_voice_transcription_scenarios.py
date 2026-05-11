@@ -12,3 +12,9 @@ def test_voice_transcription_scenarios_have_expected_ids():
     group_scenarios = scenarios.get_scenarios_by_group(scenarios.TestGroup.VOICE_TRANSCRIPTION)
     scenario_ids = {s.id for s in group_scenarios}
     assert scenario_ids == {"8.1", "8.2", "8.3"}
+
+
+def test_voice_transcription_scenarios_use_voice_delivery():
+    group_scenarios = scenarios.get_scenarios_by_group(scenarios.TestGroup.VOICE_TRANSCRIPTION)
+    for s in group_scenarios:
+        assert s.delivery == "voice", f"Scenario {s.id} should use voice delivery"
