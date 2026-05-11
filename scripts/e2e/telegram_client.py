@@ -111,6 +111,77 @@ class E2ETelegramClient:
             raw_message=response,
         )
 
+    async def send_voice_and_wait(
+        self,
+        response_timeout: int | None = None,
+    ) -> BotResponse:
+        """Send voice note to bot and wait for response.
+
+        Args:
+            response_timeout: Response timeout in seconds (default from config)
+
+        Returns:
+            BotResponse with text and timing
+
+        Raises:
+            RuntimeError: If voice note path is not configured or file does not exist.
+            TimeoutError: If no response within timeout
+        """
+        if not self._client:
+            raise RuntimeError("Client not connected")
+
+        path = self.config.voice_note_path
+        if not path:
+            raise RuntimeError(
+                "E2E_VOICE_NOTE_PATH is not set. "
+                "Provide a local audio file path for voice-note scenarios."
+            )
+
+        from pathlib import Path as _Path
+
+        if not _Path(path).exists():
+            raise RuntimeError(
+                f"Voice note fixture not found: {path}. "
+                "Set E2E_VOICE_NOTE_PATH to an existing audio file."
+            )
+
+        effective_timeout = response_timeout or self.config.response_timeout
+
+        start_time = time.time()
+
+        async with self._client.conversation(
+            self.config.bot_username,
+            timeout=effective_timeout,
+        ) as conv:
+            await conv.send_file(path, voice_note=True)
+            logger.debug(f"Sent voice note: {path}")
+
+            # Wait for response (handles streaming - waits for final message)
+            response = await conv.get_response()
+
+            # For streaming bots, wait a bit more for edits to complete
+            await asyncio.sleep(1.0)
+
+            # Try to get the latest version of the message (after edits)
+            try:
+                final_response = await conv.get_edit(timeout=3)
+                response = final_response
+            except TimeoutError:
+                # No edits, use original response
+                pass
+
+        end_time = time.time()
+        response_time_ms = int((end_time - start_time) * 1000)
+
+        logger.debug(f"Response ({response_time_ms}ms): {response.text[:100]}...")
+
+        return BotResponse(
+            text=response.text or "",
+            message_id=response.id,
+            response_time_ms=response_time_ms,
+            raw_message=response,
+        )
+
     async def __aenter__(self):
         """Async context manager entry."""
         await self.connect()
