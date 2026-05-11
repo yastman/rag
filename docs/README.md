@@ -9,6 +9,8 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`indexes/fast-search.md`](indexes/fast-search.md) — "I need to find docs about X"
 - [`indexes/runtime-services.md`](indexes/runtime-services.md) — Docker, ingestion, mini app, bot, voice
 - [`indexes/observability-and-storage.md`](indexes/observability-and-storage.md) — Langfuse, Qdrant, Redis, LiteLLM, Postgres
+- [`indexes/local-runtime.md`](indexes/local-runtime.md) — local bot startup, Telegram E2E, Telethon sessions, polling locks
+- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, docs maintenance, swarm process docs
 
 ## Understand the Project Fast
 
@@ -20,6 +22,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) — Test-writing rules and local-fast vs heavy-tier split.
 - [`engineering/sdk-registry.md`](engineering/sdk-registry.md) — SDK/framework lookup order and canonical versions.
 - [`engineering/issue-triage.md`](engineering/issue-triage.md) — Issue classification and routing playbook.
+- [`engineering/README.md`](engineering/README.md) — Engineering process index with active and historical notes.
 - [`adr/`](adr/) — Architecture decision records.
 - [`audits/`](audits/) — Dated investigation artifacts and evidence.
 

@@ -1,137 +1,61 @@
 # AGENTS.md
 
-## Project At A Glance
-- Production contextual RAG system for real-estate workflows.
-- Main surfaces: `telegram_bot/`, `mini_app/`, apartment search, CRM automation, voice agent, unified ingestion, local services, and k3s deployment.
-- Treat this repo as a multi-system product, not a single bot package.
+## Purpose
 
-## First Pass For New Sessions
-- Read `README.md` for system overview and entry points.
-- Read the nearest `AGENTS.override.md` before editing scoped subtrees.
-- Start code discovery with `grepai` MCP tools; use `rg` only for exact text or path matching.
-- Use `context-mode` MCP tools for large-output exploration, external docs, and large-file summarization.
+This file is the repo gateway for agents. Keep it short. Do not duplicate
+runbooks, Docker contracts, test policy, subsystem ownership, docs maintenance
+rules, or worker-specific workflows here.
 
-## Instruction Priority
-- The nearest `AGENTS.override.md` takes precedence for files in its scope.
-- Root `Critical Invariants` and `Validation` rules still apply repo-wide unless a local override adds stricter requirements.
-- `Engineering Heuristics` are defaults for ambiguous design choices; they do not justify violating explicit repo rules.
+## Priority
 
-## Workflow Reality
-- Do not assume `main` is the everyday integration branch.
-- Before giving PR, merge, release, or cleanup advice, verify the current workflow using:
-  - `git branch --show-current`
-  - `gh pr list --state merged --limit 8 --json number,baseRefName,headRefName,mergedAt`
-  - `.github/workflows/ci.yml`
-  - `Makefile`
-  - `scripts/git_hygiene.py`
-  - `scripts/repo_cleanup.sh`
-- Treat drift between merged PR history, docs, CI, and cleanup scripts as a real repo issue.
+1. Nearest `AGENTS.override.md`
+2. This file
+3. Linked canonical docs
 
-## MCP Priority And Fallbacks
-- `grepai` is the default entry point for code discovery, semantic search, and call-graph tracing.
-- In this repo, prefer `grepai` project-local mode by default: call `grepai_search` and `grepai_trace_*` without `workspace` unless a named workspace has been explicitly configured.
-- Use `rg` instead of `grepai` only for exact strings, imports, symbols, or file path patterns.
-- `context-mode` is the default entry point for high-output command exploration, external docs, and large-file analysis.
-- Use direct shell or file reads when you need exact file contents for editing, the output is small, or MCP adds no value.
-- If `grepai` is unavailable or returns weak results, fall back to `rg` plus direct file reads.
-- If `context-mode` is unavailable, fall back to short shell commands and targeted file reads.
+If a rule belongs to a canonical doc or skill, link it instead of copying it
+here.
 
-## SDK And Docs Lookup Order
-- For SDK and framework decisions, use this order:
-  - `docs/engineering/sdk-registry.md`
-  - current code usage
-  - official docs / Context7 for version-sensitive behavior
-  - broad web search only as fallback
-- Do not block work on missing MCP tools; use shell and direct file reads when MCP is unavailable.
+## Start Here
 
-## Issue Triage Workflow
-- Before starting new work, classify it as `Quick execution`, `Plan needed`, or `Design first`.
-- Use `docs/engineering/issue-triage.md` as the detailed operator playbook.
-- Keep small local fixes in `Quick execution`.
-- Route multi-file or runtime-sensitive work through `Plan needed`.
-- Route structurally ambiguous or contract-changing work through `Design first`.
-- `Plan needed` work routes through `@writing-plans`; `Design first` work routes through `@brainstorming`, then a written spec and user review before planning.
+1. Read [`README.md`](README.md) for the project overview.
+2. Read [`docs/README.md`](docs/README.md) for documentation navigation.
+3. Use [`docs/indexes/`](docs/indexes/) for task-oriented lookup.
+4. Use [`docs/runbooks/README.md`](docs/runbooks/README.md) for operational
+   investigations.
+5. Read the nearest folder `README.md` and `AGENTS.override.md` before scoped
+   edits.
 
-## Task Routing
-- `telegram_bot/`: handlers, dialogs, middlewares, agents, business services, orchestration.
-- `telegram_bot/services/` and `src/retrieval/`: search, RAG, cache, reranking, retrieval behavior.
-- `src/ingestion/unified/`: ingestion pipeline, chunking, manifests, Qdrant writes, resumability.
-- `src/voice/` and `telegram_bot/graph/`: voice agent and LangGraph runtime flow.
-- `mini_app/`: Telegram mini app backend and frontend.
-- `services/`: supporting local service containers and helper APIs.
-- `k8s/`, `compose*.yml`, `DOCKER.md`: deploy and environment orchestration.
+## Canonical Docs
 
-## Documentation Entry Points
-- **Project-wide docs navigation** and fast doc search: start from [`docs/README.md`](docs/README.md).
-- **Goal/task-oriented fast lookup** (e.g. "изучи последние трейсы", "сломался Qdrant/Redis/LiteLLM", "понять Docker services"): start from [`docs/indexes/`](docs/indexes/).
-- **Operational investigations and runbooks** (traces, cache, vector search, Compose/runtime, service health): start from [`docs/runbooks/README.md`](docs/runbooks/README.md).
-- **Detailed folder ownership** and local checks: start from the nearest folder `README.md`.
-- Use these indexes before ad hoc log/code searching; keep `AGENTS.md` as a gateway, not a duplicated operations manual.
-
-## Runtime And Compose Contract
-- Treat `compose*.yml`, `docker/**`, `services/**`, `mini_app/**`, `src/api/**`, `src/voice/**`, and ingestion runtime paths as runtime-impacting surfaces.
-- For those changes, validate effective Compose config and service set, not only Python tests.
-- Compose contract tests must use Docker Compose native env handling (`--env-file`, `-f`, `COMPOSE_DISABLE_ENV_FILE=1`) instead of relying on the developer's local `.env` or `os.environ.copy()`.
-- Keep non-secret test interpolation values in `tests/fixtures/compose.ci.env`; update that fixture when adding new `${VAR:?required}` interpolation to Compose files.
-- Production deploy paths must run `scripts/validate_prod_env.sh` before `docker compose build` / `up`, including both GitHub Actions and manual deploy scripts.
-- Prefer:
-  - `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services`
-  - `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services`
-  - `make verify-compose-images`
-
-## Working Rules
-- Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
-- Use `mcp__context-mode__ctx_batch_execute` for multi-command repo exploration.
-- Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
-- Before adding a new SDK, API client, or dependency, check `docs/engineering/sdk-registry.md`.
-
-## Test Writing Instruction
-- Use `docs/engineering/test-writing-guide.md` as the default instruction for creating or updating tests.
-- Keep one canonical owner per behavior; extend existing tests before adding a new file.
-- Preserve local-fast vs heavy-tier split; do not move runtime-heavy checks into `make test-unit` / `make test`.
-- For test changes, run focused pytest on touched files first, then baseline verification from `Validation`.
-
-## Engineering Heuristics
-- Prefer the simplest change that solves the current task and keeps the local blast radius small.
-- Do not add abstractions, extension points, wrappers, or interfaces before a real second use case exists.
-- Apply DRY to shared knowledge, rules, validations, and contracts; do not merge code paths that change for different reasons.
-- Extract reuse only after repetition is proven and the shared shape is stable.
-- Prefer composition and focused modules over inheritance-heavy designs.
-- Use SOLID ideas only when they improve testability, replaceability, or change safety for the current code.
-- Favor small, reviewable PRs and incremental code-health improvements.
-- Refactor when it makes the current change simpler, safer, or easier to test.
-
-## Critical Invariants
-- Preserve service boundaries: transport-layer Telegram code should not absorb retrieval or domain logic.
-- Keep apartment search cheap-first: prefer deterministic parsing and filters before adding LLM work.
-- Preserve LangGraph state contracts, checkpoint assumptions, and routing shapes.
-- Preserve ingestion determinism and resumability; do not casually change manifest identity, hashing, or collection semantics.
-- Do not remove tracing, scoring, or observability hooks without a clear replacement.
-- Treat mini app parity as part of the release surface, not as an optional frontend.
-
-## Validation
-- Run fresh verification before claiming completion.
-- Base checks for most code changes:
-  - `make check`
-  - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
-- Use stricter checks from local overrides when working in their scope.
-- If you skip a relevant check, state that explicitly.
-
-## Fast Start Commands
-- `uv sync`
-- `make local-up`
-- `make run-bot`
-- `make check`
-- `make test-unit`
-- `make ingest-unified-status`
+- Runtime, Compose, services, ports, env, and deploy surfaces:
+  [`DOCKER.md`](DOCKER.md)
+- Local setup and validation:
+  [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md)
+- Issue triage:
+  [`docs/engineering/issue-triage.md`](docs/engineering/issue-triage.md)
+- Test writing:
+  [`docs/engineering/test-writing-guide.md`](docs/engineering/test-writing-guide.md)
+- SDK/framework lookup:
+  [`docs/engineering/sdk-registry.md`](docs/engineering/sdk-registry.md)
+- Docs navigation:
+  [`docs/README.md`](docs/README.md), [`docs/indexes/`](docs/indexes/)
+- Operational runbooks:
+  [`docs/runbooks/README.md`](docs/runbooks/README.md)
 
 ## Local Overrides
-- `telegram_bot/AGENTS.override.md`
-- `k8s/AGENTS.override.md`
-- `src/ingestion/unified/AGENTS.override.md`
 
-## References
-- `README.md`
-- `docs/engineering/sdk-registry.md`
-- `docs/engineering/test-writing-guide.md`
-- `DOCKER.md`
+- [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
+- [`k8s/AGENTS.override.md`](k8s/AGENTS.override.md)
+- [`src/ingestion/unified/AGENTS.override.md`](src/ingestion/unified/AGENTS.override.md)
+
+## Safety
+
+Prefer local/test environments. Do not access production, VPS, secrets, SSH,
+cloud credentials, or real CRM write paths unless explicitly required. Redact
+secrets in outputs.
+
+## Validation
+
+Use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and the nearest
+override for verification. Run focused checks for touched areas. State skipped
+checks.
