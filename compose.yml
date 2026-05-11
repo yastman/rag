@@ -465,7 +465,7 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
-    image: clickhouse/clickhouse-server:26.3.9@sha256:537014a67ce8bf1f5c79c2e2b26fb30b8285a86ffff03875bb14ed17ea35db62
+    image: clickhouse/clickhouse-server:26.4.2@sha256:6d8f358747b59f7db044749eaf951e828e75cc16f9c487f855b114272c44b82c
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
