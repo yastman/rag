@@ -37,3 +37,8 @@ def score_keys(trace_contract):
     for group in trace_contract["scores"].values():
         scores.extend(group)
     return scores
+
+
+@pytest.fixture(scope="session")
+def coverage_tiers(trace_contract):
+    return trace_contract.get("coverage_tiers", {})
