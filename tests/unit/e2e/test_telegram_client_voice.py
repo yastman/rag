@@ -42,10 +42,13 @@ class _Conv:
 class _FakeClient:
     def __init__(self) -> None:
         self.last_username: str | None = None
+        self.last_conv: _Conv | None = None
 
     def conversation(self, username: str, timeout: int):
         self.last_username = username
-        return _Conv()
+        conv = _Conv()
+        self.last_conv = conv
+        return conv
 
 
 def _cfg_with_voice(voice_path: str) -> E2EConfig:
@@ -67,6 +70,11 @@ async def test_send_voice_and_wait_uses_conversation_send_file(tmp_path: Path) -
 
     assert isinstance(result, BotResponse)
     assert result.text == "ok"
+
+    conv = telethon_client.last_conv
+    assert conv is not None
+    assert conv.last_voice_note is True
+    assert conv.last_path == str(fixture)
 
 
 @pytest.mark.asyncio
