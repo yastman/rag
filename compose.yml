@@ -44,7 +44,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:8.6.2@sha256:832d7785830f3f4b559300e6191fc914b15642c1935252338825cf4332200148
+    image: redis:8.6.3@sha256:0c341492924cad6f5483f9133e43bd6c51ecdecbcadfac5b51657393b6a7936c
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
@@ -69,7 +69,7 @@ services:
           memory: 300M
 
   qdrant:
-    image: qdrant/qdrant:v1.17.1@sha256:94728574965d17c6485dd361aa3c0818b325b9016dac5ea6afec7b4b2700865f
+    image: qdrant/qdrant:v1.18.0@sha256:b3063c673f3973877c038eeecc392bad5011f072ee7892b56c9a8e204a3bdea9
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
@@ -513,7 +513,7 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.6.2@sha256:832d7785830f3f4b559300e6191fc914b15642c1935252338825cf4332200148
+    image: redis:8.6.3@sha256:0c341492924cad6f5483f9133e43bd6c51ecdecbcadfac5b51657393b6a7936c
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
