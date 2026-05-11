@@ -23,22 +23,36 @@ Create `telegram_bot/graph/nodes/your_node.py`:
 
 from typing import Any
 
+from langgraph.runtime import Runtime
+
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import observe
 
 
 @observe(name="node-your_node", capture_input=False, capture_output=False)
-async def your_node(state: dict[str, Any], context: Any) -> dict[str, Any]:
+async def your_node(
+    state: dict[str, Any],
+    runtime: Runtime[GraphContext],
+) -> dict[str, Any]:
     """Process state and return updates.
 
     Args:
         state: Current RAGState
-        context: GraphContext DI container
+        runtime: LangGraph Runtime with GraphContext dependencies
 
     Returns:
-        Dict of state updates (merged via | operator)
+        Dict of state updates
     """
-    # Your logic here
-    result = await context.some_service.do_something(state["query"])
+    some_service = runtime.context["some_service"]
+    messages = state.get("messages") or []
+    last_message = messages[-1] if messages else {}
+    query = (
+        last_message.content
+        if hasattr(last_message, "content")
+        else last_message.get("content", "")
+    )
+
+    result = await some_service.do_something(query)
 
     return {
         "your_field": result,
@@ -78,8 +92,8 @@ def build_graph(...) -> CompiledGraph:
         "existing_node",
         route_your_node,
         {
-            "your_node": lambda s: s.get("condition"),
-            "other_node": lambda s: not s.get("condition"),
+            "your_node": "your_node",
+            "other_node": "other_node",
         }
     )
 
@@ -92,8 +106,8 @@ def build_graph(...) -> CompiledGraph:
 def route_your_node(state: RAGState) -> str:
     """Return next node name based on state."""
     if state.get("your_field"):
-        return "next_node"
-    return "fallback_node"
+        return "your_node"
+    return "other_node"
 ```
 
 ### 5. Update Type Annotations
@@ -111,33 +125,32 @@ class GraphContext(TypedDict):
 ```python
 """Node description."""
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from telegram_bot.observability import ObserveContext
-else:
-    ObserveContext = Any
+from langgraph.runtime import Runtime
 
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import observe
 
 
 @observe(name="node-{node_name}", capture_input=False, capture_output=False)
 async def {node_name}_node(
     state: dict[str, Any],
-    context: ObserveContext,
+    runtime: Runtime[GraphContext],
 ) -> dict[str, Any]:
     """Short description of what this node does.
 
     Args:
         state: Current RAGState
-        context: GraphContext DI container
+        runtime: LangGraph Runtime with GraphContext dependencies
 
     Returns:
         State updates to merge
     """
     # 1. Extract inputs from state
-    # 2. Do work (use context for dependencies)
+    # 2. Do work (use runtime.context for dependencies)
     # 3. Return state updates
+    dependency = runtime.context.get("dependency")
     return {"output_field": "value"}
 ```
 
@@ -159,8 +172,14 @@ async def {node_name}_node(
 ```python
 # telegram_bot/graph/nodes/sentiment.py
 @observe(name="node-sentiment", capture_input=False, capture_output=False)
-async def sentiment_node(state: dict, context: Any) -> dict:
-    sentiment = await context.sentiment_analyzer.analyze(state["query"])
+async def sentiment_node(
+    state: dict[str, Any],
+    runtime: Runtime[GraphContext],
+) -> dict[str, Any]:
+    analyzer = runtime.context["sentiment_analyzer"]
+    messages = state.get("messages") or []
+    query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
+    sentiment = await analyzer.analyze(query)
     return {"sentiment": sentiment, "query_sentiment": sentiment}
 ```
 

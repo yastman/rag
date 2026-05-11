@@ -82,7 +82,7 @@ Use this path for cache degradation, eviction, latency, or semantic cache misses
 | Question | Where to Look |
 |---|---|
 | Is Redis reachable? | `redis-cli -p 6379 -a "$REDIS_PASSWORD" ping` |
-| Are cache keys present? | `KEYS sem:v5:*` in `redis-cli` |
+| Are cache keys present? | `SCAN 0 MATCH 'sem:v8:bge1024:*' COUNT 100` in `redis-cli` |
 | Which tier is missing? | `cache.get_metrics()` in bot logs or `telegram_bot/integrations/cache.py` |
 | Why is everything a miss? | Check `grade_confidence` threshold uses RRF scale, not cosine similarity |
 | Cache version stale after model change? | Bump `CACHE_VERSION` or `SEMANTIC_CACHE_VERSION` in `integrations/cache.py` |

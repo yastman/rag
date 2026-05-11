@@ -10,6 +10,11 @@ LiveKit Voice Agent — outbound calls with RAG Q&A.
 
 Provides a voice interface to the RAG system using LiveKit Agents. The agent handles SIP calls, transcribes speech, queries the RAG API, and synthesizes responses.
 
+## Ownership
+
+- Owns the LiveKit voice agent transport path, SIP helpers, RAG API client, schemas, and transcript storage.
+- Maintains voice-specific observability wrappers while reusing shared tracing infrastructure.
+
 ## Entrypoints
 
 | Entrypoint | Role |
@@ -32,14 +37,11 @@ Provides a voice interface to the RAG system using LiveKit Agents. The agent han
 - **RAG API** — `src/api/main.py` (voice agent queries this)
 - **Langfuse** — voice session tracing (optional)
 
-## Focused Checks
+## Focused checks
 
 ```bash
-# Import check (works even without LiveKit SDK installed)
-python -c "from src.voice.agent import VoiceBot; print('ok')"
-
-# Type-check
-make check
+uv run pytest tests/unit/voice/ -q
+uv run python -c "from src.voice.agent import VoiceBot; print('ok')"
 ```
 
 ## See Also

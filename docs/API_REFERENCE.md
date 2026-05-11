@@ -1,6 +1,6 @@
-# RAG API Reference
+# API Reference
 
-The RAG API exposes a FastAPI endpoint for running RAG queries through the LangGraph pipeline.
+Quick reference for calling the RAG API. [`RAG_API.md`](RAG_API.md) is the canonical request/response contract and owns field-level schema details.
 
 ## Base URL
 
@@ -15,29 +15,27 @@ http://rag-api:8080   # Docker Compose
 
 Run a RAG query through the LangGraph pipeline.
 
-**Request:**
+Minimal request:
 
 ```json
 {
-  "query": "string",           // Required: User query text (1-4096 chars)
-  "user_id": 0,                // Optional: User identifier
-  "session_id": "string",      // Optional: Session identifier (defaults to "api-{user_id}")
-  "channel": "api",            // Optional: Source channel (api, voice, telegram)
-  "langfuse_trace_id": "string" // Optional: Langfuse trace ID for linking
+  "query": "What documents are needed for buying property?",
+  "user_id": 12345,
+  "channel": "api"
 }
 ```
 
-**Response:**
+Response shape is `QueryResponse`; see [`RAG_API.md`](RAG_API.md#post-query) for the full schema. Current `query_type` values are `CHITCHAT`, `OFF_TOPIC`, `STRUCTURED`, `FAQ`, `ENTITY`, and `GENERAL`.
 
 ```json
 {
-  "response": "string",          // Generated answer
-  "query_type": "string",        // Classified query type
-  "cache_hit": false,            // Whether semantic cache was hit
-  "documents_count": 0,          // Number of retrieved documents
-  "rerank_applied": false,       // Whether reranking was applied
-  "latency_ms": 0.0,            // Total pipeline latency in milliseconds
-  "context": []                  // Retrieved context documents
+  "response": "string",
+  "query_type": "string",
+  "cache_hit": false,
+  "documents_count": 0,
+  "rerank_applied": false,
+  "latency_ms": 0.0,
+  "context": []
 }
 ```
 
@@ -68,71 +66,22 @@ Readiness probe for the RAG API.
 
 ## Error Responses
 
-### Current Behavior (Generic)
-
-The API currently returns generic errors for all failures:
+Unhandled exceptions return the structured shape implemented in `src/api/main.py`:
 
 ```json
 {
-  "error": "Internal server error"
+  "error": "internal_error",
+  "message": "Internal server error",
+  "trace_id": "abc123...",
+  "recoverable": false
 }
 ```
 
-**Status codes:**
-- `500 Internal Server Error` — For all unhandled exceptions
-
-### Recommended: Structured Errors
-
-For better API consumer experience, consider implementing structured errors:
-
-**Proposed error response format:**
-
-```json
-{
-  "error": "error_code",           // Machine-readable error code
-  "message": "Human-readable message",
-  "trace_id": "abc-123-def",       // For log correlation
-  "recoverable": true               // Whether retry might help
-}
-```
-
-**Error code recommendations:**
-
-| Error Code | HTTP Status | Description | Recoverable |
-|------------|-------------|-------------|-------------|
-| `validation_error` | 400 | Invalid request parameters | No |
-| `query_too_long` | 400 | Query exceeds 4096 chars | No |
-| `invalid_session_id` | 400 | Malformed session ID | No |
-| `qdrant_unavailable` | 503 | Vector DB unreachable | Yes |
-| `redis_unavailable` | 503 | Cache service down | Yes |
-| `llm_timeout` | 504 | LLM request timed out | Yes |
-| `rate_limited` | 429 | Too many requests | Yes |
+Validation errors use FastAPI/Pydantic's standard 422 response. `GraphRecursionError` is handled inside `/query` as a successful `QueryResponse` with `query_type: "ERROR"` and a fallback user response.
 
 ## Request/Response Schemas
 
-### QueryRequest
-
-```python
-class QueryRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=4096)
-    user_id: int = Field(default=0)
-    session_id: str = Field(default="")
-    channel: str = Field(default="api")
-    langfuse_trace_id: str | None = Field(default=None)
-```
-
-### QueryResponse
-
-```python
-class QueryResponse(BaseModel):
-    response: str
-    query_type: str = ""
-    cache_hit: bool = False
-    documents_count: int = 0
-    rerank_applied: bool = False
-    latency_ms: float = 0.0
-    context: list[dict[str, Any]] = []
-```
+The Pydantic models live in `src/api/schemas.py`. Field-level documentation is maintained in [`RAG_API.md`](RAG_API.md#post-query).
 
 ## Integration Examples
 
@@ -186,11 +135,13 @@ The `/health` endpoint checks:
 - FastAPI application is running
 - Does NOT check: Redis, Qdrant, BGE-M3, LLM availability
 
-For full dependency health checks, use the preflight command:
+For local bot/runtime dependency checks, use the local development preflight:
 
 ```bash
-make test-preflight
+make test-bot-health
 ```
+
+The RAG API also initializes Redis, Qdrant, embeddings, and LLM clients in FastAPI lifespan startup. A successful `/health` response is therefore a cheap liveness/readiness signal for the app process, not a deep dependency probe.
 
 ## Langfuse Tracing
 
@@ -201,5 +152,6 @@ All queries are traced in Langfuse with:
 
 ## Related Documentation
 
+- [RAG API Contract](RAG_API.md)
 - [Pipeline Overview](PIPELINE_OVERVIEW.md)
 - [Bot Architecture](BOT_ARCHITECTURE.md)
