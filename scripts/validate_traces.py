@@ -108,6 +108,10 @@ GO_NO_GO_THRESHOLDS_PATH = (
     Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
 )
 
+TRACE_CONTRACT_PATH = (
+    Path(__file__).resolve().parent.parent / "tests" / "observability" / "trace_contract.yaml"
+)
+
 
 def _load_go_no_go_thresholds(
     custom: dict[str, Any] | None = None,
@@ -120,6 +124,25 @@ def _load_go_no_go_thresholds(
     if custom:
         defaults.update(custom)
     return defaults
+
+
+def load_trace_coverage_tiers() -> dict[str, list[str]]:
+    """Load coverage tiers from trace_contract.yaml.
+
+    Returns:
+        dict with keys: required_for_1307, required_when_exercised,
+        opportunistic_for_1307.  Falls back to empty lists if missing.
+    """
+    if not TRACE_CONTRACT_PATH.exists():
+        return {}
+    with open(TRACE_CONTRACT_PATH) as f:
+        contract = yaml.safe_load(f) or {}
+    tiers = contract.get("coverage_tiers", {})
+    return {
+        "required_for_1307": tiers.get("required_for_1307", []),
+        "required_when_exercised": tiers.get("required_when_exercised", []),
+        "opportunistic_for_1307": tiers.get("opportunistic_for_1307", []),
+    }
 
 
 class FakeSentMessage:
@@ -850,6 +873,27 @@ def check_required_trace_coverage(
             logger.warning("Failed to check required trace '%s': %s", trace_name, exc)
             missing.append(trace_name)
 
+    # Opportunistic families — tracked but non-blocking
+    tiers = load_trace_coverage_tiers()
+    opportunistic = [t for t in tiers.get("opportunistic_for_1307", []) if t not in required_direct]
+    opportunistic_present: list[str] = []
+    opportunistic_missing: list[str] = []
+    for trace_name in opportunistic:
+        try:
+            traces_page = lf.api.trace.list(
+                name=trace_name,
+                from_timestamp=from_timestamp,
+                order_by="timestamp.desc",
+                limit=1,
+            )
+            if getattr(traces_page, "data", None):
+                opportunistic_present.append(trace_name)
+            else:
+                opportunistic_missing.append(trace_name)
+        except Exception as exc:
+            logger.warning("Failed to check opportunistic trace '%s': %s", trace_name, exc)
+            opportunistic_missing.append(trace_name)
+
     root_trace_refs: list[Any] = []
     if required_nested:
         try:
@@ -957,6 +1001,8 @@ def check_required_trace_coverage(
         "required": required,
         "present": present,
         "missing": missing,
+        "opportunistic_present": opportunistic_present,
+        "opportunistic_missing": opportunistic_missing,
         "observation_counts": dict(sorted(observation_counts.items())),
         "warning_observation_count": warning_observation_count,
         "root_context_missing": root_context_missing,
@@ -1112,13 +1158,18 @@ def evaluate_go_no_go(
         }
     else:
         missing_families = required_trace_coverage.get("missing", [])
+        opportunistic_missing = required_trace_coverage.get("opportunistic_missing", [])
+        actual_parts: list[str] = []
+        if missing_families:
+            actual_parts.append(f"missing: {', '.join(sorted(missing_families))}")
+        if opportunistic_missing:
+            actual_parts.append(
+                f"opportunistic missing: {', '.join(sorted(opportunistic_missing))}"
+            )
+        actual = "; ".join(actual_parts) if actual_parts else "all present"
         criteria["required_trace_families_present"] = {
             "target": ", ".join(required_trace_coverage.get("required", REQUIRED_TRACE_NAMES)),
-            "actual": (
-                "all present"
-                if not missing_families
-                else f"missing: {', '.join(sorted(missing_families))}"
-            ),
+            "actual": actual,
             "passed": not missing_families,
             "skipped": False,
             "stddev": "\u2014",

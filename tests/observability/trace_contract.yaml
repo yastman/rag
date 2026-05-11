@@ -13,6 +13,18 @@ required_families:
   - voice-session
   - ingestion-cli-run
 
+coverage_tiers:
+  required_for_1307:
+    - telegram-message
+    - telegram-rag-query
+    - telegram-rag-supervisor
+    - telegram-rag-voice
+  required_when_exercised:
+    - rag-api-query
+    - ingestion-cli-run
+  opportunistic_for_1307:
+    - voice-session
+
 spans:
   graph_nodes:
     - node-guard
