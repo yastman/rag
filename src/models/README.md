@@ -2,6 +2,11 @@
 
 Embedding model singletons to prevent duplicate loading (saves 4–6 GB RAM).
 
+## Ownership
+
+- Owns process-local embedding model singletons and the Voyage contextualized embedding client.
+- Keeps heavy ML imports lazy so normal imports do not require local model extras.
+
 ## Files
 
 | File | Purpose |
@@ -28,10 +33,16 @@ st = get_sentence_transformer("BAAI/bge-m3")
 - Loading multiple times wastes memory
 - `get_bge_m3_model()` ensures only one instance exists
 
+## Boundaries
+
+- Does not own retrieval algorithms or Qdrant search behavior.
+- Does not own provider/model selection policy outside model-loading helpers.
+- Local ML dependencies are optional; install the `ml-local` extra when running real local models.
+
 ## Focused checks
 
 ```bash
-uv run pytest tests/unit/models/ -q
+uv run pytest tests/unit/utils/test_embedding_model.py tests/unit/test_contextualized_embeddings.py -q
 ```
 
 ## Related

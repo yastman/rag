@@ -2,6 +2,11 @@
 
 Main RAG pipeline orchestrator.
 
+## Ownership
+
+- Owns the `RAGPipeline` orchestration API and `RAGResult` return contract.
+- Coordinates configured embedding, retrieval, contextualization, and indexing helpers.
+
 ## Files
 
 | File | Purpose |
@@ -14,6 +19,7 @@ Main RAG pipeline orchestrator.
 - Delegates embedding to [`src/models/`](../models/)
 - Delegates search to [`src/retrieval/`](../retrieval/)
 - Delegates context enrichment to [`src/contextualization/`](../contextualization/)
+- Uses [`src/ingestion/`](../ingestion/) helpers only for the `index_documents()` path.
 - Does **not** handle transport-layer concerns (Telegram, HTTP)
 
 ## Usage

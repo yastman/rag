@@ -119,7 +119,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `telegram_bot/integrations/cache.py` — SemanticCache + EmbeddingsCache
   - `telegram_bot/services/vectorizers.py` — BgeM3CacheVectorizer (custom)
 - **паттерны:**
-  - SemanticCache: name="sem:v5:bge1024", distance_threshold по query_type (FAQ=0.12, GENERAL=0.08)
+  - SemanticCache: name="sem:v8:bge1024", distance_threshold по query_type (FAQ=0.12, GENERAL=0.08)
   - EmbeddingsCache: name="embeddings:v5", ttl=7 days
   - Lazy import внутри initialize() (избежать 7.5s startup penalty)
   - filterable_fields: query_type, language, user_id, cache_scope, agent_role (tag)

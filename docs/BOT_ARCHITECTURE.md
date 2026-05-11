@@ -1,18 +1,18 @@
 # PropertyBot Architecture
 
-**File:** `telegram_bot/bot.py` (5013 lines)
+**File:** `telegram_bot/bot.py`
 
 Main Telegram bot entry point combining aiogram 3 dispatcher with LangGraph pipeline.
 
 ## High-Level Structure
 
 ```
-PropertyBot class (472+)
+PropertyBot
     ├── __init__() — bot, dispatcher, services init
-    ├── _register_routers() — handler registration
+    ├── _register_handlers() — command/message/callback handler registration
     ├── _setup_dialogs() — aiogram-dialog setup
     ├── _setup_middlewares() — middleware chain
-    └── run() — start polling
+    └── start() — dependency preflight, service startup, and polling
 ```
 
 ## Key Classes
@@ -25,6 +25,13 @@ Main bot orchestrator. Initializes:
 - All service layers (cache, embeddings, LLM, Qdrant)
 - Graph pipeline via `build_graph()`
 
+Navigation:
+
+```bash
+rg -n "class PropertyBot|def _register_handlers|async def start|async def handle_query|async def handle_voice" telegram_bot/bot.py
+rg -n "build_graph\\(|setup_.*middleware|include_router|callback_query|Command\\(" telegram_bot/bot.py
+```
+
 ### Lazy Import Wrappers
 
 | Function | Wraps | Purpose |
@@ -34,22 +41,14 @@ Main bot orchestrator. Initializes:
 | `classify_query()` | `graph/nodes/classify.py:classify_query` | Query classifier for tests |
 | `detect_injection()` | `graph/nodes/guard.py:detect_injection` | Injection detector for tests |
 
-## Key Functions
+## Helper Areas
 
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `_stream_agent_to_draft()` | 129–185 | Stream agent output to Telegram drafts |
-| `_merge_results()` | 187–206 | Deduplicate search results |
-| `_state_apartment_results()` | 207–220 | Extract apartment list from state |
-| `_split_telegram_response()` | 235–247 | Split long messages at 4096 char limit |
-| `_supervisor_thread_id()` | 248–254 | Build forum thread ID for supervisor |
-| `_delete_checkpointer_thread()` | 255–271 | Cleanup stale checkpoint threads |
-| `_extract_current_turn()` | 272–287 | Extract last user/assistant turn |
-| `_build_trace_metadata()` | 288–329 | Build Langfuse trace metadata |
-| `_write_voice_error_scores()` | 330–351 | Score voice errors in Langfuse |
-| `_is_post_pipeline_cleanup_error()` | 352–388 | Detect cleanup errors |
-| `_is_checkpointer_runtime_error()` | 389–416 | Detect checkpoint errors |
-| `_extract_stream_chunk_text()` | 417–443 | Extract text from stream chunks |
+`telegram_bot/bot.py` is large and helper names move over time. Prefer lookup recipes over line tables:
+
+```bash
+rg -n "def _stream|def _merge|def _split|trace_metadata|voice_error|checkpointer" telegram_bot/bot.py
+rg -n "handle_.*callback|cmd_|StateFilter|F\\.data|FeedbackCB|FavoriteCB" telegram_bot/bot.py
+```
 
 ## Module Imports
 
@@ -79,11 +78,9 @@ Main bot orchestrator. Initializes:
 | `_NO_RAG_QUERY_TYPES` | `{"CHITCHAT", "OFF_TOPIC"}` | Queries bypass RAG |
 | `_AGENT_DRAFT_INTERVAL` | `0.2` | Seconds between draft updates |
 
-## Handler Registration Order
+## Handler Registration
 
-1. Menu button handlers (`F.text.in_`)
-2. FSM handlers
-3. Catch-all (`StateFilter(None)`)
+`_register_handlers()` wires command handlers, voice handling, menu button handlers, callback handlers, and feature routers. The catch-all text handler is registered on a dedicated router that is included after dialog routers, so aiogram-dialog message inputs can match before general text processing.
 
 ## FSM States
 
@@ -102,11 +99,15 @@ Defined in `telegram_bot/handlers/handoff.py`:
 `PropertyBot` builds the LangGraph pipeline via `build_graph()`:
 
 ```
-START → classify → guard → cache_check → retrieve → grade
-                           ↓                           ↓
-                      chitchat/off-topic          rerank/rewrite/generate
-                           ↓                           ↓
-                         respond ←←←←←←←←← cache_store ←←←←←←
+START → transcribe? → classify
+                    ↓
+       CHITCHAT/OFF_TOPIC → respond
+                    ↓
+                  guard? → cache_check → retrieve → grade
+                                               ↓
+                                      rerank / rewrite / generate
+                                               ↓
+                                         cache_store → respond
 ```
 
 ## Testing Pattern

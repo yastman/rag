@@ -1,6 +1,11 @@
 # VPS Google Drive Ingestion Recovery
 
-Use this runbook when `gdrive_documents_bge` exists but stays empty, or when ingestion reports `No input data`.
+Use this VPS-only runbook when `gdrive_documents_bge` exists but stays empty,
+or when ingestion reports `No input data`.
+
+> **VPS only:** This page references host paths such as
+> `/etc/rag-fresh/rclone-sync.env` and `/var/log/rclone-sync.log`. Do not use
+> those paths for local development.
 
 ## Expected Contract
 
@@ -14,14 +19,23 @@ If the host sync directory is missing or empty, Qdrant may still have a valid co
 
 ## 1. Check Host Environment
 
-Confirm the configured sync path and rclone config:
+Confirm required variables are present without printing secret-bearing files:
 
 ```bash
-grep -E '^(GDRIVE_SYNC_DIR|RCLONE_CONFIG_FILE|RCLONE_REMOTE)=' .env
-sudo cat /etc/rag-fresh/rclone-sync.env
+for file in .env /etc/rag-fresh/rclone-sync.env; do
+  sudo test -r "$file" && echo "$file: present" || echo "$file: MISSING"
+done
+
+for v in GDRIVE_SYNC_DIR RCLONE_CONFIG_FILE RCLONE_REMOTE; do
+  test -r .env && grep -q "^${v}=" .env && echo ".env ${v}: present" || echo ".env ${v}: MISSING"
+  sudo test -r /etc/rag-fresh/rclone-sync.env && sudo grep -q "^${v}=" /etc/rag-fresh/rclone-sync.env && \
+    echo "rclone-sync.env ${v}: present" || echo "rclone-sync.env ${v}: MISSING"
+done
 ```
 
 The paths in `.env`, cron env, and Compose must point to the same host files.
+If you need to compare actual values during an incident, do it in a private
+shell and redact paths/tokens from notes and tickets.
 
 ## 2. Verify The Host Sync Directory
 

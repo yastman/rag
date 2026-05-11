@@ -6,13 +6,13 @@ Multi-tier semantic caching with graceful degradation when cache fails.
 
 ### Tier 1: Embeddings Cache (RedisVL)
 - **Purpose:** Skip re-encoding of repeated queries
-- **Key:** `embeddings:v5` index
+- **Index:** `embeddings:v5`
 - **TTL:** 7 days
 - **Lookup:** Query text → cached embedding vector
 
 ### Tier 2: Semantic Result Cache (RedisVL)
 - **Purpose:** Skip retrieval + generation for similar queries
-- **Key:** `sem:v5:bge1024` index
+- **Index:** `sem:v8:bge1024`
 - **Threshold:** Varies by query type (see below)
 - **TTL:** Per query type (configurable)
 
@@ -21,12 +21,17 @@ Multi-tier semantic caching with graceful degradation when cache fails.
 | Query Type | Distance Threshold | Rationale |
 |------------|-------------------|-----------|
 | `FAQ` | 0.12 | High precision required |
+| `ENTITY` | 0.10 | Entity/history-style specificity |
 | `GENERAL` | 0.08 | Balanced |
-| `APARTMENT` | 0.10 | Price/location specificity |
-| `CHITCHAT` | 0.15 | Lenient matching |
-| `OFF_TOPIC` | 1.0 | Bypass cache entirely |
+| `STRUCTURED` | 0.05 | Most specific; strictest reuse |
 
-**Note:** Thresholds are on RRF scale (~0.005–0.15), NOT cosine similarity [0-1].
+**Note:** Semantic thresholds are RedisVL vector-distance cutoffs; lower values
+are stricter. The separate store guard still uses `grade_confidence` on the RRF
+scale.
+
+`CHITCHAT` and `OFF_TOPIC` are not RAG cacheable query types. Apartment search
+uses separate apartment tooling and should not be documented as a semantic
+response-cache type unless the runtime policy changes.
 
 ## Degradation Modes
 
@@ -54,18 +59,15 @@ Index: embeddings:v5
 Schema: text (str), embedding (dense[1024])
 
 # Semantic result cache
-Index: sem:v5:bge1024
+Index: sem:v8:bge1024
 Schema: query_text, query_type, language, response, sources, metadata
 ```
 
-## Forcing Cache Bypass
+## Cache Scope
 
-Set `cache_scope=disabled` in request to bypass all caching:
-
-```python
-# In graph state
-state["cache_scope"] = "disabled"
-```
+There is no explicit runtime bypass scope. RAG semantic-cache checks and stores
+use `cache_scope="rag"`; history lookups use `cache_scope="history"`.
+`CHITCHAT` and `OFF_TOPIC` skip the RAG path before semantic cache lookup.
 
 ## Monitoring
 
@@ -89,5 +91,5 @@ Environment variables:
 |------|---------|
 | `telegram_bot/integrations/cache.py` | CacheLayerManager |
 | `telegram_bot/services/cache_policy.py` | Cacheability decisions |
-| `telegram_bot/graph/nodes/cache_check.py` | Cache lookup node |
-| `telegram_bot/graph/nodes/cache_store.py` | Cache write node |
+| `telegram_bot/graph/nodes/cache.py` | Graph cache lookup/store nodes |
+| `telegram_bot/pipelines/client.py` | Client direct cache lookup/store flow |

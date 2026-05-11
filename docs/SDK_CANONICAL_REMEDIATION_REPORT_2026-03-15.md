@@ -1,5 +1,10 @@
 # SDK Canonical Remediation Report
 
+> **Historical evidence snapshot.** This dated report records remediation work
+> from March 15, 2026. Do not treat it as the active SDK source of truth.
+> Current SDK/framework guidance lives in
+> [`docs/engineering/sdk-registry.md`](engineering/sdk-registry.md).
+
 Date: 2026-03-15
 Branch: `feat/sdk-canonical-remediation`
 Plan: `docs/plans/2026-03-15-sdk-canonical-remediation-plan.md`

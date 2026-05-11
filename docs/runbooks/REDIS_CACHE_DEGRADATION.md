@@ -4,7 +4,7 @@
 > **Last verified:** 2026-05-07
 > **Verification command:**
 > ```bash
-> COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis redis-cli -a test-redis-password ping
+> COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'
 > ```
 
 Use this runbook when Redis cache issues affect RAG performance.
@@ -36,7 +36,7 @@ Run these commands before deciding whether the issue is a service failure or an 
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps redis
 
 # Test Redis connection from inside the container
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis redis-cli -a test-redis-password ping
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'
 ```
 
 Expected: `PONG`.
@@ -46,9 +46,9 @@ If this fails, treat as **service failure** (container down, network partition, 
 
 ```bash
 # Check key count and memory without scanning all keys
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis redis-cli -a test-redis-password DBSIZE
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" DBSIZE'
 
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis redis-cli -a test-redis-password INFO memory
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" INFO memory'
 ```
 
 Look for:
@@ -113,9 +113,9 @@ Check for:
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml restart redis
    ```
 
-3. Verify network connectivity from the bot container:
+3. Verify Redis network name and auth from inside the Compose network:
    ```bash
-   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec bot redis-cli -h redis -a test-redis-password ping
+   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -h redis -a "$REDIS_PASSWORD" ping'
    ```
 
 ### Local `REDIS_PASSWORD` Drift After `.env` Change
@@ -158,7 +158,7 @@ If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_C
 
 1. Check memory usage:
    ```bash
-   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis redis-cli -a test-redis-password INFO memory | grep used_memory_human
+   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" INFO memory' | grep used_memory_human
    ```
 
 2. If near limit, consider:
