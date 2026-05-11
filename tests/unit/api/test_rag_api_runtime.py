@@ -139,8 +139,23 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
     )
     lf.update_current_span.assert_called_once()
     call_kwargs = lf.update_current_span.call_args.kwargs
-    assert call_kwargs["input"] == "test"
-    assert call_kwargs["output"] == "ok"
+    # Safe input payload
+    input_payload = call_kwargs["input"]
+    assert isinstance(input_payload, dict)
+    assert input_payload["content_type"] == "api"
+    assert "query_preview" in input_payload
+    assert "query_hash" in input_payload
+    assert input_payload["query_len"] == 4
+    assert "test" not in input_payload  # raw text must not be present
+    # Safe output payload
+    output_payload = call_kwargs["output"]
+    assert isinstance(output_payload, dict)
+    assert "answer_preview" in output_payload
+    assert "answer_hash" in output_payload
+    assert output_payload["answer_len"] == 2
+    assert output_payload["chunks_count"] == 1
+    assert output_payload["delivery_status"] == "sent"
+    assert "ok" not in output_payload  # raw response must not be present
     assert call_kwargs["metadata"] == {"source": "voice", "query_type": "GENERAL"}
 
 
@@ -367,10 +382,20 @@ async def test_query_graph_recursion_error_preserves_trace_context() -> None:
         await query(QueryRequest(query="complex", user_id=42, session_id="sess-1"))
 
     call_kwargs = lf.update_current_span.call_args.kwargs
-    assert call_kwargs["input"] == "complex"
-    assert (
-        "recursion" in str(call_kwargs.get("output", "")).lower()
-        or "limit" in str(call_kwargs.get("output", "")).lower()
-    )
+    # Safe input payload
+    input_payload = call_kwargs["input"]
+    assert isinstance(input_payload, dict)
+    assert input_payload["content_type"] == "api"
+    assert "query_preview" in input_payload
+    assert "query_hash" in input_payload
+    assert input_payload["query_len"] == 7
+    assert "complex" not in input_payload  # raw text must not be present
+    # Safe output payload with fallback_reason
+    output_payload = call_kwargs["output"]
+    assert isinstance(output_payload, dict)
+    assert "answer_preview" in output_payload
+    assert "answer_hash" in output_payload
+    assert output_payload["fallback_reason"] == "recursion_limit"
+    assert output_payload["chunks_count"] == 1
     assert call_kwargs["metadata"]["source"] == "api"
     assert call_kwargs["metadata"]["query_type"] == "ERROR"

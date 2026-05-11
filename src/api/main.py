@@ -19,6 +19,10 @@ from langgraph.errors import GraphRecursionError
 
 from src.api.schemas import QueryRequest, QueryResponse
 from telegram_bot.observability import observe
+from telegram_bot.observability_payloads import (
+    build_safe_input_payload,
+    build_safe_output_payload,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -203,9 +207,18 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
             elapsed_ms = (time.perf_counter() - start) * 1000
             lf = get_client()
             if lf is not None:
+                fallback_response = (
+                    "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
+                )
                 lf.update_current_span(
-                    input=req.query,
-                    output="recursion_limit_reached",
+                    input=build_safe_input_payload(
+                        content_type="api", text=req.query, route="rag-api-query"
+                    ),
+                    output=build_safe_output_payload(
+                        answer_text=fallback_response,
+                        chunks_count=1,
+                        fallback_reason="recursion_limit",
+                    ),
                     metadata={
                         "source": req.channel,
                         "query_type": "ERROR",
@@ -240,8 +253,14 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
         lf = get_client()
         if lf is not None:
             lf.update_current_span(
-                input=req.query,
-                output=result.get("response", ""),
+                input=build_safe_input_payload(
+                    content_type="api", text=req.query, route="rag-api-query"
+                ),
+                output=build_safe_output_payload(
+                    answer_text=result.get("response", ""),
+                    chunks_count=1,
+                    sources_count=result.get("search_results_count", 0),
+                ),
                 metadata={
                     "source": req.channel,
                     "query_type": result.get("query_type", ""),
