@@ -122,7 +122,10 @@ def test_check_required_trace_coverage_fails_when_root_context_is_unsanitized() 
     )
     bad_root.observations = [_obs("telegram-rag-query")]
     mock_lf.api.trace.get.return_value = bad_root
-    mock_lf.api.trace.list.side_effect = [SimpleNamespace(data=[SimpleNamespace(id="bad-root")])]
+    mock_lf.api.trace.list.side_effect = [
+        SimpleNamespace(data=[]),  # opportunistic voice-session check
+        SimpleNamespace(data=[SimpleNamespace(id="bad-root")]),  # telegram root check
+    ]
 
     with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
         coverage = check_required_trace_coverage(
@@ -185,3 +188,23 @@ def test_evaluate_go_no_go_passes_when_required_trace_families_present() -> None
     gate = criteria["required_trace_families_present"]
     assert gate["passed"] is True
     assert gate["actual"] == "all present"
+
+
+def test_evaluate_go_no_go_treats_opportunistic_voice_session_as_nonblocking() -> None:
+    criteria = evaluate_go_no_go(
+        {"cold": {}, "cache_hit": {}},
+        [],
+        orphan_rate=0.0,
+        required_trace_coverage={
+            "required": ["rag-api-query", "ingestion-cli-run"],
+            "present": ["rag-api-query", "ingestion-cli-run"],
+            "missing": [],
+            "opportunistic_missing": ["voice-session"],
+            "opportunistic_present": [],
+        },
+    )
+
+    gate = criteria["required_trace_families_present"]
+    assert gate["passed"] is True
+    assert "voice-session" in gate["actual"]
+    assert "opportunistic" in gate["actual"].lower() or "missing" in gate["actual"].lower()
