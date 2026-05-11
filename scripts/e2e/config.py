@@ -58,6 +58,9 @@ class E2EConfig:
     ***REMOVED*** Reports
     reports_dir: str = "reports"
 
+    ***REMOVED*** Voice note fixture path for voice delivery scenarios
+    voice_note_path: str = field(default_factory=lambda: os.getenv("E2E_VOICE_NOTE_PATH", ""))
+
     ***REMOVED*** Observability validation (Langfuse)
     validate_langfuse: bool = field(
         default_factory=lambda: (

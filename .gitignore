@@ -152,6 +152,7 @@ secrets.yaml
 
 ***REMOVED*** Temporary files
 tmp/
+tmp/e2e/
 temp/
 *.tmp
 tmp*.json
