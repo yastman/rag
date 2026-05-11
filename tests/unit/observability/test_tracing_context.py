@@ -76,5 +76,21 @@ class TestClassifyAction:
         msg.text = "Привет!"
         assert classify_action(msg) == "message"
 
+    def test_message_voice(self):
+        from aiogram.types import Message
+
+        msg = MagicMock(spec=Message)
+        msg.text = None
+        msg.content_type = "voice"
+        assert classify_action(msg) == "rag-voice"
+
+    def test_message_photo(self):
+        from aiogram.types import Message
+
+        msg = MagicMock(spec=Message)
+        msg.text = None
+        msg.content_type = "photo"
+        assert classify_action(msg) == "message"
+
     def test_unknown_event(self):
         assert classify_action(MagicMock()) == "update"
