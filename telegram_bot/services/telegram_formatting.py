@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from telegram_bot.observability import get_client
+from telegram_bot.observability_payloads import build_safe_output_payload
 
 
 logger = logging.getLogger(__name__)
@@ -147,7 +148,7 @@ def build_html_messages(
 def _record_langfuse_response_output(answer_text: str, chunks_count: int) -> None:
     """Best-effort update of the current Langfuse trace/span output after a send.
 
-    Uses ``update_current_trace`` when present, falls back to ``update_current_span``,
+    Uses ``set_current_trace_io`` when present, falls back to ``update_current_span``,
     and is a no-op when the client or method is missing so Telegram sending never
     breaks because of observability.
     """
@@ -155,19 +156,16 @@ def _record_langfuse_response_output(answer_text: str, chunks_count: int) -> Non
     if lf is None:
         return
 
-    output = {
-        "response_preview": (answer_text or "")[:800],
-        "chunks_count": chunks_count,
-    }
+    output = build_safe_output_payload(answer_text, chunks_count)
 
-    update_trace = getattr(lf, "update_current_trace", None)
-    if callable(update_trace):
+    set_trace_io = getattr(lf, "set_current_trace_io", None)
+    if callable(set_trace_io):
         try:
-            update_trace(output=output)
+            set_trace_io(output=output)
             return
         except Exception:
             logger.debug(
-                "update_current_trace failed, falling back to update_current_span", exc_info=True
+                "set_current_trace_io failed, falling back to update_current_span", exc_info=True
             )
 
     update_span = getattr(lf, "update_current_span", None)
