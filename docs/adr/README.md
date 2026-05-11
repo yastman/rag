@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This directory contains architecture decisions that are still useful for understanding core project tradeoffs.
+This directory is the canonical entrypoint for architecture decision records. [`../ADRS.md`](../ADRS.md) is kept only as a legacy compatibility pointer and should not duplicate ADR contents.
 
 ## Index
 
@@ -14,3 +14,7 @@ This directory contains architecture decisions that are still useful for underst
 ## When To Use
 
 Start here when changing retrieval architecture, embeddings, reranking, semantic cache behavior, CRM integration, or voice/Text LangGraph boundaries. Verify every ADR against current code before treating it as active implementation truth.
+
+## Adding ADRs
+
+Create a new `NNNN-short-title.md` file in this directory and add it to the index above. Keep decisions concise: context, decision, consequences, and current implementation notes when implementation details matter.

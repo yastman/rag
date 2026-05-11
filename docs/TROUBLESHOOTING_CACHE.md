@@ -38,14 +38,14 @@ If your threshold is set to `0.8` thinking it's cosine similarity, nothing will 
 #### Cache Key Versioning
 
 Each tier has a version prefix:
-- `sem:v5:` — Semantic cache
+- `sem:v8:` / index `sem:v8:bge1024` — Semantic cache
 - `embeddings:v5:` — Embeddings
 - `sparse:v5:` — Sparse embeddings
 - `search:v5:` — Search results
 
 When models change, bump the version in `integrations/cache.py`:
 ```python
-CACHE_VERSION = "v6"  # Bump to invalidate old cache
+CACHE_VERSION = "v5"  # Bump to invalidate exact caches
 SEMANTIC_CACHE_VERSION = "v8"  # Bump for semantic cache
 ```
 
@@ -95,7 +95,7 @@ stats = cache.get_metrics()
 redis-cli -p 6379 -a "$REDIS_PASSWORD"
 
 # Check semantic cache keys
-KEYS sem:v5:*
+KEYS sem:v8:*
 
 # Check embedding cache
 KEYS embeddings:v5:*
@@ -104,7 +104,7 @@ KEYS embeddings:v5:*
 KEYS search:v5:*
 
 # Inspect a semantic cache entry
-GET "sem:v5:bge1024:somekey"
+GET "sem:v8:bge1024:somekey"
 ```
 
 ## Cache Poisoning / Staleness
@@ -140,7 +140,7 @@ Or via bot command: `/clearcache`
 Only these types are stored in semantic cache:
 
 ```python
-_PIPELINE_STORE_TYPES = {"FAQ", "GENERAL", "ENTITY"}
+_SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 ```
 
 ### Queries That Skip Cache
@@ -148,7 +148,6 @@ _PIPELINE_STORE_TYPES = {"FAQ", "GENERAL", "ENTITY"}
 | Query Pattern | Reason |
 |---------------|--------|
 | Contextual follow-ups ("подробнее", "первый", "это", "ещё") | Different context |
-| STRUCTURED queries | Too specific to cache |
 | CHITCHAT/OFF_TOPIC | Not RAG queries |
 
 ### Cache Thresholds by Query Type

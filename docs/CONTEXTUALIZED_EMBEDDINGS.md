@@ -2,7 +2,13 @@
 
 > Voyage AI contextualized embeddings for improved document retrieval quality.
 
-**Feature flag:** `use_contextualized_embeddings=true`
+**Runtime status:** Experimental/planned. `USE_CONTEXTUALIZED_EMBEDDINGS` is
+parsed by `src/config/settings.py`, and the service has unit/integration tests
+plus an A/B script, but the main ingestion/query runtime does not currently
+instantiate `ContextualizedEmbeddingService` from that flag.
+
+**Feature flag:** `USE_CONTEXTUALIZED_EMBEDDINGS=true` /
+`use_contextualized_embeddings=true` (settings/tests only today)
 **Model:** `voyage-context-3`
 **Dimensions:** 2048, 1024, 512, 256 (Matryoshka)
 
@@ -10,7 +16,7 @@
 
 ## Overview
 
-Contextualized embeddings process document chunks together, allowing each chunk's embedding to incorporate context from surrounding chunks in the same document. This improves retrieval quality for complex queries that depend on document structure.
+Contextualized embeddings process document chunks together, allowing each chunk's embedding to incorporate context from surrounding chunks in the same document. This can improve retrieval quality for complex queries that depend on document structure. In this repository it is not wired into the primary BGE-M3 ingestion or Telegram RAG query path yet.
 
 ```
 Standard Embeddings:     Contextualized Embeddings:
@@ -78,7 +84,8 @@ query_vec = await service.embed_query("search query")
 
 ### Configuration
 
-Add to `.env`:
+The settings object reads these values, but enabling them does not switch the
+main runtime embedding provider by itself:
 
 ```bash
 # Enable contextualized embeddings (default: false)
@@ -96,6 +103,9 @@ settings = Settings(
     contextualized_embedding_dim=1024,
 )
 ```
+
+Runtime integration still needs an explicit ingestion/query path that creates
+and calls `ContextualizedEmbeddingService`.
 
 ---
 

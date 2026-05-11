@@ -11,6 +11,8 @@ For the full documentation map, see [`../README.md`](../README.md). For operatio
 | [`fast-search.md`](fast-search.md) | You need to grep the doc tree by topic or find the right canonical doc quickly. |
 | [`runtime-services.md`](runtime-services.md) | You need to understand Docker services, the ingestion pipeline, the mini app, or the Telegram bot flow. |
 | [`observability-and-storage.md`](observability-and-storage.md) | You need to study Langfuse traces, inspect Qdrant, or debug Redis/cache behavior. |
+| [`local-runtime.md`](local-runtime.md) | You need local bot startup, Telegram E2E, Telethon session, or polling lock guidance. |
+| [`engineering-workflows.md`](engineering-workflows.md) | You need testing, issue triage, SDK lookup, dependency update, docs maintenance, or swarm process guidance. |
 
 ## Canonical Doc Owners
 
@@ -22,3 +24,5 @@ For the full documentation map, see [`../README.md`](../README.md). For operatio
 | Operational incident/runbook navigation | [`../runbooks/README.md`](../runbooks/README.md) |
 | Test-writing rules | [`../engineering/test-writing-guide.md`](../engineering/test-writing-guide.md) |
 | SDK/framework lookup order | [`../engineering/sdk-registry.md`](../engineering/sdk-registry.md) |
+| Issue triage workflow | [`../engineering/issue-triage.md`](../engineering/issue-triage.md) |
+| Docs maintenance rules | [`../engineering/docs-maintenance.md`](../engineering/docs-maintenance.md) |

@@ -1,15 +1,18 @@
 # PropertyBot Internal Structure
 
-`PropertyBot` in `telegram_bot/bot.py` is the main orchestrator for the Telegram bot (219KB). This document provides an internal map for navigation.
+`PropertyBot` in `telegram_bot/bot.py` is the main orchestrator for the Telegram bot. This document provides an internal map for navigation without relying on brittle line ranges.
 
 ## Class Overview
 
 ```
 PropertyBot
 ├── __init__()              # Initialize all services
+├── _register_handlers()    # Register commands, messages, callbacks, routers
+├── _setup_dialogs()        # Include aiogram-dialog routers before catch-all text routing
+├── _setup_middlewares()    # Configure middleware chain
 ├── handle_query()          # Main entry point for text queries
 ├── handle_voice()          # Entry point for voice messages
-└── handle_update()         # General update handler
+└── start()                 # Startup preflight, service init, polling
 ```
 
 ## Key Methods
@@ -22,7 +25,7 @@ Initializes all service dependencies:
 self._cache = CacheLayerManager(redis_url=...)
 self._hybrid = BGEM3HybridEmbeddings(...)
 self._qdrant = QdrantService(...)
-self._reranker = ColbertRerankerService(...)
+self._reranker = None  # server-side Qdrant ColBERT is used when enabled
 self._llm = self._graph_config.create_llm()
 ```
 
@@ -36,7 +39,11 @@ handle_query()
 └── _handle_query_supervisor()        # Full agent for complex queries
 ```
 
-**Located at:** `telegram_bot/bot.py` - search for `async def handle_query`
+Find it with:
+
+```bash
+rg -n "async def handle_query|_handle_client_direct_pipeline|_handle_query_supervisor" telegram_bot/bot.py
+```
 
 ### `handle_voice()`
 
@@ -48,7 +55,11 @@ Processes voice messages through LangGraph:
 3. build_graph().ainvoke(state)
 ```
 
-**Located at:** `telegram_bot/bot.py` - search for `async def handle_voice`
+Find it with:
+
+```bash
+rg -n "async def handle_voice|voice_audio|make_initial_state|build_graph\\(" telegram_bot/bot.py
+```
 
 ## Internal Handler Methods
 
@@ -115,7 +126,7 @@ PropertyBot.handle_query()
 | `self._embeddings` | BGEM3HybridEmbeddings | Primary embedding provider |
 | `self._sparse` | BGEM3SparseEmbeddings | Sparse embeddings |
 | `self._qdrant` | QdrantService | Vector storage |
-| `self._reranker` | ColbertRerankerService | ColBERT reranking |
+| `self._reranker` | None by default | Deprecated client-side reranker hook; server-side Qdrant ColBERT path is selected by `RERANK_PROVIDER=colbert` |
 | `self._llm` | AsyncOpenAI | LLM client |
 | `self._graph` | CompiledStateGraph | Voice LangGraph |
 | `self._apartments_service` | ApartmentsService | Apartment search |
@@ -140,35 +151,19 @@ Update → ThrottlingMiddleware → ErrorMiddleware → I18nMiddleware → Handl
 - Loads user locale from DB
 - Injects `i18n`, `locale`, `property_bot`, `apartments_service`
 
-## Code Map (Major Sections)
-
-| Line Range | Section |
-|------------|---------|
-| 1-100 | Imports, type hints |
-| 100-200 | PropertyBot class definition |
-| 200-400 | `__init__()` — service initialization |
-| 400-600 | `handle_query()` — dual-path routing |
-| 600-800 | Command handlers |
-| 800-1000 | Menu handlers |
-| 1000-1200 | Callback handlers |
-| 1200-1400 | Voice handling |
-| 1400+ | FSM and utility methods |
-
-**Note:** Exact line numbers vary; use `grep` to find specific methods.
-
 ## Finding Code
 
-Due to file size, use these approaches:
+Due to file size, use `rg` recipes instead of line-number maps:
 
 ```bash
 # Find method definition
-grep -n "def handle_query" telegram_bot/bot.py
+rg -n "async def handle_query|async def handle_voice|async def start|def _register_handlers" telegram_bot/bot.py
 
 # Find class attribute initialization
-grep -n "self._cache = " telegram_bot/bot.py
+rg -n "self\\._cache = |self\\._hybrid = |self\\._qdrant = |self\\._reranker =" telegram_bot/bot.py
 
 # Find handler registration
-grep -n "dp.message_handlers" telegram_bot/bot.py
+rg -n "dp\\.message|dp\\.callback_query|include_router|Command\\(" telegram_bot/bot.py
 ```
 
 ## Related Documentation
