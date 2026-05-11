@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.e2e.langfuse_trace_validator import validate_latest_trace
+from scripts.e2e.langfuse_trace_validator import validate_latest_trace, wait_for_trace
 
 
 @pytest.fixture
@@ -43,6 +43,8 @@ def test_validator_accepts_current_langgraph_span_names(
     """
     # Mock Langfuse trace with current LangGraph span names
     mock_trace = MagicMock()
+    mock_trace.input = {"query_hash": "abc123"}
+    mock_trace.output = {"answer_hash": "def456"}
     mock_trace.observations = [
         # Current LangGraph pipeline spans
         type(
@@ -50,10 +52,9 @@ def test_validator_accepts_current_langgraph_span_names(
             (),
             {
                 "name": "telegram-rag-query",
-                "input": {"query_hash": "abc123"},
-                "output": {"answer_hash": "def456"},
             },
         ),
+        type("Obs", (), {"name": "telegram-rag-supervisor"}),
         type("Obs", (), {"name": "node-classify"}),
         type("Obs", (), {"name": "node-cache-check"}),
         type("Obs", (), {"name": "node-retrieve"}),
@@ -102,6 +103,8 @@ def test_validator_accepts_telegram_message_root_with_rag_observations(
 ):
     """Validator should accept telegram-message root with RAG observations and proper root context."""
     mock_trace = MagicMock()
+    mock_trace.input = {"query_hash": "abc123"}
+    mock_trace.output = {"answer_hash": "def456"}
     mock_trace.observations = [
         # Root observation with proper context
         type(
@@ -113,6 +116,8 @@ def test_validator_accepts_telegram_message_root_with_rag_observations(
                 "output": {"answer_hash": "def456", "response_preview": "test answer"},
             },
         ),
+        type("Obs", (), {"name": "telegram-rag-query"}),
+        type("Obs", (), {"name": "telegram-rag-supervisor"}),
         # RAG pipeline spans
         type("Obs", (), {"name": "node-classify"}),
         type("Obs", (), {"name": "node-cache-check"}),
@@ -160,8 +165,11 @@ def test_validator_fails_when_root_input_is_missing(
     mock_langfuse_configured,
     mock_wait_for_trace,
 ):
-    """Validator should fail when root observation input lacks query_hash."""
+    """Validator should fail when trace-level input lacks query_hash (Blocker 2)."""
     mock_trace = MagicMock()
+    # trace.input lacks query_hash — root_input marker expected
+    mock_trace.input = {"query_preview": "test query"}
+    mock_trace.output = {"answer_hash": "def456"}
     mock_trace.observations = [
         # Root observation missing query_hash in input
         type(
@@ -216,3 +224,57 @@ def test_validator_fails_when_root_input_is_missing(
     assert "root_output" not in result.missing_spans, (
         f"Did not expect root_output in missing_spans, got: {result.missing_spans}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Blocker 3: wait_for_trace multi-name support
+# ---------------------------------------------------------------------------
+
+
+def test_wait_for_trace_single_name_backward_compat():
+    """Single string trace_name still works (backward-compatible)."""
+    with patch("scripts.e2e.langfuse_trace_validator._langfuse_is_configured", return_value=True):
+        with patch("scripts.e2e.langfuse_trace_validator.Langfuse") as MockLangfuse:
+            mock_client = MockLangfuse.return_value
+            mock_trace = MagicMock()
+            mock_trace.id = "trace-x"
+            mock_client.api.trace.list.return_value.data = [mock_trace]
+
+            result = wait_for_trace(
+                started_at=datetime.now(),
+                trace_name="telegram-rag-query",
+            )
+
+    assert result == "trace-x"
+
+
+def test_wait_for_trace_multi_name_finds_match():
+    """Multiple trace names — returns first hit across name list."""
+    with patch("scripts.e2e.langfuse_trace_validator._langfuse_is_configured", return_value=True):
+        with patch("scripts.e2e.langfuse_trace_validator.Langfuse") as MockLangfuse:
+            mock_client = MockLangfuse.return_value
+
+            def list_side_effect(name, tags, from_timestamp, order_by, limit):
+                page = MagicMock()
+                page.data = []
+                return page
+
+            # Return trace only for second name
+            def list_for_second(name, tags, from_timestamp, order_by, limit):
+                page = MagicMock()
+                if name == "telegram-message":
+                    t = MagicMock()
+                    t.id = "trace-msg"
+                    page.data = [t]
+                else:
+                    page.data = []
+                return page
+
+            mock_client.api.trace.list.side_effect = list_for_second
+
+            result = wait_for_trace(
+                started_at=datetime.now(),
+                trace_name=["telegram-rag-voice", "telegram-message"],
+            )
+
+    assert result == "trace-msg"

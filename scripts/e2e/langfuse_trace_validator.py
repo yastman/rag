@@ -35,24 +35,28 @@ SCORE_NAMES = {
 
 SCENARIO_CONTRACTS = {
     "text_rag": {
-        "root_names": ["telegram-rag-query", "telegram-message"],
-        "required_spans": {"node-classify"},
+        "trace_names": ["telegram-message"],
+        "tags": ["telegram"],
+        "required_observations": {"telegram-rag-query", "telegram-rag-supervisor"},
         "required_scores": set(SCORE_NAMES),
     },
     "apartment": {
-        "root_names": ["telegram-message"],
-        "required_spans": {"node-apartment-search", "node-respond"},
+        "trace_names": ["telegram-message"],
+        "tags": ["telegram"],
+        "required_observations": {"client-direct-pipeline"},
         "required_scores": set(SCORE_NAMES),
     },
     "fallback": {
-        "root_names": ["telegram-message"],
-        "required_spans": {"node-fallback", "node-respond"},
+        "trace_names": ["telegram-message"],
+        "tags": ["telegram"],
+        "required_observations": set(),
         "required_scores": set(SCORE_NAMES),
     },
     "voice_note": {
-        "root_names": ["telegram-message"],
-        "required_spans": {"node-voice-transcribe", "node-classify", "node-respond"},
-        "required_scores": set(SCORE_NAMES),
+        "trace_names": ["telegram-rag-voice", "telegram-message"],
+        "tags": ["telegram", "voice"],
+        "required_observations": {"telegram-rag-voice", "transcribe"},
+        "required_scores": set(SCORE_NAMES) | {"input_type", "voice_duration_s"},
     },
 }
 
@@ -231,34 +235,38 @@ def validate_latest_trace(
 
     # Base contract from scenario; branch-aware RAG expectations are additive.
     required_scores: set[str] = set(contract["required_scores"])
-    required_spans: set[str] = set(contract["required_spans"])
+    required_observations: set[str] = set(contract["required_observations"])
 
     if not _langfuse_is_configured():
         return TraceValidationResult(
             ok=False,
             trace_id=None,
-            missing_spans=set(required_spans),
+            missing_spans=set(required_observations),
             missing_scores=set(required_scores),
             error="Langfuse keys are not configured (LANGFUSE_PUBLIC_KEY/SECRET_KEY).",
         )
 
-    # Use scenario root names when the caller has not overridden trace_name.
+    # Use scenario trace names and tags when the caller has not overridden them.
     effective_trace_name = trace_name
-    if trace_name == DEFAULT_TRACE_NAME and contract["root_names"]:
-        effective_trace_name = contract["root_names"]
+    if trace_name == DEFAULT_TRACE_NAME and contract.get("trace_names"):
+        effective_trace_name = contract["trace_names"]
+
+    effective_tags = tags
+    if tags == DEFAULT_TAGS and contract.get("tags"):
+        effective_tags = contract["tags"]
 
     trace_id = wait_for_trace(
         started_at=started_at,
         timeout_s=timeout_s,
         poll_interval_s=poll_interval_s,
         trace_name=effective_trace_name,
-        tags=tags,
+        tags=effective_tags,
     )
     if not trace_id:
         return TraceValidationResult(
             ok=False,
             trace_id=None,
-            missing_spans=set(required_spans),
+            missing_spans=set(required_observations),
             missing_scores=set(required_scores),
             error="No matching trace found in Langfuse within timeout.",
         )
@@ -270,28 +278,18 @@ def validate_latest_trace(
     scores = {s.name: getattr(s, "value", None) for s in trace.scores}
     score_names = set(scores.keys())
 
-    # Base span misses from the scenario contract.
-    missing_spans = set(required_spans - span_names)
+    # Base observation misses from the scenario contract.
+    missing_spans = set(required_observations - span_names)
 
-    # Root observation input/output checks.
-    root_names = set(contract["root_names"])
-    root_obs = None
-    for obs in trace.observations:
-        if getattr(obs, "name", None) in root_names:
-            root_obs = obs
-            break
+    # Root trace input/output checks (trace-level, not observation-level).
+    trace_input = getattr(trace, "input", None) or {}
+    trace_output = getattr(trace, "output", None) or {}
 
-    if root_obs is not None:
-        root_input = getattr(root_obs, "input", None) or {}
-        if not isinstance(root_input, dict) or root_input.get("query_hash") is None:
-            missing_spans.add("root_input")
+    if not isinstance(trace_input, dict) or trace_input.get("query_hash") is None:
+        missing_spans.add("root_input")
 
-        root_output = getattr(root_obs, "output", None) or {}
-        if not isinstance(root_output, dict) or root_output.get("answer_hash") is None:
-            missing_spans.add("root_output")
-    else:
-        # No root observation found; report the primary expected root name.
-        missing_spans.add(contract["root_names"][0])
+    if not isinstance(trace_output, dict) or trace_output.get("answer_hash") is None:
+        missing_spans.add("root_output")
 
     # Determine branch from scores, falling back to scenario hints when scores are missing.
     query_type = _as_float(scores.get("query_type"))
@@ -305,21 +303,21 @@ def validate_latest_trace(
     is_chitchat = (query_type == 0.0) if query_type is not None else bool(should_skip_rag)
 
     if not is_chitchat:
-        required_spans |= {"node-cache-check"}
+        required_observations |= {"node-cache-check"}
 
     if not is_chitchat and semantic_hit is False:
         # Retrieval path: cache miss → retrieve → grade
-        required_spans |= {"node-retrieve", "node-grade"}
+        required_observations |= {"node-retrieve", "node-grade"}
 
         if rerank_applied is True:
-            required_spans |= {"node-rerank"}
+            required_observations |= {"node-rerank"}
 
         if (llm_used is True) and (no_results is False) and ((results_count or 0) > 0):
             # Generation path: generate → cache-store → respond
-            required_spans |= {"node-generate", "node-cache-store", "node-respond"}
+            required_observations |= {"node-generate", "node-cache-store", "node-respond"}
 
-    # Recompute span misses after branch-aware additions.
-    missing_spans |= set(required_spans - span_names)
+    # Recompute observation misses after branch-aware additions.
+    missing_spans |= set(required_observations - span_names)
     missing_scores = set(required_scores - score_names)
 
     return TraceValidationResult(
