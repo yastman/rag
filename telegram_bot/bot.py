@@ -55,6 +55,7 @@ from .observability import (
     observe,
     propagate_attributes,
 )
+from .observability_payloads import build_safe_input_payload, build_safe_output_payload
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     score,
@@ -3957,11 +3958,17 @@ class PropertyBot:
             tid = lf.get_current_trace_id() or ""
             try:
                 lf.update_current_span(
-                    input={
-                        "voice_duration_s": voice.duration,
-                        "stt_text": result.get("stt_text", ""),
-                    },
-                    output={"response": result.get("response", "")},
+                    input=build_safe_input_payload(
+                        content_type="voice",
+                        text=result.get("stt_text", ""),
+                        extra={"voice_duration_s": voice.duration},
+                    ),
+                    output=build_safe_output_payload(
+                        answer_text=result.get("response", ""),
+                        chunks_count=1,
+                        sources_count=result.get("sources_count")
+                        or result.get("search_results_count", 0),
+                    ),
                     metadata=_build_trace_metadata(result),
                 )
             except Exception:
