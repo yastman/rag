@@ -42,6 +42,7 @@ class TestScenario:
     expected_filters: ExpectedFilters | None = None
     should_skip_rag: bool = False  # For CHITCHAT tests
     timeout: int = 60
+    delivery: str = "text"  # "text" or "voice"
 
 
 # All 28 test scenarios
@@ -289,6 +290,7 @@ SCENARIOS: list[TestScenario] = [
         name="Voice transcription + property search",
         query="(voice) найди квартиру у моря до 120 тысяч",
         group=TestGroup.VOICE_TRANSCRIPTION,
+        delivery="voice",
         description="Voice message should transcribe and run property search flow.",
         expected_keywords=["квартир", "мор", "120"],
     ),
@@ -297,6 +299,7 @@ SCENARIOS: list[TestScenario] = [
         name="Voice transcription + CRM lookup",
         query="(voice) покажи мои сделки в crm",
         group=TestGroup.VOICE_TRANSCRIPTION,
+        delivery="voice",
         description="Voice message should transcribe and route to CRM tool path.",
         expected_keywords=["сделк", "crm", "ID"],
     ),
@@ -305,6 +308,7 @@ SCENARIOS: list[TestScenario] = [
         name="Voice transcription timeout handling",
         query="(voice) [simulate timeout]",
         group=TestGroup.VOICE_TRANSCRIPTION,
+        delivery="voice",
         description="Voice transcription timeout should return graceful fallback.",
         expected_keywords=["не удалось", "попробуйте", "голос"],
     ),

@@ -59,11 +59,33 @@ async def run_single_test(
         # Record start time for trace validation
         test_started_at = datetime.utcnow()
 
+        # Determine scenario kind for trace validation
+        delivery = getattr(scenario, "delivery", "text")
+        group = getattr(scenario, "group", None)
+        if delivery == "voice":
+            scenario_kind = "voice_note"
+        elif group in {
+            TestGroup.PRICE_FILTERS,
+            TestGroup.ROOM_FILTERS,
+            TestGroup.LOCATION_FILTERS,
+            TestGroup.SEARCH,
+        }:
+            scenario_kind = "apartment"
+        elif group == TestGroup.EDGE_CASES:
+            scenario_kind = "fallback"
+        else:
+            scenario_kind = "text_rag"
+
         # Send message and get response
-        response = await client.send_and_wait(
-            query=scenario.query,
-            response_timeout=scenario.timeout,
-        )
+        if delivery == "voice":
+            response = await client.send_voice_and_wait(
+                response_timeout=scenario.timeout,
+            )
+        else:
+            response = await client.send_and_wait(
+                query=scenario.query,
+                response_timeout=scenario.timeout,
+            )
 
         # Validate Langfuse trace if enabled
         trace_validation = None
@@ -71,8 +93,9 @@ async def run_single_test(
             trace_validation = validate_latest_trace(
                 started_at=test_started_at,
                 should_skip_rag=bool(getattr(scenario, "should_skip_rag", False)),
-                is_command=bool(getattr(scenario, "group", None) == TestGroup.COMMANDS),
+                is_command=bool(group == TestGroup.COMMANDS),
                 timeout_s=20.0,
+                scenario_kind=scenario_kind,
             )
             if not trace_validation.ok:
                 logger.warning(f"Trace validation failed: {trace_validation}")
@@ -257,7 +280,8 @@ def main():
     parser.add_argument(
         "--scenario",
         type=str,
-        help="Run only specific scenario by ID (e.g., 3.1)",
+        action="append",
+        help="Run only specific scenario by ID (e.g., 3.1). Can be repeated.",
     )
     parser.add_argument(
         "--no-judge",
@@ -285,11 +309,13 @@ def main():
 
     # Select scenarios
     if args.scenario:
-        scenario = get_scenario_by_id(args.scenario)
-        if not scenario:
-            console.print(f"[red]Scenario {args.scenario} not found[/]")
-            sys.exit(1)
-        scenarios = [scenario]
+        scenarios = []
+        for sid in args.scenario:
+            scenario = get_scenario_by_id(sid)
+            if not scenario:
+                console.print(f"[red]Scenario {sid} not found[/]")
+                sys.exit(1)
+            scenarios.append(scenario)
     elif args.group:
         group = TestGroup(args.group)
         scenarios = get_scenarios_by_group(group)
