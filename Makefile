@@ -574,7 +574,7 @@ deploy-vps-local:  ***REMOVED******REMOVED*** Fallback/manual deploy: sync local
 ***REMOVED*** E2E TESTING
 ***REMOVED*** =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-group e2e-telegram-test e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ***REMOVED******REMOVED*** Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -605,6 +605,11 @@ e2e-test-traces: ***REMOVED******REMOVED*** Run E2E tests + validate Langfuse tr
 	@echo "$(BLUE)Running E2E tests with Langfuse trace validation...$(NC)"
 	E2E_VALIDATE_LANGFUSE=1 uv run python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ E2E tests with trace validation complete$(NC)"
+
+e2e-test-traces-core: ***REMOVED******REMOVED*** Run required ***REMOVED***1307 Telethon scenarios with Langfuse validation
+	@echo "$(BLUE)Running ***REMOVED***1307 core Telethon trace scenarios...$(NC)"
+	E2E_VALIDATE_LANGFUSE=1 uv run python scripts/e2e/runner.py --no-judge --scenario 0.1 --scenario 6.3 --scenario 7.1 --scenario 8.1
+	@echo "$(GREEN)✓ ***REMOVED***1307 core trace scenarios complete$(NC)"
 
 e2e-test-group: ***REMOVED******REMOVED*** Run specific test group (usage: make e2e-test-group GROUP=filters)
 	uv run python scripts/e2e/runner.py --group $(GROUP)
