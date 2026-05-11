@@ -33,6 +33,29 @@ SCORE_NAMES = {
     "llm_used",
 }
 
+SCENARIO_CONTRACTS = {
+    "text_rag": {
+        "root_names": ["telegram-rag-query", "telegram-message"],
+        "required_spans": {"node-classify"},
+        "required_scores": set(SCORE_NAMES),
+    },
+    "apartment": {
+        "root_names": ["telegram-message"],
+        "required_spans": {"node-apartment-search", "node-respond"},
+        "required_scores": set(SCORE_NAMES),
+    },
+    "fallback": {
+        "root_names": ["telegram-message"],
+        "required_spans": {"node-fallback", "node-respond"},
+        "required_scores": set(SCORE_NAMES),
+    },
+    "voice_note": {
+        "root_names": ["telegram-message"],
+        "required_spans": {"node-voice-transcribe", "node-classify", "node-respond"},
+        "required_scores": set(SCORE_NAMES),
+    },
+}
+
 
 @dataclass(frozen=True)
 class TraceValidationResult:
@@ -151,26 +174,32 @@ def wait_for_trace(
     started_at: datetime,
     timeout_s: float = 15.0,
     poll_interval_s: float = 0.5,
-    trace_name: str = DEFAULT_TRACE_NAME,
+    trace_name: str | list[str] = DEFAULT_TRACE_NAME,
     tags: list[str] | None = DEFAULT_TAGS,
 ) -> str | None:
-    """Poll Langfuse until a recent trace exists, returning trace_id."""
+    """Poll Langfuse until a recent trace exists, returning trace_id.
+
+    Supports multiple trace names to accommodate different scenario root names
+    while preserving backward compatibility with a single string.
+    """
     if not _langfuse_is_configured():
         return None
 
     langfuse = Langfuse()
     deadline = time.time() + timeout_s
+    trace_names = [trace_name] if isinstance(trace_name, str) else trace_name
 
     while time.time() < deadline:
-        traces_page = langfuse.api.trace.list(
-            name=trace_name,
-            tags=tags,
-            from_timestamp=started_at - timedelta(seconds=5),
-            order_by="timestamp.desc",
-            limit=5,
-        )
-        if traces_page.data:
-            return traces_page.data[0].id
+        for name in trace_names:
+            traces_page = langfuse.api.trace.list(
+                name=name,
+                tags=tags,
+                from_timestamp=started_at - timedelta(seconds=5),
+                order_by="timestamp.desc",
+                limit=5,
+            )
+            if traces_page.data:
+                return traces_page.data[0].id
 
         time.sleep(poll_interval_s)
 
@@ -184,8 +213,9 @@ def validate_latest_trace(
     is_command: bool,
     timeout_s: float = 15.0,
     poll_interval_s: float = 0.5,
-    trace_name: str = DEFAULT_TRACE_NAME,
+    trace_name: str | list[str] = DEFAULT_TRACE_NAME,
     tags: list[str] | None = DEFAULT_TAGS,
+    scenario_kind: str = "text_rag",
 ) -> TraceValidationResult:
     """Validate that the latest trace contains required spans/scores."""
     if is_command:
@@ -197,12 +227,11 @@ def validate_latest_trace(
             missing_scores=set(),
         )
 
-    # Base contract: all "real" bot messages should emit these scores.
-    # This enables branch-aware validation without flakiness from cache hits.
-    required_scores: set[str] = set(SCORE_NAMES)
+    contract = SCENARIO_CONTRACTS.get(scenario_kind, SCENARIO_CONTRACTS["text_rag"])
 
-    # Base span contract (current LangGraph node names as of 2026-02-13)
-    required_spans: set[str] = {"node-classify"}
+    # Base contract from scenario; branch-aware RAG expectations are additive.
+    required_scores: set[str] = set(contract["required_scores"])
+    required_spans: set[str] = set(contract["required_spans"])
 
     if not _langfuse_is_configured():
         return TraceValidationResult(
@@ -213,11 +242,16 @@ def validate_latest_trace(
             error="Langfuse keys are not configured (LANGFUSE_PUBLIC_KEY/SECRET_KEY).",
         )
 
+    # Use scenario root names when the caller has not overridden trace_name.
+    effective_trace_name = trace_name
+    if trace_name == DEFAULT_TRACE_NAME and contract["root_names"]:
+        effective_trace_name = contract["root_names"]
+
     trace_id = wait_for_trace(
         started_at=started_at,
         timeout_s=timeout_s,
         poll_interval_s=poll_interval_s,
-        trace_name=trace_name,
+        trace_name=effective_trace_name,
         tags=tags,
     )
     if not trace_id:
@@ -235,6 +269,29 @@ def validate_latest_trace(
     span_names = {obs.name for obs in trace.observations}
     scores = {s.name: getattr(s, "value", None) for s in trace.scores}
     score_names = set(scores.keys())
+
+    # Base span misses from the scenario contract.
+    missing_spans = set(required_spans - span_names)
+
+    # Root observation input/output checks.
+    root_names = set(contract["root_names"])
+    root_obs = None
+    for obs in trace.observations:
+        if getattr(obs, "name", None) in root_names:
+            root_obs = obs
+            break
+
+    if root_obs is not None:
+        root_input = getattr(root_obs, "input", None) or {}
+        if not isinstance(root_input, dict) or root_input.get("query_hash") is None:
+            missing_spans.add("root_input")
+
+        root_output = getattr(root_obs, "output", None) or {}
+        if not isinstance(root_output, dict) or root_output.get("answer_hash") is None:
+            missing_spans.add("root_output")
+    else:
+        # No root observation found; report the primary expected root name.
+        missing_spans.add(contract["root_names"][0])
 
     # Determine branch from scores, falling back to scenario hints when scores are missing.
     query_type = _as_float(scores.get("query_type"))
@@ -261,7 +318,8 @@ def validate_latest_trace(
             # Generation path: generate → cache-store → respond
             required_spans |= {"node-generate", "node-cache-store", "node-respond"}
 
-    missing_spans = set(required_spans - span_names)
+    # Recompute span misses after branch-aware additions.
+    missing_spans |= set(required_spans - span_names)
     missing_scores = set(required_scores - score_names)
 
     return TraceValidationResult(
