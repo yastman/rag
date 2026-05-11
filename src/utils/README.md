@@ -2,6 +2,11 @@
 
 Utility functions for document processing and serialization.
 
+***REMOVED******REMOVED*** Ownership
+
+- Owns small, shared utility helpers used by RAG and ingestion code.
+- Keeps document-structure parsing and JSON serialization helpers isolated from pipeline logic.
+
 ***REMOVED******REMOVED*** Files
 
 | File | Purpose |
@@ -33,6 +38,12 @@ from src.utils.serialization import convert_to_python_types
 
 clean = convert_to_python_types({"vector": np.array([1.0, 2.0])})
 ```
+
+***REMOVED******REMOVED*** Boundaries
+
+- Does not own document ingestion orchestration or Qdrant writes.
+- Does not own security redaction; see [`src/security/`](../security/).
+- Keep utilities dependency-light and reusable across callers.
 
 ***REMOVED******REMOVED*** Focused checks
 
