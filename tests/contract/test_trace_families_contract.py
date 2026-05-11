@@ -90,6 +90,7 @@ def test_contract_yaml_exists():
     assert "required_families" in data
     assert "spans" in data
     assert "scores" in data
+    assert "coverage_tiers" in data
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +101,22 @@ def test_contract_yaml_exists():
 def test_required_families_non_empty(required_families):
     assert required_families, "required_families must not be empty"
     assert len(required_families) >= 1
+
+
+# ---------------------------------------------------------------------------
+# b2) coverage_tiers entries are non-empty strings
+# ---------------------------------------------------------------------------
+
+
+def test_coverage_tiers_entries_are_non_empty_strings(coverage_tiers):
+    assert coverage_tiers, "coverage_tiers must exist and not be empty"
+    for tier_name, tier_list in coverage_tiers.items():
+        assert isinstance(tier_list, list), f"{tier_name} must be a list"
+        assert tier_list, f"{tier_name} must not be empty"
+        for entry in tier_list:
+            assert isinstance(entry, str) and entry.strip(), (
+                f"coverage_tiers.{tier_name} contains empty or non-string entry: {entry!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
