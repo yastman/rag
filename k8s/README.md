@@ -2,11 +2,22 @@
 
 This directory contains Kubernetes manifests for a **partial** k3s deployment path. Docker Compose is the primary local and VPS runtime; k3s support is maintained for core services but does not yet have full parity with the Compose service set.
 
+## Ownership
+
+- Owns partial k3s manifests, overlays, secret templates, and single-node k3s config.
+- Scoped agent rules and validation live in [`AGENTS.override.md`](./AGENTS.override.md).
+
 ## Honest Scope
 
 - **What works**: Core databases, ML services, bot, and ingestion can run on a single-node k3s cluster.
 - **What is missing**: Some optional profiles (observability, voice SIP, Mini App frontend) may not be fully represented or tested under k3s.
 - **Image policy**: k3s uses versioned GitHub Container Registry images (`ghcr.io/yastman/rag-*`) instead of local `rag/*:latest` tags. See [`../DOCKER.md`](../DOCKER.md) for image names and the publish workflow.
+
+## Boundaries
+
+- Compose remains the primary local and VPS runtime; runtime truth belongs in [`../DOCKER.md`](../DOCKER.md).
+- Keep base manifests reusable and put deployment-mode differences in overlays.
+- Do not hardcode secrets or remove PVC-related resources without an explicit migration plan.
 
 ## Directory Layout
 
@@ -79,15 +90,23 @@ make k3s-push-bot K3S_IMAGE_TAG=v2.14.0
 make k3s-push-ingest K3S_IMAGE_TAG=v2.14.0
 ```
 
-## Validation
+## Focused checks
 
-When a cluster is available:
+Follow the scoped validation contract in [`AGENTS.override.md`](./AGENTS.override.md).
+When a cluster is available, run static inspection:
 
 ```bash
 make k3s-status
 ```
 
-For Compose parity checks (the primary runtime):
+For deployment changes, validate secrets and the target overlay:
+
+```bash
+make k3s-secrets
+make k3s-core      # or make k3s-bot / make k3s-ingest / make k3s-full
+```
+
+For Compose parity checks, use the existing primary-runtime checks:
 
 ```bash
 make verify-compose-images

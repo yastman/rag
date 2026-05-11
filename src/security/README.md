@@ -2,6 +2,11 @@
 
 Security guardrails for production RAG deployment.
 
+## Ownership
+
+- Owns source-level security helpers under `src/security/`.
+- Currently provides PII redaction before sensitive data reaches logs or traces.
+
 ## Files
 
 | File | Purpose |
@@ -33,6 +38,7 @@ redacted, meta = redactor.redact_query("Паспорт АА123456")
 
 - Redacts **before** logging to Langfuse/MLflow; original query is still used for search accuracy
 - Does not perform authentication or authorization
+- Does not own Telegram middleware policy; see [`../../telegram_bot/middlewares/`](../../telegram_bot/middlewares/)
 
 ## Focused checks
 
