@@ -225,7 +225,7 @@ async def test_my_node_in_graph():
 | `llm` | Node parameter | AsyncOpenAI client |
 | `qdrant` | Node parameter | QdrantService |
 | `embeddings` | Node parameter | BGEM3HybridEmbeddings |
-| `reranker` | Node parameter | ColbertRerankerService |
+| `reranker` | Node parameter | Optional reranker hook; ColBERT runs server-side through Qdrant in normal runtime |
 | `message` | Node parameter | aiogram Message (voice path only) |
 
 ### Adding New Dependencies

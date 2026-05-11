@@ -7,6 +7,10 @@ Query routing logic through the LangGraph pipeline.
 ```
 START
   ↓
+route_start
+  ↓
+transcribe (voice only) → classify
+  ↓
 classify (QueryClassifier)
   ↓
 ┌───────────────────────────────────────┐
@@ -14,8 +18,7 @@ classify (QueryClassifier)
 │                                       │
 │ CHITCHAT → respond → END              │
 │ OFF_TOPIC → respond → END            │
-│ _NO_RAG_QUERY_TYPES → respond → END   │
-│ otherwise → guard → ...                │
+│ STRUCTURED/FAQ/ENTITY/GENERAL → guard │
 └───────────────────────────────────────┘
   ↓
 guard (ContentFilter)
@@ -32,12 +35,13 @@ grade (DocumentGrader)
   ↓
 ┌───────────────────────────────────────┐
 │ Grade result:                        │
-│   hallucination → rewrite → retrieve  │
-│   irrelevant → rewrite → retrieve     │
-│   relevant → rerank/rewrite/generate  │
+│   relevant + rerank needed → rerank   │
+│   relevant + skip rerank → generate   │
+│   not relevant + retries → rewrite    │
+│   otherwise → generate                │
 └───────────────────────────────────────┘
   ↓
-rerank (ColBERT Reranker) — optional
+rerank (optional post-retrieval stage)
   ↓
 generate (LLM)
   ↓
@@ -54,22 +58,29 @@ END
 
 | Query Type | Handler | Cacheable |
 |------------|---------|-----------|
-| `APARTMENT` | Apartment search | Yes |
-| `KNOWLEDGE` | RAG retrieval | Yes |
-| `CRM` | Agent tools | Partial |
+| `STRUCTURED` | RAG retrieval with structured real-estate criteria | Yes |
+| `FAQ` | RAG retrieval for procedural/knowledge questions | Yes |
+| `ENTITY` | RAG retrieval for named locations/complexes | Yes |
+| `GENERAL` | Default RAG retrieval path | Yes |
 | `CHITCHAT` | Direct response | No |
 | `OFF_TOPIC` | Direct response | No |
-| `VOICE` | Voice agent | Yes |
+
+`telegram_bot/graph/nodes/classify.py` is the source of truth for query type constants and regex priority:
+
+```bash
+rg -n "CHITCHAT|OFF_TOPIC|STRUCTURED|FAQ|ENTITY|GENERAL|def classify_query" telegram_bot/graph/nodes/classify.py
+```
 
 ## Route Functions
 
 | Function | Location | Returns |
 |----------|----------|---------|
-| `route_after_classify` | `graph/graph.py` | Next node name |
-| `route_after_guard` | `graph/graph.py` | Next node name |
-| `route_after_cache_check` | `graph/graph.py` | Next node name |
-| `route_after_grade` | `graph/graph.py` | Next node name |
-| `route_after_rerank` | `graph/graph.py` | Next node name |
+| `route_start` | `telegram_bot/graph/edges.py` | `transcribe` or `classify` |
+| `route_by_query_type` | `telegram_bot/graph/edges.py` | `respond` or `guard` |
+| `_route_by_query_type_no_guard` | `telegram_bot/graph/graph.py` | `respond` or `cache_check` |
+| `route_after_guard` | `telegram_bot/graph/edges.py` | `respond` or `cache_check` |
+| `route_cache` | `telegram_bot/graph/edges.py` | `respond` or `retrieve` |
+| `route_grade` | `telegram_bot/graph/edges.py` | `rerank`, `rewrite`, or `generate` |
 
 ## Rewrite Loop
 
@@ -88,12 +99,12 @@ Edges are defined via conditional functions in `build_graph()`:
 
 ```python
 graph.add_conditional_edges(
-    node,
-    route_function,
+    "grade",
+    route_grade,
     {
-        "rerank": lambda s: s.get("query_type") == "APARTMENT",
-        "generate": lambda s: s.get("query_type") == "KNOWLEDGE",
-        ...
+        "rerank": "rerank",
+        "rewrite": "rewrite",
+        "generate": "generate",
     }
 )
 ```
@@ -105,7 +116,7 @@ graph.add_conditional_edges(
 | `telegram_bot/graph/graph.py` | Graph building + route functions |
 | `telegram_bot/graph/nodes/classify.py` | Query classification |
 | `telegram_bot/graph/nodes/guard.py` | Content filtering |
-| `telegram_bot/graph/nodes/cache_check.py` | Cache lookup |
+| `telegram_bot/graph/nodes/cache.py` | Cache lookup/store |
 | `telegram_bot/graph/nodes/retrieve.py` | Retrieval |
 | `telegram_bot/graph/nodes/grade.py` | Document grading |
 | `telegram_bot/graph/nodes/rerank.py` | ColBERT rerank |

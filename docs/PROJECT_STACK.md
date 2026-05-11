@@ -9,8 +9,8 @@ Current stack snapshot for this repository as of 2026-05-07.
 | Language | Python `>=3.11` (recommended `3.12`) |
 | Package/deps | `uv`, `pyproject.toml`, `uv.lock` |
 | Lint/type/tests | Ruff, MyPy, pytest + xdist |
-| Local orchestration | Docker Compose v2 (`compose.yml` + `compose.dev.yml`) |
-| Server orchestration | k3s + Kustomize (`k8s/overlays/*`) |
+| Primary orchestration | Docker Compose v2 (`compose.yml` + `compose.dev.yml`; VPS via `compose.vps.yml`) |
+| Kubernetes path | Partial k3s + Kustomize overlays (`k8s/overlays/*`) for core/bot/ingest/full subsets |
 
 ## Core Application Components
 
@@ -42,7 +42,9 @@ Current stack snapshot for this repository as of 2026-05-07.
 - Local dev: `compose.yml:compose.dev.yml` via `make docker-up` / `make docker-bot-up` / `make docker-full-up`
 - Minimal local: same `compose.yml:compose.dev.yml` via `make local-up` / `make local-down`
 - VPS compose: `compose.vps.yml`
-- k3s overlays: `k8s/overlays/core`, `k8s/overlays/bot`, `k8s/overlays/ingest`, `k8s/overlays/full`
+- Partial k3s overlays: `k8s/overlays/core`, `k8s/overlays/bot`, `k8s/overlays/ingest`, `k8s/overlays/full`
+
+Docker Compose is the primary local and VPS runtime. The k3s/Kustomize manifests are maintained as a partial deployment path for core services and selected bot/ingestion stacks; they do not claim full parity with the Compose service set.
 
 ## Canonical Operations Docs
 

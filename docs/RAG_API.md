@@ -1,9 +1,11 @@
-# RAG API Reference
+# RAG API Contract
 
 FastAPI service wrapping the LangGraph pipeline for external query execution.
 
 **Entry point:** `src/api/main.py`
 **Port:** 8080 (production via Docker), 8000 (dev via uvicorn)
+
+This page owns the request/response contract. Use [`API_REFERENCE.md`](API_REFERENCE.md) for quick curl/httpx examples.
 
 ## Endpoints
 
@@ -37,12 +39,14 @@ Execute a RAG query through the full LangGraph pipeline.
 | Field | Type | Description |
 |-------|------|-------------|
 | `response` | string | Generated answer |
-| `query_type` | string | Classified query type (e.g., `APARTMENT`, `KNOWLEDGE`, `CHITCHAT`) |
+| `query_type` | string | Classified query type (e.g., `FAQ`, `GENERAL`, `CHITCHAT`) |
 | `cache_hit` | bool | Whether semantic cache was hit |
 | `documents_count` | int | Number of retrieved documents |
 | `rerank_applied` | bool | Whether reranking was applied |
 | `latency_ms` | float | Total pipeline latency in milliseconds |
 | `context` | list[dict] | Retrieved context documents (for evaluation) |
+
+`query_type` values come from `telegram_bot/graph/nodes/classify.py`: `CHITCHAT`, `OFF_TOPIC`, `STRUCTURED`, `FAQ`, `ENTITY`, `GENERAL`, plus `ERROR` for recursion-limit fallback.
 
 **Example request:**
 ```bash
@@ -59,7 +63,7 @@ curl -X POST http://localhost:8080/query \
 ```json
 {
   "response": "Permanent residency in Bulgaria requires...",
-  "query_type": "KNOWLEDGE",
+  "query_type": "FAQ",
   "cache_hit": false,
   "documents_count": 5,
   "rerank_applied": true,
@@ -78,7 +82,20 @@ curl -X POST http://localhost:8080/query \
 | Status | Body | Cause |
 |--------|------|-------|
 | 422 | Validation error | Invalid request body |
-| 500 | `{"error": "Internal server error"}` | Unhandled exception |
+| 500 | Structured error object | Unhandled exception |
+
+Unhandled exceptions are returned by `src/api/main.py` as:
+
+```json
+{
+  "error": "internal_error",
+  "message": "Internal server error",
+  "trace_id": "abc123...",
+  "recoverable": false
+}
+```
+
+The `trace_id` is the current Langfuse trace ID when available; otherwise the handler generates a UUID hex string for log correlation.
 
 For 500 errors, check Langfuse traces for the corresponding `rag-api-query` trace.
 
@@ -118,5 +135,5 @@ Returns QueryResponse with context
 ```bash
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 # Or via make:
-make docker-bot-up
+make docker-voice-up
 ```
