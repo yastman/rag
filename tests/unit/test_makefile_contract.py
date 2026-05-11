@@ -175,3 +175,65 @@ def test_validate_traces_fast_runs_postgres_auth_preflight() -> None:
         "validate-traces-fast must run scripts/validate_trace_runtime.py preflight "
         "before docker compose up to avoid silent Postgres auth mismatch loops."
     )
+
+
+# --- #1307 core trace gate contract tests ---
+
+
+def test_e2e_test_traces_core_is_phony() -> None:
+    text = _makefile_text()
+    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
+    assert phony_blocks, ".PHONY declaration not found in Makefile"
+    combined = " ".join(phony_blocks)
+    assert "e2e-test-traces-core" in combined, "e2e-test-traces-core must be declared in .PHONY"
+
+
+def test_e2e_test_traces_core_target_exists() -> None:
+    text = _makefile_text()
+    assert re.search(r"^e2e-test-traces-core:", text, re.MULTILINE), (
+        "e2e-test-traces-core target must exist in Makefile"
+    )
+
+
+def test_e2e_test_traces_core_uses_langfuse_validation() -> None:
+    text = _makefile_text()
+    block_match = re.search(
+        r"^e2e-test-traces-core:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "e2e-test-traces-core target not found in Makefile"
+    block = block_match.group(0)
+    assert "E2E_VALIDATE_LANGFUSE=1" in block, (
+        "e2e-test-traces-core must set E2E_VALIDATE_LANGFUSE=1"
+    )
+
+
+def test_e2e_test_traces_core_uses_no_judge() -> None:
+    text = _makefile_text()
+    block_match = re.search(
+        r"^e2e-test-traces-core:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "e2e-test-traces-core target not found in Makefile"
+    block = block_match.group(0)
+    assert "--no-judge" in block, (
+        "e2e-test-traces-core must use --no-judge to skip LLM judge during core trace gate"
+    )
+
+
+def test_e2e_test_traces_core_includes_required_scenarios() -> None:
+    text = _makefile_text()
+    block_match = re.search(
+        r"^e2e-test-traces-core:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "e2e-test-traces-core target not found in Makefile"
+    block = block_match.group(0)
+    required = ("0.1", "6.3", "7.1", "8.1")
+    missing = [s for s in required if f"--scenario {s}" not in block]
+    assert not missing, (
+        f"e2e-test-traces-core must include all required #1307 scenarios; missing: {missing}"
+    )
