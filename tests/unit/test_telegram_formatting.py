@@ -16,83 +16,110 @@ class TestRecordLangfuseResponseOutput:
             # Should not raise
             _record_langfuse_response_output("answer", 2)
 
-    def test_uses_update_current_trace_when_present(self):
+    def test_builds_safe_output_payload(self):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.set_current_trace_io = MagicMock()
+
+        with (
+            patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf),
+            patch(
+                "telegram_bot.services.telegram_formatting.build_safe_output_payload",
+                return_value={"mock": "payload"},
+            ) as mock_build,
+        ):
+            _record_langfuse_response_output("hello", 2)
+
+        mock_build.assert_called_once_with("hello", 2)
+        mock_lf.set_current_trace_io.assert_called_once_with(output={"mock": "payload"})
+
+    def test_uses_set_current_trace_io_when_present(self):
+        mock_lf = MagicMock()
+        mock_lf.set_current_trace_io = MagicMock()
         mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             _record_langfuse_response_output("hello world", 1)
 
-        mock_lf.update_current_trace.assert_called_once_with(
-            output={"response_preview": "hello world", "chunks_count": 1}
-        )
+        mock_lf.set_current_trace_io.assert_called_once()
         mock_lf.update_current_span.assert_not_called()
+        call_kwargs = mock_lf.set_current_trace_io.call_args.kwargs
+        assert "output" in call_kwargs
+        output = call_kwargs["output"]
+        assert "answer_preview" in output
+        assert "answer_hash" in output
+        assert output["chunks_count"] == 1
+        assert output["delivery_status"] == "sent"
 
     def test_falls_back_to_update_current_span(self):
         mock_lf = MagicMock()
-        del mock_lf.update_current_trace
+        del mock_lf.set_current_trace_io
         mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             _record_langfuse_response_output("fallback", 3)
 
-        mock_lf.update_current_span.assert_called_once_with(
-            output={"response_preview": "fallback", "chunks_count": 3}
-        )
+        mock_lf.update_current_span.assert_called_once()
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
+        assert "output" in call_kwargs
+        output = call_kwargs["output"]
+        assert "answer_preview" in output
+        assert output["chunks_count"] == 3
 
     def test_no_op_when_both_methods_missing(self):
         mock_lf = MagicMock()
-        del mock_lf.update_current_trace
+        del mock_lf.set_current_trace_io
         del mock_lf.update_current_span
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             _record_langfuse_response_output("answer", 1)
 
-    def test_trace_failure_falls_back_to_span(self):
+    def test_trace_io_failure_falls_back_to_span(self):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock(side_effect=RuntimeError("trace error"))
+        mock_lf.set_current_trace_io = MagicMock(side_effect=RuntimeError("trace io error"))
         mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             _record_langfuse_response_output("answer", 1)
 
-        mock_lf.update_current_trace.assert_called_once()
-        mock_lf.update_current_span.assert_called_once_with(
-            output={"response_preview": "answer", "chunks_count": 1}
-        )
+        mock_lf.set_current_trace_io.assert_called_once()
+        mock_lf.update_current_span.assert_called_once()
 
     def test_span_failure_is_silent(self):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock(side_effect=RuntimeError("trace error"))
+        mock_lf.set_current_trace_io = MagicMock(side_effect=RuntimeError("trace io error"))
         mock_lf.update_current_span = MagicMock(side_effect=RuntimeError("span error"))
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             # Should not raise
             _record_langfuse_response_output("answer", 1)
 
-    def test_preview_truncated_to_800_chars(self):
+    def test_preview_truncated_to_safe_limit(self):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.set_current_trace_io = MagicMock()
 
         long_text = "x" * 2000
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             _record_langfuse_response_output(long_text, 1)
 
-        call_args = mock_lf.update_current_trace.call_args.kwargs
-        assert len(call_args["output"]["response_preview"]) == 800
-        assert call_args["output"]["chunks_count"] == 1
+        call_args = mock_lf.set_current_trace_io.call_args.kwargs
+        output = call_args["output"]
+        # _preview limit is 240 chars; redactor may append a short suffix
+        assert len(output["answer_preview"]) <= 260
+        assert output["answer_len"] == 2000
+        assert output["chunks_count"] == 1
 
     def test_none_text_handled(self):
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
+        mock_lf.set_current_trace_io = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             _record_langfuse_response_output(None, 1)
 
-        call_args = mock_lf.update_current_trace.call_args.kwargs
-        assert call_args["output"]["response_preview"] == ""
-        assert call_args["output"]["chunks_count"] == 1
+        call_args = mock_lf.set_current_trace_io.call_args.kwargs
+        output = call_args["output"]
+        assert output["answer_preview"] == ""
+        assert output["answer_len"] == 0
+        assert output["chunks_count"] == 1
 
 
 class TestSendHtmlMessagesLangfuse:

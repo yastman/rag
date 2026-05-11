@@ -70,15 +70,17 @@ async def test_creates_span_when_langfuse_enabled(middleware, handler, message_e
 
     assert result == "ok"
     handler.assert_awaited_once()
-    mock_lf.start_as_current_observation.assert_called_once_with(
-        as_type="span",
-        name="telegram-cmd-start",
-        input={
-            "action": "cmd-start",
-            "content_type": "text",
-            "text_preview": "/start",
-        },
-    )
+    mock_lf.start_as_current_observation.assert_called_once()
+    call_kwargs = mock_lf.start_as_current_observation.call_args.kwargs
+    assert call_kwargs["as_type"] == "span"
+    assert call_kwargs["name"] == "telegram-cmd-start"
+    input_payload = call_kwargs["input"]
+    assert input_payload["action"] == "cmd-start"
+    assert input_payload["content_type"] == "text"
+    assert "query_preview" in input_payload
+    assert "query_hash" in input_payload
+    assert input_payload["query_len"] == 6
+    assert "text_preview" not in input_payload
     mock_propagate.assert_called_once()
     call_kwargs = mock_propagate.call_args[1]
     assert call_kwargs["user_id"] == "42"
@@ -120,11 +122,15 @@ async def test_callback_action_type(middleware, handler, event_data):
     ):
         await middleware(handler, cb, event_data)
 
-    mock_lf.start_as_current_observation.assert_called_once_with(
-        as_type="span",
-        name="telegram-callback-fav",
-        input={
-            "action": "callback-fav",
-            "callback_data": "fav:add:123",
-        },
-    )
+    mock_lf.start_as_current_observation.assert_called_once()
+    call_kwargs = mock_lf.start_as_current_observation.call_args.kwargs
+    assert call_kwargs["as_type"] == "span"
+    assert call_kwargs["name"] == "telegram-callback-fav"
+    input_payload = call_kwargs["input"]
+    assert input_payload["action"] == "callback-fav"
+    assert input_payload["content_type"] == "callback"
+    assert "query_preview" in input_payload
+    assert "query_hash" in input_payload
+    assert input_payload["query_len"] == 11
+    assert "callback_data" in input_payload
+    assert "text_preview" not in input_payload
