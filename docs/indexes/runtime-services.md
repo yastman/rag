@@ -23,7 +23,9 @@ Common commands:
 make docker-up          ***REMOVED*** default/unprofiled services
 make docker-bot-up      ***REMOVED*** bot profile
 make docker-ingest-up   ***REMOVED*** ingestion profile
-make docker-ml-up       ***REMOVED*** observability profile
+make docker-ml-up       ***REMOVED*** ML/Langfuse profile
+make docker-obs-up      ***REMOVED*** observability profile (Loki, Promtail, Alertmanager)
+make monitoring-up      ***REMOVED*** observability alias with endpoint hints
 make docker-ps          ***REMOVED*** list running containers
 ```
 

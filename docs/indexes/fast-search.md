@@ -106,6 +106,40 @@ rg -n "handler|middleware|pipeline" telegram_bot/handlers/ telegram_bot/services
 
 See also: [`runtime-services.md`](runtime-services.md***REMOVED***telegram-bot)
 
+***REMOVED******REMOVED******REMOVED*** "Run local bot or Telegram E2E"
+
+```bash
+***REMOVED*** Local runtime index and canonical local guide
+cat docs/indexes/local-runtime.md
+cat docs/LOCAL-DEVELOPMENT.md
+
+***REMOVED*** Minimal local loop
+make local-up
+make test-bot-health
+make bot
+
+***REMOVED*** Telethon session and transport checks
+uv run python -m scripts.e2e.auth --help
+uv run python -m scripts.e2e.quick_test
+```
+
+See also: [`local-runtime.md`](local-runtime.md)
+
+***REMOVED******REMOVED******REMOVED*** "Find engineering workflow guidance"
+
+```bash
+***REMOVED*** Task-oriented engineering workflow index
+cat docs/indexes/engineering-workflows.md
+
+***REMOVED*** Folder index with active vs historical process docs
+cat docs/engineering/README.md
+
+***REMOVED*** Search active engineering process docs
+rg -n "testing|validation|issue triage|SDK|dependency|docs maintenance|swarm" docs/engineering/ docs/indexes/
+```
+
+See also: [`engineering-workflows.md`](engineering-workflows.md)
+
 ***REMOVED******REMOVED*** General Search Commands
 
 Search the doc tree from the repo root:

@@ -64,10 +64,14 @@ Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to 
 
 | Service | URL/Port |
 | --- | --- |
+| PostgreSQL | `localhost:5432` |
 | Qdrant | `http://localhost:6333` (`6334` gRPC) |
 | Redis | `localhost:6379` |
 | BGE-M3 API | `http://localhost:8000` |
+| User Base | `http://localhost:8003` |
 | Docling | `http://localhost:5001` |
+| Mini App API | `http://localhost:8090` |
+| Mini App Frontend | `http://localhost:8091` |
 | LiteLLM | `http://localhost:4000` |
 | Langfuse | `http://localhost:3001` |
 | Loki | `http://localhost:3100` |
