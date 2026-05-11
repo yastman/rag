@@ -38,6 +38,11 @@ E2E judge routing defaults:
 - direct Anthropic judge is opt-in only: `E2E_JUDGE_PROVIDER=anthropic-direct` + `ANTHROPIC_API_KEY`
 - for transport-only Telethon checks without LLM judge: run `uv run python scripts/e2e/runner.py --no-judge`
 
+Voice-note fixture for E2E:
+- `E2E_VOICE_NOTE_PATH` — path to a local `.ogg` or `.oga` voice-note fixture
+- keep a short, non-sensitive query recording in an ignored local path such as `tmp/e2e/` (e.g., *"найди квартиру у моря до 120 тысяч"*)
+- do not commit personal voice recordings to the repo
+
 The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which `make` targets use as a fallback when `.env` is absent. Do not create worktree-named Docker projects.
 
 Secret model by compose file:
@@ -172,7 +177,20 @@ make local-ps
 make local-down
 ```
 
-## 8. Common Issues
+## 8. E2E Core Trace Gate (#1307)
+
+Required core Telethon trace scenarios with Langfuse validation:
+
+```bash
+make local-up
+make docker-ml-up
+make bot
+make e2e-test-traces-core
+```
+
+Keep `make bot` running in another terminal while the E2E command executes. Use `make run-bot` only when you do not need the tee'd `logs/bot-run.log` evidence.
+
+## 9. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.

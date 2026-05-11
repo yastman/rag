@@ -97,7 +97,10 @@ make test-nightly            # chaos + smoke + slow unit
 ```bash
 make e2e-test                # pytest E2E suite (live services)
 make e2e-telegram-test       # Telegram userbot runner
+make e2e-test-traces-core    # required #1307 core Telethon trace gate
 ```
+
+The `e2e-test-traces-core` target runs the required #1307 Telethon scenarios with Langfuse validation (`E2E_VALIDATE_LANGFUSE=1`). Ensure the bot is running locally (`make bot`) before executing this gate.
 
 ### RAG evaluation
 ```bash
