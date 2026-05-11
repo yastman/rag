@@ -2,6 +2,11 @@
 
 Evaluation, experimentation, and observability tooling for the RAG system.
 
+## Ownership
+
+- Owns offline evaluation tools, RAGAS runners, A/B experiment helpers, and quality metric logging.
+- Provides scripts for generating and syncing evaluation datasets and smoke checks.
+
 ## Files
 
 | File | Purpose |
@@ -18,6 +23,12 @@ Evaluation, experimentation, and observability tooling for the RAG system.
 | `langfuse_integration.py` | Production tracing and span logging |
 | `metrics_logger.py` | Legacy metrics logging (superseded by Langfuse) |
 | `config_snapshot.py` | Legacy config versioning (superseded by MLflow) |
+
+## Boundaries
+
+- Does not own production request serving or Telegram bot runtime behavior.
+- Does not own trace instrumentation contracts outside evaluation and reporting helpers.
+- RAG quality score taxonomy belongs in [`../../docs/RAG_QUALITY_SCORES.md`](../../docs/RAG_QUALITY_SCORES.md).
 
 ## Focused checks
 

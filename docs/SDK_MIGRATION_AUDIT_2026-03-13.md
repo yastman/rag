@@ -1,5 +1,10 @@
 # SDK Migration Audit (Refreshed)
 
+> **Historical evidence snapshot.** This dated audit records SDK migration
+> findings from March 13, 2026. Do not treat it as the active SDK source of
+> truth. Current SDK/framework guidance lives in
+> [`docs/engineering/sdk-registry.md`](engineering/sdk-registry.md).
+
 **As of:** 2026-03-13
 **Source issue:** #728
 

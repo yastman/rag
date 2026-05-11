@@ -2,6 +2,11 @@
 
 Central configuration for the RAG pipeline: settings, constants, and Qdrant policy.
 
+## Ownership
+
+- Owns core `src` RAG settings, enum constants, defaults, and collection naming policy.
+- Loads local settings from constructor arguments, environment variables, and defaults.
+
 ## Files
 
 | File | Purpose |
@@ -25,6 +30,12 @@ settings = Settings(
     qdrant_url="https://qdrant.example.com"
 )
 ```
+
+## Boundaries
+
+- Does not own Telegram bot settings; see `telegram_bot/config.py`.
+- Does not own Docker Compose, service ports, or secret policy; see [`../../DOCKER.md`](../../DOCKER.md).
+- Keeps Qdrant collection naming policy here so callers do not duplicate suffix rules.
 
 ## Focused checks
 

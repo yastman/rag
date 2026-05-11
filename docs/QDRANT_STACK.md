@@ -4,7 +4,7 @@ Current Qdrant setup used by bot and ingestion flows.
 
 ## Version And Endpoints
 
-- Compose image: `qdrant/qdrant:v1.17.0` (pinned by digest in compose files)
+- Compose image: `qdrant/qdrant:v1.17.1` (pinned by digest in compose files)
 - Python SDK: `qdrant-client>=1.17.0` (v1.17+ adds weighted RRF, relevance feedback)
 - HTTP: `http://localhost:6333`
 - gRPC: `localhost:6334`
@@ -148,8 +148,8 @@ Created by `scripts/apartments/setup_collection.py`.
 | `floor` | `integer` | — |
 | `price_eur` | `float` | — |
 | `area_m2` | `float` | — |
-| `is_furnished` | `bool` (intended) | **Bug:** script passes string `"bool"` instead of `models.PayloadSchemaType.BOOL` (line 71). `is_promotion` correctly uses the enum. |
-| `is_promotion` | `bool` | Correctly uses `models.PayloadSchemaType.BOOL` |
+| `is_furnished` | `bool` | Uses `models.PayloadSchemaType.BOOL` |
+| `is_promotion` | `bool` | Uses `models.PayloadSchemaType.BOOL` |
 
 ### `conversation_history`
 
@@ -157,7 +157,8 @@ Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collect
 
 - Vectors: `dense` (1024-dim, cosine)
 - Payload: `page_content`, `metadata.user_id`, `metadata.session_id`, `metadata.query`, `metadata.response`, `metadata.timestamp`, `metadata.input_type`
-- **Index gap:** `ensure_collection` does **not** create payload indexes for `metadata.user_id` or `metadata.session_id`. These fields are used heavily in `query_points` filters (`search_user_history`, `delete_user_history`) and `scroll` (`get_session_turns`), so missing indexes means full payload scans. This appears to be an omission rather than intentional — the history collection is created lazily and never runs an index-setup step.
+- Payload indexes ensured by `ensure_collection`: `metadata.user_id` (integer),
+  `metadata.session_id` (keyword), and `metadata.deal_id` (integer).
 
 ## SQL Index Navigation (Postgres Init Drift)
 

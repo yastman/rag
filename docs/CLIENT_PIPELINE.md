@@ -54,7 +54,7 @@ PropertyBot.handle_query()
 ### Cache Behavior
 
 Client pipeline uses store guards:
-- Only stores for `FAQ`, `GENERAL`, `ENTITY` types
+- Only stores for `FAQ`, `GENERAL`, `ENTITY`, `STRUCTURED` types
 - Skips contextual follow-ups ("подробнее", "первый")
 - Requires `grade_confidence >= 0.005` (RRF scale)
 
@@ -170,4 +170,7 @@ logger.info("SDK agent completed", extra={"tool_calls": ["rag_search", "crm_crea
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `CLIENT_DIRECT_PIPELINE_ENABLED` | `false` | Enable client fast-path |
-| `CLIENT_DIRECT_FALLBACK_ENABLED` | `true` | Fallback to agent on error |
+
+Fallback to the SDK agent path is built into `PropertyBot._handle_query()`: if
+the client direct pipeline raises, the bot logs the failure and calls the
+supervisor path. There is no separate runtime flag for this fallback.

@@ -46,9 +46,11 @@ We chose **ColBERT reranking** (via BGE-M3 model) as the default reranker.
 
 ## Implementation
 
-- `ColbertRerankerService` in `telegram_bot/services/colbert_reranker.py`
-- Configured via `RERANK_PROVIDER=colbert` env var
-- Triggered when `grade_confidence < skip_rerank_threshold` (RRF scale, default 0.018)
+- Current runtime keeps the legacy client-side reranker service deprecated; `PropertyBot` and the RAG API set the reranker hook to `None`.
+- `RERANK_PROVIDER=colbert` selects the server-side Qdrant ColBERT path when ColBERT query vectors and the collection schema are available.
+- `telegram_bot/graph/nodes/retrieve.py` calls `QdrantService.hybrid_search_rrf_colbert()` for the 3-stage path: dense + sparse prefetch, RRF fusion, then Qdrant ColBERT MaxSim reranking with stored multivectors.
+- If ColBERT vectors are missing, empty, or erroring, `QdrantService.hybrid_search_rrf_colbert()` falls back to plain hybrid RRF and records fallback metadata.
+- `telegram_bot/graph/nodes/rerank.py` remains an optional graph stage, but the active ColBERT implementation is server-side Qdrant reranking during retrieval rather than a separate client-side reranker service.
 
 ## References
 
