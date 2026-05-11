@@ -278,3 +278,117 @@ def test_wait_for_trace_multi_name_finds_match():
             )
 
     assert result == "trace-msg"
+
+
+# ---------------------------------------------------------------------------
+# Alias group: node-cache-check / cache-check
+# ---------------------------------------------------------------------------
+
+
+def _sanitized_observed_trace(*, include_cache_check_alias: bool = False):
+    """Build a mock trace shaped like sanitized local audit observations.
+
+    Based on artifact evidence (root_input keys present, observed cache names,
+    required score names present). No raw payload values.
+
+    Scores are chosen so only the ``node-cache-check`` branch requirement is
+    triggered, keeping the alias-group test focused.
+    """
+    mock_trace = MagicMock()
+    mock_trace.input = {
+        "action": "message",
+        "content_type": "text",
+        "query_hash": "abc123",
+        "query_len": 24,
+        "query_preview": "test query",
+    }
+    mock_trace.output = {"answer_hash": "def456"}
+
+    observations = [
+        type("Obs", (), {"name": "telegram-message"}),
+        type("Obs", (), {"name": "telegram-rag-query"}),
+        type("Obs", (), {"name": "telegram-rag-supervisor"}),
+        type("Obs", (), {"name": "client-direct-pipeline"}),
+        type("Obs", (), {"name": "classify-query"}),
+        type("Obs", (), {"name": "cache-semantic-check"}),
+        type("Obs", (), {"name": "cache-exact-get"}),
+        type("Obs", (), {"name": "cache-search-get"}),
+        type("Obs", (), {"name": "cache-embedding-get"}),
+        type("Obs", (), {"name": "grade-documents"}),
+        type("Obs", (), {"name": "hybrid-retrieve"}),
+        type("Obs", (), {"name": "service-generate-response"}),
+        type("Obs", (), {"name": "history-save"}),
+    ]
+
+    if include_cache_check_alias:
+        observations.append(type("Obs", (), {"name": "cache-check"}))
+
+    # Observations are unordered; shuffle alias into middle of list.
+    mock_trace.observations = observations
+
+    # Scores configured so ``semantic_cache_hit=True`` short-circuits the
+    # retrieval/generation branch requirements, leaving only
+    # ``node-cache-check`` as the branch-required observation.
+    mock_trace.scores = [
+        type("Score", (), {"name": "query_type", "value": 1.0}),
+        type("Score", (), {"name": "latency_total_ms", "value": 1500.0}),
+        type("Score", (), {"name": "semantic_cache_hit", "value": True}),
+        type("Score", (), {"name": "embeddings_cache_hit", "value": False}),
+        type("Score", (), {"name": "search_cache_hit", "value": False}),
+        type("Score", (), {"name": "rerank_applied", "value": False}),
+        type("Score", (), {"name": "rerank_cache_hit", "value": False}),
+        type("Score", (), {"name": "results_count", "value": 0.0}),
+        type("Score", (), {"name": "no_results", "value": True}),
+        type("Score", (), {"name": "llm_used", "value": False}),
+    ]
+    return mock_trace
+
+
+def test_validator_fails_when_cache_check_alias_group_unsatisfied(
+    mock_langfuse_configured,
+    mock_wait_for_trace,
+):
+    """Without node-cache-check or cache-check, validation must fail (strict)."""
+    mock_trace = _sanitized_observed_trace(include_cache_check_alias=False)
+
+    with patch("scripts.e2e.langfuse_trace_validator.Langfuse") as MockLangfuse:
+        mock_client = MockLangfuse.return_value
+        mock_client.api.trace.get.return_value = mock_trace
+
+        result = validate_latest_trace(
+            started_at=datetime.now(),
+            should_skip_rag=False,
+            is_command=False,
+            scenario_kind="text_rag",
+        )
+
+    assert not result.ok, "Expected validation to fail without cache-check alias"
+    assert "node-cache-check" in result.missing_spans, (
+        f"Expected node-cache-check in missing_spans, got: {result.missing_spans}"
+    )
+
+
+def test_validator_passes_with_cache_check_alias(
+    mock_langfuse_configured,
+    mock_wait_for_trace,
+):
+    """cache-check satisfies the node-cache-check requirement via alias group."""
+    mock_trace = _sanitized_observed_trace(include_cache_check_alias=True)
+
+    with patch("scripts.e2e.langfuse_trace_validator.Langfuse") as MockLangfuse:
+        mock_client = MockLangfuse.return_value
+        mock_client.api.trace.get.return_value = mock_trace
+
+        result = validate_latest_trace(
+            started_at=datetime.now(),
+            should_skip_rag=False,
+            is_command=False,
+            scenario_kind="text_rag",
+        )
+
+    assert result.ok, (
+        f"Validation failed: missing_spans={result.missing_spans}, missing_scores={result.missing_scores}"
+    )
+    assert "node-cache-check" not in result.missing_spans, (
+        f"Did not expect node-cache-check in missing_spans, got: {result.missing_spans}"
+    )

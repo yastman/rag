@@ -33,6 +33,12 @@ SCORE_NAMES = {
     "llm_used",
 }
 
+# Observation alias groups: canonical name -> set of acceptable aliases.
+# Any alias present in the trace satisfies the requirement for the canonical name.
+OBSERVATION_ALIAS_GROUPS = {
+    "node-cache-check": {"node-cache-check", "cache-check"},
+}
+
 SCENARIO_CONTRACTS = {
     "text_rag": {
         "trace_names": ["telegram-message"],
@@ -173,6 +179,23 @@ def _as_float(value: object) -> float | None:
     return None
 
 
+def _resolve_missing_observations(
+    required_observations: set[str], span_names: set[str]
+) -> set[str]:
+    """Return required observations not satisfied by any present span name.
+
+    Supports alias groups: if a required observation has aliases defined in
+    :data:`OBSERVATION_ALIAS_GROUPS`, any alias present in ``span_names``
+    satisfies the requirement for the canonical name.
+    """
+    missing: set[str] = set()
+    for req in required_observations:
+        aliases = OBSERVATION_ALIAS_GROUPS.get(req, {req})
+        if not (aliases & span_names):
+            missing.add(req)
+    return missing
+
+
 def wait_for_trace(
     *,
     started_at: datetime,
@@ -279,7 +302,7 @@ def validate_latest_trace(
     score_names = set(scores.keys())
 
     # Base observation misses from the scenario contract.
-    missing_spans = set(required_observations - span_names)
+    missing_spans = _resolve_missing_observations(required_observations, span_names)
 
     # Root trace input/output checks (trace-level, not observation-level).
     trace_input = getattr(trace, "input", None) or {}
@@ -317,7 +340,7 @@ def validate_latest_trace(
             required_observations |= {"node-generate", "node-cache-store", "node-respond"}
 
     # Recompute observation misses after branch-aware additions.
-    missing_spans |= set(required_observations - span_names)
+    missing_spans |= _resolve_missing_observations(required_observations, span_names)
     missing_scores = set(required_scores - score_names)
 
     return TraceValidationResult(
