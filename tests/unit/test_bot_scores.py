@@ -553,6 +553,63 @@ class TestVoiceTraceMetadata:
         assert metadata["checkpointer_overhead_proxy_ms"] is not None
 
 
+class TestVoiceSafePayloads:
+    """Test that handle_voice uses PII-safe input/output payloads (#1307)."""
+
+    async def test_voice_input_payload_is_safe(self, mock_config):
+        """handle_voice must not include raw stt_text in update_current_span input."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_span = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        voice_result = {
+            **FULL_PIPELINE_RESULT,
+            "stt_text": "тест запрос",
+            "stt_duration_ms": 250.0,
+            "voice_duration_s": 5.0,
+            "input_type": "voice",
+        }
+        await _run_handle_voice(mock_config, voice_result, mock_lf)
+
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
+        input_payload = call_kwargs["input"]
+        assert isinstance(input_payload, dict)
+        assert input_payload["content_type"] == "voice"
+        assert "query_preview" in input_payload
+        assert "query_hash" in input_payload
+        assert input_payload["query_len"] == len("тест запрос")
+        assert "stt_text" not in input_payload
+        assert "тест запрос" not in input_payload
+        assert input_payload["voice_duration_s"] == 5.0
+
+    async def test_voice_output_payload_is_safe(self, mock_config):
+        """handle_voice must not include raw response in update_current_span output."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_span = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        voice_result = {
+            **FULL_PIPELINE_RESULT,
+            "stt_text": "тест",
+            "response": "Вот квартиры до 100000 евро...",
+            "input_type": "voice",
+        }
+        await _run_handle_voice(mock_config, voice_result, mock_lf)
+
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
+        output_payload = call_kwargs["output"]
+        assert isinstance(output_payload, dict)
+        assert "answer_preview" in output_payload
+        assert "answer_hash" in output_payload
+        assert output_payload["answer_len"] == len("Вот квартиры до 100000 евро...")
+        assert output_payload["chunks_count"] == 1
+        assert output_payload["delivery_status"] == "sent"
+        assert "response" not in output_payload
+        assert "Вот квартиры" not in output_payload
+
+
 VOICE_PIPELINE_RESULT = {
     **FULL_PIPELINE_RESULT,
     "stt_text": "тест голосовой запрос",
