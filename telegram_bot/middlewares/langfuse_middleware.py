@@ -10,6 +10,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from telegram_bot.observability import get_client, propagate_attributes
+from telegram_bot.observability_payloads import build_safe_input_payload
 from telegram_bot.tracing_context import classify_action, make_session_id
 
 
@@ -19,22 +20,28 @@ logger = logging.getLogger(__name__)
 def _extract_event_input(event: TelegramObject, action_type: str) -> dict[str, Any]:
     """Build a safe, concise input dict from a Telegram event.
 
-    PII masking is delegated to the Langfuse SDK mask layer; this helper only
-    extracts coarse action/text metadata so the root trace is not empty.
+    Uses ``build_safe_input_payload`` so no raw message text reaches the
+    Langfuse root trace.
     """
     if isinstance(event, Message):
         text = event.text or event.caption or ""
-        return {
-            "action": action_type,
-            "content_type": event.content_type,
-            "text_preview": text[:500] if text else "",
-        }
+        return build_safe_input_payload(
+            content_type=str(getattr(event, "content_type", "unknown")),
+            text=text,
+            action=action_type,
+        )
     if isinstance(event, CallbackQuery):
-        return {
-            "action": action_type,
-            "callback_data": (event.data or "")[:200],
-        }
-    return {"action": action_type}
+        return build_safe_input_payload(
+            content_type="callback",
+            text=event.data or "",
+            action=action_type,
+            extra={"callback_data": event.data or ""},
+        )
+    return build_safe_input_payload(
+        content_type="unknown",
+        text="",
+        action=action_type,
+    )
 
 
 class LangfuseContextMiddleware(BaseMiddleware):
@@ -61,10 +68,14 @@ class LangfuseContextMiddleware(BaseMiddleware):
         session_id = make_session_id("chat", chat_id)
         action_type = classify_action(event, data)
 
+        observation_name = (
+            "telegram-rag-voice" if action_type == "rag-voice" else f"telegram-{action_type}"
+        )
+
         with (
             lf.start_as_current_observation(
                 as_type="span",
-                name=f"telegram-{action_type}",
+                name=observation_name,
                 input=_extract_event_input(event, action_type),
             ),
             propagate_attributes(
