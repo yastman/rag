@@ -31,6 +31,8 @@ def classify_action(event: Any, _data: dict[str, Any] | None = None) -> str:
             return f"callback-{cb_data.split(':')[0]}"
         return "callback"
     if isinstance(event, Message):
+        if getattr(event, "content_type", None) == "voice":
+            return "rag-voice"
         text = event.text or ""
         if text.startswith("/"):
             cmd = text.split()[0].split("@")[0].lstrip("/")
