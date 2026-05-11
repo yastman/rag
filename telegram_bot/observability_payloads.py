@@ -17,7 +17,12 @@ def _hash_text(text: str) -> str:
 
 
 def _preview(text: str, *, limit: int = _PREVIEW_LIMIT) -> str:
-    return cast(str, _redactor.mask(text[:limit], max_length=limit))
+    """Redact PII first, then bound the preview to ``limit`` chars.
+
+    Redaction happens on the full text so that PII crossing the preview
+    boundary is fully matched and replaced before any truncation.
+    """
+    return cast(str, _redactor.mask(text, max_length=limit))
 
 
 def build_safe_input_payload(
@@ -48,7 +53,30 @@ def build_safe_input_payload(
         payload["route"] = route
 
     if extra is not None:
-        payload.update({k: v for k, v in extra.items() if v is not None})
+        # Keys that must never be overridden or introduced raw.
+        # Use a static set that includes all schema keys so that extra can
+        # never inject an action/scenario/route when the caller omitted them.
+        _SAFE_KEYS = frozenset(
+            {
+                "content_type",
+                "query_preview",
+                "query_hash",
+                "query_len",
+                "action",
+                "scenario",
+                "route",
+            }
+        )
+        _BLOCKED_EXTRA_KEYS = frozenset({"text", "query", "raw_query", "answer_text", "response"})
+        for k, v in extra.items():
+            if v is None:
+                continue
+            if k in _SAFE_KEYS:
+                continue  # never override safe payload keys
+            if k in _BLOCKED_EXTRA_KEYS:
+                continue  # never introduce raw key names
+            # Redact and bound extra values (strings, dicts, lists)
+            payload[k] = _redactor.mask(v, max_length=_PREVIEW_LIMIT)
 
     return payload
 
