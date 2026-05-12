@@ -145,7 +145,7 @@ def build_html_messages(
     return rendered
 
 
-def _record_langfuse_response_output(answer_text: str, chunks_count: int) -> None:
+def record_langfuse_response_output(answer_text: str | None, chunks_count: int) -> None:
     """Best-effort update of the current Langfuse trace/span output after a send.
 
     Uses ``set_current_trace_io`` when present, falls back to ``update_current_span``,
@@ -174,6 +174,9 @@ def _record_langfuse_response_output(answer_text: str, chunks_count: int) -> Non
             update_span(output=output)
         except Exception:
             logger.debug("update_current_span failed", exc_info=True)
+
+
+_record_langfuse_response_output = record_langfuse_response_output
 
 
 async def send_html_messages(
@@ -215,7 +218,7 @@ async def send_html_messages(
                 await message.answer(html.unescape(html_text))
 
     try:
-        _record_langfuse_response_output(answer_text, len(html_messages))
+        record_langfuse_response_output(answer_text, len(html_messages))
     except Exception:
         logger.debug("Failed to record Langfuse output", exc_info=True)
     return True
