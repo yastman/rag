@@ -3173,6 +3173,7 @@ class PropertyBot:
                         self._cache, self._embeddings, user_text, dense, rag_result_store
                     )
                     topic_hint = get_query_topic_hint(user_text)
+                    grounding_mode_value = rag_result_store.get("grounding_mode", "normal")
                     rag_result_store["state_contract"] = _build_pre_agent_state_contract(
                         rag_result_store=rag_result_store,
                         query_type=query_type,
@@ -3182,7 +3183,7 @@ class PropertyBot:
                         if isinstance(rag_result_store.get("cache_key_sparse"), dict)
                         else None,
                         colbert_query=rag_result_store.get("cache_key_colbert"),
-                        grounding_mode="normal",
+                        grounding_mode=grounding_mode_value,
                         filters=extracted_filters or None,
                     )
                 except Exception:
