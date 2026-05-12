@@ -346,7 +346,6 @@ class TestScoreWriting:
                     "semantic_cache_hit": 1.0,
                     "llm_used": 0.0,
                     "rerank_applied": 0.0,
-                    "results_count": 0.0,
                 },
             ),
             (
@@ -370,6 +369,21 @@ class TestScoreWriting:
         }
         for name, expected_value in expected_scores.items():
             assert scores[name] == expected_value, f"{name}: {scores[name]} != {expected_value}"
+
+    def test_cache_hit_does_not_emit_misleading_no_results(self):
+        """Regression: semantic cache hit must NOT score no_results=1 or results_count=0 (#1493)."""
+        mock_lf = MagicMock()
+        _run_score_writer(CACHE_HIT_RESULT, mock_lf)
+
+        score_names = [call.kwargs["name"] for call in mock_lf.create_score.call_args_list]
+        assert "no_results" not in score_names
+        assert "results_count" not in score_names
+        # semantic_cache_hit must still be recorded
+        scores = {
+            call.kwargs["name"]: call.kwargs["value"]
+            for call in mock_lf.create_score.call_args_list
+        }
+        assert scores["semantic_cache_hit"] == 1.0
 
     @pytest.mark.parametrize(
         ("result_override", "test_id"),
