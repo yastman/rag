@@ -434,18 +434,54 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
-    result = await generate_response(
-        query="Стриминг?",
-        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
-        config=config,
-        lf_client=lf,
-        message=message,
-        raw_messages=[{"role": "user", "content": "Стриминг?"}],
-    )
+    with patch(
+        "telegram_bot.services.generate_response.record_langfuse_response_output"
+    ) as mock_record_output:
+        result = await generate_response(
+            query="Стриминг?",
+            documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+            config=config,
+            lf_client=lf,
+            message=message,
+            raw_messages=[{"role": "user", "content": "Стриминг?"}],
+        )
 
     assert result["response"] == "Часть 1 Часть 2"
     assert result["response_sent"] is True
     assert result["sent_message"] == {"chat_id": 555, "message_id": 777}
+    mock_record_output.assert_called_once_with("Часть 1 Часть 2", 1)
+
+
+@pytest.mark.asyncio
+async def test_generate_response_streaming_does_not_record_output_when_delivery_fails() -> None:
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Ответ без доставки")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+    message = AsyncMock()
+    message.chat = MagicMock(id=999)
+    message.bot = bot
+    message.answer = AsyncMock(side_effect=RuntimeError("telegram send failed"))
+
+    with patch(
+        "telegram_bot.services.generate_response.record_langfuse_response_output"
+    ) as mock_record_output:
+        result = await generate_response(
+            query="Тест ошибки доставки",
+            documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+            config=config,
+            lf_client=lf,
+            message=message,
+            raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
+        )
+
+    assert result["response_sent"] is False
+    mock_record_output.assert_not_called()
 
 
 @pytest.mark.asyncio

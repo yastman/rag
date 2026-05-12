@@ -33,6 +33,10 @@ SCORE_NAMES = {
     "llm_used",
 }
 
+OBSERVATION_ALIAS_GROUPS = {
+    "node-cache-check": {"node-cache-check", "cache-check"},
+}
+
 SCENARIO_CONTRACTS = {
     "text_rag": {
         "trace_names": ["telegram-message"],
@@ -173,6 +177,17 @@ def _as_float(value: object) -> float | None:
     return None
 
 
+def _resolve_missing_observations(
+    required_observations: set[str], span_names: set[str]
+) -> set[str]:
+    missing: set[str] = set()
+    for required in required_observations:
+        aliases = OBSERVATION_ALIAS_GROUPS.get(required, {required})
+        if not (aliases & span_names):
+            missing.add(required)
+    return missing
+
+
 def wait_for_trace(
     *,
     started_at: datetime,
@@ -279,7 +294,7 @@ def validate_latest_trace(
     score_names = set(scores.keys())
 
     # Base observation misses from the scenario contract.
-    missing_spans = set(required_observations - span_names)
+    missing_spans = _resolve_missing_observations(required_observations, span_names)
 
     # Root trace input/output checks (trace-level, not observation-level).
     trace_input = getattr(trace, "input", None) or {}
@@ -317,8 +332,12 @@ def validate_latest_trace(
             required_observations |= {"node-generate", "node-cache-store", "node-respond"}
 
     # Recompute observation misses after branch-aware additions.
-    missing_spans |= set(required_observations - span_names)
+    missing_spans |= _resolve_missing_observations(required_observations, span_names)
     missing_scores = set(required_scores - score_names)
+
+    # Invalid/non-numeric query_type must be treated as a missing required score.
+    if "query_type" in score_names and query_type is None:
+        missing_scores.add("query_type")
 
     return TraceValidationResult(
         ok=(not missing_spans and not missing_scores),

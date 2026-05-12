@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.services.telegram_formatting import (
-    _record_langfuse_response_output,
+    record_langfuse_response_output,
     send_html_messages,
 )
 
@@ -14,7 +14,7 @@ class TestRecordLangfuseResponseOutput:
     def test_no_op_when_client_is_none(self):
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=None):
             # Should not raise
-            _record_langfuse_response_output("answer", 2)
+            record_langfuse_response_output("answer", 2)
 
     def test_builds_safe_output_payload(self):
         mock_lf = MagicMock()
@@ -27,7 +27,7 @@ class TestRecordLangfuseResponseOutput:
                 return_value={"mock": "payload"},
             ) as mock_build,
         ):
-            _record_langfuse_response_output("hello", 2)
+            record_langfuse_response_output("hello", 2)
 
         mock_build.assert_called_once_with("hello", 2)
         mock_lf.set_current_trace_io.assert_called_once_with(output={"mock": "payload"})
@@ -38,7 +38,7 @@ class TestRecordLangfuseResponseOutput:
         mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            _record_langfuse_response_output("hello world", 1)
+            record_langfuse_response_output("hello world", 1)
 
         mock_lf.set_current_trace_io.assert_called_once()
         mock_lf.update_current_span.assert_not_called()
@@ -56,7 +56,7 @@ class TestRecordLangfuseResponseOutput:
         mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            _record_langfuse_response_output("fallback", 3)
+            record_langfuse_response_output("fallback", 3)
 
         mock_lf.update_current_span.assert_called_once()
         call_kwargs = mock_lf.update_current_span.call_args.kwargs
@@ -71,7 +71,7 @@ class TestRecordLangfuseResponseOutput:
         del mock_lf.update_current_span
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            _record_langfuse_response_output("answer", 1)
+            record_langfuse_response_output("answer", 1)
 
     def test_trace_io_failure_falls_back_to_span(self):
         mock_lf = MagicMock()
@@ -79,7 +79,7 @@ class TestRecordLangfuseResponseOutput:
         mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            _record_langfuse_response_output("answer", 1)
+            record_langfuse_response_output("answer", 1)
 
         mock_lf.set_current_trace_io.assert_called_once()
         mock_lf.update_current_span.assert_called_once()
@@ -91,7 +91,7 @@ class TestRecordLangfuseResponseOutput:
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             # Should not raise
-            _record_langfuse_response_output("answer", 1)
+            record_langfuse_response_output("answer", 1)
 
     def test_preview_truncated_to_safe_limit(self):
         mock_lf = MagicMock()
@@ -99,7 +99,7 @@ class TestRecordLangfuseResponseOutput:
 
         long_text = "x" * 2000
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            _record_langfuse_response_output(long_text, 1)
+            record_langfuse_response_output(long_text, 1)
 
         call_args = mock_lf.set_current_trace_io.call_args.kwargs
         output = call_args["output"]
@@ -113,13 +113,21 @@ class TestRecordLangfuseResponseOutput:
         mock_lf.set_current_trace_io = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            _record_langfuse_response_output(None, 1)
+            record_langfuse_response_output(None, 1)
 
         call_args = mock_lf.set_current_trace_io.call_args.kwargs
         output = call_args["output"]
         assert output["answer_preview"] == ""
         assert output["answer_len"] == 0
         assert output["chunks_count"] == 1
+
+    def test_private_output_helper_alias_points_to_public_helper(self):
+        from telegram_bot.services import telegram_formatting
+
+        assert (
+            telegram_formatting._record_langfuse_response_output
+            is telegram_formatting.record_langfuse_response_output
+        )
 
 
 class TestSendHtmlMessagesLangfuse:
@@ -128,7 +136,7 @@ class TestSendHtmlMessagesLangfuse:
         message.answer = AsyncMock()
 
         with patch(
-            "telegram_bot.services.telegram_formatting._record_langfuse_response_output"
+            "telegram_bot.services.telegram_formatting.record_langfuse_response_output"
         ) as mock_record:
             result = await send_html_messages(message, "Hello")
 
@@ -141,7 +149,7 @@ class TestSendHtmlMessagesLangfuse:
         long_text = "A" * 5000
 
         with patch(
-            "telegram_bot.services.telegram_formatting._record_langfuse_response_output"
+            "telegram_bot.services.telegram_formatting.record_langfuse_response_output"
         ) as mock_record:
             result = await send_html_messages(message, long_text)
 
@@ -155,7 +163,7 @@ class TestSendHtmlMessagesLangfuse:
         message = MagicMock()
 
         with patch(
-            "telegram_bot.services.telegram_formatting._record_langfuse_response_output"
+            "telegram_bot.services.telegram_formatting.record_langfuse_response_output"
         ) as mock_record:
             result = await send_html_messages(message, "")
 
@@ -167,7 +175,7 @@ class TestSendHtmlMessagesLangfuse:
         message.answer = AsyncMock()
 
         with patch(
-            "telegram_bot.services.telegram_formatting._record_langfuse_response_output",
+            "telegram_bot.services.telegram_formatting.record_langfuse_response_output",
             side_effect=RuntimeError("langfuse down"),
         ) as mock_record:
             # Should not raise
