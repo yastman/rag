@@ -1,7 +1,8 @@
 """LangChain Embeddings wrappers for BGE-M3 API.
 
-Provides BGEM3Embeddings (dense) and BGEM3SparseEmbeddings (sparse)
-that wrap the local BGE-M3 REST API for use in LangGraph pipelines.
+Provides BGEM3Embeddings (dense), BGEM3SparseEmbeddings (sparse), and
+BGEM3HybridEmbeddings (dense + sparse + optional ColBERT) that wrap the
+local BGE-M3 REST API for use in LangGraph pipelines.
 
 All HTTP communication delegates to BGEM3Client (unified SDK layer).
 """
@@ -94,9 +95,10 @@ class BGEM3SparseEmbeddings:
 
 
 class BGEM3HybridEmbeddings(Embeddings):
-    """Combined dense+sparse embedding via BGE-M3 /encode/hybrid.
+    """Combined dense+sparse(+ColBERT) embedding via BGE-M3 /encode/hybrid.
 
-    Single HTTP call returns both dense and sparse vectors.
+    Single HTTP call returns dense and sparse vectors, and may also return
+    ColBERT token vectors when the endpoint supports it.
     Uses shared httpx.AsyncClient for connection pooling.
     """
 
