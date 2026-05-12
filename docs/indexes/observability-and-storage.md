@@ -93,6 +93,7 @@ Use this path for cache degradation, eviction, latency, or semantic cache misses
 |---|---|---|---|
 | Semantic | RedisVL SemanticCache | Query-dependent | LLM response caching |
 | Embeddings | RedisVL EmbeddingsCache | 7 days | Dense embedding cache |
+| Query bundle | RedisVL EmbeddingsCache | 7 days | BGE-M3 dense + sparse + ColBERT cache (see [ADR-0004](../adr/0004-redisvl-semantic-cache.md)) |
 | Sparse | Redis exact | 7 days | Sparse embedding cache |
 | Search | Redis exact | 2 hours | Search results cache |
 | Rerank | Redis exact | 2 hours | Reranked results cache |
