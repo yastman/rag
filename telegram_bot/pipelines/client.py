@@ -372,12 +372,15 @@ async def run_client_pipeline(
     pre_agent_ms = float(_store.get("pre_agent_ms", 0.0) or 0.0)
     pre_agent_embed_ms = _store.get("pre_agent_embed_ms")
     pre_agent_cache_check_ms = _store.get("pre_agent_cache_check_ms")
+    bge_model_processing_ms = _store.get("bge_model_processing_ms")
     if pre_agent_ms > 0:
         result["pre_agent_ms"] = pre_agent_ms
     if isinstance(pre_agent_embed_ms, Real):
         result["pre_agent_embed_ms"] = float(pre_agent_embed_ms)
     if isinstance(pre_agent_cache_check_ms, Real):
         result["pre_agent_cache_check_ms"] = float(pre_agent_cache_check_ms)
+    if isinstance(bge_model_processing_ms, Real) and not isinstance(bge_model_processing_ms, bool):
+        result["bge_model_processing_ms"] = float(bge_model_processing_ms)
 
     pipeline_result = await rag_pipeline(
         user_text,
@@ -529,6 +532,7 @@ async def run_client_pipeline(
         "environment": _safe_langfuse_env(config),
         "pipeline_wall_ms": wall_ms,
         "pre_agent_ms": pre_agent_ms,
+        "bge_model_processing_ms": result.get("bge_model_processing_ms"),
         "e2e_latency_ms": e2e_wall_ms,
     }
     _store.update(trace_metadata)
