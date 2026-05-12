@@ -229,6 +229,38 @@ class TestUserBaseServiceSpanMetadata:
         )
 
 
+class TestBGEIntegrationWrapperSpanMetadata:
+    """BGE integration wrapper spans must have capture disabled."""
+
+    @pytest.fixture(scope="class")
+    def integration_spans(self):
+        path = REPO_ROOT / "telegram_bot" / "integrations" / "embeddings.py"
+        return _collect_observe_decorators(path)
+
+    @pytest.mark.parametrize(
+        "span_name",
+        [
+            "bge-m3-dense-embed",
+            "bge-m3-dense-query-embed",
+            "bge-m3-sparse-embed",
+            "bge-m3-sparse-embed-batch",
+            "bge-m3-hybrid-embed",
+            "bge-m3-hybrid-colbert-embed",
+            "bge-m3-colbert-query-embed",
+            "bge-m3-hybrid-embed-batch",
+        ],
+    )
+    def test_integration_span_has_capture_disabled(self, integration_spans, span_name):
+        assert span_name in integration_spans, f"Span '{span_name}' not found"
+        info = integration_spans[span_name]
+        assert info["capture_input"] is False, (
+            f"Span '{span_name}' must have capture_input=False (got {info['capture_input']!r})"
+        )
+        assert info["capture_output"] is False, (
+            f"Span '{span_name}' must have capture_output=False (got {info['capture_output']!r})"
+        )
+
+
 class TestBGEM3SpanRuntimeMetadata:
     """Runtime tests for BGE-M3 span metadata."""
 
