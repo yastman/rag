@@ -97,6 +97,7 @@ def make_bge_m3_query_bundle_key_material(
     *,
     model: str = BGE_M3_QUERY_BUNDLE_MODEL,
     max_length: int = BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
+    version: str = BGE_M3_QUERY_BUNDLE_VERSION,
 ) -> str:
     """Build cache key material for a BGE-M3 query bundle.
 
@@ -104,4 +105,4 @@ def make_bge_m3_query_bundle_key_material(
     query text so that semantically identical queries share the same key.
     """
     normalized = _normalize_query(query)
-    return f"{BGE_M3_QUERY_BUNDLE_VERSION}:{model}:{max_length}:{normalized}"
+    return f"{version}:{model}:{max_length}:{normalized}"
