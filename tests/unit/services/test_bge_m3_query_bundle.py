@@ -88,3 +88,11 @@ def test_key_material_includes_version_and_max_length() -> None:
     assert "v1" in material
     assert "512" in material
     assert "hello" in material
+
+
+def test_key_material_respects_custom_version() -> None:
+    material = make_bge_m3_query_bundle_key_material(
+        "hello", model="BAAI/bge-m3", max_length=512, version="v2"
+    )
+    assert material.startswith("v2:")
+    assert "v1" not in material
