@@ -86,16 +86,17 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `telegram_bot/services/apartments_service.py` — direct client access
 - **паттерны:**
   - ВСЕГДА query_points() (НИКОГДА .search() — deprecated в v1.17)
-  - Dense-only: query_points(query=vector, using="dense")
-  - 2-stage RRF: Prefetch[dense, sparse] → RrfQuery(k=rrf_k)
-  - 3-stage ColBERT: Prefetch[Prefetch[dense, sparse] → RRF] → query colbert vectors
+  - Инициализация через `AsyncQdrantClient(..., prefer_grpc=True)`
+  - Dense-only: `query_points(query=vector, using="dense")`
+  - 2-stage RRF: `Prefetch[dense, sparse]` → `RrfQuery(k=rrf_k)`
+  - 3-stage ColBERT: `Prefetch[Prefetch[dense, sparse] → RRF]` → `query_colbert`
   - Named vectors: "dense" (BGE-M3), "bm42"/"sparse" (lexical), "colbert" (multivec)
   - Batch: query_batch_points() с list[QueryRequest]
-  - Group-by: query_points_groups(group_by="doc_id")
+  - Group-by: `query_points_groups(group_by="doc_id")`
 - **gotchas:**
   - НИКОГДА .search() — только .query_points()
+  - Qdrant остаётся поисковым бекендом — не переносить векторный поиск на RedisVL
   - Apartments: payload filters без metadata. prefix
-  - prefer_grpc=True для async клиента
   - QDRANT_TIMEOUT=30 для тяжёлых запросов
 
 ## instructor
@@ -120,31 +121,38 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `telegram_bot/services/vectorizers.py` — BgeM3CacheVectorizer (custom)
 - **паттерны:**
   - SemanticCache: name="sem:v8:bge1024", distance_threshold по query_type (FAQ=0.12, GENERAL=0.08)
-  - EmbeddingsCache: name="embeddings:v5", ttl=7 days
+  - EmbeddingsCache: name="embeddings:v5", base TTL=7d (переиспользуется и для query-bundle кеша)
   - Lazy import внутри initialize() (избежать 7.5s startup penalty)
   - filterable_fields: query_type, language, user_id, cache_scope, agent_role (tag)
+  - BGE-M3 query-bundle: `EmbeddingsCache` с `model_name="bge-m3-query-bundle"` хранит:
+    - dense как `embedding`
+    - sparse + colbert в `metadata`
+    - key material через `version:model:max_length:normalized_query`
+  - TTL для query-bundle = точный TTL tier `embeddings` (по умолчанию 7d)
 - **gotchas:**
   - ВСЕГДА lazy import redisvl (не на уровне модуля)
   - distance_threshold на RRF scale (~0.005–0.12), НЕ cosine [0-1]
-  - BgeM3CacheVectorizer — кастомный, чтобы использовать тот же BGE-M3 что в pipeline
+  - BgeM3CacheVectorizer остается кастомным намеренно: вызывает тот же local BGE-M3 pipeline API, чтобы сохранить внутренние threshold/dimensions
 
 ## redis-py (asyncio)
 - **triggers:** redis, redis.asyncio, pubsub, TTL, event stream, handoff state, deep-link state
 - **context7_id:** /redis/redis-py
 - **как_у_нас:**
   - `mini_app/api.py` — lazy `aioredis.from_url()` для deep-link payload и pub/sub
-  - `telegram_bot/integrations/cache.py` — async Redis path в cache layer
+  - `telegram_bot/integrations/cache.py` — exact-key JSON tiers: sparse/search/rerank
   - `telegram_bot/integrations/event_stream.py` — event stream publishing
   - `telegram_bot/services/handoff_state.py` — typed `Redis` dependency
   - `telegram_bot/preflight.py` — runtime preflight checks
 - **паттерны:**
   - Async path = `import redis.asyncio as redis|aioredis`
   - Long-lived client через `from_url(..., decode_responses=True)` и reuse, не client-per-call
+  - Exact cache tiers и runtime-state (sparse/search/rerank/state/pubsub/deep-link) с явным TTL
   - Ephemeral state хранить с явным TTL: `set(key, payload, ex=seconds)`
   - Pub/sub и coordination paths держать bounded и keyed по явным channel/key naming rules
 - **gotchas:**
   - НЕ тащить sync Redis client в async runtime path
   - НЕ терять `ex=`/TTL на ephemeral state вроде mini app deep links
+  - НЕ считать, что RedisVL заменяет redis-py exact-key JSON кеши
   - Reuse or close long-lived clients явно; не плодить новые соединения без причины
 
 ## langfuse
@@ -167,6 +175,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ возвращаться к manual `client.api.prompts.get(...)` probing, пока `client.get_prompt(...)` покрывает нужный path
   - propagate_attributes() ПЕРЕД любым @observe кодом
   - capture_input/output=False на тяжёлых нодах (payload bloat prevention)
+  - Для полной локальной диагностики в Langfuse v3 лучше `langfuse api traces get <id> --fields core,io,scores,observations,metrics --json`; `traces list` иногда хватает, а `observations list` может быть 404
 
 ## langmem
 - **triggers:** summarization, conversation memory, сжатие, summary, compress messages
@@ -325,11 +334,11 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `src/contextualization/openai.py` — chunk contextualization
 - **паттерны:**
   - Основной bot/query/runtime path: `langfuse.openai.AsyncOpenAI` + `LLM_BASE_URL` → LiteLLM proxy
-  - Structured output: `response_format=` где хватает native SDK, `instructor` только для bounded extraction paths
-  - Isolated contextualization / compatibility paths могут использовать native `openai.AsyncOpenAI` / `OpenAI`
+  - Структурированный output: `response_format=` / Instructor-compatible контракты в основном runtime
+  - Raw `openai.AsyncOpenAI` / `OpenAI` допустим только в изолированных совместимых/compatibility paths (например, instructor-экстракшн/оценка)
 - **gotchas:**
   - Для основного runtime path НЕ импортировать raw `openai.AsyncOpenAI`; использовать Langfuse wrapper
-  - Direct OpenAI SDK допустим только в изолированных contextualization / eval / Instructor-compatibility paths
+  - Direct OpenAI SDK не является основным runtime path; использовать только в изолированных contextualization/eval/Instructor-compatibility paths
   - НЕ хардкодить runtime model name — брать из config/env (`LLM_MODEL`)
   - `LLM_BASE_URL` обязателен для unified routing там, где path идет через LiteLLM
 
