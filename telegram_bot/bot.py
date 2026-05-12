@@ -2962,27 +2962,77 @@ class PropertyBot:
                                 filters=extracted_filters
                             )
                             rag_result_store["semantic_cache_filter_signature"] = filter_signature
+                    cache_obs_input = {
+                        "query_len": len(user_text),
+                        "query_type": query_type,
+                        "cache_scope": "rag",
+                        "agent_role": role,
+                        "filter_sensitive": filter_signal.is_filter_sensitive,
+                        "has_filter_signature": filter_signature is not None,
+                        "contextual_query": contextual_query,
+                    }
                     cached = None
-                    if contextual_query or (
-                        filter_signal.is_filter_sensitive and filter_signature is None
-                    ):
-                        rag_result_store["semantic_cache_already_checked"] = True
-                    else:
-                        check_start = time.perf_counter()
-                        cached = await self._cache.check_semantic(
-                            query=user_text,
-                            vector=embedding,
-                            query_type=query_type,
-                            cache_scope="rag",
-                            agent_role=role,
-                            grounding_mode=grounding_mode if grounding_mode == "strict" else None,
-                            require_safe_reuse=grounding_mode == "strict",
-                            filter_signature=filter_signature,
+                    try:
+                        with get_client().start_as_current_observation(
+                            as_type="span",
+                            name="cache-check",
+                            input=cache_obs_input,
+                        ) as cache_obs:
+                            if contextual_query or (
+                                filter_signal.is_filter_sensitive and filter_signature is None
+                            ):
+                                rag_result_store["semantic_cache_already_checked"] = True
+                                cache_obs.update(output={"cache_hit": False, "skipped": True})
+                            else:
+                                check_start = time.perf_counter()
+                                cached = await self._cache.check_semantic(
+                                    query=user_text,
+                                    vector=embedding,
+                                    query_type=query_type,
+                                    cache_scope="rag",
+                                    agent_role=role,
+                                    grounding_mode=grounding_mode
+                                    if grounding_mode == "strict"
+                                    else None,
+                                    require_safe_reuse=grounding_mode == "strict",
+                                    filter_signature=filter_signature,
+                                )
+                                rag_result_store["pre_agent_cache_check_ms"] = (
+                                    time.perf_counter() - check_start
+                                ) * 1000
+                                rag_result_store["semantic_cache_already_checked"] = True
+                                if cached:
+                                    cache_obs.update(output={"cache_hit": True})
+                                else:
+                                    cache_obs.update(output={"cache_hit": False})
+                    except Exception:
+                        logger.warning(
+                            "cache-check observation failed, proceeding without it",
+                            exc_info=True,
                         )
-                        rag_result_store["pre_agent_cache_check_ms"] = (
-                            time.perf_counter() - check_start
-                        ) * 1000
-                        rag_result_store["semantic_cache_already_checked"] = True
+                        cached = None
+                        if contextual_query or (
+                            filter_signal.is_filter_sensitive and filter_signature is None
+                        ):
+                            rag_result_store["semantic_cache_already_checked"] = True
+                        else:
+                            check_start = time.perf_counter()
+                            cached = await self._cache.check_semantic(
+                                query=user_text,
+                                vector=embedding,
+                                query_type=query_type,
+                                cache_scope="rag",
+                                agent_role=role,
+                                grounding_mode=grounding_mode
+                                if grounding_mode == "strict"
+                                else None,
+                                require_safe_reuse=grounding_mode == "strict",
+                                filter_signature=filter_signature,
+                            )
+                            rag_result_store["pre_agent_cache_check_ms"] = (
+                                time.perf_counter() - check_start
+                            ) * 1000
+                            rag_result_store["semantic_cache_already_checked"] = True
                     if cached:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
