@@ -695,10 +695,18 @@ class CacheLayerManager:
                 lf.update_current_span(output={"hit": False}, metadata={"model": model})
                 return None
             metadata = result.get("metadata") or {}
+            sparse = metadata.get("sparse")
+            colbert = metadata.get("colbert")
+            if sparse is None or colbert is None:
+                lf.update_current_span(
+                    output={"hit": False, "invalid": True},
+                    metadata={"model": model},
+                )
+                return None
             bundle = BgeM3QueryVectorBundle(
                 dense=list(result["embedding"]),
-                sparse=metadata.get("sparse"),
-                colbert=metadata.get("colbert"),
+                sparse=sparse,
+                colbert=colbert,
                 model=metadata.get("model", model),
                 max_length=metadata.get("max_length", max_length),
                 version=metadata.get("version", version),
