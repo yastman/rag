@@ -1,7 +1,7 @@
 # Runbook: Langfuse Tracing Gaps
 
 - **Owner:** Observability / On-call
-- **Last verified:** 2026-05-07
+- **Last verified:** 2026-05-12
 - **Verification command:** `make validate-traces-fast`
 
 Use this runbook when traces are missing from Langfuse or observability is broken.
@@ -28,6 +28,14 @@ When traces appear missing, validate **app pipeline coverage** first:
 - Expected LiteLLM callback noise: **`litellm-acompletion`** (flat, proxy-generated, no session context)
 
 If direct families and nested Telegram families are present and root input is sanitized, flat `litellm-acompletion` traces do **not** indicate a defect.
+
+### Cache-smoke behavior check
+
+For cache regression checks:
+
+1. Cold query should emit BGE-M3 encode, Qdrant, and LLM spans.
+2. Immediate repeat of the same query should be a semantic cache hit path only and must not add fresh `bge-m3-encode-*`, Qdrant, or LLM spans.
+3. The semantic-hit replay should not emit new `results_count=0` / `no_results=1` scoring artifacts.
 
 ## Diagnosis
 
@@ -74,17 +82,20 @@ langfuse api traces list --name rag-api-query --limit 5 --order-by timestamp.des
 langfuse api traces list --name voice-session --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 langfuse api traces list --name ingestion-cli-run --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 
-# Get a specific trace with inline observations and scores
+# Get a specific trace with inline observations and scores (primary full-trace path)
 langfuse api traces get <trace-id> --fields core,io,scores,observations,metrics --json
 
 # List scores for a trace
 langfuse api scores list --trace-id <trace-id> --json
 
 # List observations for a trace
+# In some local deployments this endpoint returns 404; use `traces get` as the primary full-tree command.
 langfuse api observations list --trace-id <trace-id> --fields core,basic,io,metadata,usage,metrics --json
 ```
 
-**Validation focus:** Check missing/stale `rag-api-query`, `voice-session`, `ingestion-cli-run`, then inspect recent `telegram-message` traces for nested `telegram-rag-query`/`telegram-rag-supervisor` observations plus sanitized root fields. Proxy-generated `litellm-acompletion` traces are expected flat noise and should not be treated as app coverage.
+If `observations list` returns 404 in your deployment, continue with `traces get` and scores queries instead of treating `observations list` as a hard requirement.
+
+**Validation focus:** Check missing/stale `rag-api-query`, `voice-session`, `ingestion-cli-run`, then inspect recent `telegram-message` traces for nested `telegram-rag-query`/`telegram-rag-supervisor` observations plus sanitized root fields. Use `traces get` for full trace trees. Proxy-generated `litellm-acompletion` traces are expected flat noise and should not be treated as app coverage.
 
 ### 4. Trace Interpretation Matrix
 
