@@ -294,6 +294,11 @@ def main():
         choices=["litellm", "anthropic-direct"],
         help="Override E2E_JUDGE_PROVIDER for this run",
     )
+    parser.add_argument(
+        "--skip-qdrant-preflight",
+        action="store_true",
+        help="Skip Qdrant preflight check (for local debugging only)",
+    )
     args = parser.parse_args()
 
     # Load config
@@ -327,6 +332,36 @@ def main():
         f"{len(scenarios)} E2E tests against {config.bot_username} "
         f"(judge={config.judge_provider}, mode={'no-judge' if args.no_judge else 'llm'})[/]\n"
     )
+
+    # Qdrant preflight for RAG/apartment/voice scenarios
+    needs_qdrant = any(s.group not in {TestGroup.COMMANDS, TestGroup.CHITCHAT} for s in scenarios)
+    if needs_qdrant and not args.skip_qdrant_preflight:
+        from scripts.e2e.qdrant_preflight import CollectionRequirement, run_qdrant_preflight
+
+        requirements = (
+            CollectionRequirement(
+                name=config.qdrant_doc_collection,
+                min_points=config.qdrant_min_doc_points,
+                required_vectors=frozenset(
+                    v.strip() for v in config.qdrant_doc_vectors.split(",") if v.strip()
+                ),
+            ),
+            CollectionRequirement(
+                name=config.qdrant_apartment_collection,
+                min_points=config.qdrant_min_apartment_points,
+                required_vectors=frozenset(
+                    v.strip() for v in config.qdrant_apartment_vectors.split(",") if v.strip()
+                ),
+            ),
+        )
+        preflight = run_qdrant_preflight(qdrant_url=config.qdrant_url, requirements=requirements)
+        if not preflight.ok:
+            console.print("[red]Qdrant preflight failed:[/]")
+            for line in preflight.message.splitlines():
+                console.print(f"  {line}")
+            sys.exit(1)
+        console.print("[green]Qdrant preflight passed[/]")
+        console.print()
 
     # Check if trace validation is enabled
     validate_traces = is_validation_enabled()
