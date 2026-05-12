@@ -1,13 +1,18 @@
-from telegram_bot.integrations.cache import CacheLayerManager
-from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+from telegram_bot.integrations.cache import BGE_M3_QUERY_BUNDLE_MODEL_NAME, CacheLayerManager
+from telegram_bot.services.bge_m3_query_bundle import (
+    BgeM3QueryVectorBundle,
+    make_bge_m3_query_bundle_key_material,
+)
 
 
 class FakeEmbeddingsCache:
     def __init__(self) -> None:
         self.data: dict[tuple[str, str], dict] = {}
         self.ttls: dict[tuple[str, str], int | None] = {}
+        self.get_calls: list[tuple[str, str]] = []
 
     async def aget(self, content: str, model_name: str):
+        self.get_calls.append((content, model_name))
         return self.data.get((content, model_name))
 
     async def aset(self, content: str, model_name: str, embedding, metadata=None, ttl=None) -> None:
@@ -35,7 +40,8 @@ async def test_get_bge_m3_query_bundle_returns_none_for_incomplete_payload() -> 
     fake = FakeEmbeddingsCache()
     cache.embed_cache = fake
     # Store a malformed entry directly (missing colbert in metadata)
-    fake.data[("some-key", "bge-m3-query-bundle")] = {
+    key_material = make_bge_m3_query_bundle_key_material("some-key")
+    fake.data[(key_material, BGE_M3_QUERY_BUNDLE_MODEL_NAME)] = {
         "embedding": [0.1],
         "metadata": {"sparse": {"indices": [1], "values": [0.2]}},
     }
@@ -43,6 +49,7 @@ async def test_get_bge_m3_query_bundle_returns_none_for_incomplete_payload() -> 
     hit = await cache.get_bge_m3_query_bundle("some-key")
 
     assert hit is None
+    assert fake.get_calls == [(key_material, BGE_M3_QUERY_BUNDLE_MODEL_NAME)]
 
 
 async def test_store_bge_m3_query_bundle_noops_for_incomplete_bundle() -> None:
