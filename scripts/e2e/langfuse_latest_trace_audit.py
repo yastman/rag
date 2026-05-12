@@ -255,13 +255,13 @@ def _fetch_traces_via_cli(
     if os.getenv("LANGFUSE_BASE_URL") and not os.getenv("LANGFUSE_HOST"):
         env["LANGFUSE_HOST"] = os.getenv("LANGFUSE_BASE_URL", "")
 
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603
         cmd,
         capture_output=True,
         text=True,
         env=env,
         timeout=30,
-    )  # nosec B603
+    )
     if result.returncode != 0:
         raise RuntimeError(f"langfuse CLI failed (rc={result.returncode}): {result.stderr}")
 
