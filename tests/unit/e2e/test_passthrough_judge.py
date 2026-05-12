@@ -281,3 +281,20 @@ def test_price_evidence_euro_in_euro_word_alone_fails() -> None:
     evidence = result.check_details["filter_evidence"]
     assert evidence is not None
     assert evidence["price_max"] is False
+
+
+def test_price_evidence_fails_digits_before_longer_euro_word() -> None:
+    """Numeric text followed by longer word beginning with евро must NOT satisfy price_max."""
+    judge = PassthroughJudge(E2EConfig())
+    result = asyncio.run(
+        judge.evaluate(
+            _price_filter_scenario(),
+            "Есть 70000 европейских вариантов.",
+        )
+    )
+
+    assert result.passed is False
+    assert result.check_details is not None
+    evidence = result.check_details["filter_evidence"]
+    assert evidence is not None
+    assert evidence["price_max"] is False

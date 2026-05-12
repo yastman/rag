@@ -263,8 +263,8 @@ class PassthroughJudge:
         """
         lowered = response.lower()
         # "70 000 евро", "70000€", "70к евро", "€70000", "евро 70 000"
-        return bool(re.search(r"(?:евро|€)\s*\d", lowered)) or bool(
-            re.search(r"\d[\d\s]*(?:k|к)?\s*(?:евро|€)", lowered)
+        return bool(re.search(r"(?:евро\b|€)\s*\d", lowered)) or bool(
+            re.search(r"\d[\d\s]*(?:k|к)?\s*(?:евро\b|€)", lowered)
         )
 
     @staticmethod
