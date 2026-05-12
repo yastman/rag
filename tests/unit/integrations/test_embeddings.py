@@ -208,6 +208,21 @@ class TestBGEM3HybridEmbeddings:
             result = await emb.aembed_query("test")
         assert result == [0.1, 0.2]
 
+    async def test_aembed_dense_query_uses_dense_endpoint_and_returns_processing_time(self):
+        from telegram_bot.services.bge_m3_client import BGEM3Client, DenseResult
+
+        mock_client = AsyncMock(spec=BGEM3Client)
+        mock_client.encode_dense = AsyncMock(
+            return_value=DenseResult(vectors=[[0.1] * 1024], processing_time=0.123)
+        )
+
+        emb = BGEM3HybridEmbeddings(client=mock_client)
+        dense, processing_time = await emb.aembed_dense_query("test query")
+
+        assert dense == [0.1] * 1024
+        assert processing_time == 0.123
+        mock_client.encode_dense.assert_awaited_once_with(["test query"])
+
     async def test_aembed_hybrid_with_colbert(self):
         """aembed_hybrid_with_colbert returns 3-tuple (dense, sparse, colbert)."""
         from telegram_bot.services.bge_m3_client import BGEM3Client, HybridResult
