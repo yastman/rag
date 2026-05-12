@@ -65,21 +65,23 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     if e2e_ms is None:
         e2e_ms = result.get("user_perceived_wall_ms", total_ms)
 
+    cache_hit = result.get("cache_hit", False)
     scores = {
         "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
         "latency_total_ms": e2e_ms,
-        "semantic_cache_hit": 1.0 if result.get("cache_hit") else 0.0,
+        "semantic_cache_hit": 1.0 if cache_hit else 0.0,
         "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
         "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
         "rerank_applied": 1.0 if result.get("rerank_applied") else 0.0,
         "rerank_cache_hit": 1.0 if result.get("rerank_cache_hit") else 0.0,
-        "results_count": float(result.get("search_results_count", 0)),
-        "no_results": 1.0 if result.get("search_results_count", 0) == 0 else 0.0,
         "llm_used": 1.0 if "generate" in latency_stages else 0.0,
         "confidence_score": float(result.get("grade_confidence", 0.0)),
         "llm_ttft_ms": float(result.get("llm_ttft_ms", 0.0)),
         "llm_response_duration_ms": float(result.get("llm_response_duration_ms", 0.0)),
     }
+    if not cache_hit:
+        scores["results_count"] = float(result.get("search_results_count", 0))
+        scores["no_results"] = 1.0 if result.get("search_results_count", 0) == 0 else 0.0
 
     for name, value in scores.items():
         score(lf, trace_id, name=name, value=value)
