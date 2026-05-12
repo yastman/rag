@@ -14,7 +14,7 @@ import pytest
 # Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
@@ -3049,6 +3049,54 @@ class TestClientDirectPipeline:
         mock_factory.assert_called_once()
         mock_agent.ainvoke.assert_awaited_once()
         mock_rag.assert_not_called()
+
+
+class TestHandleQuerySDKAgent:
+    """Test SDK agent query path pre-agent cache observations."""
+
+    def _setup_pre_agent_cache_miss(self, bot):
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_semantic = AsyncMock()
+
+    async def test_pre_agent_cache_miss_emits_cache_check_observation(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+        self._setup_pre_agent_cache_miss(bot)
+
+        observation = MagicMock()
+        observation.__enter__.return_value = observation
+        observation.__exit__.return_value = None
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id.return_value = "trace-pre-agent-miss"
+        mock_lf.start_as_current_observation.return_value = observation
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("2-комн в Солнечный берег до 120к")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_lf.start_as_current_observation.assert_any_call(
+            as_type="span",
+            name="cache-check",
+            input=ANY,
+        )
+        assert any(
+            call.kwargs.get("output", {}).get("cache_hit") is False
+            for call in observation.update.call_args_list
+        )
 
 
 class TestStreamingCoordination:
