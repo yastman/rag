@@ -337,6 +337,23 @@ class TestScoreWriting:
         assert scores["answer_to_question_ratio"] == 2.4
         assert scores["response_style_applied"] == 1.0
 
+    def test_writes_bge_model_processing_latency_separately(self):
+        """BGE service processing time is a separate score from wrapper wall time."""
+        mock_lf = MagicMock()
+        result = {
+            **CACHE_HIT_RESULT,
+            "pre_agent_embed_ms": 321.5,
+            "bge_model_processing_ms": 123.0,
+        }
+        _run_score_writer(result, mock_lf)
+
+        scores = {
+            call.kwargs["name"]: call.kwargs["value"]
+            for call in mock_lf.create_score.call_args_list
+        }
+        assert scores["bge_embed_latency_ms"] == 321.5
+        assert scores["bge_model_processing_ms"] == 123.0
+
     @pytest.mark.parametrize(
         ("result_fixture", "expected_scores"),
         [
