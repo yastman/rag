@@ -55,6 +55,29 @@ class E2EConfig:
         default_factory=lambda: os.getenv("E2E_COLLECTION_NAME", "gdrive_documents_bge")
     )
 
+    # Qdrant preflight configuration
+    qdrant_url: str = field(
+        default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
+    )
+    qdrant_doc_collection: str = field(
+        default_factory=lambda: os.getenv("E2E_QDRANT_DOC_COLLECTION", "gdrive_documents_bge")
+    )
+    qdrant_apartment_collection: str = field(
+        default_factory=lambda: os.getenv("E2E_QDRANT_APARTMENT_COLLECTION", "apartments")
+    )
+    qdrant_min_doc_points: int = field(
+        default_factory=lambda: int(os.getenv("E2E_QDRANT_MIN_DOC_POINTS", "1"))
+    )
+    qdrant_min_apartment_points: int = field(
+        default_factory=lambda: int(os.getenv("E2E_QDRANT_MIN_APARTMENT_POINTS", "1"))
+    )
+    qdrant_doc_vectors: str = field(
+        default_factory=lambda: os.getenv("E2E_QDRANT_DOC_VECTORS", "dense,colbert")
+    )
+    qdrant_apartment_vectors: str = field(
+        default_factory=lambda: os.getenv("E2E_QDRANT_APARTMENT_VECTORS", "dense,colbert")
+    )
+
     # Reports
     reports_dir: str = "reports"
 
