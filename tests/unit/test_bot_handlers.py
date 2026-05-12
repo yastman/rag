@@ -3165,6 +3165,43 @@ class TestStreamingCoordination:
         bot.bot.send_message.assert_awaited_once()
         assert bot.bot.send_message.await_args.kwargs["text"] == "Добрый день"
 
+    async def test_sdk_agent_draftstreamer_records_langfuse_root_output(self, mock_config):
+        """DraftStreamer finalize in private chat must record sanitized root output (#1485)."""
+        from langchain_core.messages import AIMessageChunk
+
+        bot, _ = _create_bot(mock_config)
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+        bot.bot.send_message = AsyncMock(return_value=MagicMock())
+
+        async def _agent_stream(*args, **kwargs):
+            yield AIMessageChunk(content="Ответ "), {"langgraph_node": "model"}
+            yield AIMessageChunk(content="через DraftStreamer"), {"langgraph_node": "model"}
+
+        mock_agent = AsyncMock()
+        mock_agent.astream = _agent_stream
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch(
+                "telegram_bot.services.telegram_formatting.record_langfuse_response_output"
+            ) as mock_record_output,
+        ):
+            message = _make_text_message("квартиры")
+            message.chat.type = "private"
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                response_text = await bot._handle_query_supervisor(
+                    message=message,
+                    pipeline_start=time.perf_counter(),
+                )
+
+        assert response_text == "Ответ через DraftStreamer"
+        mock_record_output.assert_called_once_with("Ответ через DraftStreamer", 1)
+
     async def test_astream_supervisor_preserves_final_state_from_values_stream(self, mock_config):
         """Streaming path must keep final state so interrupts/metadata are not lost."""
         from langchain_core.messages import AIMessageChunk
