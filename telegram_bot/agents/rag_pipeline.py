@@ -184,45 +184,67 @@ async def _cache_check(
 
     start = time.perf_counter()
 
-    # Step 1: Get or compute dense embedding via shared core
-    if pre_computed_embedding:
-        logger.debug(
-            "_cache_check: reusing pre-computed embedding (%d dims)", len(pre_computed_embedding)
-        )
-    try:
-        embedding, sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
-            query,
-            cache=cache,
-            embeddings=embeddings,
-            pre_computed=pre_computed_embedding,
-            pre_computed_sparse=pre_computed_sparse,
-            pre_computed_colbert=pre_computed_colbert,
-        )
-    except Exception as exc:
-        embedding_error_type = type(exc).__name__
-        logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
-        latency = time.perf_counter() - start
-        lf.update_current_span(
-            level="ERROR",
-            output={
+    # Try bundle cache first (avoids redundant BGE-M3 calls when full bundle is cached #1493)
+    bundle = None
+    _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
+    if _has_bundle_cache and pre_computed_embedding is None:
+        try:
+            maybe_bundle = await cache.get_bge_m3_query_bundle(query)
+            if (
+                maybe_bundle is not None
+                and hasattr(maybe_bundle, "dense")
+                and isinstance(maybe_bundle.dense, list)
+            ):
+                bundle = maybe_bundle
+        except Exception:
+            logger.debug("Bundle cache check failed (non-critical), skipping")
+
+    if bundle is not None:
+        embedding = bundle.dense
+        sparse = bundle.sparse
+        colbert_query = bundle.colbert
+        embeddings_cache_hit = True
+    else:
+        # Step 1: Get or compute dense embedding via shared core
+        if pre_computed_embedding:
+            logger.debug(
+                "_cache_check: reusing pre-computed embedding (%d dims)",
+                len(pre_computed_embedding),
+            )
+        try:
+            embedding, sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
+                query,
+                cache=cache,
+                embeddings=embeddings,
+                pre_computed=pre_computed_embedding,
+                pre_computed_sparse=pre_computed_sparse,
+                pre_computed_colbert=pre_computed_colbert,
+            )
+        except Exception as exc:
+            embedding_error_type = type(exc).__name__
+            logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
+            latency = time.perf_counter() - start
+            lf.update_current_span(
+                level="ERROR",
+                output={
+                    "embedding_error": True,
+                    "embedding_error_type": embedding_error_type,
+                    "error_message": str(exc)[:200],
+                    "duration_ms": round(latency * 1000, 1),
+                },
+            )
+            return {
+                "cache_hit": False,
+                "cached_response": None,
+                "query_embedding": None,
+                "sparse_embedding": None,
+                "embeddings_cache_hit": False,
                 "embedding_error": True,
                 "embedding_error_type": embedding_error_type,
-                "error_message": str(exc)[:200],
-                "duration_ms": round(latency * 1000, 1),
-            },
-        )
-        return {
-            "cache_hit": False,
-            "cached_response": None,
-            "query_embedding": None,
-            "sparse_embedding": None,
-            "embeddings_cache_hit": False,
-            "embedding_error": True,
-            "embedding_error_type": embedding_error_type,
-            "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
-            "colbert_query": None,
-            "latency_stages": {**latency_stages, "cache_check": latency},
-        }
+                "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
+                "colbert_query": None,
+                "latency_stages": {**latency_stages, "cache_check": latency},
+            }
 
     # Step 2: Check semantic cache via shared core
     contextual_query = is_contextual_query(query)
@@ -284,6 +306,28 @@ async def _cache_check(
                     sparse = sparse_from_hybrid
                     if not pre_computed_sparse:
                         await cache.store_sparse_embedding(query, sparse_from_hybrid)
+                # Store full bundle for future requests (#1493)
+                if (
+                    _has_bundle_cache
+                    and embedding is not None
+                    and sparse is not None
+                    and colbert_query is not None
+                ):
+                    try:
+                        from telegram_bot.services.bge_m3_query_bundle import (
+                            BgeM3QueryVectorBundle,
+                        )
+
+                        await cache.store_bge_m3_query_bundle(
+                            query,
+                            BgeM3QueryVectorBundle(
+                                dense=embedding,
+                                sparse=sparse,
+                                colbert=colbert_query,
+                            ),
+                        )
+                    except Exception:
+                        logger.debug("Bundle store failed (non-critical), skipping")
             except Exception:
                 logger.debug("ColBERT query encode failed (non-critical), skipping")
         elif _has_colbert_only:
@@ -357,42 +401,84 @@ async def _hybrid_retrieve(
 
     # After rewrite, query_embedding is None — re-embed the rewritten query
     if dense_vector is None and embeddings is not None:
-        dense_vector = await cache.get_embedding(query)
-        if dense_vector is None:
-            sparse_cached = await cache.get_sparse_embedding(query)
-            if sparse_cached is not None:
-                dense_vector = await embeddings.aembed_query(query)
-                await cache.store_embedding(query, dense_vector)
-                sparse_vector = sparse_cached
-            elif callable(
-                getattr(embeddings, "aembed_hybrid_with_colbert", None)
-            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
-                (
-                    dense_vector,
-                    sparse_vector,
-                    colbert_query,
-                ) = await embeddings.aembed_hybrid_with_colbert(query)
-                await cache.store_embedding(query, dense_vector)
-                await cache.store_sparse_embedding(query, sparse_vector)
-            elif callable(
-                getattr(embeddings, "aembed_hybrid", None)
-            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
-                dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
-                await cache.store_embedding(query, dense_vector)
-                await cache.store_sparse_embedding(query, sparse_vector)
-            else:
+        # Check bundle cache first (avoids redundant BGE-M3 calls #1493)
+        _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
+        bundle = None
+        if _has_bundle_cache:
+            try:
+                maybe_bundle = await cache.get_bge_m3_query_bundle(query)
+                if (
+                    maybe_bundle is not None
+                    and hasattr(maybe_bundle, "dense")
+                    and isinstance(maybe_bundle.dense, list)
+                ):
+                    bundle = maybe_bundle
+            except Exception:
+                logger.debug("Bundle cache check failed (non-critical), skipping")
 
-                async def _get_dense() -> list[float]:
-                    vec: list[float] = await embeddings.aembed_query(query)
-                    await cache.store_embedding(query, vec)
-                    return vec
+        if bundle is not None:
+            dense_vector = bundle.dense
+            sparse_vector = bundle.sparse
+            colbert_query = bundle.colbert
+        else:
+            dense_vector = await cache.get_embedding(query)
+            if dense_vector is None:
+                sparse_cached = await cache.get_sparse_embedding(query)
+                if sparse_cached is not None:
+                    dense_vector = await embeddings.aembed_query(query)
+                    await cache.store_embedding(query, dense_vector)
+                    sparse_vector = sparse_cached
+                elif callable(
+                    getattr(embeddings, "aembed_hybrid_with_colbert", None)
+                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
+                    (
+                        dense_vector,
+                        sparse_vector,
+                        colbert_query,
+                    ) = await embeddings.aembed_hybrid_with_colbert(query)
+                    await cache.store_embedding(query, dense_vector)
+                    await cache.store_sparse_embedding(query, sparse_vector)
+                    # Store full bundle for future requests (#1493)
+                    if (
+                        _has_bundle_cache
+                        and dense_vector is not None
+                        and sparse_vector is not None
+                        and colbert_query is not None
+                    ):
+                        try:
+                            from telegram_bot.services.bge_m3_query_bundle import (
+                                BgeM3QueryVectorBundle,
+                            )
 
-                async def _get_sparse() -> Any:
-                    vec = await sparse_embeddings.aembed_query(query)
-                    await cache.store_sparse_embedding(query, vec)
-                    return vec
+                            await cache.store_bge_m3_query_bundle(
+                                query,
+                                BgeM3QueryVectorBundle(
+                                    dense=dense_vector,
+                                    sparse=sparse_vector,
+                                    colbert=colbert_query,
+                                ),
+                            )
+                        except Exception:
+                            logger.debug("Bundle store failed (non-critical), skipping")
+                elif callable(
+                    getattr(embeddings, "aembed_hybrid", None)
+                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
+                    dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
+                    await cache.store_embedding(query, dense_vector)
+                    await cache.store_sparse_embedding(query, sparse_vector)
+                else:
 
-                dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
+                    async def _get_dense() -> list[float]:
+                        vec: list[float] = await embeddings.aembed_query(query)
+                        await cache.store_embedding(query, vec)
+                        return vec
+
+                    async def _get_sparse() -> Any:
+                        vec = await sparse_embeddings.aembed_query(query)
+                        await cache.store_sparse_embedding(query, vec)
+                        return vec
+
+                    dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
 
     if not dense_vector:
         dense_vector = []
