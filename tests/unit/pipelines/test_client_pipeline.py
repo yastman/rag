@@ -626,6 +626,167 @@ class TestPipelineFullFlow:
         assert metadata["e2e_latency_ms"] >= metadata["pipeline_wall_ms"]
         assert rag_store["e2e_latency_ms"] >= rag_store["pipeline_wall_ms"]
 
+    async def test_pipeline_propagates_bge_model_processing_ms_to_scores(self):
+        """bge_model_processing_ms from rag_result_store reaches write_langfuse_scores input."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-bge-123"
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Generated answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+        }
+        rag_store = {"bge_model_processing_ms": 456.7}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в центре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store=rag_store,
+            )
+
+        mock_write.assert_called_once()
+        result_passed = mock_write.call_args.args[1]
+        assert result_passed["bge_model_processing_ms"] == 456.7
+
+    async def test_pipeline_trace_metadata_includes_bge_model_processing_ms(self):
+        """bge_model_processing_ms is included in Langfuse trace metadata."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Generated answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+        }
+        rag_store = {"bge_model_processing_ms": 234.5}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в центре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store=rag_store,
+            )
+
+        trace_calls = lf.update_current_span.call_args_list
+        pipeline_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert pipeline_call is not None
+        metadata = pipeline_call.kwargs["metadata"]
+        assert metadata["bge_model_processing_ms"] == 234.5
+        assert rag_store["bge_model_processing_ms"] == 234.5
+
+    async def test_pipeline_ignores_non_numeric_bge_model_processing_ms(self):
+        """Non-numeric bge_model_processing_ms must not pollute result or metadata."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-bge-456"
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Generated answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+        }
+        rag_store = {"bge_model_processing_ms": "not_a_number"}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores") as mock_write,
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в центре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store=rag_store,
+            )
+
+        result_passed = mock_write.call_args.args[1]
+        assert "bge_model_processing_ms" not in result_passed
+        trace_calls = lf.update_current_span.call_args_list
+        pipeline_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert pipeline_call is not None
+        assert pipeline_call.kwargs["metadata"].get("bge_model_processing_ms") is None
+
     async def test_pipeline_metadata_includes_route_topic_and_grounding_contract(self):
         """Client-direct trace metadata should expose route/topic/grounding fields early."""
         msg = _make_message()
