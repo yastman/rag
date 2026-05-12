@@ -30,6 +30,12 @@ from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.bge_m3_query_bundle import (
+    BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
+    BGE_M3_QUERY_BUNDLE_MODEL,
+    BgeM3QueryVectorBundle,
+    make_bge_m3_query_bundle_key_material,
+)
 
 
 if TYPE_CHECKING:
@@ -45,11 +51,12 @@ SEMANTIC_CACHE_VERSION = "v8"
 DEFAULT_TTLS: dict[str, int] = {
     "embeddings": 7 * 86400,  # 7 days
     "sparse": 7 * 86400,  # 7 days
+    "bge_m3_query_bundle": 7 * 86400,  # 7 days
     "search": 7200,  # 2 hours
     "rerank": 7200,  # 2 hours
 }
 
-_METRIC_TIERS = ("semantic", "embeddings", "sparse", "search", "rerank")
+_METRIC_TIERS = ("semantic", "embeddings", "sparse", "bge_m3_query_bundle", "search", "rerank")
 _REDIS_URL_CREDENTIALS_RE = re.compile(r"(rediss?://)([^@\s]+)@")
 
 
@@ -650,6 +657,69 @@ class CacheLayerManager:
         await self.store_exact(
             "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"), sparse_vector
         )
+        lf.update_current_span(output={"stored": True}, metadata={"model": model})
+
+    # ========== Convenience: BGE-M3 Query Bundle ==========
+
+    @observe(name="cache-bge-m3-bundle-get", capture_input=False, capture_output=False)
+    async def get_bge_m3_query_bundle(
+        self,
+        text: str,
+        *,
+        model: str = BGE_M3_QUERY_BUNDLE_MODEL,
+        max_length: int = BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
+    ) -> BgeM3QueryVectorBundle | None:
+        """Get cached BGE-M3 query vector bundle (dense + sparse + ColBERT)."""
+        lf = get_client()
+        lf.update_current_span(
+            input={"model": model, "max_length": max_length, "text_length": len(text)},
+            metadata={"model": model},
+        )
+        material = make_bge_m3_query_bundle_key_material(text, model=model, max_length=max_length)
+        key = _hash(material)
+        raw = await self.get_exact("bge_m3_query_bundle", key)
+        if raw is None:
+            lf.update_current_span(output={"hit": False}, metadata={"model": model})
+            return None
+        bundle = BgeM3QueryVectorBundle.from_json_dict(raw)
+        if bundle is None:
+            lf.update_current_span(
+                output={"hit": False, "invalid": True},
+                metadata={"model": model},
+            )
+            return None
+        lf.update_current_span(output={"hit": True}, metadata={"model": model})
+        return bundle
+
+    @observe(name="cache-bge-m3-bundle-store", capture_input=False, capture_output=False)
+    async def store_bge_m3_query_bundle(
+        self,
+        text: str,
+        bundle: BgeM3QueryVectorBundle,
+        *,
+        model: str = BGE_M3_QUERY_BUNDLE_MODEL,
+        max_length: int = BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
+    ) -> None:
+        """Store BGE-M3 query vector bundle. No-ops for incomplete bundles."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "model": model,
+                "max_length": max_length,
+                "text_length": len(text),
+                "bundle_complete": bundle.is_complete(),
+            },
+            metadata={"model": model},
+        )
+        if not bundle.is_complete():
+            lf.update_current_span(
+                output={"stored": False, "reason": "incomplete"},
+                metadata={"model": model},
+            )
+            return
+        material = make_bge_m3_query_bundle_key_material(text, model=model, max_length=max_length)
+        key = _hash(material)
+        await self.store_exact("bge_m3_query_bundle", key, bundle.to_json_dict())
         lf.update_current_span(output={"stored": True}, metadata={"model": model})
 
     # ========== Convenience: Search Results ==========
