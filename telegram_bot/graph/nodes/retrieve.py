@@ -95,12 +95,6 @@ async def retrieve_node(
     colbert_query = state.get("colbert_query")
     retrieval_filters = state.get("filters")
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
-    search_cache_profile = _build_search_cache_profile(
-        needs_coverage=needs_coverage,
-        use_colbert=bool(colbert_query and _has_colbert_search),
-        top_k=effective_top_k,
-        filters=retrieval_filters if isinstance(retrieval_filters, dict) else None,
-    )
 
     # Curated span metadata (replaces auto-captured full state)
     lf = get_client()
@@ -121,37 +115,98 @@ async def retrieve_node(
 
     # After rewrite, query_embedding is None — re-embed the rewritten query
     if dense_vector is None and embeddings is not None:
-        dense_vector = await cache.get_embedding(query)
-        if dense_vector is None:
-            sparse_cached = await cache.get_sparse_embedding(query)
-            if sparse_cached is not None:
-                # Dense miss, sparse cached → just compute dense
-                dense_vector = await embeddings.aembed_query(query)
-                await cache.store_embedding(query, dense_vector)
-                sparse_vector = sparse_cached
-            elif callable(
-                getattr(embeddings, "aembed_hybrid", None)
-            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
-                # Hybrid: single call for both dense + sparse
-                dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
-                await cache.store_embedding(query, dense_vector)
-                await cache.store_sparse_embedding(query, sparse_vector)
-            else:
-                # Fallback: parallel dense + sparse (old path)
-                async def _get_dense() -> list[float]:
-                    vec: list[float] = await embeddings.aembed_query(query)
-                    await cache.store_embedding(query, vec)
-                    return vec
+        # Check bundle cache first (avoids redundant BGE-M3 calls #1493)
+        _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
+        bundle = None
+        if _has_bundle_cache:
+            try:
+                maybe_bundle = await cache.get_bge_m3_query_bundle(query)
+                if (
+                    maybe_bundle is not None
+                    and hasattr(maybe_bundle, "dense")
+                    and isinstance(maybe_bundle.dense, list)
+                ):
+                    bundle = maybe_bundle
+            except Exception:
+                logger.debug("Bundle cache check failed (non-critical), skipping")
 
-                async def _get_sparse() -> Any:
-                    vec = await sparse_embeddings.aembed_query(query)
-                    await cache.store_sparse_embedding(query, vec)
-                    return vec
+        if bundle is not None:
+            dense_vector = bundle.dense
+            sparse_vector = bundle.sparse
+            colbert_query = bundle.colbert
+        else:
+            dense_vector = await cache.get_embedding(query)
+            if dense_vector is None:
+                sparse_cached = await cache.get_sparse_embedding(query)
+                if sparse_cached is not None:
+                    # Dense miss, sparse cached → just compute dense
+                    dense_vector = await embeddings.aembed_query(query)
+                    await cache.store_embedding(query, dense_vector)
+                    sparse_vector = sparse_cached
+                elif callable(
+                    getattr(embeddings, "aembed_hybrid_with_colbert", None)
+                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
+                    # Full bundle: single call for dense + sparse + ColBERT
+                    (
+                        dense_vector,
+                        sparse_vector,
+                        colbert_query,
+                    ) = await embeddings.aembed_hybrid_with_colbert(query)
+                    await cache.store_embedding(query, dense_vector)
+                    await cache.store_sparse_embedding(query, sparse_vector)
+                    # Store full bundle for future requests (#1493)
+                    if (
+                        _has_bundle_cache
+                        and dense_vector is not None
+                        and sparse_vector is not None
+                        and colbert_query is not None
+                    ):
+                        try:
+                            from telegram_bot.services.bge_m3_query_bundle import (
+                                BgeM3QueryVectorBundle,
+                            )
 
-                dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
+                            await cache.store_bge_m3_query_bundle(
+                                query,
+                                BgeM3QueryVectorBundle(
+                                    dense=dense_vector,
+                                    sparse=sparse_vector,
+                                    colbert=colbert_query,
+                                ),
+                            )
+                        except Exception:
+                            logger.debug("Bundle store failed (non-critical), skipping")
+                elif callable(
+                    getattr(embeddings, "aembed_hybrid", None)
+                ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
+                    # Hybrid: single call for both dense + sparse
+                    dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
+                    await cache.store_embedding(query, dense_vector)
+                    await cache.store_sparse_embedding(query, sparse_vector)
+                else:
+                    # Fallback: parallel dense + sparse (old path)
+                    async def _get_dense() -> list[float]:
+                        vec: list[float] = await embeddings.aembed_query(query)
+                        await cache.store_embedding(query, vec)
+                        return vec
+
+                    async def _get_sparse() -> Any:
+                        vec = await sparse_embeddings.aembed_query(query)
+                        await cache.store_sparse_embedding(query, vec)
+                        return vec
+
+                    dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
 
     if not dense_vector:
         dense_vector = []
+
+    # Build search cache profile AFTER re-embed so colbert_query is accurate (#1493)
+    search_cache_profile = _build_search_cache_profile(
+        needs_coverage=needs_coverage,
+        use_colbert=bool(colbert_query and _has_colbert_search),
+        top_k=effective_top_k,
+        filters=retrieval_filters if isinstance(retrieval_filters, dict) else None,
+    )
 
     start = time.perf_counter()
 
