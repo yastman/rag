@@ -7,6 +7,7 @@ All scores use create_score(trace_id=...) for explicit trace scoping (#435).
 
 from __future__ import annotations
 
+from numbers import Real
 from typing import Any
 
 
@@ -183,6 +184,14 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             trace_id,
             name="bge_embed_latency_ms",
             value=float(embed_latency_ms),
+        )
+    bge_model_processing_ms = result.get("bge_model_processing_ms")
+    if isinstance(bge_model_processing_ms, Real) and not isinstance(bge_model_processing_ms, bool):
+        score(
+            lf,
+            trace_id,
+            name="bge_model_processing_ms",
+            value=float(bge_model_processing_ms),
         )
 
     # --- Prompt injection defense (#226) ---
