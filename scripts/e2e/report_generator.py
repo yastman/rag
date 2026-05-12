@@ -244,6 +244,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="response">{{ result.bot_response[:500] }}{% if result.bot_response|length > 500 %}...{% endif %}</div>
                     <div class="label-tag">Judge Summary:</div>
                     <div class="response">{{ result.judge_result.summary }}</div>
+                    {% if result.judge_result.check_details is not none %}
+                    <div class="label-tag">Deterministic Checks:</div>
+                    <div class="response">{{ result.judge_result.check_details | tojson }}</div>
+                    {% endif %}
                     {% if result.observability_ok is not none %}
                     <div class="label-tag">Langfuse Trace:</div>
                     <div class="response">
@@ -318,6 +322,7 @@ class ReportGenerator:
                         "tone_format": asdict(r.judge_result.tone_format),
                         "no_hallucination": asdict(r.judge_result.no_hallucination),
                         "summary": r.judge_result.summary,
+                        "check_details": r.judge_result.check_details,
                     },
                     "error": r.error,
                 }
