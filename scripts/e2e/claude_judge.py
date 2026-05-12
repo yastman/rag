@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 
 from openai import AsyncOpenAI
@@ -254,6 +255,19 @@ class PassthroughJudge:
         return any(marker in lowered for marker in bad_markers)
 
     @staticmethod
+    def _has_numeric_price_with_currency(response: str) -> bool:
+        """Check if response contains a numeric price token together with a currency marker.
+
+        Requires at least one digit adjacent to ``евро`` or ``€``, so
+        currency-only text like ``"Все цены указаны в евро"`` is rejected.
+        """
+        lowered = response.lower()
+        # "70 000 евро", "70000€", "70к евро", "€70000", "евро 70 000"
+        return bool(re.search(r"(?:евро|€)\s*\d", lowered)) or bool(
+            re.search(r"\d[\d\s]*(?:k|к)?\s*(?:евро|€)", lowered)
+        )
+
+    @staticmethod
     def _check_filter_evidence(response: str, filters) -> dict[str, bool]:
         lowered = response.lower()
         checks: dict[str, bool] = {}
@@ -265,8 +279,7 @@ class PassthroughJudge:
                 short in lowered
                 or f"{short}к" in lowered
                 or f"{short} {price_str[-3:]}" in lowered
-                or "евро" in lowered
-                or "€" in lowered
+                or PassthroughJudge._has_numeric_price_with_currency(response)
             )
 
         if filters.price_min is not None:
@@ -276,8 +289,7 @@ class PassthroughJudge:
                 short in lowered
                 or f"{short}к" in lowered
                 or f"{short} {price_str[-3:]}" in lowered
-                or "евро" in lowered
-                or "€" in lowered
+                or PassthroughJudge._has_numeric_price_with_currency(response)
             )
 
         if filters.city is not None:
