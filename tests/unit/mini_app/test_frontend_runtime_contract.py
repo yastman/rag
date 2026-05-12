@@ -57,3 +57,19 @@ def test_frontend_nginx_temp_paths_use_tmp_root_dirs() -> None:
         assert re.search(pattern, text), (
             f"{directive} must use a direct /tmp/<dir> path so nginx can create it on tmpfs"
         )
+
+
+def test_frontend_nginx_temp_dirs_are_created_for_unprivileged_runtime() -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    nginx_conf = NGINX_CONF.read_text(encoding="utf-8")
+    for path in [
+        "/tmp/client_temp",
+        "/tmp/proxy_temp",
+        "/tmp/fastcgi_temp",
+        "/tmp/uwsgi_temp",
+        "/tmp/scgi_temp",
+    ]:
+        assert path in nginx_conf
+        assert path in dockerfile
+    assert "chown -R 101:101" in dockerfile
+    assert "USER 101:101" in dockerfile
