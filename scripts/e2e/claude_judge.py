@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from openai import AsyncOpenAI
 
 from .config import E2EConfig
-from .test_scenarios import TestScenario
+from .test_scenarios import TestGroup, TestScenario
 
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,7 @@ class JudgeResult:
     total_score: float
     passed: bool
     summary: str
+    check_details: dict | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> JudgeResult:
@@ -99,6 +100,7 @@ class JudgeResult:
             total_score=data["total_score"],
             passed=data["pass"],
             summary=data["summary"],
+            check_details=data.get("check_details"),
         )
 
 
@@ -230,35 +232,156 @@ def build_judge(config: E2EConfig) -> LiteLLMJudge | ClaudeJudge:
 
 
 class PassthroughJudge:
-    """Simple judge that passes any non-empty bot response (no LLM needed)."""
+    """Deterministic judge with product-meaningful checks (no LLM needed)."""
 
     def __init__(self, config: E2EConfig):
         self.config = config
+
+    @staticmethod
+    def _contains_any_keyword(response: str, keywords: list[str]) -> bool:
+        lowered = response.lower()
+        return any(keyword.lower() in lowered for keyword in keywords)
+
+    @staticmethod
+    def _generic_fallback_detected(response: str) -> bool:
+        lowered = response.lower()
+        bad_markers = [
+            "не нашел информацию",
+            "попробуйте переформулировать",
+            "не удалось найти",
+            "сервис временно недоступен",
+        ]
+        return any(marker in lowered for marker in bad_markers)
+
+    @staticmethod
+    def _check_filter_evidence(response: str, filters) -> dict[str, bool]:
+        lowered = response.lower()
+        checks: dict[str, bool] = {}
+
+        if filters.price_max is not None:
+            price_str = str(filters.price_max)
+            short = price_str[:-3] if len(price_str) > 3 else price_str
+            checks["price_max"] = (
+                short in lowered
+                or f"{short}к" in lowered
+                or f"{short} {price_str[-3:]}" in lowered
+                or "евро" in lowered
+                or "€" in lowered
+            )
+
+        if filters.price_min is not None:
+            price_str = str(filters.price_min)
+            short = price_str[:-3] if len(price_str) > 3 else price_str
+            checks["price_min"] = (
+                short in lowered
+                or f"{short}к" in lowered
+                or f"{short} {price_str[-3:]}" in lowered
+                or "евро" in lowered
+                or "€" in lowered
+            )
+
+        if filters.city is not None:
+            checks["city"] = filters.city.lower()[:6] in lowered
+
+        if filters.rooms is not None:
+            room_str = str(filters.rooms)
+            checks["rooms"] = (
+                room_str in lowered
+                or (filters.rooms == 2 and "двух" in lowered)
+                or (filters.rooms == 3 and "трех" in lowered)
+                or f"{room_str}-ком" in lowered
+            )
+
+        if filters.distance_to_sea_max is not None:
+            checks["distance_to_sea_max"] = (
+                str(filters.distance_to_sea_max) in lowered
+                or "м" in lowered
+                or "мор" in lowered
+                or "пляж" in lowered
+            )
+
+        return checks
 
     async def evaluate(
         self,
         scenario: TestScenario,
         bot_response: str,
     ) -> JudgeResult:
-        """Pass if bot returned a non-empty response."""
-        if bot_response and bot_response.strip():
+        """Evaluate bot response with deterministic product checks."""
+        if not bot_response or not bot_response.strip():
             return JudgeResult(
-                relevance=CriterionScore(8, "Response received"),
-                completeness=CriterionScore(8, "Response received"),
-                filter_accuracy=CriterionScore(8, "Response received"),
-                tone_format=CriterionScore(8, "Response received"),
-                no_hallucination=CriterionScore(8, "Response received"),
-                total_score=8.0,
-                passed=True,
-                summary="Bot responded (no-judge mode)",
+                relevance=CriterionScore(0, "Empty response"),
+                completeness=CriterionScore(0, "Empty response"),
+                filter_accuracy=CriterionScore(0, "Empty response"),
+                tone_format=CriterionScore(0, "Empty response"),
+                no_hallucination=CriterionScore(0, "Empty response"),
+                total_score=0.0,
+                passed=False,
+                summary="Bot returned empty response",
+                check_details={"presence": False},
             )
+
+        check_details: dict = {"presence": True}
+        failed_checks: list[str] = []
+
+        # 1. Expected keywords
+        if scenario.expected_keywords:
+            has_keywords = self._contains_any_keyword(bot_response, scenario.expected_keywords)
+            check_details["expected_keywords"] = has_keywords
+            if not has_keywords:
+                failed_checks.append(f"Missing expected keywords: {scenario.expected_keywords}")
+        else:
+            check_details["expected_keywords"] = None
+
+        # 2. Generic fallback rejection for RAG/property scenarios
+        is_rag_property = scenario.group in {
+            TestGroup.PRICE_FILTERS,
+            TestGroup.ROOM_FILTERS,
+            TestGroup.LOCATION_FILTERS,
+            TestGroup.SEARCH,
+            TestGroup.IMMIGRATION,
+            TestGroup.VOICE_TRANSCRIPTION,
+        }
+        if is_rag_property and scenario.id not in {"7.1", "8.3"}:
+            fallback = self._generic_fallback_detected(bot_response)
+            check_details["generic_fallback"] = fallback
+            if fallback:
+                failed_checks.append("Generic fallback detected")
+        else:
+            check_details["generic_fallback"] = None
+
+        # 3. Expected filter evidence
+        if scenario.expected_filters is not None:
+            evidence = self._check_filter_evidence(bot_response, scenario.expected_filters)
+            check_details["filter_evidence"] = evidence
+            missing = [k for k, v in evidence.items() if not v]
+            if missing:
+                failed_checks.append(f"Missing filter evidence for: {missing}")
+        else:
+            check_details["filter_evidence"] = None
+
+        passed = not failed_checks
+
+        if passed:
+            summary = "Bot responded with meaningful content (no-judge mode)"
+            if check_details.get("expected_keywords") is True:
+                summary += " | keywords matched"
+            if check_details.get("filter_evidence"):
+                summary += f" | filters: {check_details['filter_evidence']}"
+        else:
+            summary = "; ".join(failed_checks)
+
+        score = 8.0 if passed else 2.0
+        reason = summary if passed else "Deterministic check failed"
+
         return JudgeResult(
-            relevance=CriterionScore(0, "Empty response"),
-            completeness=CriterionScore(0, "Empty response"),
-            filter_accuracy=CriterionScore(0, "Empty response"),
-            tone_format=CriterionScore(0, "Empty response"),
-            no_hallucination=CriterionScore(0, "Empty response"),
-            total_score=0.0,
-            passed=False,
-            summary="Bot returned empty response",
+            relevance=CriterionScore(int(score), reason),
+            completeness=CriterionScore(int(score), reason),
+            filter_accuracy=CriterionScore(int(score), reason),
+            tone_format=CriterionScore(int(score), reason),
+            no_hallucination=CriterionScore(int(score), reason),
+            total_score=score,
+            passed=passed,
+            summary=summary,
+            check_details=check_details,
         )
