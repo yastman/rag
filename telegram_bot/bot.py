@@ -164,6 +164,105 @@ def _build_pre_agent_state_contract(
     )
 
 
+def _has_async_method(obj: Any, name: str) -> bool:
+    method = getattr(obj, name, None)
+    return callable(method) and asyncio.iscoroutinefunction(method)
+
+
+async def _get_or_compute_pre_agent_dense(
+    cache: Any,
+    embeddings: Any,
+    query: str,
+    result_store: dict[str, Any],
+) -> list[float] | None:
+    """Compute or retrieve cached dense embedding for semantic cache lookup.
+
+    Uses ``aembed_dense_query`` when available, otherwise falls back to
+    ``aembed_query``. Records ``pre_agent_embed_ms`` and optionally
+    ``bge_model_processing_ms``.
+    """
+    dense: list[float] | None = await cache.get_embedding(query)
+    if dense is not None:
+        return dense
+
+    embed_start = time.perf_counter()
+    dense = None
+
+    if _has_async_method(embeddings, "aembed_dense_query"):
+        try:
+            result: Any = await embeddings.aembed_dense_query(query)
+            if isinstance(result, tuple) and len(result) == 2:
+                dense = result[0]
+                processing_s = result[1]
+                if isinstance(processing_s, (int, float)):
+                    result_store["bge_model_processing_ms"] = float(processing_s) * 1000
+            else:
+                dense = result
+        except Exception:
+            logger.warning("aembed_dense_query failed, falling back", exc_info=True)
+            dense = None
+
+    if dense is None and _has_async_method(embeddings, "aembed_query"):
+        dense = await embeddings.aembed_query(query)
+
+    if dense is not None:
+        await cache.store_embedding(query, dense)
+
+    result_store["pre_agent_embed_ms"] = (time.perf_counter() - embed_start) * 1000
+    return dense
+
+
+async def _prepare_pre_agent_retrieval_vectors(
+    cache: Any,
+    embeddings: Any,
+    query: str,
+    dense: list[float] | None,
+    result_store: dict[str, Any],
+) -> None:
+    """Prepare sparse and ColBERT vectors after semantic cache MISS.
+
+    Reads cached sparse, falls back to ``aembed_hybrid_with_colbert`` or
+    ``aembed_hybrid``, and then standalone ``aembed_colbert_query`` when
+    needed. Stashes ``cache_key_embedding``, ``cache_key_sparse``,
+    ``cache_key_colbert``, and ``pre_agent_retrieval_vector_ms``.
+    """
+    prep_start = time.perf_counter()
+
+    sparse = await cache.get_sparse_embedding(query)
+    colbert = None
+
+    if sparse is None:
+        if _has_async_method(embeddings, "aembed_hybrid_with_colbert"):
+            try:
+                _, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(query)
+                if sparse is not None:
+                    await cache.store_sparse_embedding(query, sparse)
+            except Exception:
+                logger.debug("Pre-agent hybrid ColBERT encode failed, skipping", exc_info=True)
+                sparse = None
+                colbert = None
+        elif _has_async_method(embeddings, "aembed_hybrid"):
+            try:
+                _, sparse = await embeddings.aembed_hybrid(query)
+                if sparse is not None:
+                    await cache.store_sparse_embedding(query, sparse)
+            except Exception:
+                logger.debug("Pre-agent hybrid encode failed, skipping", exc_info=True)
+                sparse = None
+
+    if colbert is None and _has_async_method(embeddings, "aembed_colbert_query"):
+        try:
+            colbert = await embeddings.aembed_colbert_query(query)
+        except Exception:
+            logger.debug("Pre-agent ColBERT encode failed, skipping", exc_info=True)
+            colbert = None
+
+    result_store["cache_key_embedding"] = dense
+    result_store["cache_key_sparse"] = sparse
+    result_store["cache_key_colbert"] = colbert
+    result_store["pre_agent_retrieval_vector_ms"] = (time.perf_counter() - prep_start) * 1000
+
+
 async def _stream_agent_to_draft(
     agent: Any,
     payload: dict[str, Any],
@@ -2880,59 +2979,16 @@ class PropertyBot:
             if query_type in CACHEABLE_QUERY_TYPES:
                 extracted_filters: dict[str, Any] = {}
                 try:
-                    embed_start = time.perf_counter()
-                    embedding = await self._cache.get_embedding(user_text)
-                    sparse = await self._cache.get_sparse_embedding(user_text)
-                    colbert = None
-                    if embedding is None:
-                        _has_hybrid_colbert = callable(
-                            getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
-                        ) and asyncio.iscoroutinefunction(
-                            self._embeddings.aembed_hybrid_with_colbert
-                        )
-                        _has_hybrid = callable(
-                            getattr(self._embeddings, "aembed_hybrid", None)
-                        ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid)
-                        if _has_hybrid_colbert:
-                            (
-                                embedding,
-                                sparse,
-                                colbert,
-                            ) = await self._embeddings.aembed_hybrid_with_colbert(user_text)
-                            await self._cache.store_embedding(user_text, embedding)
-                            await self._cache.store_sparse_embedding(user_text, sparse)
-                            rag_result_store["cache_key_colbert"] = colbert
-                        elif _has_hybrid:
-                            embedding, sparse = await self._embeddings.aembed_hybrid(user_text)
-                            await self._cache.store_embedding(user_text, embedding)
-                            await self._cache.store_sparse_embedding(user_text, sparse)
-                        else:
-                            embedding = await self._embeddings.aembed_query(user_text)
-                            await self._cache.store_embedding(user_text, embedding)
-                    else:
-                        # Embedding cached but sparse may have expired (#637)
-                        if sparse is None:
-                            _has_hybrid_colbert = callable(
-                                getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
-                            ) and asyncio.iscoroutinefunction(
-                                self._embeddings.aembed_hybrid_with_colbert
-                            )
-                            _has_hybrid = callable(
-                                getattr(self._embeddings, "aembed_hybrid", None)
-                            ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid)
-                            if _has_hybrid_colbert:
-                                (
-                                    _,
-                                    sparse,
-                                    colbert,
-                                ) = await self._embeddings.aembed_hybrid_with_colbert(user_text)
-                                await self._cache.store_sparse_embedding(user_text, sparse)
-                            elif _has_hybrid:
-                                _, sparse = await self._embeddings.aembed_hybrid(user_text)
-                                await self._cache.store_sparse_embedding(user_text, sparse)
-                    rag_result_store["pre_agent_embed_ms"] = (
-                        time.perf_counter() - embed_start
-                    ) * 1000
+                    # 1. Dense embedding for semantic lookup only (#1501)
+                    dense = await _get_or_compute_pre_agent_dense(
+                        self._cache, self._embeddings, user_text, rag_result_store
+                    )
+                    # In production embeddings always expose aembed_query; this
+                    # guards the theoretical edge case where dense is unavailable.
+                    if dense is None:
+                        raise RuntimeError("Pre-agent dense embedding unavailable")
+
+                    # 2. Topic hint, grounding mode, filters, contextual query
                     topic_hint_label = get_query_topic_hint(user_text)
                     topic_hint = topic_hint_label.value if topic_hint_label is not None else None
                     grounding_mode = get_grounding_mode(
@@ -2987,7 +3043,7 @@ class PropertyBot:
                                 check_start = time.perf_counter()
                                 cached = await self._cache.check_semantic(
                                     query=user_text,
-                                    vector=embedding,
+                                    vector=dense,
                                     query_type=query_type,
                                     cache_scope="rag",
                                     agent_role=role,
@@ -3019,7 +3075,7 @@ class PropertyBot:
                             check_start = time.perf_counter()
                             cached = await self._cache.check_semantic(
                                 query=user_text,
-                                vector=embedding,
+                                vector=dense,
                                 query_type=query_type,
                                 cache_scope="rag",
                                 agent_role=role,
@@ -3037,9 +3093,8 @@ class PropertyBot:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
                         rag_result_store["query_type"] = query_type
-                        rag_result_store["cache_key_embedding"] = embedding
-                        rag_result_store["cache_key_sparse"] = sparse
-                        # Write Langfuse scores and trace metadata
+                        rag_result_store["cache_key_embedding"] = dense
+                        # Do NOT prepare sparse/ColBERT on HIT (#1501)
                         lf = get_client()
                         pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
                         rag_result_store["pre_agent_ms"] = pre_agent_ms
@@ -3111,56 +3166,24 @@ class PropertyBot:
                         if root_trace_metadata is not None:
                             root_trace_metadata.update(cache_trace_metadata)
                         return cached
-                    # MISS: stash all embeddings so rag_pipeline can skip recomputation (#571)
+                    # MISS: prepare retrieval vectors, then build state contract (#1501)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
-                    rag_result_store["cache_key_embedding"] = embedding
-                    rag_result_store["cache_key_sparse"] = sparse
                     rag_result_store["query_type"] = query_type
-                    # Prefer the hybrid endpoint so BGE-M3 can return all query
-                    # representations from one request when supported.
-                    if colbert is None:
-                        _has_hybrid_colbert = callable(
-                            getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
-                        ) and asyncio.iscoroutinefunction(
-                            self._embeddings.aembed_hybrid_with_colbert
-                        )
-                        _has_colbert_only = callable(
-                            getattr(self._embeddings, "aembed_colbert_query", None)
-                        ) and asyncio.iscoroutinefunction(self._embeddings.aembed_colbert_query)
-                        # Use the one-pass hybrid endpoint only when it can still
-                        # fill in missing query representations. If dense+sparse
-                        # are already cached, prefer standalone ColBERT to avoid
-                        # recomputing embeddings we already have.
-                        if _has_hybrid_colbert and (embedding is None or sparse is None):
-                            try:
-                                (
-                                    _,
-                                    sparse_from_hybrid,
-                                    colbert,
-                                ) = await self._embeddings.aembed_hybrid_with_colbert(user_text)
-                                if sparse is None and sparse_from_hybrid is not None:
-                                    sparse = sparse_from_hybrid
-                                    await self._cache.store_sparse_embedding(
-                                        user_text, sparse_from_hybrid
-                                    )
-                                    rag_result_store["cache_key_sparse"] = sparse_from_hybrid
-                            except Exception:
-                                logger.debug("Pre-agent hybrid ColBERT encode failed, skipping")
-                        elif _has_colbert_only:
-                            try:
-                                colbert = await self._embeddings.aembed_colbert_query(user_text)
-                            except Exception:
-                                logger.debug("Pre-agent ColBERT encode failed, skipping")
-                    rag_result_store["cache_key_colbert"] = colbert
+                    await _prepare_pre_agent_retrieval_vectors(
+                        self._cache, self._embeddings, user_text, dense, rag_result_store
+                    )
                     topic_hint = get_query_topic_hint(user_text)
+                    grounding_mode_value = rag_result_store.get("grounding_mode", "normal")
                     rag_result_store["state_contract"] = _build_pre_agent_state_contract(
                         rag_result_store=rag_result_store,
                         query_type=query_type,
                         topic_hint=topic_hint.value if topic_hint is not None else None,
-                        dense_vector=embedding,
-                        sparse_vector=sparse if isinstance(sparse, dict) else None,
-                        colbert_query=colbert,
-                        grounding_mode="normal",
+                        dense_vector=dense,
+                        sparse_vector=rag_result_store.get("cache_key_sparse")
+                        if isinstance(rag_result_store.get("cache_key_sparse"), dict)
+                        else None,
+                        colbert_query=rag_result_store.get("cache_key_colbert"),
+                        grounding_mode=grounding_mode_value,
                         filters=extracted_filters or None,
                     )
                 except Exception:
