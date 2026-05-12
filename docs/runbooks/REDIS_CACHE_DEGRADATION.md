@@ -1,7 +1,7 @@
 # Runbook: Redis Cache Degradation
 
 > **Owner:** Retrieval & Cache subsystems
-> **Last verified:** 2026-05-07
+> **Last verified:** 2026-05-12
 > **Verification command:**
 > ```bash
 > COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'
@@ -21,9 +21,24 @@ Use this runbook when Redis cache issues affect RAG performance.
 | Compose service | Typical container names |
 |---|---|
 | `redis` | `dev-redis-1` (Compose v2+), `dev_redis_1` (legacy) |
+| `redis-langfuse` | `dev-redis-langfuse-1`, `dev_redis_langfuse_1` |
 
 > The app Redis is **distinct** from `redis-langfuse` (Langfuse v3 telemetry stack).
 > If Langfuse shows Redis errors, verify whether the failing container is `redis` or `redis-langfuse` first.
+> `redis` service is currently pinned to Redis **8.6.3** in compose; confirm exact versions in your environment if this matters.
+
+| Note | Why |
+|---|---|
+| `redis` app-cache | Cache service used by bot runtime, cache manager, and LangGraph |
+| `redis-langfuse` | Langfuse internal telemetry cache/storage |
+
+## Cache Tiers in the App
+
+- RedisVL **SemanticCache**: `sem:v8:bge1024`
+- RedisVL **EmbeddingsCache**: `embeddings:v5` (dense vectors and BGE-M3 query-bundle payload)
+- Exact async Redis caches (redis-py): `embeddings`, `sparse`, `search`, `rerank`, and `conversation`/state keys (`conversation:<user_id>`)
+
+BGE-M3 query-bundle optimization uses **RedisVL EmbeddingsCache** for dense vectors and stores sparse/ColBERT parts as metadata in the same payload. It is still an app-level cache optimization; retrieval remains in Qdrant.
 
 ## Fast-Path Diagnosis (read-only)
 
@@ -41,6 +56,15 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 
 Expected: `PONG`.
 If this fails, treat as **service failure** (container down, network partition, or auth misconfiguration at the Compose level).
+
+### 1b. Verify container/runtime version before conclusions
+
+```bash
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" INFO server | grep "^redis_version"'
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis-langfuse sh -lc 'if [ -n "${LANGFUSE_REDIS_PASSWORD:-}" ]; then redis-cli -a "$LANGFUSE_REDIS_PASSWORD" INFO server; else redis-cli INFO server; fi | grep "^redis_version"'
+```
+
+Run both commands independently and compare output before concluding a cache failure is app-Redis-specific.
 
 ### 2. Read-only keyspace and memory inspection
 
@@ -78,6 +102,17 @@ Check for:
 | Cache hit rate is 0% but Redis is healthy and has keys | App bug | Check semantic cache threshold, query_type mapping, or `CACHE_VERSION` drift in `telegram_bot/integrations/cache.py` |
 | High latency **with** cache hits | App bug | Profile embedding or rerank tiers; latency may be upstream of Redis |
 | Only specific tiers miss (e.g. `search` hits, `semantic` misses) | App bug | Inspect tier-specific TTLs and `distance_threshold` in source |
+
+### Cache Smoke Validation (for cache-hit health)
+
+Use a canonical query twice, once with a cleared cache and once immediately after:
+
+1. **Cold run:** expect new `bge-m3-encode-*`, `qdrant` retrieval, and `LLM` generation spans.
+2. **Immediate replay:** on semantic cache hit, expect:
+   - no new `bge-m3-encode-*` spans,
+   - no new `qdrant` search spans,
+   - no new LLM generation spans for the same response path.
+   - no new `results_count=0` / `no_results=1` score-like writes.
 
 ## Source Paths
 
