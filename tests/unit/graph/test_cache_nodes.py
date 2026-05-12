@@ -304,6 +304,82 @@ class TestCacheCheckNode:
         cache.store_embedding.assert_awaited_once_with("hybrid query", [0.3] * 1024)
         cache.store_sparse_embedding.assert_awaited_once_with("hybrid query", sparse_vec)
 
+    async def test_bundle_cache_hit_includes_colbert_in_state(self):
+        """Bundle cache hit in compute_query_embedding propagates colbert to state."""
+        from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+
+        bundle = BgeM3QueryVectorBundle(
+            dense=[0.1] * 1024,
+            sparse={"indices": [1], "values": [0.5]},
+            colbert=[[0.2] * 1024] * 4,
+        )
+
+        cache = AsyncMock()
+        cache.get_bge_m3_query_bundle = AsyncMock(return_value=bundle)
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        # No aembed_hybrid_with_colbert — bundle should be used
+        embeddings = AsyncMock(spec=[])
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
+
+        assert result["cache_hit"] is False
+        assert result.get("colbert_query") is not None
+        assert len(result["colbert_query"]) == 4
+        cache.get_bge_m3_query_bundle.assert_awaited_once_with("test query")
+        # embeddings has no aembed_hybrid_with_colbert attribute (spec=[])
+        assert not hasattr(embeddings, "aembed_hybrid_with_colbert")
+
+    async def test_bundle_cache_miss_computes_full_bundle(self):
+        """Bundle miss with aembed_hybrid_with_colbert computes and stores bundle."""
+        cache = AsyncMock()
+        cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
+        cache.store_bge_m3_query_bundle = AsyncMock()
+        cache.store_embedding = AsyncMock()
+        cache.store_sparse_embedding = AsyncMock()
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}, [[0.2] * 1024] * 4)
+        )
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
+
+        assert result["cache_hit"] is False
+        assert result.get("colbert_query") is not None
+        assert len(result["colbert_query"]) == 4
+        cache.store_bge_m3_query_bundle.assert_awaited_once()
+        cache.store_embedding.assert_awaited_once()
+        cache.store_sparse_embedding.assert_awaited_once()
+
+    async def test_legacy_colbert_fallback_when_no_bundle_support(self):
+        """When no bundle support, legacy aembed_colbert_query fallback still works."""
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.check_semantic = AsyncMock(return_value=None)
+        del cache.get_bge_m3_query_bundle
+
+        embeddings = AsyncMock(spec=["aembed_query", "aembed_colbert_query"])
+        embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
+        embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 3)
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
+
+        assert result["cache_hit"] is False
+        assert result.get("colbert_query") is not None
+        assert len(result["colbert_query"]) == 3
+        embeddings.aembed_colbert_query.assert_awaited_once_with("test query")
+
 
 class TestCacheStoreNode:
     """Test cache_store_node."""
