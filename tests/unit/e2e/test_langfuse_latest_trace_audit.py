@@ -356,6 +356,265 @@ def test_coverage_for_proxy_noise_is_not_app_coverage():
 
 
 # ---------------------------------------------------------------------------
+# Branch-aware required child coverage (mirrors langfuse_trace_validator.py:309-335)
+# ---------------------------------------------------------------------------
+
+_BASE_SCORE_NAMES = [
+    "query_type",
+    "latency_total_ms",
+    "semantic_cache_hit",
+    "embeddings_cache_hit",
+    "search_cache_hit",
+    "rerank_applied",
+    "rerank_cache_hit",
+    "results_count",
+    "no_results",
+    "llm_used",
+]
+
+
+def test_branch_missing_cache_check_fails_for_non_chitchat():
+    """Regression: a non-chitchat app trace missing node-cache-check must FAIL."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="telegram-message",
+        tags=["telegram"],
+        session_id=None,
+        timestamp=None,
+        observation_names=["telegram-rag-query", "telegram-rag-supervisor"],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=2,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={"query_type": 1.0},
+    )
+    cov = _check_trace_coverage(trace)
+    assert not cov.ok, "non-chitchat trace missing node-cache-check should fail"
+    assert "node-cache-check" in cov.missing_observations
+    assert cov.scenario_kind == "text_rag"
+
+
+def test_branch_chitchat_no_cache_check_required():
+    """Chitchat traces (query_type=0.0) do not require node-cache-check."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="telegram-message",
+        tags=["telegram"],
+        session_id=None,
+        timestamp=None,
+        observation_names=["telegram-rag-query", "telegram-rag-supervisor"],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=2,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={"query_type": 0.0},
+    )
+    cov = _check_trace_coverage(trace)
+    assert cov.ok, "chitchat trace should pass without cache-check"
+    assert "node-cache-check" not in cov.missing_observations
+
+
+def test_branch_unknown_trace_no_branch_expansion():
+    """Unknown traces (no matching scenario) are not expanded with branch-aware observations."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="unknown-trace-name",
+        tags=["misc"],
+        session_id=None,
+        timestamp=None,
+        observation_names=["telegram-rag-query", "telegram-rag-supervisor"],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=2,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={
+            "query_type": 1.0,
+            "semantic_cache_hit": False,
+        },
+    )
+    cov = _check_trace_coverage(trace)
+    assert cov.scenario_kind == "unknown"
+    # Unknown traces only require base observations (telegram-rag-query + supervisor).
+    assert "node-cache-check" not in cov.missing_observations
+    # With base observations present and all scores, it should pass.
+    assert cov.ok
+
+
+def test_branch_semantic_cache_miss_requires_retrieval_and_generation():
+    """Semantic cache miss with valid results triggers retrieval + generation path."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="telegram-message",
+        tags=["telegram"],
+        session_id=None,
+        timestamp=None,
+        observation_names=[
+            "telegram-rag-query",
+            "telegram-rag-supervisor",
+            "node-cache-check",
+        ],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=3,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={
+            "query_type": 1.0,
+            "semantic_cache_hit": False,
+            "llm_used": True,
+            "no_results": False,
+            "results_count": 5,
+        },
+    )
+    cov = _check_trace_coverage(trace)
+    assert not cov.ok, "semantic miss without retrieval/generation should fail"
+    assert "node-retrieve" in cov.missing_observations
+    assert "node-grade" in cov.missing_observations
+    assert "node-generate" in cov.missing_observations
+    assert "node-cache-store" in cov.missing_observations
+    assert "node-respond" in cov.missing_observations
+
+
+def test_branch_semantic_cache_hit_no_retrieval_required():
+    """Semantic cache hit does not require retrieval or generation observations."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="telegram-message",
+        tags=["telegram"],
+        session_id=None,
+        timestamp=None,
+        observation_names=[
+            "telegram-rag-query",
+            "telegram-rag-supervisor",
+            "node-cache-check",
+        ],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=3,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={
+            "query_type": 1.0,
+            "semantic_cache_hit": True,
+        },
+    )
+    cov = _check_trace_coverage(trace)
+    # Cache hit: only cache-check is needed beyond base contract.
+    assert cov.ok, "semantic cache hit should not require retrieval/generation"
+    assert "node-retrieve" not in cov.missing_observations
+    assert "node-generate" not in cov.missing_observations
+
+
+def test_branch_rerank_applied_requires_node_rerank():
+    """Rerank applied on a semantic miss requires node-rerank observation."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="telegram-message",
+        tags=["telegram"],
+        session_id=None,
+        timestamp=None,
+        observation_names=[
+            "telegram-rag-query",
+            "telegram-rag-supervisor",
+            "node-cache-check",
+            "node-retrieve",
+            "node-grade",
+            "node-generate",
+            "node-cache-store",
+            "node-respond",
+        ],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=8,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={
+            "query_type": 1.0,
+            "semantic_cache_hit": False,
+            "rerank_applied": True,
+            "llm_used": True,
+            "no_results": False,
+            "results_count": 5,
+        },
+    )
+    cov = _check_trace_coverage(trace)
+    assert not cov.ok, "rerank applied should require node-rerank"
+    assert "node-rerank" in cov.missing_observations
+
+
+def test_branch_no_results_skips_generation():
+    """When no_results=True, generation-path observations are not required."""
+    trace = AuditTrace(
+        trace_id="t1",
+        name="telegram-message",
+        tags=["telegram"],
+        session_id=None,
+        timestamp=None,
+        observation_names=[
+            "telegram-rag-query",
+            "telegram-rag-supervisor",
+            "node-cache-check",
+            "node-retrieve",
+            "node-grade",
+        ],
+        score_names=_BASE_SCORE_NAMES,
+        root_input_keys=["query_hash"],
+        root_output_keys=["answer_hash"],
+        observation_count=5,
+        score_count=10,
+        is_proxy_noise=False,
+        score_values={
+            "query_type": 1.0,
+            "semantic_cache_hit": False,
+            "llm_used": True,
+            "no_results": True,
+            "results_count": 0,
+        },
+    )
+    cov = _check_trace_coverage(trace)
+    # No results: generate/cache-store/respond are NOT required.
+    assert cov.ok, "no_results=True should not require generation path"
+    assert "node-generate" not in cov.missing_observations
+    assert "node-cache-store" not in cov.missing_observations
+    assert "node-respond" not in cov.missing_observations
+
+
+def test_branch_proxy_noise_unaffected_by_score_values():
+    """Proxy noise traces always pass regardless of score values."""
+    trace = AuditTrace(
+        trace_id="p1",
+        name="litellm-acompletion",
+        tags=[],
+        session_id=None,
+        timestamp=None,
+        observation_names=["GENERATION"],
+        score_names=[],
+        root_input_keys=[],
+        root_output_keys=[],
+        observation_count=1,
+        score_count=0,
+        is_proxy_noise=True,
+        score_values={
+            "query_type": 1.0,
+            "semantic_cache_hit": False,
+            "llm_used": True,
+        },
+    )
+    cov = _check_trace_coverage(trace)
+    assert cov.ok
+    assert cov.scenario_kind is None
+
+
+# ---------------------------------------------------------------------------
 # render_markdown
 # ---------------------------------------------------------------------------
 
