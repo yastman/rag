@@ -3,7 +3,8 @@
 Single internal SDK layer for all BGE-M3 interactions:
 - /encode/dense  — dense embeddings (1024-dim)
 - /encode/sparse — sparse embeddings (lexical_weights)
-- /encode/hybrid — combined dense + sparse in one call
+- /encode/hybrid — combined dense + sparse (+ optional ColBERT) in one call
+- /encode/colbert — ColBERT multivectors
 - /rerank        — ColBERT MaxSim reranking
 
 Centralizes: httpx client lifecycle, retry/timeout policy, response parsing.
@@ -44,7 +45,7 @@ class SparseResult:
 
 @dataclass
 class HybridResult:
-    """Result from /encode/hybrid."""
+    """Result from /encode/hybrid (dense + sparse + optional ColBERT)."""
 
     dense_vecs: list[list[float]]
     lexical_weights: list[dict[str, Any]]
@@ -194,7 +195,7 @@ class BGEM3Client:
     )
     @bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
-        """Encode texts to dense + sparse via /encode/hybrid (single call)."""
+        """Encode texts to dense + sparse (+ optional ColBERT) via /encode/hybrid (single call)."""
         lf = get_client()
         lf.update_current_span(
             input={
