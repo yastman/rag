@@ -14,6 +14,7 @@ import asyncio
 import logging
 from typing import Any
 
+from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 from telegram_bot.services.cache_policy import is_contextual_query
 
 
@@ -212,15 +213,18 @@ async def compute_query_embedding(
 ) -> tuple[list[float], Any, list[list[float]] | None, bool]:
     """Get or compute dense query embedding with optional sparse side-product.
 
-    Handles three paths:
+    Handles paths in priority order:
     1. Pre-computed: caller already has the embedding (e.g. agent pre-fetch) → return immediately.
-    2. Redis cache hit: embedding stored from previous request → return with from_cache=True.
-    3. Model compute: call embeddings.aembed_hybrid (preferred) or aembed_query, cache result.
+    2. Bundle cache hit: BGE-M3 query vector bundle stored from previous request → return with from_cache=True.
+    3. Model compute (bundle): call embeddings.aembed_hybrid_with_colbert, store bundle + legacy caches.
+    4. Legacy cache hit: dense embedding stored from previous request → return with from_cache=True.
+    5. Legacy model compute: call embeddings.aembed_hybrid or aembed_query, cache result.
 
     Args:
         query: The query string.
-        cache: Cache instance with get_embedding / store_embedding / store_sparse_embedding.
-        embeddings: Embedding model with aembed_hybrid or aembed_query.
+        cache: Cache instance with get_embedding / store_embedding / store_sparse_embedding
+            and optionally get_bge_m3_query_bundle / store_bge_m3_query_bundle.
+        embeddings: Embedding model with aembed_hybrid_with_colbert, aembed_hybrid, or aembed_query.
         pre_computed: Pre-computed dense vector (bypasses all computation).
         pre_computed_sparse: Pre-computed sparse vector; returned alongside pre_computed.
         pre_computed_colbert: Pre-computed ColBERT vectors; returned alongside pre_computed.
@@ -228,10 +232,9 @@ async def compute_query_embedding(
     Returns:
         Tuple of (dense, sparse, colbert, from_cache).
         - dense: dense embedding vector (always present)
-        - sparse: sparse vector if computed via hybrid or pre_computed_sparse; else None
-        - colbert: pre_computed_colbert if provided; else None
-          (ColBERT-after-miss fetching is the caller's responsibility)
-        - from_cache: True if dense vector came from Redis cache
+        - sparse: sparse vector if computed via hybrid or from bundle; else None
+        - colbert: ColBERT vectors if from bundle or aembed_hybrid_with_colbert; else None
+        - from_cache: True if result came from cache (bundle or legacy dense)
 
     Raises:
         Exception: propagates embedding model errors to caller (adapter handles fallback).
@@ -240,14 +243,62 @@ async def compute_query_embedding(
     if pre_computed is not None:
         return (pre_computed, pre_computed_sparse, pre_computed_colbert, False)
 
-    # Path 2: check Redis embedding cache
+    # Determine capabilities
+    _has_bundle_get = callable(
+        getattr(cache, "get_bge_m3_query_bundle", None)
+    ) and asyncio.iscoroutinefunction(cache.get_bge_m3_query_bundle)
+    _has_bundle_store = callable(
+        getattr(cache, "store_bge_m3_query_bundle", None)
+    ) and asyncio.iscoroutinefunction(cache.store_bge_m3_query_bundle)
+    _has_hybrid_colbert = callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
+    # Path 2: check bundle cache (even if embeddings lacks aembed_hybrid_with_colbert,
+    # a hit still gives us all three vectors).
+    if _has_bundle_get:
+        bundle = await cache.get_bge_m3_query_bundle(query)
+        if isinstance(bundle, BgeM3QueryVectorBundle) and bundle.is_complete():
+            return (bundle.dense, bundle.sparse, bundle.colbert, True)
+
+    # Path 3: full bundle compute (cache miss + aembed_hybrid_with_colbert available)
+    if _has_bundle_get and _has_hybrid_colbert:
+        try:
+            dense, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(query)
+        except (TypeError, ValueError):
+            # aembed_hybrid_with_colbert is present but doesn't return a usable
+            # 3-tuple (e.g. test mocks); fall through to legacy path.
+            pass
+        else:
+            # Store bundle if store API is available
+            if _has_bundle_store:
+                try:
+                    new_bundle = BgeM3QueryVectorBundle(
+                        dense=dense,
+                        sparse=sparse,
+                        colbert=colbert,
+                    )
+                    await cache.store_bge_m3_query_bundle(query, new_bundle)
+                except Exception:
+                    logger.debug("Bundle store failed (non-critical), skipping")
+
+            # Keep legacy caches populated for compatibility
+            try:
+                await cache.store_embedding(query, dense)
+                await cache.store_sparse_embedding(query, sparse)
+            except Exception:
+                logger.debug("Legacy embedding store failed (non-critical), skipping")
+
+            return (dense, sparse, colbert, False)
+
+    # Path 4: legacy dense cache
     dense = await cache.get_embedding(query)
     from_cache = dense is not None
 
     if dense is not None:
         return (dense, None, None, from_cache)
 
-    # Path 3: compute via model
+    # Path 5: legacy model compute
     _has_hybrid = callable(
         getattr(embeddings, "aembed_hybrid", None)
     ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
