@@ -574,7 +574,7 @@ deploy-vps-local:  ***REMOVED******REMOVED*** Fallback/manual deploy: sync local
 ***REMOVED*** E2E TESTING
 ***REMOVED*** =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup langfuse-latest-trace-audit
 
 e2e-install: ***REMOVED******REMOVED*** Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -617,6 +617,11 @@ e2e-test-group: ***REMOVED******REMOVED*** Run specific test group (usage: make 
 e2e-setup: e2e-install ***REMOVED******REMOVED*** Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
+
+langfuse-latest-trace-audit: ***REMOVED******REMOVED*** Sanitized post-E2E Langfuse latest-trace audit
+	@echo "$(BLUE)Running sanitized latest-trace audit...$(NC)"
+	uv run python scripts/e2e/langfuse_latest_trace_audit.py --limit 20
+	@echo "$(GREEN)✓ Latest-trace audit complete$(NC)"
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** BASELINE & OBSERVABILITY
