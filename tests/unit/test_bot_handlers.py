@@ -4969,6 +4969,52 @@ class TestPreAgentCacheCheck:
 
         assert stashed_store.get("cache_key_colbert") is None
 
+    async def test_pre_agent_cache_miss_strict_grounding_preserved_in_state_contract(
+        self, mock_config
+    ):
+        """On cache MISS with strict grounding, state_contract preserves grounding_mode (#1501)."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+
+        bot._embeddings.aembed_dense_query = None  # unavailable
+        bot._embeddings.aembed_query = AsyncMock(return_value=dense)
+        bot._embeddings.aembed_hybrid_with_colbert = None  # unavailable
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._embeddings.aembed_colbert_query = None  # unavailable
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("Какие документы нужны для ВНЖ?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        assert stashed_store.get("grounding_mode") == "strict"
+        contract = stashed_store.get("state_contract")
+        assert contract is not None
+        assert contract["grounding_mode"] == "strict"
+
 
 def _make_cc_callback_query(data: str, user_id: int = 12345):
     """Create a mock CallbackQuery for clearcache tests."""
