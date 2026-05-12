@@ -3337,6 +3337,7 @@ class PropertyBot:
                 from telegram_bot.services.draft_streamer import DraftStreamer
                 from telegram_bot.services.telegram_formatting import (
                     build_html_messages,
+                    record_langfuse_response_output,
                     send_html_messages,
                 )
 
@@ -3357,6 +3358,7 @@ class PropertyBot:
                                 parse_mode="HTML",
                                 reply_markup=reply_markup,
                             )
+                            record_langfuse_response_output(response_text, len(html_messages))
                         else:
                             await send_html_messages(
                                 message,
