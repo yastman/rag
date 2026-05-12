@@ -779,3 +779,181 @@ class TestRetrieveNodeEvalFields:
         assert "eval_docs" in final_output
         assert final_output["eval_query"] == "cached query"
         assert "Cached document content" in final_output["eval_docs"]
+
+
+class TestRetrieveNodeBundle:
+    """Tests for BGE-M3 query vector bundle cache in retrieve_node (#1493)."""
+
+    async def test_bundle_cache_hit_after_rewrite(self):
+        """After rewrite, retrieve_node uses bundle cache and skips BGE-M3 call."""
+        state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None  # simulates post-rewrite
+
+        from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+
+        bundle = BgeM3QueryVectorBundle(
+            dense=[0.3] * 1024,
+            sparse={"indices": [2], "values": [0.7]},
+            colbert=[[0.4] * 1024] * 3,
+        )
+        cache = AsyncMock()
+        cache.get_bge_m3_query_bundle = AsyncMock(return_value=bundle)
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_search_results = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf_colbert = AsyncMock(
+            return_value=(
+                [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+                _OK_META,
+            )
+        )
+
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid_with_colbert = AsyncMock()
+
+        result = await retrieve_node(
+            state,
+            _make_runtime(
+                cache=cache,
+                embeddings=embeddings,
+                sparse_embeddings=AsyncMock(),
+                qdrant=qdrant,
+            ),
+        )
+
+        assert result["rerank_applied"] is True
+        assert result.get("query_embedding") == bundle.dense
+        embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
+        qdrant.hybrid_search_rrf_colbert.assert_awaited_once()
+
+    async def test_bundle_store_after_hybrid_colbert_compute(self):
+        """After rewrite, retrieve_node stores bundle after aembed_hybrid_with_colbert."""
+        state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None
+
+        cache = AsyncMock()
+        cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf_colbert = AsyncMock(
+            return_value=(
+                [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+                _OK_META,
+            )
+        )
+
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.3] * 1024, {"indices": [2], "values": [0.7]}, [[0.4] * 1024] * 3)
+        )
+
+        result = await retrieve_node(
+            state,
+            _make_runtime(
+                cache=cache,
+                embeddings=embeddings,
+                sparse_embeddings=AsyncMock(),
+                qdrant=qdrant,
+            ),
+        )
+
+        assert result["rerank_applied"] is True
+        cache.store_bge_m3_query_bundle.assert_awaited_once()
+        embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("rewritten query")
+
+    async def test_uses_hybrid_with_colbert_after_rewrite(self):
+        """After rewrite, retrieve_node prefers aembed_hybrid_with_colbert over aembed_hybrid."""
+        state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None
+
+        cache = AsyncMock()
+        cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf_colbert = AsyncMock(
+            return_value=(
+                [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+                _OK_META,
+            )
+        )
+
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.3] * 1024, {"indices": [2], "values": [0.7]}, [[0.4] * 1024] * 3)
+        )
+        embeddings.aembed_hybrid = AsyncMock()
+
+        result = await retrieve_node(
+            state,
+            _make_runtime(
+                cache=cache,
+                embeddings=embeddings,
+                sparse_embeddings=AsyncMock(),
+                qdrant=qdrant,
+            ),
+        )
+
+        assert result["rerank_applied"] is True
+        embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+        embeddings.aembed_hybrid.assert_not_awaited()
+
+    async def test_search_cache_profile_reflects_colbert_after_rewrite(self):
+        """Search cache profile uses colbert mode when vectors are computed after rewrite."""
+        state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None
+        state["colbert_query"] = None  # cleared after rewrite
+
+        cache = AsyncMock()
+        cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf_colbert = AsyncMock(
+            return_value=(
+                [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+                _OK_META,
+            )
+        )
+
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.3] * 1024, {"indices": [2], "values": [0.7]}, [[0.4] * 1024] * 3)
+        )
+
+        await retrieve_node(
+            state,
+            _make_runtime(
+                cache=cache,
+                embeddings=embeddings,
+                sparse_embeddings=AsyncMock(),
+                qdrant=qdrant,
+            ),
+        )
+
+        # Verify search results were cached under colbert profile
+        store_call = cache.store_search_results.await_args
+        profile = store_call.kwargs.get("filters") or store_call.args[1]
+        assert profile["mode"] == "colbert"
