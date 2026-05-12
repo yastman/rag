@@ -42,12 +42,21 @@ RRF score = 1 / (k + rank), where k = 60
 - Cache store threshold must match: `>= 0.005`
 - Using cosine thresholds (e.g., 0.8) would result in no stores
 
+## Cache Types
+
+This ADR covers the **semantic answer cache** (query → LLM response) only.
+A separate **BGE-M3 query vector bundle cache** uses RedisVL `EmbeddingsCache`
+with `model_name="bge-m3-query-bundle"` to store dense embeddings alongside
+sparse and ColBERT vectors in `metadata`. Qdrant remains the retrieval
+backend; Redis is a cache/sidecar.
+
 ## Consequences
 
 ### Positive
 - Fast semantic cache with Redis
 - Query-type-specific thresholds
 - No new infrastructure
+- RedisVL-native `EmbeddingsCache.metadata` design avoids custom serialization
 
 ### Negative
 - Threshold tuning required per query type

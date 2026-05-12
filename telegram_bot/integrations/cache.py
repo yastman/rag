@@ -30,6 +30,13 @@ from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.bge_m3_query_bundle import (
+    BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
+    BGE_M3_QUERY_BUNDLE_MODEL,
+    BGE_M3_QUERY_BUNDLE_VERSION,
+    BgeM3QueryVectorBundle,
+    make_bge_m3_query_bundle_key_material,
+)
 
 
 if TYPE_CHECKING:
@@ -50,6 +57,8 @@ DEFAULT_TTLS: dict[str, int] = {
 }
 
 _METRIC_TIERS = ("semantic", "embeddings", "sparse", "search", "rerank")
+
+BGE_M3_QUERY_BUNDLE_MODEL_NAME = "bge-m3-query-bundle"
 _REDIS_URL_CREDENTIALS_RE = re.compile(r"(rediss?://)([^@\s]+)@")
 
 
@@ -651,6 +660,142 @@ class CacheLayerManager:
             "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"), sparse_vector
         )
         lf.update_current_span(output={"stored": True}, metadata={"model": model})
+
+    # ========== Convenience: BGE-M3 Query Bundle ==========
+
+    @observe(name="cache-bge-m3-bundle-get", capture_input=False, capture_output=False)
+    async def get_bge_m3_query_bundle(
+        self,
+        text: str,
+        *,
+        model: str = BGE_M3_QUERY_BUNDLE_MODEL,
+        max_length: int = BGE_M3_QUERY_BUNDLE_MAX_LENGTH,
+        version: str = BGE_M3_QUERY_BUNDLE_VERSION,
+    ) -> BgeM3QueryVectorBundle | None:
+        """Get cached BGE-M3 query vector bundle (dense + sparse + ColBERT)."""
+        lf = get_client()
+        lf.update_current_span(
+            input={"model": model, "max_length": max_length, "text_length": len(text)},
+            metadata={"model": model},
+        )
+        if self.embed_cache is None:
+            lf.update_current_span(
+                output={"hit": False, "embed_cache_enabled": False},
+                metadata={"model": model},
+            )
+            return None
+        material = make_bge_m3_query_bundle_key_material(
+            text, model=model, max_length=max_length, version=version
+        )
+        try:
+            result = await self.embed_cache.aget(
+                content=material, model_name=BGE_M3_QUERY_BUNDLE_MODEL_NAME
+            )
+            if result is None:
+                lf.update_current_span(output={"hit": False}, metadata={"model": model})
+                return None
+            metadata = result.get("metadata") or {}
+            sparse = metadata.get("sparse")
+            colbert = metadata.get("colbert")
+            if sparse is None or colbert is None:
+                lf.update_current_span(
+                    output={"hit": False, "invalid": True},
+                    metadata={"model": model},
+                )
+                return None
+            bundle = BgeM3QueryVectorBundle(
+                dense=list(result["embedding"]),
+                sparse=sparse,
+                colbert=colbert,
+                model=metadata.get("model", model),
+                max_length=metadata.get("max_length", max_length),
+                version=metadata.get("version", version),
+            )
+            if not bundle.is_complete():
+                lf.update_current_span(
+                    output={"hit": False, "invalid": True},
+                    metadata={"model": model},
+                )
+                return None
+            lf.update_current_span(output={"hit": True}, metadata={"model": model})
+            return bundle
+        except Exception as e:
+            logger.error("BGE-M3 bundle get error: %s: %s", type(e).__name__, e)
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"BGE-M3 bundle get error: {type(e).__name__}",
+                output={"hit": False, "error": type(e).__name__},
+                metadata={"model": model},
+            )
+            return None
+
+    @observe(name="cache-bge-m3-bundle-store", capture_input=False, capture_output=False)
+    async def store_bge_m3_query_bundle(
+        self,
+        text: str,
+        bundle: BgeM3QueryVectorBundle,
+        *,
+        model: str | None = None,
+        max_length: int | None = None,
+        version: str | None = None,
+    ) -> None:
+        """Store BGE-M3 query vector bundle. No-ops for incomplete bundles."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "model": model,
+                "max_length": max_length,
+                "text_length": len(text),
+                "bundle_complete": bundle.is_complete(),
+            },
+            metadata={"model": model},
+        )
+        if self.embed_cache is None:
+            lf.update_current_span(
+                output={"stored": False, "embed_cache_enabled": False},
+                metadata={"model": model},
+            )
+            return
+        if not bundle.is_complete():
+            lf.update_current_span(
+                output={"stored": False, "reason": "incomplete"},
+                metadata={"model": model},
+            )
+            return
+        effective_model = model if model is not None else bundle.model
+        effective_max_length = max_length if max_length is not None else bundle.max_length
+        effective_version = version if version is not None else bundle.version
+        material = make_bge_m3_query_bundle_key_material(
+            text,
+            model=effective_model,
+            max_length=effective_max_length,
+            version=effective_version,
+        )
+        metadata = {
+            "sparse": bundle.sparse,
+            "colbert": bundle.colbert,
+            "model": bundle.model,
+            "max_length": bundle.max_length,
+            "version": bundle.version,
+        }
+        try:
+            ttl = self.exact_ttls.get("embeddings")
+            await self.embed_cache.aset(
+                content=material,
+                model_name=BGE_M3_QUERY_BUNDLE_MODEL_NAME,
+                embedding=bundle.dense,
+                metadata=metadata,
+                ttl=ttl,
+            )
+            lf.update_current_span(output={"stored": True}, metadata={"model": model})
+        except Exception as e:
+            logger.error("BGE-M3 bundle store error: %s: %s", type(e).__name__, e)
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"BGE-M3 bundle store error: {type(e).__name__}",
+                output={"stored": False, "error": type(e).__name__},
+                metadata={"model": model},
+            )
 
     # ========== Convenience: Search Results ==========
 
