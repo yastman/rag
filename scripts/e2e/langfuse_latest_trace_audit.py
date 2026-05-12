@@ -27,6 +27,8 @@ from scripts.e2e.langfuse_trace_validator import (
     OBSERVATION_ALIAS_GROUPS,
     SCENARIO_CONTRACTS,
     SCORE_NAMES,
+    _as_bool,
+    _as_float,
 )
 
 
@@ -52,6 +54,7 @@ class AuditTrace:
     observation_count: int
     score_count: int
     is_proxy_noise: bool
+    score_values: dict[str, int | float | bool] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,43 @@ def _resolve_missing_observations(
         if not (aliases & span_names):
             missing.add(required)
     return missing
+
+
+def _compute_branch_observations(
+    score_values: dict[str, object],
+) -> set[str]:
+    """Compute additional required observations based on score values.
+
+    Mirrors the branch-aware logic in langfuse_trace_validator.py:309-335.
+    Only numeric/boolean score values are trusted for branch detection.
+    """
+    additional: set[str] = set()
+
+    query_type = _as_float(score_values.get("query_type"))
+    semantic_hit = _as_bool(score_values.get("semantic_cache_hit"))
+    llm_used = _as_bool(score_values.get("llm_used"))
+    results_count = _as_float(score_values.get("results_count"))
+    no_results = _as_bool(score_values.get("no_results"))
+    rerank_applied = _as_bool(score_values.get("rerank_applied"))
+
+    # Conservative default: treat missing query_type as non-chitchat.
+    is_chitchat = (query_type == 0.0) if query_type is not None else False
+
+    if not is_chitchat:
+        additional |= {"node-cache-check"}
+
+    if not is_chitchat and semantic_hit is False:
+        # Retrieval path: cache miss -> retrieve -> grade
+        additional |= {"node-retrieve", "node-grade"}
+
+        if rerank_applied is True:
+            additional |= {"node-rerank"}
+
+        if (llm_used is True) and (no_results is False) and ((results_count or 0) > 0):
+            # Generation path: generate -> cache-store -> respond
+            additional |= {"node-generate", "node-cache-store", "node-respond"}
+
+    return additional
 
 
 # Sanitized key safelist for root input/output — never report raw payloads or secrets.
@@ -149,11 +189,19 @@ def sanitize_trace(raw: object) -> AuditTrace:
 
     raw_scores = data.get("scores") or []
     score_names = []
+    score_values: dict[str, int | float | bool] = {}
     for score in raw_scores:
         if isinstance(score, dict):
-            score_names.append(str(score.get("name") or ""))
+            score_name = str(score.get("name") or "")
+            score_value = score.get("value")
         else:
-            score_names.append(str(getattr(score, "name", "") or ""))
+            score_name = str(getattr(score, "name", "") or "")
+            score_value = getattr(score, "value", None) if hasattr(score, "value") else None
+        if score_name:
+            score_names.append(score_name)
+        # Only capture sanitized numeric/boolean values; never capture strings or raw payloads.
+        if score_name and isinstance(score_value, (int, float, bool)):
+            score_values[score_name] = score_value
 
     root_input = data.get("input")
     root_output = data.get("output")
@@ -173,6 +221,7 @@ def sanitize_trace(raw: object) -> AuditTrace:
         observation_count=len(raw_obs),
         score_count=len(raw_scores),
         is_proxy_noise=is_proxy_noise,
+        score_values=score_values,
     )
 
 
@@ -202,6 +251,10 @@ def _check_trace_coverage(trace: AuditTrace) -> TraceCoverage:
         # Unknown trace — treat as app trace with base requirements only.
         scenario_kind = "unknown"
         required_observations = {"telegram-rag-query", "telegram-rag-supervisor"}
+
+    # Branch-aware required child observations for known scenarios (mirrors validator logic).
+    if scenario_kind != "unknown":
+        required_observations |= _compute_branch_observations(trace.score_values)
 
     span_names = set(trace.observation_names)
     missing_obs = _resolve_missing_observations(required_observations, span_names)
