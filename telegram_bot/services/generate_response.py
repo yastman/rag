@@ -29,6 +29,7 @@ from telegram_bot.services.response_style_detector import ResponseStyleDetector
 from telegram_bot.services.telegram_formatting import (
     build_reply_parameters,
     format_answer_html,
+    record_langfuse_response_output,
 )
 
 
@@ -426,6 +427,8 @@ async def _generate_streaming(
                         getattr(message, "text", "") or "",
                     ),
                 )
+            if sent_msg is not None:
+                record_langfuse_response_output(final_text, 1)
             raise StreamingPartialDeliveryError(sent_msg, final_text) from None
         raise
 
@@ -448,6 +451,9 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to send final streaming message")
             sent_msg = None
+
+    if sent_msg is not None:
+        record_langfuse_response_output(final_text, 1)
 
     return (
         final_text,
