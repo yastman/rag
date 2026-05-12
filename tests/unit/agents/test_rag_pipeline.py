@@ -21,6 +21,8 @@ def mock_cache():
     cache.get_rerank_results = AsyncMock(return_value=None)
     cache.store_rerank_results = AsyncMock()
     cache.store_semantic = AsyncMock()
+    cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
+    cache.store_bge_m3_query_bundle = AsyncMock()
     return cache
 
 
@@ -2270,3 +2272,183 @@ async def test_rag_pipeline_skips_blind_semantic_lookup_for_filter_sensitive_que
 
     mock_cache.check_semantic.assert_not_awaited()
     assert result["semantic_cache_already_checked"] is True
+
+
+# ---------------------------------------------------------------------------
+# BGE-M3 query vector bundle tests (#1493)
+# ---------------------------------------------------------------------------
+
+
+async def test_cache_check_uses_bundle_cache_hit(mock_cache):
+    """_cache_check uses bundle cache and skips compute_query_embedding."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+
+    bundle = BgeM3QueryVectorBundle(
+        dense=[0.1] * 1024,
+        sparse={"indices": [1], "values": [0.5]},
+        colbert=[[0.2] * 1024] * 4,
+    )
+    mock_cache.get_bge_m3_query_bundle = AsyncMock(return_value=bundle)
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock()
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["cache_hit"] is False
+    assert result["query_embedding"] == bundle.dense
+    assert result["sparse_embedding"] == bundle.sparse
+    assert result["colbert_query"] == bundle.colbert
+    assert result["embeddings_cache_hit"] is True
+    mock_embeddings.aembed_hybrid.assert_not_awaited()
+    mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
+
+
+async def test_cache_check_stores_bundle_after_colbert_compute(mock_cache):
+    """_cache_check stores bundle after computing colbert via aembed_hybrid_with_colbert."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=None)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}, [[0.2] * 1024] * 4)
+    )
+    mock_embeddings.aembed_colbert_query = None
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["colbert_query"] is not None
+    mock_cache.store_bge_m3_query_bundle.assert_awaited_once()
+    call_args = mock_cache.store_bge_m3_query_bundle.await_args
+    assert call_args.args[0] == "test query"
+
+
+async def test_hybrid_retrieve_uses_bundle_after_rewrite(mock_cache, mock_sparse):
+    """_hybrid_retrieve uses bundle cache after rewrite to avoid redundant BGE-M3 call."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+
+    bundle = BgeM3QueryVectorBundle(
+        dense=[0.3] * 1024,
+        sparse={"indices": [2], "values": [0.7]},
+        colbert=[[0.4] * 1024] * 3,
+    )
+    mock_cache.get_bge_m3_query_bundle = AsyncMock(return_value=bundle)
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock()
+
+    result = await _hybrid_retrieve(
+        "rewritten query",
+        None,  # dense_vector is None after rewrite
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        embeddings=mock_embeddings,
+        colbert_query=None,
+        latency_stages={},
+    )
+
+    assert result["rerank_applied"] is True
+    assert result["colbert_query"] == bundle.colbert
+    mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
+    mock_qdrant.hybrid_search_rrf_colbert.assert_called_once()
+
+
+async def test_hybrid_retrieve_stores_bundle_after_hybrid_colbert(mock_cache, mock_sparse):
+    """_hybrid_retrieve stores bundle after aembed_hybrid_with_colbert computes vectors."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=([0.3] * 1024, {"indices": [2], "values": [0.7]}, [[0.4] * 1024] * 3)
+    )
+
+    result = await _hybrid_retrieve(
+        "rewritten query",
+        None,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        embeddings=mock_embeddings,
+        colbert_query=None,
+        latency_stages={},
+    )
+
+    assert result["rerank_applied"] is True
+    mock_cache.store_bge_m3_query_bundle.assert_awaited_once()
+
+
+async def test_cache_check_skips_bundle_when_pre_computed(mock_cache):
+    """_cache_check skips bundle cache when pre_computed_embedding is provided."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+    from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
+
+    bundle = BgeM3QueryVectorBundle(
+        dense=[0.1] * 1024,
+        sparse={"indices": [1], "values": [0.5]},
+        colbert=[[0.2] * 1024] * 4,
+    )
+    mock_cache.get_bge_m3_query_bundle = AsyncMock(return_value=bundle)
+
+    mock_embeddings = AsyncMock()
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=[0.5] * 1024,
+        pre_computed_sparse={"indices": [3], "values": [0.9]},
+    )
+
+    assert result["query_embedding"] == [0.5] * 1024
+    assert result["sparse_embedding"] == {"indices": [3], "values": [0.9]}
+    mock_cache.get_bge_m3_query_bundle.assert_not_awaited()
