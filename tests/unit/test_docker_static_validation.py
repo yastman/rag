@@ -38,6 +38,9 @@ _LANGFUSE_RUNTIME_DOCKERFILES = [
 COMPOSE_CI_ENV = Path("tests/fixtures/compose.ci.env")
 MINI_APP_FRONTEND_DOCKERFILE = Path("mini_app/frontend/Dockerfile")
 MINI_APP_FRONTEND_NGINX_CONF = Path("mini_app/frontend/nginx.conf")
+COMPOSE_FILE = Path("compose.yml")
+ENV_EXAMPLE = Path(".env.example")
+QDRANT_STACK_DOC = Path("docs/QDRANT_STACK.md")
 
 
 def _docker_available() -> bool:
@@ -165,3 +168,77 @@ def test_mini_app_frontend_nginx_runtime_paths_use_tmp() -> None:
     assert "pid /tmp/nginx.pid;" in text
     assert "client_body_temp_path /tmp/client_temp;" in text
     assert "proxy_temp_path /tmp/proxy_temp;" in text
+
+
+def test_voice_agent_healthcheck_does_not_use_rag_api_port() -> None:
+    """voice-agent healthcheck must not reference port 8080 to avoid confusion with rag-api (#1510)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    voice = compose["services"]["voice-agent"]
+    health_test = " ".join(voice["healthcheck"]["test"])
+    assert "8080" not in health_test, (
+        "voice-agent healthcheck must not reference port 8080 (rag-api); use a process check instead"
+    )
+
+
+def test_voice_agent_has_otel_service_name() -> None:
+    """voice-agent must set a stable OTEL_SERVICE_NAME default like other Langfuse-instrumented services (#1510)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    voice = compose["services"]["voice-agent"]
+    env = voice.get("environment", {})
+    assert "OTEL_SERVICE_NAME" in env, "voice-agent must set OTEL_SERVICE_NAME in compose.yml"
+    assert "voice-agent" in env["OTEL_SERVICE_NAME"], (
+        "voice-agent OTEL_SERVICE_NAME default must include 'voice-agent'"
+    )
+
+
+def test_mini_app_api_depends_on_postgres() -> None:
+    """mini-app-api uses REALESTATE_DATABASE_URL and must declare a postgres dependency (#1510)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    mini = compose["services"]["mini-app-api"]
+    deps = mini.get("depends_on", {})
+    assert "postgres" in deps, "mini-app-api must depend_on postgres"
+
+
+def test_docling_read_only_has_explanatory_comment() -> None:
+    """docling overrides read_only: false and must have an explanatory comment like litellm (#1510)."""
+    text = COMPOSE_FILE.read_text()
+    # Find the docling service block by locating the next service at the same indent
+    docling_start = text.find("  docling:")
+    assert docling_start != -1, "docling service not found in compose.yml"
+    # Services are separated by a blank line followed by "  <service-name>:" at column 0
+    next_service = text.find("\n\n  ", docling_start + 1)
+    block = text[docling_start : next_service if next_service != -1 else None]
+    assert "read_only: false" in block, "docling must set read_only: false"
+    # The comment should appear before read_only: false in the same block
+    lines = block.splitlines()
+    for i, line in enumerate(lines):
+        if "read_only: false" in line:
+            # Check preceding 2 lines for a comment
+            preceding = "\n".join(lines[max(0, i - 2) : i])
+            assert "#" in preceding, (
+                "docling read_only: false must have an explanatory comment nearby"
+            )
+            break
+    else:
+        pytest.fail("read_only: false not found in docling block")
+
+
+def test_qdrant_stack_doc_matches_compose_version() -> None:
+    """docs/QDRANT_STACK.md must reference the same Qdrant version as compose.yml (#1510)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    qdrant_image = compose["services"]["qdrant"]["image"]
+    # Extract tag from image string, e.g. qdrant/qdrant:v1.18.0@sha256:...
+    tag = qdrant_image.split(":")[1].split("@")[0]
+
+    doc_text = QDRANT_STACK_DOC.read_text()
+    assert tag in doc_text, (
+        f"docs/QDRANT_STACK.md must reference Qdrant version {tag} (from compose.yml)"
+    )
