@@ -276,11 +276,14 @@ def test_voice_dockerfile_healthcheck_does_not_use_localhost_8080() -> None:
 
 
 def test_voice_dockerfile_healthcheck_is_self_match_safe() -> None:
-    """src/voice/Dockerfile HEALTHCHECK must use a bracketed pgrep regex (#1510)."""
-    import re
-
+    """src/voice/Dockerfile HEALTHCHECK must not contain the process needle literally (#1510)."""
     dockerfile = Path("src/voice/Dockerfile").read_text()
-    assert re.search(r"pgrep\s+-f\s+.*\[[a-z]\]", dockerfile), (
-        "src/voice/Dockerfile HEALTHCHECK must use a bracketed pgrep pattern "
-        "(e.g. pgrep -f '[s]rc.voice.agent') to avoid self-matching"
+    healthcheck = dockerfile.split("HEALTHCHECK", 1)[1].split("\n\nCMD", 1)[0]
+    assert "python -c" in healthcheck, (
+        "src/voice/Dockerfile HEALTHCHECK must use Python stdlib in python:slim runtime"
     )
+    assert "src.voice.agent" not in healthcheck, (
+        "src/voice/Dockerfile HEALTHCHECK must not contain the literal process needle; "
+        "build it dynamically to avoid self-matching the healthcheck command"
+    )
+    assert "'src.voice.' + 'agent'" in healthcheck
