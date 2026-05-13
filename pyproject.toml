@@ -392,6 +392,10 @@ markers = [
     "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
     "kommo: Live Kommo CRM API tests (requires KOMMO_ACCESS_TOKEN)",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
+    "contract: Contract tests (span/trace/error contracts)",
+    "baseline: Baseline comparison tests (regression guard)",
+    "performance: Performance benchmarks (latency, throughput, resource usage)",
+    "regression: Regression guard tests (baseline comparisons, golden sets)",
 ]
 filterwarnings = [
     # trustcall 0.0.39 imports Send from deprecated langgraph.constants;
@@ -411,6 +415,8 @@ omit = [
     "*/legacy/*",
     "*/__pycache__/*",
     "*/.venv/*",
+    "telegram_bot/.venv/*",
+    "telegram_bot/.venv/**/*",
     # Scripts directory (not production code)
     "scripts/*",
     "scripts/**/*",
