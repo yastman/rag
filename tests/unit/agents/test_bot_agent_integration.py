@@ -93,3 +93,23 @@ def test_bot_local_lock_imports_create_agent_sdk():
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
     assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
     assert "ok" in result.stdout
+
+
+def test_bot_local_lock_imports_instructor_sdk():
+    """Regression: bot-local frozen env can import instructor and ApartmentLlmExtractor."""
+    repo_root = str(pathlib.Path(__file__).resolve().parents[3])
+    cmd = [
+        "uv",
+        "--directory",
+        "telegram_bot",
+        "run",
+        "--frozen",
+        "python",
+        "-c",
+        "from telegram_bot.services.apartment_llm_extractor import ApartmentLlmExtractor; print('ok')",
+    ]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = repo_root
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+    assert "ok" in result.stdout
