@@ -9,7 +9,9 @@
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
 	test-contract \
-	docs-check
+	docs-check \
+	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
+	remote-active-up remote-full-up remote-bot-up remote-bot-restart remote-bot-logs remote-service-health
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
@@ -394,6 +396,101 @@ LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD) --env-fil
 # Runtime env for E2E trace gates: allow worktrees to point at the main checkout .env
 RAG_RUNTIME_ENV_FILE ?= $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 export RAG_RUNTIME_ENV_FILE
+
+# =============================================================================
+# REMOTE MACBOOK DOCKER HOST
+# =============================================================================
+
+REMOTE_DOCKER_HOST ?= macbook-docker
+REMOTE_DOCKER_IP ?= 192.168.31.168
+REMOTE_DOCKER_REPO ?= ~/Documents/rag-fresh
+REMOTE_DOCKER_PATH ?= /opt/homebrew/bin:/usr/local/bin
+REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
+REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
+REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
+
+REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 litellm redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
+
+remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
+	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) " \
+		echo \"Hostname: \`hostname\`\"; \
+		echo \"Repo: $(REMOTE_DOCKER_REPO)\"; \
+		cd $(REMOTE_DOCKER_REPO) && echo \"Git branch: \`git branch --show-current 2>/dev/null || echo N/A\`\" && echo \"Last commit: \`git log -1 --format=%h 2>/dev/null || echo N/A\`\"; \
+		echo \"Colima status:\"; \
+		colima status 2>/dev/null || echo \"  Colima not running or not found\"; \
+		echo \"Docker client: \`docker version --format '{{.Client.Version}}' 2>/dev/null || echo N/A\`\"; \
+		echo \"Docker server: \`docker version --format '{{.Server.Version}}' 2>/dev/null || echo N/A\`\"; \
+		echo \"Buildx version: \`docker buildx version 2>/dev/null || echo 'buildx not available'\`\"; \
+	"
+
+remote-compose-config: ## Render remote Compose config (service names only, no secrets)
+	@echo "$(BLUE)Remote Compose config ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` config --services"
+
+remote-docker-ps: ## Show remote Compose container names, status, and ports
+	@echo "$(BLUE)Remote Docker containers ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
+
+remote-env-sync: ## Sync local .env to remote MacBook repo (fails if local .env missing)
+	@echo "$(BLUE)Syncing .env to remote $(REMOTE_DOCKER_HOST)...$(NC)"
+	@test -f .env || { echo "$(RED)Error: local .env not found$(NC)"; exit 1; }
+	@scp -q .env $(REMOTE_DOCKER_HOST):$(REMOTE_DOCKER_REPO)/.env
+	@echo "$(GREEN)✓ .env synced to remote$(NC)"
+
+remote-env-check: ## Verify remote .env exists and report missing required variable names
+	@echo "$(BLUE)Checking remote .env on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && \
+		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
+		missing=''; \
+		if ! grep -qE '^TELEGRAM_BOT_TOKEN=' .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
+		if ! grep -qE '^LITELLM_MASTER_KEY=' .env; then missing=\"$$missing LITELLM_MASTER_KEY\"; fi; \
+		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
+		if ! grep -qE '^NEXTAUTH_SECRET=' .env; then missing=\"$$missing NEXTAUTH_SECRET\"; fi; \
+		if ! grep -qE '^SALT=' .env; then missing=\"$$missing SALT\"; fi; \
+		if ! grep -qE '^ENCRYPTION_KEY=' .env; then missing=\"$$missing ENCRYPTION_KEY\"; fi; \
+		if [ -n \"$$missing\" ]; then \
+			echo \"Missing variables:$$missing\"; \
+			exit 1; \
+		else \
+			echo 'Required variables present'; \
+		fi"
+
+remote-active-up: ## Start active remote stack (bot + ml + voice profiles)
+	@echo "$(BLUE)Starting active remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot --profile ml --profile voice up -d $(REMOTE_ACTIVE_SERVICES)"
+	@echo "$(GREEN)✓ Active remote stack started$(NC)"
+
+remote-full-up: ## Start full remote stack (all profiles)
+	@echo "$(BLUE)Starting full remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full up -d"
+	@echo "$(GREEN)✓ Full remote stack started$(NC)"
+
+remote-bot-up: ## Start remote bot container
+	@echo "$(BLUE)Starting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d bot"
+	@echo "$(GREEN)✓ Remote bot started$(NC)"
+
+remote-bot-restart: ## Recreate remote bot container
+	@echo "$(BLUE)Restarting remote bot on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d --force-recreate bot"
+	@echo "$(GREEN)✓ Remote bot restarted$(NC)"
+
+remote-bot-logs: ## Show recent remote bot logs
+	@echo "$(BLUE)Remote bot logs ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 -f bot"
+
+remote-service-health: ## Check remote service health over SSH on 127.0.0.1
+	@echo "$(BLUE)Remote service health ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@fail=0; \
+	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:6333/readyz >/dev/null 2>&1"; then echo "  Qdrant: $(RED)FAIL$(NC)"; fail=1; else echo "  Qdrant: $(GREEN)OK$(NC)"; fi; \
+	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1"; then echo "  BGE-M3: $(RED)FAIL$(NC)"; fail=1; else echo "  BGE-M3: $(GREEN)OK$(NC)"; fi; \
+	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:4000/health/liveliness >/dev/null 2>&1"; then echo "  LiteLLM: $(RED)FAIL$(NC)"; fail=1; else echo "  LiteLLM: $(GREEN)OK$(NC)"; fi; \
+	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:3000/api/public/health >/dev/null 2>&1"; then echo "  Langfuse: $(GREEN)OK$(NC)"; else echo "  Langfuse: $(YELLOW)NOT READY$(NC)"; fi; \
+	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:5001/health >/dev/null 2>&1"; then echo "  Docling: $(GREEN)OK$(NC)"; else echo "  Docling: $(YELLOW)NOT READY$(NC)"; fi; \
+	bot_restarts=$$($(REMOTE_SSH) "docker inspect --format='{{.RestartCount}}' rag-fresh-bot-1 2>/dev/null || echo N/A"); \
+	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
+	exit $$fail
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
