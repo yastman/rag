@@ -128,6 +128,35 @@ export OTEL_SERVICE_NAME=custom-bot-name
 make docker-bot-up
 ```
 
+### Local Langfuse Headless Initialization
+
+`compose.yml` keeps Langfuse credentials secret-free: it declares traced service
+environment variables but does not provide predictable key defaults.
+
+`compose.dev.yml` is the local convenience layer. It provides dev-only
+`LANGFUSE_INIT_*` defaults for the `langfuse` service so an empty local
+Langfuse database creates a development organization, project, and API key that
+match the traced service defaults:
+
+| Variable | Dev default |
+| --- | --- |
+| `LANGFUSE_INIT_ORG_ID` | `dev-org` |
+| `LANGFUSE_INIT_ORG_NAME` | `Local Dev` |
+| `LANGFUSE_INIT_PROJECT_ID` | `dev-project` |
+| `LANGFUSE_INIT_PROJECT_NAME` | `Local Dev` |
+| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `pk-lf-dev` |
+| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `sk-lf-dev` |
+
+These defaults are local-only. Override them from `.env` when a dev stack should
+use a different local Langfuse project. Production and VPS environments must
+provide real Langfuse keys and must not rely on the dev defaults.
+
+If `bot` logs show OTLP `401` or Langfuse logs show `No key found for public
+key`, the local Langfuse database likely lacks the project key currently
+injected into traced services. Recreate `langfuse`, `langfuse-worker`, and the
+traced service with the same env file so headless initialization and service
+credentials line up.
+
 ## Health Checks
 
 ```bash

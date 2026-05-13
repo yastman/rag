@@ -50,6 +50,11 @@ Secret model by compose file:
 - `compose.dev.yml` may provide local-only defaults for development convenience (`pk-lf-dev`, `sk-lf-dev`, `clickhouse`, `miniosecret`, `langfuseredis`, `devkey`).
 - Production/VPS stacks must set real secret values via environment management or file-backed secret patterns (`*_FILE` / `secrets:`) when available.
 
+Langfuse local development:
+- `compose.dev.yml` uses Langfuse headless initialization defaults to create a local dev organization/project/API key (`pk-lf-dev` / `sk-lf-dev`) when the Langfuse database is empty.
+- Traced dev services use the same local keys, so a fresh local Langfuse database should accept OTLP ingestion after `langfuse` is recreated.
+- If `bot` logs show OTLP `401` / `No key found for public key`, recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file, then confirm the local Langfuse DB has an organization, project, and API key before debugging application tracing.
+
 ## 2. Start Services
 
 ```bash
