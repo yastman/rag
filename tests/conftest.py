@@ -217,8 +217,16 @@ def qdrant_collection():
 
 @pytest.fixture(scope="session")
 def redis_url():
-    """Redis server URL."""
-    return os.getenv("REDIS_URL", "redis://localhost:6379")
+    """Redis server URL with password support.
+
+    Reads REDIS_URL and REDIS_PASSWORD from env. If URL has no auth
+    but REDIS_PASSWORD is set, injects password into URL.
+    """
+    url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    password = os.getenv("REDIS_PASSWORD", "")
+    if password and "@" not in url:
+        url = url.replace("redis://", f"redis://:{password}@", 1)
+    return url
 
 
 @pytest.fixture(scope="session")
