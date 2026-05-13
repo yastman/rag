@@ -52,6 +52,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         root / "chaos": "chaos",
         root / "load": "load",
         root / "benchmark": "benchmark",
+        root / "contract": "contract",
+        root / "baseline": "baseline",
     }
 
     for item in items:
