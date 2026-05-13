@@ -44,14 +44,26 @@ def _docker_available() -> bool:
     return shutil.which("docker") is not None
 
 
+def _run_docker_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+    if not _docker_available():
+        pytest.skip("Docker not available")
+    try:
+        return subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        pytest.skip("Docker not available")
+
+
 @pytest.mark.parametrize("dockerfile", DOCKERFILES)
 def test_dockerfile_exists(dockerfile: str) -> None:
     assert Path(dockerfile).is_file(), f"{dockerfile} not found"
 
 
-@pytest.mark.skipif(not _docker_available(), reason="Docker not available")
 def test_compose_dev_config_renders() -> None:
-    result = subprocess.run(
+    result = _run_docker_command(
         [
             "docker",
             "compose",
@@ -64,15 +76,12 @@ def test_compose_dev_config_renders() -> None:
             "config",
             "--quiet",
         ],
-        capture_output=True,
-        text=True,
     )
     assert result.returncode == 0, f"Compose dev config failed:\n{result.stderr}"
 
 
-@pytest.mark.skipif(not _docker_available(), reason="Docker not available")
 def test_compose_vps_config_renders() -> None:
-    result = subprocess.run(
+    result = _run_docker_command(
         [
             "docker",
             "compose",
@@ -85,16 +94,13 @@ def test_compose_vps_config_renders() -> None:
             "config",
             "--quiet",
         ],
-        capture_output=True,
-        text=True,
     )
     assert result.returncode == 0, f"Compose VPS config failed:\n{result.stderr}"
 
 
-@pytest.mark.skipif(not _docker_available(), reason="Docker not available")
 def test_compose_dev_config_renders_with_full_profile() -> None:
     """Profile-gated services must not fail merely because required env vars are unset (#1341)."""
-    result = subprocess.run(
+    result = _run_docker_command(
         [
             "docker",
             "compose",
@@ -109,8 +115,6 @@ def test_compose_dev_config_renders_with_full_profile() -> None:
             "config",
             "--quiet",
         ],
-        capture_output=True,
-        text=True,
     )
     assert result.returncode == 0, (
         f"Compose dev config with --profile full failed:\n{result.stderr}"
