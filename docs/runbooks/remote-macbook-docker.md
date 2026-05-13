@@ -112,7 +112,8 @@ Optional services may report soft failures when they are not part of the selecte
 | Context | Address |
 |---|---|
 | MacBook service health over SSH | `127.0.0.1` (localhost on the MacBook) |
-| WSL tests that call exposed ports | `192.168.31.168` (MacBook LAN IP, not WSL `localhost`) |
+| WSL tests against default Compose ports | Run over SSH on the MacBook; default dev ports bind to MacBook `127.0.0.1` |
+| WSL tests after intentionally publishing ports on the LAN | `192.168.31.168` (MacBook LAN IP, not WSL `localhost`) |
 | Docker exec / container-name tests | Run over SSH in the MacBook repo |
 
 ## Test Boundary
@@ -120,15 +121,13 @@ Optional services may report soft failures when they are not part of the selecte
 | Test Type | Where to Run |
 |---|---|
 | Unit / lint / type-check / non-Docker integration | WSL (fast, no Docker needed) |
-| Service-dependent WSL tests | Point to MacBook endpoints (`192.168.31.168`) |
+| Service-dependent tests against default Compose ports | Over SSH on MacBook |
 | Docker exec, local volumes, Compose networks, container names | Over SSH on MacBook |
 
-Example WSL test pointing at MacBook:
+Example service-dependent test over SSH:
 
 ```bash
-QDRANT_URL=http://192.168.31.168:6333 \
-LITELLM_BASE_URL=http://192.168.31.168:4000 \
-make test-bot-health
+ssh macbook-docker 'cd ~/Documents/rag-fresh && export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; make test-bot-health'
 ```
 
 Example Docker-local test over SSH:
