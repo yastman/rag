@@ -237,3 +237,37 @@ def test_e2e_test_traces_core_includes_required_scenarios() -> None:
     assert not missing, (
         f"e2e-test-traces-core must include all required #1307 scenarios; missing: {missing}"
     )
+
+
+# --- #1490 latest trace audit contract tests ---
+
+
+def test_langfuse_latest_trace_audit_is_phony() -> None:
+    text = _makefile_text()
+    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
+    assert phony_blocks, ".PHONY declaration not found in Makefile"
+    combined = " ".join(phony_blocks)
+    assert "langfuse-latest-trace-audit" in combined, (
+        "langfuse-latest-trace-audit must be declared in .PHONY"
+    )
+
+
+def test_langfuse_latest_trace_audit_target_exists() -> None:
+    text = _makefile_text()
+    assert re.search(r"^langfuse-latest-trace-audit:", text, re.MULTILINE), (
+        "langfuse-latest-trace-audit target must exist in Makefile"
+    )
+
+
+def test_langfuse_latest_trace_audit_runs_audit_script() -> None:
+    text = _makefile_text()
+    block_match = re.search(
+        r"^langfuse-latest-trace-audit:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "langfuse-latest-trace-audit target not found in Makefile"
+    block = block_match.group(0)
+    assert "scripts/e2e/langfuse_latest_trace_audit.py" in block, (
+        "langfuse-latest-trace-audit must invoke scripts/e2e/langfuse_latest_trace_audit.py"
+    )
