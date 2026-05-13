@@ -56,6 +56,8 @@ make local-ps
 make local-down
 ```
 
+> **Remote MacBook workflow**: for this machine, the recommended Docker path runs on a remote MacBook via SSH. See [`docs/runbooks/remote-macbook-docker.md`](docs/runbooks/remote-macbook-docker.md) for remote targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`.
+
 For local development, the canonical local env file is `.env` in the repo root. `.env.local` is not auto-loaded by the documented `make` and `uv run` workflows.
 
 Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
