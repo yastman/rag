@@ -1,11 +1,10 @@
 # models/
 
+## Purpose
+
 Embedding model singletons to prevent duplicate loading (saves 4–6 GB RAM).
-
-## Ownership
-
-- Owns process-local embedding model singletons and the Voyage contextualized embedding client.
-- Keeps heavy ML imports lazy so normal imports do not require local model extras.
+Owns process-local embedding model singletons and the Voyage contextualized embedding client.
+Keeps heavy ML imports lazy so normal imports do not require local model extras.
 
 ## Files
 
@@ -45,7 +44,7 @@ st = get_sentence_transformer("BAAI/bge-m3")
 uv run pytest tests/unit/utils/test_embedding_model.py tests/unit/test_contextualized_embeddings.py -q
 ```
 
-## Related
+## See Also
 
 - [`src/retrieval/`](../retrieval/) — Uses models for search
 - [`telegram_bot/services/voyage.py`](../../telegram_bot/services/voyage.py) — Voyage AI alternative

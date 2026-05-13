@@ -1,11 +1,10 @@
 # contextualization/
 
+## Purpose
+
 LLM-based context enrichment for document chunks (+2-5% Recall improvement).
-
-## Ownership
-
-- Owns contextualization provider interfaces and Claude/OpenAI/Groq implementations.
-- Produces `ContextualizedChunk` objects used by RAG and ingestion paths.
+Owns contextualization provider interfaces and Claude/OpenAI/Groq implementations.
+Produces `ContextualizedChunk` objects used by RAG and ingestion paths.
 
 ## Files
 
@@ -57,7 +56,7 @@ enriched = await contextualizer.contextualize(["chunk text"], query="optional qu
 uv run pytest tests/unit/contextualization/ -q
 ```
 
-## Related
+## See Also
 
 - [src/core/pipeline.py](../core/pipeline.py) — Uses contextualizers in RAG pipeline
 - [src/ingestion/](../ingestion/) — Document chunking before contextualization
