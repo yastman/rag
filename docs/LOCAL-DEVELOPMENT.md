@@ -83,6 +83,18 @@ Bot preflight:
 make test-bot-health
 ```
 
+Bot-local LangChain/LangGraph dependency smoke:
+
+```bash
+uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'
+PYTHONPATH="$PWD" uv --directory telegram_bot run --frozen python -c 'from telegram_bot.agents.agent import create_bot_agent'
+```
+
+Run this after changes to `telegram_bot/pyproject.toml`,
+`telegram_bot/uv.lock`, or LangChain/LangGraph agent code. The Docker bot image
+builds from the bot-local lock, so root `uv.lock` passing is not enough for bot
+runtime compatibility.
+
 If `make test-bot-health` reports Redis auth failure after editing `.env`:
 
 ```bash
