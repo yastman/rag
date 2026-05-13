@@ -403,7 +403,7 @@ export RAG_RUNTIME_ENV_FILE
 
 REMOTE_DOCKER_HOST ?= macbook-docker
 REMOTE_DOCKER_IP ?= 192.168.31.168
-REMOTE_DOCKER_REPO ?= ~/Documents/rag-fresh
+REMOTE_DOCKER_REPO ?= /Users/aroslav/Documents/rag-fresh
 REMOTE_DOCKER_PATH ?= /opt/homebrew/bin:/usr/local/bin
 REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
@@ -417,6 +417,7 @@ remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docke
 		echo \"Hostname: \`hostname\`\"; \
 		echo \"Repo: $(REMOTE_DOCKER_REPO)\"; \
 		cd $(REMOTE_DOCKER_REPO) && echo \"Git branch: \`git branch --show-current 2>/dev/null || echo N/A\`\" && echo \"Last commit: \`git log -1 --format=%h 2>/dev/null || echo N/A\`\"; \
+		export PATH=$(REMOTE_DOCKER_PATH):\$$PATH; \
 		echo \"Colima status:\"; \
 		colima status 2>/dev/null || echo \"  Colima not running or not found\"; \
 		echo \"Docker client: \`docker version --format '{{.Client.Version}}' 2>/dev/null || echo N/A\`\"; \
@@ -478,7 +479,7 @@ remote-bot-restart: ## Recreate remote bot container
 
 remote-bot-logs: ## Show recent remote bot logs
 	@echo "$(BLUE)Remote bot logs ($(REMOTE_DOCKER_HOST))...$(NC)"
-	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 -f bot"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 bot"
 
 remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	@echo "$(BLUE)Remote service health ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -486,9 +487,9 @@ remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:6333/readyz >/dev/null 2>&1"; then echo "  Qdrant: $(RED)FAIL$(NC)"; fail=1; else echo "  Qdrant: $(GREEN)OK$(NC)"; fi; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1"; then echo "  BGE-M3: $(RED)FAIL$(NC)"; fail=1; else echo "  BGE-M3: $(GREEN)OK$(NC)"; fi; \
 	if ! $(REMOTE_SSH) "curl -fsS http://127.0.0.1:4000/health/liveliness >/dev/null 2>&1"; then echo "  LiteLLM: $(RED)FAIL$(NC)"; fail=1; else echo "  LiteLLM: $(GREEN)OK$(NC)"; fi; \
-	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:3000/api/public/health >/dev/null 2>&1"; then echo "  Langfuse: $(GREEN)OK$(NC)"; else echo "  Langfuse: $(YELLOW)NOT READY$(NC)"; fi; \
+	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:3001/api/public/health >/dev/null 2>&1"; then echo "  Langfuse: $(GREEN)OK$(NC)"; else echo "  Langfuse: $(YELLOW)NOT READY$(NC)"; fi; \
 	if $(REMOTE_SSH) "curl -fsS http://127.0.0.1:5001/health >/dev/null 2>&1"; then echo "  Docling: $(GREEN)OK$(NC)"; else echo "  Docling: $(YELLOW)NOT READY$(NC)"; fi; \
-	bot_restarts=$$($(REMOTE_SSH) "docker inspect --format='{{.RestartCount}}' rag-fresh-bot-1 2>/dev/null || echo N/A"); \
+	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
 	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(YELLOW)container not found$(NC)"; fi; \
 	exit $$fail
 
