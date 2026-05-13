@@ -118,7 +118,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: ${BGE_M3_MEMORY_LIMIT:-4G}
           pids: 200
 
   user-base:
