@@ -12,24 +12,11 @@ from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.qdrant import QdrantService
 
 
-def _build_redis_url() -> str:
-    """Build Redis URL with password support.
-
-    Reads REDIS_URL and REDIS_PASSWORD from env. If URL has no auth
-    but REDIS_PASSWORD is set, injects password into URL.
-    """
-    url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    password = os.getenv("REDIS_PASSWORD", "")
-    if password and "@" not in url:
-        url = url.replace("redis://", f"redis://:{password}@", 1)
-    return url
-
-
 @pytest.fixture(scope="module")
-def require_live_services():
+def require_live_services(request):
     """Skip if live services not available. Checks BOTH Qdrant AND Redis."""
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    redis_url = _build_redis_url()
+    redis_url = request.getfixturevalue("redis_url")
 
     # Check Qdrant
     try:
@@ -85,9 +72,9 @@ async def qdrant_service():
 
 
 @pytest.fixture(scope="module")
-async def cache_service():
+async def cache_service(request):
     """CacheLayerManager for caching."""
-    redis_url = _build_redis_url()
+    redis_url = request.getfixturevalue("redis_url")
     service = CacheLayerManager(redis_url=redis_url)
     await service.initialize()
     yield service
