@@ -5,7 +5,6 @@ Requires a running Qdrant instance (make docker-up).
 
 import contextlib
 import socket
-import uuid
 from unittest.mock import AsyncMock
 
 import pytest
@@ -19,7 +18,7 @@ from telegram_bot.services.history_service import HistoryService
 
 
 # Use unique collection name to avoid conflicts
-TEST_COLLECTION = f"test_history_{uuid.uuid4().hex[:8]}"
+TEST_COLLECTION = "test_history_integration"
 
 
 def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
