@@ -33,8 +33,12 @@ def test_generate_contact_data():
     """Contact data has valid first_name, last_name, phone."""
     from scripts.kommo_seed import generate_contact_data
 
-    random.seed(42)
-    contact = generate_contact_data(index=0)
+    _saved_state = random.getstate()
+    try:
+        random.seed(42)
+        contact = generate_contact_data(index=0)
+    finally:
+        random.setstate(_saved_state)
     assert contact["first_name"]
     assert contact["last_name"]
     assert contact["phone"].startswith("+")
@@ -58,8 +62,12 @@ def test_pick_scenario_returns_scenario():
     """pick_scenario returns a Scenario dataclass."""
     from scripts.kommo_seed import SCENARIOS, pick_scenario
 
-    random.seed(42)
-    s = pick_scenario()
+    _saved_state = random.getstate()
+    try:
+        random.seed(42)
+        s = pick_scenario()
+    finally:
+        random.setstate(_saved_state)
     assert s in SCENARIOS
     assert s.crm_title
     assert s.note_templates
@@ -350,16 +358,20 @@ async def test_seed_dry_run_full_flow():
         "lost": 143,
     }
 
-    random.seed(42)
-    stats = await seed_crm(
-        kommo_client=None,
-        apartments=apartments,
-        statuses=statuses,
-        pipeline_id=1,
-        num_contacts=10,
-        num_leads=20,
-        dry_run=True,
-    )
+    _saved_state = random.getstate()
+    try:
+        random.seed(42)
+        stats = await seed_crm(
+            kommo_client=None,
+            apartments=apartments,
+            statuses=statuses,
+            pipeline_id=1,
+            num_contacts=10,
+            num_leads=20,
+            dry_run=True,
+        )
+    finally:
+        random.setstate(_saved_state)
 
     assert stats["contacts_created"] == 10
     assert stats["leads_created"] == 20
