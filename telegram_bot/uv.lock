@@ -783,6 +783,28 @@ wheels = [
 ]
 
 [[package]]
+name = "instructor"
+version = "1.15.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "docstring-parser" },
+    { name = "jinja2" },
+    { name = "jiter" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "rich" },
+    { name = "tenacity" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/a4/832cfb15420360e26d2d85bd9d5fe1e4b839d52587574d389bc31284bf6f/instructor-1.15.1.tar.gz", hash = "sha256:c72406469d9025b742e83cf0c13e914b317db2089d08d889944e74fcd659ef94", size = 69948370, upload-time = "2026-04-03T01:51:30.107Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/c8/36c5d9b80aaf40ba9a7084a8fc18c967db6bf248a4cc8d0f0816b14284be/instructor-1.15.1-py3-none-any.whl", hash = "sha256:be81d17ba2b154a04ab4720808f24f9d6b598f80992f82eaf9cc79006099cf6c", size = 178156, upload-time = "2026-04-03T01:51:23.098Z" },
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2013,6 +2035,7 @@ dependencies = [
     { name = "fluentogram" },
     { name = "grpcio" },
     { name = "httpx" },
+    { name = "instructor" },
     { name = "langchain" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
@@ -2042,6 +2065,7 @@ requires-dist = [
     { name = "fluentogram", specifier = ">=1.1.8" },
     { name = "grpcio", specifier = ">=1.60.0" },
     { name = "httpx", specifier = ">=0.28.0" },
+    { name = "instructor", specifier = ">=1.7.0" },
     { name = "langchain", specifier = ">=1.2" },
     { name = "langchain-core", specifier = ">=1.2" },
     { name = "langchain-openai", specifier = ">=0.3.0" },
