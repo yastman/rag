@@ -1,11 +1,10 @@
 ***REMOVED*** config/
 
+***REMOVED******REMOVED*** Purpose
+
 Central configuration for the RAG pipeline: settings, constants, and Qdrant policy.
-
-***REMOVED******REMOVED*** Ownership
-
-- Owns core `src` RAG settings, enum constants, defaults, and collection naming policy.
-- Loads local settings from constructor arguments, environment variables, and defaults.
+Owns core `src` RAG settings, enum constants, defaults, and collection naming policy.
+Loads local settings from constructor arguments, environment variables, and defaults.
 
 ***REMOVED******REMOVED*** Files
 
@@ -43,7 +42,7 @@ settings = Settings(
 uv run pytest tests/unit/config/ -q
 ```
 
-***REMOVED******REMOVED*** Related
+***REMOVED******REMOVED*** See Also
 
 - [`.env.example`](../../.env.example) — Environment variables template
 - [`src/core/pipeline.py`](../core/pipeline.py) — Uses `Settings` for pipeline config
