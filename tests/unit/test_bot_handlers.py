@@ -618,7 +618,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -652,7 +651,6 @@ class TestHandleQuery:
                 "telegram_bot.integrations.memory.create_fallback_checkpointer",
                 return_value=fallback_cp,
             ) as mock_create_fallback_cp,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -677,7 +675,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=failing_agent) as mock_factory,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -705,7 +702,6 @@ class TestHandleQuery:
             patch(
                 "telegram_bot.integrations.memory.create_fallback_checkpointer"
             ) as mock_create_fallback_cp,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -728,7 +724,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -799,7 +794,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -820,7 +814,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -843,7 +836,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -869,7 +861,6 @@ class TestHandleQuery:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -902,7 +893,6 @@ class TestHistorySaveOnResponse:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -939,7 +929,6 @@ class TestHistorySaveOnResponse:
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
@@ -976,7 +965,6 @@ class TestHistorySaveOnResponse:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -997,7 +985,6 @@ class TestHistorySaveOnResponse:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -1106,9 +1093,8 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history цены")
 
-        with patch("telegram_bot.bot.get_client", return_value=MagicMock()):
-            with patch("telegram_bot.bot.propagate_attributes"):
-                await bot.cmd_history(message)
+        with patch("telegram_bot.bot.propagate_attributes"):
+            await bot.cmd_history(message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -1133,9 +1119,8 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history тест")
 
-        with patch("telegram_bot.bot.get_client", return_value=MagicMock()):
-            with patch("telegram_bot.bot.propagate_attributes"):
-                await bot.cmd_history(message)
+        with patch("telegram_bot.bot.propagate_attributes"):
+            await bot.cmd_history(message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -1153,9 +1138,8 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history тест")
 
-        with patch("telegram_bot.bot.get_client", return_value=MagicMock()):
-            with patch("telegram_bot.bot.propagate_attributes"):
-                await bot.cmd_history(message)
+        with patch("telegram_bot.bot.propagate_attributes"):
+            await bot.cmd_history(message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -1264,7 +1248,6 @@ class TestCheckpointNamespace:
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph) as mock_build_graph,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
@@ -1428,7 +1411,6 @@ class TestHandleVoiceExceptionHandling:
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
@@ -1451,7 +1433,6 @@ class TestHandleVoiceExceptionHandling:
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
@@ -2471,7 +2452,6 @@ class TestPreAgentGuard:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -2492,7 +2472,6 @@ class TestPreAgentGuard:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.detect_injection") as mock_detect,
@@ -2515,7 +2494,6 @@ class TestPreAgentGuard:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -2536,7 +2514,6 @@ class TestPreAgentGuard:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -2562,7 +2539,6 @@ class TestSdkAgentIntegration:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -2600,7 +2576,6 @@ class TestClientDirectPipeline:
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
             patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -3010,7 +2985,6 @@ class TestClientDirectPipeline:
                 AsyncMock(side_effect=RuntimeError("boom")),
             ),
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.pipelines.client.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
@@ -3037,7 +3011,6 @@ class TestClientDirectPipeline:
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
             patch("telegram_bot.pipelines.client.rag_pipeline") as mock_rag,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -3157,7 +3130,6 @@ class TestStreamingCoordination:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -3193,7 +3165,6 @@ class TestStreamingCoordination:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -3231,7 +3202,6 @@ class TestStreamingCoordination:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch(
@@ -3343,7 +3313,6 @@ class TestStreamingCoordination:
                 "telegram_bot.integrations.memory.create_fallback_checkpointer",
                 return_value=fallback_cp,
             ) as mock_create_fallback_cp,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -3371,7 +3340,6 @@ class TestStreamingCoordination:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
@@ -3557,7 +3525,6 @@ class TestToolListByRole:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
@@ -3583,7 +3550,6 @@ class TestToolListByRole:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
@@ -3638,7 +3604,6 @@ class TestHITLBotHandler:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
@@ -3685,7 +3650,6 @@ class TestHITLBotHandler:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
@@ -3713,7 +3677,6 @@ class TestHITLBotHandler:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
@@ -3780,7 +3743,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -3814,7 +3776,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -3852,7 +3813,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -3887,7 +3847,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -3928,7 +3887,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -3960,7 +3918,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -3986,7 +3943,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
@@ -4016,7 +3972,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4192,7 +4147,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="OFF_TOPIC"),
@@ -4235,7 +4189,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4286,7 +4239,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4333,7 +4285,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4375,7 +4326,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4453,7 +4403,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4645,7 +4594,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4668,7 +4616,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4709,7 +4656,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4747,7 +4693,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4780,7 +4725,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4827,7 +4771,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4875,7 +4818,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4918,7 +4860,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4957,7 +4898,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -5066,7 +5006,6 @@ class TestTextPathSemanticCachePolicy:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="GENERAL"),
@@ -5222,7 +5161,6 @@ class TestTextPathSemanticCachePolicy:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
