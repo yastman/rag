@@ -393,6 +393,7 @@ LOCAL_COMPOSE_FILE := compose.yml:compose.dev.yml
 LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD) --env-file $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 # Runtime env for E2E trace gates: allow worktrees to point at the main checkout .env
 RAG_RUNTIME_ENV_FILE ?= $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
+export RAG_RUNTIME_ENV_FILE
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 

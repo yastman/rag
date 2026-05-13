@@ -294,9 +294,14 @@ def test_e2e_trace_targets_use_runtime_env_file() -> None:
 
 
 def test_runtime_env_file_has_safe_fallback() -> None:
-    """RAG_RUNTIME_ENV_FILE must exist and fall back to the safe CI fixture when .env is absent."""
+    """RAG_RUNTIME_ENV_FILE must have a safe CI-fallback *and* be exported so recipes
+    receive it even when the shell environment does not set it."""
     text = _makefile_text()
     assert "RAG_RUNTIME_ENV_FILE" in text, "RAG_RUNTIME_ENV_FILE not found in Makefile"
     assert "tests/fixtures/compose.ci.env" in text, (
         "Makefile must reference tests/fixtures/compose.ci.env as the safe fallback"
+    )
+    assert "export RAG_RUNTIME_ENV_FILE" in text, (
+        "Makefile must export RAG_RUNTIME_ENV_FILE so recipe shells "
+        "receive the Make-defined fallback even when the environment does not set it"
     )
