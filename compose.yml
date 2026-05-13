@@ -156,6 +156,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     logging: *default-logging
+    # Docling writes temporary files and HuggingFace caches at runtime.
+    # Keep hardening defaults, but allow writes for this service.
     read_only: false
     environment:
       UVICORN_HOST: 0.0.0.0
@@ -356,6 +358,8 @@ services:
       KOMMO_ACCESS_TOKEN: "${KOMMO_ACCESS_TOKEN:-}"
       BOT_USERNAME: "${BOT_USERNAME:-}"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       qdrant:
@@ -469,7 +473,6 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
-    user: "101:101"
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
@@ -867,8 +870,9 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-voice-agent}"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
+      test: ["CMD-SHELL", "pgrep -f 'src.voice.agent' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
