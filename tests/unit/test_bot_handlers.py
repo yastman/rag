@@ -717,7 +717,7 @@ class TestHandleQuery:
 
         assert failing_agent.ainvoke.await_count == 1
         assert mock_factory.call_count == 1
-        assert mock_create_fallback_cp.call_count == 0
+        mock_create_fallback_cp.assert_not_called()
 
     async def test_handle_query_sends_typing(self, mock_config):
         """Typing action is sent early."""
