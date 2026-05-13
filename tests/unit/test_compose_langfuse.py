@@ -128,6 +128,30 @@ class TestLangfuseSecretPosture:
             f"host localhost values leaking into containers, got: {val!r}"
         )
 
+    def test_base_langfuse_has_no_headless_dev_key_defaults(self, compose_base: dict):
+        env = _get_service_env(compose_base, "langfuse")
+        public = str(env.get("LANGFUSE_INIT_PROJECT_PUBLIC_KEY", ""))
+        secret = str(env.get("LANGFUSE_INIT_PROJECT_SECRET_KEY", ""))
+        assert "pk-lf-dev" not in public
+        assert "sk-lf-dev" not in secret
+
+    def test_dev_langfuse_headless_init_matches_traced_service_keys(self, compose_dev: dict):
+        langfuse_env = _get_service_env(compose_dev, "langfuse")
+        bot_env = _get_service_env(compose_dev, "bot")
+
+        assert langfuse_env["LANGFUSE_INIT_ORG_ID"] == "${LANGFUSE_INIT_ORG_ID:-dev-org}"
+        assert langfuse_env["LANGFUSE_INIT_PROJECT_ID"] == (
+            "${LANGFUSE_INIT_PROJECT_ID:-dev-project}"
+        )
+        assert langfuse_env["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"] == (
+            "${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-dev}"
+        )
+        assert langfuse_env["LANGFUSE_INIT_PROJECT_SECRET_KEY"] == (
+            "${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-dev}"
+        )
+        assert bot_env["LANGFUSE_PUBLIC_KEY"] == "${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}"
+        assert bot_env["LANGFUSE_SECRET_KEY"] == "${LANGFUSE_SECRET_KEY:-sk-lf-dev}"
+
 
 class TestLitellmCallbacks:
     """LiteLLM config must have langfuse callbacks configured."""
