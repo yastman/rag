@@ -429,3 +429,82 @@ class TestRAGPipelineMain:
                 await main()
 
         assert mock_print.call_count >= 4
+
+
+class TestRAGPipelineContextualizer:
+    """Test contextualizer creation based on API provider."""
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    @patch("src.core.pipeline.ClaudeContextualizer")
+    def test_creates_claude_contextualizer(
+        self,
+        mock_claude,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_search_engine,
+        mock_embedding,
+    ):
+        """Test Claude contextualizer is created for Claude provider."""
+        from src.config import APIProvider
+
+        mock_settings = MagicMock()
+        mock_settings.api_provider = APIProvider.CLAUDE
+
+        _pipeline = RAGPipeline(settings=mock_settings)
+
+        mock_claude.assert_called_once()
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    @patch("src.core.pipeline.OpenAIContextualizer")
+    def test_creates_openai_contextualizer(
+        self,
+        mock_openai,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_search_engine,
+        mock_embedding,
+    ):
+        """Test OpenAI contextualizer is created for OpenAI provider."""
+        from src.config import APIProvider
+
+        mock_settings = MagicMock()
+        mock_settings.api_provider = APIProvider.OPENAI
+
+        _pipeline = RAGPipeline(settings=mock_settings)
+
+        mock_openai.assert_called_once()
+
+    @patch("src.core.pipeline.get_sentence_transformer")
+    @patch("src.core.pipeline.create_search_engine")
+    @patch("src.core.pipeline.DocumentIndexer")
+    @patch("src.core.pipeline.DocumentChunker")
+    @patch("src.core.pipeline.UniversalDocumentParser")
+    @patch("src.core.pipeline.GroqContextualizer")
+    def test_creates_groq_contextualizer(
+        self,
+        mock_groq,
+        mock_parser,
+        mock_chunker,
+        mock_indexer,
+        mock_search_engine,
+        mock_embedding,
+    ):
+        """Test Groq contextualizer is created for Groq provider."""
+        from src.config import APIProvider
+
+        mock_settings = MagicMock()
+        mock_settings.api_provider = APIProvider.GROQ
+
+        _pipeline = RAGPipeline(settings=mock_settings)
+
+        mock_groq.assert_called_once()
