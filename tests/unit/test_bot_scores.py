@@ -931,7 +931,7 @@ class TestScoreIsolation:
             assert call.kwargs["score_id"] == expected_id
 
         ***REMOVED*** score_current_trace must NOT be used
-        assert mock_lf.score_current_trace.call_count == 0
+        mock_lf.score_current_trace.assert_not_called()
 
     async def test_supervisor_scores_use_create_score_with_trace_id(self, mock_config):
         """Supervisor-specific scores use create_score(trace_id=...) (***REMOVED***435)."""
@@ -951,7 +951,7 @@ class TestScoreIsolation:
             assert "score_id" in call.kwargs  ***REMOVED*** idempotency key
 
         ***REMOVED*** score_current_trace must NOT be used
-        assert mock_lf.score_current_trace.call_count == 0
+        mock_lf.score_current_trace.assert_not_called()
 
 
 class TestCreateScoreNoBarId:
