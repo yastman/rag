@@ -271,3 +271,32 @@ def test_langfuse_latest_trace_audit_runs_audit_script() -> None:
     assert "scripts/e2e/langfuse_latest_trace_audit.py" in block, (
         "langfuse-latest-trace-audit must invoke scripts/e2e/langfuse_latest_trace_audit.py"
     )
+
+
+# --- #1486 runtime env contract tests ---
+
+
+def test_e2e_trace_targets_use_runtime_env_file() -> None:
+    """E2E trace targets must load runtime env explicitly so worktrees without .env still work."""
+    text = _makefile_text()
+    for target in ("e2e-telegram-test", "e2e-test-traces", "e2e-test-traces-core"):
+        block_match = re.search(
+            rf"^{re.escape(target)}:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+            text,
+            re.MULTILINE | re.DOTALL,
+        )
+        assert block_match, f"{target} target not found in Makefile"
+        block = block_match.group(0)
+        assert '--env-file "$$RAG_RUNTIME_ENV_FILE"' in block, (
+            f'{target} must use --env-file "$$RAG_RUNTIME_ENV_FILE" '
+            f"to load runtime credentials explicitly in worktrees"
+        )
+
+
+def test_runtime_env_file_has_safe_fallback() -> None:
+    """RAG_RUNTIME_ENV_FILE must exist and fall back to the safe CI fixture when .env is absent."""
+    text = _makefile_text()
+    assert "RAG_RUNTIME_ENV_FILE" in text, "RAG_RUNTIME_ENV_FILE not found in Makefile"
+    assert "tests/fixtures/compose.ci.env" in text, (
+        "Makefile must reference tests/fixtures/compose.ci.env as the safe fallback"
+    )
