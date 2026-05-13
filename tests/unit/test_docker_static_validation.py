@@ -242,3 +242,45 @@ def test_qdrant_stack_doc_matches_compose_version() -> None:
     assert tag in doc_text, (
         f"docs/QDRANT_STACK.md must reference Qdrant version {tag} (from compose.yml)"
     )
+
+
+# ── pgrep self-match safety (#1510) ────────────────────────────────────────
+
+
+def test_voice_agent_compose_healthcheck_is_self_match_safe() -> None:
+    """voice-agent compose healthcheck must use a bracketed regex (e.g. [s]rc)
+    so the pgrep command line does not match itself (#1510)."""
+    import re
+
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    voice = compose["services"]["voice-agent"]
+    health_test = " ".join(voice["healthcheck"]["test"])
+    # A self-match-safe pgrep -f pattern uses brackets: [s]rc.voice.agent
+    assert re.search(r"pgrep\s+-f\s+.*\[[a-z]\]", health_test), (
+        "voice-agent compose healthcheck must use a bracketed pgrep pattern "
+        "(e.g. pgrep -f '[s]rc.voice.agent') to avoid self-matching the shell command"
+    )
+
+
+def test_voice_dockerfile_healthcheck_does_not_use_localhost_8080() -> None:
+    """src/voice/Dockerfile must not reference localhost:8080/health (#1510)."""
+    dockerfile = Path("src/voice/Dockerfile").read_text()
+    assert "localhost:8080/health" not in dockerfile, (
+        "src/voice/Dockerfile healthcheck must not reference localhost:8080 (rag-api endpoint)"
+    )
+    assert "8080" not in dockerfile, (
+        "src/voice/Dockerfile must not reference port 8080 (rag-api port)"
+    )
+
+
+def test_voice_dockerfile_healthcheck_is_self_match_safe() -> None:
+    """src/voice/Dockerfile HEALTHCHECK must use a bracketed pgrep regex (#1510)."""
+    import re
+
+    dockerfile = Path("src/voice/Dockerfile").read_text()
+    assert re.search(r"pgrep\s+-f\s+.*\[[a-z]\]", dockerfile), (
+        "src/voice/Dockerfile HEALTHCHECK must use a bracketed pgrep pattern "
+        "(e.g. pgrep -f '[s]rc.voice.agent') to avoid self-matching"
+    )
