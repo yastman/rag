@@ -85,7 +85,7 @@ jobs:
       - name: Unit tests (optional extras)
         run: |
           UV_PROJECT_ENVIRONMENT=.venv-py312 uv sync --extra voice --extra ingest --extra eval --all-groups
-          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30 -m "requires_extras"
+          UV_PROJECT_ENVIRONMENT=.venv-py312 uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30 -m "requires_extras and not legacy_api"
 
       - name: Security scan (bandit + vulture)
         run: |
