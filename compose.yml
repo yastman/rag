@@ -872,7 +872,7 @@ services:
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-voice-agent}"
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f '[s]rc.voice.agent' || exit 1"]
+      test: ["CMD-SHELL", "python -c \"from pathlib import Path; import sys; needle='src.voice.' + 'agent'; sys.exit(0 if any(needle in p.read_text(errors='ignore') for p in Path('/proc').glob('[0-9]*/cmdline')) else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 5
