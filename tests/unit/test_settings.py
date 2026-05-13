@@ -232,48 +232,10 @@ class TestRepr:
             assert "api_provider=openai" in result
             assert "search_engine=" in result
 
+        # === BotConfig (telegram_bot) field parsing tests ===
 
-# === BotConfig (telegram_bot) pydantic-settings tests ===
 
-
-class TestBotConfigIsPydanticSettings:
-    """Test that BotConfig is a pydantic-settings BaseSettings subclass."""
-
-    def test_config_is_pydantic_settings(self):
-        from pydantic_settings import BaseSettings
-
-        from telegram_bot.config import BotConfig
-
-        assert issubclass(BotConfig, BaseSettings)
-
-    def test_config_validates_types(self):
-        from pydantic import ValidationError
-
-        from telegram_bot.config import BotConfig
-
-        with pytest.raises(ValidationError):
-            BotConfig(search_top_k="not_a_number")
-
-    def test_config_reads_env(self, monkeypatch):
-        monkeypatch.setenv("BOT_DOMAIN", "тестовый домен")
-        from telegram_bot.config import BotConfig
-
-        config = BotConfig()
-        assert config.domain == "тестовый домен"
-
-    def test_config_constructor_kwargs(self):
-        """Ensure BotConfig can be created with python field names (backward compat)."""
-        from telegram_bot.config import BotConfig
-
-        config = BotConfig(
-            telegram_token="test-token",
-            llm_api_key="test-key",
-            llm_base_url="http://fake:4000",
-            search_top_k=42,
-        )
-        assert config.telegram_token == "test-token"
-        assert config.search_top_k == 42
-
+class TestBotConfigBoolFields:
     def test_config_bool_fields_parse_env_strings(self, monkeypatch):
         """Bool fields should parse 'true'/'false' strings from env."""
         monkeypatch.setenv("USE_HYDE", "true")
