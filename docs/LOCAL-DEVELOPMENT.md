@@ -190,7 +190,16 @@ make e2e-test-traces-core
 
 Keep `make bot` running in another terminal while the E2E command executes. Use `make run-bot` only when you do not need the tee'd `logs/bot-run.log` evidence.
 
-## 9. Common Issues
+## 9. Runtime env in worktrees
+
+Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the main checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
+
+- Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
+- Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
+- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/home/user/projects/rag-fresh/.env` when local Telegram credentials live only in the main checkout.
+- Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
+
+## 10. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
