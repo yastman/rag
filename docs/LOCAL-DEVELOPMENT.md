@@ -12,7 +12,7 @@ Canonical local setup and verification flow.
 > See [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md) for the full workflow.
 > Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
 
-## 1. Remote MacBook Docker (Recommended)
+## Remote MacBook Docker (Recommended)
 
 For this machine, the dev Docker stack runs on a remote MacBook instead of Docker Desktop on WSL. Edit code in WSL, commit/push, then fetch/pull and operate the stack on the MacBook via SSH.
 
@@ -46,11 +46,11 @@ make local-up
 make bot
 ```
 
-Only one process can poll a given Telegram bot token at a time. Stop the Docker bot (`make remote-bot-up`) before running native `make bot`, and vice versa.
+Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
 
 Full operator workflow, troubleshooting, and test boundaries are in [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
 
-## 2. Bootstrap Workspace
+## 1. Bootstrap Workspace
 
 ```bash
 uv sync
