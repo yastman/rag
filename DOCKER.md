@@ -88,6 +88,10 @@ Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to 
 - At least one provider key for LiteLLM routing:
   - `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 
+`telegram_bot/Dockerfile` installs Python dependencies from
+`telegram_bot/pyproject.toml` and `telegram_bot/uv.lock`. The root `uv.lock`
+does not define the bot image dependency set.
+
 ### ML profile (`make docker-ml-up`)
 
 - `NEXTAUTH_SECRET`
