@@ -137,6 +137,25 @@ This checks required direct families plus Telegram nested-family/root-context co
 
 If these are present and fresh, flat `litellm-acompletion` traces are expected proxy-generated noise and do not indicate a defect.
 
+### 7. Post-E2E Latest-Trace Audit
+
+After running `make e2e-test-traces-core`, run the sanitized latest-trace audit to verify app coverage without exposing raw values:
+
+```bash
+make langfuse-latest-trace-audit
+```
+
+This command:
+- Inspects the latest traces (up to 20) via the `langfuse` CLI (with SDK fallback)
+- Reports **sanitized metadata only** — trace IDs, names, tags, observation/score names, root input/output key presence, and coverage gaps
+- Classifies `litellm-acompletion` traces as **proxy noise**
+- Writes a markdown artifact to `.artifacts/langfuse-local-audit/<timestamp>/latest-traces.md`
+- Exits non-zero when required app observations, scores, or root IO keys are missing
+
+**Artifact path:** `.artifacts/langfuse-local-audit/<timestamp>/latest-traces.md`
+
+The audit intentionally never prints raw Telegram payloads, trace input/output values, Qdrant contents, secrets, or API keys.
+
 ## Common Issues
 
 ### "Public key not valid" Error
