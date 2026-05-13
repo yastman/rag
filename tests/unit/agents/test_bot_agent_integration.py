@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import pathlib
+import subprocess
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -70,3 +73,23 @@ async def test_get_crm_tools_returns_list():
     names = {t.name for t in tools}
     assert "crm_get_deal" in names
     assert "crm_create_lead" in names
+
+
+def test_bot_local_lock_imports_create_agent_sdk():
+    """Regression: bot-local frozen env can import langchain.agents.create_agent and create_bot_agent."""
+    repo_root = str(pathlib.Path(__file__).resolve().parents[3])
+    cmd = [
+        "uv",
+        "--directory",
+        "telegram_bot",
+        "run",
+        "--frozen",
+        "python",
+        "-c",
+        "from langchain.agents import create_agent; from telegram_bot.agents.agent import create_bot_agent; print('ok')",
+    ]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = repo_root
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+    assert "ok" in result.stdout
