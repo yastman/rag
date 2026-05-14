@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convert `$tmux-swarm-orchestration` from orchestrator-heavy analysis to a worker-first control plane with DeepSeek V4 Flash/Pro secretary routes.
+**Goal:** Convert `$tmux-swarm-orchestration` from orchestrator-heavy analysis to a worker-first control plane while preserving the current Kimi implementation and DeepSeek Pro review roles.
 
-**Architecture:** Add first-class `secretary-flash` and `secretary-pro` OpenCode agents, secretary prompt/signal contracts, and launcher model integrity checks. Update routing docs so GPT-5.5 only performs high-value decisions while Flash/Pro secretary workers prepare issue/PR facts, decomposition, artifact validation, and next-worker prompts.
+**Architecture:** Add first-class `secretary-flash` and `secretary-pro` OpenCode agents, but make Phase 1 center on `secretary-flash` as the default cheap intake, artifact-validation, and prompt-draft route. Keep `pr-worker` on `opencode-go/kimi-k2.6` for implementation and keep DeepSeek V4 Pro routes for review, review-fix, complex escalation, and secretary-pro escalation when Flash reports low confidence or high risk.
 
 **Tech Stack:** Markdown skill docs, OpenCode agent frontmatter, Python 3 validators, Bash tmux launcher, pytest contract tests.
 
@@ -17,6 +17,52 @@
 - Repo OpenCode agents: `/home/user/projects/rag-fresh/.opencode/agents`
 - Global OpenCode agents: `/home/user/.config/opencode/agents`
 
+## Final Routing Decision
+
+Do not swap Kimi and DeepSeek V4 Pro roles in this refactor.
+
+Keep:
+
+```yaml
+implementation_worker:
+  agent: pr-worker
+  model: opencode-go/kimi-k2.6
+
+pr_reviewer:
+  agent: pr-review
+  model: opencode-go/deepseek-v4-pro
+
+review_fix_worker:
+  agent: pr-review-fix
+  model: opencode-go/deepseek-v4-pro
+
+complex_escalation:
+  agent: complex-escalation
+  model: opencode-go/deepseek-v4-pro
+```
+
+Add:
+
+```yaml
+secretary_flash:
+  agent: secretary-flash
+  model: opencode-go/deepseek-v4-flash
+  phase_1_role: default cheap intake, brief, artifact validator, prompt drafter
+
+secretary_pro:
+  agent: secretary-pro
+  model: opencode-go/deepseek-v4-pro
+  phase_1_role: explicit escalation route for low-confidence/high-risk Flash briefs
+```
+
+Core policy sentence for `SKILL.md`:
+
+```text
+GPT-5.5 decides; DeepSeek V4 Flash prepares; DeepSeek V4 Pro analyzes risks; Kimi K2.6 implements.
+```
+
+`secretary-pro` is still worth creating as a dedicated OpenCode agent because agent frontmatter is the reliable way to force the actual OpenCode model. However, it must not become the default path. It is launched only when the Flash brief requests it or the orchestrator detects a safety/product/production/broken-routing exception.
+
 ## File Structure
 
 Create:
@@ -24,14 +70,14 @@ Create:
 - `/home/user/projects/rag-fresh/.opencode/agents/secretary-flash.md`
   - Read-mostly low-cost secretary agent using `opencode-go/deepseek-v4-flash`.
 - `/home/user/projects/rag-fresh/.opencode/agents/secretary-pro.md`
-  - Read-mostly stronger secretary agent using `opencode-go/deepseek-v4-pro`.
+  - Read-mostly stronger secretary agent using `opencode-go/deepseek-v4-pro`; escalation-only in Phase 1.
 
 Modify:
 
 - `/home/user/.codex/skills/tmux-swarm-orchestration/SKILL.md`
-  - Add worker-first rule, secretary routes, secretary-first default flow.
+  - Add worker-first rule, secretary routes, secretary-first default flow, and the core policy sentence.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/classification.md`
-  - Add secretary-first routing decisions and worker-chain decomposition.
+  - Add secretary-first routing decisions and keep Kimi/Pro implementation/review roles unchanged.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/worker-contract.md`
   - Add secretary quick contract and prompt draft rules.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/infrastructure.md`
@@ -39,7 +85,7 @@ Modify:
 - `/home/user/.codex/skills/tmux-swarm-orchestration/red-flags.md`
   - Add red flags for GPT-5.5 doing routine raw analysis.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/references/worker-types.md`
-  - Add Secretary Flash and Secretary Pro role sections.
+  - Add Secretary Flash and Secretary Pro role sections; mark Secretary Pro as escalation-only in Phase 1.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/references/prompt-snippets.md`
   - Add secretary prompt snippets.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/references/signal-schema.md`
@@ -47,7 +93,7 @@ Modify:
 - `/home/user/.codex/skills/tmux-swarm-orchestration/references/review-verification.md`
   - Move semantic diff review from orchestrator to PR review workers.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/references/sdk-native.md`
-  - Delegate SDK baseline production to secretary-pro/research workers.
+  - Delegate SDK baseline production to `secretary-pro` or dedicated research workers only after Flash flags SDK/runtime risk.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/references/knowledge-freshness.md`
   - Delegate docs/research baseline phases.
 - `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh`
@@ -78,7 +124,7 @@ Do not modify unrelated repo files. Treat the dirty repo worktree as user-owned.
 
 - [ ] **Step 1: Write failing tests for secretary agent discovery**
 
-Add a test asserting the repo contains both agent files and that each has the expected frontmatter model and safety denies:
+Add a test asserting the repo contains both agent files and that each has the expected frontmatter model and safety denies. Creating both agents is intentional: OpenCode agent frontmatter is the stable way to guarantee the real model, and it prevents reusing `pr-review` with a misleading Flash launch metadata value.
 
 ```python
 def test_repo_secretary_agents_exist_with_expected_models() -> None:
@@ -174,6 +220,11 @@ SDK/runtime baseline preparation, report reconciliation, and refined
 next-worker prompt drafting. Persist results only through requested logs,
 prompt drafts, and signal JSON. Do not launch workers, merge PRs, alter issues,
 or edit product files unless the prompt explicitly reserves those files.
+
+Phase 1 policy: you are an escalation route, not the default secretary. You are
+used only when a Flash brief reports low confidence, high risk, SDK/runtime
+uncertainty, conflicting artifacts, unclear scope, or an explicit orchestrator
+escalation.
 ```
 
 - [ ] **Step 5: Run the test again**
@@ -650,6 +701,8 @@ def test_worker_first_secretary_routes_are_documented() -> None:
     assert "opencode-go/deepseek-v4-pro" in bundle
     assert "secretary_first" in classification
     assert "secretary_pro_escalation" in classification
+    assert "GPT-5.5 decides; DeepSeek V4 Flash prepares; DeepSeek V4 Pro analyzes risks; Kimi K2.6 implements." in skill
+    assert "Do not swap Kimi K2.6 and DeepSeek V4 Pro roles in Phase 1" in skill
     assert "GPT-5.5 high cannot be used for routine raw issue, PR, diff, or artifact analysis" in red_flags
 ```
 
@@ -684,7 +737,7 @@ Add default routes:
 - Secretary intake, cheap scans, artifact checks, and prompt drafts:
   `secretary-flash` with `opencode-go/deepseek-v4-flash`.
 - Complex decomposition, SDK/runtime baseline, conflicting artifact analysis:
-  `secretary-pro` with `opencode-go/deepseek-v4-pro`.
+  `secretary-pro` with `opencode-go/deepseek-v4-pro`; escalation-only in Phase 1.
 - Implementation, plan slices, docs, quick smokes:
   `pr-worker` with `opencode-go/kimi-k2.6`.
 - PR review, complex review-fix, runtime verification, escalation analysis:
@@ -692,12 +745,25 @@ Add default routes:
   `opencode-go/deepseek-v4-pro`.
 ```
 
+Add the core policy sentence:
+
+```markdown
+GPT-5.5 decides; DeepSeek V4 Flash prepares; DeepSeek V4 Pro analyzes risks; Kimi K2.6 implements.
+```
+
+Add the Phase 1 non-swap rule:
+
+```markdown
+Do not swap Kimi K2.6 and DeepSeek V4 Pro roles in Phase 1. The first refactor
+targets GPT-5.5 token leakage, not the proven implementation/review model map.
+```
+
 Change default flow to:
 
 ```markdown
 1. Intake: if no accepted `SECRETARY_BRIEF` exists and task is not tiny, launch `secretary-flash`.
 2. Secretary validation: validate secretary signal and artifact paths.
-3. Escalate to `secretary-pro` when risk/confidence requires it.
+3. Escalate to `secretary-pro` only when risk/confidence requires it.
 4. Launch delivery/review workers from accepted artifacts.
 5. Final decision from validated implementation and review artifacts.
 ```
@@ -726,12 +792,12 @@ Add secretary rows to OpenCode routing table:
 
 ```markdown
 | secretary intake / cheap scan | `secretary-flash` | `opencode-go/deepseek-v4-flash`; logs/signals/prompt drafts only | 1 |
-| secretary pro decomposition / SDK baseline | `secretary-pro` | `opencode-go/deepseek-v4-pro`; no product edits unless docs phase reserves docs files | 1 |
+| secretary pro decomposition / SDK baseline | `secretary-pro` | `opencode-go/deepseek-v4-pro`; escalation-only in Phase 1; no product edits unless docs phase reserves docs files | 1 |
 ```
 
 - [ ] **Step 6: Update `worker-types.md`**
 
-Add `### Secretary Flash` and `### Secretary Pro` sections with allowed actions, forbidden actions, and artifact outputs.
+Add `### Secretary Flash` and `### Secretary Pro` sections with allowed actions, forbidden actions, and artifact outputs. The Secretary Pro section must say it is not the default route in Phase 1.
 
 - [ ] **Step 7: Update `red-flags.md`**
 
@@ -742,6 +808,8 @@ Add:
   analysis before a secretary worker artifact exists.
 - A worker prompt is hand-written from raw issue context when a secretary prompt
   draft exists and validates.
+- Kimi K2.6 and DeepSeek V4 Pro are being swapped as part of the secretary
+  rollout. Phase 1 must preserve the current implementation/review routes.
 ```
 
 - [ ] **Step 8: Run docs contract tests**
@@ -761,7 +829,7 @@ git add /home/user/.codex/skills/tmux-swarm-orchestration/SKILL.md /home/user/.c
 git commit -m "docs(swarm): make secretary-first routing default"
 ```
 
-## Task 6: Delegate Review, SDK, And Knowledge Gates
+## Task 6: Delegate Review, SDK, And Knowledge Gates Without Swapping Core Routes
 
 **Files:**
 - Modify: `/home/user/.codex/skills/tmux-swarm-orchestration/references/review-verification.md`
@@ -782,9 +850,9 @@ def test_semantic_review_and_sdk_baselines_are_delegated() -> None:
 
     assert "Semantic diff review belongs to PR review workers" in review
     assert "Orchestrator diff review is bounded artifact sanity" in review
-    assert "secretary-pro or a dedicated research worker produces the SDK/custom decision" in sdk
+    assert "secretary-pro or a dedicated research worker produces the SDK/custom decision after Flash flags SDK/runtime risk" in sdk
     assert "The orchestrator validates and accepts the baseline artifact" in sdk
-    assert "Launch secretary-pro or a docs/research worker" in freshness
+    assert "Launch secretary-pro or a docs/research worker only after a secretary brief identifies the missing baseline" in freshness
 ```
 
 - [ ] **Step 2: Run failing test**
@@ -818,8 +886,8 @@ In `sdk-native.md`, replace “orchestrator owns docs lookup by default” langu
 
 ```markdown
 `secretary-pro` or a dedicated research worker produces the SDK/custom decision
-when SDK/API/runtime behavior matters. The orchestrator validates and accepts
-the baseline artifact, then freezes it into implementation/review prompts.
+after Flash flags SDK/runtime risk. The orchestrator validates and accepts the
+baseline artifact, then freezes it into implementation/review prompts.
 ```
 
 Keep workers blocked on inconclusive baselines.
@@ -829,8 +897,8 @@ Keep workers blocked on inconclusive baselines.
 In `knowledge-freshness.md`, change docs/research loop to prefer:
 
 ```markdown
-Launch secretary-pro or a docs/research worker when reusable local truth is
-missing, stale, or contradictory. The orchestrator validates evidence and
+Launch secretary-pro or a docs/research worker only after a secretary brief
+identifies the missing baseline. The orchestrator validates evidence and
 accepts or rejects the artifact.
 ```
 
