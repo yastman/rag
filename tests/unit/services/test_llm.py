@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import openai
 import pytest
 
-from telegram_bot.services.llm import LLMService
+from telegram_bot.services.llm import ConfidenceResponse, LLMService
 
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -109,6 +109,37 @@ class TestLLMServiceGenerateAnswer:
         result = await service.generate_answer("What apartments?", sample_chunks)
 
         assert result == "Generated answer text"
+
+    async def test_configured_max_tokens_used_for_answer_confidence_and_stream(self, sample_chunks):
+        """LLM answer paths use the configured generation token budget."""
+        service = LLMService(api_key="test-key", max_tokens=1234)
+
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Generated answer text")
+        )
+        await service.generate_answer("What apartments?", sample_chunks)
+        assert service.client.chat.completions.create.call_args.kwargs["max_tokens"] == 1234
+
+        service._instructor_client = AsyncMock()
+        service._instructor_client.chat.completions.create = AsyncMock(
+            return_value=ConfidenceResponse(answer="Confident answer", confidence=0.8)
+        )
+        await service.generate_answer("What apartments?", sample_chunks, with_confidence=True)
+        assert (
+            service._instructor_client.chat.completions.create.call_args.kwargs["max_tokens"]
+            == 1234
+        )
+
+        stream_chunk = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content="chunk"))])
+
+        async def mock_stream():
+            yield stream_chunk
+
+        service.client.chat.completions.create = AsyncMock(return_value=mock_stream())
+        chunks = [chunk async for chunk in service.stream_answer("What apartments?", sample_chunks)]
+        assert chunks == ["chunk"]
+        assert service.client.chat.completions.create.call_args.kwargs["max_tokens"] == 1234
 
     async def test_generate_answer_custom_system_prompt(self, sample_chunks):
         """Test answer generation with custom system prompt."""
