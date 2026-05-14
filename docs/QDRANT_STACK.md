@@ -4,7 +4,7 @@ Current Qdrant setup used by bot and ingestion flows.
 
 ## Version And Endpoints
 
-- Compose image: `qdrant/qdrant:v1.17.1` (pinned by digest in compose files)
+- Compose image: `qdrant/qdrant:v1.18.0` (pinned by digest in compose files)
 - Python SDK: `qdrant-client>=1.17.0` (v1.17+ adds weighted RRF, relevance feedback)
 - HTTP: `http://localhost:6333`
 - gRPC: `localhost:6334`
