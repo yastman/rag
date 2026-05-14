@@ -29,6 +29,7 @@ SKIP_DIRS = {
     "build",
     "site",
     ".claude",
+    ".worktrees",
 }
 
 # Markdown link regex: [text](url)
