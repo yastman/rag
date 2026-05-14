@@ -54,7 +54,7 @@ class GraphConfig:
     # Small-to-big context expansion
     small_to_big_mode: str = "on"
     small_to_big_window_before: int = 0
-    small_to_big_window_after: int = 1
+    small_to_big_window_after: int = 2
     max_expanded_chunks: int = 10
     # Response length control rollout (#129)
     response_style_enabled: bool = False
@@ -132,7 +132,7 @@ class GraphConfig:
             rerank_provider=os.getenv("RERANK_PROVIDER", "colbert"),
             small_to_big_mode=os.getenv("SMALL_TO_BIG_MODE", "on"),
             small_to_big_window_before=int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "0")),
-            small_to_big_window_after=int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "1")),
+            small_to_big_window_after=int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "2")),
             max_expanded_chunks=int(os.getenv("MAX_EXPANDED_CHUNKS", "10")),
             response_style_enabled=os.getenv("RESPONSE_STYLE_ENABLED", "false").lower() == "true",
             response_style_shadow_mode=os.getenv("RESPONSE_STYLE_SHADOW_MODE", "false").lower()
