@@ -350,6 +350,78 @@ async def test_search_leads_without_contacts_no_embedded(kommo_client, httpx_moc
     assert leads[0].contacts is None
 
 
+# --- Input non-mutation: search_leads must not mutate response items (#1540) ---
+
+
+async def test_search_leads_preserves_input_embedded_key(kommo_client):
+    """search_leads must not remove _embedded from original response items (#1540).
+
+    The fix uses lead_data = dict(item) before .pop('_embedded'), so the
+    original item dict is preserved. Verify the original items still have
+    _embedded after search_leads completes.
+    """
+    original_items = [
+        {
+            "id": 1,
+            "name": "Lead One",
+            "_embedded": {"contacts": [{"id": 10, "name": "Contact A"}]},
+        },
+        {
+            "id": 2,
+            "name": "Lead Two",
+            "_embedded": {"contacts": [{"id": 20, "name": "Contact B"}]},
+        },
+    ]
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
+        return_value={"_embedded": {"leads": original_items}}
+    )
+
+    leads = await kommo_client.search_leads(with_contacts=True)
+
+    # Returned leads should be properly constructed
+    assert len(leads) == 2
+    assert leads[0].id == 1
+    assert leads[0].name == "Lead One"
+    assert leads[0].contacts == [{"id": 10, "name": "Contact A"}]
+    assert leads[1].id == 2
+    assert leads[1].name == "Lead Two"
+    assert leads[1].contacts == [{"id": 20, "name": "Contact B"}]
+
+    # Original items must NOT be mutated: _embedded key still present
+    assert "_embedded" in original_items[0], (
+        "BUG: search_leads mutated original item — _embedded key removed"
+    )
+    assert "_embedded" in original_items[1], (
+        "BUG: search_leads mutated original item — _embedded key removed"
+    )
+
+
+async def test_search_leads_preserves_input_without_embedded(kommo_client):
+    """search_leads must not mutate items that have no _embedded key (#1540).
+
+    Even when lead items lack _embedded, the method must not alter
+    the original input items.
+    """
+    original_items = [
+        {"id": 3, "name": "Plain Lead No Contacts"},
+    ]
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
+        return_value={"_embedded": {"leads": original_items}}
+    )
+
+    leads = await kommo_client.search_leads()
+
+    assert len(leads) == 1
+    assert leads[0].id == 3
+    assert leads[0].name == "Plain Lead No Contacts"
+    assert leads[0].contacts is None
+
+    # Original item must not be altered
+    assert original_items[0] == {"id": 3, "name": "Plain Lead No Contacts"}, (
+        "BUG: search_leads mutated original item without _embedded"
+    )
+
+
 async def test_get_tasks_by_entity_id(kommo_client, httpx_mock):
     """get_tasks(entity_id=...) sends filter[entity_id][] param (#731)."""
     import re
