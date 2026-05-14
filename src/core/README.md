@@ -1,11 +1,10 @@
 # core/
 
+## Purpose
+
 Main RAG pipeline orchestrator.
-
-## Ownership
-
-- Owns the `RAGPipeline` orchestration API and `RAGResult` return contract.
-- Coordinates configured embedding, retrieval, contextualization, and indexing helpers.
+Owns the `RAGPipeline` orchestration API and `RAGResult` return contract.
+Coordinates configured embedding, retrieval, contextualization, and indexing helpers.
 
 ## Files
 
@@ -40,7 +39,7 @@ for result in results.results:
 uv run pytest tests/unit/core/ -q
 ```
 
-## Related
+## See Also
 
 - [`src/config/`](../config/) — Settings and constants
 - [`src/retrieval/`](../retrieval/) — Search engine implementations

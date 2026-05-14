@@ -153,10 +153,10 @@ class BotConfig(BaseSettings):
 
     # Search Configuration
     search_top_k: int = Field(
-        default=20, validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K")
+        default=40, validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K")
     )
     rerank_top_k: int = Field(
-        default=3, validation_alias=AliasChoices("rerank_top_k", "RERANK_TOP_K")
+        default=7, validation_alias=AliasChoices("rerank_top_k", "RERANK_TOP_K")
     )
     rerank_candidates_max: int = Field(
         default=10,

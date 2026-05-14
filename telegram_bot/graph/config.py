@@ -32,8 +32,8 @@ class GraphConfig:
 
     qdrant_url: str = "http://qdrant:6333"
     qdrant_collection: str = "gdrive_documents_bge"
-    search_top_k: int = 20
-    rerank_top_k: int = 3
+    search_top_k: int = 40
+    rerank_top_k: int = 7
 
     redis_url: str = "redis://redis:6379"
 
@@ -114,8 +114,8 @@ class GraphConfig:
             bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
             qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),
             qdrant_collection=os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge"),
-            search_top_k=int(os.getenv("SEARCH_TOP_K", "20")),
-            rerank_top_k=int(os.getenv("RERANK_TOP_K", "3")),
+            search_top_k=int(os.getenv("SEARCH_TOP_K", "40")),
+            rerank_top_k=int(os.getenv("RERANK_TOP_K", "7")),
             redis_url=os.getenv("REDIS_URL", "redis://redis:6379"),
             domain=os.getenv("BOT_DOMAIN", "недвижимость"),
             domain_language=os.getenv("BOT_LANGUAGE", "ru"),

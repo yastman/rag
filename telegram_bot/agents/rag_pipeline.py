@@ -48,8 +48,10 @@ from telegram_bot.services.rag_core import (
 
 logger = logging.getLogger(__name__)
 
-# top_k=5 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
-_DEFAULT_RERANK_TOP_K = 5
+# top_k=7 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
+# 3 was too restrictive — comprehensive queries (e.g. list all ВНЖ types) were losing chunks.
+_DEFAULT_RERANK_TOP_K = 7
+_MIN_FINAL_CHUNKS = 3
 _QUERY_PREPROCESSOR = QueryPreprocessor()
 
 
@@ -1237,8 +1239,11 @@ async def rag_pipeline(
                 [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
             )
             final_gap_confident = bool(final_gap["confident"])
-            if not final_gap_confident and len(final_docs) > 1:
-                final_docs = final_docs[:1]
+            # Only trim when gap is confident AND we have more than min floor.
+            # 15% gap → trim-to-1 was too aggressive for comprehensive queries
+            # where all chunks are equally relevant (e.g. listing all ВНЖ types).
+            if final_gap_confident and len(final_docs) > _MIN_FINAL_CHUNKS:
+                final_docs = final_docs[:_MIN_FINAL_CHUNKS]
 
             result = _assemble_context(
                 query=current_query,
@@ -1325,8 +1330,8 @@ async def rag_pipeline(
         [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
     )
     final_gap_confident = bool(final_gap["confident"])
-    if not final_gap_confident and len(final_docs) > 1:
-        final_docs = final_docs[:1]
+    if final_gap_confident and len(final_docs) > _MIN_FINAL_CHUNKS:
+        final_docs = final_docs[:_MIN_FINAL_CHUNKS]
 
     result = _assemble_context(
         query=current_query,
