@@ -3,15 +3,12 @@ description: Read-only PR review agent for tmux swarm OpenCode workers.
 mode: primary
 model: opencode-go/deepseek-v4-pro
 permission:
-  read: allow
-  bash: allow
-  edit: deny
+  "*": allow
+  skill:
+    "*": allow
   webfetch: deny
   websearch: deny
   external_directory: ask
-  doom_loop: ask
-  skill:
-    "*": allow
 mcp:
   context7:
     enabled: false

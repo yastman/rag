@@ -94,6 +94,12 @@ Secret model by compose file:
 
 ## 2. Start Services
 
+To keep Docker load off the workstation, use the MacBook as a remote Docker host
+instead of starting local Docker Desktop. On an 8GB MacBook, use the lean
+bot/core remote flow by default; the ML, observability, voice, and full stacks
+are temporary validation tools, not the idle development baseline. See
+[`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+
 ```bash
 # Core services (default compose set)
 make docker-up

@@ -559,7 +559,7 @@ class BotConfig(BaseSettings):
 
     # Real Estate Database (realestate DB in shared Postgres)
     realestate_database_url: str = Field(
-        default="postgresql://postgres:postgres@postgres:5432/realestate",
+        default="",
         validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
     )
 
