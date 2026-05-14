@@ -15,6 +15,12 @@ rules, or worker-specific workflows here.
 If a rule belongs to a canonical doc or skill, link it instead of copying it
 here.
 
+## Skill Use
+
+Use additional skills only when the user explicitly names them, the task clearly
+matches their trigger, or an accepted artifact requires that next step. Do not
+cascade into unrelated skills or workflows on your own.
+
 ## Start Here
 
 1. Read [`README.md`](README.md) for the project overview.
