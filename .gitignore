@@ -257,6 +257,7 @@ docs/artifacts/*.md
 .claude/hooks/
 .grepai/
 .signals/
+.swarm/
 
 # Local AI/orchestration tool directories
 .planning/
