@@ -177,12 +177,8 @@ class TestConfigDefaults:
 
 
 class TestWarmup:
-    async def test_warmup_includes_colbert(self, bge_app):
-        """Lifespan warmup must call encode with return_colbert_vecs=True.
-
-        ColBERT codepath must be warmed up alongside dense and sparse so that
-        the first real /encode/hybrid request doesn't pay the cold-start penalty.
-        """
+    async def test_warmup_skips_colbert(self, bge_app):
+        """Lifespan warmup avoids ColBERT to keep startup memory bounded."""
         app_module = bge_app["app_module"]
         fake_model = bge_app["fake_model"]
 
@@ -195,7 +191,7 @@ class TestWarmup:
 
         assert fake_model.encode.called, "Warmup must call model.encode()"
         warmup_kwargs = fake_model.encode.call_args.kwargs
-        assert warmup_kwargs.get("return_colbert_vecs") is True, (
-            f"Warmup must use return_colbert_vecs=True to warm ColBERT codepath, "
+        assert warmup_kwargs.get("return_colbert_vecs") is False, (
+            f"Warmup must use return_colbert_vecs=False to reduce startup memory, "
             f"got return_colbert_vecs={warmup_kwargs.get('return_colbert_vecs')}"
         )
