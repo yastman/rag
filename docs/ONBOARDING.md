@@ -16,9 +16,10 @@ Before you begin, ensure you have:
 | Service | Required | Purpose |
 |---------|----------|---------|
 | Telegram Bot Token | Yes | Bot functionality (`TELEGRAM_BOT_TOKEN`) |
-| Langfuse | Recommended | Observability (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`) |
-| LiteLLM API | Yes | LLM calls (`LITELLM_API_KEY`) |
-| BGE-M3 API | Optional | Embeddings (can use bundled model) |
+| LiteLLM Master Key | Yes | LLM proxy auth (`LITELLM_MASTER_KEY`) |
+| LLM Provider | Yes | At least one of `OPENAI_API_KEY`, `CEREBRAS_API_KEY`, or `GROQ_API_KEY` |
+| Langfuse | Recommended | Local observability (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`) |
+| BGE-M3 | Optional | Embeddings service started automatically by Compose |
 
 ## Step 1: Clone and Setup
 
@@ -36,61 +37,53 @@ cp .env.example .env
 
 ## Step 2: Configure Environment
 
-Edit `.env` with your API keys:
+Edit `.env` with your API keys. The canonical reference is `.env.example`:
 
 ```bash
 # Required for bot to work
 TELEGRAM_BOT_TOKEN=your_bot_token_from_BotFather
+LITELLM_MASTER_KEY=your_litellm_master_key
 
-# LLM provider
-LITELLM_API_KEY=your_litellm_api_key
+# At least one LLM provider key
+OPENAI_API_KEY=your_openai_key
+# CEREBRAS_API_KEY=...
+# GROQ_API_KEY=...
 
-# Langfuse (for observability)
-LANGFUSE_PUBLIC_KEY=your_langfuse_public_key
-LANGFUSE_SECRET_KEY=your_langfuse_secret_key
-LANGFUSE_HOST=https://cloud.langfuse.com
-
-# BGE-M3 (embeddings)
-BGE_M3_URL=http://localhost:8000  # or hosted endpoint
+# Langfuse (local observability — started by make docker-ml-up)
+LANGFUSE_PUBLIC_KEY=pk-lf-dev
+LANGFUSE_SECRET_KEY=sk-lf-dev
+LANGFUSE_HOST=http://localhost:3001
 ```
 
-See `.env.example` for full variable documentation.
+See `.env.example` for the full variable list and [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the minimum env sets per profile.
 
 ## Step 3: Start Services
 
-```bash
-# Start all Docker services (Redis, Qdrant, etc.)
-make docker-up
-
-# Or with monitoring (Grafana, Loki)
-make docker-full-up
-```
-
-Verify services are healthy:
+Start core services and verify health:
 
 ```bash
+make local-up
 make test-bot-health
-make docker-ps
 ```
+
+For the full service map, profile stacks, and port list, see [`DOCKER.md`](../DOCKER.md).
 
 ## Step 4: Run Preflight Checks
 
 ```bash
-# Check all dependencies
-make test-preflight
-
-# Verify embeddings service
-curl -fsS http://localhost:8000/health
+make test-bot-health
 ```
+
+The authoritative startup preflight runs in `telegram_bot/preflight.py` when the bot starts. See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the full validation ladder.
 
 ## Step 5: Start the Bot
 
 ```bash
-# Start Telegram bot only
-make docker-bot-up
+# Run bot natively (fast iteration, services must be running)
+make run-bot
 
-# Or run directly (requires all services running)
-uv run python -m telegram_bot.main
+# Or run everything in Docker
+make docker-bot-up
 ```
 
 ### Verify Bot is Connected
@@ -99,18 +92,15 @@ uv run python -m telegram_bot.main
 2. Send `/start` — you should receive a welcome message
 3. Send `/help` — you should receive help text
 
+See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the day-to-day workflow and native vs Docker trade-offs.
+
 ## Step 6: Run Ingestion (Optional)
 
-To test with real data:
+To test with real data, see [`INGESTION.md`](INGESTION.md) for the full ingestion workflow:
 
 ```bash
-# Preflight checks for ingestion
 make ingest-unified-preflight
-
-# Bootstrap the collection
 make ingest-unified-bootstrap
-
-# Run continuous ingestion
 make ingest-unified
 ```
 
@@ -140,7 +130,7 @@ make ingest-unified-bootstrap
 
 1. Verify `TELEGRAM_BOT_TOKEN` is valid
 2. Check Langfuse keys are correct
-3. Ensure `LITELLM_API_KEY` has not expired
+3. Ensure `LITELLM_MASTER_KEY` and at least one provider key (`OPENAI_API_KEY`, `CEREBRAS_API_KEY`, or `GROQ_API_KEY`) are set
 
 ## Project Structure Overview
 
