@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
         max_length=64,
         return_dense=True,
         return_sparse=True,
-        return_colbert_vecs=True,
+        return_colbert_vecs=False,
     )
     elapsed = time.time() - start
     _warmed_up = True
