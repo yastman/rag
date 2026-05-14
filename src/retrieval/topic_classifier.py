@@ -125,7 +125,7 @@ def get_query_topic_hint(query: str) -> TopicLabel | None:
 
 
 def detect_score_gap(
-    scores: list[float], gap_ratio_threshold: float = 0.15
+    scores: list[float], gap_ratio_threshold: float = 0.25
 ) -> dict[str, float | bool]:
     """Evaluate whether the top result is sufficiently separated from the runner-up."""
     if not scores:

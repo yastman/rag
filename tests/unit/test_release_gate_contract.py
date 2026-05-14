@@ -185,8 +185,15 @@ def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
             "rag-api compose healthcheck uses wget; Python urllib.request should be used instead."
         )
     if voice_agent_match:
-        assert "wget" not in voice_agent_match.group(1), (
+        voice_agent_healthcheck = voice_agent_match.group(1)
+        assert "wget" not in voice_agent_healthcheck, (
             "voice-agent compose healthcheck uses wget; Python urllib.request should be used instead."
+        )
+        assert "pgrep" not in voice_agent_healthcheck, (
+            "voice-agent compose healthcheck runs in python:slim; pgrep requires procps."
+        )
+        assert "python" in voice_agent_healthcheck, (
+            "voice-agent compose healthcheck should use Python stdlib available in python:slim."
         )
 
 
