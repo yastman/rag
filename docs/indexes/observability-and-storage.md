@@ -6,6 +6,9 @@ Quick orientation for Langfuse traces, Qdrant, and Redis/cache investigations. L
 
 Use this path when traces are missing, gaps appear, or you need to validate scoring.
 
+For inspecting traces, observations, and scores from the terminal, use
+[Langfuse CLI](../runbooks/remote-macbook-docker.md#langfuse-cli) on the MacBook Docker host.
+
 ### Start Here
 
 - **Runbook**: [`../runbooks/LANGFUSE_TRACING_GAPS.md`](../runbooks/LANGFUSE_TRACING_GAPS.md)
