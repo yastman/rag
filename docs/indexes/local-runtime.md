@@ -6,6 +6,7 @@ in [`../../DOCKER.md`](../../DOCKER.md).
 
 | Goal / Symptom | Canonical Doc | Focused Check |
 |---|---|---|
+| Run dev Docker stack on remote MacBook | [`../runbooks/remote-macbook-docker.md`](../runbooks/remote-macbook-docker.md) | `make remote-env-sync && make remote-active-up` |
 | Bootstrap local services for native bot iteration | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#7-minimal-stack-fast-iteration) | `make local-up && make test-bot-health` |
 | Run the bot natively from `.env` | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#7-minimal-stack-fast-iteration) | `make bot` |
 | Check the bot username behind the current token | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) | Telegram `getMe` snippet in the local guide |
