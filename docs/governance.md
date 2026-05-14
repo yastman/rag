@@ -13,8 +13,8 @@ This directory is reserved for governance utilities. Currently no source files a
 
 ## Boundaries
 
-- Do not place architecture decision records here; use [`../../docs/ADRS.md`](../../docs/ADRS.md).
-- Do not place evaluation runners here; use [`../evaluation/`](../evaluation/).
+- Do not place architecture decision records here; use [`ADRS.md`](ADRS.md).
+- Do not place evaluation runners here; use [`../src/evaluation/`](../src/evaluation/).
 - Add source-level checks only when source files are added.
 
 ## Focused checks
@@ -23,10 +23,10 @@ No dedicated source tests are required while this directory has no source files.
 
 ```bash
 make docs-check
-git diff --check -- src/governance/README.md
+git diff --check -- docs/governance.md
 ```
 
 ## Related
 
-- [`docs/ADRS.md`](../../docs/ADRS.md) — Architecture decision records
-- [`src/evaluation/`](../evaluation/) — A/B testing and experiment tracking
+- [`ADRS.md`](ADRS.md) — Architecture decision records
+- [`../src/evaluation/`](../src/evaluation/) — A/B testing and experiment tracking

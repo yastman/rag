@@ -11,7 +11,16 @@ Use this skill to review pull requests with a bug-finding mindset and, when aske
 
 In repositories that use `AGENTS.md`, local override files, SDK registries, or Docker Compose as part of the product contract, load those first. They are part of correctness, not optional background reading.
 
-For `rag-fresh`, treat this as a `review -> verify -> merge-to-dev -> cleanup` operator unless the user explicitly wants a read-only review or the caller is a swarm review-fix worker.
+For `rag-fresh`, the local operator flow may include review, verification,
+merge to `dev`, and cleanup only when the caller is not a swarm review worker
+and the user asked for merge operation.
+
+When invoked by the OpenCode `pr-review` agent, this skill is non-merge:
+- do not merge;
+- do not run cleanup;
+- do not delete branches or worktrees;
+- review against the true PR merge base;
+- write DONE JSON with `review_decision`, findings, blockers, and evidence.
 
 When invoked by the OpenCode `pr-review-fix` agent, this skill is non-merge:
 - do not merge;

@@ -8,10 +8,12 @@
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
+	docker-clean docker-clean-aggressive
 	test-contract \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
-	remote-active-up remote-full-up remote-bot-up remote-bot-restart remote-bot-logs remote-service-health
+	remote-active-up remote-full-up remote-bot-up remote-bot-restart remote-bot-logs \
+	remote-local-up remote-local-down remote-local-logs remote-service-health
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev_redis_1
@@ -384,6 +386,18 @@ clean: ## Clean up cache files and build artifacts
 	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "$(GREEN)✓ Cleaned up$(NC)"
 
+docker-clean: ## Prune Docker build cache and stopped containers (safe)
+	@echo "$(BLUE)Pruning Docker build cache...$(NC)"
+	docker builder prune -f --filter "until=720h" 2>/dev/null || true
+	@echo "$(BLUE)Removing stopped containers...$(NC)"
+	docker container prune -f 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker cleaned$(NC)"
+
+docker-clean-aggressive: ## Prune ALL unused Docker resources (images, volumes, networks)
+	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes unused images and volumes$(NC)"
+	docker system prune -f --volumes 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker aggressively cleaned$(NC)"
+
 # =============================================================================
 # DOCKER PROFILES
 # =============================================================================
@@ -480,6 +494,21 @@ remote-bot-restart: ## Recreate remote bot container
 remote-bot-logs: ## Show recent remote bot logs
 	@echo "$(BLUE)Remote bot logs ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 bot"
+
+remote-local-up: ## Start the local-service subset on remote MacBook Docker
+	@echo "$(BLUE)Starting local service subset on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` up -d $(LOCAL_SERVICES)"
+	@echo "$(GREEN)✓ Local service subset started on remote$(NC)"
+
+remote-local-down: ## Stop remote MacBook compose stack
+	@echo "$(BLUE)Stopping remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full down"
+	@echo "$(GREEN)✓ Remote stack stopped$(NC)"
+
+remote-local-logs: ## Show recent remote MacBook compose logs
+	@echo "$(BLUE)Remote compose logs ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full logs --tail 120"
+	@echo "$(GREEN)✓ Remote compose logs shown$(NC)"
 
 remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	@echo "$(BLUE)Remote service health ($(REMOTE_DOCKER_HOST))...$(NC)"
