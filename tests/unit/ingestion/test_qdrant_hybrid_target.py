@@ -86,6 +86,10 @@ class TestQdrantHybridTargetSpec:
         spec = QdrantHybridTargetSpec()
         assert spec.pipeline_version == "v3.2.1"
 
+    def test_default_database_url_requires_explicit_configuration(self) -> None:
+        spec = QdrantHybridTargetSpec()
+        assert spec.database_url == ""
+
     def test_from_config(self) -> None:
         from src.ingestion.unified.config import UnifiedConfig
 

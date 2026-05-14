@@ -21,11 +21,7 @@ class UnifiedConfig:
     )
 
     ***REMOVED*** Database
-    database_url: str = field(
-        default_factory=lambda: os.getenv(
-            "INGESTION_DATABASE_URL", "postgresql://postgres@localhost:5432/cocoindex"
-        )
-    )
+    database_url: str = field(default_factory=lambda: os.getenv("INGESTION_DATABASE_URL", ""))
 
     ***REMOVED*** Qdrant
     qdrant_url: str = field(
