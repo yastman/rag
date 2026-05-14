@@ -60,6 +60,11 @@ For local development, the canonical local env file is `.env` in the repo root. 
 
 Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
 
+The MacBook remote Docker workflow is intentionally narrower than the full
+profile stack. On an 8GB MacBook, keep the default remote runtime to the
+bot/core path and start `ml`, `obs`, `voice`, or `full` only for focused checks.
+See [`docs/runbooks/remote-macbook-docker.md`](docs/runbooks/remote-macbook-docker.md).
+
 ## Service Endpoints (Host)
 
 | Service | URL/Port |
@@ -201,6 +206,8 @@ make validate-traces-fast
 ## Notes
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
+- `bge-m3` memory is controlled by `BGE_M3_MEMORY_LIMIT` and defaults to 4G in
+  local/dev Compose, including the MacBook remote helpers.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).

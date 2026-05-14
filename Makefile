@@ -8,6 +8,7 @@
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
 	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
+	docker-clean docker-clean-aggressive
 	test-contract \
 	docs-check
 
@@ -382,6 +383,18 @@ clean: ## Clean up cache files and build artifacts
 	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "$(GREEN)✓ Cleaned up$(NC)"
 
+docker-clean: ## Prune Docker build cache and stopped containers (safe)
+	@echo "$(BLUE)Pruning Docker build cache...$(NC)"
+	docker builder prune -f --filter "until=720h" 2>/dev/null || true
+	@echo "$(BLUE)Removing stopped containers...$(NC)"
+	docker container prune -f 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker cleaned$(NC)"
+
+docker-clean-aggressive: ## Prune ALL unused Docker resources (images, volumes, networks)
+	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes unused images and volumes$(NC)"
+	docker system prune -f --volumes 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker aggressively cleaned$(NC)"
+
 # =============================================================================
 # DOCKER PROFILES
 # =============================================================================
@@ -394,6 +407,17 @@ LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD) --env-fil
 # Runtime env for E2E trace gates: allow worktrees to point at the main checkout .env
 RAG_RUNTIME_ENV_FILE ?= $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 export RAG_RUNTIME_ENV_FILE
+
+# Remote Docker host for offloading local container runtime to the MacBook.
+REMOTE_DOCKER_HOST ?= macbook-docker
+REMOTE_DOCKER_IP ?= REDACTED_PRIVATE_IP
+REMOTE_DOCKER_REPO ?= ~/Documents/rag-fresh
+REMOTE_DOCKER_PATH ?= /opt/homebrew/bin:/usr/local/bin:$$PATH
+REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
+REMOTE_BGE_M3_MEMORY_LIMIT ?= 4G
+REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
+REMOTE_ACTIVE_SERVICES ?= mini-app-frontend mini-app-api bge-m3 litellm redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base
+REMOTE_COMPOSE_CMD = cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH) && export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
@@ -449,6 +473,41 @@ docker-down: ## Stop all Docker services
 docker-ps: ## Show Docker service status
 	@echo "$(BLUE)Docker service status:$(NC)"
 	@$(LOCAL_COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+.PHONY: remote-docker-status remote-docker-ps remote-compose-config remote-active-up remote-bot-up remote-bot-logs remote-local-up remote-full-up remote-local-down remote-local-logs remote-service-health
+
+remote-docker-status: ## Show remote MacBook Docker/Colima status
+	@$(REMOTE_SSH) 'export PATH=$(REMOTE_DOCKER_PATH); echo "Host: $$(hostname)"; colima status; docker version --format "Client {{.Client.Version}} Server {{.Server.Version}}"'
+
+remote-docker-ps: ## Show remote MacBook compose service status
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"'
+
+remote-compose-config: ## Render remote MacBook compose services
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile full config --services'
+
+remote-local-up: ## Start the normal local-service subset on remote MacBook Docker
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) up -d $(LOCAL_SERVICES)'
+
+remote-active-up: ## Start the same service set currently used on the workstation
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile ml --profile voice up -d $(REMOTE_ACTIVE_SERVICES)'
+
+remote-bot-up: ## Start the bot container separately on remote MacBook Docker
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile bot up -d bot'
+
+remote-bot-logs: ## Show recent remote MacBook bot logs
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile bot logs --tail 120 bot'
+
+remote-full-up: ## Start the full profile stack on remote MacBook Docker
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile full up -d'
+
+remote-local-down: ## Stop the remote MacBook compose stack
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile full down'
+
+remote-local-logs: ## Show recent remote MacBook compose logs
+	@$(REMOTE_SSH) '$(REMOTE_COMPOSE_CMD) --profile full logs --tail 120'
+
+remote-service-health: ## Check selected remote MacBook service endpoints on the Docker host
+	@$(REMOTE_SSH) 'export PATH=$(REMOTE_DOCKER_PATH); curl -fsS http://127.0.0.1:6333/readyz; curl -fsS http://127.0.0.1:8000/health || true; curl -fsS http://127.0.0.1:4000/health/readiness || true'
 
 # =============================================================================
 # DEVELOPMENT WORKFLOW
