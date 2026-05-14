@@ -131,11 +131,12 @@ class KommoClient:
         items = data.get("_embedded", {}).get("leads", [])
         leads = []
         for item in items:
-            embedded = item.pop("_embedded", {})
+            lead_data = dict(item)
+            embedded = lead_data.pop("_embedded", {})
             contacts = embedded.get("contacts") if embedded else None
             if contacts is not None:
-                item["contacts"] = contacts
-            leads.append(Lead(**item))
+                lead_data["contacts"] = contacts
+            leads.append(Lead(**lead_data))
         return leads
 
     @observe(name="kommo-get-tasks")
