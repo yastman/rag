@@ -8,6 +8,48 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
+> **For this machine**: the recommended Docker path is the remote MacBook host.
+> See [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md) for the full workflow.
+> Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
+
+***REMOVED******REMOVED*** Remote MacBook Docker (Recommended)
+
+For this machine, the dev Docker stack runs on a remote MacBook instead of Docker Desktop on WSL. Edit code in WSL, commit/push, then fetch/pull and operate the stack on the MacBook via SSH.
+
+Quick start:
+
+```bash
+***REMOVED*** Sync .env and check required variables
+make remote-env-sync
+make remote-env-check
+
+***REMOVED*** Start the active dev stack including bot
+make remote-active-up
+
+***REMOVED*** Verify
+make remote-docker-ps
+make remote-service-health
+```
+
+Bot container operations:
+
+```bash
+make remote-bot-up
+make remote-bot-restart
+make remote-bot-logs
+```
+
+Native WSL bot (separate from Docker bot):
+
+```bash
+make local-up
+make bot
+```
+
+Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
+
+Full operator workflow, troubleshooting, and test boundaries are in [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+
 ***REMOVED******REMOVED*** 1. Bootstrap Workspace
 
 ```bash
