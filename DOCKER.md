@@ -119,6 +119,7 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | `mini-app-api` | `mini-app-api` |
 | `ingestion` | `ingestion` |
 | `rag-api` | `rag-api` |
+| `voice-agent` | `voice-agent` |
 
 The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `k8s/` additionally hard-code the `telegram-bot` identity.
 
