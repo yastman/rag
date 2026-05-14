@@ -16,9 +16,10 @@ Before you begin, ensure you have:
 | Service | Required | Purpose |
 |---------|----------|---------|
 | Telegram Bot Token | Yes | Bot functionality (`TELEGRAM_BOT_TOKEN`) |
-| Langfuse | Recommended | Observability (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`) |
-| LiteLLM API | Yes | LLM calls (`LITELLM_API_KEY`) |
-| BGE-M3 API | Optional | Embeddings (can use bundled model) |
+| LiteLLM Master Key | Yes | LLM proxy auth (`LITELLM_MASTER_KEY`) |
+| LLM Provider | Yes | At least one of `OPENAI_API_KEY`, `CEREBRAS_API_KEY`, or `GROQ_API_KEY` |
+| Langfuse | Recommended | Local observability (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`) |
+| BGE-M3 | Optional | Embeddings service started automatically by Compose |
 
 ***REMOVED******REMOVED*** Step 1: Clone and Setup
 
@@ -36,61 +37,53 @@ cp .env.example .env
 
 ***REMOVED******REMOVED*** Step 2: Configure Environment
 
-Edit `.env` with your API keys:
+Edit `.env` with your API keys. The canonical reference is `.env.example`:
 
 ```bash
 ***REMOVED*** Required for bot to work
 TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN]
+LITELLM_MASTER_KEY=your_litellm_master_key
 
-***REMOVED*** LLM provider
-LITELLM_API_KEY=your_litellm_api_key
+***REMOVED*** At least one LLM provider key
+OPENAI_API_KEY=[REDACTED-OPENAI-KEY]
+***REMOVED*** CEREBRAS_API_KEY=...
+***REMOVED*** GROQ_API_KEY=[REDACTED-GROQ-KEY]
 
-***REMOVED*** Langfuse (for observability)
+***REMOVED*** Langfuse (local observability — started by make docker-ml-up)
 LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY]
 LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY]
-LANGFUSE_HOST=https://cloud.langfuse.com
-
-***REMOVED*** BGE-M3 (embeddings)
-BGE_M3_URL=http://localhost:8000  ***REMOVED*** or hosted endpoint
+LANGFUSE_HOST=http://localhost:3001
 ```
 
-See `.env.example` for full variable documentation.
+See `.env.example` for the full variable list and [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the minimum env sets per profile.
 
 ***REMOVED******REMOVED*** Step 3: Start Services
 
-```bash
-***REMOVED*** Start all Docker services (Redis, Qdrant, etc.)
-make docker-up
-
-***REMOVED*** Or with monitoring (Grafana, Loki)
-make docker-full-up
-```
-
-Verify services are healthy:
+Start core services and verify health:
 
 ```bash
+make local-up
 make test-bot-health
-make docker-ps
 ```
+
+For the full service map, profile stacks, and port list, see [`DOCKER.md`](../DOCKER.md).
 
 ***REMOVED******REMOVED*** Step 4: Run Preflight Checks
 
 ```bash
-***REMOVED*** Check all dependencies
-make test-preflight
-
-***REMOVED*** Verify embeddings service
-curl -fsS http://localhost:8000/health
+make test-bot-health
 ```
+
+The authoritative startup preflight runs in `telegram_bot/preflight.py` when the bot starts. See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the full validation ladder.
 
 ***REMOVED******REMOVED*** Step 5: Start the Bot
 
 ```bash
-***REMOVED*** Start Telegram bot only
-make docker-bot-up
+***REMOVED*** Run bot natively (fast iteration, services must be running)
+make run-bot
 
-***REMOVED*** Or run directly (requires all services running)
-uv run python -m telegram_bot.main
+***REMOVED*** Or run everything in Docker
+make docker-bot-up
 ```
 
 ***REMOVED******REMOVED******REMOVED*** Verify Bot is Connected
@@ -99,18 +92,15 @@ uv run python -m telegram_bot.main
 2. Send `/start` — you should receive a welcome message
 3. Send `/help` — you should receive help text
 
+See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the day-to-day workflow and native vs Docker trade-offs.
+
 ***REMOVED******REMOVED*** Step 6: Run Ingestion (Optional)
 
-To test with real data:
+To test with real data, see [`INGESTION.md`](INGESTION.md) for the full ingestion workflow:
 
 ```bash
-***REMOVED*** Preflight checks for ingestion
 make ingest-unified-preflight
-
-***REMOVED*** Bootstrap the collection
 make ingest-unified-bootstrap
-
-***REMOVED*** Run continuous ingestion
 make ingest-unified
 ```
 
@@ -140,7 +130,7 @@ make ingest-unified-bootstrap
 
 1. Verify `TELEGRAM_BOT_TOKEN` is valid
 2. Check Langfuse keys are correct
-3. Ensure `LITELLM_API_KEY` has not expired
+3. Ensure `LITELLM_MASTER_KEY` and at least one provider key (`OPENAI_API_KEY`, `CEREBRAS_API_KEY`, or `GROQ_API_KEY`) are set
 
 ***REMOVED******REMOVED*** Project Structure Overview
 
