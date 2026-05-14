@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 from src.retrieval.topic_classifier import (
@@ -105,6 +106,71 @@ def test_detect_score_gap_marks_clear_winner_confident() -> None:
     result = detect_score_gap([0.62, 0.40, 0.39])
 
     assert result["confident"] is True
+
+
+def test_detect_score_gap_confident_many_docs_above_threshold() -> None:
+    """0.25 ratio: (0.50-0.30)/0.50=0.40 > 0.25 → confident."""
+    result = detect_score_gap([0.50, 0.30, 0.30, 0.29, 0.28, 0.27, 0.26, 0.25, 0.24, 0.23])
+
+    assert result["confident"] is True
+    assert result["gap_ratio"] == pytest.approx(0.40)
+
+
+def test_detect_score_gap_not_confident_keeps_all_for_small_spread() -> None:
+    """Small spread (0.08/0.30=0.267 > 0.25) but drops below if scores are low."""
+    scores = [0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10]
+    result = detect_score_gap(scores)
+
+    assert result["confident"] is False
+
+
+def test_detect_score_gap_not_confident_comprehensive_query_scores() -> None:
+    """Tight cluster like listing ВНЖ types — gap_ratio is near zero."""
+    scores = [0.0164, 0.0160, 0.0158, 0.0157, 0.0156, 0.0155, 0.0154]
+    result = detect_score_gap(scores)
+
+    assert result["confident"] is False
+    assert result["gap_ratio"] == pytest.approx(0.024, abs=0.01)
+
+
+def test_detect_score_gap_single_doc_always_confident() -> None:
+    """One doc → no runner-up → always confident (prevents empty context)."""
+    result = detect_score_gap([0.5])
+
+    assert result["confident"] is True
+
+
+def test_detect_score_gap_two_docs_below_trim_threshold() -> None:
+    """Confident gap but only 2 docs — caller won't trim (len ≤ _CONFIDENT_TRIM_TOP_K)."""
+    result = detect_score_gap([0.50, 0.35])
+
+    assert result["confident"] is True
+    assert result["gap_ratio"] == pytest.approx(0.30)
+
+
+def test_detect_score_gap_at_threshold_edge() -> None:
+    """Exactly at the 0.25 threshold boundary."""
+    result = detect_score_gap([0.40, 0.30], gap_ratio_threshold=0.25)
+
+    assert result["confident"] is True
+    assert result["gap_ratio"] == pytest.approx(0.25)
+
+
+def test_detect_score_gap_just_below_threshold() -> None:
+    """Just below the 0.25 threshold — not confident."""
+    result = detect_score_gap([0.40, 0.31], gap_ratio_threshold=0.25)
+
+    assert result["confident"] is False
+
+
+def test_detect_score_gap_respects_custom_threshold() -> None:
+    """Old threshold 0.15 would classify previously non-confident cluster as confident."""
+    scores = [0.05, 0.04, 0.04, 0.04, 0.04, 0.04]
+    result_strict = detect_score_gap(scores, gap_ratio_threshold=0.25)
+    result_loose = detect_score_gap(scores, gap_ratio_threshold=0.15)
+
+    assert result_strict["confident"] is False
+    assert result_loose["confident"] is True
 
 
 def test_query_topic_hints_match_retrieval_quality_fixture() -> None:
