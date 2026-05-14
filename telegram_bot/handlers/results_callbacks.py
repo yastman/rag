@@ -11,14 +11,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InaccessibleMessage
 
 from telegram_bot.callback_data import ResultsCB
+from telegram_bot.constants import STALE_RESULTS_CALLBACK_TEXT as _STALE_RESULTS_CALLBACK_TEXT
 
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-_STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
 
 
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
