@@ -14,7 +14,7 @@ class TestGraphConfig:
         assert cfg.llm_base_url == "http://litellm:4000"
         assert cfg.llm_model == "gpt-4o-mini"
         assert cfg.bge_m3_url == "http://bge-m3:8000"
-        assert cfg.search_top_k == 20
+        assert cfg.search_top_k == 40
         assert cfg.max_rewrite_attempts == 1
         assert cfg.rewrite_max_tokens == 64
 
