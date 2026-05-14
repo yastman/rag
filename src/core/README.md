@@ -1,11 +1,10 @@
 ***REMOVED*** core/
 
+***REMOVED******REMOVED*** Purpose
+
 Main RAG pipeline orchestrator.
-
-***REMOVED******REMOVED*** Ownership
-
-- Owns the `RAGPipeline` orchestration API and `RAGResult` return contract.
-- Coordinates configured embedding, retrieval, contextualization, and indexing helpers.
+Owns the `RAGPipeline` orchestration API and `RAGResult` return contract.
+Coordinates configured embedding, retrieval, contextualization, and indexing helpers.
 
 ***REMOVED******REMOVED*** Files
 
@@ -40,7 +39,7 @@ for result in results.results:
 uv run pytest tests/unit/core/ -q
 ```
 
-***REMOVED******REMOVED*** Related
+***REMOVED******REMOVED*** See Also
 
 - [`src/config/`](../config/) — Settings and constants
 - [`src/retrieval/`](../retrieval/) — Search engine implementations

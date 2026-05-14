@@ -29,6 +29,8 @@ make monitoring-up      ***REMOVED*** observability alias with endpoint hints
 make docker-ps          ***REMOVED*** list running containers
 ```
 
+> **Remote MacBook workflow**: for this machine, the recommended Docker path runs on a remote MacBook via SSH. See [`../runbooks/remote-macbook-docker.md`](../runbooks/remote-macbook-docker.md) for remote targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`.
+
 ***REMOVED******REMOVED******REMOVED*** Local Service Containers
 
 For per-service build, healthcheck, and test details, see [`../../services/README.md`](../../services/README.md).

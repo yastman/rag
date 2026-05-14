@@ -1,11 +1,10 @@
 ***REMOVED*** evaluation/
 
+***REMOVED******REMOVED*** Purpose
+
 Evaluation, experimentation, and observability tooling for the RAG system.
-
-***REMOVED******REMOVED*** Ownership
-
-- Owns offline evaluation tools, RAGAS runners, A/B experiment helpers, and quality metric logging.
-- Provides scripts for generating and syncing evaluation datasets and smoke checks.
+Owns offline evaluation tools, RAGAS runners, A/B experiment helpers, and quality metric logging.
+Provides scripts for generating and syncing evaluation datasets and smoke checks.
 
 ***REMOVED******REMOVED*** Files
 
@@ -36,7 +35,7 @@ Evaluation, experimentation, and observability tooling for the RAG system.
 uv run pytest tests/unit/evaluation/ -q
 ```
 
-***REMOVED******REMOVED*** Related
+***REMOVED******REMOVED*** See Also
 
 - [`docs/RAG_QUALITY_SCORES.md`](../../docs/RAG_QUALITY_SCORES.md) — Scoring taxonomy
 - [`tests/README.md`](../../tests/README.md) — Test tiers and commands
