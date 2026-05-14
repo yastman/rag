@@ -868,7 +868,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
+      test: ["CMD", "python", "-m", "src.voice.healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 5

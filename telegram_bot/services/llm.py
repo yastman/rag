@@ -66,6 +66,7 @@ class LLMService:
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
+        max_tokens: int = 4096,
         low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
     ):
         warnings.warn(
@@ -77,6 +78,7 @@ class LLMService:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.model_max_tokens = max_tokens
         self.low_confidence_threshold = low_confidence_threshold
         self.client = AsyncOpenAI(
             api_key=api_key,
@@ -142,7 +144,7 @@ class LLMService:
                     response_model=ConfidenceResponse,
                     max_retries=2,
                     temperature=0.7,
-                    max_tokens=4096,
+                    max_tokens=self.model_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
                 )
                 return ConfidenceResult(
@@ -156,7 +158,7 @@ class LLMService:
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
                 temperature=0.7,
-                max_tokens=4096,
+                max_tokens=self.model_max_tokens,
                 name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
 
@@ -244,7 +246,7 @@ class LLMService:
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
                 temperature=0.7,
-                max_tokens=4096,
+                max_tokens=self.model_max_tokens,
                 stream=True,
                 stream_options={"include_usage": True},
                 name="stream-answer",  # type: ignore[call-overload]  # langfuse kwarg
