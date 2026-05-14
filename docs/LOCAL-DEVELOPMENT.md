@@ -50,6 +50,11 @@ Secret model by compose file:
 - `compose.dev.yml` may provide local-only defaults for development convenience (`pk-lf-dev`, `sk-lf-dev`, `clickhouse`, `miniosecret`, `langfuseredis`, `devkey`).
 - Production/VPS stacks must set real secret values via environment management or file-backed secret patterns (`*_FILE` / `secrets:`) when available.
 
+Langfuse local development:
+- `compose.dev.yml` uses Langfuse headless initialization defaults to create a local dev organization/project/API key (`pk-lf-dev` / `sk-lf-dev`) when the Langfuse database is empty.
+- Traced dev services use the same local keys, so a fresh local Langfuse database should accept OTLP ingestion after `langfuse` is recreated.
+- If `bot` logs show OTLP `401` / `No key found for public key`, recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file, then confirm the local Langfuse DB has an organization, project, and API key before debugging application tracing.
+
 ## 2. Start Services
 
 To keep Docker load off the workstation, use the MacBook as a remote Docker host
@@ -88,6 +93,18 @@ Bot preflight:
 ```bash
 make test-bot-health
 ```
+
+Bot-local LangChain/LangGraph dependency smoke:
+
+```bash
+uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'
+PYTHONPATH="$PWD" uv --directory telegram_bot run --frozen python -c 'from telegram_bot.agents.agent import create_bot_agent'
+```
+
+Run this after changes to `telegram_bot/pyproject.toml`,
+`telegram_bot/uv.lock`, or LangChain/LangGraph agent code. The Docker bot image
+builds from the bot-local lock, so root `uv.lock` passing is not enough for bot
+runtime compatibility.
 
 If `make test-bot-health` reports Redis auth failure after editing `.env`:
 
