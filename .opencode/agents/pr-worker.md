@@ -1,16 +1,14 @@
 ---
 description: Bounded implementation worker that writes code, tests, commits, pushes, opens a PR, and writes DONE JSON.
 mode: primary
-model: kimi-for-coding/k2p6
+model: opencode-go/kimi-k2.6
 permission:
-  edit: allow
-  bash: allow
+  "*": allow
+  skill:
+    "*": allow
   webfetch: deny
   websearch: deny
   external_directory: ask
-  doom_loop: ask
-  skill:
-    "*": allow
 mcp:
   context7:
     enabled: false
