@@ -62,7 +62,7 @@ class QdrantHybridTargetSpec(TargetSpec):
     bge_m3_concurrency: int = 1
 
     # Postgres
-    database_url: str = "postgresql://postgres@localhost:5432/cocoindex"
+    database_url: str = ""
 
     # Pipeline
     max_retries: int = 3
