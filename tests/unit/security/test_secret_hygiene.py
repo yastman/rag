@@ -110,3 +110,70 @@ def test_k8s_bot_redis_password_declared_before_redis_url():
         "REDIS_PASSWORD must be declared before REDIS_URL because Kubernetes "
         "expands $(REDIS_PASSWORD) only from previously defined env vars."
     )
+
+
+@pytest.mark.timeout(0)
+def test_no_non_example_env_files_tracked():
+    """Ensure no non-example .env files are tracked in git (#1325)."""
+    import subprocess
+    from pathlib import Path
+
+    project_root = Path(__file__).parent.parent.parent.parent
+    result = subprocess.run(
+        ["git", "ls-files"],
+        capture_output=True,
+        text=True,
+        cwd=project_root,
+    )
+    tracked_envs = [
+        line
+        for line in result.stdout.splitlines()
+        if Path(line).name.startswith(".env") and not line.endswith(".example")
+    ]
+    assert not tracked_envs, (
+        f"Real .env files must not be tracked in git: {tracked_envs}\n"
+        "Add them to .gitignore and remove from the index."
+    )
+
+
+@pytest.mark.timeout(0)
+def test_env_example_files_use_safe_placeholders():
+    """Ensure .env.example files do not contain real-looking API key prefixes (#1325)."""
+    import re
+    from pathlib import Path
+
+    project_root = Path(__file__).parent.parent.parent.parent
+    env_examples = [
+        project_root / ".env.example",
+        project_root / ".env.local.example",
+        project_root / "telegram_bot" / ".env.example",
+        project_root / "k8s" / "secrets" / ".env.example",
+    ]
+
+    # Common real API key prefixes that should not appear as example values
+    bad_prefixes = [
+        r"sk-ant-",
+        r"sk-proj-",
+        r"sk-",
+        r"gsk_",
+        r"csk-",
+        r"pa-",
+        r"pk-lf-",
+        r"sk-lf-",
+    ]
+    prefix_pattern = re.compile(r"^\s*[A-Z_][A-Z0-9_]*=\s*.*(" + "|".join(bad_prefixes) + r")")
+    # Allow placeholder-style values like <your-key> or empty values
+    placeholder_pattern = re.compile(r"^\s*[A-Z_][A-Z0-9_]*=\s*(<.*>|\s*)$")
+
+    errors = []
+    for env_file in env_examples:
+        if not env_file.exists():
+            continue
+        for lineno, line in enumerate(env_file.read_text().splitlines(), 1):
+            if prefix_pattern.search(line) and not placeholder_pattern.search(line):
+                errors.append(f"  {env_file.name}:{lineno}: {line.strip()}")
+
+    assert not errors, (
+        "Security violation: .env.example files contain values that resemble real API keys.\n"
+        "Use placeholder format like <your-key-here> or leave empty.\n" + "\n".join(errors)
+    )

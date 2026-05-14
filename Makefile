@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-all lint format type-check security test test-full test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security check-env-safety test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
@@ -172,7 +172,12 @@ dead-code: ## Find dead code with Vulture (alias for security)
 	uv run vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
 
-all-checks: lint type-check security ## Run all code quality checks
+check-env-safety: ## Run env safety structural check (no real secrets in tracked files)
+	@echo "$(BLUE)Running env safety check...$(NC)"
+	@./scripts/check_env_safety.sh
+	@echo "$(GREEN)✓ Env safety check passed$(NC)"
+
+all-checks: lint type-check security check-env-safety ## Run all code quality checks
 	@echo "$(GREEN)✓✓✓ All checks passed! ✓✓✓$(NC)"
 
 # =============================================================================
