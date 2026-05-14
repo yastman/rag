@@ -161,12 +161,12 @@ security: ## Run Bandit security scan + Vulture dead-code check
 	uv run bandit -r src/ telegram_bot/ -c pyproject.toml
 	@echo "$(GREEN)✓ Bandit security check complete$(NC)"
 	@echo "$(BLUE)Checking for dead code with Vulture...$(NC)"
-	uv run vulture src/ telegram_bot/ --min-confidence 80
+	uv run vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Vulture dead-code check complete$(NC)"
 
 dead-code: ## Find dead code with Vulture (alias for security)
 	@echo "$(BLUE)Checking for dead code...$(NC)"
-	uv run vulture src/ telegram_bot/ --min-confidence 80
+	uv run vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
 
 all-checks: lint type-check security ## Run all code quality checks
