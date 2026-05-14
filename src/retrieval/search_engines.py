@@ -748,7 +748,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         dbsf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=100),
-                models.Prefetch(query=sparse_vector, using="sparse", limit=100),
+                models.Prefetch(query=sparse_vector, using="bm42", limit=100),
             ],
             query=models.FusionQuery(fusion=models.Fusion.DBSF),
         )
