@@ -193,7 +193,6 @@ class TestGraphConfig:
         assert cfg.small_to_big_window_before == 0
         assert cfg.small_to_big_window_after == 2
         assert cfg.max_expanded_chunks == 10
-        assert cfg.max_context_tokens == 8000
 
     def test_small_to_big_from_env(self):
         from telegram_bot.graph.config import GraphConfig
@@ -203,7 +202,6 @@ class TestGraphConfig:
             "SMALL_TO_BIG_WINDOW_BEFORE": "1",
             "SMALL_TO_BIG_WINDOW_AFTER": "3",
             "MAX_EXPANDED_CHUNKS": "20",
-            "MAX_CONTEXT_TOKENS": "12000",
         }
         with patch.dict(os.environ, env, clear=True):
             cfg = GraphConfig.from_env()
@@ -211,7 +209,6 @@ class TestGraphConfig:
         assert cfg.small_to_big_window_before == 1
         assert cfg.small_to_big_window_after == 3
         assert cfg.max_expanded_chunks == 20
-        assert cfg.max_context_tokens == 12000
 
     # --- Reasoning control ---
 
