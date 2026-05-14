@@ -56,6 +56,8 @@ make local-ps
 make local-down
 ```
 
+> **Remote MacBook workflow**: for this machine, the recommended Docker path runs on a remote MacBook via SSH. See [`docs/runbooks/remote-macbook-docker.md`](docs/runbooks/remote-macbook-docker.md) for remote targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`.
+
 For local development, the canonical local env file is `.env` in the repo root. `.env.local` is not auto-loaded by the documented `make` and `uv run` workflows.
 
 Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
@@ -93,6 +95,10 @@ See [`docs/runbooks/remote-macbook-docker.md`](docs/runbooks/remote-macbook-dock
 - At least one provider key for LiteLLM routing:
   - `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 
+`telegram_bot/Dockerfile` installs Python dependencies from
+`telegram_bot/pyproject.toml` and `telegram_bot/uv.lock`. The root `uv.lock`
+does not define the bot image dependency set.
+
 ### ML profile (`make docker-ml-up`)
 
 - `NEXTAUTH_SECRET`
@@ -119,6 +125,7 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 | `mini-app-api` | `mini-app-api` |
 | `ingestion` | `ingestion` |
 | `rag-api` | `rag-api` |
+| `voice-agent` | `voice-agent` |
 
 The defaults are set in `compose.yml` and mirrored in `compose.dev.yml` for profile-gated local overrides. `telegram_bot/observability.py` also sets `telegram-bot` at runtime as a safety fallback for non-Docker execution. Kubernetes manifests under `k8s/` additionally hard-code the `telegram-bot` identity.
 
@@ -128,6 +135,35 @@ To override, export `OTEL_SERVICE_NAME` in the shell or set it in `.env` before 
 export OTEL_SERVICE_NAME=custom-bot-name
 make docker-bot-up
 ```
+
+### Local Langfuse Headless Initialization
+
+`compose.yml` keeps Langfuse credentials secret-free: it declares traced service
+environment variables but does not provide predictable key defaults.
+
+`compose.dev.yml` is the local convenience layer. It provides dev-only
+`LANGFUSE_INIT_*` defaults for the `langfuse` service so an empty local
+Langfuse database creates a development organization, project, and API key that
+match the traced service defaults:
+
+| Variable | Dev default |
+| --- | --- |
+| `LANGFUSE_INIT_ORG_ID` | `dev-org` |
+| `LANGFUSE_INIT_ORG_NAME` | `Local Dev` |
+| `LANGFUSE_INIT_PROJECT_ID` | `dev-project` |
+| `LANGFUSE_INIT_PROJECT_NAME` | `Local Dev` |
+| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `pk-lf-dev` |
+| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `sk-lf-dev` |
+
+These defaults are local-only. Override them from `.env` when a dev stack should
+use a different local Langfuse project. Production and VPS environments must
+provide real Langfuse keys and must not rely on the dev defaults.
+
+If `bot` logs show OTLP `401` or Langfuse logs show `No key found for public
+key`, the local Langfuse database likely lacks the project key currently
+injected into traced services. Recreate `langfuse`, `langfuse-worker`, and the
+traced service with the same env file so headless initialization and service
+credentials line up.
 
 ## Health Checks
 

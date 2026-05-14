@@ -8,6 +8,48 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
+> **For this machine**: the recommended Docker path is the remote MacBook host.
+> See [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md) for the full workflow.
+> Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
+
+## Remote MacBook Docker (Recommended)
+
+For this machine, the dev Docker stack runs on a remote MacBook instead of Docker Desktop on WSL. Edit code in WSL, commit/push, then fetch/pull and operate the stack on the MacBook via SSH.
+
+Quick start:
+
+```bash
+# Sync .env and check required variables
+make remote-env-sync
+make remote-env-check
+
+# Start the active dev stack including bot
+make remote-active-up
+
+# Verify
+make remote-docker-ps
+make remote-service-health
+```
+
+Bot container operations:
+
+```bash
+make remote-bot-up
+make remote-bot-restart
+make remote-bot-logs
+```
+
+Native WSL bot (separate from Docker bot):
+
+```bash
+make local-up
+make bot
+```
+
+Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
+
+Full operator workflow, troubleshooting, and test boundaries are in [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+
 ## 1. Bootstrap Workspace
 
 ```bash
@@ -50,6 +92,11 @@ Secret model by compose file:
 - `compose.dev.yml` may provide local-only defaults for development convenience (`pk-lf-dev`, `sk-lf-dev`, `clickhouse`, `miniosecret`, `langfuseredis`, `devkey`).
 - Production/VPS stacks must set real secret values via environment management or file-backed secret patterns (`*_FILE` / `secrets:`) when available.
 
+Langfuse local development:
+- `compose.dev.yml` uses Langfuse headless initialization defaults to create a local dev organization/project/API key (`pk-lf-dev` / `sk-lf-dev`) when the Langfuse database is empty.
+- Traced dev services use the same local keys, so a fresh local Langfuse database should accept OTLP ingestion after `langfuse` is recreated.
+- If `bot` logs show OTLP `401` / `No key found for public key`, recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file, then confirm the local Langfuse DB has an organization, project, and API key before debugging application tracing.
+
 ## 2. Start Services
 
 To keep Docker load off the workstation, use the MacBook as a remote Docker host
@@ -88,6 +135,18 @@ Bot preflight:
 ```bash
 make test-bot-health
 ```
+
+Bot-local LangChain/LangGraph dependency smoke:
+
+```bash
+uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'
+PYTHONPATH="$PWD" uv --directory telegram_bot run --frozen python -c 'from telegram_bot.agents.agent import create_bot_agent'
+```
+
+Run this after changes to `telegram_bot/pyproject.toml`,
+`telegram_bot/uv.lock`, or LangChain/LangGraph agent code. The Docker bot image
+builds from the bot-local lock, so root `uv.lock` passing is not enough for bot
+runtime compatibility.
 
 If `make test-bot-health` reports Redis auth failure after editing `.env`:
 
