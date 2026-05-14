@@ -95,6 +95,30 @@ async def test_search_leads_with_contacts_parses_embedded_and_does_not_mutate_or
     }
 
 
+async def test_search_leads_does_not_mutate_response_object_returned_by_request(kommo_client):
+    """search_leads preserves the raw response object returned by the transport layer."""
+    original_response = {
+        "_embedded": {
+            "leads": [
+                {
+                    "id": 31,
+                    "name": "Raw Deal With Contacts",
+                    "_embedded": {"contacts": [{"id": 9, "name": "Bob"}]},
+                }
+            ]
+        }
+    }
+    kommo_client._request = AsyncMock(return_value=original_response)
+
+    leads = await kommo_client.search_leads(with_contacts=True)
+
+    assert len(leads) == 1
+    assert leads[0].contacts == [{"id": 9, "name": "Bob"}]
+    assert original_response["_embedded"]["leads"][0]["_embedded"] == {
+        "contacts": [{"id": 9, "name": "Bob"}]
+    }
+
+
 async def test_update_lead_score_propagates_idempotency_key(kommo_client, httpx_mock):
     """update_lead_score propagates X-Idempotency-Key header."""
     httpx_mock.add_response(
