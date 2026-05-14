@@ -40,7 +40,7 @@ Orchestrator responsibilities:
 - create and validate a dedicated implementation worktree;
 - reserve files before launch;
 - launch a visible OpenCode worker with `OPENCODE_AGENT=pr-worker`,
-  `OPENCODE_MODEL=kimi-for-coding/k2p6`,
+  `OPENCODE_MODEL=opencode-go/kimi-k2.6`,
   `OPENCODE_REQUIRED_SKILLS=swarm-pr-finish`, and `SWARM_LOCAL_ONLY=1`;
 - review the worker diff and command evidence;
 - run any missing focused checks locally if needed;
@@ -197,7 +197,7 @@ Prompt body:
 ```markdown
 # Worker: #1485 Langfuse Trace Contract
 
-WORKER MODEL: kimi-for-coding/k2p6
+WORKER MODEL: opencode-go/kimi-k2.6
 Required OpenCode skills: swarm-pr-finish
 Branch/base: fix/1485-langfuse-trace-contract based on dev
 Worktree: $WT_PATH
@@ -277,7 +277,7 @@ PROMPT_FILE="$PROJECT_ROOT/.codex/prompts/worker-1485-langfuse-trace-contract.md
 SIGNAL_FILE="$WT_PATH/.signals/worker-1485-langfuse-trace-contract.json"
 ORCH_PANE="$ORCH_PANE" \
 OPENCODE_AGENT=pr-worker \
-OPENCODE_MODEL=kimi-for-coding/k2p6 \
+OPENCODE_MODEL=opencode-go/kimi-k2.6 \
 OPENCODE_VARIANT= \
 OPENCODE_REQUIRED_SKILLS=swarm-pr-finish \
 SWARM_LOCAL_ONLY=1 \
