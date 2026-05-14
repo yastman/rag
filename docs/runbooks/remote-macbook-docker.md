@@ -18,10 +18,21 @@ The MacBook is the canonical dev Docker host for this machine. Do not use Docker
 |---|---|
 | SSH host | `macbook-docker` |
 | Remote repo | `/Users/aroslav/Documents/rag-fresh` |
-| Homebrew PATH | `/opt/homebrew/bin:/usr/local/bin:$PATH` |
+| Homebrew PATH | `/opt/homebrew/bin:/usr/local/bin` |
 | Compose files | `compose.yml:compose.dev.yml` |
 | Docker host LAN IP | `192.168.31.168` |
 | BGE-M3 memory default | `6G` (`BGE_M3_MEMORY_LIMIT=6G`) |
+
+## Shell Alias
+
+The `macbook` function (in `~/.zshrc`) adds Docker/Homebrew to PATH automatically:
+
+```bash
+macbook                     # interactive session with docker in PATH
+macbook docker ps           # remote command with docker in PATH
+```
+
+No need to manually prefix `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH` for interactive use. The Make targets already handle this internally for non-interactive SSH sessions.
 
 ## Day-to-Day Workflow
 
@@ -75,6 +86,33 @@ This enables profiles: `bot`, `ml`, and `voice` (if `rag-api` is included).
 
 `make remote-full-up` is available as an explicit full-profile command, but `remote-active-up` is the default daily command.
 
+For a leaner 8GB MacBook baseline, use:
+
+```bash
+make remote-local-down
+make remote-bot-up
+```
+
+This keeps the runtime to `bot`, `litellm`, `redis`, `postgres`, `qdrant`, `user-base`, and `bge-m3`.
+
+Start only the local-service subset without the bot:
+
+```bash
+make remote-local-up
+```
+
+Stop the remote stack:
+
+```bash
+make remote-local-down
+```
+
+Show recent compose logs:
+
+```bash
+make remote-local-logs
+```
+
 ### Bot Container Workflow
 
 ```bash
@@ -116,6 +154,58 @@ Optional services may report soft failures when they are not part of the selecte
 | WSL tests after intentionally publishing ports on the LAN | `192.168.31.168` (MacBook LAN IP, not WSL `localhost`) |
 | Docker exec / container-name tests | Run over SSH in the MacBook repo |
 
+If a compose override exposes ports on the MacBook LAN interface:
+
+```bash
+curl -fsS http://192.168.31.168:6333/readyz
+curl -fsS http://192.168.31.168:4000/health/readiness
+```
+
+## Langfuse CLI
+
+Langfuse traces, observations, and scores live in ClickHouse on the MacBook.
+Use the `langfuse-cli` npm package (installed globally on the MacBook) to
+inspect them from the terminal.
+
+Works from WSL over SSH because the Langfuse Web UI port is bound to
+`127.0.0.1:3001` on the MacBook (not exposed to LAN).
+
+Default dev credentials: `pk-lf-dev` / `sk-lf-dev`.
+
+```bash
+# Quick: list recent traces
+ssh macbook-docker 'LANGFUSE_BASE_URL=http://localhost:3001 \
+  LANGFUSE_PUBLIC_KEY=pk-lf-dev \
+  LANGFUSE_SECRET_KEY=sk-lf-dev \
+  langfuse api traces list --limit 10'
+
+# List observations, scores, prompts
+ssh macbook-docker 'LANGFUSE_BASE_URL=http://localhost:3001 \
+  LANGFUSE_PUBLIC_KEY=pk-lf-dev \
+  LANGFUSE_SECRET_KEY=sk-lf-dev \
+  langfuse api observations list --limit 10'
+
+# Discover available resources and actions
+ssh macbook-docker 'LANGFUSE_BASE_URL=http://localhost:3001 \
+  LANGFUSE_PUBLIC_KEY=pk-lf-dev \
+  LANGFUSE_SECRET_KEY=sk-lf-dev \
+  langfuse api __schema'
+ssh macbook-docker 'LANGFUSE_BASE_URL=http://localhost:3001 \
+  LANGFUSE_PUBLIC_KEY=pk-lf-dev \
+  LANGFUSE_SECRET_KEY=sk-lf-dev \
+  langfuse api traces --help'
+```
+
+### Web UI
+
+Forward the Langfuse Web UI port to the workstation:
+
+```bash
+ssh -L 3001:127.0.0.1:3001 macbook-docker
+```
+
+Then open <http://localhost:3001> in a browser.
+
 ## Test Boundary
 
 | Test Type | Where to Run |
@@ -124,17 +214,55 @@ Optional services may report soft failures when they are not part of the selecte
 | Service-dependent tests against default Compose ports | Over SSH on MacBook |
 | Docker exec, local volumes, Compose networks, container names | Over SSH on MacBook |
 
+Run fast tests locally on the workstation:
+
+```bash
+make test-unit
+make test
+make lint
+make type-check
+```
+
+Run service-dependent checks locally only after pointing service URLs at the
+MacBook:
+
+```bash
+QDRANT_URL=http://192.168.31.168:6333 \
+LITELLM_BASE_URL=http://192.168.31.168:4000 \
+make test-bot-health
+```
+
 Example service-dependent test over SSH:
 
 ```bash
-ssh macbook-docker 'cd ~/Documents/rag-fresh && export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; make test-bot-health'
+ssh macbook-docker 'cd /Users/aroslav/Documents/rag-fresh && export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; make test-bot-health'
 ```
 
 Example Docker-local test over SSH:
 
 ```bash
-ssh macbook-docker 'cd ~/Documents/rag-fresh && export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; make test-smoke'
+ssh macbook-docker 'cd /Users/aroslav/Documents/rag-fresh && export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; make test-smoke'
 ```
+
+## Environment
+
+The remote Compose command uses `.env` on the MacBook when present and otherwise
+falls back to `tests/fixtures/compose.ci.env`, matching the local Makefile
+fallback model.
+
+Remote Make targets set `BGE_M3_MEMORY_LIMIT=6G` by default. On an 8GB MacBook,
+Colima can run near 7G, but giving Docker more memory is not a substitute for
+keeping the active Compose profile small. macOS, the Colima VM, Docker daemon,
+filesystem cache, and short encode spikes still need headroom. If the full stack
+is required, run it temporarily and shut it down afterward.
+
+The BGE model cache is the named Docker volume `dev_hf_cache`; keeping this
+volume avoids repeated model downloads. Do not remove volumes during routine
+cleanup unless you intentionally want to redownload models and rebuild local
+state.
+
+Do not print `.env` contents in logs or chat. It is safe to report missing
+variable names.
 
 ## Troubleshooting
 
@@ -160,7 +288,7 @@ ssh macbook-docker 'colima start --cpu 4 --memory 7'
 ### Stale Remote Repo / Branch
 
 ```bash
-ssh macbook-docker 'cd ~/Documents/rag-fresh && git fetch && git status'
+ssh macbook-docker 'cd /Users/aroslav/Documents/rag-fresh && git fetch && git status'
 ```
 
 Ensure the MacBook repo is on the correct branch and up to date before starting services.
@@ -188,6 +316,23 @@ Look for:
 - `make remote-docker-ps` may show `Up` while the endpoint is not yet ready.
 - `make remote-service-health` checks actual endpoint responses.
 - Some services (BGE-M3, Docling) have long warm-up times on first start.
+
+### MacBook Memory Pressure
+
+- Use `make remote-local-down && make remote-bot-up`, then check `docker stats --no-stream`.
+- Do not leave `remote-full-up`, `remote-active-up`, `docker-ml-up`, `monitoring-up`,
+  or voice services running as the default idle stack on an 8GB MacBook.
+
+### Docker / Compose Issues
+
+- Docker command is missing: the `macbook` shell function already handles PATH;
+  if using raw `ssh macbook-docker`, prefix with `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH`.
+- Compose sees stale code: sync files to `/Users/aroslav/Documents/rag-fresh` on the
+  MacBook before rebuilding or starting containers (e.g., `rsync` changed files).
+- LiteLLM OOM / crash-loop: see [LITEllm_FAILURE.md](LITEllm_FAILURE.md). The
+  dev memory override is in `compose.dev.yml` (1G for litellm).
+- A workstation health check fails on `localhost`: retry with `192.168.31.168`.
+  Note: most dev ports are bound to `127.0.0.1` (host-local), not exposed to LAN.
 
 ### Fallback Fixture Token
 
