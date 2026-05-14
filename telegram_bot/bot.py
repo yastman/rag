@@ -757,6 +757,7 @@ class PropertyBot:
         self._bot_user_id: int | None = None
 
         # Expert topic service (user+expert → thread_id mapping)
+        self._topic_redis: Any | None = None
         self._topic_service: TopicService | None = None
         self._topics_enabled: bool = False
         self._deeplink_redis: Any | None = None
@@ -4679,8 +4680,8 @@ class PropertyBot:
         # Initialize topic service (forum topics mapping — user+expert → thread_id)
         import redis.asyncio as aioredis
 
-        topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
-        self._topic_service = TopicService(redis=topic_redis)
+        self._topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
+        self._topic_service = TopicService(redis=self._topic_redis)
         logger.info("TopicService ready (Redis)")
 
         # Initialize TopicManager + deeplink Redis for Mini App deep link flow
@@ -5233,4 +5234,10 @@ class PropertyBot:
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")
+        if self._topic_redis is not None:
+            await self._topic_redis.aclose()
+            self._topic_redis = None
+        if self._deeplink_redis is not None:
+            await self._deeplink_redis.aclose()
+            self._deeplink_redis = None
         await self.bot.session.close()
