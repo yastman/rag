@@ -31,6 +31,13 @@ def test_voice_agent_uses_env_driven_livekit_url() -> None:
     assert environment["LIVEKIT_URL"] == LIVEKIT_URL_EXPR
 
 
+def test_voice_agent_healthcheck_checks_voice_agent_process() -> None:
+    compose = _load_compose()
+    healthcheck = compose["services"]["voice-agent"]["healthcheck"]["test"]
+
+    assert healthcheck == ["CMD", "python", "-m", "src.voice.healthcheck"]
+
+
 def test_livekit_sip_uses_env_driven_livekit_url_everywhere() -> None:
     compose = _load_compose()
     environment = compose["services"]["livekit-sip"]["environment"]

@@ -6,13 +6,13 @@ import html
 import logging
 from typing import Any
 
+from telegram_bot.constants import TELEGRAM_MESSAGE_LIMIT as _TELEGRAM_MESSAGE_LIMIT
 from telegram_bot.observability import get_client
 from telegram_bot.observability_payloads import build_safe_output_payload
 
 
 logger = logging.getLogger(__name__)
 
-_TELEGRAM_MESSAGE_LIMIT = 4096
 _LONG_ANSWER_THRESHOLD = 900
 _QUOTE_THRESHOLD = 120
 _QUOTE_MAX_LEN = 220

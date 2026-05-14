@@ -261,14 +261,13 @@ def test_voice_agent_compose_healthcheck_is_runtime_safe() -> None:
     assert "pgrep" not in health_test, (
         "voice-agent compose healthcheck runs inside python:slim; pgrep requires procps"
     )
-    assert "python -c" in health_test, (
+    assert "python" in health_test, (
         "voice-agent compose healthcheck must use Python stdlib available in the image"
     )
-    assert "src.voice.agent" not in health_test, (
-        "voice-agent compose healthcheck must not contain the literal process needle; "
-        "build it dynamically to avoid self-matching the healthcheck command"
+    assert "src.voice.healthcheck" in health_test, (
+        "voice-agent compose healthcheck must reference the dedicated src.voice.healthcheck module; "
+        "the module uses its own PID exclusion to avoid self-matching"
     )
-    assert "'src.voice.' + 'agent'" in health_test
 
 
 def test_voice_dockerfile_healthcheck_does_not_use_localhost_8080() -> None:
@@ -286,11 +285,10 @@ def test_voice_dockerfile_healthcheck_is_self_match_safe() -> None:
     """src/voice/Dockerfile HEALTHCHECK must not contain the process needle literally (#1510)."""
     dockerfile = Path("src/voice/Dockerfile").read_text()
     healthcheck = dockerfile.split("HEALTHCHECK", 1)[1].split("\n\nCMD", 1)[0]
-    assert "python -c" in healthcheck, (
+    assert "python" in healthcheck, (
         "src/voice/Dockerfile HEALTHCHECK must use Python stdlib in python:slim runtime"
     )
-    assert "src.voice.agent" not in healthcheck, (
-        "src/voice/Dockerfile HEALTHCHECK must not contain the literal process needle; "
-        "build it dynamically to avoid self-matching the healthcheck command"
+    assert "src.voice.healthcheck" in healthcheck, (
+        "src/voice/Dockerfile HEALTHCHECK must reference the dedicated src.voice.healthcheck module; "
+        "the module uses its own PID exclusion to avoid self-matching"
     )
-    assert "'src.voice.' + 'agent'" in healthcheck

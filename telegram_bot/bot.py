@@ -37,6 +37,12 @@ from src.retrieval.topic_classifier import get_query_topic_hint
 
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
+from .constants import (
+    STALE_RESULTS_CALLBACK_TEXT as _STALE_RESULTS_CALLBACK_TEXT,
+)
+from .constants import (
+    split_telegram_response as _split_telegram_response,
+)
 from .handlers.handoff import (
     HandoffStates,
     start_qualification,
@@ -99,8 +105,6 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
-_STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
-_TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 _AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
 # Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
@@ -367,15 +371,6 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
     if isinstance(footer_msg_id, int):
         return footer_msg_id
     return None
-
-
-def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
-    """Split text into Telegram-safe chunks without importing the full client pipeline."""
-    if not text:
-        return []
-    if len(text) <= limit:
-        return [text]
-    return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
 # Re-export from shared module (avoid circular imports with middlewares)

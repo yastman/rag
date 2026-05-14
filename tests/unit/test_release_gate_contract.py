@@ -157,9 +157,9 @@ def test_python_slim_healthchecks_do_not_use_wget() -> None:
             f"{df.name} HEALTHCHECK uses wget but runtime is python:3.14-slim-bookworm "
             "(no wget installed). Use Python urllib.request instead."
         )
-        assert "urllib.request" in cmd or "python -c" in cmd, (
+        assert "urllib.request" in cmd or "python -c" in cmd or "src.voice.healthcheck" in cmd, (
             f"{df.name} HEALTHCHECK should use a Python stdlib HTTP check "
-            "since the runtime image is python:3.14-slim-bookworm."
+            "or a Python stdlib process check since the runtime image is python:3.14-slim-bookworm."
         )
 
 
@@ -192,9 +192,16 @@ def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
         assert "pgrep" not in voice_agent_healthcheck, (
             "voice-agent compose healthcheck runs in python:slim; pgrep requires procps."
         )
-        assert "python -c" in voice_agent_healthcheck, (
+        assert "python" in voice_agent_healthcheck, (
             "voice-agent compose healthcheck should use Python stdlib available in python:slim."
         )
+
+
+def test_voice_agent_dockerfile_healthcheck_checks_voice_agent_process() -> None:
+    cmd = _extract_healthcheck_cmd(ROOT / "src" / "voice" / "Dockerfile")
+
+    assert "python -m src.voice.healthcheck" in cmd
+    assert "localhost:8080/health" not in cmd
 
 
 def test_bot_dockerfile_healthcheck_command_is_runtime_available() -> None:
