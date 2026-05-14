@@ -38,8 +38,6 @@ _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 # Cache store allowlist mirrors graph semantic cache policy.
 _PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY", "STRUCTURED"})
 
-_TELEGRAM_MESSAGE_LIMIT = 4096
-
 # Fallback confidence threshold for semantic cache store guard.
 _CONFIDENCE_THRESHOLD = 0.005
 
@@ -145,15 +143,6 @@ def _is_contextual_query(user_text: str) -> bool:
 # ---------------------------------------------------------------------------
 # Telegram send helpers
 # ---------------------------------------------------------------------------
-
-
-def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
-    """Split text into Telegram-safe chunks."""
-    if not text:
-        return []
-    if len(text) <= limit:
-        return [text]
-    return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
 async def _send_html_chunks(

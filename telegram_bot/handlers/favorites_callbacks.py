@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_STALE_RESULTS_CALLBACK_TEXT = "Это устаревшая кнопка. Используйте актуальное меню ниже."
-
 
 @dataclass
 class _LegacyFavoriteCB:
