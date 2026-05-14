@@ -25,7 +25,7 @@ async def test_get_config_returns_questions_and_experts():
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint():
+async def test_health_endpoint__api_config():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/health")
     assert resp.status_code == 200

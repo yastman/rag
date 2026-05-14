@@ -48,7 +48,9 @@ class TestQueryPreprocessorRRFWeights:
             pytest.param("квартира этаж 3", 0.2, 0.8, id="floor_query"),
         ],
     )
-    def test_rrf_weights(self, query, expected_dense, expected_sparse):
+    def test_rrf_weights__query_preprocessor_r_r_f_weights(
+        self, query, expected_dense, expected_sparse
+    ):
         dense, sparse = _preprocessor.get_rrf_weights(query)
         assert dense == expected_dense
         assert sparse == expected_sparse
@@ -65,7 +67,7 @@ class TestQueryPreprocessorCacheThreshold:
             pytest.param("корпус А цена", 0.05, id="corpus"),
         ],
     )
-    def test_cache_threshold(self, query, expected):
+    def test_cache_threshold__query_preprocessor_cache_threshold(self, query, expected):
         assert _preprocessor.get_cache_threshold(query) == expected
 
 

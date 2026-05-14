@@ -85,7 +85,7 @@ class TestErrorHandlerMiddleware:
 class TestSetupErrorMiddleware:
     """Tests for setup_error_middleware function."""
 
-    def test_setup_registers_middleware(self):
+    def test_setup_registers_middleware__setup_error_middleware(self):
         """Test that setup_error_middleware registers the middleware."""
         from telegram_bot.middlewares.error_handler import setup_error_middleware
 

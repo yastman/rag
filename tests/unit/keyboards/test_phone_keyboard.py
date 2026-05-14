@@ -63,7 +63,7 @@ class TestValidatePhone:
         assert validate_phone("+380501234567") is True
         assert validate_phone("+359896759292") is True
 
-    def test_invalid(self):
+    def test_invalid__validate_phone(self):
         assert validate_phone("hello") is False
         assert validate_phone("123") is False
 
@@ -77,7 +77,7 @@ class TestNormalizePhone:
         assert result is not None
         assert result.startswith("+359")
 
-    def test_invalid(self):
+    def test_invalid__normalize_phone(self):
         assert normalize_phone("hello") is None
         assert normalize_phone("") is None
 

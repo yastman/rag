@@ -125,7 +125,7 @@ class TestFetchDislikeTraceIds:
         result = module.fetch_dislike_trace_ids(mock_api, hours=24)
         assert result == ["trace-ok"]
 
-    def test_paginates_through_all_pages(self):
+    def test_paginates_through_all_pages__fetch_dislike_trace_ids(self):
         """Fetches all pages when total_pages > 1."""
         module = _load_module()
 

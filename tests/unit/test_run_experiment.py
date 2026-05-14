@@ -73,7 +73,7 @@ class TestAvgScoresEvaluator:
         assert result.name == "composite_score"
         assert result.value == 0.75
 
-    def test_empty_results(self):
+    def test_empty_results__avg_scores_evaluator(self):
         from scripts.run_experiment import avg_scores_evaluator
 
         result = avg_scores_evaluator(item_results=[])

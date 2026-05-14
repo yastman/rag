@@ -269,7 +269,7 @@ class TestWebhookTarget:
 class TestSendKeysCommand:
     """Helper to build correct send-keys command for worker prompts."""
 
-    def test_format(self):
+    def test_format__send_keys_command(self):
         ident = OrchIdentity()
         ident.session = "claude"
         ident.orch_id = "ORCH-a1b2c3d4"

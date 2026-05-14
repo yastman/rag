@@ -44,7 +44,7 @@ class TestGraphConfigAutoTrace:
         mock_langfuse.assert_called_once()
         mock_plain.assert_not_called()
 
-    def test_create_llm_auto_trace_false_uses_plain_openai(self) -> None:
+    def test_create_llm_auto_trace_false_uses_plain_openai__graph_config_auto_trace(self) -> None:
         with (
             patch("langfuse.openai.AsyncOpenAI") as mock_langfuse,
             patch("openai.AsyncOpenAI") as mock_plain,

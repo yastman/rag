@@ -155,7 +155,7 @@ class TestVoiceErrorScoresResilience:
     def _require_aiogram(self):
         pytest.importorskip("aiogram", reason="bot.py requires aiogram")
 
-    def test_empty_trace_id_writes_nothing(self):
+    def test_empty_trace_id_writes_nothing__voice_error_scores_resilience(self):
         from telegram_bot.bot import _write_voice_error_scores
 
         lf = MagicMock()

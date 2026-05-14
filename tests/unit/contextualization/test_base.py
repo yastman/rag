@@ -468,14 +468,14 @@ class TestContextualizeProviderInterface:
         result = ContextualizeProvider.get_user_prompt("Test text")
         assert isinstance(result, str)
 
-    def test_get_user_prompt_without_query(self):
+    def test_get_user_prompt_without_query__contextualize_provider_interface(self):
         """Test get_user_prompt without query parameter."""
         text = "Sample legal text"
         prompt = ContextualizeProvider.get_user_prompt(text)
         assert text in prompt
         assert "summarize" in prompt.lower()
 
-    def test_get_user_prompt_with_query(self):
+    def test_get_user_prompt_with_query__contextualize_provider_interface(self):
         """Test get_user_prompt with query parameter."""
         text = "Sample legal text"
         query = "What is the penalty?"

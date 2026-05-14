@@ -108,7 +108,7 @@ class TestClassifyNode:
         assert isinstance(result["latency_stages"]["classify"], float)
         assert result["latency_stages"]["classify"] >= 0
 
-    async def test_preserves_existing_latency_stages(self):
+    async def test_preserves_existing_latency_stages__classify_node(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["latency_stages"] = {"prev": 0.5}
         result = await classify_node(state, _make_runtime())

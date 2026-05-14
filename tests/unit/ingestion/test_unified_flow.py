@@ -21,12 +21,12 @@ def test_legacy_compute_file_id_helper_is_not_exported():
 class TestGetMimeType:
     """Test get_mime_type: extension → MIME mapping."""
 
-    def test_pdf(self):
+    def test_pdf__unified_flow_get_mime_type(self):
         from src.ingestion.unified.flow import get_mime_type
 
         assert get_mime_type("docs/test.pdf") == "application/pdf"
 
-    def test_docx(self):
+    def test_docx__unified_flow_get_mime_type(self):
         from src.ingestion.unified.flow import get_mime_type
 
         mime = get_mime_type("report.docx")
@@ -37,7 +37,7 @@ class TestGetMimeType:
 
         assert get_mime_type("README.md") == "text/markdown"
 
-    def test_txt(self):
+    def test_txt__unified_flow_get_mime_type(self):
         from src.ingestion.unified.flow import get_mime_type
 
         assert get_mime_type("notes.txt") == "text/plain"
@@ -63,7 +63,7 @@ class TestGetMimeType:
 
         assert get_mime_type("DOC.PDF") == "application/pdf"
 
-    def test_nested_path(self):
+    def test_nested_path__get_mime_type(self):
         from src.ingestion.unified.flow import get_mime_type
 
         assert get_mime_type("a/b/c/deep.xlsx") == (
@@ -82,7 +82,7 @@ class TestFlowNameFor:
         name = _flow_name_for(config)
         assert name.startswith("ingest_")
 
-    def test_deterministic(self):
+    def test_deterministic__flow_name_for(self):
         from src.ingestion.unified.config import UnifiedConfig
         from src.ingestion.unified.flow import _flow_name_for
 
@@ -347,7 +347,9 @@ class TestBuildFlow:
     @patch("src.ingestion.unified.flow.flow_names", return_value=[])
     @patch("cocoindex.open_flow")
     @patch("src.ingestion.unified.flow.GDriveManifest")
-    def test_uses_default_config_when_none(self, mock_manifest, mock_open, mock_names, mock_init):
+    def test_uses_default_config_when_none__build_flow(
+        self, mock_manifest, mock_open, mock_names, mock_init
+    ):
         from src.ingestion.unified.flow import build_flow
 
         build_flow(None)
@@ -431,7 +433,9 @@ class TestRunWatch:
     @patch("src.ingestion.unified.flow.try_update_ingestion_trace")
     @patch("src.ingestion.unified.flow.build_flow")
     @patch("cocoindex.FlowLiveUpdater")
-    def test_uses_default_config_when_none(self, mock_updater_cls, mock_build, mock_update_trace):
+    def test_uses_default_config_when_none__run_watch(
+        self, mock_updater_cls, mock_build, mock_update_trace
+    ):
         from src.ingestion.unified.flow import run_watch
 
         mock_flow = MagicMock()

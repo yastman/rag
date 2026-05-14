@@ -17,7 +17,7 @@ from src.ingestion.chunker import (
 class TestChunk:
     """Test Chunk dataclass."""
 
-    def test_chunk_creation(self):
+    def test_chunk_creation__chunk(self):
         """Test basic Chunk creation."""
         chunk = Chunk(
             text="Test text",
@@ -228,7 +228,7 @@ class TestDocumentChunkerSlidingWindow:
 class TestExtractMetadata:
     """Test metadata extraction from chunk text."""
 
-    def test_extract_article_number(self):
+    def test_extract_article_number__extract_metadata(self):
         """Test article number extraction."""
         text = "Стаття 115. Умисне вбивство"
         metadata = DocumentChunker.extract_metadata(text)

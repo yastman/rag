@@ -27,7 +27,7 @@ def temp_sync_dir(tmp_path):
 
 
 @pytest.fixture
-def test_collection_name():
+def test_collection_name__unified_ingestion_e2e():
     """Unique collection name for test isolation."""
     return "test_unified_e2e"
 
@@ -53,7 +53,7 @@ def cleanup_collection(qdrant_client, test_collection_name):
 class TestUnifiedPipelinePayload:
     """Tests for payload contract compliance."""
 
-    async def test_payload_has_required_fields(
+    async def test_payload_has_required_fields__unified_pipeline_payload(
         self, temp_sync_dir, test_collection_name, qdrant_client, cleanup_collection
     ):
         """File goes through pipeline with correct payload format."""

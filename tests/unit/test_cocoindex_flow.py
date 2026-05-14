@@ -24,7 +24,7 @@ from src.ingestion.cocoindex_flow import (
 class TestFlowConfig:
     """Tests for FlowConfig dataclass."""
 
-    def test_default_values(self):
+    def test_default_values__flow_config(self):
         """Test default configuration values."""
         config = FlowConfig()
 
@@ -36,7 +36,7 @@ class TestFlowConfig:
         assert config.vector_size == 1024
         assert config.refresh_interval_seconds == 60
 
-    def test_custom_values(self):
+    def test_custom_values__flow_config(self):
         """Test custom configuration values."""
         config = FlowConfig(
             qdrant_url="http://custom:6333",
@@ -66,14 +66,14 @@ class TestFlowConfig:
 class TestVoyageEmbedFunction:
     """Tests for VoyageEmbedFunction class."""
 
-    def test_init_defaults(self):
+    def test_init_defaults__voyage_embed_function(self):
         """Test initialization with defaults."""
         func = VoyageEmbedFunction()
 
         assert func.model == "voyage-4-large"
         assert func._service is None  # Lazy loaded
 
-    def test_init_custom_model(self):
+    def test_init_custom_model__voyage_embed_function(self):
         """Test initialization with custom model."""
         func = VoyageEmbedFunction(
             api_key="test-key",

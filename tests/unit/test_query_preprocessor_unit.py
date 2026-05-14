@@ -83,7 +83,7 @@ class TestGetRRFWeights:
             pytest.param("ЖК Елените апартаменты", 0.2, 0.8, id="zhk"),
         ],
     )
-    def test_rrf_weights(self, query, expected_dense, expected_sparse):
+    def test_rrf_weights__get_r_r_f_weights(self, query, expected_dense, expected_sparse):
         dense, sparse = _pp.get_rrf_weights(query)
         assert dense == expected_dense
         assert sparse == expected_sparse
@@ -111,7 +111,7 @@ class TestGetCacheThreshold:
             pytest.param("ID квартиры", 0.05, id="id"),
         ],
     )
-    def test_cache_threshold(self, query, expected):
+    def test_cache_threshold__get_cache_threshold(self, query, expected):
         assert _pp.get_cache_threshold(query) == expected
 
 

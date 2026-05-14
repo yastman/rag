@@ -11,7 +11,7 @@ def test_menu_buttons_has_demo():
     assert MENU_BUTTONS["🎯 Демонстрация"] == "demo"
 
 
-def test_keyboard_has_7_buttons():
+def test_keyboard_has_7_buttons__demo_button():
     kb = build_client_keyboard()
     all_buttons = [btn.text for row in kb.keyboard for btn in row]
     assert len(all_buttons) == 7

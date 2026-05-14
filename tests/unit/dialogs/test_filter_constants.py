@@ -79,7 +79,7 @@ class TestConstants:
     def test_budget_field_maps_to_price_eur(self):
         assert FIELD_TO_FILTER_KEY["budget"] == "price_eur"
 
-    def test_furnished_maps_to_is_furnished(self):
+    def test_furnished_maps_to_is_furnished__constants(self):
         assert FIELD_TO_FILTER_KEY["furnished"] == "is_furnished"
 
 
@@ -182,7 +182,7 @@ class TestBuildFiltersDict:
         assert result == {"area_m2": {"gte": 60}}
         assert "area" not in result
 
-    def test_furnished_maps_to_is_furnished(self):
+    def test_furnished_maps_to_is_furnished__build_filters_dict(self):
         result = build_filters_dict({"furnished": True})
         assert result == {"is_furnished": True}
         assert "furnished" not in result
@@ -192,7 +192,7 @@ class TestBuildFiltersDict:
         assert result == {"is_promotion": True}
         assert "promotion" not in result
 
-    def test_combined_filters(self):
+    def test_combined_filters__build_filters_dict(self):
         result = build_filters_dict({"city": "Несебр", "budget": "high", "rooms": 3})
         assert result["city"] == "Несебр"
         assert result["price_eur"] == {"gte": 100_000, "lte": 150_000}

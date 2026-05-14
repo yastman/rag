@@ -415,7 +415,7 @@ class TestEnvironmentChecks:
 class TestResultsFormat:
     """Tests for final results format."""
 
-    def test_results_dictionary_structure(self):
+    def test_results_dictionary_structure__results_format(self):
         """Test final results dictionary has expected structure."""
         result = {
             "engine": "dbsf_colbert",

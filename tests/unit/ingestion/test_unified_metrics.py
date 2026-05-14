@@ -17,7 +17,7 @@ from src.ingestion.unified.metrics import (
 class TestIngestionMetrics:
     """Test IngestionMetrics dataclass."""
 
-    def test_defaults(self):
+    def test_defaults__ingestion_metrics(self):
         """New metrics have sensible defaults."""
         m = IngestionMetrics(file_id="abc123", source_path="docs/a.pdf")
         assert m.file_id == "abc123"

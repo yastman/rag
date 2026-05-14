@@ -185,7 +185,7 @@ class TestRerankNodeFallback:
 class TestRerankNodeQueryExtraction:
     """rerank_node extracts query from messages correctly."""
 
-    async def test_query_from_human_message_object(self):
+    async def test_query_from_human_message_object__rerank_node_query_extraction(self):
         """Extracts content from HumanMessage object."""
         state = _state_with_query("test from message object")
         state["documents"] = _make_docs([0.010])
@@ -199,7 +199,7 @@ class TestRerankNodeQueryExtraction:
         call_args = mock_rerank.call_args
         assert call_args[0][0] == "test from message object"
 
-    async def test_query_from_dict_message(self):
+    async def test_query_from_dict_message__rerank_node_query_extraction(self):
         """Extracts content from dict-style message."""
         state = make_initial_state(user_id=1, session_id="s1", query="dict query")
         state["messages"] = [{"role": "user", "content": "dict query"}]
@@ -218,7 +218,7 @@ class TestRerankNodeQueryExtraction:
 class TestRerankNodeLatency:
     """rerank_node latency tracking."""
 
-    async def test_latency_stages_set(self):
+    async def test_latency_stages_set__rerank_node_latency(self):
         state = _state_with_query()
         state["documents"] = _make_docs([0.010])
         state["latency_stages"] = {"retrieve": 0.1}

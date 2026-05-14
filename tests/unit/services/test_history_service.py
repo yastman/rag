@@ -39,7 +39,7 @@ def service(mock_client, mock_embeddings):
 class TestEnsureCollection:
     """Test ensure_collection creates collection and indexes if absent."""
 
-    async def test_creates_collection_when_missing(self, service, mock_client):
+    async def test_creates_collection_when_missing__ensure_collection(self, service, mock_client):
         """ensure_collection creates collection if it doesn't exist."""
         mock_client.collection_exists = AsyncMock(return_value=False)
         mock_client.create_collection = AsyncMock()
@@ -200,7 +200,7 @@ class TestSaveTurn:
 
         mock_embeddings.aembed_query.assert_awaited_once_with("test query")
 
-    async def test_graceful_on_qdrant_error(self, service, mock_client):
+    async def test_graceful_on_qdrant_error__save_turn(self, service, mock_client):
         """save_turn does not raise on Qdrant exceptions."""
         mock_client.upsert = AsyncMock(side_effect=RuntimeError("connection lost"))
 
@@ -259,7 +259,9 @@ class TestSearchUserHistory:
 
         assert results == []
 
-    async def test_graceful_on_qdrant_error(self, service, mock_client, mock_embeddings):
+    async def test_graceful_on_qdrant_error__search_user_history(
+        self, service, mock_client, mock_embeddings
+    ):
         """search_user_history returns empty list on Qdrant exceptions."""
         mock_client.query_points = AsyncMock(side_effect=RuntimeError("timeout"))
 
@@ -328,7 +330,7 @@ class TestGetSessionTurns:
 
         assert turns == []
 
-    async def test_graceful_on_qdrant_error(self, service, mock_client):
+    async def test_graceful_on_qdrant_error__get_session_turns(self, service, mock_client):
         """get_session_turns returns empty list on Qdrant exception."""
         mock_client.scroll = AsyncMock(side_effect=RuntimeError("connection lost"))
 
@@ -336,7 +338,7 @@ class TestGetSessionTurns:
 
         assert turns == []
 
-    async def test_respects_limit(self, service, mock_client):
+    async def test_respects_limit__get_session_turns(self, service, mock_client):
         """get_session_turns passes limit to Qdrant scroll."""
         mock_client.scroll = AsyncMock(return_value=([], None))
 

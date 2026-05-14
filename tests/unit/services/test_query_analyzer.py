@@ -24,7 +24,7 @@ class TestQueryAnalyzerInit:
         analyzer = QueryAnalyzer(api_key="test-api-key", base_url="http://localhost:8000")
         assert analyzer.base_url == "http://localhost:8000"
 
-    def test_init_strips_trailing_slash(self):
+    def test_init_strips_trailing_slash__query_analyzer_init(self):
         analyzer = QueryAnalyzer(api_key="test-api-key", base_url="http://localhost:8000/")
         assert analyzer.base_url == "http://localhost:8000"
 
@@ -32,13 +32,13 @@ class TestQueryAnalyzerInit:
         analyzer = QueryAnalyzer(api_key="test-api-key", base_url="http://localhost:8000")
         assert analyzer.model == "gpt-4o-mini"
 
-    def test_init_custom_model(self):
+    def test_init_custom_model__query_analyzer_init(self):
         analyzer = QueryAnalyzer(
             api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o"
         )
         assert analyzer.model == "gpt-4o"
 
-    def test_init_creates_openai_client(self):
+    def test_init_creates_openai_client__query_analyzer_init(self):
         from openai import AsyncOpenAI
 
         analyzer = QueryAnalyzer(api_key="test-api-key", base_url="http://localhost:8000")

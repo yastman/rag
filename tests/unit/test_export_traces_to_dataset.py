@@ -78,7 +78,7 @@ class TestClassifyExportReasons:
         reasons = classify_export_reasons({"judge_faithfulness": 0.3})
         assert "low_judge_faithfulness" in reasons
 
-    def test_no_results(self):
+    def test_no_results__classify_export_reasons(self):
         reasons = classify_export_reasons({"no_results": 1.0})
         assert "no_results" in reasons
 
@@ -196,7 +196,7 @@ class TestFetchExportableTraces:
         items = fetch_exportable_traces(langfuse, days=7, tag="rag")
         assert len(items) == 0
 
-    def test_paginates_through_all_pages(self):
+    def test_paginates_through_all_pages__fetch_exportable_traces(self):
         trace1 = _make_trace(trace_id="t1", scores={"judge_faithfulness": 0.2})
         trace2 = _make_trace(trace_id="t2", scores={"judge_faithfulness": 0.1})
 
@@ -219,7 +219,7 @@ class TestFetchExportableTraces:
 
 
 class TestExportToLangfuse:
-    def test_creates_dataset_and_items(self):
+    def test_creates_dataset_and_items__export_to_langfuse(self):
         langfuse = MagicMock()
         items = [
             {
@@ -251,7 +251,7 @@ class TestExportToLangfuse:
 
 
 class TestExportToJsonl:
-    def test_writes_valid_jsonl(self, tmp_path: Path):
+    def test_writes_valid_jsonl__export_to_jsonl(self, tmp_path: Path):
         items = [
             {
                 "trace_id": "t1",

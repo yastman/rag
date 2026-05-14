@@ -267,7 +267,7 @@ class TestPIIRedactorNoPII:
         assert redacted == query
         assert metadata["pii_redacted"] is False
 
-    def test_empty_string(self, redactor: PIIRedactor):
+    def test_empty_string__p_i_i_redactor_no_p_i_i(self, redactor: PIIRedactor):
         """Test empty input."""
         query = ""
         redacted, metadata = redactor.redact_query(query)

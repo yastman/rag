@@ -22,7 +22,7 @@ with warnings.catch_warnings():
 
 
 class TestGDriveFlowConfig:
-    def test_default_collection_name(self) -> None:
+    def test_default_collection_name__g_drive_flow_config(self) -> None:
         config = GDriveFlowConfig()
         assert config.collection_name == "gdrive_documents_bge"
 
@@ -105,12 +105,16 @@ class TestComputeFileId:
         ):
             return GDriveFileProcessor(GDriveFlowConfig(sync_dir=str(tmp_path)))
 
-    def test_returns_16_char_hex(self, processor: GDriveFileProcessor, tmp_path: Path) -> None:
+    def test_returns_16_char_hex__compute_file_id(
+        self, processor: GDriveFileProcessor, tmp_path: Path
+    ) -> None:
         file_id = processor._compute_file_id(tmp_path / "test.pdf")
         assert len(file_id) == 16
         assert all(c in "0123456789abcdef" for c in file_id)
 
-    def test_deterministic(self, processor: GDriveFileProcessor, tmp_path: Path) -> None:
+    def test_deterministic__compute_file_id(
+        self, processor: GDriveFileProcessor, tmp_path: Path
+    ) -> None:
         path = tmp_path / "test.pdf"
         assert processor._compute_file_id(path) == processor._compute_file_id(path)
 
@@ -121,7 +125,9 @@ class TestComputeFileId:
         id2 = processor._compute_file_id(tmp_path / "b.pdf")
         assert id1 != id2
 
-    def test_nested_path(self, processor: GDriveFileProcessor, tmp_path: Path) -> None:
+    def test_nested_path__compute_file_id(
+        self, processor: GDriveFileProcessor, tmp_path: Path
+    ) -> None:
         path = tmp_path / "subdir" / "deep" / "file.pdf"
         file_id = processor._compute_file_id(path)
         assert len(file_id) == 16
@@ -133,14 +139,14 @@ class TestComputeFileId:
 
 
 class TestGetMimeType:
-    def test_pdf(self) -> None:
+    def test_pdf__get_mime_type(self) -> None:
         assert GDriveFileProcessor._get_mime_type(Path("doc.pdf")) == "application/pdf"
 
-    def test_docx(self) -> None:
+    def test_docx__get_mime_type(self) -> None:
         result = GDriveFileProcessor._get_mime_type(Path("doc.docx"))
         assert "wordprocessingml" in result
 
-    def test_txt(self) -> None:
+    def test_txt__get_mime_type(self) -> None:
         assert GDriveFileProcessor._get_mime_type(Path("file.txt")) == "text/plain"
 
     def test_md(self) -> None:

@@ -157,7 +157,7 @@ class TestHybridSearch:
         hits = result.get("result", {}).get("points", [])
         assert len(hits) > 0, f"Dense search returned no results for: '{self.QUERY}'"
 
-    def test_hybrid_search_returns_results(self) -> None:
+    def test_hybrid_search_returns_results__hybrid_search(self) -> None:
         _require_qdrant()
         _require_bge_m3()
         dense_vec = self._dense_embedding(self.QUERY)

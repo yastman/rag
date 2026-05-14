@@ -53,7 +53,7 @@ class TestSettingsInit:
         assert settings.openai_api_key == "test-openai-key"
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True)
-    def test_init_default_values(self):
+    def test_init_default_values__settings_init(self):
         """Test that default values are correctly applied."""
         settings = Settings()
 

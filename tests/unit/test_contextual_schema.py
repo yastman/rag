@@ -12,7 +12,7 @@ from src.ingestion.contextual_schema import (
 class TestContextualChunk:
     """Tests for ContextualChunk dataclass."""
 
-    def test_chunk_creation(self):
+    def test_chunk_creation__contextual_chunk(self):
         """Chunk should store all required fields."""
         chunk = ContextualChunk(
             chunk_id=1,

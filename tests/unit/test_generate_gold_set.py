@@ -89,7 +89,7 @@ class TestCalculateQuestionsCount:
 
 
 class TestExportToJsonl:
-    def test_writes_valid_jsonl(self, tmp_path: Path):
+    def test_writes_valid_jsonl__generate_gold_set_export_to_jsonl(self, tmp_path: Path):
         from scripts.generate_gold_set import export_to_jsonl
 
         items = [
@@ -134,7 +134,7 @@ class TestExportToJsonl:
 
 
 class TestUploadToLangfuse:
-    def test_creates_dataset_and_items(self):
+    def test_creates_dataset_and_items__upload_to_langfuse(self):
         from scripts.generate_gold_set import upload_to_langfuse
 
         mock_lf = MagicMock()

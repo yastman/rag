@@ -102,7 +102,7 @@ class TestDetectInjection:
         assert risk_score == 0.0
         assert category is None
 
-    def test_empty_string(self):
+    def test_empty_string__detect_injection(self):
         detected, risk_score, _category = detect_injection("")
         assert detected is False
         assert risk_score == 0.0
@@ -192,7 +192,7 @@ class TestGuardNode:
         assert call_kwargs["output"]["injection_detected"] is False
 
     @pytest.mark.asyncio()
-    async def test_latency_stages_set(self, _mock_langfuse):
+    async def test_latency_stages_set__guard_node(self, _mock_langfuse):
         state = make_initial_state(user_id=1, session_id="s", query="test")
         result = await guard_node(state, _make_runtime("hard"))
         assert "guard" in result["latency_stages"]

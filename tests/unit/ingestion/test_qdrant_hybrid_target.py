@@ -30,19 +30,19 @@ from src.ingestion.unified.targets.qdrant_hybrid_target import (
 
 
 class TestComputeContentHash:
-    def test_returns_16_char_hex(self, tmp_path: Path) -> None:
+    def test_returns_16_char_hex__compute_content_hash(self, tmp_path: Path) -> None:
         f = tmp_path / "test.txt"
         f.write_bytes(b"hello")
         result = compute_content_hash(f)
         assert len(result) == 16
         assert all(c in "0123456789abcdef" for c in result)
 
-    def test_deterministic(self, tmp_path: Path) -> None:
+    def test_deterministic__compute_content_hash(self, tmp_path: Path) -> None:
         f = tmp_path / "test.txt"
         f.write_bytes(b"hello")
         assert compute_content_hash(f) == compute_content_hash(f)
 
-    def test_different_content_different_hash(self, tmp_path: Path) -> None:
+    def test_different_content_different_hash__compute_content_hash(self, tmp_path: Path) -> None:
         f1 = tmp_path / "a.txt"
         f2 = tmp_path / "b.txt"
         f1.write_bytes(b"content A")
@@ -74,7 +74,7 @@ class TestQdrantHybridTargetSpec:
         spec = QdrantHybridTargetSpec()
         assert spec.qdrant_url == "http://localhost:6333"
 
-    def test_default_collection_name(self) -> None:
+    def test_default_collection_name__qdrant_hybrid_target_spec(self) -> None:
         spec = QdrantHybridTargetSpec()
         assert spec.collection_name == "gdrive_documents_bge"
 
@@ -98,7 +98,7 @@ class TestQdrantHybridTargetSpec:
         assert spec.qdrant_url == config.qdrant_url
         assert spec.collection_name == config.collection_name
 
-    def test_custom_values(self) -> None:
+    def test_custom_values__qdrant_hybrid_target_spec(self) -> None:
         spec = QdrantHybridTargetSpec(
             qdrant_url="http://custom:6333",
             collection_name="my_col",

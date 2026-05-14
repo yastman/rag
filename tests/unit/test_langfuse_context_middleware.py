@@ -18,7 +18,7 @@ from aiogram.types import CallbackQuery, Message
 
 
 class TestExtractEventInput:
-    def test_message_text(self):
+    def test_message_text__extract_event_input(self):
         msg = MagicMock(spec=Message)
         msg.text = "Hello world"
         msg.caption = None
@@ -62,7 +62,7 @@ class TestExtractEventInput:
         assert result["query_len"] == 1000
         assert result["action"] == "cmd-start"
 
-    def test_message_voice(self):
+    def test_message_voice__extract_event_input(self):
         msg = MagicMock(spec=Message)
         msg.text = None
         msg.caption = None
@@ -87,7 +87,7 @@ class TestExtractEventInput:
         result = _extract_event_input(cb, "callback")
         assert result["query_len"] == 300
 
-    def test_unknown_event(self):
+    def test_unknown_event__extract_event_input(self):
         event = MagicMock()
         result = _extract_event_input(event, "update")
         assert result["action"] == "update"

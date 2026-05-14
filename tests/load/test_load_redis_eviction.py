@@ -83,7 +83,7 @@ class TestLoadRedisEviction:
         policy = await redis_client.config_get("maxmemory-policy")
         assert policy.get("maxmemory-policy") == "volatile-lfu"
 
-    async def test_redis_maxmemory_set(self, redis_client):
+    async def test_redis_maxmemory_set__load_redis_eviction(self, redis_client):
         """Verify maxmemory is configured."""
         maxmem = await redis_client.config_get("maxmemory")
         assert int(maxmem.get("maxmemory", 0)) > 0

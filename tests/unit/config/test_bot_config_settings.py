@@ -52,7 +52,9 @@ class TestBotConfigIsPydanticSettings:
         assert config.telegram_token == "test-token"
         assert config.search_top_k == 42
 
-    def test_config_bool_fields_parse_env_strings(self, monkeypatch):
+    def test_config_bool_fields_parse_env_strings__bot_config_is_pydantic_settings(
+        self, monkeypatch
+    ):
         """Bool fields should parse 'true'/'false' strings from env."""
         monkeypatch.setenv("USE_HYDE", "true")
         monkeypatch.setenv("MMR_ENABLED", "false")
@@ -114,7 +116,7 @@ class TestBotConfigIsPydanticSettings:
         cfg = BotConfig(_env_file=None)
         assert cfg.agent_checkpointer_ttl_minutes == 60
 
-    def test_config_get_collection_name(self):
+    def test_config_get_collection_name__bot_config_is_pydantic_settings(self):
         """get_collection_name() still works after migration."""
         from telegram_bot.config import BotConfig
 

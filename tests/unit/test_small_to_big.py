@@ -294,7 +294,7 @@ class TestSmallToBigSettings:
             assert settings.max_expanded_chunks == 15
             assert settings.max_context_tokens == 10000
 
-    def test_settings_defaults(self):
+    def test_settings_defaults__small_to_big_settings(self):
         """Test default values for small-to-big settings."""
         with patch.dict(
             "os.environ",

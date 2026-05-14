@@ -29,7 +29,7 @@ def test_keyboard_has_4_rows():
     assert len(kb.keyboard) == 4
 
 
-def test_keyboard_has_7_buttons():
+def test_keyboard_has_7_buttons__client_keyboard():
     kb = build_client_keyboard()
     buttons = [btn for row in kb.keyboard for btn in row]
     assert len(buttons) == 7

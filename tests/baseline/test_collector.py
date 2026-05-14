@@ -11,7 +11,7 @@ from tests.baseline.collector import LangfuseMetricsCollector
 class TestLangfuseMetricsCollector:
     """Test LangfuseMetricsCollector functionality."""
 
-    def test_init_creates_client(self):
+    def test_init_creates_client__langfuse_metrics_collector(self):
         """Should initialize Langfuse client with credentials."""
         with patch("tests.baseline.collector.Langfuse") as mock_langfuse:
             LangfuseMetricsCollector(

@@ -22,7 +22,7 @@ def _mock_completion(content: str) -> MagicMock:
 class TestLLMServiceInit:
     """Test LLMService initialization."""
 
-    def test_init_defaults(self):
+    def test_init_defaults__l_l_m_service_init(self):
         """Test initialization with default values."""
         service = LLMService(api_key="test-key")
 
@@ -30,7 +30,7 @@ class TestLLMServiceInit:
         assert service.base_url == "https://api.openai.com/v1"
         assert service.model == "gpt-4o-mini"
 
-    def test_init_custom_values(self):
+    def test_init_custom_values__l_l_m_service_init(self):
         """Test initialization with custom values."""
         service = LLMService(
             api_key="custom-key",
@@ -42,7 +42,7 @@ class TestLLMServiceInit:
         assert service.base_url == "https://custom.api.com/v1"  # Trailing slash removed
         assert service.model == "custom-model"
 
-    def test_init_creates_openai_client(self):
+    def test_init_creates_openai_client__l_l_m_service_init(self):
         """Test that AsyncOpenAI client is created."""
         from openai import AsyncOpenAI
 
@@ -68,7 +68,7 @@ class TestFormatContext:
 
         assert result == "Релевантной информации не найдено."
 
-    def test_format_context_single_chunk(self):
+    def test_format_context_single_chunk__format_context(self):
         """Test formatting with single chunk."""
         service = LLMService(api_key="test-key")
 
@@ -89,7 +89,7 @@ class TestFormatContext:
         assert "50,000€" in result
         assert "Sample apartment text" in result
 
-    def test_format_context_multiple_chunks(self):
+    def test_format_context_multiple_chunks__format_context(self):
         """Test formatting with multiple chunks."""
         service = LLMService(api_key="test-key")
 
@@ -119,7 +119,7 @@ class TestFormatContext:
 class TestGetFallbackAnswer:
     """Test fallback answer generation."""
 
-    def test_fallback_no_chunks(self):
+    def test_fallback_no_chunks__get_fallback_answer(self):
         """Test fallback with no chunks."""
         service = LLMService(api_key="test-key")
 
@@ -129,7 +129,7 @@ class TestGetFallbackAnswer:
         assert "Извините" in result
         assert "недоступен" in result
 
-    def test_fallback_with_chunks(self):
+    def test_fallback_with_chunks__get_fallback_answer(self):
         """Test fallback with chunks returns formatted results."""
         service = LLMService(api_key="test-key")
 
@@ -184,7 +184,7 @@ class TestGetFallbackAnswer:
 class TestGenerateAnswer:
     """Test answer generation."""
 
-    async def test_generate_answer_success(self):
+    async def test_generate_answer_success__generate_answer(self):
         """Test successful answer generation."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -230,7 +230,7 @@ class TestGenerateAnswer:
 
         assert "⚠️" in result
 
-    async def test_generate_answer_custom_system_prompt(self):
+    async def test_generate_answer_custom_system_prompt__generate_answer(self):
         """Test using custom system prompt."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -260,7 +260,7 @@ class TestGenerate:
 
         assert result == "Result"
 
-    async def test_generate_uses_low_temperature(self):
+    async def test_generate_uses_low_temperature__generate(self):
         """Test that generate uses low temperature (0.3)."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -271,7 +271,7 @@ class TestGenerate:
         call_args = service.client.chat.completions.create.call_args
         assert call_args[1]["temperature"] == 0.3
 
-    async def test_generate_custom_max_tokens(self):
+    async def test_generate_custom_max_tokens__generate(self):
         """Test generate with custom max_tokens."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -282,7 +282,7 @@ class TestGenerate:
         call_args = service.client.chat.completions.create.call_args
         assert call_args[1]["max_tokens"] == 500
 
-    async def test_generate_raises_on_error(self):
+    async def test_generate_raises_on_error__generate(self):
         """Test that generate raises exceptions (doesn't use fallback)."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()

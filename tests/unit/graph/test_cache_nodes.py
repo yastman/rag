@@ -257,7 +257,7 @@ class TestCacheCheckNode:
         assert result.get("colbert_query") is not None
         assert len(result["colbert_query"]) == 4  # 4 token vectors
 
-    async def test_cache_check_computes_colbert_when_embedding_cached(self):
+    async def test_cache_check_computes_colbert_when_embedding_cached__cache_check_node(self):
         """When embedding is cached but ColBERT not computed, compute ColBERT separately."""
         mock_cache = AsyncMock()
         mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!

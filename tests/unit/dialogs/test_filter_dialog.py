@@ -178,7 +178,7 @@ class TestRuntimeTraceHelpers:
 
 
 class TestGetHubData:
-    async def test_returns_count(self):
+    async def test_returns_count__get_hub_data(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         svc = AsyncMock()
@@ -274,7 +274,7 @@ class TestOnApply:
         assert "price_eur" in filters
         assert "budget" not in filters
 
-    async def test_starts_catalog_dialog_results(self):
+    async def test_starts_catalog_dialog_results__on_apply(self):
         from aiogram_dialog import ShowMode, StartMode
 
         from telegram_bot.dialogs.filter_dialog import on_apply

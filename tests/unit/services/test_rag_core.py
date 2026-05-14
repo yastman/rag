@@ -39,7 +39,7 @@ class TestBuildRetrievedContext:
         assert result[0]["score"] == 0.85
         assert result[0]["chunk_location"] == "doc/p1"
 
-    def test_respects_limit(self):
+    def test_respects_limit__build_retrieved_context(self):
         docs = [{"text": f"doc {i}", "score": 0.1 * i, "metadata": {}} for i in range(10)]
         result = build_retrieved_context(docs, limit=3)
         assert len(result) == 3

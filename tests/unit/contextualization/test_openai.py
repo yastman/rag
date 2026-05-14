@@ -14,7 +14,7 @@ pytestmark = pytest.mark.legacy_api
 class TestOpenAIContextualizerInit:
     """Tests for OpenAIContextualizer.__init__."""
 
-    def test_init_with_settings(self):
+    def test_init_with_settings__open_a_i_contextualizer_init(self):
         """Test initialization with provided settings."""
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test-api-key"
@@ -32,7 +32,7 @@ class TestOpenAIContextualizerInit:
             mock_async.assert_called_once_with(api_key="test-api-key")
             mock_sync.assert_called_once_with(api_key="test-api-key")
 
-    def test_init_without_settings_uses_default(self):
+    def test_init_without_settings_uses_default__open_a_i_contextualizer_init(self):
         """Test initialization without settings uses default Settings."""
         with patch("src.contextualization.openai.Settings") as mock_settings_class:
             mock_settings = MagicMock()
@@ -48,7 +48,7 @@ class TestOpenAIContextualizerInit:
                 mock_settings_class.assert_called_once()
                 assert contextualizer.settings == mock_settings
 
-    def test_init_creates_async_client(self):
+    def test_init_creates_async_client__open_a_i_contextualizer_init(self):
         """Test that AsyncOpenAI client is created."""
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test-api-key"
@@ -64,7 +64,7 @@ class TestOpenAIContextualizerInit:
 
             assert contextualizer.client == mock_client
 
-    def test_init_creates_sync_client(self):
+    def test_init_creates_sync_client__open_a_i_contextualizer_init(self):
         """Test that sync OpenAI client is created."""
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test-api-key"
@@ -126,7 +126,9 @@ class TestOpenAIContextualizerContextualize:
             ctx.client = AsyncMock()
             return ctx
 
-    async def test_contextualize_single_chunk(self, contextualizer):
+    async def test_contextualize_single_chunk__open_a_i_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing a single chunk."""
         # Mock the API response
         mock_response = MagicMock()
@@ -147,7 +149,9 @@ class TestOpenAIContextualizerContextualize:
         assert results[0].article_number == "chunk_0"
         assert results[0].context_method == "openai"
 
-    async def test_contextualize_multiple_chunks(self, contextualizer):
+    async def test_contextualize_multiple_chunks__open_a_i_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing multiple chunks."""
         # Mock responses for each chunk
         mock_responses = []
@@ -171,7 +175,9 @@ class TestOpenAIContextualizerContextualize:
             assert result.contextual_summary == f"Summary {i}"
             assert result.article_number == f"chunk_{i}"
 
-    async def test_contextualize_with_query(self, contextualizer):
+    async def test_contextualize_with_query__open_a_i_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualization with optional query parameter."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -192,7 +198,9 @@ class TestOpenAIContextualizerContextualize:
         assert call_kwargs["messages"][1]["role"] == "user"
         assert query in call_kwargs["messages"][1]["content"]
 
-    async def test_contextualize_handles_api_error_gracefully(self, contextualizer):
+    async def test_contextualize_handles_api_error_gracefully__open_a_i_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test that API errors result in fallback chunks."""
         contextualizer.client.chat.completions.create = AsyncMock(
             side_effect=Exception("API error")
@@ -206,7 +214,9 @@ class TestOpenAIContextualizerContextualize:
         assert results[0].contextual_summary == ""  # Fallback
         assert results[0].context_method == "none"  # Indicates failure
 
-    async def test_contextualize_empty_chunks(self, contextualizer):
+    async def test_contextualize_empty_chunks__open_a_i_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing empty list returns empty list."""
         results = await contextualizer.contextualize([])
         assert results == []
@@ -231,7 +241,9 @@ class TestOpenAIContextualizerContextualizeSingle:
             ctx.client = AsyncMock()
             return ctx
 
-    async def test_contextualize_single_success(self, contextualizer):
+    async def test_contextualize_single_success__open_a_i_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test successful single chunk contextualization."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -252,7 +264,9 @@ class TestOpenAIContextualizerContextualizeSingle:
         assert result.article_number == "Article 123"
         assert result.context_method == "openai"
 
-    async def test_contextualize_single_tracks_tokens(self, contextualizer):
+    async def test_contextualize_single_tracks_tokens__open_a_i_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that token usage is tracked."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -267,7 +281,9 @@ class TestOpenAIContextualizerContextualizeSingle:
 
         assert contextualizer.total_tokens == initial_tokens + 300
 
-    async def test_contextualize_single_tracks_cost(self, contextualizer):
+    async def test_contextualize_single_tracks_cost__open_a_i_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that cost estimation is tracked."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -283,7 +299,9 @@ class TestOpenAIContextualizerContextualizeSingle:
         expected_cost = (1000 * 5 + 100 * 15) / 1_000_000
         assert contextualizer.total_cost == pytest.approx(initial_cost + expected_cost)
 
-    async def test_contextualize_single_uses_correct_model(self, contextualizer):
+    async def test_contextualize_single_uses_correct_model__open_a_i_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that the correct model is used from settings."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -298,7 +316,9 @@ class TestOpenAIContextualizerContextualizeSingle:
         call_kwargs = contextualizer.client.chat.completions.create.call_args[1]
         assert call_kwargs["model"] == contextualizer.settings.model_name
 
-    async def test_contextualize_single_with_query(self, contextualizer):
+    async def test_contextualize_single_with_query__open_a_i_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that query is included in user prompt."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -339,7 +359,7 @@ class TestOpenAIContextualizerSync:
             ctx.sync_client = MagicMock()
             return ctx
 
-    def test_contextualize_sync_success(self, contextualizer):
+    def test_contextualize_sync_success__open_a_i_contextualizer_sync(self, contextualizer):
         """Test successful synchronous contextualization."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -360,7 +380,7 @@ class TestOpenAIContextualizerSync:
         assert result.article_number == "Art5"
         assert result.context_method == "openai"
 
-    def test_contextualize_sync_tracks_tokens(self, contextualizer):
+    def test_contextualize_sync_tracks_tokens__open_a_i_contextualizer_sync(self, contextualizer):
         """Test that sync method also tracks tokens."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -375,7 +395,7 @@ class TestOpenAIContextualizerSync:
 
         assert contextualizer.total_tokens == initial_tokens + 225
 
-    def test_contextualize_sync_with_query(self, contextualizer):
+    def test_contextualize_sync_with_query__open_a_i_contextualizer_sync(self, contextualizer):
         """Test sync contextualization with query."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]

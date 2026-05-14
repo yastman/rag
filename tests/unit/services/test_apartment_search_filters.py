@@ -83,7 +83,7 @@ class TestSoftPreferences:
 
 
 class TestExtractionMeta:
-    def test_defaults(self) -> None:
+    def test_defaults__extraction_meta(self) -> None:
         m = ExtractionMeta()
         assert m.source == "regex"
         assert m.confidence == "LOW"
@@ -97,7 +97,7 @@ class TestExtractionMeta:
 
 
 class TestApartmentSearchFilters:
-    def test_defaults(self) -> None:
+    def test_defaults__apartment_search_filters(self) -> None:
         f = ApartmentSearchFilters()
         assert f.hard.city is None
         assert f.soft.near_sea is False

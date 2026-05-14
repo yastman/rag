@@ -14,7 +14,7 @@ from mini_app.api import app
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint():
+async def test_health_endpoint__chat():
     """Health check should return ok."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/health")

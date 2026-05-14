@@ -99,7 +99,7 @@ async def test_results_refine_is_stale_compat_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_results_viewing_is_stale_compat_only() -> None:
+async def test_results_viewing_is_stale_compat_only__results_callbacks() -> None:
     bot = _create_bot()
     state = _make_state({"apartment_results": _make_results(3)})
     callback = _make_callback("results:viewing")

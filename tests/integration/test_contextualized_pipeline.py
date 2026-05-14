@@ -35,7 +35,7 @@ class TestContextualizedEmbeddingService:
                 output_dimension=768,  # Not supported
             )
 
-    def test_supported_dimensions(self):
+    def test_supported_dimensions__contextualized_embedding_service(self):
         """Test all supported Matryoshka dimensions."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -235,7 +235,7 @@ class TestContextualizedValidation:
 class TestContextualizedSyncWrappers:
     """Tests for synchronous wrapper methods."""
 
-    def test_embed_documents_sync(self):
+    def test_embed_documents_sync__contextualized_sync_wrappers(self):
         """Test sync wrapper for document embedding."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -255,7 +255,7 @@ class TestContextualizedSyncWrappers:
 
             assert len(result.embeddings) == 1
 
-    def test_embed_query_sync(self):
+    def test_embed_query_sync__contextualized_sync_wrappers(self):
         """Test sync wrapper for query embedding."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -340,7 +340,7 @@ class TestContextualizedSettingsIntegration:
             assert s.use_contextualized_embeddings is True
             assert s.contextualized_embedding_dim == 2048
 
-    def test_settings_defaults(self):
+    def test_settings_defaults__contextualized_settings_integration(self):
         """Test default values for contextualized settings."""
         with patch.dict(
             "os.environ",

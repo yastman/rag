@@ -9,61 +9,61 @@ import pytest
 class TestPipelineResultDefaults:
     """Tests for PipelineResult default field values."""
 
-    def test_answer_defaults_to_empty_string(self):
+    def test_answer_defaults_to_empty_string__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.answer == ""
 
-    def test_sources_defaults_to_empty_list(self):
+    def test_sources_defaults_to_empty_list__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.sources == []
 
-    def test_query_type_defaults_to_general(self):
+    def test_query_type_defaults_to_general__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.query_type == "GENERAL"
 
-    def test_cache_hit_defaults_to_false(self):
+    def test_cache_hit_defaults_to_false__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.cache_hit is False
 
-    def test_needs_agent_defaults_to_false(self):
+    def test_needs_agent_defaults_to_false__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.needs_agent is False
 
-    def test_agent_intent_defaults_to_empty_string(self):
+    def test_agent_intent_defaults_to_empty_string__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.agent_intent == ""
 
-    def test_pipeline_mode_defaults_to_client_direct(self):
+    def test_pipeline_mode_defaults_to_client_direct__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.pipeline_mode == "client_direct"
 
-    def test_scores_defaults_to_empty_dict(self):
+    def test_scores_defaults_to_empty_dict__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.scores == {}
 
-    def test_sent_message_defaults_to_none(self):
+    def test_sent_message_defaults_to_none__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         assert result.sent_message is None
 
-    def test_response_sent_defaults_to_false(self):
+    def test_response_sent_defaults_to_false__pipeline_result_defaults(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
@@ -102,7 +102,7 @@ class TestPipelineResultImmutability:
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
             result.new_field = "value"  # type: ignore[attr-defined]
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__pipeline_result_immutability(self):
         from telegram_bot.services.types import PipelineResult
 
         assert dataclasses.is_dataclass(PipelineResult)

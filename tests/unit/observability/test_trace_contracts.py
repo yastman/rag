@@ -272,7 +272,7 @@ class TestWriteHistoryScoresContract:
         assert scores["history_backend"]["data_type"] == "CATEGORICAL"
         assert scores["history_backend"]["value"] == "qdrant"
 
-    def test_empty_trace_id_writes_nothing(self):
+    def test_empty_trace_id_writes_nothing__write_history_scores_contract(self):
         from telegram_bot.scoring import write_history_scores
 
         lf = MagicMock()

@@ -54,7 +54,7 @@ class TestApartmentSearchTool:
         assert call_kwargs.kwargs["top_k"] == 20
 
     @pytest.mark.asyncio
-    async def test_no_results(self) -> None:
+    async def test_no_results__apartment_search_tool(self) -> None:
         mock_service = AsyncMock()
         mock_service.search_with_filters.return_value = ([], 0)
 
