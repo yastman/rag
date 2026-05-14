@@ -1,11 +1,10 @@
 # security/
 
+## Purpose
+
 Security guardrails for production RAG deployment.
-
-## Ownership
-
-- Owns source-level security helpers under `src/security/`.
-- Currently provides PII redaction before sensitive data reaches logs or traces.
+Owns source-level security helpers under `src/security/`.
+Currently provides PII redaction before sensitive data reaches logs or traces.
 
 ## Files
 
@@ -46,7 +45,7 @@ redacted, meta = redactor.redact_query("Паспорт АА123456")
 uv run pytest tests/unit/security/ -q
 ```
 
-## Related
+## See Also
 
 - [`docs/ERROR_RESPONSES.md`](../../docs/ERROR_RESPONSES.md) — Error taxonomy
 - [`telegram_bot/middlewares/`](../../telegram_bot/middlewares/) — Request middleware
