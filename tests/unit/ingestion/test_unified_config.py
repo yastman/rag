@@ -23,3 +23,19 @@ class TestManifestDir:
         monkeypatch.delenv("MANIFEST_DIR", raising=False)
         config = UnifiedConfig()
         assert config.manifest_dir is None
+
+
+class TestDatabaseUrl:
+    def test_database_url_requires_explicit_configuration(self, monkeypatch):
+        monkeypatch.delenv("INGESTION_DATABASE_URL", raising=False)
+
+        config = UnifiedConfig()
+
+        assert config.database_url == ""
+
+    def test_database_url_reads_env(self, monkeypatch):
+        monkeypatch.setenv("INGESTION_DATABASE_URL", "postgresql://user:pass@db:5432/cocoindex")
+
+        config = UnifiedConfig()
+
+        assert config.database_url == "postgresql://user:pass@db:5432/cocoindex"
