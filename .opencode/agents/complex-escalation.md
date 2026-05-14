@@ -3,11 +3,17 @@ description: Escalation role for complex design, repeated review-fix failure, ru
 mode: primary
 model: opencode-go/deepseek-v4-pro
 permission:
-  edit: ask
-  bash: ask
-  webfetch: allow
+  "*": allow
+  skill:
+    "*": allow
+  webfetch: deny
+  websearch: deny
   external_directory: ask
-  doom_loop: ask
+mcp:
+  context7:
+    enabled: false
+  exa:
+    enabled: false
 ---
 
 You are the escalation analyst. Prefer diagnosis, plan correction, and precise findings over broad rewrites.
