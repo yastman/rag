@@ -44,6 +44,10 @@ from telegram_bot.services.rag_core import (
 from telegram_bot.services.rag_core import (
     build_retrieved_context as _build_retrieved_context,
 )
+from telegram_bot.services.small_to_big import (
+    SmallToBigMode,
+    SmallToBigService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -1245,6 +1249,30 @@ async def rag_pipeline(
             if final_gap_confident and len(final_docs) > _MIN_FINAL_CHUNKS:
                 final_docs = final_docs[:_MIN_FINAL_CHUNKS]
 
+            # Small-to-big context expansion: fetch neighbor chunks from same document
+            if config.small_to_big_mode != SmallToBigMode.OFF and final_docs:
+                try:
+                    stb = SmallToBigService(
+                        client=qdrant.client,
+                        collection_name=qdrant.collection_name,
+                        max_expanded_chunks=config.max_expanded_chunks,
+                    )
+                    expanded = await stb.expand_context(
+                        chunks=final_docs,
+                        window_before=config.small_to_big_window_before,
+                        window_after=config.small_to_big_window_after,
+                        deduplicate=True,
+                    )
+                    if expanded:
+                        # Replace document texts with expanded versions
+                        for i, ec in enumerate(expanded):
+                            if i < len(final_docs):
+                                final_docs[i]["text"] = ec.expanded_text
+                                final_docs[i]["_expanded"] = True
+                        logger.debug("Small-to-big expanded %d chunks", len(expanded))
+                except Exception as e:
+                    logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
+
             result = _assemble_context(
                 query=current_query,
                 original_query=query,
@@ -1332,6 +1360,28 @@ async def rag_pipeline(
     final_gap_confident = bool(final_gap["confident"])
     if final_gap_confident and len(final_docs) > _MIN_FINAL_CHUNKS:
         final_docs = final_docs[:_MIN_FINAL_CHUNKS]
+
+    # Small-to-big context expansion (fallback path)
+    if config.small_to_big_mode != SmallToBigMode.OFF and final_docs:
+        try:
+            stb = SmallToBigService(
+                client=qdrant.client,
+                collection_name=qdrant.collection_name,
+                max_expanded_chunks=config.max_expanded_chunks,
+            )
+            expanded = await stb.expand_context(
+                chunks=final_docs,
+                window_before=config.small_to_big_window_before,
+                window_after=config.small_to_big_window_after,
+                deduplicate=True,
+            )
+            if expanded:
+                for i, ec in enumerate(expanded):
+                    if i < len(final_docs):
+                        final_docs[i]["text"] = ec.expanded_text
+                        final_docs[i]["_expanded"] = True
+        except Exception as e:
+            logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
 
     result = _assemble_context(
         query=current_query,
