@@ -23,7 +23,7 @@ class UnifiedConfig:
     # Database
     database_url: str = field(
         default_factory=lambda: os.getenv(
-            "INGESTION_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/cocoindex"
+            "INGESTION_DATABASE_URL", "postgresql://postgres@localhost:5432/cocoindex"
         )
     )
 
