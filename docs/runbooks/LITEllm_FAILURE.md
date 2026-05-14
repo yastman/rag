@@ -223,10 +223,16 @@ docker compose restart litellm
 
 ### Increase LiteLLM Memory Limit
 
-If OOM is confirmed, raise the memory limit in `compose.yml` or `compose.override.yml` and recreate:
+If OOM is confirmed, raise the memory limit and recreate:
+
+- **Dev/remote MacBook:** edit `compose.dev.yml` (default: 1G for litellm).
+- **Base config:** edit `compose.yml` (default: 512M).
+
+After changing the limit, recreate the container:
 
 ```bash
-docker compose up -d --force-recreate litellm
+# On the Docker host (MacBook for remote, local for WSL)
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d --force-recreate litellm
 ```
 
 ### Switch LLM Provider
