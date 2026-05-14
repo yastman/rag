@@ -51,7 +51,9 @@ def no_retry_sleep(monkeypatch):
 class TestContextualizedEmbeddingServiceInit:
     """Test service initialization."""
 
-    def test_init_with_default_settings(self, mock_voyage_client):
+    def test_init_with_default_settings__contextualized_embedding_service_init(
+        self, mock_voyage_client
+    ):
         """Test initialization with default parameters."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -90,7 +92,7 @@ class TestContextualizedEmbeddingServiceInit:
         with pytest.raises(ValueError, match="Invalid output_dimension 999"):
             ContextualizedEmbeddingService(api_key="test-key", output_dimension=999)
 
-    def test_supported_dimensions(self, mock_voyage_client):
+    def test_supported_dimensions__contextualized_embedding_service_init(self, mock_voyage_client):
         """Test all supported dimensions can be used."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -252,7 +254,7 @@ class TestEmbedQuery:
 class TestSyncWrappers:
     """Test synchronous wrapper methods."""
 
-    def test_embed_documents_sync(self, mock_voyage_client, mock_langfuse):
+    def test_embed_documents_sync__sync_wrappers(self, mock_voyage_client, mock_langfuse):
         """Test sync wrapper for embed_documents."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -272,7 +274,7 @@ class TestSyncWrappers:
 
         assert len(result.embeddings) == 1
 
-    def test_embed_query_sync(self, mock_voyage_client, mock_langfuse):
+    def test_embed_query_sync__sync_wrappers(self, mock_voyage_client, mock_langfuse):
         """Test sync wrapper for embed_query."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 

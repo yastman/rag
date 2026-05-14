@@ -52,7 +52,7 @@ def baseline_engine(mock_settings: Settings) -> BaselineSearchEngine:
 
 
 class TestLexicalWeightsToSparse:
-    def test_retrieval_module_reexports_shared_helper(self) -> None:
+    def test_retrieval_module_reexports_shared_helper__lexical_weights_to_sparse(self) -> None:
         assert lexical_weights_to_sparse is shared_sparse
 
     def test_empty_dict_returns_empty_sparse(self) -> None:
@@ -288,7 +288,9 @@ class TestBaselineEngineSearch:
         call_kwargs = baseline_engine.client.query_points.call_args[1]
         assert call_kwargs["score_threshold"] == 0.7
 
-    def test_empty_results(self, baseline_engine: BaselineSearchEngine) -> None:
+    def test_empty_results__baseline_engine_search(
+        self, baseline_engine: BaselineSearchEngine
+    ) -> None:
         baseline_engine.client.query_points.return_value = self._make_response([])
         results = baseline_engine.search([0.1, 0.2])
         assert results == []

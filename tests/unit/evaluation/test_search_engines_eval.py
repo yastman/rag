@@ -48,7 +48,7 @@ class TestConvertToPythonTypes:
         assert result == pytest.approx(expected, rel=1e-5)
         assert isinstance(result, expected_type)
 
-    def test_convert_nested_dict(self):
+    def test_convert_nested_dict__search_engines_eval_convert_to_python_types(self):
         """Test conversion of nested dict with numpy types."""
         from src.evaluation.search_engines import convert_to_python_types
 
@@ -63,7 +63,7 @@ class TestConvertToPythonTypes:
         assert isinstance(result["score"], float)
         assert isinstance(result["count"], int)
 
-    def test_convert_nested_list(self):
+    def test_convert_nested_list__search_engines_eval_convert_to_python_types(self):
         """Test conversion of nested list with numpy types."""
         from src.evaluation.search_engines import convert_to_python_types
 
@@ -74,7 +74,7 @@ class TestConvertToPythonTypes:
         assert result[1] == [2.0, 3.0]
         assert result[2] == "string"
 
-    def test_convert_python_types_unchanged(self):
+    def test_convert_python_types_unchanged__search_engines_eval_convert_to_python_types(self):
         """Test that Python types are unchanged."""
         from src.evaluation.search_engines import convert_to_python_types
 
@@ -113,7 +113,7 @@ class TestSearchEngineBase:
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_extract_article_number(self, mock_settings_cls, mock_qdrant):
+    def test_extract_article_number__search_engine_base(self, mock_settings_cls, mock_qdrant):
         """Test _extract_article_number helper."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -196,7 +196,9 @@ class TestBaselineSearchEngine:
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_baseline_search_returns_results(self, mock_settings_cls, mock_qdrant):
+    def test_baseline_search_returns_results__search_engines_eval_baseline_search_engine(
+        self, mock_settings_cls, mock_qdrant
+    ):
         """Test that search returns formatted results."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -314,7 +316,9 @@ class TestHybridSearchEngine:
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_search_uses_query_points(self, mock_settings_cls, mock_qdrant):
+    def test_hybrid_search_uses_query_points__hybrid_search_engine(
+        self, mock_settings_cls, mock_qdrant
+    ):
         """Test that hybrid search uses SDK query_points."""
         from src.evaluation.search_engines import HybridSearchEngine
 
@@ -414,7 +418,9 @@ class TestHybridSearchEngine:
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_search_returns_results(self, mock_settings_cls, mock_qdrant):
+    def test_hybrid_search_returns_results__hybrid_search_engine(
+        self, mock_settings_cls, mock_qdrant
+    ):
         """Test parsing response from query_points."""
         from src.evaluation.search_engines import HybridSearchEngine
 
@@ -598,7 +604,9 @@ class TestCreateSearchEngine:
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_baseline_engine(self, mock_settings_cls, mock_qdrant):
+    def test_create_baseline_engine__search_engines_eval_create_search_engine(
+        self, mock_settings_cls, mock_qdrant
+    ):
         """Test creating baseline engine."""
         from src.evaluation.search_engines import (
             BaselineSearchEngine,
@@ -632,7 +640,9 @@ class TestCreateSearchEngine:
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_dbsf_colbert_engine(self, mock_settings_cls, mock_qdrant):
+    def test_create_dbsf_colbert_engine__search_engines_eval_create_search_engine(
+        self, mock_settings_cls, mock_qdrant
+    ):
         """Test creating DBSF+ColBERT engine."""
         from src.evaluation.search_engines import (
             HybridDBSFColBERTSearchEngine,

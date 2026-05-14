@@ -48,7 +48,7 @@ class TestContextualizeBatch:
     """contextualize_batch() behaviour via base class."""
 
     @pytest.mark.asyncio
-    async def test_all_chunks_processed(self) -> None:
+    async def test_all_chunks_processed__contextualize_batch(self) -> None:
         ctx = _SimpleContextualizer()
         results = await ctx.contextualize_batch(["a", "b", "c"])
         assert len(results) == 3
@@ -86,7 +86,7 @@ class TestContextualizeBatch:
         assert received == ["find X", "find X"]
 
     @pytest.mark.asyncio
-    async def test_semaphore_limits_concurrency(self) -> None:
+    async def test_semaphore_limits_concurrency__contextualize_batch(self) -> None:
         active = 0
         peak = 0
 
@@ -145,7 +145,9 @@ class TestClaudeContextualizerBatch:
     """contextualize_batch() on ClaudeContextualizer."""
 
     @pytest.mark.asyncio
-    async def test_all_chunks_processed(self, claude_ctx: ClaudeContextualizer) -> None:
+    async def test_all_chunks_processed__claude_contextualizer_batch(
+        self, claude_ctx: ClaudeContextualizer
+    ) -> None:
         call_count = 0
 
         async def _mock_single(text: str, article_number: str, query=None) -> ContextualizedChunk:
@@ -184,7 +186,9 @@ class TestClaudeContextualizerBatch:
         assert [r.original_text for r in results] == chunks
 
     @pytest.mark.asyncio
-    async def test_semaphore_limits_concurrency(self, claude_ctx: ClaudeContextualizer) -> None:
+    async def test_semaphore_limits_concurrency__claude_contextualizer_batch(
+        self, claude_ctx: ClaudeContextualizer
+    ) -> None:
         active = 0
         peak = 0
 

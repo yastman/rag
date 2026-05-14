@@ -46,7 +46,7 @@ def indexer() -> GDriveIndexer:
 
 
 class TestIndexStats:
-    def test_default_values(self) -> None:
+    def test_default_values__index_stats(self) -> None:
         stats = IndexStats()
         assert stats.total_chunks == 0
         assert stats.indexed_chunks == 0
@@ -71,7 +71,7 @@ class TestGeneratePointId:
         point_id = indexer._generate_point_id("file123", "chunk_0")
         uuid.UUID(point_id)  # raises if invalid
 
-    def test_deterministic(self, indexer: GDriveIndexer) -> None:
+    def test_deterministic__generate_point_id(self, indexer: GDriveIndexer) -> None:
         id1 = indexer._generate_point_id("file123", "chunk_0")
         id2 = indexer._generate_point_id("file123", "chunk_0")
         assert id1 == id2

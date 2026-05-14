@@ -143,7 +143,7 @@ class TestDefaultModelSelection:
 class TestSearchEngineConfiguration:
     """Test search engine configuration."""
 
-    def test_default_search_engine(self):
+    def test_default_search_engine__search_engine_configuration(self):
         """Test default search engine is HYBRID_RRF_COLBERT."""
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
             settings = Settings(api_provider="openai")
@@ -236,7 +236,7 @@ class TestRepr:
 
 
 class TestBotConfigBoolFields:
-    def test_config_bool_fields_parse_env_strings(self, monkeypatch):
+    def test_config_bool_fields_parse_env_strings__bot_config_bool_fields(self, monkeypatch):
         """Bool fields should parse 'true'/'false' strings from env."""
         monkeypatch.setenv("USE_HYDE", "true")
         monkeypatch.setenv("MMR_ENABLED", "false")
@@ -246,7 +246,7 @@ class TestBotConfigBoolFields:
         assert config.use_hyde is True
         assert config.mmr_enabled is False
 
-    def test_config_get_collection_name(self):
+    def test_config_get_collection_name__bot_config_bool_fields(self):
         """get_collection_name() still works after migration."""
         from telegram_bot.config import BotConfig
 

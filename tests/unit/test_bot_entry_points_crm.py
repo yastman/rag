@@ -180,7 +180,7 @@ async def test_cta_get_offer_passes_service_key() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_results_viewing_is_stale_compat_only() -> None:
+async def test_results_viewing_is_stale_compat_only__bot_entry_points_crm() -> None:
     """results:viewing should no longer invoke phone collection from legacy callbacks."""
     bot = _create_bot()
     results = [

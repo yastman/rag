@@ -47,7 +47,7 @@ def service(mock_qdrant_client):
 class TestIngestionService:
     """Tests for IngestionService class."""
 
-    def test_init_defaults(self):
+    def test_init_defaults__ingestion_service(self):
         """Test service initialization with defaults."""
         service = IngestionService()
 
@@ -56,7 +56,7 @@ class TestIngestionService:
         assert service.chunk_size == 512
         assert service.chunk_overlap == 50
 
-    def test_init_custom_params(self):
+    def test_init_custom_params__ingestion_service(self):
         """Test service initialization with custom parameters."""
         service = IngestionService(
             qdrant_url="http://custom:6333",
@@ -131,7 +131,7 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "not found" in stats.errors[0].lower()
 
-    async def test_get_collection_stats(self, service, mock_qdrant_client):
+    async def test_get_collection_stats__ingestion_service(self, service, mock_qdrant_client):
         """Test getting collection statistics."""
         stats = await service.get_collection_stats()
 
@@ -157,7 +157,7 @@ class TestIngestionService:
         assert "error" in stats
         assert stats["points_count"] == 0
 
-    async def test_close(self, service, mock_qdrant_client):
+    async def test_close__ingestion_service(self, service, mock_qdrant_client):
         """Test service cleanup."""
         await service.close()
 
@@ -168,7 +168,7 @@ class TestIngestionService:
 class TestIngestionStats:
     """Tests for IngestionStats dataclass."""
 
-    def test_default_values(self):
+    def test_default_values__ingestion_stats(self):
         """Test default values."""
         stats = IngestionStats()
 
@@ -179,7 +179,7 @@ class TestIngestionStats:
         assert stats.duration_seconds == 0.0
         assert stats.errors == []
 
-    def test_custom_values(self):
+    def test_custom_values__ingestion_stats(self):
         """Test setting custom values."""
         stats = IngestionStats(
             total_documents=10,
@@ -223,7 +223,7 @@ class TestConvenienceFunctions:
                 assert len(stats.errors) == 1
                 mock_close.assert_called_once()
 
-    async def test_get_ingestion_status(self):
+    async def test_get_ingestion_status__convenience_functions(self):
         """Test convenience function for getting status."""
         with patch.object(IngestionService, "get_collection_stats") as mock_stats:
             with patch.object(IngestionService, "close") as mock_close:

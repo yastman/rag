@@ -148,12 +148,12 @@ class TestPreflightRedis:
 
         pytest.skip(f"Redis requires authentication (set REDIS_PASSWORD): {last_error}")
 
-    async def test_redis_connection(self, redis_client):
+    async def test_redis_connection__preflight_redis(self, redis_client):
         """Redis should be reachable."""
         pong = await redis_client.ping()
         assert pong is True
 
-    async def test_redis_maxmemory_set(self, redis_client):
+    async def test_redis_maxmemory_set__preflight_redis(self, redis_client):
         """maxmemory should be configured (not 0)."""
         config = await redis_client.config_get("maxmemory")
         maxmem = int(config.get("maxmemory", 0))

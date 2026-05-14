@@ -180,7 +180,7 @@ class TestEvaluateBlackbox:
 
 
 class TestEvaluateTrajectory:
-    def test_exact_match(self, eval_module) -> None:
+    def test_exact_match__evaluate_trajectory(self, eval_module) -> None:
         example = {
             "id": 1,
             "expected_tools": ["apartment_search"],
@@ -297,7 +297,7 @@ class TestEvaluateSingleStep:
 
 
 class TestComputeMetrics:
-    def test_all_pass(self, eval_module) -> None:
+    def test_all_pass__compute_metrics(self, eval_module) -> None:
         results = [
             {
                 "blackbox": {"pass": True, "score": 1.0},
@@ -334,7 +334,7 @@ class TestComputeMetrics:
         assert metrics["trajectory_pass_rate"] == 0.5
         assert metrics["single_step_pass_rate"] == 0.5
 
-    def test_empty_results(self, eval_module) -> None:
+    def test_empty_results__compute_metrics(self, eval_module) -> None:
         metrics = eval_module.compute_metrics([])
         assert metrics["total"] == 0
         assert metrics["blackbox_pass_rate"] == 0.0

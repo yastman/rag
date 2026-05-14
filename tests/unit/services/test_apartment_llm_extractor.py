@@ -139,7 +139,7 @@ class TestMergeExtractionResults:
 
 
 class TestLlmExtractorObservability:
-    def test_extract_is_observed(self) -> None:
+    def test_extract_is_observed__llm_extractor_observability(self) -> None:
         """ApartmentLlmExtractor.extract must be @observe-decorated (span: apartment-llm-extract)."""
         assert hasattr(ApartmentLlmExtractor.extract, "__wrapped__"), (
             "ApartmentLlmExtractor.extract must be decorated with "

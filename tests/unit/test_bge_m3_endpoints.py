@@ -167,7 +167,7 @@ class TestMetrics:
 
 
 class TestConfigDefaults:
-    def test_settings_defaults(self, bge_app):
+    def test_settings_defaults__config_defaults(self, bge_app):
         _cfg = bge_app["config"]
         assert _cfg.settings.MAX_LENGTH == 2048
         assert _cfg.settings.BATCH_SIZE == 12

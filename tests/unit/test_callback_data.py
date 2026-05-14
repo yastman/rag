@@ -36,7 +36,7 @@ class TestFeedbackCB:
         assert cb.action == "dislike"
         assert cb.trace_id == "trace999"
 
-    def test_roundtrip(self):
+    def test_roundtrip__feedback_c_b(self):
         from telegram_bot.callback_data import FeedbackCB
 
         original = FeedbackCB(action="like", trace_id="trace_xyz")
@@ -75,7 +75,7 @@ class TestFeedbackReasonCB:
             packed = FeedbackReasonCB(code=code, trace_id=trace_id).pack()
             assert len(packed.encode()) <= 64
 
-    def test_roundtrip(self):
+    def test_roundtrip__feedback_reason_c_b(self):
         from telegram_bot.callback_data import FeedbackReasonCB
 
         original = FeedbackReasonCB(code="bs", trace_id="trace_abc")
@@ -103,7 +103,7 @@ class TestFavoriteCB:
         packed = FavoriteCB(action="remove", apartment_id="prop-42").pack()
         assert packed == "fav:remove:prop-42"
 
-    def test_viewing_pack_format(self):
+    def test_viewing_pack_format__favorite_c_b(self):
         from telegram_bot.callback_data import FavoriteCB
 
         packed = FavoriteCB(action="viewing", apartment_id="prop-42").pack()
@@ -129,7 +129,7 @@ class TestFavoriteCB:
         assert cb.action == "remove"
         assert cb.apartment_id == "prop-99"
 
-    def test_roundtrip(self):
+    def test_roundtrip__favorite_c_b(self):
         from telegram_bot.callback_data import FavoriteCB
 
         original = FavoriteCB(action="add", apartment_id="some-prop-id")
@@ -151,7 +151,7 @@ class TestResultsCB:
         packed = ResultsCB(action="refine").pack()
         assert packed == "results:refine"
 
-    def test_viewing_pack_format(self):
+    def test_viewing_pack_format__results_c_b(self):
         from telegram_bot.callback_data import ResultsCB
 
         packed = ResultsCB(action="viewing").pack()
@@ -163,7 +163,7 @@ class TestResultsCB:
         cb = ResultsCB.unpack("results:more")
         assert cb.action == "more"
 
-    def test_roundtrip(self):
+    def test_roundtrip__results_c_b(self):
         from telegram_bot.callback_data import ResultsCB
 
         for action in ("more", "refine", "viewing"):

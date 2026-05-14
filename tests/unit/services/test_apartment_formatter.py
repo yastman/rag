@@ -72,7 +72,7 @@ class TestFormatApartmentText:
         result = format_apartment_text(results)
         assert "Найдено 1" in result
 
-    def test_multiple_results_numbered(self) -> None:
+    def test_multiple_results_numbered__format_apartment_text(self) -> None:
         results = [
             {
                 "payload": {

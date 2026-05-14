@@ -13,7 +13,7 @@ from telegram_bot.services.bge_m3_client import HybridResult
 class TestPayloadContract:
     """Test that payload meets bot requirements."""
 
-    def test_payload_has_required_fields(self):
+    def test_payload_has_required_fields__payload_contract(self):
         """Payload must have page_content, metadata dict, and flat file_id."""
         writer = QdrantHybridWriter.__new__(QdrantHybridWriter)
 

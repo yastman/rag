@@ -704,7 +704,7 @@ async def test_grade_documents_includes_score_gap_confident():
 # ---------------------------------------------------------------------------
 
 
-async def test_rerank_with_colbert(mock_reranker):
+async def test_rerank_with_colbert__rag_pipeline(mock_reranker):
     from telegram_bot.agents.rag_pipeline import _rerank
 
     docs = [
@@ -748,7 +748,7 @@ async def test_rerank_empty_docs():
     assert result["rerank_cache_hit"] is False
 
 
-async def test_rerank_uses_cache_hit(mock_reranker):
+async def test_rerank_uses_cache_hit__rag_pipeline(mock_reranker):
     from telegram_bot.agents.rag_pipeline import _rerank
 
     docs = [{"text": "A", "score": 0.1}, {"text": "B", "score": 0.2}]
@@ -1428,7 +1428,7 @@ async def test_cache_check_colbert_query_none_without_hybrid_colbert(mock_cache,
     assert result["colbert_query"] is None
 
 
-async def test_cache_check_computes_colbert_when_embedding_cached(mock_cache):
+async def test_cache_check_computes_colbert_when_embedding_cached__rag_pipeline(mock_cache):
     """_cache_check computes ColBERT vectors even when dense embedding is cached."""
     from unittest.mock import AsyncMock
 

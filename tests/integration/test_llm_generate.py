@@ -41,7 +41,7 @@ async def test_generate_returns_text():
     await service.close()
 
 
-async def test_generate_uses_low_temperature():
+async def test_generate_uses_low_temperature__llm_generate():
     """generate() should use low temperature for structured output."""
     from telegram_bot.services.llm import LLMService
 
@@ -68,7 +68,7 @@ async def test_generate_uses_low_temperature():
 class TestLLMServiceFormatContext:
     """Tests for _format_context method."""
 
-    def test_format_context_empty_chunks(self):
+    def test_format_context_empty_chunks__l_l_m_service_format_context(self):
         """Empty chunks returns default message."""
         from telegram_bot.services.llm import LLMService
 
@@ -77,7 +77,7 @@ class TestLLMServiceFormatContext:
 
         assert "не найдено" in result
 
-    def test_format_context_single_chunk(self):
+    def test_format_context_single_chunk__l_l_m_service_format_context(self):
         """Single chunk formats correctly."""
         from telegram_bot.services.llm import LLMService
 
@@ -89,7 +89,7 @@ class TestLLMServiceFormatContext:
         assert "Test content" in result
         assert "[Объект 1]" in result
 
-    def test_format_context_multiple_chunks(self):
+    def test_format_context_multiple_chunks__l_l_m_service_format_context(self):
         """Multiple chunks format with separators."""
         from telegram_bot.services.llm import LLMService
 
@@ -104,7 +104,7 @@ class TestLLMServiceFormatContext:
         assert "Content 2" in result
         assert "---" in result  # Separator
 
-    def test_format_context_with_metadata(self):
+    def test_format_context_with_metadata__l_l_m_service_format_context(self):
         """Context includes metadata fields."""
         from telegram_bot.services.llm import LLMService
 
@@ -126,7 +126,7 @@ class TestLLMServiceFormatContext:
 class TestLLMServiceFallback:
     """Tests for _get_fallback_answer method."""
 
-    def test_fallback_no_chunks(self):
+    def test_fallback_no_chunks__l_l_m_service_fallback(self):
         """Fallback with no chunks returns error message."""
         from telegram_bot.services.llm import LLMService
 
@@ -136,7 +136,7 @@ class TestLLMServiceFallback:
         assert "недоступен" in result
         assert "повторить" in result
 
-    def test_fallback_with_chunks(self):
+    def test_fallback_with_chunks__l_l_m_service_fallback(self):
         """Fallback with chunks returns formatted results."""
         from telegram_bot.services.llm import LLMService
 
@@ -167,7 +167,7 @@ class TestLLMServiceFallback:
 class TestLLMServiceGenerateAnswer:
     """Tests for generate_answer method."""
 
-    async def test_generate_answer_success(self):
+    async def test_generate_answer_success__l_l_m_service_generate_answer(self):
         """generate_answer returns LLM response."""
         from telegram_bot.services.llm import LLMService
 

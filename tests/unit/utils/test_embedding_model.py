@@ -52,7 +52,7 @@ def mock_sentence_transformers():
 class TestGetBgeM3Model:
     """Tests for get_bge_m3_model() singleton function."""
 
-    def test_singleton_returns_same_instance(self, mock_flag_embedding):
+    def test_singleton_returns_same_instance__get_bge_m3_model(self, mock_flag_embedding):
         """Test that get_bge_m3_model returns the same instance on multiple calls."""
         from src.models.embedding_model import get_bge_m3_model
 
@@ -129,7 +129,9 @@ class TestGetBgeM3Model:
 class TestGetSentenceTransformer:
     """Tests for get_sentence_transformer() singleton function."""
 
-    def test_singleton_returns_same_instance(self, mock_sentence_transformers):
+    def test_singleton_returns_same_instance__get_sentence_transformer(
+        self, mock_sentence_transformers
+    ):
         """Test that get_sentence_transformer returns the same instance on multiple calls."""
         from src.models.embedding_model import get_sentence_transformer
 

@@ -12,19 +12,19 @@ from src.ingestion.unified.manifest import GDriveManifest, compute_content_hash_
 class TestComputeContentHash:
     """Test compute_content_hash_from_bytes()."""
 
-    def test_deterministic(self):
+    def test_deterministic__unified_manifest_compute_content_hash(self):
         """Same content → same hash."""
         h1 = compute_content_hash_from_bytes(b"hello world")
         h2 = compute_content_hash_from_bytes(b"hello world")
         assert h1 == h2
 
-    def test_different_content_different_hash(self):
+    def test_different_content_different_hash__unified_manifest_compute_content_hash(self):
         """Different content → different hash."""
         h1 = compute_content_hash_from_bytes(b"hello")
         h2 = compute_content_hash_from_bytes(b"world")
         assert h1 != h2
 
-    def test_returns_16_char_hex(self):
+    def test_returns_16_char_hex__unified_manifest_compute_content_hash(self):
         """Hash is 16-char hex string (SHA-256 prefix)."""
         h = compute_content_hash_from_bytes(b"test")
         assert len(h) == 16

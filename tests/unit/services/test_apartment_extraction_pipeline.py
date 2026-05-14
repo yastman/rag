@@ -189,7 +189,7 @@ class TestPipelineCache:
 
 
 class TestExtractionPipelineObservability:
-    def test_extract_is_observed(self) -> None:
+    def test_extract_is_observed__extraction_pipeline_observability(self) -> None:
         """ApartmentExtractionPipeline.extract must be @observe-decorated (span: apartment-extraction-pipeline)."""
         assert hasattr(ApartmentExtractionPipeline.extract, "__wrapped__"), (
             "ApartmentExtractionPipeline.extract must be decorated with "

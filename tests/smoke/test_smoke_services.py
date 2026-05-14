@@ -40,7 +40,7 @@ class TestSmokeServices:
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(not _is_port_open("localhost", 6333), reason="Qdrant not running (6333)")
-    async def test_qdrant_health(self):
+    async def test_qdrant_health__smoke_services(self):
         """Qdrant responds to health check."""
         url = os.getenv("QDRANT_URL", "http://localhost:6333")
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -85,7 +85,7 @@ class TestSmokeServices:
         not _is_port_open("localhost", 5001), reason="Docling not running (port 5001)"
     )
     @pytest.mark.asyncio
-    async def test_docling_health(self):
+    async def test_docling_health__smoke_services(self):
         """Docling responds to health check."""
         url = os.getenv("DOCLING_URL", "http://localhost:5001")
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -96,7 +96,7 @@ class TestSmokeServices:
         not _is_port_open("localhost", 9621), reason="LightRAG not running (port 9621)"
     )
     @pytest.mark.asyncio
-    async def test_lightrag_health(self):
+    async def test_lightrag_health__smoke_services(self):
         """LightRAG responds to health check."""
         url = os.getenv("LIGHTRAG_URL", "http://localhost:9621")
         async with httpx.AsyncClient(timeout=5.0) as client:

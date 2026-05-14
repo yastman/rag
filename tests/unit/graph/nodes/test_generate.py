@@ -83,7 +83,7 @@ def _make_mocks(
 # ---------------------------------------------------------------------------
 
 
-async def test_streaming_uses_send_message_draft() -> None:
+async def test_streaming_uses_send_message_draft__generate() -> None:
     """Voice path streaming uses bot.send_message_draft instead of edit_text."""
     mock_llm, mock_config, mock_message, _ = _make_mocks()
 

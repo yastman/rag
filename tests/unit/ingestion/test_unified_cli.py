@@ -89,20 +89,20 @@ class TestArgParsing:
         assert args.command == "schema-check"
         assert args.require_colbert is True
 
-    def test_reprocess_file_id(self):
+    def test_reprocess_file_id__arg_parsing(self):
         args = self._parse("reprocess", "--file-id", "abc123")
         assert args.command == "reprocess"
         assert args.file_id == "abc123"
         assert args.errors is False
         assert args.pending is False
 
-    def test_reprocess_errors(self):
+    def test_reprocess_errors__arg_parsing(self):
         args = self._parse("reprocess", "--errors")
         assert args.errors is True
         assert args.file_id is None
         assert args.pending is False
 
-    def test_reprocess_pending(self):
+    def test_reprocess_pending__arg_parsing(self):
         args = self._parse("reprocess", "--pending")
         assert args.pending is True
         assert args.file_id is None
@@ -569,7 +569,7 @@ class TestCmdRun:
 class TestCmdReprocess:
     """Test reprocess command."""
 
-    async def test_reprocess_file_id(self):
+    async def test_reprocess_file_id__cmd_reprocess(self):
         config = _make_config()
         pool = AsyncMock()
         pool.fetch.side_effect = [
@@ -606,7 +606,7 @@ class TestCmdReprocess:
         assert "abc123" in update_call.args
         assert "DELETE FROM unified__ingest" in delete_call.args[0]
 
-    async def test_reprocess_errors(self):
+    async def test_reprocess_errors__cmd_reprocess(self):
         config = _make_config()
         pool = AsyncMock()
         pool.fetch.side_effect = [
@@ -641,7 +641,7 @@ class TestCmdReprocess:
         assert update_call.args[1] == "error"
         assert "DELETE FROM unified__ingest" in delete_call.args[0]
 
-    async def test_reprocess_pending(self):
+    async def test_reprocess_pending__cmd_reprocess(self):
         config = _make_config()
         pool = AsyncMock()
         pool.fetch.side_effect = [
@@ -799,7 +799,7 @@ class TestCmdBootstrap:
         output = capsys.readouterr().out
         assert "[FAIL]" in output
 
-    async def test_creates_collection_when_missing(self, args, capsys):
+    async def test_creates_collection_when_missing__cmd_bootstrap(self, args, capsys):
         from qdrant_client.http.exceptions import UnexpectedResponse
 
         config = _make_config(collection_name="new_col")
@@ -943,7 +943,9 @@ class TestMainDispatch:
     @patch("src.ingestion.unified.cli.cmd_schema_check", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_schema_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
+    def test_main_dispatches_schema_check__main_dispatch(
+        self, mock_dotenv, mock_logging, mock_cmd, monkeypatch
+    ):
         monkeypatch.setattr("sys.argv", ["cli", "schema-check", "--require-colbert"])
 
         from src.ingestion.unified.cli import main

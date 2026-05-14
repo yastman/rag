@@ -2335,7 +2335,7 @@ class TestWriteLangfuseScores:
 class TestMakeSessionId:
     """Test make_session_id utility function."""
 
-    def test_format(self):
+    def test_format__make_session_id(self):
         """Test session ID format: prefix-hash8-id."""
         sid = make_session_id("chat", 12345)
         assert sid.startswith("chat-")
@@ -2347,7 +2347,7 @@ class TestMakeSessionId:
         ("prefix", "identifier"),
         [("chat", 12345), ("voice", 99999), ("api", 1)],
     )
-    def test_deterministic(self, prefix, identifier):
+    def test_deterministic__make_session_id(self, prefix, identifier):
         """Same inputs produce same session ID."""
         assert make_session_id(prefix, identifier) == make_session_id(prefix, identifier)
 

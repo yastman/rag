@@ -21,7 +21,7 @@ class TestGreetingsRU:
             ("Хай, что есть в Несебре", "что есть в Несебре"),
         ],
     )
-    def test_greeting_stripped(self, input_text, expected):
+    def test_greeting_stripped__greetings_r_u(self, input_text, expected):
         assert normalize_ru_uk(input_text) == expected
 
 
@@ -37,7 +37,7 @@ class TestGreetingsUK:
             ("Доброго ранку, що нового", "що нового"),
         ],
     )
-    def test_greeting_stripped(self, input_text, expected):
+    def test_greeting_stripped__greetings_u_k(self, input_text, expected):
         assert normalize_ru_uk(input_text) == expected
 
 

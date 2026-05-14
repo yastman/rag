@@ -106,7 +106,7 @@ class TestQueryPreprocessorEdgeCases:
         result3 = preprocessor.analyze("villa in SuNnY BeAcH")
         assert "Солнечный берег" in result3["normalized_query"]
 
-    def test_empty_query(self):
+    def test_empty_query__query_preprocessor_edge_cases(self):
         """Test handling of empty query."""
         preprocessor = QueryPreprocessor()
 

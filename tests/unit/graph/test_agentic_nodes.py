@@ -117,7 +117,7 @@ class TestGradeNodeRRFScores:
 
 
 class TestRerankNode:
-    async def test_rerank_with_colbert(self):
+    async def test_rerank_with_colbert__rerank_node(self):
         """ColBERT reranker reorders documents and sets rerank_applied=True."""
         from telegram_bot.graph.nodes.rerank import rerank_node
 
@@ -159,7 +159,7 @@ class TestRerankNode:
         assert result["documents"][0]["text"] == "doc B"
         assert result["documents"][1]["text"] == "doc C"
 
-    async def test_rerank_empty_documents(self):
+    async def test_rerank_empty_documents__rerank_node(self):
         """Empty documents returns empty list."""
         from telegram_bot.graph.nodes.rerank import rerank_node
 
@@ -186,7 +186,7 @@ class TestRerankNode:
         assert result["rerank_applied"] is False
         assert result["documents"][0]["text"] == "B"
 
-    async def test_rerank_uses_cache_hit(self):
+    async def test_rerank_uses_cache_hit__rerank_node(self):
         """When rerank cache has a hit, ColBERT service call is skipped."""
         from telegram_bot.graph.nodes.rerank import rerank_node
 

@@ -132,7 +132,7 @@ class TestHybridSearchRRFQuantization:
 class TestQdrantServiceUnit:
     """Unit tests for QdrantService (no actual Qdrant calls)."""
 
-    def test_init_creates_async_client(self):
+    def test_init_creates_async_client__qdrant_service_unit(self):
         """HTTP URL should strip api_key and create AsyncQdrantClient with gRPC."""
         from telegram_bot.services.qdrant import QdrantService
 

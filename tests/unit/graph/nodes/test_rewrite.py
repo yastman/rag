@@ -289,7 +289,7 @@ class TestRewriteNodeMaxRetries:
 class TestRewriteNodeQueryExtraction:
     """rewrite_node extracts query from messages correctly."""
 
-    async def test_query_from_human_message_object(self):
+    async def test_query_from_human_message_object__rewrite_node_query_extraction(self):
         state = make_initial_state(user_id=1, session_id="s1", query="original")
         state["messages"] = [HumanMessage(content="query via message object")]
         state["rewrite_count"] = 0
@@ -303,7 +303,7 @@ class TestRewriteNodeQueryExtraction:
         call_args = mock_rewrite.call_args
         assert call_args[0][0] == "query via message object"
 
-    async def test_query_from_dict_message(self):
+    async def test_query_from_dict_message__rewrite_node_query_extraction(self):
         state = make_initial_state(user_id=1, session_id="s1", query="original")
         state["messages"] = [{"role": "user", "content": "dict-style query"}]
         state["rewrite_count"] = 0
@@ -321,7 +321,7 @@ class TestRewriteNodeQueryExtraction:
 class TestRewriteNodeLatency:
     """rewrite_node latency tracking."""
 
-    async def test_latency_stages_set(self):
+    async def test_latency_stages_set__rewrite_node_latency(self):
         state = _state_with_query()
         state["latency_stages"] = {"retrieve": 0.1, "grade": 0.02}
 

@@ -24,7 +24,7 @@ def _mock_completion(content: str) -> MagicMock:
 class TestLLMServiceInit:
     """Tests for LLMService.__init__."""
 
-    def test_init_default_values(self):
+    def test_init_default_values__l_l_m_service_init(self):
         """Test initialization with default values."""
         service = LLMService(api_key="test-key")
 
@@ -33,7 +33,7 @@ class TestLLMServiceInit:
         assert service.model == "gpt-4o-mini"
         assert isinstance(service.client, openai.AsyncOpenAI)
 
-    def test_init_custom_values(self):
+    def test_init_custom_values__llm_l_l_m_service_init(self):
         """Test initialization with custom values."""
         service = LLMService(
             api_key="custom-key",
@@ -45,7 +45,7 @@ class TestLLMServiceInit:
         assert service.base_url == "https://custom.api.com/v1"  # Trailing slash stripped
         assert service.model == "custom-model"
 
-    def test_init_strips_trailing_slash(self):
+    def test_init_strips_trailing_slash__l_l_m_service_init(self):
         """Test that trailing slash is stripped from base_url."""
         service = LLMService(
             api_key="test-key",
@@ -55,14 +55,14 @@ class TestLLMServiceInit:
         # rstrip("/") removes ALL trailing slashes
         assert service.base_url == "https://api.example.com"
 
-    def test_init_creates_openai_client(self):
+    def test_init_creates_openai_client__llm_l_l_m_service_init(self):
         """Test that AsyncOpenAI client is created."""
         service = LLMService(api_key="test-key")
 
         assert isinstance(service.client, openai.AsyncOpenAI)
 
 
-def test_format_context_no_raw_score():
+def test_format_context_no_raw_score__l_l_m_service_init():
     """_format_context must NOT expose raw RRF scores to LLM."""
     service = LLMService(api_key="test-key")
 
@@ -141,7 +141,9 @@ class TestLLMServiceGenerateAnswer:
         assert chunks == ["chunk"]
         assert service.client.chat.completions.create.call_args.kwargs["max_tokens"] == 1234
 
-    async def test_generate_answer_custom_system_prompt(self, sample_chunks):
+    async def test_generate_answer_custom_system_prompt__l_l_m_service_generate_answer(
+        self, sample_chunks
+    ):
         """Test answer generation with custom system prompt."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -308,13 +310,13 @@ class TestLLMServiceFormatContext:
         """Create LLMService instance."""
         return LLMService(api_key="test-key")
 
-    def test_format_context_empty_chunks(self, service):
+    def test_format_context_empty_chunks__llm_l_l_m_service_format_context(self, service):
         """Test formatting with empty chunks list."""
         result = service._format_context([])
 
         assert result == "Релевантной информации не найдено."
 
-    def test_format_context_single_chunk(self, service):
+    def test_format_context_single_chunk__llm_l_l_m_service_format_context(self, service):
         """Test formatting with single chunk."""
         chunks = [{"text": "Property description", "score": 0.92}]
 
@@ -324,7 +326,7 @@ class TestLLMServiceFormatContext:
         assert "релевантность" not in result
         assert "Property description" in result
 
-    def test_format_context_with_metadata(self, service):
+    def test_format_context_with_metadata__llm_l_l_m_service_format_context(self, service):
         """Test formatting with full metadata."""
         chunks = [
             {
@@ -341,7 +343,7 @@ class TestLLMServiceFormatContext:
         assert "Цена: 75,000" in result
         assert "Nice apartment" in result
 
-    def test_format_context_multiple_chunks(self, service):
+    def test_format_context_multiple_chunks__llm_l_l_m_service_format_context(self, service):
         """Test formatting with multiple chunks."""
         chunks = [
             {"text": "First property", "score": 0.95},
@@ -510,7 +512,7 @@ class TestLLMServiceGenerate:
 
         assert result == "Generated text"
 
-    async def test_generate_uses_low_temperature(self):
+    async def test_generate_uses_low_temperature__l_l_m_service_generate(self):
         """Test that generate uses low temperature for deterministic output."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -523,7 +525,7 @@ class TestLLMServiceGenerate:
         call_args = service.client.chat.completions.create.call_args
         assert call_args[1]["temperature"] == 0.3
 
-    async def test_generate_custom_max_tokens(self):
+    async def test_generate_custom_max_tokens__l_l_m_service_generate(self):
         """Test generate with custom max_tokens."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
@@ -549,7 +551,7 @@ class TestLLMServiceGenerate:
         call_args = service.client.chat.completions.create.call_args
         assert call_args[1]["max_tokens"] == 200
 
-    async def test_generate_raises_on_error(self):
+    async def test_generate_raises_on_error__l_l_m_service_generate(self):
         """Test that generate raises exception on API error."""
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()

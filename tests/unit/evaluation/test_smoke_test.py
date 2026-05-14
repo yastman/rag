@@ -522,7 +522,7 @@ class TestDifficultyBreakdown:
 class TestResultsStructure:
     """Tests for results structure."""
 
-    def test_results_dictionary_structure(self):
+    def test_results_dictionary_structure__results_structure(self):
         """Test that results dictionary has expected structure."""
         results = {
             "engine": "baseline",

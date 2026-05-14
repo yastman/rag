@@ -23,7 +23,7 @@ class TestBGEM3Embeddings:
         emb = BGEM3Embeddings(base_url="http://fake:8000")
         assert isinstance(emb, Embeddings)
 
-    async def test_aembed_query(self):
+    async def test_aembed_query__b_g_e_m3_embeddings(self):
         mock_response = httpx.Response(
             200,
             json={"dense_vecs": [[0.1, 0.2, 0.3]]},
@@ -34,7 +34,7 @@ class TestBGEM3Embeddings:
             result = await emb.aembed_query("test query")
         assert result == [0.1, 0.2, 0.3]
 
-    async def test_aembed_documents(self):
+    async def test_aembed_documents__b_g_e_m3_embeddings(self):
         mock_response = httpx.Response(
             200,
             json={"dense_vecs": [[0.1, 0.2], [0.3, 0.4]]},
@@ -45,7 +45,7 @@ class TestBGEM3Embeddings:
             result = await emb.aembed_documents(["doc1", "doc2"])
         assert result == [[0.1, 0.2], [0.3, 0.4]]
 
-    async def test_aembed_documents_empty(self):
+    async def test_aembed_documents_empty__b_g_e_m3_embeddings(self):
         emb = BGEM3Embeddings(base_url="http://fake:8000")
         result = await emb.aembed_documents([])
         assert result == []
@@ -88,7 +88,7 @@ class TestBGEM3Embeddings:
 
 
 class TestBGEM3SparseEmbeddings:
-    async def test_aembed_query(self):
+    async def test_aembed_query__b_g_e_m3_sparse_embeddings(self):
         sparse_vec = {"indices": [1, 5, 10], "values": [0.1, 0.5, 0.9]}
         mock_response = httpx.Response(
             200,
@@ -100,7 +100,7 @@ class TestBGEM3SparseEmbeddings:
             result = await emb.aembed_query("test query")
         assert result == sparse_vec
 
-    async def test_aembed_documents(self):
+    async def test_aembed_documents__b_g_e_m3_sparse_embeddings(self):
         lexical_weights = [
             {"indices": [1], "values": [0.1]},
             {"indices": [2], "values": [0.2]},
@@ -115,7 +115,7 @@ class TestBGEM3SparseEmbeddings:
             result = await emb.aembed_documents(["doc1", "doc2"])
         assert result == lexical_weights
 
-    async def test_aembed_documents_empty(self):
+    async def test_aembed_documents_empty__b_g_e_m3_sparse_embeddings(self):
         emb = BGEM3SparseEmbeddings(base_url="http://fake:8000")
         result = await emb.aembed_documents([])
         assert result == []

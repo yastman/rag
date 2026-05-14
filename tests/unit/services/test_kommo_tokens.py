@@ -39,7 +39,7 @@ class TestKommoTokenStore:
         assert "refresh_token" not in payload
         assert "expires_at" not in payload
 
-    async def test_get_valid_token_from_cache(self, token_store, mock_redis):
+    async def test_get_valid_token_from_cache__kommo_token_store(self, token_store, mock_redis):
         """Return cached token when not expired."""
         future_ts = str(int(time.time()) + 3600)
         mock_redis.hgetall.return_value = {

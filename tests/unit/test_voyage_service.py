@@ -129,7 +129,7 @@ class TestVoyageServiceUnit:
             assert result[0]["relevance_score"] == 0.95
             assert result[0]["document"] == "doc1"
 
-    async def test_rerank_empty_documents(self):
+    async def test_rerank_empty_documents__voyage_service_unit(self):
         """Test rerank with empty documents returns empty list."""
         from telegram_bot.services.voyage import VoyageService
 

@@ -17,7 +17,7 @@ from telegram_bot.services.apartments_service import (
 class TestBuildApartmentFilter:
     """Test filter construction without metadata. prefix."""
 
-    def test_exact_match(self) -> None:
+    def test_exact_match__build_apartment_filter(self) -> None:
         f = _build_apartment_filter({"rooms": 2, "complex_name": "Premier Fort Beach"})
         assert f is not None
         assert len(f.must) == 2

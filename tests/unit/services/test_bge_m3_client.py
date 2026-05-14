@@ -114,7 +114,7 @@ class TestBGEM3Client:
         assert result.processing_time == 0.1
         assert "/encode/hybrid" in mock_http.post.call_args[0][0]
 
-    async def test_encode_hybrid_empty_input(self, client):
+    async def test_encode_hybrid_empty_input__b_g_e_m3_client(self, client):
         result = await client.encode_hybrid([])
         assert result.dense_vecs == []
         assert result.lexical_weights == []
@@ -161,7 +161,7 @@ class TestBGEM3Client:
         assert result.processing_time == 0.2
         assert "/rerank" in mock_http.post.call_args[0][0]
 
-    async def test_rerank_empty_documents(self, client):
+    async def test_rerank_empty_documents__b_g_e_m3_client(self, client):
         result = await client.rerank("query", [])
         assert result.results == []
 
@@ -388,7 +388,7 @@ class TestBGEM3SyncClient:
             call_url = mock_post.call_args[0][0]
             assert "/encode/hybrid" in call_url
 
-    def test_encode_hybrid_empty_input(self, sync_client):
+    def test_encode_hybrid_empty_input__b_g_e_m3_sync_client(self, sync_client):
         """Empty input returns empty HybridResult without HTTP call."""
         result = sync_client.encode_hybrid([])
         assert result.dense_vecs == []

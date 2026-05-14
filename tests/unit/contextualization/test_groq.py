@@ -10,7 +10,7 @@ from src.contextualization.base import ContextualizedChunk
 class TestGroqContextualizerInit:
     """Tests for GroqContextualizer.__init__."""
 
-    def test_init_with_default_settings(self):
+    def test_init_with_default_settings__groq_contextualizer_init(self):
         """Test initialization with default settings."""
         with (
             patch("src.contextualization.groq.Settings") as MockSettings,
@@ -98,7 +98,9 @@ class TestGroqContextualizerContextualize:
             ctx.client = mock_client
             return ctx
 
-    async def test_contextualize_single_chunk(self, contextualizer):
+    async def test_contextualize_single_chunk__groq_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing a single chunk."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Summary of chunk"))]
@@ -115,7 +117,9 @@ class TestGroqContextualizerContextualize:
         assert results[0].article_number == "chunk_0"
         assert results[0].context_method == "groq"
 
-    async def test_contextualize_multiple_chunks(self, contextualizer):
+    async def test_contextualize_multiple_chunks__groq_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing multiple chunks."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Summary"))]
@@ -131,7 +135,9 @@ class TestGroqContextualizerContextualize:
         assert results[2].article_number == "chunk_2"
         assert contextualizer.client.chat.completions.create.call_count == 3
 
-    async def test_contextualize_with_query(self, contextualizer):
+    async def test_contextualize_with_query__groq_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing with an optional query parameter."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Query-focused summary"))]
@@ -144,7 +150,9 @@ class TestGroqContextualizerContextualize:
         assert len(results) == 1
         assert results[0].contextual_summary == "Query-focused summary"
 
-    async def test_contextualize_empty_chunks(self, contextualizer):
+    async def test_contextualize_empty_chunks__groq_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing with empty chunks list."""
         results = await contextualizer.contextualize([])
 
@@ -207,7 +215,9 @@ class TestGroqContextualizerContextualizeSingle:
             ctx.client = mock_client
             return ctx
 
-    async def test_contextualize_single_success(self, contextualizer):
+    async def test_contextualize_single_success__groq_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test successful single chunk contextualization."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Legal summary"))]
@@ -226,7 +236,9 @@ class TestGroqContextualizerContextualizeSingle:
         assert result.article_number == "article_51"
         assert result.context_method == "groq"
 
-    async def test_contextualize_single_uses_correct_model(self, contextualizer):
+    async def test_contextualize_single_uses_correct_model__groq_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that the correct Groq model is used."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Summary"))]
@@ -272,7 +284,9 @@ class TestGroqContextualizerContextualizeSingle:
         assert "Property law text" in messages[1]["content"]
         assert "ownership rights" in messages[1]["content"]
 
-    async def test_contextualize_single_tracks_tokens(self, contextualizer):
+    async def test_contextualize_single_tracks_tokens__groq_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that tokens are tracked correctly."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Summary"))]
@@ -326,7 +340,7 @@ class TestGroqContextualizerSync:
             ctx.sync_client = mock_sync_client
             return ctx
 
-    def test_contextualize_sync_success(self, contextualizer):
+    def test_contextualize_sync_success__groq_contextualizer_sync(self, contextualizer):
         """Test successful synchronous contextualization."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Sync summary"))]
@@ -357,7 +371,7 @@ class TestGroqContextualizerSync:
         assert call_args.kwargs["max_tokens"] == 256
         assert call_args.kwargs["temperature"] == 0.3
 
-    def test_contextualize_sync_tracks_tokens(self, contextualizer):
+    def test_contextualize_sync_tracks_tokens__groq_contextualizer_sync(self, contextualizer):
         """Test that sync method tracks tokens correctly."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(content="Summary"))]
@@ -417,7 +431,7 @@ class TestGroqContextualizerGetStats:
 
             return GroqContextualizer()
 
-    def test_get_stats_initial_values(self, contextualizer):
+    def test_get_stats_initial_values__groq_contextualizer_get_stats(self, contextualizer):
         """Test stats with no contextualization performed."""
         stats = contextualizer.get_stats()
 
@@ -426,7 +440,7 @@ class TestGroqContextualizerGetStats:
             "total_cost_usd": 0.0,
         }
 
-    def test_get_stats_after_processing(self, contextualizer):
+    def test_get_stats_after_processing__groq_contextualizer_get_stats(self, contextualizer):
         """Test stats after processing some chunks."""
         contextualizer.total_tokens = 1500
 
@@ -558,7 +572,7 @@ class TestGroqContextualizerPrompts:
 
             return GroqContextualizer()
 
-    def test_get_system_prompt(self, contextualizer):
+    def test_get_system_prompt__groq_contextualizer_prompts(self, contextualizer):
         """Test system prompt content."""
         prompt = contextualizer.get_system_prompt()
 
@@ -567,7 +581,7 @@ class TestGroqContextualizerPrompts:
         assert "contextual summaries" in prompt
         assert "max 100 words" in prompt
 
-    def test_get_user_prompt_without_query(self, contextualizer):
+    def test_get_user_prompt_without_query__groq_contextualizer_prompts(self, contextualizer):
         """Test user prompt without query."""
         prompt = contextualizer.get_user_prompt("Sample legal text")
 
@@ -575,7 +589,7 @@ class TestGroqContextualizerPrompts:
         assert "Summarize this legal text" in prompt
         assert "User is searching for:" not in prompt
 
-    def test_get_user_prompt_with_query(self, contextualizer):
+    def test_get_user_prompt_with_query__groq_contextualizer_prompts(self, contextualizer):
         """Test user prompt with query."""
         prompt = contextualizer.get_user_prompt("Sample legal text", query="theft penalties")
 

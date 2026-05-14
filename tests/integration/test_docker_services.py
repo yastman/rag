@@ -41,7 +41,7 @@ async def test_postgres_connection():
 
 
 @pytest.mark.asyncio
-async def test_redis_connection():
+async def test_redis_connection__docker_services():
     """Test Redis connectivity."""
     if not _check_tcp("localhost", 6379):
         pytest.skip("Redis not running on localhost:6379")
@@ -59,7 +59,7 @@ async def test_redis_connection():
         await r.aclose()
 
 
-def test_qdrant_health():
+def test_qdrant_health__docker_services():
     """Test Qdrant connectivity."""
     if not _check_tcp("localhost", 6333):
         pytest.skip("Qdrant not running on localhost:6333")
@@ -85,7 +85,7 @@ async def test_bge_m3_health():
 
 
 @pytest.mark.asyncio
-async def test_lightrag_health():
+async def test_lightrag_health__docker_services():
     """Test LightRAG service health."""
     if not _check_tcp("localhost", 9621):
         pytest.skip("LightRAG not running on localhost:9621")
@@ -98,7 +98,7 @@ async def test_lightrag_health():
 
 
 @pytest.mark.asyncio
-async def test_docling_health():
+async def test_docling_health__docker_services():
     """Test Docling document parsing service health."""
     if not _check_tcp("localhost", 5001):
         pytest.skip("Docling not running on localhost:5001")

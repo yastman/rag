@@ -72,7 +72,7 @@ class TestRespondNode:
 
         assert "respond" in result["latency_stages"]
 
-    async def test_preserves_existing_latency_stages(self):
+    async def test_preserves_existing_latency_stages__respond_node(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "ok"
         state["latency_stages"] = {"classify": 0.01}

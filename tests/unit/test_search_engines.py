@@ -54,7 +54,7 @@ class TestSearchResult:
 class TestConvertToPythonTypes:
     """Test numpy type conversion."""
 
-    def test_retrieval_module_reexports_shared_helper(self):
+    def test_retrieval_module_reexports_shared_helper__convert_to_python_types(self):
         """Test helper is re-exported from shared serialization module."""
         assert convert_to_python_types is shared_convert
 
@@ -98,7 +98,7 @@ class TestConvertToPythonTypes:
         assert result == 42
         assert isinstance(result, int)
 
-    def test_convert_nested_dict(self):
+    def test_convert_nested_dict__convert_to_python_types(self):
         """Test conversion of nested dict with numpy types."""
         data = {
             "values": np.array([1.0, 2.0]),
@@ -111,7 +111,7 @@ class TestConvertToPythonTypes:
         assert isinstance(result["score"], float)
         assert isinstance(result["count"], int)
 
-    def test_convert_nested_list(self):
+    def test_convert_nested_list__convert_to_python_types(self):
         """Test conversion of nested list with numpy types."""
         data = [np.float32(1.0), np.array([2.0, 3.0]), "string"]
         result = convert_to_python_types(data)
@@ -120,7 +120,7 @@ class TestConvertToPythonTypes:
         assert result[1] == [2.0, 3.0]
         assert result[2] == "string"
 
-    def test_convert_python_types_unchanged(self):
+    def test_convert_python_types_unchanged__convert_to_python_types(self):
         """Test that Python types are unchanged."""
         data = {
             "string": "text",
@@ -190,7 +190,9 @@ class TestBaselineSearchEngine:
 
     @patch.object(search_engines, "QdrantClient")
     @patch.object(search_engines, "Settings")
-    def test_baseline_search_returns_results(self, mock_settings_cls, mock_qdrant):
+    def test_baseline_search_returns_results__baseline_search_engine(
+        self, mock_settings_cls, mock_qdrant
+    ):
         """Test that search returns formatted results."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"
@@ -260,7 +262,9 @@ class TestHybridRRFSearchEngine:
     @patch.object(search_engines, "get_bge_m3_model")
     @patch.object(search_engines, "QdrantClient")
     @patch.object(search_engines, "Settings")
-    def test_hybrid_search_uses_query_points(self, mock_settings_cls, mock_qdrant, mock_bge):
+    def test_hybrid_search_uses_query_points__hybrid_r_r_f_search_engine(
+        self, mock_settings_cls, mock_qdrant, mock_bge
+    ):
         """Test that hybrid search uses SDK query_points with prefetch."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"
@@ -498,7 +502,9 @@ class TestCreateSearchEngine:
     @patch.object(search_engines, "get_bge_m3_model")
     @patch.object(search_engines, "QdrantClient")
     @patch.object(search_engines, "Settings")
-    def test_create_baseline_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
+    def test_create_baseline_engine__create_search_engine(
+        self, mock_settings_cls, mock_qdrant, mock_bge
+    ):
         """Test creating baseline engine."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"
@@ -541,7 +547,9 @@ class TestCreateSearchEngine:
     @patch.object(search_engines, "get_bge_m3_model")
     @patch.object(search_engines, "QdrantClient")
     @patch.object(search_engines, "Settings")
-    def test_create_dbsf_colbert_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
+    def test_create_dbsf_colbert_engine__create_search_engine(
+        self, mock_settings_cls, mock_qdrant, mock_bge
+    ):
         """Test creating DBSF ColBERT engine."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"

@@ -239,7 +239,7 @@ class TestDemoResultsFormatting:
         assert len(calls) >= 2  # "Ищу..." + results
 
     @pytest.mark.asyncio
-    async def test_multiple_results_numbered(self) -> None:
+    async def test_multiple_results_numbered__demo_results_formatting(self) -> None:
         """Multiple results are numbered 1-N with correct data (HTML bold)."""
         results = [
             self._make_result(

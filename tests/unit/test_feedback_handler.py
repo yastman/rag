@@ -135,17 +135,17 @@ class TestParseFeedbackCallbackReasonPath:
 
         assert parse_feedback_callback("fb:r:wt:") is None
 
-    def test_invalid_prefix_returns_none(self):
+    def test_invalid_prefix_returns_none__parse_feedback_callback_reason_path(self):
         from telegram_bot.feedback import parse_feedback_callback
 
         assert parse_feedback_callback("other:data") is None
 
-    def test_invalid_value_returns_none(self):
+    def test_invalid_value_returns_none__parse_feedback_callback_reason_path(self):
         from telegram_bot.feedback import parse_feedback_callback
 
         assert parse_feedback_callback("fb:x:abc123") is None
 
-    def test_missing_trace_id_returns_none(self):
+    def test_missing_trace_id_returns_none__parse_feedback_callback_reason_path(self):
         from telegram_bot.feedback import parse_feedback_callback
 
         assert parse_feedback_callback("fb:1:") is None

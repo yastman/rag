@@ -528,7 +528,7 @@ class TestCheckSingleDep:
 class TestCheckDependencies:
     """Tests for check_dependencies(config) — main orchestrator."""
 
-    async def test_all_pass(self):
+    async def test_all_pass__check_dependencies(self):
         config = _make_config()
 
         with (

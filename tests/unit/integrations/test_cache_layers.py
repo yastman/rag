@@ -759,7 +759,7 @@ class TestQueryNormalization:
         assert result_with_dot == "ул. ленина"
         assert result_with_dot.endswith("а")  # dot in middle is kept, trailing ? removed
 
-    def test_empty_string(self):
+    def test_empty_string__query_normalization(self):
         assert _normalize_query_for_cache("") == ""
 
     async def test_embedding_cache_shares_key_after_normalization(self):

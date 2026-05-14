@@ -87,13 +87,13 @@ class TestQueryPreprocessorHyDE:
 class TestHyDEGenerator:
     """Tests for HyDEGenerator class (OpenAI SDK)."""
 
-    def test_init_defaults(self):
+    def test_init_defaults__hy_d_e_generator(self):
         hyde = HyDEGenerator()
         assert hyde.api_key == "not-needed"
         assert hyde.base_url == "http://localhost:4000"
         assert hyde.model == "gpt-4o-mini"
 
-    def test_init_custom_params(self):
+    def test_init_custom_params__hy_d_e_generator(self):
         hyde = HyDEGenerator(
             api_key="test-key",
             base_url="http://custom:5000/",
@@ -103,7 +103,7 @@ class TestHyDEGenerator:
         assert hyde.base_url == "http://custom:5000"
         assert hyde.model == "gpt-4o"
 
-    def test_init_creates_openai_client(self):
+    def test_init_creates_openai_client__hy_d_e_generator(self):
         from openai import AsyncOpenAI
 
         hyde = HyDEGenerator()
@@ -163,7 +163,7 @@ class TestHyDEGenerator:
         assert call_kwargs["messages"][1]["role"] == "user"
         assert "test query" in call_kwargs["messages"][1]["content"]
 
-    async def test_close(self):
+    async def test_close__hy_d_e_generator(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
 

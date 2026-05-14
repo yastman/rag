@@ -44,7 +44,7 @@ This concludes the test document.
 
 
 @pytest.fixture
-def test_collection_name() -> str:
+def test_collection_name__ingestion_e2e() -> str:
     """Use a separate collection for tests."""
     return "test_ingestion_e2e"
 
@@ -77,7 +77,7 @@ class TestIngestionServiceE2E:
         finally:
             await service.close()
 
-    async def test_get_collection_stats(self, test_collection_name: str):
+    async def test_get_collection_stats__ingestion_service_e2_e(self, test_collection_name: str):
         """Test getting collection statistics."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
 
@@ -141,7 +141,7 @@ class TestQdrantSetupScript:
 class TestConvenienceFunctionsE2E:
     """E2E tests for convenience functions."""
 
-    async def test_get_ingestion_status(self):
+    async def test_get_ingestion_status__convenience_functions_e2_e(self):
         """Test get_ingestion_status convenience function."""
         from telegram_bot.services.ingestion_cocoindex import get_ingestion_status
 

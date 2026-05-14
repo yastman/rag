@@ -351,7 +351,7 @@ class TestFilterExtractorCombined:
     def test_no_filters(self) -> None:
         assert _ext.extract_filters("покажи квартиры") == {}
 
-    def test_empty_query(self) -> None:
+    def test_empty_query__filter_extractor_combined(self) -> None:
         assert _ext.extract_filters("") == {}
 
 

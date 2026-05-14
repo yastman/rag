@@ -8,7 +8,7 @@ from telegram_bot.tracing_context import classify_action, make_session_id
 
 
 class TestMakeSessionId:
-    def test_format(self):
+    def test_format__tracing_context_make_session_id(self):
         result = make_session_id("chat", 12345)
         parts = result.split("-")
         assert parts[0] == "chat"
@@ -69,14 +69,14 @@ class TestClassifyAction:
         msg.text = "/help@mybot"
         assert classify_action(msg) == "cmd-help"
 
-    def test_message_text(self):
+    def test_message_text__classify_action(self):
         from aiogram.types import Message
 
         msg = MagicMock(spec=Message)
         msg.text = "Привет!"
         assert classify_action(msg) == "message"
 
-    def test_message_voice(self):
+    def test_message_voice__classify_action(self):
         from aiogram.types import Message
 
         msg = MagicMock(spec=Message)
@@ -92,5 +92,5 @@ class TestClassifyAction:
         msg.content_type = "photo"
         assert classify_action(msg) == "message"
 
-    def test_unknown_event(self):
+    def test_unknown_event__classify_action(self):
         assert classify_action(MagicMock()) == "update"

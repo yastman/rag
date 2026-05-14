@@ -280,7 +280,9 @@ class TestColbertCliDispatch:
     @patch("src.ingestion.unified.cli.cmd_schema_check", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_schema_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
+    def test_main_dispatches_schema_check__colbert_cli_dispatch(
+        self, mock_dotenv, mock_logging, mock_cmd, monkeypatch
+    ):
         monkeypatch.setattr("sys.argv", ["cli", "schema-check", "--require-colbert"])
 
         from src.ingestion.unified.cli import main

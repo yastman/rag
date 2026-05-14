@@ -43,7 +43,9 @@ class TestDocumentIndexerInit:
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
-    def test_init_creates_client(self, mock_settings_cls, mock_qdrant, mock_bge):
+    def test_init_creates_client__document_indexer_init(
+        self, mock_settings_cls, mock_qdrant, mock_bge
+    ):
         """Test that initialization creates Qdrant client."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"

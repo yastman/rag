@@ -11,7 +11,7 @@ from src.contextualization.claude import ClaudeContextualizer
 class TestClaudeContextualizerInit:
     """Tests for ClaudeContextualizer.__init__."""
 
-    def test_init_with_settings(self):
+    def test_init_with_settings__claude_contextualizer_init(self):
         """Test initialization with provided settings."""
         mock_settings = MagicMock()
         mock_settings.anthropic_api_key = "test-api-key"
@@ -30,7 +30,7 @@ class TestClaudeContextualizerInit:
             mock_async.assert_called_once_with(api_key="test-api-key")
             mock_sync.assert_called_once_with(api_key="test-api-key")
 
-    def test_init_without_settings_uses_default(self):
+    def test_init_without_settings_uses_default__claude_contextualizer_init(self):
         """Test initialization without settings uses default Settings."""
         with patch("src.contextualization.claude.Settings") as mock_settings_class:
             mock_settings = MagicMock()
@@ -59,7 +59,7 @@ class TestClaudeContextualizerInit:
 
             assert contextualizer.use_cache is False
 
-    def test_init_creates_async_client(self):
+    def test_init_creates_async_client__claude_contextualizer_init(self):
         """Test that AsyncAnthropic client is created."""
         mock_settings = MagicMock()
         mock_settings.anthropic_api_key = "test-api-key"
@@ -75,7 +75,7 @@ class TestClaudeContextualizerInit:
 
             assert contextualizer.client == mock_client
 
-    def test_init_creates_sync_client(self):
+    def test_init_creates_sync_client__claude_contextualizer_init(self):
         """Test that sync Anthropic client is created."""
         mock_settings = MagicMock()
         mock_settings.anthropic_api_key = "test-api-key"
@@ -110,7 +110,9 @@ class TestClaudeContextualizerContextualize:
             ctx.client = AsyncMock()
             return ctx
 
-    async def test_contextualize_single_chunk(self, contextualizer):
+    async def test_contextualize_single_chunk__claude_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing a single chunk."""
         # Mock the API response
         mock_response = MagicMock()
@@ -129,7 +131,9 @@ class TestClaudeContextualizerContextualize:
         assert results[0].article_number == "chunk_0"
         assert results[0].context_method == "claude"
 
-    async def test_contextualize_multiple_chunks(self, contextualizer):
+    async def test_contextualize_multiple_chunks__claude_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing multiple chunks."""
         # Mock responses for each chunk
         mock_responses = []
@@ -151,7 +155,9 @@ class TestClaudeContextualizerContextualize:
             assert result.contextual_summary == f"Summary {i}"
             assert result.article_number == f"chunk_{i}"
 
-    async def test_contextualize_with_query(self, contextualizer):
+    async def test_contextualize_with_query__claude_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualization with optional query parameter."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Query-aware summary")]
@@ -167,7 +173,9 @@ class TestClaudeContextualizerContextualize:
         # Verify the API was called (query is passed to contextualize_single)
         contextualizer.client.messages.create.assert_called_once()
 
-    async def test_contextualize_handles_api_error_gracefully(self, contextualizer):
+    async def test_contextualize_handles_api_error_gracefully__claude_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test that API errors result in fallback chunks."""
         contextualizer.client.messages.create = AsyncMock(
             side_effect=Exception("API rate limit exceeded")
@@ -205,7 +213,9 @@ class TestClaudeContextualizerContextualize:
         assert results[1].context_method == "none"  # Failed
         assert results[2].context_method == "claude"
 
-    async def test_contextualize_empty_chunks(self, contextualizer):
+    async def test_contextualize_empty_chunks__claude_contextualizer_contextualize(
+        self, contextualizer
+    ):
         """Test contextualizing empty list returns empty list."""
         results = await contextualizer.contextualize([])
         assert results == []
@@ -229,7 +239,9 @@ class TestClaudeContextualizerContextualizeSingle:
             ctx.client = AsyncMock()
             return ctx
 
-    async def test_contextualize_single_success(self, contextualizer):
+    async def test_contextualize_single_success__claude_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test successful single chunk contextualization."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Generated context")]
@@ -282,7 +294,9 @@ class TestClaudeContextualizerContextualizeSingle:
         system = call_kwargs["system"]
         assert isinstance(system, str)
 
-    async def test_contextualize_single_tracks_tokens(self, contextualizer):
+    async def test_contextualize_single_tracks_tokens__claude_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that token usage is tracked."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
@@ -295,7 +309,9 @@ class TestClaudeContextualizerContextualizeSingle:
 
         assert contextualizer.total_tokens == initial_tokens + 300
 
-    async def test_contextualize_single_tracks_cost(self, contextualizer):
+    async def test_contextualize_single_tracks_cost__claude_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that cost estimation is tracked."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
@@ -310,7 +326,9 @@ class TestClaudeContextualizerContextualizeSingle:
         expected_cost = (1000 * 5 + 100 * 15) / 1_000_000
         assert contextualizer.total_cost == pytest.approx(initial_cost + expected_cost)
 
-    async def test_contextualize_single_uses_correct_model(self, contextualizer):
+    async def test_contextualize_single_uses_correct_model__claude_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that the correct model is used from settings."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
@@ -323,7 +341,9 @@ class TestClaudeContextualizerContextualizeSingle:
         call_kwargs = contextualizer.client.messages.create.call_args[1]
         assert call_kwargs["model"] == contextualizer.settings.model_name
 
-    async def test_contextualize_single_with_query(self, contextualizer):
+    async def test_contextualize_single_with_query__claude_contextualizer_contextualize_single(
+        self, contextualizer
+    ):
         """Test that query is included in user prompt."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
@@ -363,7 +383,7 @@ class TestClaudeContextualizerSync:
             ctx.sync_client = MagicMock()
             return ctx
 
-    def test_contextualize_sync_success(self, contextualizer):
+    def test_contextualize_sync_success__claude_contextualizer_sync(self, contextualizer):
         """Test successful synchronous contextualization."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Sync summary")]
@@ -382,7 +402,7 @@ class TestClaudeContextualizerSync:
         assert result.article_number == "Art5"
         assert result.context_method == "claude"
 
-    def test_contextualize_sync_tracks_tokens(self, contextualizer):
+    def test_contextualize_sync_tracks_tokens__claude_contextualizer_sync(self, contextualizer):
         """Test that sync method also tracks tokens."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
@@ -409,7 +429,7 @@ class TestClaudeContextualizerSync:
         assert "system" in call_kwargs
         assert "legal document analyzer" in call_kwargs["system"].lower()
 
-    def test_contextualize_sync_with_query(self, contextualizer):
+    def test_contextualize_sync_with_query__claude_contextualizer_sync(self, contextualizer):
         """Test sync contextualization with query."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Query-aware summary")]
@@ -445,7 +465,7 @@ class TestClaudeContextualizerGetStats:
         ):
             return ClaudeContextualizer(settings=mock_settings)
 
-    def test_get_stats_initial_values(self, contextualizer):
+    def test_get_stats_initial_values__claude_contextualizer_get_stats(self, contextualizer):
         """Test stats with no contextualization performed."""
         stats = contextualizer.get_stats()
 
@@ -453,7 +473,7 @@ class TestClaudeContextualizerGetStats:
         assert stats["total_cost_usd"] == 0
         assert stats["avg_cost_per_chunk"] == 0
 
-    def test_get_stats_after_processing(self, contextualizer):
+    def test_get_stats_after_processing__claude_contextualizer_get_stats(self, contextualizer):
         """Test stats after processing some chunks."""
         contextualizer.total_tokens = 1500
         contextualizer.total_cost = 0.015
@@ -491,7 +511,7 @@ class TestClaudeContextualizerPrompts:
         ):
             return ClaudeContextualizer(settings=mock_settings)
 
-    def test_get_system_prompt(self, contextualizer):
+    def test_get_system_prompt__claude_contextualizer_prompts(self, contextualizer):
         """Test system prompt contains required elements."""
         prompt = contextualizer.get_system_prompt()
 
@@ -499,7 +519,7 @@ class TestClaudeContextualizerPrompts:
         assert "summary" in prompt.lower()
         assert "Ukrainian" in prompt
 
-    def test_get_user_prompt_without_query(self, contextualizer):
+    def test_get_user_prompt_without_query__claude_contextualizer_prompts(self, contextualizer):
         """Test user prompt without query."""
         text = "Article 185. Theft is..."
         prompt = contextualizer.get_user_prompt(text)
@@ -507,7 +527,7 @@ class TestClaudeContextualizerPrompts:
         assert text in prompt
         assert "Summarize" in prompt
 
-    def test_get_user_prompt_with_query(self, contextualizer):
+    def test_get_user_prompt_with_query__claude_contextualizer_prompts(self, contextualizer):
         """Test user prompt includes query when provided."""
         text = "Article 185. Theft is..."
         query = "What are the penalties for theft?"

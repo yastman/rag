@@ -78,7 +78,7 @@ class TestConvertNumpy:
         assert isinstance(result[1], float)
         assert isinstance(result[2], float)
 
-    def test_convert_python_types_unchanged(self):
+    def test_convert_python_types_unchanged__convert_numpy(self):
         """Test that Python types are unchanged."""
         data = {"string": "text", "int": 42, "float": 3.14, "bool": True}
         result = self._convert_numpy(data)

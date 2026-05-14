@@ -45,7 +45,7 @@ class TestColbertRerankerService:
         assert "index" in results[0]
         assert "score" in results[0]
 
-    async def test_rerank_empty_documents(self, service):
+    async def test_rerank_empty_documents__colbert_reranker_service(self, service):
         """Test rerank with empty documents returns empty list."""
         results = await service.rerank(query="test", documents=[], top_k=5)
         assert results == []

@@ -24,7 +24,7 @@ def mock_redis():
     return redis
 
 
-async def test_get_valid_token_from_cache(mock_redis):
+async def test_get_valid_token_from_cache__kommo_token_store_1(mock_redis):
     """Returns cached token when not expired."""
     from telegram_bot.services.kommo_token_store import KommoTokenStore
 

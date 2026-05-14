@@ -2097,19 +2097,19 @@ class TestPipelineResultFrozenInvariants:
 class TestPipelineResultDefaultValues:
     """Verify all default field values match the documented contract."""
 
-    def test_answer_defaults_to_empty_string(self):
+    def test_answer_defaults_to_empty_string__pipeline_result_default_values(self):
         assert PipelineResult().answer == ""
 
-    def test_query_type_defaults_to_general(self):
+    def test_query_type_defaults_to_general__pipeline_result_default_values(self):
         assert PipelineResult().query_type == "GENERAL"
 
-    def test_cache_hit_defaults_to_false(self):
+    def test_cache_hit_defaults_to_false__pipeline_result_default_values(self):
         assert PipelineResult().cache_hit is False
 
-    def test_needs_agent_defaults_to_false(self):
+    def test_needs_agent_defaults_to_false__pipeline_result_default_values(self):
         assert PipelineResult().needs_agent is False
 
-    def test_agent_intent_defaults_to_empty_string(self):
+    def test_agent_intent_defaults_to_empty_string__pipeline_result_default_values(self):
         assert PipelineResult().agent_intent == ""
 
     def test_latency_ms_defaults_to_zero(self):
@@ -2118,19 +2118,19 @@ class TestPipelineResultDefaultValues:
     def test_llm_call_count_defaults_to_zero(self):
         assert PipelineResult().llm_call_count == 0
 
-    def test_pipeline_mode_defaults_to_client_direct(self):
+    def test_pipeline_mode_defaults_to_client_direct__pipeline_result_default_values(self):
         assert PipelineResult().pipeline_mode == "client_direct"
 
-    def test_response_sent_defaults_to_false(self):
+    def test_response_sent_defaults_to_false__pipeline_result_default_values(self):
         assert PipelineResult().response_sent is False
 
-    def test_sent_message_defaults_to_none(self):
+    def test_sent_message_defaults_to_none__pipeline_result_default_values(self):
         assert PipelineResult().sent_message is None
 
-    def test_sources_defaults_to_empty_list(self):
+    def test_sources_defaults_to_empty_list__pipeline_result_default_values(self):
         assert PipelineResult().sources == []
 
-    def test_scores_defaults_to_empty_dict(self):
+    def test_scores_defaults_to_empty_dict__pipeline_result_default_values(self):
         assert PipelineResult().scores == {}
 
 

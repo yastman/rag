@@ -1000,7 +1000,7 @@ class TestOnSummarySearchRedesign:
 
         callback.message.delete.assert_awaited_once()
 
-    async def test_starts_catalog_dialog_results(self, monkeypatch):
+    async def test_starts_catalog_dialog_results__on_summary_search_redesign(self, monkeypatch):
         """on_summary_search should hand off into CatalogSG.results."""
         mock_svc = MagicMock()
         mock_svc.scroll_with_filters = AsyncMock(
@@ -1146,7 +1146,7 @@ class TestFormatApartmentList:
         assert "<b>6." in text
         assert "<b>7." in text
 
-    def test_empty_results(self):
+    def test_empty_results__format_apartment_list(self):
         from telegram_bot.dialogs.funnel import format_apartment_list
 
         assert format_apartment_list([]) == ""

@@ -183,7 +183,7 @@ class TestApartmentRecord:
 
 
 class TestApartmentQueryParseResult:
-    def test_defaults(self) -> None:
+    def test_defaults__apartment_query_parse_result(self) -> None:
         r = ApartmentQueryParseResult(raw_query="test")
         assert r.confidence == "LOW"
         assert r.score == 0

@@ -114,7 +114,7 @@ def test_is_promotion_none_not_included():
     assert "is_promotion" not in filters
 
 
-def test_combined_filters():
+def test_combined_filters__funnel_results():
     """All filter types combined."""
     filters = build_funnel_filters(
         rooms="2bed",

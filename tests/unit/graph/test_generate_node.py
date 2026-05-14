@@ -1396,7 +1396,7 @@ class TestGenerateNodeEvalFields:
         assert final_output["eval_context"] == ""
 
 
-def test_format_context_no_raw_score():
+def test_format_context_no_raw_score__generate_node_eval_fields():
     """_format_context in generate.py must NOT expose raw RRF scores to LLM."""
     from telegram_bot.graph.nodes.generate import _format_context
 
@@ -1490,7 +1490,7 @@ async def test_streaming_raw_cerebras_reasoning_merged(monkeypatch):
     assert result["response_sent"] is True
 
 
-async def test_streaming_mixed_content_and_reasoning(monkeypatch):
+async def test_streaming_mixed_content_and_reasoning__generate_node_eval_fields(monkeypatch):
     """Streaming with mixed delta.content and delta.reasoning_content works.
 
     Some chunks have delta.content (LiteLLM merge works), others have

@@ -78,7 +78,7 @@ class TestErrorHandlerMiddleware:
 class TestSetupErrorMiddleware:
     """Test setup_error_middleware function."""
 
-    def test_setup_registers_middleware(self):
+    def test_setup_registers_middleware__middlewares_setup_error_middleware(self):
         """Test that setup function registers middleware."""
         dp = MagicMock(spec=Dispatcher)
         dp.message = MagicMock()
@@ -362,7 +362,7 @@ class TestThrottlingMiddleware:
 class TestSetupThrottlingMiddleware:
     """Test setup_throttling_middleware function."""
 
-    def test_setup_registers_middleware(self):
+    def test_setup_registers_middleware__setup_throttling_middleware(self):
         """Test that setup function registers middleware."""
         dp = MagicMock(spec=Dispatcher)
         dp.message = MagicMock()

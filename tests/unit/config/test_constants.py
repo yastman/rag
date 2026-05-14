@@ -131,7 +131,7 @@ class TestModelNameEnum:
 class TestVectorDimensions:
     """Tests for VectorDimensions dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__vector_dimensions(self):
         """Verify VectorDimensions is a dataclass."""
         assert is_dataclass(VectorDimensions)
 
@@ -160,7 +160,7 @@ class TestVectorDimensions:
 class TestThresholdValues:
     """Tests for ThresholdValues dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__threshold_values(self):
         """Verify ThresholdValues is a dataclass."""
         assert is_dataclass(ThresholdValues)
 
@@ -199,7 +199,7 @@ class TestThresholdValues:
 class TestHSNWParameters:
     """Tests for HSNWParameters dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__h_s_n_w_parameters(self):
         """Verify HSNWParameters is a dataclass."""
         assert is_dataclass(HSNWParameters)
 
@@ -224,7 +224,7 @@ class TestHSNWParameters:
         assert HSNWParameters.EF_LOW_LATENCY < HSNWParameters.EF_DEFAULT
         assert HSNWParameters.EF_DEFAULT < HSNWParameters.EF_HIGH_PRECISION
 
-    def test_all_values_are_positive_integers(self):
+    def test_all_values_are_positive_integers__h_s_n_w_parameters(self):
         """Verify all HSNW parameters are positive integers."""
         assert isinstance(HSNWParameters.EF_DEFAULT, int) and HSNWParameters.EF_DEFAULT > 0
         assert (
@@ -240,7 +240,7 @@ class TestHSNWParameters:
 class TestBatchSizes:
     """Tests for BatchSizes dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__batch_sizes(self):
         """Verify BatchSizes is a dataclass."""
         assert is_dataclass(BatchSizes)
 
@@ -251,7 +251,7 @@ class TestBatchSizes:
         assert BatchSizes.DOCUMENTS == 16
         assert BatchSizes.CONTEXT == 5
 
-    def test_all_values_are_positive_integers(self):
+    def test_all_values_are_positive_integers__batch_sizes(self):
         """Verify all batch sizes are positive integers."""
         assert isinstance(BatchSizes.QUERIES, int) and BatchSizes.QUERIES > 0
         assert isinstance(BatchSizes.EMBEDDINGS, int) and BatchSizes.EMBEDDINGS > 0
@@ -262,7 +262,7 @@ class TestBatchSizes:
 class TestRetrievalStages:
     """Tests for RetrievalStages dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__retrieval_stages(self):
         """Verify RetrievalStages is a dataclass."""
         assert is_dataclass(RetrievalStages)
 
@@ -275,7 +275,7 @@ class TestRetrievalStages:
         """Verify stage 1 candidates > stage 2 final (makes sense for filtering)."""
         assert RetrievalStages.STAGE1_CANDIDATES > RetrievalStages.STAGE2_FINAL
 
-    def test_all_values_are_positive_integers(self):
+    def test_all_values_are_positive_integers__retrieval_stages(self):
         """Verify stage values are positive integers."""
         assert (
             isinstance(RetrievalStages.STAGE1_CANDIDATES, int)
@@ -287,7 +287,7 @@ class TestRetrievalStages:
 class TestMetricValues:
     """Tests for MetricValues dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__metric_values(self):
         """Verify MetricValues is a dataclass."""
         assert is_dataclass(MetricValues)
 
@@ -319,7 +319,7 @@ class TestMetricValues:
 class TestMMRParameters:
     """Tests for MMRParameters dataclass."""
 
-    def test_is_dataclass(self):
+    def test_is_dataclass__m_m_r_parameters(self):
         """Verify MMRParameters is a dataclass."""
         assert is_dataclass(MMRParameters)
 
@@ -417,7 +417,7 @@ class TestDefaults:
         for key in required_keys:
             assert key in DEFAULTS, f"Missing required key: {key}"
 
-    def test_default_search_engine(self):
+    def test_default_search_engine__defaults(self):
         """Verify default search engine is HYBRID_RRF_COLBERT (best performance)."""
         assert DEFAULTS["search_engine"] == SearchEngine.HYBRID_RRF_COLBERT
 

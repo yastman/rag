@@ -86,7 +86,7 @@ class TestGetStats:
 class TestGetDlqCount:
     """Tests for get_dlq_count async method."""
 
-    async def test_returns_count(self, manager, mock_pool):
+    async def test_returns_count__get_dlq_count(self, manager, mock_pool):
         mock_pool.fetchrow.return_value = {"count": 7}
 
         result = await manager.get_dlq_count()
