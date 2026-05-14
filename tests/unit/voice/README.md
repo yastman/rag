@@ -13,6 +13,7 @@ tests/unit/voice
 - test_sip_setup.py
 - test_transcript_store.py
 - test_voice_agent.py
+- test_voice_healthcheck.py
 - test_voice_observability.py
 - test_voice_schemas.py
 
