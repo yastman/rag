@@ -386,16 +386,16 @@ clean: ## Clean up cache files and build artifacts
 	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "$(GREEN)✓ Cleaned up$(NC)"
 
-docker-clean: ## Prune Docker build cache and stopped containers (safe)
-	@echo "$(BLUE)Pruning Docker build cache...$(NC)"
+docker-clean: ## Prune unused Docker images and build cache (safe)
+	@echo "$(BLUE)Pruning unused Docker images (unused > 30 days)...$(NC)"
+	docker image prune -f --filter "until=720h" 2>/dev/null || true
+	@echo "$(BLUE)Pruning Docker build cache (unused > 30 days)...$(NC)"
 	docker builder prune -f --filter "until=720h" 2>/dev/null || true
-	@echo "$(BLUE)Removing stopped containers...$(NC)"
-	docker container prune -f 2>/dev/null || true
 	@echo "$(GREEN)✓ Docker cleaned$(NC)"
 
-docker-clean-aggressive: ## Prune ALL unused Docker resources (images, volumes, networks)
-	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes unused images and volumes$(NC)"
-	docker system prune -f --volumes 2>/dev/null || true
+docker-clean-aggressive: ## Prune ALL unused Docker resources (WARNING: destructive)
+	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes ALL unused data$(NC)"
+	docker system prune -f 2>/dev/null || true
 	@echo "$(GREEN)✓ Docker aggressively cleaned$(NC)"
 
 # =============================================================================
