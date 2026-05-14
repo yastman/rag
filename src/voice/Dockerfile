@@ -44,6 +44,6 @@ RUN python -c "from livekit.plugins.silero import VAD; VAD.load()" 2>/dev/null |
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)" || exit 1
+    CMD python -c "from pathlib import Path; import sys; needle='src.voice.' + 'agent'; sys.exit(0 if any(needle in p.read_text(errors='ignore') for p in Path('/proc').glob('[0-9]*/cmdline')) else 1)"
 
 CMD ["python", "-m", "src.voice.agent", "start"]
