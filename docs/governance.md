@@ -1,11 +1,10 @@
 # governance/
 
+## Purpose
+
 Model governance and registry utilities.
-
-## Ownership
-
-- Reserved home for future model governance and registry source code.
-- Repo-level governance decisions currently live in canonical docs, not this empty package.
+Reserved home for future model governance and registry source code.
+Repo-level governance decisions currently live in canonical docs, not this empty package.
 
 ## Files
 
@@ -26,7 +25,7 @@ make docs-check
 git diff --check -- docs/governance.md
 ```
 
-## Related
+## See Also
 
 - [`ADRS.md`](ADRS.md) — Architecture decision records
 - [`../src/evaluation/`](../src/evaluation/) — A/B testing and experiment tracking
