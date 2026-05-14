@@ -1,11 +1,10 @@
 ***REMOVED*** utils/
 
+***REMOVED******REMOVED*** Purpose
+
 Utility functions for document processing and serialization.
-
-***REMOVED******REMOVED*** Ownership
-
-- Owns small, shared utility helpers used by RAG and ingestion code.
-- Keeps document-structure parsing and JSON serialization helpers isolated from pipeline logic.
+Owns small, shared utility helpers used by RAG and ingestion code.
+Keeps document-structure parsing and JSON serialization helpers isolated from pipeline logic.
 
 ***REMOVED******REMOVED*** Files
 
@@ -51,6 +50,6 @@ clean = convert_to_python_types({"vector": np.array([1.0, 2.0])})
 uv run pytest tests/unit/utils/ -q
 ```
 
-***REMOVED******REMOVED*** Related
+***REMOVED******REMOVED*** See Also
 
 - [`src/ingestion/`](../ingestion/) — Document parsing and chunking
