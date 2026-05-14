@@ -6,7 +6,8 @@ Operator entrypoint for container/service investigations and incident response. 
 
 | Operator request | First command / doc |
 |---|---|
-| Recent Langfuse traces (`изучи последние трейсы`) | `make validate-traces-fast` → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| Recent Langfuse traces (`изучи последние трейсы`) | `make validate-traces-fast` or [Langfuse CLI](remote-macbook-docker.md***REMOVED***langfuse-cli) → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| Remote MacBook Docker (status, start/stop, memory pressure, Langfuse CLI) | [`remote-macbook-docker.md`](remote-macbook-docker.md) |
 | Qdrant health / query / index issues (`изучи последние qdrant запросы`) | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Redis / cache degradation (`сломался redis`) | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
 | LiteLLM / provider failure (`сломался litellm`) | `curl -s http://localhost:4000/health` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
