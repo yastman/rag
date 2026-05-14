@@ -44,10 +44,6 @@ from telegram_bot.services.rag_core import (
 from telegram_bot.services.rag_core import (
     build_retrieved_context as _build_retrieved_context,
 )
-from telegram_bot.services.small_to_big import (
-    SmallToBigMode,
-    SmallToBigService,
-)
 
 
 logger = logging.getLogger(__name__)
@@ -55,7 +51,7 @@ logger = logging.getLogger(__name__)
 # top_k=7 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
 # 3 was too restrictive — comprehensive queries (e.g. list all ВНЖ types) were losing chunks.
 _DEFAULT_RERANK_TOP_K = 7
-_MIN_FINAL_CHUNKS = 3
+_CONFIDENT_TRIM_TOP_K = 3
 _QUERY_PREPROCESSOR = QueryPreprocessor()
 
 
@@ -1243,35 +1239,21 @@ async def rag_pipeline(
                 [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
             )
             final_gap_confident = bool(final_gap["confident"])
+            gap_ratio = final_gap.get("ratio", 0.0)
             # Only trim when gap is confident AND we have more than min floor.
-            # 15% gap → trim-to-1 was too aggressive for comprehensive queries
-            # where all chunks are equally relevant (e.g. listing all ВНЖ types).
-            if final_gap_confident and len(final_docs) > _MIN_FINAL_CHUNKS:
-                final_docs = final_docs[:_MIN_FINAL_CHUNKS]
+            if final_gap_confident and len(final_docs) > _CONFIDENT_TRIM_TOP_K:
+                logger.info(
+                    "Score gap confident, trimming final docs",
+                    extra={
+                        "gap_ratio": gap_ratio,
+                        "before_count": len(final_docs),
+                        "after_count": _CONFIDENT_TRIM_TOP_K,
+                    },
+                )
+                final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
 
-            # Small-to-big context expansion: fetch neighbor chunks from same document
-            if config.small_to_big_mode != SmallToBigMode.OFF and final_docs:
-                try:
-                    stb = SmallToBigService(
-                        client=qdrant.client,
-                        collection_name=qdrant.collection_name,
-                        max_expanded_chunks=config.max_expanded_chunks,
-                    )
-                    expanded = await stb.expand_context(
-                        chunks=final_docs,
-                        window_before=config.small_to_big_window_before,
-                        window_after=config.small_to_big_window_after,
-                        deduplicate=True,
-                    )
-                    if expanded:
-                        # Replace document texts with expanded versions
-                        for i, ec in enumerate(expanded):
-                            if i < len(final_docs):
-                                final_docs[i]["text"] = ec.expanded_text
-                                final_docs[i]["_expanded"] = True
-                        logger.debug("Small-to-big expanded %d chunks", len(expanded))
-                except Exception as e:
-                    logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
+            # Small-to-big context expansion
+            await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
 
             result = _assemble_context(
                 query=current_query,
@@ -1358,30 +1340,20 @@ async def rag_pipeline(
         [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
     )
     final_gap_confident = bool(final_gap["confident"])
-    if final_gap_confident and len(final_docs) > _MIN_FINAL_CHUNKS:
-        final_docs = final_docs[:_MIN_FINAL_CHUNKS]
+    gap_ratio = final_gap.get("ratio", 0.0)
+    if final_gap_confident and len(final_docs) > _CONFIDENT_TRIM_TOP_K:
+        logger.info(
+            "Score gap confident, trimming final docs (fallback)",
+            extra={
+                "gap_ratio": gap_ratio,
+                "before_count": len(final_docs),
+                "after_count": _CONFIDENT_TRIM_TOP_K,
+            },
+        )
+        final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
 
     # Small-to-big context expansion (fallback path)
-    if config.small_to_big_mode != SmallToBigMode.OFF and final_docs:
-        try:
-            stb = SmallToBigService(
-                client=qdrant.client,
-                collection_name=qdrant.collection_name,
-                max_expanded_chunks=config.max_expanded_chunks,
-            )
-            expanded = await stb.expand_context(
-                chunks=final_docs,
-                window_before=config.small_to_big_window_before,
-                window_after=config.small_to_big_window_after,
-                deduplicate=True,
-            )
-            if expanded:
-                for i, ec in enumerate(expanded):
-                    if i < len(final_docs):
-                        final_docs[i]["text"] = ec.expanded_text
-                        final_docs[i]["_expanded"] = True
-        except Exception as e:
-            logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
+    await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
 
     result = _assemble_context(
         query=current_query,
@@ -1417,6 +1389,48 @@ async def rag_pipeline(
         }
     )
     return result
+
+
+async def _expand_small_to_big(
+    final_docs: list[dict[str, Any]],
+    *,
+    qdrant: Any,
+    config: Any,
+) -> None:
+    """Expand final_docs in-place with neighbor chunks via Small-to-Big service.
+
+    Fetches window_before/window_after sibling chunks per doc from the same
+    Qdrant document, replaces each doc's ``text`` with expanded context.
+    Failures are logged but never crash the pipeline.
+    """
+    from telegram_bot.services.small_to_big import (
+        SmallToBigMode,
+        SmallToBigService,
+    )
+
+    if config.small_to_big_mode == SmallToBigMode.OFF or not final_docs:
+        return
+    try:
+        stb = SmallToBigService(
+            client=qdrant.client,
+            collection_name=qdrant.collection_name,
+            max_expanded_chunks=config.max_expanded_chunks,
+            max_context_tokens=config.max_context_tokens,
+        )
+        expanded = await stb.expand_context(
+            chunks=final_docs,
+            window_before=config.small_to_big_window_before,
+            window_after=config.small_to_big_window_after,
+            deduplicate=True,
+        )
+        if expanded:
+            for i, ec in enumerate(expanded):
+                if i < len(final_docs):
+                    final_docs[i]["text"] = ec.expanded_text
+                    final_docs[i]["_expanded"] = True
+            logger.debug("Small-to-big expanded %d chunks", len(expanded))
+    except Exception as e:
+        logger.warning("Small-to-big expansion failed: %s", e, exc_info=True)
 
 
 def _assemble_context(
