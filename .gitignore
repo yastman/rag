@@ -261,6 +261,7 @@ docs/artifacts/*.md
 # Local AI/orchestration tool directories
 .planning/
 .codex/
+.opencode/
 .opencode/node_modules/
 projects/
 tmp.*
