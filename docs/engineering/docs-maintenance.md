@@ -107,7 +107,7 @@ make check
 ### 5.4 Audit and Plan Docs
 
 - New validation reports and audit summaries go in `docs/reports/` with a `YYYY-MM-DD-` prefix when they are intended for active review.
-- Historical audit artifacts live in `docs/archive/audits/` after follow-up is complete.
+- Historical audit artifacts should not remain in the public docs tree after follow-up is complete.
 - Plans go in `docs/plans/` when they are intended to be public and durable.
 - Reports, audits, and plans are **dated evidence**, not timeless source of truth. They may be archived when follow-up is complete.
 - Do not let audit findings silently replace canonical policy docs.
