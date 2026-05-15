@@ -1,7 +1,7 @@
 # Access For Reviewers
 
-Use this file when someone receives repository access for technical review,
-portfolio review, or hiring evaluation.
+Use this file for technical review, portfolio review, hiring evaluation, or
+getting oriented as a new contributor.
 
 > **Start here.** Read this file first, then `README.md` and
 > `docs/review/PROJECT_GUIDE.md`, before running any commands or inspecting
