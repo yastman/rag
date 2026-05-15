@@ -185,6 +185,12 @@ Choose the path that matches your goal:
 - Docker with Compose support.
 - `.env` copied from `.env.example` and filled with local/test credentials.
 
+```bash
+cp .env.example .env
+```
+
+`.env.local` is not loaded automatically; use `.env` for local runs.
+
 For full setup, validation ladder, environment behavior, and troubleshooting, use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 
 ### Runtime Profiles
@@ -201,7 +207,7 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 | `voice` | RAG API, LiveKit, SIP, voice agent |
 | `full` | all profile-gated services |
 
-The repo also includes SSH-based remote Docker helpers for running Compose on a MacBook/Colima host. Keep this as a development convenience, not a required public setup path; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and [`DOCKER.md`](DOCKER.md) for details.
+The repo also includes remote Docker helpers for running Compose on a remote host. Treat this as a development convenience, not a required public setup path; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and [`DOCKER.md`](DOCKER.md) for details.
 
 ## Project Map
 
@@ -231,7 +237,7 @@ Local verification is the release authority for this repo. Run focused checks fo
 
 ## Honest Scope
 
-- Docker Compose is the primary local/VPS runtime path.
+- Docker Compose is the primary local runtime path.
 - k3s manifests exist for core services but are not full parity with Compose.
 - Monitoring services are local/dev unless production evidence is added.
 - HITL confirmation protects CRM/write workflows, not every possible state transition.

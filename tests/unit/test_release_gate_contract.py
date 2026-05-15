@@ -6,7 +6,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
-DEPLOY_SCRIPT = ROOT / "scripts" / "deploy-vps.sh"
 RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "test_release_health_vps.sh"
 
 
@@ -39,26 +38,9 @@ def test_public_ci_does_not_deploy_or_recreate_services() -> None:
     assert "docker compose --compatibility up -d --force-recreate" not in workflow
 
 
-def test_manual_deploy_uses_strict_mini_app_release_smoke() -> None:
-    """Manual VPS deploy must use the same strict release contract as CI."""
-    script = DEPLOY_SCRIPT.read_text()
-    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" in script
-
-
-def test_manual_deploy_force_recreates_services_after_build() -> None:
-    """Manual deploy must recreate services so rebuilt images replace stale containers."""
-    script = DEPLOY_SCRIPT.read_text()
-    assert "docker compose --compatibility up -d --force-recreate" in script
-    assert script.index("docker compose build") < script.index(
-        "docker compose --compatibility up -d --force-recreate"
-    )
-
-
-def test_manual_deploy_runs_prod_env_preflight_before_build() -> None:
-    """Manual deploy must validate the production env contract before docker compose build."""
-    script = DEPLOY_SCRIPT.read_text()
-    assert "./scripts/validate_prod_env.sh" in script
-    assert script.index("./scripts/validate_prod_env.sh") < script.index("docker compose build")
+def test_public_repo_does_not_ship_manual_vps_deploy_script() -> None:
+    """Public repo cleanup removes maintainer-specific VPS deploy automation."""
+    assert not (ROOT / "scripts" / "deploy-vps.sh").exists()
 
 
 def test_release_gate_script_contains_handoff_contract() -> None:

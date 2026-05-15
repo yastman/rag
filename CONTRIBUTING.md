@@ -16,7 +16,7 @@ Thank you for your interest in contributing.
 ```bash
 make check
 uv run pytest tests/unit -q
-docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config >/tmp/rag-compose.yml
+docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
 ```
 
 4. Open a pull request against `dev`.
@@ -24,7 +24,7 @@ docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compos
 ## What Not to Commit
 
 - `.env` or any file containing real credentials
-- `.swarm/`, `.signals/`, logs, or local session artifacts
+- generated artifacts, logs, or local session data
 - Real datasets, personal recordings, or client exports
 - Production deploy scripts or VPS/SSH keys
 
