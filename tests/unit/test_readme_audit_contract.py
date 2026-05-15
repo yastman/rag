@@ -88,7 +88,6 @@ class TestDocsReadme:
             "BOT_INTERNAL_STRUCTURE.md",
             "ONBOARDING.md",
             "ONBOARDING_CHECKLIST.md",
-            "INFRA_ISSUES_REPORT_1113_1126.md",
             "TROUBLESHOOTING_CACHE.md",
             "ADD_NEW_RAG_NODE.md",
         ]
