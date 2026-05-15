@@ -24,6 +24,10 @@ Project data files: demo fixtures, test datasets, and generated assets.
 - Do **not** commit large binary files or production datasets.
 - If you are unsure whether a dataset contains personal or proprietary information, treat it as sensitive and keep it out of the public repository.
 
+## Automated Scan Verification
+
+Periodic scans for email addresses and phone numbers in `data/` match only synthetic UUIDs in `test_properties.json` and numeric property fields (prices, areas) in `apartments.csv`. No real personal contact details are present in committed data files.
+
 ## Related
 
 - [Project overview](../README.md)
