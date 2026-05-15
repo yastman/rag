@@ -1,14 +1,13 @@
 # Docker Services
 
-This document is the source of truth for containerized local/dev/VPS runtime in this repository.
+This document is the source of truth for containerized local/dev runtime in this repository.
 
 ## Compose Files
 
 | File | Scope | Typical use |
 | --- | --- | --- |
-| `compose.yml` | Secure baseline for all services | Shared base for local and VPS |
+| `compose.yml` | Secure baseline for all services | Shared base |
 | `compose.dev.yml` | Development overrides (ports, profile gating, local defaults) | Local development and integration testing |
-| `compose.vps.yml` | VPS production-like overrides | Server deployment and operations |
 
 ## Compose Project Name
 
@@ -56,16 +55,9 @@ make local-ps
 make local-down
 ```
 
-> **Remote MacBook workflow**: for this machine, the recommended Docker path runs on a remote MacBook via SSH. See [`docs/runbooks/remote-macbook-docker.md`](docs/runbooks/remote-macbook-docker.md) for remote targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`.
-
 For local development, the canonical local env file is `.env` in the repo root. `.env.local` is not auto-loaded by the documented `make` and `uv run` workflows.
 
 Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
-
-The MacBook remote Docker workflow is intentionally narrower than the full
-profile stack. On an 8GB MacBook, keep the default remote runtime to the
-bot/core path and start `ml`, `obs`, `voice`, or `full` only for focused checks.
-See [`docs/runbooks/remote-macbook-docker.md`](docs/runbooks/remote-macbook-docker.md).
 
 ## Service Endpoints (Host)
 
@@ -156,8 +148,8 @@ match the traced service defaults:
 | `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `sk-lf-dev` |
 
 These defaults are local-only. Override them from `.env` when a dev stack should
-use a different local Langfuse project. Production and VPS environments must
-provide real Langfuse keys and must not rely on the dev defaults.
+use a different local Langfuse project. Production environments must provide
+real Langfuse keys and must not rely on the dev defaults.
 
 If `bot` logs show OTLP `401` or Langfuse logs show `No key found for public
 key`, the local Langfuse database likely lacks the project key currently
@@ -201,25 +193,10 @@ make test-bot-health
 
 ## Source Of Truth
 
-- `main` in Git is the official deployment source of truth for VPS.
+- `main` in Git is the official deployment source of truth.
 - Standard flow: work locally, push to `dev` or a feature branch, open a PR to `main`, and merge the PR.
-- Only merges to `main` should trigger VPS auto-deploy through GitHub Actions.
-- `make deploy-bot` prints the official PR-based deploy flow; it does not push directly to `main`.
-- Use `make deploy-vps-local` or `./scripts/deploy-vps.sh` only as fallback/manual recovery when GitHub-driven deploy is unavailable.
-- Do not treat `/opt/rag-fresh` on the server as an editable working copy; it is a deployment target.
 
-## Internal K3s Images
 
-- Kubernetes manifests under `k8s/` use versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
-- Canonical image names:
-  - `ghcr.io/yastman/rag-bot`
-  - `ghcr.io/yastman/rag-ingestion`
-  - `ghcr.io/yastman/rag-docling`
-  - `ghcr.io/yastman/rag-user-base`
-  - `ghcr.io/yastman/rag-bge-m3`
-- Publish workflow: `.github/workflows/publish-internal-images.yml`
-- Manual publish helper: `make k3s-push-<service> K3S_IMAGE_TAG=v<version>`
-- Use explicit version tags for k3s manifests and let Renovate manage future updates.
 
 ## Common Operations
 
