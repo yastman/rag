@@ -85,28 +85,28 @@ The table below shows which payload indexes each origin creates, their Qdrant sc
 | `metadata.chunk_order` | `integer` | ✓ | ✓ | Alias for `metadata.order` |
 | `metadata.document_name` | `keyword` | ✓ | ✓ | — |
 | `metadata.article_number` | `keyword` | ✓ | ✓ | — |
-| `metadata.city` | `keyword` | ✓ | ✓ | Apartment search keyword match |
+| `metadata.city` | `keyword` | ✓ | ✓ | Structured catalog keyword match |
 | `metadata.source_type` | `keyword` | ✓ | ✓ | — |
 | `metadata.topic` | `keyword` | ✓ | ✓ | Same as above |
 | `metadata.doc_type` | `keyword` | ✓ | ✓ | Same as above |
 | `metadata.jurisdiction` | `keyword` | ✓ | ✓ | — |
 | `metadata.audience` | `keyword` | ✓ | ✓ | — |
 | `metadata.language` | `keyword` | ✓ | ✓ | — |
-| `metadata.price` | `integer` | ✓ | ✓ | Apartment search range filter |
-| `metadata.rooms` | `integer` | ✓ | ✓ | Apartment search range/exact filter |
-| `metadata.area` | `integer` | ✓ | ✓ | Apartment search range filter |
-| `metadata.floor` | `integer` | ✓ | ✓ | Apartment search range/exact filter |
+| `metadata.price` | `integer` | ✓ | ✓ | Structured catalog range filter |
+| `metadata.rooms` | `integer` | ✓ | ✓ | Structured catalog range/exact filter |
+| `metadata.area` | `integer` | ✓ | ✓ | Structured catalog range filter |
+| `metadata.floor` | `integer` | ✓ | ✓ | Structured catalog range/exact filter |
 | `metadata.floors` | `integer` | ✓ | ✓ | — |
-| `metadata.distance_to_sea` | `integer` | ✓ | ✓ | Apartment search range filter |
-| `metadata.bathrooms` | `integer` | ✓ | ✓ | Apartment search exact filter |
+| `metadata.distance_to_sea` | `integer` | ✓ | ✓ | Structured catalog range filter |
+| `metadata.bathrooms` | `integer` | ✓ | ✓ | Structured catalog exact filter |
 | `metadata.chunk_id` | `integer` | ✓ | ✓ | — |
 | `metadata.order` | `integer` | ✓ | ✓ | Same as above |
-| `metadata.furnished` | `bool` | — | ✓ | Apartment search exact match (bool) |
-| `metadata.year_round` | `bool` | — | ✓ | Apartment search exact match (bool) |
+| `metadata.furnished` | `bool` | — | ✓ | Structured catalog exact match (bool) |
+| `metadata.year_round` | `bool` | — | ✓ | Structured catalog exact match (bool) |
 
-### Apartment / CSV-only indexes
+### Structured Catalog / CSV-only indexes
 
-Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`. These fields are populated by CSV apartment ingestion and used by the apartment search pipeline.
+Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`. These fields are populated by structured CSV ingestion and used by the catalog search pipeline.
 
 | Field | Type | setup_qdrant_indexes | indexer | Runtime use |
 |-------|------|:--------------------:|:-------:|-------------|

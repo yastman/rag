@@ -6,7 +6,7 @@ Operator entrypoint for container/service investigations and incident response. 
 
 | Operator request | First command / doc |
 |---|---|
-| Remote MacBook Docker workflow | [`remote-macbook-docker.md`](remote-macbook-docker.md) |
+| Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
 | Recent Langfuse traces (`изучи последние трейсы`) | `make validate-traces-fast` → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 | Qdrant health / query / index issues (`изучи последние qdrant запросы`) | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Redis / cache degradation (`сломался redis`) | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
@@ -17,7 +17,7 @@ Operator entrypoint for container/service investigations and incident response. 
 
 | Symptom / Request | Runbook |
 |---|---|
-| Remote MacBook Docker workflow (SSH, Colima, env sync, bot container) | [`remote-macbook-docker.md`](remote-macbook-docker.md) |
+| Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
 | Langfuse traces missing, gaps, or drift | [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 | LiteLLM / LLM connection failures or proxy errors | [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Redis cache degradation, eviction, or latency | [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |

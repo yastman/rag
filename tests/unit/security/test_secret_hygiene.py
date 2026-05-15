@@ -48,7 +48,6 @@ def test_compose_redis_uses_requirepass():
     compose_files = [
         project_root / "compose.yml",
         project_root / "compose.dev.yml",
-        project_root / "compose.vps.yml",
     ]
 
     errors = []

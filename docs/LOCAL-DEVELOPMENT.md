@@ -8,13 +8,11 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
-> **For this machine**: the recommended Docker path is the remote MacBook host.
-> See [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md) for the full workflow.
-> Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
+> **Flexible Docker topology**: you can run Docker Compose locally (default) or target a remote Docker host via SSH. Choose the mode that fits your workstation resources.
 
-## Remote MacBook Docker (Recommended)
+## Remote Docker Host (Alternative)
 
-For this machine, the dev Docker stack runs on a remote MacBook instead of Docker Desktop on WSL. Edit code in WSL, commit/push, then fetch/pull and operate the stack on the MacBook via SSH.
+When local Docker resource usage is a concern, the dev Docker stack can run on a separate host reachable via SSH. Edit code on your workstation, push, then pull/operate on the remote host. The `remote-*` Makefile targets automate the SSH workflow.
 
 Quick start:
 
@@ -48,7 +46,7 @@ make bot
 
 Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
 
-Full operator workflow, troubleshooting, and test boundaries are in [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+Full operator workflow, troubleshooting, and test boundaries are in the Docker runbook referenced below.
 
 ## 1. Bootstrap Workspace
 
@@ -57,7 +55,26 @@ uv sync
 cp .env.example .env
 ```
 
-For local development, the canonical environment file is `.env` in the repo root. `.env.local` is legacy/manual-only and is not auto-loaded by local commands.
+`.env.local` is legacy/manual-only and is not auto-loaded; use `.env` for local runs.
+
+### Local artifact hygiene
+
+Keep generated heavy artifacts out of the repository tree when possible.
+
+- Python virtualenvs: prefer one root `.venv` and avoid nested envs in module folders.
+- JS dependencies/build output: keep `node_modules/` and `dist/` as generated-only assets.
+- Runtime outputs: keep logs, temp files, and ad-hoc reports under ignored paths (`logs/`, `tmp/`, `reports/`).
+- Service model caches (for example embedding models) should stay local-only and never be committed.
+
+Quick check before commit:
+
+```bash
+git ls-files --others --exclude-standard
+```
+
+This should be empty for routine development work.
+
+For local development, the canonical environment file is `.env` in the repo root.
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
@@ -68,7 +85,7 @@ Minimum env for bot profile:
 Minimum env for Telegram E2E (Telethon userbot):
 - `TELEGRAM_API_ID` (from [my.telegram.org](https://my.telegram.org))
 - `TELEGRAM_API_HASH` (from [my.telegram.org](https://my.telegram.org))
-- `E2E_BOT_USERNAME` (defaults to `@test_nika_homes_bot`)
+- `E2E_BOT_USERNAME` (defaults to `@test_your_bot`)
 - an authorized Telethon session file (e.g., `e2e_tester.session`)
 - if the session is present but unauthorized, refresh it with `uv run python scripts/e2e/auth.py --phone <PHONE>`
 
@@ -99,11 +116,9 @@ Langfuse local development:
 
 ## 2. Start Services
 
-To keep Docker load off the workstation, use the MacBook as a remote Docker host
-instead of starting local Docker Desktop. On an 8GB MacBook, use the lean
-bot/core remote flow by default; the ML, observability, voice, and full stacks
-are temporary validation tools, not the idle development baseline. See
-[`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+When using a remote Docker host, prefer the lean bot/core flow by default
+to conserve resources. ML, observability, voice, and full stacks are
+temporary validation tools, not the idle development baseline.
 
 ```bash
 # Core services (default compose set)
@@ -257,12 +272,12 @@ Keep `make bot` running in another terminal while the E2E command executes. Use 
 
 ## 9. Runtime env in worktrees
 
-Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the main checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
+New worktrees start from a fresh branch checkout and do not contain the primary checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
 
 - Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
 - Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
-- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
-- Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
+- For isolated worktrees, set `RAG_RUNTIME_ENV_FILE` to the absolute path of the primary checkout's `.env` (e.g. `$(pwd)/.env`) when local Telegram credentials live only in the primary checkout.
+- Do not copy `.env`, Telegram sessions, or provider keys into worktree directories.
 
 ## 10. Common Issues
 
