@@ -365,10 +365,7 @@ photos, and fixtures are either:
 - **Synthetic/generated** (e.g., `test_properties.json`);
 - **Public sample data** (e.g., `data/apartments.csv` contains generic listing
   fields without personal contact details); or
-- **Demo-safe placeholders** (e.g., screenshots and photos marked for review
-  before release).
-- **`telegram_bot/static/photos/demo/1-03.jpg`** requires **human visual/provenance
-  review** before public release; rights status has not been conclusively verified.
+- **Demo-safe placeholders** with provenance reviewed before publication.
 
 Do not commit real CRM exports, client contact lists, phone numbers, email
 addresses, private property records, personal recordings, or unlicensed imagery.
