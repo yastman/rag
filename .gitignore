@@ -165,6 +165,7 @@ pytest-of-user/
 
 # Demo data files (but keep README)
 data/demo/*.csv
+data/apartments.csv
 data/demo/*.docx
 data/demo/*.pdf
 data/demo/*.xlsx
@@ -183,6 +184,7 @@ qdrant_storage/
 *.session
 *.session-journal
 .e2e_auth_hash.json
+.telethon/
 
 # Pre-commit
 .pre-commit-config.yaml~

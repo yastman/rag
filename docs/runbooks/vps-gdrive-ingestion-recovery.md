@@ -5,7 +5,8 @@ or when ingestion reports `No input data`.
 
 > **VPS only:** This page references host paths such as
 > `/etc/rag-fresh/rclone-sync.env` and `/var/log/rclone-sync.log`. Do not use
-> those paths for local development.
+> those paths for local development. In production, replace these with
+> your actual VPS paths.
 
 ## Expected Contract
 
@@ -22,13 +23,13 @@ If the host sync directory is missing or empty, Qdrant may still have a valid co
 Confirm required variables are present without printing secret-bearing files:
 
 ```bash
-for file in .env /etc/rag-fresh/rclone-sync.env; do
+for file in .env /etc/rag-fresh/rclone-sync.env; do  # /etc/rag-fresh/ is a VPS-specific path
   sudo test -r "$file" && echo "$file: present" || echo "$file: MISSING"
 done
 
 for v in GDRIVE_SYNC_DIR RCLONE_CONFIG_FILE RCLONE_REMOTE; do
   test -r .env && grep -q "^${v}=" .env && echo ".env ${v}: present" || echo ".env ${v}: MISSING"
-  sudo test -r /etc/rag-fresh/rclone-sync.env && sudo grep -q "^${v}=" /etc/rag-fresh/rclone-sync.env && \
+  sudo test -r /etc/rag-fresh/rclone-sync.env 2>/dev/null && sudo grep -q "^${v}=" /etc/rag-fresh/rclone-sync.env 2>/dev/null && \
     echo "rclone-sync.env ${v}: present" || echo "rclone-sync.env ${v}: MISSING"
 done
 ```

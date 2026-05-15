@@ -48,8 +48,8 @@ class TestEnvExampleSanitization:
     """.env.example must not contain real IPs or secret-looking placeholders."""
 
     BLOCKED_STRINGS = [
-        "REDACTED_VPS_IP",
-        "REDACTED_PRIVATE_IP",
+        "REDACTED_VPS_IP",  # placeholder: replace with actual VPS IP
+        "REDACTED_PRIVATE_IP",  # placeholder: replace with actual LAN IP
         "sk-ant-api03-",
     ]
 
