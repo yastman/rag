@@ -38,7 +38,6 @@ modern laptop:
 | `make check` | 45–90 s | Lint and type-check pass |
 | `uv run pytest tests/unit` | 1–3 min | Unit tests pass |
 | `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services` | <5 s | Dev Compose config is valid |
-| `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services` | <5 s | VPS Compose config is valid |
 
 For a narrower first pass, prefer focused tests around the subsystem being
 reviewed, then `make check`.
@@ -72,7 +71,7 @@ reviewed, then `make check`.
 
 - State and routing contracts in `telegram_bot/graph/`.
 - SDK/native API usage in `telegram_bot/integrations/` and `telegram_bot/services/`.
-- Cheap-first apartment parsing in `telegram_bot/services/filter_extractor.py`.
+- Cheap-first domain/catalog parsing in `telegram_bot/services/filter_extractor.py`.
 - HITL safety boundaries in `telegram_bot/agents/hitl.py` and CRM tools.
 - Ingestion determinism in `src/ingestion/unified/manifest.py` and
   `src/ingestion/unified/state_manager.py`.

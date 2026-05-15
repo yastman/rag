@@ -1,6 +1,6 @@
 ***REMOVED*** Mini App
 
-Telegram Mini App backend and frontend for the FortNoks real-estate workflow.
+Telegram Mini App backend and frontend for domain-specific assistant workflows.
 
 ***REMOVED******REMOVED*** Purpose
 

@@ -108,7 +108,7 @@ Key flows:
 
 Subsystems:
 - `telegram_bot/graph/` — LangGraph nodes, edges, and state
-- `telegram_bot/services/` — Qdrant queries, cache, apartment search, CRM tools
+- `telegram_bot/services/` — Qdrant queries, cache, catalog search, CRM tools
 - `telegram_bot/agents/` — Agent SDK RAG functions
 - `telegram_bot/dialogs/` — Funnel UI and filter extraction
 - `telegram_bot/middlewares/` — Throttling, i18n, error handling
@@ -119,7 +119,6 @@ Quick commands:
 make run-bot           ***REMOVED*** native bot run (fast iteration)
 make docker-bot-up     ***REMOVED*** bot in Docker
 make test-bot-health   ***REMOVED*** local prerequisite check
-python -m telegram_bot.preflight   ***REMOVED*** startup health check
 ```
 
 ***REMOVED******REMOVED*** Voice Agent
