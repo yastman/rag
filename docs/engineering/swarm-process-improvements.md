@@ -1,8 +1,13 @@
-# Swarm Deploy Process Improvements
+# Historical Swarm Deploy Process Improvements
 
 ## Issue
 
-CI/CD deploy reliability suffered from several brittle defaults that made production pushes risky and slow to debug.
+CI/CD deploy reliability suffered from several brittle defaults that made
+production pushes risky and slow to debug.
+
+This note is historical. Public repository hardening removed VPS deploy scripts
+and internal deploy workflow wiring from the public tree. Keep future public
+docs focused on local/test validation contracts.
 
 ## Changes
 
@@ -14,11 +19,12 @@ CI/CD deploy reliability suffered from several brittle defaults that made produc
 - **Dirty-tree guard** stashes local VPS changes before `git reset --hard`, protecting manual hotfixes from accidental loss.
 - **Production env validation** remains mandatory before `docker compose build`.
 
-### Local deploy script (`scripts/deploy-vps.sh`)
+### Local deploy script
 
-- **Connection params are env-driven** (`VPS_HOST`, `VPS_PORT`, `VPS_USER`, `VPS_KEY`) with clear failures when required vars are missing.
-- **Safer SSH defaults** replace `StrictHostKeyChecking=no` with `accept-new` (configurable via `VPS_SSH_STRICT_HOST_KEY_CHECKING`).
-- **No hardcoded IPs, ports, users, or key paths** remain in the script.
+- The internal manual VPS deploy script is no longer shipped in the public
+  repository.
+- Public CI and docs must not expose VPS hostnames, SSH wiring, or deploy
+  secrets.
 
 ### Image publishing (`publish-internal-images.yml`)
 
@@ -28,11 +34,11 @@ CI/CD deploy reliability suffered from several brittle defaults that made produc
 
 ## Testing
 
-Static unit tests assert each behavior by parsing workflow YAML and the deploy script:
+Static unit tests assert the public-safe behavior by parsing workflow YAML and
+remaining public release-gate scripts:
 
 - `tests/unit/test_ci_deploy_workflow.py`
-- `tests/unit/scripts/test_deploy_vps.py`
-- `tests/unit/test_publish_internal_images_workflow.py`
+- `tests/unit/test_release_gate_contract.py`
 
 These tests do not require live Docker builds or VPS access.
 
