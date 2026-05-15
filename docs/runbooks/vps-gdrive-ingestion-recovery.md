@@ -3,10 +3,10 @@
 Use this VPS-only runbook when `gdrive_documents_bge` exists but stays empty,
 or when ingestion reports `No input data`.
 
-> **VPS only:** This page references host paths such as
-> `/etc/rag-fresh/rclone-sync.env` and `/var/log/rclone-sync.log`. Do not use
-> those paths for local development. In production, replace these with
-> your actual VPS paths.
+> **VPS/deployment only:** This page references deployment-specific host paths such as
+> `/etc/rag-fresh/rclone-sync.env` and `/var/log/rclone-sync.log` — examples only.
+> Replace these with your actual deployment paths. For local development, use
+> [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md) instead.
 
 ## Expected Contract
 
@@ -23,7 +23,7 @@ If the host sync directory is missing or empty, Qdrant may still have a valid co
 Confirm required variables are present without printing secret-bearing files:
 
 ```bash
-for file in .env /etc/rag-fresh/rclone-sync.env; do  # /etc/rag-fresh/ is a VPS-specific path
+for file in .env /etc/rag-fresh/rclone-sync.env; do  # deployment-specific path; replace with your actual path
   sudo test -r "$file" && echo "$file: present" || echo "$file: MISSING"
 done
 

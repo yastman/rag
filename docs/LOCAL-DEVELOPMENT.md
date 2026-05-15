@@ -8,12 +8,11 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
-> **For this machine**: use a remote Docker host via SSH to keep Docker load off the workstation.
-> Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
+> **Flexible Docker topology**: you can run Docker Compose locally (default) or target a remote Docker host via SSH. Choose the mode that fits your workstation resources.
 
-## Remote MacBook Docker (Recommended)
+## Remote Docker Host (Alternative)
 
-For this machine, the dev Docker stack runs on a remote MacBook instead of Docker Desktop on WSL. Edit code in WSL, commit/push, then fetch/pull and operate the stack on the MacBook via SSH.
+When local Docker resource usage is a concern, the dev Docker stack can run on a separate host reachable via SSH. Edit code on your workstation, push, then pull/operate on the remote host. The `remote-*` Makefile targets automate the SSH workflow.
 
 Quick start:
 
@@ -55,6 +54,8 @@ Full operator workflow, troubleshooting, and test boundaries are in the Docker r
 uv sync
 cp .env.example .env
 ```
+
+`.env.local` is legacy/manual-only and is not auto-loaded; use `.env` for local runs.
 
 ### Local artifact hygiene
 
@@ -115,10 +116,9 @@ Langfuse local development:
 
 ## 2. Start Services
 
-To keep Docker load off the workstation, use a remote Docker host via SSH
-instead of starting local Docker Desktop. On an 8GB remote host, use the lean
-bot/core remote flow by default; the ML, observability, voice, and full stacks
-are temporary validation tools, not the idle development baseline.
+When using a remote Docker host, prefer the lean bot/core flow by default
+to conserve resources. ML, observability, voice, and full stacks are
+temporary validation tools, not the idle development baseline.
 
 ```bash
 # Core services (default compose set)
@@ -272,12 +272,12 @@ Keep `make bot` running in another terminal while the E2E command executes. Use 
 
 ## 9. Runtime env in worktrees
 
-Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the main checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
+New worktrees start from a fresh branch checkout and do not contain the primary checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
 
 - Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
 - Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
-- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE` to the absolute path of the main checkout's `.env` (e.g. `$(pwd)/.env`) when local Telegram credentials live only in the main checkout.
-- Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
+- For isolated worktrees, set `RAG_RUNTIME_ENV_FILE` to the absolute path of the primary checkout's `.env` (e.g. `$(pwd)/.env`) when local Telegram credentials live only in the primary checkout.
+- Do not copy `.env`, Telegram sessions, or provider keys into worktree directories.
 
 ## 10. Common Issues
 

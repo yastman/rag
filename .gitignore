@@ -245,7 +245,11 @@ mcp-clusters.yaml
 
 # Worker artifacts (generated, not committed)
 docs/artifacts/*.md
+docs/artifacts/**/*.md
 !docs/artifacts/.gitkeep
+
+# Generated dated SDK/audit/roadmap snapshots (do not commit)
+docs/SDK_*_20*.md
 
 # Claude plugin skills (installed per-machine, not committed)
 .claude/skills/

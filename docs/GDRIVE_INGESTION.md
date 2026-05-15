@@ -40,7 +40,7 @@ make rclone-install
 ### 2. Prepare Google Drive access
 
 1. Create a Google Cloud service account with Drive read-only access.
-2. Download the JSON key to a secure host path such as `/opt/credentials/gdrive-service-account.json`.
+2. Download the JSON key to a secure host path (e.g. `<credentials-dir>/gdrive-service-account.json`).
 3. Share the target Drive folder with the service account email.
 4. Create an rclone config file on the host and point it at that service account key.
 
@@ -50,7 +50,7 @@ Example rclone config:
 [gdrive]
 type = drive
 scope = drive.readonly
-service_account_file = /opt/credentials/gdrive-service-account.json
+service_account_file = <credentials-dir>/gdrive-service-account.json
 root_folder_id = YOUR_FOLDER_ID_HERE
 ```
 
@@ -60,8 +60,8 @@ Set these variables in `.env` or the host environment:
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `GDRIVE_SYNC_DIR` | `/opt/rag-fresh/drive-sync` | Host path used for the local Google Drive mirror |
-| `RCLONE_CONFIG_FILE` | `/opt/credentials/rclone.conf` | Host path to the rclone config file |
+| `GDRIVE_SYNC_DIR` | `<your-sync-dir>` | Host path used for the local Google Drive mirror |
+| `RCLONE_CONFIG_FILE` | `<credentials-dir>/rclone.conf` | Host path to the rclone config file |
 | `RCLONE_REMOTE` | `gdrive:RAG` | Remote/folder to sync |
 | `GDRIVE_COLLECTION_NAME` | `gdrive_documents_bge` | Canonical Qdrant collection |
 
@@ -78,10 +78,10 @@ make sync-drive-install
 ```
 
 This installs:
-- `/opt/scripts/sync-drive.sh`
-- `/opt/scripts/gdrive-manifest.sh`
-- `/etc/cron.d/rclone-sync`
-- `/etc/rag-fresh/rclone-sync.env`
+- `<scripts-dir>/sync-drive.sh`
+- `<scripts-dir>/gdrive-manifest.sh`
+- `<cron-dir>/rclone-sync`
+- `<env-dir>/rclone-sync.env`
 
 ### 5. Seed the local mirror
 
@@ -147,8 +147,8 @@ Google Workspace files are exported by `rclone` into Office-compatible formats:
 | Qdrant collection exists but has `0 points` | Verify `GDRIVE_SYNC_DIR` is populated before debugging Qdrant |
 | `preflight` fails on sync dir | Confirm `GDRIVE_SYNC_DIR` exists and is a directory |
 | Ingestion says `No input data` | Check the host path, then the container mount at `/data/drive-sync` |
-| Sync not running | Check `/etc/cron.d/rclone-sync` and `/var/log/rclone-sync.log` |
-| `RCLONE_CONFIG_FILE` not found | Fix the host path in `.env` or `/etc/rag-fresh/rclone-sync.env` |
-| Qdrant looks empty from VPS host | Query from the Docker network if port `6333` is not published on the host |
+| Sync not running | Check your cron config and sync log path (typically `/var/log/rclone-sync.log`) |
+| `RCLONE_CONFIG_FILE` not found | Fix the host path in `.env` or your deployment env file |
+| Qdrant looks empty from remote/deployment host | Query from the Docker network if port `6333` is not published on the host |
 
 For the full VPS recovery sequence, see `docs/runbooks/vps-gdrive-ingestion-recovery.md`.
