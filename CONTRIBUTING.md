@@ -28,6 +28,10 @@ docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compos
 - Real datasets, personal recordings, or client exports
 - Production deploy scripts or VPS/SSH keys
 
+## Code of Conduct
+
+This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+
 ## Safe Boundaries
 
 - Do not run production or CRM write flows without maintainer approval.
