@@ -9,6 +9,10 @@ If you discover a security issue, please report it responsibly.
 - If GitHub Security Advisories are enabled for this repository, prefer opening a private advisory.
 - Otherwise, open a minimal public issue requesting security contact without including sensitive details, and a maintainer will reach out privately.
 
+## Scope
+
+This policy applies to the public GitHub repository. All security reports should follow the guidelines above regardless of whether the reporter is a known contributor or a first-time visitor.
+
 ## Secrets and Credentials
 
 - Do **not** commit secrets, API keys, passwords, tokens, or other credentials to this repository.

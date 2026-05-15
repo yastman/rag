@@ -59,6 +59,8 @@ reviewed, then `make check`.
 - Use fake/demo credentials for local inspection.
 - Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external
   secrets, not repository content.
+- If you are a public contributor, open an issue before attempting any change
+  that touches secrets, deploy scripts, or production endpoints.
 
 ## Branch Context
 
