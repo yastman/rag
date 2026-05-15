@@ -141,6 +141,10 @@ services:
     ports:
       - "127.0.0.1:3100:3100"
 
+  alertmanager:
+    ports:
+      - "127.0.0.1:9093:9093"
+
   rag-api:
     ports:
       - "127.0.0.1:8080:8080"
