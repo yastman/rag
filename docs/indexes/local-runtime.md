@@ -9,7 +9,7 @@ in [`../../DOCKER.md`](../../DOCKER.md).
 | Run dev Docker stack on remote host | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#2-start-services) | `make remote-env-sync && make remote-active-up` |
 | Bootstrap local services for native bot iteration | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#7-minimal-stack-fast-iteration) | `make local-up && make test-bot-health` |
 | Run the bot natively from `.env` | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#7-minimal-stack-fast-iteration) | `make bot` |
-| Check the bot username behind the current token | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) | Telegram `getMe` snippet in the local guide |
+| Check the bot username behind the current token | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) | `curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"` and inspect `.result.username` |
 | Configure Telegram E2E userbot credentials | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) | `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `E2E_BOT_USERNAME` |
 | Create or refresh the Telethon session | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) and [`../../tests/README.md`](../../tests/README.md#e2e) | `uv run python -m scripts.e2e.auth --phone ... --code ...` |
 | Smoke test Telegram bot response through Telethon | [`../../tests/README.md`](../../tests/README.md#e2e) | `uv run python -m scripts.e2e.quick_test` |
@@ -18,8 +18,8 @@ in [`../../DOCKER.md`](../../DOCKER.md).
 
 Runtime reminders:
 
-- `E2E_BOT_USERNAME` must match the bot behind `BOT_TOKEN` or
-  `TELEGRAM_BOT_TOKEN`; otherwise Telethon messages the wrong bot.
+- `E2E_BOT_USERNAME` must match the bot behind `TELEGRAM_BOT_TOKEN`; otherwise
+  Telethon messages the wrong bot.
 - Do not include angle brackets in shell values. Use `--code 12345`, not
   `--code <12345>`.
 - Only one process can poll a Telegram bot token. Stop Docker bot containers

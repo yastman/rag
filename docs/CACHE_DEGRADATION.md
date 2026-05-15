@@ -29,8 +29,8 @@ Multi-tier semantic caching with graceful degradation when cache fails.
 are stricter. The separate store guard still uses `grade_confidence` on the RRF
 scale.
 
-`CHITCHAT` and `OFF_TOPIC` are not RAG cacheable query types. Apartment search
-uses separate apartment tooling and should not be documented as a semantic
+`CHITCHAT` and `OFF_TOPIC` are not RAG cacheable query types. Structured catalog search
+uses separate catalog tooling and should not be documented as a semantic
 response-cache type unless the runtime policy changes.
 
 ## Degradation Modes
