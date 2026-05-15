@@ -7,8 +7,9 @@ recruiters, technical interviewers, collaborators, and public contributors.
 
 Recommended GitHub sidebar description:
 
-> AI real-estate automation platform: Telegram bot, RAG, apartment search, CRM
-> workflows, voice agent, Langfuse observability, and Dockerized AI runtime.
+> Conversational AI automation platform: Telegram bot, RAG, domain catalog
+> search, CRM/workflow tools, voice agent, Langfuse observability, and
+> Dockerized AI runtime.
 
 Recommended topics:
 
@@ -20,11 +21,12 @@ qdrant
 langfuse
 fastapi
 docker
-real-estate
+business-automation
 ai-agents
 crm
 kommo
 voice-ai
+conversational-ai
 ```
 
 Recommended homepage link:

@@ -1,0 +1,82 @@
+<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Conversational AI Automation Platform</title>
+  <desc id="desc">A dark GitHub-style hero image showing chat, voice, knowledge search, CRM workflows, observability, and Docker runtime as connected platform nodes.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#071019"/>
+      <stop offset="0.48" stop-color="#0D1726"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="orb" x1="305" y1="90" x2="875" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="0.5" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="card" x1="230" y1="66" x2="970" y2="462" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111C2E" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#0B1220" stop-opacity="0.96"/>
+    </linearGradient>
+    <filter id="softShadow" x="190" y="42" width="820" height="456" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="24"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="520" fill="url(#bg)"/>
+  <circle cx="206" cy="104" r="184" fill="#0EA5E9" opacity="0.12"/>
+  <circle cx="1026" cy="410" r="210" fill="#22C55E" opacity="0.10"/>
+  <path d="M80 430C228 348 346 386 504 308C680 221 764 134 1124 168" stroke="#334155" stroke-width="2" stroke-dasharray="8 14" opacity="0.55"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="230" y="66" width="740" height="396" rx="34" fill="url(#card)" stroke="#26364D" stroke-width="1.5"/>
+  </g>
+
+  <g opacity="0.92">
+    <path d="M340 190C340 167.909 357.909 150 380 150H444C466.091 150 484 167.909 484 190V220C484 242.091 466.091 260 444 260H400L368 286V260H380C357.909 260 340 242.091 340 220V190Z" fill="#0F2742" stroke="#38BDF8" stroke-width="3"/>
+    <circle cx="382" cy="205" r="6" fill="#38BDF8"/>
+    <circle cx="412" cy="205" r="6" fill="#38BDF8"/>
+    <circle cx="442" cy="205" r="6" fill="#38BDF8"/>
+  </g>
+
+  <g opacity="0.92">
+    <rect x="716" y="150" width="136" height="110" rx="22" fill="#102515" stroke="#22C55E" stroke-width="3"/>
+    <path d="M746 208H822" stroke="#22C55E" stroke-width="8" stroke-linecap="round"/>
+    <path d="M762 186V230" stroke="#22C55E" stroke-width="8" stroke-linecap="round"/>
+    <path d="M790 184V232" stroke="#22C55E" stroke-width="8" stroke-linecap="round"/>
+    <path d="M818 194V222" stroke="#22C55E" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <circle cx="600" cy="210" r="74" fill="#111827" stroke="url(#orb)" stroke-width="4"/>
+    <circle cx="600" cy="210" r="30" fill="#172033" stroke="#E2E8F0" stroke-width="2"/>
+    <circle cx="600" cy="136" r="9" fill="#38BDF8"/>
+    <circle cx="674" cy="210" r="9" fill="#22C55E"/>
+    <circle cx="600" cy="284" r="9" fill="#F59E0B"/>
+    <circle cx="526" cy="210" r="9" fill="#A78BFA"/>
+    <path d="M600 145V180M665 210H630M600 275V240M535 210H570" stroke="#94A3B8" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <text x="600" y="342" text-anchor="middle" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="42" font-weight="780">Conversational AI Automation Platform</text>
+  <text x="600" y="386" text-anchor="middle" fill="#CBD5E1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="500">Chat, voice, knowledge, CRM, and workflows in one observable AI runtime</text>
+
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="15" font-weight="700">
+    <rect x="342" y="415" width="92" height="30" rx="8" fill="#172033" stroke="#334155"/>
+    <text x="388" y="436" text-anchor="middle" fill="#BAE6FD">LangGraph</text>
+    <rect x="446" y="415" width="74" height="30" rx="8" fill="#172033" stroke="#334155"/>
+    <text x="483" y="436" text-anchor="middle" fill="#BBF7D0">Qdrant</text>
+    <rect x="532" y="415" width="78" height="30" rx="8" fill="#172033" stroke="#334155"/>
+    <text x="571" y="436" text-anchor="middle" fill="#FDE68A">BGE-M3</text>
+    <rect x="622" y="415" width="72" height="30" rx="8" fill="#172033" stroke="#334155"/>
+    <text x="658" y="436" text-anchor="middle" fill="#FECACA">Redis</text>
+    <rect x="706" y="415" width="90" height="30" rx="8" fill="#172033" stroke="#334155"/>
+    <text x="751" y="436" text-anchor="middle" fill="#DDD6FE">Langfuse</text>
+    <rect x="808" y="415" width="86" height="30" rx="8" fill="#172033" stroke="#334155"/>
+    <text x="851" y="436" text-anchor="middle" fill="#BFDBFE">Compose</text>
+  </g>
+</svg>
