@@ -204,6 +204,7 @@ CLAUDE.md
 .claude/rules/
 .claude/cache/
 .claude/prompts/
+docs/audits/
 docs/archive/
 !docs/archive/README.md
 !docs/archive/workflows/README.md
