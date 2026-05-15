@@ -1,5 +1,9 @@
 ***REMOVED*** compose.dev.yml — Development overrides: ports, colbert reranking, relaxed defaults, ML profile-gating.
 ***REMOVED*** Usage: COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d
+***REMOVED***
+***REMOVED*** WARNING: This file contains hardcoded dev-only passwords (miniosecret, clickhouse, etc.).
+***REMOVED***          These defaults are safe for local development only. Do NOT reuse this file
+***REMOVED***          for any internet-facing or shared environment.
 
 services:
   postgres:
