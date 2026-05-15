@@ -415,9 +415,13 @@ export RAG_RUNTIME_ENV_FILE
 # REMOTE MACBOOK DOCKER HOST
 # =============================================================================
 
-REMOTE_DOCKER_HOST ?= macbook-docker
-REMOTE_DOCKER_IP ?= REDACTED_PRIVATE_IP
-REMOTE_DOCKER_REPO ?= /Users/aroslav/Documents/rag-fresh
+# Set these three vars in your shell/.env before using remote-* targets:
+#   REMOTE_DOCKER_HOST  – SSH hostname for the remote Docker host
+#   REMOTE_DOCKER_IP    – LAN IP of the remote Docker host
+#   REMOTE_DOCKER_REPO  – absolute path to rag-fresh checkout on remote
+REMOTE_DOCKER_HOST ?=
+REMOTE_DOCKER_IP ?=
+REMOTE_DOCKER_REPO ?=
 REMOTE_DOCKER_PATH ?= /opt/homebrew/bin:/usr/local/bin
 REMOTE_COMPOSE_FILE ?= compose.yml:compose.dev.yml
 REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
