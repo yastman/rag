@@ -42,6 +42,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.ruff_cache/
 nosetests.xml
 coverage.xml
 *.cover
@@ -99,6 +100,7 @@ celerybeat.pid
 .env
 .mcp.json
 .venv
+**/.venv/
 env/
 venv/
 ENV/
@@ -216,7 +218,8 @@ coverage.json
 =*
 
 # k8s secrets (never commit)
-k8s/secrets/
+k8s/secrets/*
+!k8s/secrets/README.md
 
 # Validation reports (generated, not committed)
 !docs/reports/

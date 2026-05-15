@@ -7,9 +7,14 @@
 
 ## Test Placement
 - `tests/unit/` for isolated logic with mocks/fakes, no live service dependency.
+- `tests/unit/e2e_adapters/` for unit checks around E2E helper code (config/adapters/validators), still unit lane.
 - `tests/integration/` for service-aware paths and real component interaction.
 - `tests/smoke/`, `tests/load/`, `tests/chaos/`, `tests/e2e/`, `tests/benchmark/` for heavy-tier and runtime-sensitive coverage.
 - Keep tests close to owning surface (`services`, `graph`, `mini_app`, `ingestion`, etc.).
+
+E2E naming contract:
+- Real end-to-end tests belong to `tests/e2e/` only.
+- Do not add live/runtime E2E flows under `tests/unit/**`.
 
 ## Naming And Structure
 - File: `test_<feature>.py`

@@ -1,4 +1,4 @@
-# Unit E2E Test Index
+# Unit E2E Adapter Test Index
 
 ## Purpose
 
@@ -14,6 +14,7 @@ running the full external-service E2E suite.
 - `test_config.py`
 - `test_voice_transcription_scenarios.py`
 - `test_corpus_e2e_config.py`
+- `test_qdrant_preflight.py`
 
 ## Parent
 

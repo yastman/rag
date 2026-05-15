@@ -56,6 +56,23 @@ uv sync
 cp .env.example .env
 ```
 
+### Local artifact hygiene
+
+Keep generated heavy artifacts out of the repository tree when possible.
+
+- Python virtualenvs: prefer one root `.venv` and avoid nested envs in module folders.
+- JS dependencies/build output: keep `node_modules/` and `dist/` as generated-only assets.
+- Runtime outputs: keep logs, temp files, and ad-hoc reports under ignored paths (`logs/`, `tmp/`, `reports/`).
+- Service model caches (for example embedding models) should stay local-only and never be committed.
+
+Quick check before commit:
+
+```bash
+git ls-files --others --exclude-standard
+```
+
+This should be empty for routine development work.
+
 For local development, the canonical environment file is `.env` in the repo root. `.env.local` is legacy/manual-only and is not auto-loaded by local commands.
 
 Minimum env for bot profile:
