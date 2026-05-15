@@ -30,7 +30,7 @@ dependencies = [
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
     # LangGraph Pipeline (2026-02-09)
     "langgraph>=1.0.3,<2.0",               # State graph for RAG pipeline
-    "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
+    "langchain-core>=1.3.3",                # Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", # Postgres checkpointing for LangGraph
     # Conversation memory (#154)
     "langgraph-checkpoint-redis>=0.3.6",  # Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization #128)
