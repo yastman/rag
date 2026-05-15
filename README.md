@@ -27,12 +27,8 @@ channels.
 - Searches apartment listings with natural language — *"2-bedroom in Sofia under €80k"*
 - Scores and nurtures leads automatically via CRM integration
 - Supports Telegram voice input and a LiveKit-powered voice agent path
-- Runs as a Docker Compose based local/VPS stack with observability, ingestion,
+- Runs as a Docker Compose based local stack with observability, ingestion,
   vector search, and local ML services
-
-> The primary runtime is Docker Compose on local/VPS environments. k3s manifests
-> exist for core services as an incremental migration path, not full parity with
-> the Compose stack.
 
 ---
 
@@ -47,7 +43,7 @@ If you have limited time, read the repository in this order:
 4. `telegram_bot/agents/` and `telegram_bot/services/` — CRM tools, apartment
    search, cache, lead scoring, handoff, and business logic.
 5. `src/ingestion/unified/` — deterministic document ingestion and Qdrant writes.
-6. `compose.yml`, `compose.dev.yml`, `compose.vps.yml`, and [DOCKER.md](DOCKER.md)
+6. `compose.yml`, `compose.dev.yml`, and [DOCKER.md](DOCKER.md)
    — runtime architecture.
 
 Safe review notes:
@@ -281,7 +277,7 @@ make test-unit   # Unit tests (parallel via pytest-xdist)
 make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
-Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `dev` (the active integration branch) or deploying to VPS.
+Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `dev` (the active integration branch) or deploying.
 
 CI is intentionally lightweight. It should stay fast and is used as a guardrail for lint, format, type-check, security, and other short checks, not as the authoritative full-suite signal.
 
