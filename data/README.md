@@ -6,17 +6,23 @@ Project data files: demo fixtures, test datasets, and generated assets.
 
 | Path | Purpose |
 |------|---------|
-| `apartments.csv` | Sample apartment listings for local ingestion |
+| `apartments.csv` | Sample apartment listings for local ingestion (public/synthetic data) |
 | `demo/` | Demo data files for ingestion pipeline tests |
 | `test/` | Test datasets and sample articles |
 | `test_properties.json` | Generated property fixture data |
 
-## Owner Boundaries
+## Data Provenance and Privacy
 
-- **`data/demo/`** — owned by ingestion testing; keep files Git-ignored per `.gitignore`.
+- **`apartments.csv`** — contains **public/sample real-estate listing data** (complex names, cities, prices, areas). No personal emails, phone numbers, or private owner details are included.
+- **`test_properties.json`** — contains **generated/synthetic fixture data** for tests. UUIDs and values are fabricated.
+- **`data/demo/`** — intended for **local demo documents**; files are Git-ignored per `.gitignore`.
 - **`data/test/`** — owned by test suites (`tests/`); fixtures must be deterministic and version-controlled.
-- **`data/apartments.csv`, `data/test_properties.json`** — owned by scripts under `scripts/`; regenerated as needed.
-- Do not commit large binary files, real user data, or production datasets to this directory.
+
+## Safety Warnings
+
+- Do **not** commit real CRM exports, client contact lists, phone numbers, email addresses, private property records, or personal recordings.
+- Do **not** commit large binary files or production datasets.
+- If you are unsure whether a dataset contains personal or proprietary information, treat it as sensitive and keep it out of the public repository.
 
 ## Related
 
