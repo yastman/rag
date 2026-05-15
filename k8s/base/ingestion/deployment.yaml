@@ -101,6 +101,5 @@ spec:
             failureThreshold: 3
       volumes:
         - name: drive-sync
-          hostPath:
-            path: /srv/drive-sync
-            type: Directory
+          persistentVolumeClaim:
+            claimName: drive-sync-pvc
