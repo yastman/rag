@@ -276,7 +276,7 @@ Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the 
 
 - Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
 - Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
-- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
+- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE` to the absolute path of the main checkout's `.env` (e.g. `$(pwd)/.env`) when local Telegram credentials live only in the main checkout.
 - Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
 
 ## 10. Common Issues
