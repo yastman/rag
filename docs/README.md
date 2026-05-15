@@ -24,7 +24,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`engineering/issue-triage.md`](engineering/issue-triage.md) — Issue classification and routing playbook.
 - [`engineering/README.md`](engineering/README.md) — Engineering process index with active and historical notes.
 - [`adr/`](adr/) — Architecture decision records.
-- [`archive/audits/`](archive/audits/) — Historical dated investigation artifacts and evidence.
 
 ## Architecture & Design
 
@@ -51,7 +50,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
 - [`ALERTING.md`](ALERTING.md) — Loki/Alertmanager setup.
-- [`archive/audits/INFRA_ISSUES_REPORT_1113_1126.md`](archive/audits/INFRA_ISSUES_REPORT_1113_1126.md) — Archived infrastructure issues report.
 - [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 
@@ -69,10 +67,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
 
-## Archive
-
-- [`archive/`](archive/) — Historical documentation and retired CI workflows preserved for context.
-
 ## Fast Doc Search
 
 Search the doc tree from the repo root:
@@ -88,6 +82,5 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 |---|---|
 | `docs/runbooks/` | Operational troubleshooting and incident response |
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
-| `docs/archive/audits/` | Historical dated evidence and investigation artifacts; not entrypoints |
 | `docs/review/` and `docs/portfolio/` | Reviewer and portfolio entry points |
 | Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `k8s/`, `docker/`) |

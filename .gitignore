@@ -149,6 +149,7 @@ evaluation/evaluation/
 .env.local
 .env.server
 .env.production
+!.env.example
 credentials.json
 secrets.yaml
 
@@ -202,6 +203,9 @@ drive-sync/
 CLAUDE.local.md
 CLAUDE.md
 **/AGENTS.override.md
+!telegram_bot/AGENTS.override.md
+!k8s/AGENTS.override.md
+!src/ingestion/unified/AGENTS.override.md
 
 # Internal dev tools & AI agent configs
 .claude/rules/
@@ -209,8 +213,6 @@ CLAUDE.md
 .claude/prompts/
 docs/audits/
 docs/archive/
-!docs/archive/README.md
-!docs/archive/workflows/README.md
 
 # Build artifacts & test outputs
 test_output*.txt
@@ -221,11 +223,11 @@ coverage.json
 # k8s secrets (never commit)
 k8s/secrets/*
 !k8s/secrets/README.md
+!k8s/secrets/.env.example
 
 # Validation reports (generated, not committed)
 !docs/reports/
 docs/reports/*
-!docs/reports/README.md
 
 
 # Baseline (legacy file-based approach)
