@@ -20,7 +20,7 @@ class E2EConfig:
 
     # Target bot
     bot_username: str = field(
-        default_factory=lambda: os.getenv("E2E_BOT_USERNAME", "@test_nika_homes_bot")
+        default_factory=lambda: os.getenv("E2E_BOT_USERNAME", "@test_your_bot")
     )
 
     # Timeouts

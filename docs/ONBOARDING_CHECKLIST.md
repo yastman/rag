@@ -116,8 +116,8 @@ make ingest-unified
 
 ### Check Langfuse traces
 ```bash
-# Local Langfuse at http://localhost:3000
-open http://localhost:3000
+# Local Langfuse at http://localhost:3001 (see DOCKER.md)
+open http://localhost:3001
 ```
 
 ## 9. Code Patterns to Follow
