@@ -86,6 +86,8 @@ Recommended files:
 
 - `.env.example`
 - `SECURITY.md`
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
 - `docs/review/ACCESS_FOR_REVIEWERS.md`
 
 ## README Checklist
