@@ -14,6 +14,7 @@ def test_ci_validates_pull_requests_for_dev() -> None:
     assert "branches: [main, dev]" in text
 
 
-def test_deploy_remains_main_only() -> None:
+def test_no_deploy_conditionals_in_public_ci() -> None:
+    """Public CI must not contain VPS deploy conditionals (sanitized repo)."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "if: github.ref == 'refs/heads/main' && github.event_name == 'push'" in text
+    assert "if: github.ref == 'refs/heads/main' && github.event_name == 'push'" not in text
