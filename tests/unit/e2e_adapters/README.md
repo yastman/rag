@@ -18,4 +18,4 @@ running the full external-service E2E suite.
 
 ## Parent
 
-- [Unit tests](../README.md)
+- [Tests](../../README.md)

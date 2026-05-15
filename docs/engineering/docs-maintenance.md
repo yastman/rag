@@ -108,7 +108,7 @@ make check
 
 - New validation reports and audit summaries go in `docs/reports/` with a `YYYY-MM-DD-` prefix when they are intended for active review.
 - Historical audit artifacts live in `docs/archive/audits/` after follow-up is complete.
-- Plans go in `docs/plans/` or `docs/superpowers/plans/`.
+- Plans go in `docs/plans/` when they are intended to be public and durable.
 - Reports, audits, and plans are **dated evidence**, not timeless source of truth. They may be archived when follow-up is complete.
 - Do not let audit findings silently replace canonical policy docs.
 
@@ -121,7 +121,7 @@ Block or fix docs that contain any of the following:
 | Trap | Example | Fix |
 |---|---|---|
 | **Contradicted boundaries** | A package README says "no dependency on X" while imports prove otherwise | Update README or code; do not leave the contradiction |
-| **Stale ports / healthcheck paths / service names / profile names / Python versions** | Doc says `localhost:3000` but compose maps `3001` | Edit canonical doc; link from others |
+| **Stale ports / healthcheck paths / service names / profile names / Python versions** | Doc lists an outdated local port while compose maps the current one | Edit canonical doc; link from others |
 | **Absolute local links** | `/repo/...` | Replace with relative repo paths |
 | **Raw secrets / tokens / DSNs / chat IDs / phone numbers / private URLs** | Pasted `.env` line with `TELEGRAM_BOT_TOKEN=123:abc` | Redact to `<redacted>` or describe the variable name |
 | **Instructions to use VPS/deploy/live services for local-only tasks** | "Run on production Langfuse to test" | Restrict to local Docker endpoints |

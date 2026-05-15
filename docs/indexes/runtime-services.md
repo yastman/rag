@@ -29,7 +29,7 @@ make monitoring-up      # observability alias with endpoint hints
 make docker-ps          # list running containers
 ```
 
-> **Remote Docker workflow**: for this machine, the recommended Docker path runs on a remote host via SSH. See [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md) for remote targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`.
+> **Remote Docker workflow**: when using an SSH-accessible Docker host (instead of local Docker), use the `remote-*` targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`. See [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md) and [`../../DOCKER.md`](../../DOCKER.md) for details.
 
 ### Local Service Containers
 
