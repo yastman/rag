@@ -41,7 +41,6 @@ jobs:
       - name: Validate Compose configs
         run: |
           COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
-          COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.vps.yml config --quiet
 
       - name: Hadolint Dockerfile lint
         run: |

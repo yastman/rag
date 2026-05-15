@@ -1,6 +1,6 @@
 # Docker Helper Assets
 
-This directory contains configuration files, scripts, and initialization assets used by the Docker Compose runtime. It does **not** contain the Compose files themselves—see [`../compose.yml`](../compose.yml), [`../compose.dev.yml`](../compose.dev.yml), [`../compose.vps.yml`](../compose.vps.yml), and [`../DOCKER.md`](../DOCKER.md) for service definitions and operations.
+This directory contains configuration files, scripts, and initialization assets used by the Docker Compose runtime. It does **not** contain the Compose files themselves—see [`../compose.yml`](../compose.yml), [`../compose.dev.yml`](../compose.dev.yml), and [`../DOCKER.md`](../DOCKER.md) for service definitions and operations.
 
 ## Layout
 
@@ -41,17 +41,6 @@ Database initialization scripts executed on first Postgres startup.
 - **`06-lead-scoring-sync.sql`** — Lead scoring sync schema.
 - **`07-nurturing-funnel-analytics.sql`** — Funnel analytics schema.
 - **`08-user-favorites.sql`** — User favorites schema.
-
-### `rclone/`
-
-Google Drive sync scripts and cron configuration for document ingestion.
-
-- **`sync-drive.sh`** — rclone-based Drive sync script.
-- **`gdrive-manifest.sh`** — Manifest generation for synced files.
-- **`rclone.conf`** — Example rclone remote configuration.
-- **`crontab`** — Cron schedule for automated sync.
-
-> Install via `make sync-drive-install` after filling in `GDRIVE_SYNC_DIR` and `RCLONE_CONFIG_FILE`.
 
 ### `ingestion/`
 

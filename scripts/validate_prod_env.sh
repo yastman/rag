@@ -80,4 +80,4 @@ for pw_var in "${password_vars[@]}"; do
   fi
 done
 
-docker compose --env-file .env -f compose.yml -f compose.vps.yml config >/dev/null
+docker compose --env-file .env -f compose.yml config >/dev/null

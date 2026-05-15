@@ -73,7 +73,7 @@ git ls-files --others --exclude-standard
 
 This should be empty for routine development work.
 
-For local development, the canonical environment file is `.env` in the repo root. `.env.local` is legacy/manual-only and is not auto-loaded by local commands.
+For local development, the canonical environment file is `.env` in the repo root.
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
@@ -84,7 +84,7 @@ Minimum env for bot profile:
 Minimum env for Telegram E2E (Telethon userbot):
 - `TELEGRAM_API_ID` (from [my.telegram.org](https://my.telegram.org))
 - `TELEGRAM_API_HASH` (from [my.telegram.org](https://my.telegram.org))
-- `E2E_BOT_USERNAME` (defaults to `@test_nika_homes_bot`)
+- `E2E_BOT_USERNAME` (defaults to `@test_your_bot`)
 - an authorized Telethon session file (e.g., `e2e_tester.session`)
 - if the session is present but unauthorized, refresh it with `uv run python scripts/e2e/auth.py --phone <PHONE>`
 

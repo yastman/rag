@@ -23,7 +23,7 @@ docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compos
 
 ## What Not to Commit
 
-- `.env`, `.env.local`, or any file containing real credentials
+- `.env` or any file containing real credentials
 - `.swarm/`, `.signals/`, logs, or local session artifacts
 - Real datasets, personal recordings, or client exports
 - Production deploy scripts or VPS/SSH keys

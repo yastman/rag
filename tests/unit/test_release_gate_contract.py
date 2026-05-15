@@ -66,7 +66,7 @@ def test_release_gate_script_contains_handoff_contract() -> None:
     script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
     assert "HANDOFF_ENABLED" in script
     assert "MANAGERS_GROUP_ID" in script
-    assert "docker compose --env-file .env -f compose.yml -f compose.vps.yml config" in script
+    assert "docker compose --env-file .env -f compose.yml config" in script
 
 
 def test_release_gate_script_requires_langfuse_stateful_secrets() -> None:
