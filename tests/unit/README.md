@@ -16,7 +16,7 @@ tests/unit
 - contextualization
 - core
 - dialogs
-- e2e
+- e2e_adapters
 - evaluation
 - graph
 - handlers

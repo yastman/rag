@@ -3,10 +3,10 @@
 
 Usage:
     # Step 1: Send code to phone
-    python scripts/e2e/auth.py --phone REDACTED_PHONE
+    python scripts/e2e/auth.py --phone +359XXXXXXXXX
 
     # Step 2: Complete auth with received code
-    python scripts/e2e/auth.py --phone REDACTED_PHONE --code 12345
+    python scripts/e2e/auth.py --phone +359XXXXXXXXX --code 12345
 """
 
 import argparse
@@ -95,7 +95,7 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Telethon auth for E2E tests")
-    parser.add_argument("--phone", required=True, help="Phone number (REDACTED_PHONE)")
+    parser.add_argument("--phone", required=True, help="Phone number in international format")
     parser.add_argument("--code", help="Verification code from Telegram")
     parser.add_argument("--password", help="2FA password (if enabled)")
     args = parser.parse_args()

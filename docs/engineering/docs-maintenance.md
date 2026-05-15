@@ -69,7 +69,7 @@ Do not finish code/config/runtime work without either updating docs or explicitl
 
 Inspect the code/config that owns the fact:
 
-- **Docker/runtime docs:** `compose.yml`, `compose.dev.yml`, `compose.vps.yml`, `Makefile`, Dockerfiles, healthchecks, `tests/fixtures/compose.ci.env`.
+- **Docker/runtime docs:** `compose.yml`, `compose.dev.yml`, `Makefile`, Dockerfiles, healthchecks, `tests/fixtures/compose.ci.env`.
 - **Service docs:** Service entrypoint, Dockerfile, compose service name, tests.
 - **API docs:** Code route definitions, Dockerfile `EXPOSE`, compose ports/healthcheck, README entrypoints.
 - **SDK/framework docs:** If behavior is version-sensitive, use Context7/official-docs summary; if missing and tools are available, refresh docs before writing.
@@ -106,9 +106,10 @@ make check
 
 ### 5.4 Audit and Plan Docs
 
-- Audits go in `docs/audits/` with a `YYYY-MM-DD-` prefix.
-- Plans go in `docs/plans/` or `docs/superpowers/plans/`.
-- Both are **dated evidence**, not timeless source of truth. They may be archived when follow-up is complete.
+- New validation reports and audit summaries go in `docs/reports/` with a `YYYY-MM-DD-` prefix when they are intended for active review.
+- Historical audit artifacts live in `docs/archive/audits/` after follow-up is complete.
+- Plans go in `docs/plans/` when they are intended to remain in the public repository.
+- Reports, audits, and plans are **dated evidence**, not timeless source of truth. They may be archived when follow-up is complete.
 - Do not let audit findings silently replace canonical policy docs.
 
 ---

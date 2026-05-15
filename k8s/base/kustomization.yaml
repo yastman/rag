@@ -30,6 +30,7 @@ resources:
   - litellm/deployment.yaml
   - litellm/service.yaml
   - bot/deployment.yaml
+  - ingestion/pvc.yaml
   - ingestion/deployment.yaml
 
 labels:

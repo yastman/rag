@@ -8,7 +8,6 @@ Uses APScheduler v3 AsyncIOScheduler with:
 TODO(#390): Migrate to APScheduler v4 when stable (currently alpha 4.0.0a6).
   v4 changes: AsyncScheduler, AnyIO, add_schedule(IntervalTrigger),
   CoalescePolicy.latest, misfire_grace_time=timedelta(minutes=5).
-  See research notes in docs/plans/2026-02-18-nurturing-funnel-390-plan.md.
 """
 
 from __future__ import annotations

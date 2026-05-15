@@ -8,8 +8,7 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
-> **For this machine**: the recommended Docker path is the remote MacBook host.
-> See [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md) for the full workflow.
+> **For this machine**: use a remote Docker host via SSH to keep Docker load off the workstation.
 > Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
 
 ## Remote MacBook Docker (Recommended)
@@ -48,7 +47,7 @@ make bot
 
 Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
 
-Full operator workflow, troubleshooting, and test boundaries are in [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+Full operator workflow, troubleshooting, and test boundaries are in the Docker runbook referenced below.
 
 ## 1. Bootstrap Workspace
 
@@ -57,7 +56,25 @@ uv sync
 cp .env.example .env
 ```
 
-For local development, the canonical environment file is `.env` in the repo root. `.env.local` is legacy/manual-only and is not auto-loaded by local commands.
+### Local artifact hygiene
+
+Keep generated heavy artifacts out of the repository tree when possible.
+
+- Python virtualenvs: prefer one root `.venv` and avoid nested envs in module folders.
+- JS dependencies/build output: keep `node_modules/` and `dist/` as generated-only assets.
+- Runtime outputs: keep logs, temp files, and ad-hoc reports under ignored paths (`logs/`, `tmp/`, `reports/`).
+- Service model caches (for example embedding models) should stay local-only and never be committed.
+
+Quick check before commit:
+
+```bash
+git ls-files --others --exclude-standard
+```
+
+This should be empty for routine development work.
+
+For local development, the canonical environment file is `.env` in the repo root.
+`.env.local` is legacy/manual-only and is not auto-loaded by documented workflows.
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
@@ -68,7 +85,7 @@ Minimum env for bot profile:
 Minimum env for Telegram E2E (Telethon userbot):
 - `TELEGRAM_API_ID` (from [my.telegram.org](https://my.telegram.org))
 - `TELEGRAM_API_HASH` (from [my.telegram.org](https://my.telegram.org))
-- `E2E_BOT_USERNAME` (defaults to `@test_nika_homes_bot`)
+- `E2E_BOT_USERNAME` (defaults to `@test_your_bot`)
 - an authorized Telethon session file (e.g., `e2e_tester.session`)
 - if the session is present but unauthorized, refresh it with `uv run python scripts/e2e/auth.py --phone <PHONE>`
 
@@ -99,11 +116,10 @@ Langfuse local development:
 
 ## 2. Start Services
 
-To keep Docker load off the workstation, use the MacBook as a remote Docker host
-instead of starting local Docker Desktop. On an 8GB MacBook, use the lean
+To keep Docker load off the workstation, use a remote Docker host via SSH
+instead of starting local Docker Desktop. On an 8GB remote host, use the lean
 bot/core remote flow by default; the ML, observability, voice, and full stacks
-are temporary validation tools, not the idle development baseline. See
-[`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+are temporary validation tools, not the idle development baseline.
 
 ```bash
 # Core services (default compose set)
@@ -261,7 +277,7 @@ Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the 
 
 - Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
 - Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
-- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
+- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE` to the absolute path of the main checkout's `.env` (e.g. `$(pwd)/.env`) when local Telegram credentials live only in the main checkout.
 - Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
 
 ## 10. Common Issues

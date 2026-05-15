@@ -11,10 +11,10 @@ Automation, indexing, benchmarking, validation, and maintenance scripts.
 | **Validation** | `validate_*.py`, `check_image_drift.py`, `run_legal_grounding_audit.py` | Query correctness, trace validation, and drift checks |
 | **Benchmarks** | `benchmark_*.py`, `test_*_ab.py`, `test_quantization_ab.py` | A/B and throughput comparisons |
 | **Experiment** | `run_experiment.py`, `generate_test_properties.py` | Synthetic data and experiment runners |
-| **Maintenance** | `qdrant_backup.sh`, `qdrant_restore.sh`, `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
-| **Ops** | `deploy-vps.sh`, `test_release_health_vps.sh`, `test_bot_health.sh`, `smoke-zoo.sh` | Deployment and health checks |
-| **Hygiene** | `git_hygiene.py`, `repo_cleanup.sh`, `local_pre_push.sh`, `no-commit-to-main.sh` | Repo hygiene and git hooks |
-| **Alerting** | `langfuse_alert.py`, `langfuse_triage.py`, `monitor-workers.sh` | Langfuse monitoring and triage |
+| **Maintenance** | `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
+| **Ops** | `test_release_health_vps.sh`, `test_bot_health.sh`, `smoke-zoo.sh` | Deployment and health checks |
+| **Hygiene** | `git_hygiene.py`, `repo_cleanup.sh` | Repo hygiene |
+| **Alerting** | `langfuse_alert.py`, `langfuse_triage.py` | Langfuse monitoring and triage |
 | **CRM / Seeding** | `kommo_seed.py`, `update_advisor_prompts.py` | CRM seeding and prompt updates |
 
 ## Usage

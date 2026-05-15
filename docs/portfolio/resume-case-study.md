@@ -1,25 +1,25 @@
-# AI Real Estate Automation Platform - Resume Case Study
+# Conversational AI Automation Platform - Resume Case Study
 
 This document is a resume/portfolio source file. It summarizes the project as a
 case study, not as developer setup documentation.
 
 ## One-Line Positioning
 
-AI-native real-estate automation platform combining Telegram, RAG search,
-apartment matching, CRM automation, voice input, observability, and Dockerized
-AI infrastructure. Built with an AI-assisted engineering workflow using Codex,
+AI-native conversational automation platform combining Telegram, RAG search,
+domain catalog matching, CRM/workflow automation, voice input, observability,
+and Dockerized AI infrastructure. Built with an AI-assisted engineering workflow using Codex,
 Claude Code CLI, OpenCode workers, PR review loops, and CI verification.
 
 ## Resume Summary - English
 
-Built a production-like AI real-estate automation platform with Telegram bot,
-RAG search, natural-language apartment search, Kommo CRM workflows, voice input,
-and Docker Compose based local/VPS infrastructure. Implemented self-hosted BGE-M3
+Built a production-like conversational AI automation platform with Telegram bot,
+RAG search, natural-language domain catalog search, Kommo CRM workflows, voice
+input, and Docker Compose based local/VPS infrastructure. Implemented self-hosted BGE-M3
 embeddings, Qdrant hybrid retrieval with dense/sparse/ColBERT vectors, tiered
 Redis caching, semantic conversation memory, CRM lead automation with
 human-in-the-loop confirmation, Langfuse tracing, gold-set/evaluation tooling,
-and unified document ingestion. The system includes 20+ Docker services,
-local/dev observability and monitoring, and 400+ test files.
+and unified document ingestion. The system includes Compose profiles for bot, ingestion, voice, ML
+observability, monitoring, and full-stack runtime, plus 400+ test files.
 Developed using an AI-native engineering workflow: task decomposition into
 focused worker prompts, parallel OpenCode worker swarms, PR review loops with
 self-review and verification gates, and CI-driven quality checks. Treats Codex
@@ -28,9 +28,9 @@ auto-pilot—within a disciplined development process.
 
 ## Resume Summary - Russian
 
-Разработал AI-native платформу автоматизации для real estate: Telegram-бот,
-RAG-поиск, подбор объектов по естественному языку, интеграция с Kommo CRM,
-голосовой ввод и Docker-инфраструктура для локального/VPS запуска. Реализовал
+Разработал AI-native платформу conversational automation: Telegram-бот,
+RAG-поиск, поиск по доменному каталогу на естественном языке, интеграция с
+Kommo CRM, голосовой ввод и Docker-инфраструктура для локального/VPS запуска. Реализовал
 self-hosted BGE-M3 embeddings, Qdrant hybrid retrieval с dense/sparse/ColBERT
 векторами, многоуровневое Redis-кеширование, семантическую память диалогов,
 автоматизацию лидов в CRM с human-in-the-loop подтверждением, Langfuse
@@ -44,8 +44,8 @@ checks. Codex и Claude Code CLI используются как структу�
 
 ## Best Resume Bullets
 
-- Built an AI automation platform for real-estate workflows with Telegram,
-  voice, CRM, RAG, apartment search, and mini-app surfaces.
+- Built an AI automation platform for domain-specific business workflows with
+  Telegram, voice, CRM, RAG, catalog search, and mini-app surfaces.
 - Implemented self-hosted retrieval infrastructure using BGE-M3 and Qdrant:
   dense vectors, sparse BM42 vectors, and ColBERT multivector reranking.
 - Designed a tiered Redis cache for semantic answers, embeddings, search
@@ -123,15 +123,15 @@ not as a replacement for engineering judgment.
 
 ### 1. LangGraph RAG Pipeline
 
-**Problem:** Real-estate clients ask repeated questions about properties, legal
-processes, documents, and company workflows. Static FAQ answers are not enough.
+**Problem:** Business users ask repeated questions about products, policies, documents,
+processes, and company workflows. Static FAQ answers are not enough.
 
 **Implementation:** Built a LangGraph pipeline with classification, prompt
 injection guard, cache check, retrieval, grading, reranking, query rewriting,
 generation, cache store, response, and optional summarization.
 
 **Impact:** The system behaves like a stateful AI workflow, not a simple LLM
-wrapper. It can route easy, off-topic, knowledge, apartment, and CRM-related
+wrapper. It can route easy, off-topic, knowledge, catalog-search, and CRM-related
 queries through different paths.
 
 ### 2. Self-Hosted Qdrant + BGE-M3 Retrieval
@@ -200,25 +200,26 @@ contacts. Write operations require HITL confirmation for lead/contact mutations.
 **Impact:** The bot connects AI conversations to real sales workflow: lead
 capture, qualification, follow-up, and manager handoff.
 
-### 7. Natural-Language Apartment Search
+### 7. Natural-Language Catalog Search
 
 **Problem:** Users describe what they want in natural language or voice instead
 of filling structured filters.
 
-**Implementation:** Built an apartment extraction pipeline that converts queries
-into structured filters such as city, complex, rooms, price, area, floor, view,
-and furnishing. The pipeline uses cached extraction, LLM extraction, and a
-deterministic regex fallback. Search results support catalog navigation,
-pagination, cards, favorites, and viewing flow.
+**Implementation:** Built a domain catalog extraction pipeline that converts
+queries into structured filters such as location, category, price, attributes,
+and availability. The current demo module uses starter-domain catalog fields,
+while the platform pattern is reusable for other catalogs. The pipeline uses cached
+extraction, LLM extraction, and a deterministic regex fallback. Search results
+support catalog navigation, pagination, cards, favorites, and viewing flow.
 
-**Impact:** Users can search with phrases like "2-bedroom near the sea under
-120k", while the system still applies structured filters and avoids unnecessary
-LLM work when deterministic parsing is enough.
+**Impact:** Users can search with natural phrases, while the system still applies
+structured filters and avoids unnecessary LLM work when deterministic parsing is
+enough.
 
 ### 8. Voice Input And Voice Agent
 
-**Problem:** Real-estate clients may prefer voice messages or phone-like flows
-instead of text.
+**Problem:** Business users may prefer voice messages or phone-like flows instead
+of text.
 
 **Implementation:** Added Telegram voice input and a LiveKit RTC voice path
 with ElevenLabs STT/TTS. The voice agent calls the same RAG API used by other
@@ -268,7 +269,7 @@ routing behavior.
 baseline metric collection from Langfuse, RAGAS evaluation commands,
 gold-set sync to Langfuse datasets, experiment runners, trace export, score
 config setup, judge calibration, and trace validation. The checked-in
-ground-truth fixture currently contains 55 samples; generation scripts can
+ground-truth fixture currently contains 9 samples; generation scripts can
 produce larger corpus-derived datasets.
 
 **Impact:** Retrieval, generation, routing, and prompt changes can be compared
@@ -326,7 +327,7 @@ monitoring unless production deployment evidence is added.
 
 3. **How is cost controlled?**
    The project avoids LLM calls when possible: classification, deterministic
-   apartment parsing fallback, semantic cache, embeddings cache, search cache,
+   catalog parsing fallback, semantic cache, embeddings cache, search cache,
    rerank cache, and local embeddings.
 
 4. **How are CRM writes made safe?**
@@ -357,6 +358,18 @@ monitoring unless production deployment evidence is added.
    AI as a pair-programming and review accelerator, not as unsupervised
    auto-pilot.
 
+## Data and Asset Boundaries
+
+This repository is intended for public portfolio review. All committed data,
+photos, and fixtures are either:
+
+- **Synthetic/generated** fixtures;
+- **Public sample data** with generic demo catalog rows; or
+- **Demo-safe placeholders** with provenance reviewed before publication.
+
+Do not commit real CRM exports, client contact lists, phone numbers, email
+addresses, private customer/domain records, personal recordings, or unlicensed imagery.
+
 ## Honest Limitations / Next Improvements
 
 - Fix and revalidate local Langfuse ML profile startup for the pinned ClickHouse
@@ -370,7 +383,7 @@ monitoring unless production deployment evidence is added.
 - Add a prompt-version A/B harness using Langfuse labels and dataset
   experiments.
 - Add screenshots or short demo videos for Telegram, CRM handoff, Langfuse
-  traces, and apartment search.
+  traces, and catalog search.
 - Publish a small sanitized demo dataset so recruiters can run a safe subset.
 - Add a short architecture diagram optimized for non-engineers.
 - Add quantified metrics if available: cache hit rate, latency before/after
