@@ -165,7 +165,6 @@ pytest-of-user/
 
 # Demo data files (but keep README)
 data/demo/*.csv
-data/apartments.csv
 data/demo/*.docx
 data/demo/*.pdf
 data/demo/*.xlsx

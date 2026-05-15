@@ -107,7 +107,7 @@ make check
 ### 5.4 Audit and Plan Docs
 
 - Audits go in `docs/audits/` with a `YYYY-MM-DD-` prefix.
-- Plans go in `docs/plans/` or `docs/superpowers/plans/`.
+- Plans go in `docs/plans/` when they are intended to remain in the public repository.
 - Both are **dated evidence**, not timeless source of truth. They may be archived when follow-up is complete.
 - Do not let audit findings silently replace canonical policy docs.
 

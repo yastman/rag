@@ -1,0 +1,3 @@
+complex_name,city,section,apartment_number,rooms,floor_label,area_m2,view_raw,price_eur,price_bgn,is_furnished,has_floor_plan,has_photo,is_promotion,old_price_eur
+Sample Sea Residence,Бургас,A,101,2,3,65.0,sea,120000,234699.60,false,false,false,false,
+Sample Garden Residence,Варна,B,12,1,gr.,42.5,garden,78000,152557.74,true,false,false,false,
