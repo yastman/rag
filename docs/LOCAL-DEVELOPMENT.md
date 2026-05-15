@@ -8,8 +8,7 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
-> **For this machine**: the recommended Docker path is the remote MacBook host.
-> See [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md) for the full workflow.
+> **For this machine**: use a remote Docker host via SSH to keep Docker load off the workstation.
 > Native `make bot` (WSL) remains available as a separate helper for fast iteration without Docker.
 
 ## Remote MacBook Docker (Recommended)
@@ -48,7 +47,7 @@ make bot
 
 Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
 
-Full operator workflow, troubleshooting, and test boundaries are in [`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+Full operator workflow, troubleshooting, and test boundaries are in the Docker runbook referenced below.
 
 ## 1. Bootstrap Workspace
 
@@ -99,11 +98,10 @@ Langfuse local development:
 
 ## 2. Start Services
 
-To keep Docker load off the workstation, use the MacBook as a remote Docker host
-instead of starting local Docker Desktop. On an 8GB MacBook, use the lean
+To keep Docker load off the workstation, use a remote Docker host via SSH
+instead of starting local Docker Desktop. On an 8GB remote host, use the lean
 bot/core remote flow by default; the ML, observability, voice, and full stacks
-are temporary validation tools, not the idle development baseline. See
-[`runbooks/remote-macbook-docker.md`](runbooks/remote-macbook-docker.md).
+are temporary validation tools, not the idle development baseline.
 
 ```bash
 # Core services (default compose set)
