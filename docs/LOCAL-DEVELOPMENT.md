@@ -74,6 +74,7 @@ git ls-files --others --exclude-standard
 This should be empty for routine development work.
 
 For local development, the canonical environment file is `.env` in the repo root.
+`.env.local` is legacy/manual-only and is not auto-loaded by documented workflows.
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`

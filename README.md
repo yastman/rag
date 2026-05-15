@@ -183,7 +183,13 @@ Choose the path that matches your goal:
 - Python 3.11+; Python 3.12 is recommended for local development.
 - [`uv`](https://docs.astral.sh/uv/)
 - Docker with Compose support.
-- `.env` copied from `.env.example` and filled with local/test credentials.
+- `.env` copied from `.env.example` and filled with local/test credentials:
+
+```bash
+cp .env.example .env
+```
+
+`.env.local` is not loaded automatically by documented workflows.
 
 For full setup, validation ladder, environment behavior, and troubleshooting, use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 

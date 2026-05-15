@@ -20,7 +20,7 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 ## Boundaries
 
 - **Transport does not absorb retrieval/domain logic.** `bot.py` handlers call into `graph`, `agents`, or `pipelines/client`; they do not query Qdrant or run LLM prompts directly.
-- **LangGraph state contracts** (`graph/state.py`) must be preserved when adding new nodes or edges.
+- **LangGraph state contracts** ([`telegram_bot/graph/state.py`](graph/state.py)) must be preserved when adding new nodes or edges.
 - **Ingestion determinism** is owned by `src/ingestion/`; bot code must not modify collection schemas or manifest identity.
 
 ## Related Runtime Services
