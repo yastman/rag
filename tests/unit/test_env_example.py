@@ -44,6 +44,21 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     assert ".env -> .env.local symlink" not in makefile
 
 
+class TestEnvExampleSanitization:
+    """.env.example must not contain real IPs or secret-looking placeholders."""
+
+    BLOCKED_STRINGS = [
+        "95.111.252.29",
+        "192.168.31.168",
+        "sk-ant-api03-",
+    ]
+
+    @pytest.mark.parametrize("blocked", BLOCKED_STRINGS)
+    def test_no_blocked_strings_in_env_example(self, blocked: str) -> None:
+        env_example = Path(".env.example").read_text(encoding="utf-8")
+        assert blocked not in env_example, f".env.example contains blocked string: {blocked}"
+
+
 class TestEnvExampleCompleteness:
     """Env example must document all CRM and manager config vars."""
 

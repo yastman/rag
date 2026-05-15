@@ -262,5 +262,6 @@ docs/artifacts/*.md
 .planning/
 .codex/
 .opencode/node_modules/
+opencode.json
 projects/
 tmp.*
