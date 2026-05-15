@@ -271,3 +271,14 @@ rag-small-to-big-research.md
 opencode.json
 projects/
 tmp.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor swap/backup files
+*.swp
+*.swo
+*~
+*.bak
+*.backup

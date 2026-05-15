@@ -220,7 +220,7 @@ make validate-traces-fast
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
 - `bge-m3` memory is controlled by `BGE_M3_MEMORY_LIMIT` and defaults to 4G in
-  local/dev Compose, including the MacBook remote helpers.
+  local/dev Compose.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
 - Local and profile workflows use the canonical local compose set: `compose.yml:compose.dev.yml`.
 - Docker runtime for images that import `telegram_bot.observability` (and therefore `langfuse`) uses Python 3.13. Local native development may still use the repo's `uv` environment (Python 3.11+).
