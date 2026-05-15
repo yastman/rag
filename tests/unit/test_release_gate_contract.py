@@ -1,4 +1,4 @@
-"""Regression tests for the VPS release gate contract."""
+"""Regression tests for release gate and public CI contracts."""
 
 import re
 from pathlib import Path
@@ -20,26 +20,23 @@ def test_release_smoke_script_does_not_allow_profile_mode() -> None:
     )
 
 
-def test_ci_deploy_uses_strict_mini_app_release_smoke() -> None:
-    """CI deploy must fail when mini-app parity is broken."""
+def test_public_ci_does_not_run_release_smoke() -> None:
+    """Public CI must not run production release smoke checks."""
     workflow = CI_WORKFLOW.read_text()
-    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" in workflow
+    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" not in workflow
 
 
-def test_ci_deploy_runs_prod_env_preflight_before_build() -> None:
-    """CI deploy must validate the production env contract before docker compose build."""
+def test_public_ci_does_not_run_prod_env_preflight() -> None:
+    """Public CI must not expose production env preflight wiring."""
     workflow = CI_WORKFLOW.read_text()
-    assert "./scripts/validate_prod_env.sh" in workflow
-    assert workflow.index("./scripts/validate_prod_env.sh") < workflow.index("docker compose build")
+    assert "./scripts/validate_prod_env.sh" not in workflow
 
 
-def test_ci_deploy_force_recreates_services_after_build() -> None:
-    """CI deploy must recreate services so rebuilt images actually reach runtime."""
+def test_public_ci_does_not_deploy_or_recreate_services() -> None:
+    """Public CI validates code and config; it must not deploy services."""
     workflow = CI_WORKFLOW.read_text()
-    assert "docker compose --compatibility up -d --wait --force-recreate" in workflow
-    assert workflow.index("docker compose build") < workflow.index(
-        "docker compose --compatibility up -d --wait --force-recreate"
-    )
+    assert "docker compose --compatibility up -d --wait --force-recreate" not in workflow
+    assert "docker compose --compatibility up -d --force-recreate" not in workflow
 
 
 def test_manual_deploy_uses_strict_mini_app_release_smoke() -> None:

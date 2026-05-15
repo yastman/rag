@@ -95,6 +95,6 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 | `docs/runbooks/` | Operational troubleshooting and incident response |
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
 | `docs/audits/` | Dated evidence and investigation artifacts; not entrypoints |
-| `docs/plans/` and `docs/superpowers/plans/` | Implementation plans and design specs |
+| `docs/superpowers/plans/` | Implementation plans and design specs |
 | `docs/review/` and `docs/portfolio/` | Reviewer and portfolio entry points |
 | Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `k8s/`, `docker/`) |

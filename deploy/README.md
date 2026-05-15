@@ -25,9 +25,8 @@ Server deployment configuration for the RAG Telegram Bot.
    sudo visudo -c
    ```
 
-3. Configure GitHub Secrets for CI/CD:
-   - `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`
-   - `TELEGRAM_BOT_TOKEN`, `ALLOWED_USER_IDS`
+3. Configure runtime secrets outside the repository. Do not commit production
+   tokens, hostnames, SSH keys, or user allowlists.
 
 ## Service management
 

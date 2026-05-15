@@ -7,7 +7,6 @@
 
 Date: 2026-03-15
 Branch: `feat/sdk-canonical-remediation`
-Plan: `docs/plans/2026-03-15-sdk-canonical-remediation-plan.md`
 
 ## Scope
 
@@ -24,10 +23,10 @@ This report summarizes execution of phases 0-8 from the canonical SDK remediatio
 
 ### Phase 0: Source Of Truth Recovery
 
-- Restored and tracked historical SDK docs + canonical plan in `docs/plans/`.
+- Restored and tracked historical SDK docs + canonical plan (since cleaned up in public cleanup).
 - Fixed stale broken references in compose/docs/agents override files.
 - Aligned Python version and structure drift in README/docs.
-- Updated `.gitignore` to allow tracking canonical plan/audit docs.
+- Updated `.gitignore` for plan/audit doc tracking (whitelist cleaned up in public cleanup).
 
 ### Phase 1: Compose Secret Posture
 

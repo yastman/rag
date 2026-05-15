@@ -3,34 +3,46 @@ from pathlib import Path
 import yaml
 
 
-def test_deploy_timeout_increased() -> None:
+def test_workflow_name_is_ci() -> None:
+    """Workflow exposes the standard CI name."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     data = yaml.safe_load(text)
-    deploy = next(j for j in data["jobs"].values() if j.get("name") == "Deploy to VPS")
-    assert deploy.get("timeout-minutes", 10) > 10
+    assert data["name"] == "CI"
 
 
-def test_deploy_no_fixed_sleep() -> None:
+def test_no_deploy_to_vps_job() -> None:
+    """No job deploys to VPS; public CI must not expose deployment targets."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "sleep 20" not in text
-    # Disallow blind fixed sleeps anywhere in the deploy job script
-    assert "sleep " not in text
+    data = yaml.safe_load(text)
+    job_names = [j.get("name") for j in data["jobs"].values()]
+    assert "Deploy to VPS" not in job_names
 
 
-def test_deploy_uses_compose_wait_or_health_driven() -> None:
+def test_no_sensitive_deploy_patterns() -> None:
+    """Workflow must not contain secrets, hostnames, or deploy actions that
+    would leak deployment internals in a public repository."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "--wait" in text or "health" in text.lower()
+    forbidden = [
+        "SERVER_HOST",
+        "SERVER_USER",
+        "SSH_PRIVATE_KEY",
+        "/opt/rag-fresh",
+        "git reset --hard",
+        "appleboy/ssh-action",
+    ]
+    for pattern in forbidden:
+        assert pattern not in text, f"forbidden pattern in workflow: {pattern!r}"
 
 
-def test_deploy_exports_buildkit() -> None:
+def test_validation_jobs_exist() -> None:
+    """Core validation: the Lint & Type Check job runs."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "DOCKER_BUILDKIT=1" in text
+    data = yaml.safe_load(text)
+    assert "lint" in data["jobs"], "missing 'lint' job key"
+    assert data["jobs"]["lint"].get("name") == "Lint & Type Check"
 
 
-def test_deploy_dirty_tree_guard_before_reset() -> None:
+def test_ruff_lint_runs() -> None:
+    """Linting runs as part of CI."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    # Must guard against dirty tree before destructive reset
-    assert "git status --porcelain" in text
-    reset_idx = text.find("git reset --hard")
-    guard_idx = text.find("git status --porcelain")
-    assert guard_idx < reset_idx, "dirty-tree guard must appear before git reset --hard"
+    assert "ruff check src/ telegram_bot/" in text
