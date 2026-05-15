@@ -9,6 +9,7 @@ For test-writing conventions, see [`docs/engineering/test-writing-guide.md`](../
 tests/
 ├── conftest.py          ***REMOVED*** Shared fixtures and hooks
 ├── unit/                ***REMOVED*** Fast, isolated tests (mocked/no external deps)
+│   └── e2e_adapters/    ***REMOVED*** Unit checks for E2E adapters/config/validators (not live E2E)
 ├── contract/            ***REMOVED*** Static contracts: trace families, span coverage, error shapes
 ├── integration/         ***REMOVED*** Service-aware paths and real component interaction
 ├── smoke/               ***REMOVED*** Quick health checks against live services
@@ -47,6 +48,10 @@ Run these selectively, not on every save.
 | Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
 | Load | `tests/load/` | Concurrent throughput and cache eviction | Minutes |
 | E2E | `tests/e2e/` | Full-stack pipeline and Telegram flows | Slow |
+
+Canonical E2E placement:
+- Live end-to-end scenarios belong only to `tests/e2e/`.
+- `tests/unit/e2e_adapters/` is unit-only coverage for E2E helper code (config, adapters, validators) and must stay in the local-fast lane.
 
 ***REMOVED******REMOVED*** Commands
 
