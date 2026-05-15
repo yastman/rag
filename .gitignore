@@ -258,9 +258,26 @@ docs/artifacts/*.md
 .grepai/
 .signals/
 
-# Local AI/orchestration tool directories
+# Internal AI/orchestration tool directories
+docs/superpowers/
 .planning/
+rag-small-to-big-research.md
+.gsd/auto.lock
+.gsd/completed-units.json
+.gsd/STATE.md
+.gsd/metrics.json
+.gsd/activity/
+.gsd/runtime/
+.gsd/worktrees/
+.gsd/gsd.db*
+.gsd/notifications.jsonl
+.gsd/doctor-history.jsonl
+.gsd/milestones/**/continue.md
+.gsd/milestones/**/*-CONTINUE.md
+.bg-shell/
 .codex/
+.swarm/
+.opencode/
 .opencode/node_modules/
 opencode.json
 projects/
