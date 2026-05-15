@@ -125,7 +125,6 @@ When changing `compose*.yml`, Dockerfiles, or service definitions, verify the ef
 
 ```bash
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services
-COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services
 ```
 
 CI uses `tests/fixtures/compose.ci.env` for interpolation validation:
