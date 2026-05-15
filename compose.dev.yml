@@ -1,5 +1,9 @@
 # compose.dev.yml — Development overrides: ports, colbert reranking, relaxed defaults, ML profile-gating.
 # Usage: COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d
+#
+# WARNING: This file contains hardcoded dev-only passwords (miniosecret, clickhouse, etc.).
+#          These defaults are safe for local development only. Do NOT reuse this file
+#          for any internet-facing or shared environment.
 
 services:
   postgres:
@@ -76,7 +80,7 @@ services:
       - "127.0.0.1:8123:8123"
       - "127.0.0.1:9009:9000"
     environment:
-      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
 
   minio:
     profiles: ["ml", "full"]
@@ -85,7 +89,7 @@ services:
       - "127.0.0.1:9091:9001"
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
-      MINIO_ROOT_PASSWORD: miniosecret
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
 
   redis-langfuse:
     profiles: ["ml", "full"]
@@ -101,9 +105,9 @@ services:
   langfuse-worker:
     profiles: ["ml", "full"]
     environment:
-      CLICKHOUSE_PASSWORD: clickhouse
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
       REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
 
   langfuse:
@@ -117,9 +121,9 @@ services:
       LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-Local Dev}
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-dev}
-      CLICKHOUSE_PASSWORD: clickhouse
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
       REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
     deploy:
       resources:
@@ -136,6 +140,10 @@ services:
   loki:
     ports:
       - "127.0.0.1:3100:3100"
+
+  alertmanager:
+    ports:
+      - "127.0.0.1:9093:9093"
 
   rag-api:
     ports:

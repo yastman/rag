@@ -11,6 +11,17 @@ Typical local filenames you can place here (these are not committed):
 - `demo_BG.csv` — Sample property listings
 - `info_bg_home.docx` — Sample company contact document
 
+## Data Status
+
+Files placed here should be **synthetic, public, or fully anonymized**.
+They are meant for local pipeline verification only and are not part of the public repository.
+
+## Safety Warnings
+
+- Do **not** commit real CRM exports, client contact lists, phone numbers, email addresses, private property records, or personal recordings.
+- Do **not** place proprietary or licensed documents here unless you have explicit redistribution rights.
+- When in doubt, generate synthetic data or use clearly public-domain sources.
+
 ## Usage
 
 Index demo files via the unified ingestion pipeline or helper scripts in [`scripts/`](../../scripts/):

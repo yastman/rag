@@ -1,277 +1,229 @@
 <div align="center">
 
-# AI Real Estate Automation Platform
+# Conversational AI Automation Platform
 
-**Telegram + RAG + apartment search + CRM automation + voice + production-like AI infrastructure**
+**Build domain-specific AI assistants that connect chat, voice, knowledge search, CRM workflows, and business automation in one observable runtime.**
 
 [![CI](https://github.com/yastman/rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yastman/rag/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Docker Compose](https://img.shields.io/badge/runtime-Docker%20Compose-2496ED.svg)](DOCKER.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
+<p align="center">
+  <img src="docs/assets/readme/conversational-ai-platform-hero.svg" alt="Conversational AI Automation Platform: chat, voice, knowledge search, CRM workflows, observability, and Docker runtime" width="880">
+</p>
 
 </div>
 
 ---
 
-## What Is This?
+This repository is a production-oriented foundation for AI assistants that answer from private knowledge, search domain catalogs, qualify leads, update CRM/workflow systems with human approval, and operate across Telegram, voice, API, and Mini App surfaces.
 
-An AI-native real-estate automation platform that lets clients ask questions in
-natural language via Telegram, search apartment listings, move qualified leads
-into Kommo CRM workflows, and use the same RAG stack from text and voice
-channels.
+The current codebase includes one working sales/catalog automation domain, but the platform is intentionally modular: replace the domain prompts, search tools, and business integrations while keeping the orchestration, retrieval, ingestion, caching, observability, and runtime contracts.
 
-**The problem:** Real estate agencies drown in repetitive client questions across Telegram, phone, and CRM. Agents spend hours answering the same things.
+## Why It Exists
 
-**The solution:** An AI-powered Telegram bot that:
-- Answers knowledge-base questions with source citations (RAG)
-- Searches apartment listings with natural language — *"2-bedroom in Sofia under €80k"*
-- Scores and nurtures leads automatically via CRM integration
-- Supports Telegram voice input and a LiveKit-powered voice agent path
-- Runs as a Docker Compose based local/VPS stack with observability, ingestion,
-  vector search, and local ML services
+Most business bots stop at scripted replies. Most AI demos stop at a prompt. This project demonstrates the full operational loop: users ask in natural language, the system retrieves grounded knowledge, routes workflow intent, calls business tools, asks for human approval when needed, and leaves traces operators can inspect.
 
-> The primary runtime is Docker Compose on local/VPS environments. k3s manifests
-> exist for core services as an incremental migration path, not full parity with
-> the Compose stack.
+| Business need | Platform capability |
+|---|---|
+| Reduce repeated manual answers | RAG over private documents with citation-aware generation |
+| Convert conversations into action | CRM/workflow tools, lead scoring, tasks, notes, and manager handoff |
+| Let users search naturally | Domain-specific extraction plus hybrid vector/search pipelines |
+| Support more than text chat | Telegram bot, Telegram voice input, LiveKit voice-agent path, API, and Mini App surface |
+| Keep AI behavior inspectable | LangGraph state flow, Langfuse traces, structured logs, quality scores, and runbooks |
+| Control latency and cost | Redis-backed semantic, embedding, search, rerank, and extraction caches |
 
----
+## Adapt It To Your Domain
 
-## For Reviewers
+The reusable part is the platform: channels, graph orchestration, retrieval, ingestion, cache, observability, and Docker runtime. The replaceable part is the domain layer: prompts, tools, search schema, CRM/workflow integration, and UI copy.
 
-If you have limited time, read the repository in this order:
+| Domain | Replaceable module examples |
+|---|---|
+| Sales and CRM | Lead qualification, deal lookup, tasks, notes, manager handoff |
+| Customer support | Policy answers, ticket lookup, escalation workflows |
+| E-commerce | Product catalog search, recommendations, order status tools |
+| Education | Course search, student FAQ, onboarding flows |
+| Internal operations | Knowledge-base assistant, document search, approval workflows |
 
-1. [Portfolio case study](docs/portfolio/resume-case-study.md) — concise
-   project narrative, feature cards, trade-offs, and honest limitations.
-2. [Project guide](docs/review/PROJECT_GUIDE.md) — folder map and subsystem ownership.
-3. `telegram_bot/graph/` — LangGraph orchestration and routing.
-4. `telegram_bot/agents/` and `telegram_bot/services/` — CRM tools, apartment
-   search, cache, lead scoring, handoff, and business logic.
-5. `src/ingestion/unified/` — deterministic document ingestion and Qdrant writes.
-6. `compose.yml`, `compose.dev.yml`, `compose.vps.yml`, and [DOCKER.md](DOCKER.md)
-   — runtime architecture.
+## Platform Capabilities
 
-Safe review notes:
+| Capability | What it means in this repo | Evidence |
+|---|---|---|
+| Stateful AI orchestration | LangGraph routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization | [`telegram_bot/graph/`](telegram_bot/graph/) |
+| Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`telegram_bot/graph/state.py`](telegram_bot/graph/state.py) |
+| Cross-channel assistant runtime | Telegram text, Telegram voice, LiveKit voice agent, FastAPI RAG API, and Mini App handoff reuse the same core ideas | [`src/voice/`](src/voice/), [`src/api/`](src/api/), [`mini_app/`](mini_app/) |
+| Self-hosted retrieval | BGE-M3 + Qdrant support dense, sparse, and ColBERT-style retrieval paths | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) |
+| Deterministic ingestion | CocoIndex and Docling parse, chunk, embed, upsert/delete, retry, and track DLQ state | [`docs/INGESTION.md`](docs/INGESTION.md) |
+| Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
+| Cost and latency controls | Redis caches semantic answers, embeddings, search results, rerank results, and extraction outputs | [`telegram_bot/integrations/cache.py`](telegram_bot/integrations/cache.py) |
+| Observability | Langfuse traces/scores, trace validation, Loki/Promtail/Alertmanager local monitoring, and runbooks | [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) |
+| Compose-first runtime | Docker Compose profiles cover core services, bot, ingestion, voice, ML observability, monitoring, and full stack | [`DOCKER.md`](DOCKER.md) |
 
-- Do not run production deploy scripts or real CRM write paths without a
-  dedicated review environment.
-- Start with [ACCESS_FOR_REVIEWERS.md](docs/review/ACCESS_FOR_REVIEWERS.md) before
-  executing commands.
-- GitHub repository presentation checklist lives in
-  [GITHUB_REPO_SETUP.md](docs/review/GITHUB_REPO_SETUP.md).
+## Why This Is More Than A Bot
 
----
+A simple chatbot receives a message and calls an LLM. This repository treats the assistant as an operating system for business workflows:
 
-## How It Works
+- The graph can decide whether to answer, retrieve, rewrite, rerank, call tools, ask for approval, or hand off.
+- Retrieval is not a single vector query; it includes dense/sparse search, optional reranking, cache policy, grading, and fallbacks.
+- Domain behavior lives behind tools and prompts, so catalog/search/CRM logic can be replaced without rewriting the runtime.
+- Runtime behavior is observable through traces, logs, health checks, validation commands, and documented runbooks.
+
+## Architecture Snapshot
 
 ```mermaid
 graph TB
-    subgraph "User Interface"
-        U["👤 Telegram User"]
-        V["📞 Voice Call"]
+    subgraph "Channels"
+        TG["Telegram Bot"]
+        TV["Telegram Voice"]
+        MA["Telegram Mini App"]
+        VA["LiveKit Voice Agent"]
+        API["FastAPI RAG API"]
     end
 
-    subgraph "Bot Layer"
-        B["Telegram Bot<br/>aiogram 3 + dialogs"]
-        VA["Voice Agent<br/>LiveKit + ElevenLabs"]
+    subgraph "AI Workflow Core"
+        ROUTER["Classifier / Router"]
+        GRAPH["LangGraph Workflow"]
+        HITL["Human Approval"]
+        TOOLS["Domain + CRM Tools"]
     end
 
-    subgraph "Intelligence"
-        QC[Query Classifier]
-        QC -->|Knowledge| RAG[RAG Pipeline]
-        QC -->|Apartment| APT["Apartment Search<br/>regex filters → hybrid search"]
-        QC -->|CRM Action| AG["LangGraph Agent<br/>CRM tools"]
+    subgraph "Knowledge Runtime"
+        INGEST["CocoIndex + Docling Ingestion"]
+        RAG["RAG Pipeline"]
+        CACHE["Redis Semantic Cache"]
+        EVAL["Evaluation + Trace Validation"]
     end
 
-    subgraph "Retrieval"
-        RAG --> SC{Semantic Cache}
-        SC -->|HIT| RES[Cached Response]
-        SC -->|MISS| HS["Hybrid Search<br/>Dense + Sparse RRF"]
-        HS --> RR[ColBERT Rerank]
-        RR --> LLM["LLM Generate<br/>via LiteLLM"]
+    subgraph "Data + Model Services"
+        QD[("Qdrant")]
+        RD[("Redis")]
+        PG[("PostgreSQL")]
+        BGE["BGE-M3 Embeddings"]
+        LLM["LiteLLM Providers"]
     end
 
-    subgraph "Infrastructure"
-        QD[("Qdrant<br/>vectors")]
-        RD[("Redis<br/>cache + state")]
-        PG[("PostgreSQL<br/>leads + checkpoints")]
-        BGE["BGE-M3<br/>embeddings"]
-        LF["Langfuse<br/>tracing"]
-        CRM[Kommo CRM]
+    subgraph "Operations"
+        LF["Langfuse"]
+        MON["Loki / Promtail / Alertmanager"]
+        DOCKER["Docker Compose Profiles"]
     end
 
-    U --> B --> QC
-    V --> VA --> QC
-    HS --> QD
-    HS --> BGE
-    SC --> RD
-    AG --> CRM
-    AG --> PG
-    LLM --> LF
+    TG --> ROUTER
+    TV --> ROUTER
+    MA --> TG
+    VA --> API --> ROUTER
+    ROUTER --> GRAPH
+    GRAPH --> RAG
+    GRAPH --> TOOLS
+    TOOLS --> HITL
+    RAG --> CACHE
+    RAG --> QD
+    INGEST --> QD
+    CACHE --> RD
+    GRAPH --> PG
+    RAG --> BGE
+    GRAPH --> LLM
+    GRAPH --> LF
+    EVAL --> LF
+    DOCKER --> QD
+    DOCKER --> BGE
+    DOCKER --> MON
 ```
 
----
+## Review This In 5 Minutes
 
-## Key Features
+If you are evaluating the project for collaboration, hiring, or client work, read it in this order:
 
-### Hybrid Search with ColBERT Reranking
-Dense + sparse vectors fused via RRF, with optional ColBERT multi-vector reranking — all server-side in Qdrant. No external reranking API needed.
+1. [`docs/portfolio/resume-case-study.md`](docs/portfolio/resume-case-study.md) - concise narrative, feature cards, trade-offs, and limitations.
+2. [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) - folder map and high-signal files.
+3. [`telegram_bot/graph/`](telegram_bot/graph/) - LangGraph orchestration and state flow.
+4. [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) - tools, business logic, cache, search, CRM, scoring, handoff.
+5. [`src/ingestion/unified/`](src/ingestion/unified/) - deterministic ingestion and Qdrant writes.
+6. [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), and [`DOCKER.md`](DOCKER.md) - runtime architecture.
 
-### Cheap-First Apartment Search
-Natural language queries like *"3 rooms in Burgas under 100k"* use
-deterministic regex parsing for common filters before falling back to LLM
-extraction for complex queries. Results come from hybrid vector search over
-property listings.
+Safe review notes:
 
-### Agentic RAG with CRM Tools
-LangGraph state graph with CRM tools for leads, contacts, tasks, notes, and
-history. Write operations use HITL confirmation via `interrupt()`.
+- Do not run production deploy scripts, use real credentials, or trigger real CRM write paths without a dedicated review environment.
+- Start with [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) before executing commands.
+- Repository presentation checklist lives in [`docs/review/GITHUB_REPO_SETUP.md`](docs/review/GITHUB_REPO_SETUP.md).
 
-### Multi-Level Semantic Cache
-Tiered caching via RedisVL: semantic answer cache, embedding caches, search
-result cache, and rerank result cache. Distance thresholds are tuned per query
-type.
+## Proof Of Engineering
 
-### Voice Assistant
-LiveKit agent path with ElevenLabs STT/TTS and shared RAG API integration. SIP
-support is represented as outbound trunk provisioning; inbound call routing
-should be described only after a dedicated production review.
+- Workflow architecture: LangGraph graph, typed state, conditional edges, tool boundaries, and HITL confirmation.
+- Retrieval infrastructure: BGE-M3, Qdrant dense/sparse/ColBERT vectors, aliases, strict mode, and reranking path.
+- Ingestion reliability: stable file identity, Docling parsing, chunking, Qdrant upsert/delete, PostgreSQL state, retries, and DLQ.
+- Runtime discipline: Compose profiles, pinned images, health checks, preflight checks, remote Docker helpers, and operational docs.
+- Cost controls: Redis semantic answer cache, embedding cache, search cache, rerank cache, and extraction cache.
+- Observability: Langfuse traces/scores, prompt management, trace validation, local monitoring, and runbooks.
+- Quality gates: Ruff, MyPy, pytest tiers, CI guardrails, and documented local validation.
 
-### Observability
-Langfuse traces and quality/operational scores cover RAG, latency, cache,
-rerank, voice, security, CRM, history, nurturing, and source attribution when
-observability is configured. Loki + Alertmanager are available for local/dev
-monitoring.
+## Current Domain Module
 
-### Partial i18n
-Three language bundles (ru/uk/en) via Fluent `.ftl` files. Some operational and
-dialog strings are still hardcoded and should be treated as an ongoing migration.
+The repository currently includes a working sales/catalog automation module: catalog-style search, lead workflows, manager handoff, scoring, and Kommo CRM integration. Treat that as the first domain implementation, not the boundary of the platform.
 
-### Unified Ingestion
-CocoIndex pipeline: Docling parses PDFs/DOCX → semantic chunking → BGE-M3 dense+sparse embeddings → Qdrant. Incremental updates, resumable.
-
----
-
-## Tech Stack
-
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| **LLM** | Any model via LiteLLM | Provider-agnostic, easy switching |
-| **Embeddings** | BGE-M3 (self-hosted) | Dense + sparse + ColBERT in one model, no API costs |
-| **Vector DB** | Qdrant | Native RRF fusion, ColBERT support, server-side reranking |
-| **Cache** | Redis + RedisVL | Semantic similarity cache, sub-ms latency |
-| **Bot** | aiogram 3 + aiogram-dialog | Async, dialog state machines, inline keyboards |
-| **Pipeline** | LangGraph | State graph with tools, checkpointing, HITL |
-| **Ingestion** | CocoIndex + Docling | Deterministic, resumable, multi-format parsing |
-| **Voice** | LiveKit Agents | WebRTC + SIP, plugin ecosystem |
-| **Observability** | Langfuse + Loki | LLM tracing + local/dev log aggregation + alerting |
-| **Database** | PostgreSQL | Lead scoring, graph checkpoints, user data |
-| **Deployment** | Docker Compose / partial k3s | Local/VPS Compose primary, k3s core-service manifests |
-
----
+To adapt the system, replace the domain prompts, extraction logic, catalog/search tools, CRM/tool integrations, and UI copy while keeping the common runtime: channels, LangGraph orchestration, RAG, ingestion, cache, observability, and Docker profiles.
 
 ## Quick Start
 
+Choose the path that matches your goal:
+
+| Goal | Start here |
+|---|---|
+| Review safely before running commands | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) |
+| Run core local services | `make local-up` |
+| Run the bot natively for fast iteration | `make test-bot-health` then `make run-bot` |
+| Run the Compose bot stack | `make docker-bot-up` |
+| Run the full Compose stack | `make docker-full-up` |
+| Understand runtime profiles and ports | [`DOCKER.md`](DOCKER.md) |
+
 ### Prerequisites
 
-- Python 3.11+ (3.12 recommended), [uv](https://docs.astral.sh/uv/), Docker
-  - Docker runtime for Langfuse-importing services uses Python 3.13; local `uv` environment may use a different Python version
-
-### 1. Install & Configure
-
-```bash
-git clone https://github.com/yastman/rag.git && cd rag
-uv sync
-cp .env.example .env   # Fill in API keys (see below)
-```
-
-For local development, the canonical environment file is `.env` in the repo root. `.env.local` is not loaded automatically by the bot, `make`, or `uv run` entry points.
-
-### 2. Start Services
+- Python 3.11+; Python 3.12 is recommended for local development.
+- [`uv`](https://docs.astral.sh/uv/)
+- Docker with Compose support.
+- `.env` copied from `.env.example` and filled with local/test credentials.
 
 ```bash
-make local-up    # Redis, Qdrant, BGE-M3, LiteLLM
-make test-bot-health   # Local helper: Redis, Qdrant, LiteLLM + optional Postgres note
-make run-bot           # Run bot natively (fast iteration, no Docker rebuild)
+cp .env.example .env
 ```
 
-For native bot runs, `REDIS_URL` is optional in local development: when it is unset, the bot derives `redis://:REDIS_PASSWORD@localhost:6379` from `REDIS_PASSWORD` so it matches the password-protected Redis started by `make local-up`.
+`.env.local` is not loaded automatically; use `.env` for local runs.
 
-`make test-bot-health` validates the published local prerequisites used by native bot runs. The authoritative startup preflight still runs in [`telegram_bot/preflight.py`](telegram_bot/preflight.py) when the bot starts. That runtime preflight still owns the repo-local BGE-M3 contract because BGE-M3 is a service this repository depends on directly, not a generic upstream SDK health path.
+For full setup, validation ladder, environment behavior, and troubleshooting, use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 
-### 3. Or Run Everything in Docker
+### Runtime Profiles
 
-```bash
-make docker-bot-up     # Core + bot (production-like)
-make docker-full-up    # All 23 services
-```
+Docker Compose is the primary local/VPS runtime. Profiles split the system by operational surface:
 
-<details>
-<summary><strong>Optional Stacks</strong></summary>
+| Profile | Services |
+|---|---|
+| default/core | PostgreSQL, Redis, Qdrant, BGE-M3, Docling, user-base, Mini App API/frontend |
+| `bot` | LiteLLM and Telegram bot |
+| `ingest` | unified ingestion service |
+| `ml` | Langfuse, ClickHouse, MinIO, Redis Langfuse, worker |
+| `obs` | Loki, Promtail, Alertmanager |
+| `voice` | RAG API, LiveKit, SIP, voice agent |
+| `full` | all profile-gated services |
 
-| Stack | Command | Services |
-|-------|---------|----------|
-| ML/Observability | `make docker-ml-up` | Langfuse, ClickHouse, MinIO |
-| Monitoring | `make monitoring-up` | Loki, Promtail, Alertmanager |
-| Ingestion | `make docker-ingest-up` | Unified ingestion service |
-| Voice | `make docker-voice-up` | RAG API, LiveKit, SIP, Voice Agent — **intentionally off by default** |
+The repo also includes remote Docker helpers for running Compose on a remote host. Treat this as a development convenience, not a required public setup path; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and [`DOCKER.md`](DOCKER.md) for details.
 
-</details>
+## Project Map
 
-### Environment Variables
+Use [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) for the maintained folder map and high-signal files.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TELEGRAM_BOT_TOKEN` | Yes | Telegram Bot API token |
-| `OPENAI_API_KEY` | Yes | OpenAI API key (routed through LiteLLM) |
-| `REDIS_PASSWORD` | Yes | Redis authentication |
-| `LANGFUSE_*` | Yes | Langfuse observability (public key, secret key, host) |
+High-level entry points:
 
-<details>
-<summary><strong>Optional variables</strong></summary>
-
-| Variable | Description |
-|----------|-------------|
-| `KOMMO_*` | Kommo CRM integration (client ID, secret, tokens) |
-| `LIVEKIT_*` | LiveKit voice agent (URL, API key, secret) |
-| `CEREBRAS_API_KEY` | Alternative LLM provider |
-| `TTFT_DRIFT_WARN_MS` | TTFT monitoring threshold (default: 500ms) |
-
-</details>
-
----
-
-## Project Structure
-
-```
-telegram_bot/              # Telegram bot (aiogram 3 + aiogram-dialog)
-├── handlers/              #   Message & callback handlers
-├── services/              #   Business logic (search, LLM, cache, apartments, CRM)
-├── graph/                 #   LangGraph voice RAG pipeline
-├── agents/                #   Sub-agents (history search, HITL)
-├── dialogs/               #   Dialog UI (menus, filters, settings)
-├── integrations/          #   External clients (Redis, Postgres, Langfuse)
-├── middlewares/           #   Throttling, i18n, error handling
-└── locales/{ru,uk,en}/    #   Fluent .ftl translations
-
-src/
-├── ingestion/unified/     #   CocoIndex ingestion pipeline
-├── retrieval/             #   Search engines & evaluation
-├── voice/                 #   LiveKit voice agent
-└── api/                   #   FastAPI RAG API
-
-mini_app/                  # Telegram Mini App (React + TypeScript)
-k8s/                       # Kubernetes manifests (k3s deployment)
-src/evaluation/            # RAG evaluation (RAGAS, A/B testing)
-```
-
-## Entry Points
-
-| Service | Command |
-|---------|---------|
-| Telegram Bot | `uv run python -m telegram_bot.main` |
-| RAG API | `uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080` |
-| Ingestion CLI | `uv run python -m src.ingestion.unified.cli --help` |
-| Voice Agent | `uv run python -m src.voice.agent` |
+| Area | Path |
+|---|---|
+| Telegram assistant runtime | [`telegram_bot/`](telegram_bot/) |
+| LangGraph workflow | [`telegram_bot/graph/`](telegram_bot/graph/) |
+| Business/domain tools | [`telegram_bot/agents/`](telegram_bot/agents/) and [`telegram_bot/services/`](telegram_bot/services/) |
+| RAG API and voice | [`src/api/`](src/api/) and [`src/voice/`](src/voice/) |
+| Unified ingestion | [`src/ingestion/unified/`](src/ingestion/unified/) |
+| Mini App | [`mini_app/`](mini_app/) |
+| Runtime | [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), [`DOCKER.md`](DOCKER.md) |
 
 ## Validation
 
@@ -281,34 +233,31 @@ make test-unit   # Unit tests (parallel via pytest-xdist)
 make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
-Local verification is the release authority for this repo. Run the full test suite from the working tree before merging to `dev` (the active integration branch) or deploying to VPS.
+Local verification is the release authority for this repo. Run focused checks for the touched area before merging to `dev` or deploying. CI is intentionally lightweight: it is a guardrail for fast checks, not the authoritative full-suite signal.
 
-CI is intentionally lightweight. It should stay fast and is used as a guardrail for lint, format, type-check, security, and other short checks, not as the authoritative full-suite signal.
+## Honest Scope
 
----
+- Docker Compose is the primary local runtime path.
+- k3s manifests exist for core services but are not full parity with Compose.
+- Monitoring services are local/dev unless production evidence is added.
+- HITL confirmation protects CRM/write workflows, not every possible state transition.
+- The Mini App is a lightweight entry surface and not full parity with the Telegram bot.
+- Some UI/i18n strings are still being migrated into Fluent bundles.
+- Domain-specific names, prompts, and catalog fields remain in the current implementation and should be replaced for a different customer domain.
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Reviewer Access Guide](docs/review/ACCESS_FOR_REVIEWERS.md) | Safe review path, commands, and boundaries for people with repo access |
-| [Project Guide](docs/review/PROJECT_GUIDE.md) | Folder map, subsystem ownership, and where the important code lives |
-| [Portfolio Case Study](docs/portfolio/resume-case-study.md) | Resume-ready project narrative and feature highlights |
-| [GitHub Repo Setup](docs/review/GITHUB_REPO_SETUP.md) | Repository metadata, topics, branch protection, release, and hygiene checklist |
-| [Docs Index](docs/README.md) | Concise map of all major documentation areas |
-| [DOCKER.md](DOCKER.md) | Docker Compose profiles, service map, env requirements |
-| [Architecture](docs/PROJECT_STACK.md) | System architecture and subsystem map |
-| [Pipeline Overview](docs/PIPELINE_OVERVIEW.md) | Ingestion, query, and voice runtime flows |
-| [Local Development](docs/LOCAL-DEVELOPMENT.md) | Local setup and validation guide |
-| [Qdrant Stack](docs/QDRANT_STACK.md) | Vector collections, schema, operations |
-| [Ingestion Runbook](docs/INGESTION.md) | Unified ingestion guide and troubleshooting |
-| [Google Drive Sync Runbook](docs/GDRIVE_INGESTION.md) | Google Drive -> local mirror -> unified ingestion contract |
-| [VPS Recovery Runbook](docs/runbooks/vps-gdrive-ingestion-recovery.md) | Recover empty sync mount / empty collection incidents on VPS |
-| [SDK Migration Audit](docs/SDK_MIGRATION_AUDIT_2026-03-13.md) | Canonical SDK keeper stack and bounded follow-up work |
-| [SDK Migration Roadmap](docs/SDK_MIGRATION_ROADMAP_2026-03-13.md) | Post-audit execution order and guardrails |
-| [Alerting](docs/ALERTING.md) | Loki/Alertmanager setup |
-
----
+| Document | Use it for |
+|---|---|
+| [`docs/portfolio/resume-case-study.md`](docs/portfolio/resume-case-study.md) | portfolio narrative and feature cards |
+| [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) | safe review path |
+| [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) | folder map and high-signal files |
+| [`docs/README.md`](docs/README.md) | full documentation index |
+| [`DOCKER.md`](DOCKER.md) | Compose services, profiles, ports, env, runtime contracts |
+| [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) | local setup and validation ladder |
+| [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) | query, retrieval, ingestion, voice, observability flows |
+| [`docs/INGESTION.md`](docs/INGESTION.md) | unified ingestion operations |
+| [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | vector schema and Qdrant operations |
 
 ## License
 

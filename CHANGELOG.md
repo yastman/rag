@@ -151,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * add active tasks tracking ([5530d22](https://github.com/yastman/rag/commit/5530d2257d98e5a0bd8b49b1717a085d862223a5))
 * Add Azbyka RAG implementation plan 2025 v2 ([4e02017](https://github.com/yastman/rag/commit/4e0201798b05ad470dd2c88b398e2833d16a2230))
 * add CESC implementation design plan ([7a55aeb](https://github.com/yastman/rag/commit/7a55aebf7673938a8da98705e604310d5eb4f8b2))
-* Add Claude Code CLI as recommended development method ([da994a0](https://github.com/yastman/rag/commit/da994a0af0340a2ba5dbea54f8f85f17b47cf452))
+* Add recommended development workflow ([da994a0](https://github.com/yastman/rag/commit/da994a0af0340a2ba5dbea54f8f85f17b47cf452))
 * add Claude Code project brief ([95c77a8](https://github.com/yastman/rag/commit/95c77a882bac6987d52bee24273125e9499a167f))
 * add coding standards ([4db6300](https://github.com/yastman/rag/commit/4db6300c0a5955c92dace89b62e86ce160051175))
 * add completed tasks history ([1254bf2](https://github.com/yastman/rag/commit/1254bf2bf99d22d93cb0f9b9364055cab872a017))
@@ -557,15 +557,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## Release Schedule
-
-- **v2.6.0** (Critical Fixes) - Target: 2025-01-08 (2 days)
-- **v2.7.0** (High Priority) - Target: 2025-01-15 (1 week)
-- **v3.0.0** (Production Ready) - Target: 2025-01-24 (2 weeks)
-- **v3.1.0** (Nice-to-have) - Target: 2025-02-10 (4 weeks)
-
----
-
 ## Versioning Strategy
 
 This project follows [Semantic Versioning](https://semver.org/):
@@ -608,5 +599,4 @@ This project follows [Semantic Versioning](https://semver.org/):
 ---
 
 **Maintained by:** Project Team
-**Last updated:** 2025-01-06
 **Format:** [Keep a Changelog v1.1.0](https://keepachangelog.com/en/1.1.0/)

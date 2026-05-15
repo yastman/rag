@@ -9,6 +9,7 @@ For test-writing conventions, see [`docs/engineering/test-writing-guide.md`](../
 tests/
 ├── conftest.py          # Shared fixtures and hooks
 ├── unit/                # Fast, isolated tests (mocked/no external deps)
+│   └── e2e_adapters/    # Unit checks for E2E adapters/config/validators (not live E2E)
 ├── contract/            # Static contracts: trace families, span coverage, error shapes
 ├── integration/         # Service-aware paths and real component interaction
 ├── smoke/               # Quick health checks against live services
@@ -47,6 +48,10 @@ Run these selectively, not on every save.
 | Chaos | `tests/chaos/` | Degraded-service behavior and fallbacks | Minutes |
 | Load | `tests/load/` | Concurrent throughput and cache eviction | Minutes |
 | E2E | `tests/e2e/` | Full-stack pipeline and Telegram flows | Slow |
+
+Canonical E2E placement:
+- Live end-to-end scenarios belong only to `tests/e2e/`.
+- `tests/unit/e2e_adapters/` is unit-only coverage for E2E helper code (config, adapters, validators) and must stay in the local-fast lane.
 
 ## Commands
 
@@ -120,7 +125,6 @@ When changing `compose*.yml`, Dockerfiles, or service definitions, verify the ef
 
 ```bash
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services
-COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services
 ```
 
 CI uses `tests/fixtures/compose.ci.env` for interpolation validation:

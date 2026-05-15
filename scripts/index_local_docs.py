@@ -33,7 +33,7 @@ from qdrant_client.models import (
 print = functools.partial(print, flush=True)  # type: ignore[assignment]
 
 # --- Config defaults ---
-DEFAULT_DOCS_DIR = "/home/USER/drive-sync/Test"
+DEFAULT_DOCS_DIR = os.getenv("DOCS_DIR", "./docs")
 DEFAULT_COLLECTION = "gdrive_documents_bge"
 DEFAULT_BGE_M3_URL = "http://localhost:8000"
 DEFAULT_QDRANT_URL = "http://localhost:6333"

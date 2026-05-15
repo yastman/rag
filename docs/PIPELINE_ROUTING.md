@@ -58,7 +58,7 @@ END
 
 | Query Type | Handler | Cacheable |
 |------------|---------|-----------|
-| `STRUCTURED` | RAG retrieval with structured real-estate criteria | Yes |
+| `STRUCTURED` | RAG retrieval with structured catalog criteria | Yes |
 | `FAQ` | RAG retrieval for procedural/knowledge questions | Yes |
 | `ENTITY` | RAG retrieval for named locations/complexes | Yes |
 | `GENERAL` | Default RAG retrieval path | Yes |

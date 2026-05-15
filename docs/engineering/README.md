@@ -10,17 +10,14 @@ Concise index for engineering process docs. These pages describe workflow, valid
 | [`issue-triage.md`](issue-triage.md) | Classifying issue scope, risk, SDK coverage, and execution lane. |
 | [`sdk-registry.md`](sdk-registry.md) | Checking SDK/framework ownership and preferred project patterns before code changes. |
 | [`docs-maintenance.md`](docs-maintenance.md) | Updating docs, choosing canonical owners, and running docs verification. |
-| [`swarm-context-budget.md`](swarm-context-budget.md) | Improving or reviewing swarm orchestration context budget and artifact-first evidence rules. |
+
 
 ## Historical Or Resolved Notes
 
-| Doc | Status |
-|---|---|
-| [`dependency-upgrade-blockers-2026-04.md`](dependency-upgrade-blockers-2026-04.md) | Historical/resolved Langfuse v4 blocker note; do not use as the current dependency backlog. |
-| [`swarm-process-improvements.md`](swarm-process-improvements.md) | Historical deploy-process improvement summary for issue #1244; use current workflows and scripts as source of truth. |
+No active historical notes at this time.
 
 ## Fast Search
 
 ```bash
-rg -n "validation|test|triage|SDK|dependency|docs maintenance|swarm" docs/engineering/ docs/indexes/engineering-workflows.md
+rg -n "validation|test|triage|SDK|dependency|docs maintenance" docs/engineering/ docs/indexes/engineering-workflows.md
 ```

@@ -129,7 +129,7 @@ PropertyBot.handle_query()
 | `self._reranker` | None by default | Deprecated client-side reranker hook; server-side Qdrant ColBERT path is selected by `RERANK_PROVIDER=colbert` |
 | `self._llm` | AsyncOpenAI | LLM client |
 | `self._graph` | CompiledStateGraph | Voice LangGraph |
-| `self._apartments_service` | ApartmentsService | Apartment search |
+| `self._apartments_service` | ApartmentsService | Structured catalog search |
 | `self._user_service` | UserService | User management |
 
 ## Middleware Stack

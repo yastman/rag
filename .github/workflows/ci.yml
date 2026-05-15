@@ -1,4 +1,4 @@
-name: CI & Deploy
+name: CI
 
 on:
   pull_request:
@@ -41,7 +41,6 @@ jobs:
       - name: Validate Compose configs
         run: |
           COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
-          COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.vps.yml config --quiet
 
       - name: Hadolint Dockerfile lint
         run: |
@@ -91,54 +90,3 @@ jobs:
         run: |
           UV_PROJECT_ENVIRONMENT=.venv-py312 uv run bandit -r src/ telegram_bot/ -c pyproject.toml
           UV_PROJECT_ENVIRONMENT=.venv-py312 uv run vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
-
-  deploy:
-    name: Deploy to VPS
-    needs: lint
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: deploy-vps
-      cancel-in-progress: false
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            set -e
-            cd /opt/rag-fresh
-            export COMPOSE_FILE=compose.yml:compose.vps.yml
-            export DOCKER_BUILDKIT=1
-            export BUILDKIT_INLINE_CACHE=1
-
-            echo "=== Pull latest code ==="
-            git fetch origin main
-            if [ -n "$(git status --porcelain)" ]; then
-              echo "WARNING: Dirty tree detected; stashing local changes before reset"
-              git stash push -m "deploy-auto-stash-$(date +%s)"
-            fi
-            git reset --hard origin/main
-
-            echo "=== Normalize bind-mounted config permissions ==="
-            chmod 644 ./docker/litellm/config.yaml
-
-            echo "=== Validate production env ==="
-            chmod +x ./scripts/validate_prod_env.sh
-            ./scripts/validate_prod_env.sh
-
-            echo "=== Rebuild changed images ==="
-            docker compose build
-
-            echo "=== Restart services from rebuilt images ==="
-            docker compose --compatibility up -d --wait --force-recreate
-
-            echo "=== Release smoke ==="
-            chmod +x ./scripts/test_release_health_vps.sh
-            REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh
-
-            echo "=== Deploy complete $(date -Iseconds) ==="
