@@ -14,7 +14,7 @@ Concise index for engineering process docs. These pages describe workflow, valid
 
 ***REMOVED******REMOVED*** Historical Or Resolved Notes
 
-No active historical notes at this time. See [`../archive/`](../archive/) for older artifacts.
+No active historical notes at this time.
 
 ***REMOVED******REMOVED*** Fast Search
 
