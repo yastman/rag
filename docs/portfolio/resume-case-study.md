@@ -367,6 +367,8 @@ photos, and fixtures are either:
   fields without personal contact details); or
 - **Demo-safe placeholders** (e.g., screenshots and photos marked for review
   before release).
+- **`telegram_bot/static/photos/demo/1-03.jpg`** requires **human visual/provenance
+  review** before public release; rights status has not been conclusively verified.
 
 Do not commit real CRM exports, client contact lists, phone numbers, email
 addresses, private property records, personal recordings, or unlicensed imagery.
