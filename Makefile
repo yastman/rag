@@ -2,7 +2,6 @@
 	test-preflight test-smoke test-load-eviction \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
-	rclone-install sync-drive-install sync-drive-run sync-drive-status \
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
@@ -113,14 +112,9 @@ setup-hooks: ***REMOVED******REMOVED*** Install pre-commit hooks
 	uv run pre-commit install --hook-type pre-push
 	@echo "$(GREEN)✓ Pre-commit hooks installed$(NC)"
 
-local-pre-push: ***REMOVED******REMOVED*** Fast local pre-push sanity gate (check + compose validate)
-	@echo "$(BLUE)Running fast local pre-push sanity gate...$(NC)"
-	./scripts/local_pre_push.sh
-	@echo "$(GREEN)✓ Fast local pre-push sanity gate passed$(NC)"
-
-local-pr-ready: ***REMOVED******REMOVED*** Full PR readiness gate (fast gate + unit tests) - run manually
+local-pr-ready: ***REMOVED******REMOVED*** Full PR readiness gate (check + unit tests) - run manually
 	@echo "$(BLUE)Running full PR readiness gate...$(NC)"
-	./scripts/local_pre_push.sh
+	make check
 	@echo "$(BLUE)Running core unit tests...$(NC)"
 	make test-unit
 	@echo "$(GREEN)✓ Full PR readiness gate passed$(NC)"
@@ -699,10 +693,8 @@ deploy-bot:  ***REMOVED******REMOVED*** Show official deploy flow: push dev/feat
 	@echo "  5. GitHub Actions auto-deploys main to VPS"
 	@echo "$(GREEN)No direct push to main is performed by this target.$(NC)"
 
-deploy-vps-local:  ***REMOVED******REMOVED*** Fallback/manual deploy: sync local workspace to VPS via rsync + rebuild
-	@echo "$(CYAN)Deploying local workspace to VPS via fallback rsync flow...$(NC)"
-	./scripts/deploy-vps.sh
-	@echo "$(GREEN)✓ Deploy complete$(NC)"
+deploy-vps-local:  ***REMOVED******REMOVED*** Fallback/manual deploy: manual instructions only (VPS scripts removed from public repo)
+	@echo "$(CYAN)Manual deploy: push to main and let CI handle it, or use Docker Compose on VPS$(NC)"
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** E2E TESTING
@@ -939,51 +931,8 @@ monitoring-test-alert: ***REMOVED******REMOVED*** Send a test alert to verify Te
 ***REMOVED*** =============================================================================
 ***REMOVED*** GOOGLE DRIVE SYNC (rclone)
 ***REMOVED*** =============================================================================
-
-.PHONY: rclone-install sync-drive-install sync-drive-run sync-drive-status
-
-rclone-install: ***REMOVED******REMOVED*** Install rclone
-	@echo "$(BLUE)Installing rclone...$(NC)"
-	curl https://rclone.org/install.sh | sudo bash
-	@echo "$(GREEN)✓ rclone installed$(NC)"
-
-sync-drive-install: ***REMOVED******REMOVED*** Install rclone cron job
-	@echo "$(BLUE)Installing rclone cron...$(NC)"
-	@$(ENV_LOAD) \
-	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
-	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
-	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
-	sudo mkdir -p /opt/scripts /opt/credentials /etc/rag-fresh "$${GDRIVE_SYNC_DIR}"; \
-	sudo cp docker/rclone/sync-drive.sh /opt/scripts/; \
-	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/; \
-	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh; \
-	printf 'GDRIVE_SYNC_DIR=%s\nRCLONE_CONFIG_FILE=%s\nRCLONE_REMOTE=%s\n' \
-	  "$${GDRIVE_SYNC_DIR}" "$${RCLONE_CONFIG_FILE}" "$${RCLONE_REMOTE:-gdrive:RAG}" | \
-	  sudo tee /etc/rag-fresh/rclone-sync.env >/dev/null; \
-	sudo chmod 600 /etc/rag-fresh/rclone-sync.env; \
-	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync; \
-	sudo chmod 644 /etc/cron.d/rclone-sync
-	@echo "$(GREEN)✓ Cron installed$(NC)"
-
-sync-drive-run: ***REMOVED******REMOVED*** Run Drive sync manually
-	@echo "$(BLUE)Syncing Google Drive...$(NC)"
-	@$(ENV_LOAD) \
-	: "$${GDRIVE_SYNC_DIR:?GDRIVE_SYNC_DIR is required}"; \
-	: "$${RCLONE_CONFIG_FILE:?RCLONE_CONFIG_FILE is required}"; \
-	test -f "$${RCLONE_CONFIG_FILE}" || { echo "$(RED)Error: RCLONE_CONFIG_FILE not found at $${RCLONE_CONFIG_FILE}$(NC)"; exit 1; }; \
-	/opt/scripts/sync-drive.sh
-	@echo "$(GREEN)✓ Sync complete$(NC)"
-
-sync-drive-status: ***REMOVED******REMOVED*** Show sync status and recent files
-	@echo "$(BLUE)Recent synced files:$(NC)"
-	@$(ENV_LOAD) \
-	if [ -n "$${GDRIVE_SYNC_DIR:-}" ] && [ -d "$${GDRIVE_SYNC_DIR}" ]; then \
-	  ls -lt "$${GDRIVE_SYNC_DIR}" 2>/dev/null | head -20; \
-	else \
-	  echo "No files synced yet"; \
-	fi
-	@echo ""
-	@echo "$(BLUE)Last sync log:$(NC)"
+***REMOVED*** rclone sync scripts were removed from public repo.
+***REMOVED*** See docs/GDRIVE_INGESTION.md for ingestion setup.
 	@tail -10 /var/log/rclone-sync.log 2>/dev/null || echo "No logs yet"
 
 ***REMOVED*** =============================================================================
