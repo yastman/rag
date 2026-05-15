@@ -266,6 +266,23 @@ opencode.json
 projects/
 tmp.*
 
+# Additional public-repo hardening
+.direnv/
+.envrc
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+**/node_modules/
+**/coverage/
+**/.nyc_output/
+**/.vite/
+
 # OS files
 .DS_Store
 Thumbs.db
