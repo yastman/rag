@@ -8,7 +8,7 @@ indicate stale containers running older/different image versions.
 Usage:
     python scripts/check_image_drift.py                         ***REMOVED*** Human-readable
     python scripts/check_image_drift.py --json                  ***REMOVED*** JSON output
-    python scripts/check_image_drift.py -f compose.vps.yml      ***REMOVED*** Custom file
+    python scripts/check_image_drift.py -f compose.dev.yml       ***REMOVED*** Custom file
     python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml  ***REMOVED*** Multiple files
     python scripts/check_image_drift.py --fix                   ***REMOVED*** Show fix commands
 

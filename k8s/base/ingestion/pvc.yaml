@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: drive-sync-pvc
+  annotations:
+    rag-fresh.io/data-source: externally-provisioned
+    rag-fresh.io/data-contract: pre-populated-rclone-mirror
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi

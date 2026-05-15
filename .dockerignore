@@ -111,14 +111,11 @@ coverage_report_final.txt
 
 ***REMOVED*** Infrastructure (not needed in app images)
 k8s/
-deploy/
 drive-sync/
 
 ***REMOVED*** Build/CI config (not needed in images)
 docker-bake.hcl
-renovate.json
 release-please-config.json
-.release-please-manifest.json
 .pre-commit-config.yaml
 Makefile
 Dockerfile*

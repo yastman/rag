@@ -1,51 +1,48 @@
-***REMOVED*** AI Real Estate Automation Platform - Resume Case Study
+***REMOVED*** Conversational AI Automation Platform - Resume Case Study
 
 This document is a resume/portfolio source file. It summarizes the project as a
 case study, not as developer setup documentation.
 
 ***REMOVED******REMOVED*** One-Line Positioning
 
-AI-native real-estate automation platform combining Telegram, RAG search,
-apartment matching, CRM automation, voice input, observability, and Dockerized
-AI infrastructure. Built with an AI-assisted engineering workflow using Codex,
-Claude Code CLI, OpenCode workers, PR review loops, and CI verification.
+AI-native conversational automation platform combining Telegram, RAG search,
+domain catalog matching, CRM/workflow automation, voice input, observability,
+and Dockerized AI infrastructure. Built with CI verification, automated quality checks, and AI-assisted
+development practices.
 
 ***REMOVED******REMOVED*** Resume Summary - English
 
-Built a production-like AI real-estate automation platform with Telegram bot,
-RAG search, natural-language apartment search, Kommo CRM workflows, voice input,
-and Docker Compose based local/VPS infrastructure. Implemented self-hosted BGE-M3
+Built a production-like conversational AI automation platform with Telegram bot,
+RAG search, natural-language domain catalog search, Kommo CRM workflows, voice
+input, and Docker Compose based local/VPS infrastructure. Implemented self-hosted BGE-M3
 embeddings, Qdrant hybrid retrieval with dense/sparse/ColBERT vectors, tiered
 Redis caching, semantic conversation memory, CRM lead automation with
 human-in-the-loop confirmation, Langfuse tracing, gold-set/evaluation tooling,
-and unified document ingestion. The system includes 20+ Docker services,
-local/dev observability and monitoring, and 400+ test files.
-Developed using an AI-native engineering workflow: task decomposition into
-focused worker prompts, parallel OpenCode worker swarms, PR review loops with
-self-review and verification gates, and CI-driven quality checks. Treats Codex
-and Claude Code CLI as structured engineering tools—not unsupervised
-auto-pilot—within a disciplined development process.
+and unified document ingestion. The system includes Compose profiles for bot, ingestion, voice, ML
+observability, monitoring, and full-stack runtime, plus 400+ test files.
+Developed with an AI-assisted engineering workflow: task decomposition, focused
+implementation units, automated quality gates, and CI-driven verification. AI
+tooling is used as a structured engineering accelerator within a disciplined
+development process.
 
 ***REMOVED******REMOVED*** Resume Summary - Russian
 
-Разработал AI-native платформу автоматизации для real estate: Telegram-бот,
-RAG-поиск, подбор объектов по естественному языку, интеграция с Kommo CRM,
-голосовой ввод и Docker-инфраструктура для локального/VPS запуска. Реализовал
+Разработал AI-native платформу conversational automation: Telegram-бот,
+RAG-поиск, поиск по доменному каталогу на естественном языке, интеграция с
+Kommo CRM, голосовой ввод и Docker-инфраструктура для локального/VPS запуска. Реализовал
 self-hosted BGE-M3 embeddings, Qdrant hybrid retrieval с dense/sparse/ColBERT
 векторами, многоуровневое Redis-кеширование, семантическую память диалогов,
 автоматизацию лидов в CRM с human-in-the-loop подтверждением, Langfuse
 трассировку, gold-set/evaluation tooling и unified ingestion документов.
-Платформа разработана с использованием AI-native workflow: декомпозиция задач
-в фокусированные worker-запросы, параллельные OpenCode worker swarms,
-PR review loops с self-review и verification gates, а также CI-driven quality
-checks. Codex и Claude Code CLI используются как структурированные
-инженерные инструменты — не как unsupervised auto-pilot — в рамках
-дисциплинированного development process.
+Платформа разработана с использованием AI-ассистированного рабочего процесса:
+декомпозиция задач, автоматизированные quality gates и CI-driven верификация.
+AI-инструменты используются как структурированный инженерный акселератор
+в рамках дисциплинированного процесса разработки.
 
 ***REMOVED******REMOVED*** Best Resume Bullets
 
-- Built an AI automation platform for real-estate workflows with Telegram,
-  voice, CRM, RAG, apartment search, and mini-app surfaces.
+- Built an AI automation platform for domain-specific business workflows with
+  Telegram, voice, CRM, RAG, catalog search, and mini-app surfaces.
 - Implemented self-hosted retrieval infrastructure using BGE-M3 and Qdrant:
   dense vectors, sparse BM42 vectors, and ColBERT multivector reranking.
 - Designed a tiered Redis cache for semantic answers, embeddings, search
@@ -61,77 +58,44 @@ checks. Codex и Claude Code CLI используются как структу�
 - Dockerized the system with Compose profiles for bot, ingestion, voice, ML
   observability, monitoring, and full-stack runtime; k3s manifests cover core
   services as an incremental migration path.
-- Applied AI-assisted engineering workflows using Codex, Claude Code CLI, and
-  OpenCode workers with PR review loops, verification gates, and CI quality
-  checks. Decomposed large features into focused worker tasks with reserved
-  files, explicit acceptance criteria, and traceable commits.
-- Orchestrated parallel worker swarms for test writing, documentation updates,
-  and focused implementation, treating agent tooling as an accelerator for
-  decomposition and review rather than unsupervised code generation.
+- Applied AI-assisted engineering workflows with automated verification gates,
+  CI quality checks, and structured task decomposition. Broke large features
+  into focused implementation units with explicit acceptance criteria and
+  traceable commits.
 
-***REMOVED******REMOVED*** AI-Native Engineering Workflow
+***REMOVED******REMOVED*** Engineering Practices
 
-This project is built with AI-assisted engineering as a first-class practice,
-not as a replacement for engineering judgment.
+This project is built with a disciplined development workflow that treats
+automated quality checks as first-class gates:
 
-***REMOVED******REMOVED******REMOVED*** Workflow Summary — English
+- **CI/CD guardrails:** GitHub Actions provide fast lint/test checks on every
+  change. Runtime-impacting changes require documented Compose contract
+  validation before merge.
+- **Structured verification:** Focused tests, type checking, linting, and diff
+  inspection run before every merge. No success claims without fresh evidence.
+- **Task decomposition:** Large features are split into focused implementation
+  units with explicit acceptance criteria and traceable commits.
+- **AI-assisted development:** AI tooling is used as an engineering accelerator
+  for drafting, decomposition, and review. Humans approve merges, set
+  acceptance criteria, and verify outcomes.
 
-- **Task decomposition:** Large features are split into focused worker prompts
-  with explicit acceptance criteria, reserved files, and verification ladders.
-- **Worker swarms:** OpenCode workers run in isolated branches to implement,
-  test, and document changes in parallel. Each worker owns a narrow scope and
-  produces traceable commits.
-- **Self-review and verification:** Workers run `git diff --check`, focused
-  pytest, and linting before claiming completion. No success claims without
-  fresh evidence.
-- **PR review loops:** Changes are committed, pushed, and opened as PRs against
-  `dev`. Review includes diff inspection, test results, and adherence to
-  acceptance criteria before merge.
-- **CI quality gates:** GitHub Actions provide fast lint/test guardrails on
-  every PR. Runtime-impacting changes additionally require documented Compose
-  contract validation and service-level verification before merge. The project
-  treats CI as a mandatory gate, not a post-merge check.
-- **Responsible agent use:** Codex and Claude Code CLI are used as structured
-  engineering tools for drafting, decomposition, and review. Humans approve
-  merges, set acceptance criteria, and verify outcomes.
-
-***REMOVED******REMOVED******REMOVED*** Workflow Summary — Russian
-
-- **Декомпозиция задач:** Большие фичи разбиваются на фокусированные
-  worker-запросы с четкими критериями приемки, зарезервированными файлами и
-  verification ladders.
-- **Worker swarms:** OpenCode workers работают в изолированных ветках для
-  параллельной имплементации, написания тестов и обновления документации.
-  Каждый worker владеет узким скоупом и производит traceable commits.
-- **Self-review и verification:** Workers запускают `git diff --check`, focused
-  pytest и линтинг перед тем, как заявлять о завершении. Никаких заявлений об
-  успехе без свежих доказательств.
-- **PR review loops:** Изменения коммитятся, пушатся и открываются как PRы в
-  `dev`. Ревью включает инспекцию diff, результаты тестов и соответствие
-  критериям приемки перед мержем.
-- **CI quality gates:** GitHub Actions обеспечивают быстрые lint/test
-  guardrails на каждом PR. Изменения, затрагивающие runtime, дополнительно
-  требуют документированной Compose contract validation и service-level
-  verification перед мержем. Проект рассматривает CI как обязательный gate,
-  а не как post-merge check.
-- **Ответственное использование агентов:** Codex и Claude Code CLI
-  используются как структурированные инженерные инструменты для драфтинга,
-  декомпозиции и ревью. Человек утверждает мержи, задает критерии приемки и
-  верифицирует результаты.
+This workflow is a portfolio artifact in itself: it demonstrates how to ship
+production-quality AI infrastructure with repeatable quality gates rather than
+ad-hoc scripting.
 
 ***REMOVED******REMOVED*** Feature Cards
 
 ***REMOVED******REMOVED******REMOVED*** 1. LangGraph RAG Pipeline
 
-**Problem:** Real-estate clients ask repeated questions about properties, legal
-processes, documents, and company workflows. Static FAQ answers are not enough.
+**Problem:** Business users ask repeated questions about products, policies, documents,
+processes, and company workflows. Static FAQ answers are not enough.
 
 **Implementation:** Built a LangGraph pipeline with classification, prompt
 injection guard, cache check, retrieval, grading, reranking, query rewriting,
 generation, cache store, response, and optional summarization.
 
 **Impact:** The system behaves like a stateful AI workflow, not a simple LLM
-wrapper. It can route easy, off-topic, knowledge, apartment, and CRM-related
+wrapper. It can route easy, off-topic, knowledge, catalog-search, and CRM-related
 queries through different paths.
 
 ***REMOVED******REMOVED******REMOVED*** 2. Self-Hosted Qdrant + BGE-M3 Retrieval
@@ -200,25 +164,26 @@ contacts. Write operations require HITL confirmation for lead/contact mutations.
 **Impact:** The bot connects AI conversations to real sales workflow: lead
 capture, qualification, follow-up, and manager handoff.
 
-***REMOVED******REMOVED******REMOVED*** 7. Natural-Language Apartment Search
+***REMOVED******REMOVED******REMOVED*** 7. Natural-Language Catalog Search
 
 **Problem:** Users describe what they want in natural language or voice instead
 of filling structured filters.
 
-**Implementation:** Built an apartment extraction pipeline that converts queries
-into structured filters such as city, complex, rooms, price, area, floor, view,
-and furnishing. The pipeline uses cached extraction, LLM extraction, and a
-deterministic regex fallback. Search results support catalog navigation,
-pagination, cards, favorites, and viewing flow.
+**Implementation:** Built a domain catalog extraction pipeline that converts
+queries into structured filters such as location, category, price, attributes,
+and availability. The current demo module uses starter-domain catalog fields,
+while the platform pattern is reusable for other catalogs. The pipeline uses cached
+extraction, LLM extraction, and a deterministic regex fallback. Search results
+support catalog navigation, pagination, cards, favorites, and viewing flow.
 
-**Impact:** Users can search with phrases like "2-bedroom near the sea under
-120k", while the system still applies structured filters and avoids unnecessary
-LLM work when deterministic parsing is enough.
+**Impact:** Users can search with natural phrases, while the system still applies
+structured filters and avoids unnecessary LLM work when deterministic parsing is
+enough.
 
 ***REMOVED******REMOVED******REMOVED*** 8. Voice Input And Voice Agent
 
-**Problem:** Real-estate clients may prefer voice messages or phone-like flows
-instead of text.
+**Problem:** Business users may prefer voice messages or phone-like flows instead
+of text.
 
 **Implementation:** Added Telegram voice input and a LiveKit RTC voice path
 with ElevenLabs STT/TTS. The voice agent calls the same RAG API used by other
@@ -268,7 +233,7 @@ routing behavior.
 baseline metric collection from Langfuse, RAGAS evaluation commands,
 gold-set sync to Langfuse datasets, experiment runners, trace export, score
 config setup, judge calibration, and trace validation. The checked-in
-ground-truth fixture currently contains 55 samples; generation scripts can
+ground-truth fixture currently contains 9 samples; generation scripts can
 produce larger corpus-derived datasets.
 
 **Impact:** Retrieval, generation, routing, and prompt changes can be compared
@@ -310,9 +275,9 @@ monitoring unless production deployment evidence is added.
   metrics, judge calibration scripts.
 - **Ops:** Docker Compose profiles, healthchecks, pinned images, non-root
   runtime users, VPS Docker Compose deployment path, partial k3s manifests.
-- **AI-native workflow:** Codex, Claude Code CLI, OpenCode workers, task
-  decomposition, PR review loops, verification gates, CI quality checks,
-  traceable commits, and responsible agent orchestration.
+- **Engineering practices:** CI/CD guardrails, structured verification gates,
+  task decomposition, automated quality checks, AI-assisted development workflow,
+  and traceable commits.
 
 ***REMOVED******REMOVED*** Interview Talking Points
 
@@ -326,7 +291,7 @@ monitoring unless production deployment evidence is added.
 
 3. **How is cost controlled?**
    The project avoids LLM calls when possible: classification, deterministic
-   apartment parsing fallback, semantic cache, embeddings cache, search cache,
+   catalog parsing fallback, semantic cache, embeddings cache, search cache,
    rerank cache, and local embeddings.
 
 4. **How are CRM writes made safe?**
@@ -341,21 +306,17 @@ monitoring unless production deployment evidence is added.
    It has ingestion, retrieval infrastructure, CRM automation, voice channel,
    memory, evaluation, observability, and Dockerized runtime services.
 
-7. **How do you use AI agents responsibly?**
-   The project uses Codex, Claude Code CLI, and OpenCode workers within a
-   structured workflow: task decomposition, reserved files, explicit acceptance
-   criteria, verification ladders, and PR review loops. Agents draft and review;
-   humans approve merges and verify outcomes. This demonstrates agent
-   orchestration, not agent replacement.
+***REMOVED******REMOVED*** Data and Asset Boundaries
 
-8. **What does your AI-native development workflow look like?**
-   Features start as worker prompts with acceptance criteria. Workers run in
-   isolated branches, verify with fresh tests and `git diff --check`, and open
-   PRs. CI provides fast lint/test guardrails on every PR, while
-   runtime-impacting changes also require documented Compose contract
-   validation and service-level verification before merge. The workflow treats
-   AI as a pair-programming and review accelerator, not as unsupervised
-   auto-pilot.
+This repository is intended for public portfolio review. All committed data,
+photos, and fixtures are either:
+
+- **Synthetic/generated** fixtures;
+- **Public sample data** with generic demo catalog rows; or
+- **Demo-safe placeholders** with provenance reviewed before publication.
+
+Do not commit real CRM exports, client contact lists, phone numbers, email
+addresses, private customer/domain records, personal recordings, or unlicensed imagery.
 
 ***REMOVED******REMOVED*** Honest Limitations / Next Improvements
 
@@ -370,7 +331,7 @@ monitoring unless production deployment evidence is added.
 - Add a prompt-version A/B harness using Langfuse labels and dataset
   experiments.
 - Add screenshots or short demo videos for Telegram, CRM handoff, Langfuse
-  traces, and apartment search.
+  traces, and catalog search.
 - Publish a small sanitized demo dataset so recruiters can run a safe subset.
 - Add a short architecture diagram optimized for non-engineers.
 - Add quantified metrics if available: cache hit rate, latency before/after

@@ -116,8 +116,8 @@ make ingest-unified
 
 ***REMOVED******REMOVED******REMOVED*** Check Langfuse traces
 ```bash
-***REMOVED*** Local Langfuse at http://localhost:3000
-open http://localhost:3000
+***REMOVED*** Local Langfuse at http://localhost:3001 (see DOCKER.md)
+open http://localhost:3001
 ```
 
 ***REMOVED******REMOVED*** 9. Code Patterns to Follow

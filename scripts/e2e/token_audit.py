@@ -1,6 +1,6 @@
 """Send 10 test queries via Telethon and collect response stats.
 
-Usage: cd /repo && uv run python -m scripts.e2e.token_audit
+Usage: cd <project-root> && uv run python -m scripts.e2e.token_audit
 """
 
 import asyncio
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
 API_HASH = os.getenv("TELEGRAM_API_HASH", "")
-BOT_USERNAME = os.getenv("E2E_BOT_USERNAME", "@test_nika_homes_bot")
+BOT_USERNAME = os.getenv("E2E_BOT_USERNAME", "@test_your_bot")
 SESSION_PATH = "e2e_tester"
 RESPONSE_TIMEOUT = 120
 

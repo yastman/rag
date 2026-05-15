@@ -1,14 +1,15 @@
 ***REMOVED*** GitHub Repository Setup
 
-This checklist is for making the repository understandable and safe when access
-is shared with recruiters, technical interviewers, or collaborators.
+This checklist is for making the repository understandable and safe for
+recruiters, technical interviewers, collaborators, and public contributors.
 
 ***REMOVED******REMOVED*** Repository Metadata
 
 Recommended GitHub sidebar description:
 
-> AI real-estate automation platform: Telegram bot, RAG, apartment search, CRM
-> workflows, voice agent, Langfuse observability, and Dockerized AI runtime.
+> Conversational AI automation platform: Telegram bot, RAG, domain catalog
+> search, CRM/workflow tools, voice agent, Langfuse observability, and
+> Dockerized AI runtime.
 
 Recommended topics:
 
@@ -20,11 +21,12 @@ qdrant
 langfuse
 fastapi
 docker
-real-estate
+business-automation
 ai-agents
 crm
 kommo
 voice-ai
+conversational-ai
 ```
 
 Recommended homepage link:
@@ -73,7 +75,7 @@ primary evidence for code changes.
 
 ***REMOVED******REMOVED*** Security And Sanitization
 
-Before granting external access:
+Before publishing or sharing the repository:
 
 - verify no `.env`, tokens, SSH keys, database dumps, or production logs are in
   the repository.
@@ -86,6 +88,8 @@ Recommended files:
 
 - `.env.example`
 - `SECURITY.md`
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
 - `docs/review/ACCESS_FOR_REVIEWERS.md`
 
 ***REMOVED******REMOVED*** README Checklist
