@@ -357,6 +357,20 @@ monitoring unless production deployment evidence is added.
    AI as a pair-programming and review accelerator, not as unsupervised
    auto-pilot.
 
+## Data and Asset Boundaries
+
+This repository is intended for public portfolio review. All committed data,
+photos, and fixtures are either:
+
+- **Synthetic/generated** (e.g., `test_properties.json`);
+- **Public sample data** (e.g., `data/apartments.csv` contains generic listing
+  fields without personal contact details); or
+- **Demo-safe placeholders** (e.g., screenshots and photos marked for review
+  before release).
+
+Do not commit real CRM exports, client contact lists, phone numbers, email
+addresses, private property records, personal recordings, or unlicensed imagery.
+
 ## Honest Limitations / Next Improvements
 
 - Fix and revalidate local Langfuse ML profile startup for the pinned ClickHouse
