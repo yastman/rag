@@ -3,10 +3,10 @@ from pathlib import Path
 
 def test_deploy_vps_no_hardcoded_connection_defaults() -> None:
     text = Path("scripts/deploy-vps.sh").read_text(encoding="utf-8")
-    assert 'VPS_HOST="REDACTED_VPS_IP"' not in text
-    assert 'VPS_PORT="1654"' not in text
-    assert 'VPS_USER="admin"' not in text
-    assert 'VPS_KEY="$HOME/.ssh/vps_access_key"' not in text
+    assert 'VPS_HOST="vps.example.com"' not in text
+    assert 'VPS_PORT="2222"' not in text
+    assert 'VPS_USER="deploy"' not in text
+    assert 'VPS_KEY="$HOME/.ssh/deploy_key"' not in text
 
 
 def test_deploy_vps_env_defaults_with_clear_failure() -> None:

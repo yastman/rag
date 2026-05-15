@@ -11,13 +11,13 @@ Wants=docker.service
 
 [Service]
 Type=simple
-User=admin
-Group=admin
-WorkingDirectory=/srv/contextual_rag
-Environment=PATH=/srv/app/venv/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=/srv/app/telegram_bot/.env
+User=rag-bot
+Group=rag-bot
+WorkingDirectory=/opt/rag-fresh
+Environment=PATH=/opt/rag-fresh/venv/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/opt/rag-fresh/telegram_bot/.env
 
-ExecStart=/srv/app/venv/bin/python -m telegram_bot.main
+ExecStart=/opt/rag-fresh/venv/bin/python -m telegram_bot.main
 ExecReload=/bin/kill -HUP $MAINPID
 
 Restart=always
@@ -30,7 +30,7 @@ SyslogIdentifier=telegram-bot
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/srv/app/telegram_bot
+ReadWritePaths=/opt/rag-fresh/telegram_bot
 
 [Install]
 WantedBy=multi-user.target

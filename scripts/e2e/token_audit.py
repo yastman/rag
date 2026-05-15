@@ -1,6 +1,6 @@
 """Send 10 test queries via Telethon and collect response stats.
 
-Usage: cd /repo && uv run python -m scripts.e2e.token_audit
+Usage: cd <project-root> && uv run python -m scripts.e2e.token_audit
 """
 
 import asyncio

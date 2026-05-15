@@ -377,10 +377,8 @@ class TestNewWindowCommand:
     def test_format_with_worktree(self):
         ident = OrchIdentity()
         ident.session = "claude"
-        cmd = ident.new_window_command("W-FIX", "/repo")
-        assert cmd == (
-            'TMUX="" tmux new-window -t "claude" -n "W-FIX" -c "/repo"'
-        )
+        cmd = ident.new_window_command("W-FIX", "/tmp/rag-fresh")
+        assert cmd == ('TMUX="" tmux new-window -t "claude" -n "W-FIX" -c "/tmp/rag-fresh"')
 
     def test_uses_tmux_empty(self):
         ident = OrchIdentity()
@@ -405,11 +403,11 @@ class TestMainRepoRoot:
     @patch("scripts.tmux_orch_identity.subprocess.run")
     def test_uses_git_common_dir(self, mock_run: MagicMock):
         mock_run.return_value = MagicMock(
-            stdout="/repo/.git\n",
+            stdout="/tmp/rag-fresh/.git\n",
             returncode=0,
         )
         root = _main_repo_root()
-        assert root == Path("/repo")
+        assert root == Path("/tmp/rag-fresh")
         cmd = mock_run.call_args[0][0]
         assert "--git-common-dir" in cmd
 
