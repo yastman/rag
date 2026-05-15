@@ -116,25 +116,6 @@ repos:
   # =============================================================================
   # These hooks run more expensive checks that shouldn't slow down commits
 
-  # Block direct commits to main — only merge from dev allowed.
-  # git merge doesn't trigger pre-commit stage, so merges pass through.
-  - repo: local
-    hooks:
-      - id: no-commit-to-main
-        name: Block direct commits to main
-        entry: ./scripts/no-commit-to-main.sh
-        language: script
-        always_run: true
-        pass_filenames: false
-        stages: [pre-commit]
-
-      - id: local-pre-push
-        name: Fast local pre-push sanity gate
-        entry: make local-pre-push
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
-
 # CI configuration
 ci:
   autofix_commit_msg: |

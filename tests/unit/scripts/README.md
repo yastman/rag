@@ -18,7 +18,7 @@ tests/unit/scripts
 - test_ingest_script.py
 - test_kommo_seed.py
 - test_parse_catalog.py
-- test_tmux_orch_identity.py
+
 
 ## Parent
 - [..](..)
