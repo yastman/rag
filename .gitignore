@@ -42,6 +42,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.ruff_cache/
 nosetests.xml
 coverage.xml
 *.cover
@@ -99,6 +100,7 @@ celerybeat.pid
 .env
 .mcp.json
 .venv
+**/.venv/
 env/
 venv/
 ENV/
@@ -181,6 +183,7 @@ qdrant_storage/
 *.session
 *.session-journal
 .e2e_auth_hash.json
+.telethon/
 
 # Pre-commit
 .pre-commit-config.yaml~
@@ -204,16 +207,10 @@ CLAUDE.md
 .claude/rules/
 .claude/cache/
 .claude/prompts/
-docs/plans/*
+docs/audits/
 docs/archive/
 !docs/archive/README.md
 !docs/archive/workflows/README.md
-!docs/plans/README.md
-!docs/plans/2026-03-02-sdk-migration-audit.md
-!docs/plans/2026-03-13-issue-728-sdk-realignment-plan.md
-!docs/plans/2026-03-13-sdk-first-remediation-plan.md
-!docs/plans/2026-03-15-sdk-canonical-remediation-plan.md
-!docs/plans/2026-05-07-langfuse-coverage-trace-quality-plan.md
 
 # Build artifacts & test outputs
 test_output*.txt
@@ -222,7 +219,8 @@ coverage.json
 =*
 
 # k8s secrets (never commit)
-k8s/secrets/
+k8s/secrets/*
+!k8s/secrets/README.md
 
 # Validation reports (generated, not committed)
 !docs/reports/
@@ -247,7 +245,11 @@ mcp-clusters.yaml
 
 # Worker artifacts (generated, not committed)
 docs/artifacts/*.md
+docs/artifacts/**/*.md
 !docs/artifacts/.gitkeep
+
+# Generated dated SDK/audit/roadmap snapshots (do not commit)
+docs/SDK_*_20*.md
 
 # Claude plugin skills (installed per-machine, not committed)
 .claude/skills/
@@ -258,9 +260,59 @@ docs/artifacts/*.md
 .grepai/
 .signals/
 
-# Local AI/orchestration tool directories
+# Internal AI/orchestration tool directories
+docs/superpowers/
 .planning/
+rag-small-to-big-research.md
+.gsd/
+.bg-shell/
 .codex/
+.swarm/
+.opencode/
 .opencode/node_modules/
+opencode.json
 projects/
 tmp.*
+
+# Removed from public repo (VPS-specific, internal tooling)
+deploy/
+compose.vps.yml
+renovate.json
+.release-please-manifest.json
+.env.local.example
+docker/rclone/
+scripts/no-commit-to-main.sh
+scripts/local_pre_push.sh
+scripts/monitor-workers.sh
+scripts/tmux_orch_identity.py
+scripts/deploy-vps.sh
+scripts/qdrant_backup.sh
+scripts/qdrant_restore.sh
+
+# Additional public-repo hardening
+.direnv/
+.envrc
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+**/node_modules/
+**/coverage/
+**/.nyc_output/
+**/.vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor swap/backup files
+*.swp
+*.swo
+*~
+*.bak
+*.backup

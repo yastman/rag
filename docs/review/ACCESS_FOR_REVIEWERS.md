@@ -1,7 +1,7 @@
 # Access For Reviewers
 
-Use this file when someone receives repository access for technical review,
-portfolio review, or hiring evaluation.
+Use this file for technical review, portfolio review, hiring evaluation, or
+getting oriented as a new contributor.
 
 > **Start here.** Read this file first, then `README.md` and
 > `docs/review/PROJECT_GUIDE.md`, before running any commands or inspecting
@@ -38,7 +38,6 @@ modern laptop:
 | `make check` | 45–90 s | Lint and type-check pass |
 | `uv run pytest tests/unit` | 1–3 min | Unit tests pass |
 | `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services` | <5 s | Dev Compose config is valid |
-| `COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --compatibility config --services` | <5 s | VPS Compose config is valid |
 
 For a narrower first pass, prefer focused tests around the subsystem being
 reviewed, then `make check`.
@@ -59,6 +58,8 @@ reviewed, then `make check`.
 - Use fake/demo credentials for local inspection.
 - Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external
   secrets, not repository content.
+- If you are a public contributor, open an issue before attempting any change
+  that touches secrets, deploy scripts, or production endpoints.
 
 ## Branch Context
 
@@ -70,7 +71,7 @@ reviewed, then `make check`.
 
 - State and routing contracts in `telegram_bot/graph/`.
 - SDK/native API usage in `telegram_bot/integrations/` and `telegram_bot/services/`.
-- Cheap-first apartment parsing in `telegram_bot/services/filter_extractor.py`.
+- Cheap-first domain/catalog parsing in `telegram_bot/services/filter_extractor.py`.
 - HITL safety boundaries in `telegram_bot/agents/hitl.py` and CRM tools.
 - Ingestion determinism in `src/ingestion/unified/manifest.py` and
   `src/ingestion/unified/state_manager.py`.

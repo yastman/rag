@@ -23,7 +23,7 @@ from qdrant_client import QdrantClient
 # Загрузить .env
 load_dotenv()
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://REDACTED_VPS_IP:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 

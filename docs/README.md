@@ -10,7 +10,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`indexes/runtime-services.md`](indexes/runtime-services.md) — Docker, ingestion, mini app, bot, voice
 - [`indexes/observability-and-storage.md`](indexes/observability-and-storage.md) — Langfuse, Qdrant, Redis, LiteLLM, Postgres
 - [`indexes/local-runtime.md`](indexes/local-runtime.md) — local bot startup, Telegram E2E, Telethon sessions, polling locks
-- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, docs maintenance, swarm process docs
+- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, and docs maintenance
 
 ## Understand the Project Fast
 
@@ -24,7 +24,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`engineering/issue-triage.md`](engineering/issue-triage.md) — Issue classification and routing playbook.
 - [`engineering/README.md`](engineering/README.md) — Engineering process index with active and historical notes.
 - [`adr/`](adr/) — Architecture decision records.
-- [`audits/`](audits/) — Dated investigation artifacts and evidence.
+- [`archive/audits/`](archive/audits/) — Historical dated investigation artifacts and evidence.
 
 ## Architecture & Design
 
@@ -51,7 +51,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
 - [`ALERTING.md`](ALERTING.md) — Loki/Alertmanager setup.
-- [`INFRA_ISSUES_REPORT_1113_1126.md`](INFRA_ISSUES_REPORT_1113_1126.md) — Infrastructure issues report.
+- [`archive/audits/INFRA_ISSUES_REPORT_1113_1126.md`](archive/audits/INFRA_ISSUES_REPORT_1113_1126.md) — Archived infrastructure issues report.
 - [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 
@@ -60,12 +60,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`RAG_QUALITY_SCORES.md`](RAG_QUALITY_SCORES.md) — Scoring taxonomy and trace expectations.
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Development conventions and test guidance.
 - [`ADRS.md`](ADRS.md) — Architecture decision records.
-
-## Migration & SDK
-
-- [`SDK_MIGRATION_AUDIT_2026-03-13.md`](SDK_MIGRATION_AUDIT_2026-03-13.md) — Canonical SDK keeper stack.
-- [`SDK_MIGRATION_ROADMAP_2026-03-13.md`](SDK_MIGRATION_ROADMAP_2026-03-13.md) — Post-audit execution order.
-- [`SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md`](SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md) — SDK canonical remediation report.
 
 ## Engineering Notes
 
@@ -94,7 +88,6 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 |---|---|
 | `docs/runbooks/` | Operational troubleshooting and incident response |
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
-| `docs/audits/` | Dated evidence and investigation artifacts; not entrypoints |
-| `docs/plans/` and `docs/superpowers/plans/` | Implementation plans and design specs |
+| `docs/archive/audits/` | Historical dated evidence and investigation artifacts; not entrypoints |
 | `docs/review/` and `docs/portfolio/` | Reviewer and portfolio entry points |
 | Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `k8s/`, `docker/`) |

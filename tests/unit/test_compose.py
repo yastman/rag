@@ -1,7 +1,7 @@
 """Tests for Docker Compose file structure and correctness.
 
 Covers:
-- #818: compose.yml/compose.dev.yml/compose.vps.yml structure
+- #818: compose.yml/compose.dev.yml structure
 - #812: VPS ColBERT rerank enabled with reduced candidates
 - #810: qdrant_ensure_indexes.py exists and creates correct indexes
 """
@@ -46,12 +46,6 @@ def test_compose_dev_yml_is_valid_yaml():
     assert "services" in data
 
 
-def test_compose_vps_yml_is_valid_yaml():
-    """compose.vps.yml must be parseable and have a services key."""
-    data = load_yaml("compose.vps.yml")
-    assert "services" in data
-
-
 def test_compose_yml_has_no_container_name():
     """Base compose.yml must not hardcode container names (uses project prefix)."""
     data = load_yaml("compose.yml")
@@ -67,8 +61,7 @@ def test_compose_yml_has_no_ports():
     data = load_yaml("compose.yml")
     for name, svc in data["services"].items():
         assert "ports" not in svc, (
-            f"Service '{name}' in compose.yml has ports — "
-            "move to compose.dev.yml or compose.vps.yml override"
+            f"Service '{name}' in compose.yml has ports — move to compose.dev.yml override"
         )
 
 
@@ -105,38 +98,6 @@ def test_compose_dev_has_ports_for_core_services():
         assert "ports" in services.get(svc_name, {}), (
             f"compose.dev.yml missing ports for '{svc_name}'"
         )
-
-
-# ---------------------------------------------------------------------------
-# #812 — VPS ColBERT rerank enabled
-# ---------------------------------------------------------------------------
-
-
-def test_vps_rerank_provider_is_colbert():
-    """compose.vps.yml must enable ColBERT rerank (not 'none')."""
-    data = load_yaml("compose.vps.yml")
-    bot_env = data["services"]["bot"]["environment"]
-    assert bot_env.get("RERANK_PROVIDER") == "colbert", (
-        "VPS must use ColBERT rerank — set RERANK_PROVIDER=colbert in compose.vps.yml. "
-        "See issue #812."
-    )
-
-
-def test_vps_rerank_candidates_reduced():
-    """VPS must use reduced candidates to keep latency acceptable (<= 5)."""
-    data = load_yaml("compose.vps.yml")
-    bot_env = data["services"]["bot"]["environment"]
-    candidates = int(bot_env.get("RERANK_CANDIDATES_MAX", 10))
-    assert candidates <= 5, (
-        f"VPS RERANK_CANDIDATES_MAX={candidates} — must be <= 5 to keep latency <2s on CPU"
-    )
-
-
-def test_vps_bge_m3_read_only():
-    """VPS bge-m3 must run read-only for security hardening."""
-    data = load_yaml("compose.vps.yml")
-    bge = data["services"].get("bge-m3", {})
-    assert bge.get("read_only") is True, "compose.vps.yml bge-m3 must have read_only: true"
 
 
 # ---------------------------------------------------------------------------

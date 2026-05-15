@@ -33,7 +33,7 @@ If any check above was skipped, state the reason explicitly:
 Does this change affect Docker Compose, k8s manifests, service startup, or production deploy?
 
 - [ ] No runtime impact
-- [ ] Compose file change (`compose.yml`, `compose.dev.yml`, `compose.vps.yml`)
+- [ ] Compose file change (`compose.yml`, `compose.dev.yml`)
 - [ ] Dockerfile or build change
 - [ ] k8s manifest change
 - [ ] Environment variable or secret contract change
@@ -50,4 +50,4 @@ If this PR changes UI, Telegram flows, or visual output, attach screenshots or a
 
 - Anything non-obvious about the implementation?
 - Any trade-offs or follow-up work?
-- Relevant docs: [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md), [`docs/engineering/test-writing-guide.md`](docs/engineering/test-writing-guide.md), [`DOCKER.md`](DOCKER.md), [`tests/README.md`](tests/README.md)
+- Relevant docs: [`docs/review/ACCESS_FOR_REVIEWERS.md`](../docs/review/ACCESS_FOR_REVIEWERS.md), [`docs/engineering/test-writing-guide.md`](../docs/engineering/test-writing-guide.md), [`DOCKER.md`](../DOCKER.md), [`tests/README.md`](../tests/README.md)
