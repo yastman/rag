@@ -1,7 +1,7 @@
 # GitHub Repository Setup
 
-This checklist is for making the repository understandable and safe when access
-is shared with recruiters, technical interviewers, or collaborators.
+This checklist is for making the repository understandable and safe for
+recruiters, technical interviewers, collaborators, and public contributors.
 
 ## Repository Metadata
 
@@ -73,7 +73,7 @@ primary evidence for code changes.
 
 ## Security And Sanitization
 
-Before granting external access:
+Before publishing or sharing the repository:
 
 - verify no `.env`, tokens, SSH keys, database dumps, or production logs are in
   the repository.
