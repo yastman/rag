@@ -270,6 +270,21 @@ opencode.json
 projects/
 tmp.*
 
+# Removed from public repo (VPS-specific, internal tooling)
+deploy/
+compose.vps.yml
+renovate.json
+.release-please-manifest.json
+.env.local.example
+docker/rclone/
+scripts/no-commit-to-main.sh
+scripts/local_pre_push.sh
+scripts/monitor-workers.sh
+scripts/tmux_orch_identity.py
+scripts/deploy-vps.sh
+scripts/qdrant_backup.sh
+scripts/qdrant_restore.sh
+
 # Additional public-repo hardening
 .direnv/
 .envrc

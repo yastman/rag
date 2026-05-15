@@ -38,7 +38,7 @@ def test_script_examples_use_current_compose_filenames() -> None:
     content = SCRIPT.read_text()
     assert "docker-compose.dev.yml" not in content
     assert "docker-compose.vps.yml" not in content
-    assert "compose.vps.yml" in content
+    assert "compose.vps.yml" not in content
 
 
 def test_main_exits_nonzero_when_no_running_containers_checked(

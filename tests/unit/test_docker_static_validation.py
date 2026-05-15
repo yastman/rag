@@ -83,24 +83,6 @@ def test_compose_dev_config_renders() -> None:
     assert result.returncode == 0, f"Compose dev config failed:\n{result.stderr}"
 
 
-def test_compose_vps_config_renders() -> None:
-    result = _run_docker_command(
-        [
-            "docker",
-            "compose",
-            "--env-file",
-            str(COMPOSE_CI_ENV),
-            "-f",
-            "compose.yml",
-            "-f",
-            "compose.vps.yml",
-            "config",
-            "--quiet",
-        ],
-    )
-    assert result.returncode == 0, f"Compose VPS config failed:\n{result.stderr}"
-
-
 def test_compose_dev_config_renders_with_full_profile() -> None:
     """Profile-gated services must not fail merely because required env vars are unset (#1341)."""
     result = _run_docker_command(
