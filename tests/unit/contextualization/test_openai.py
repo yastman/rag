@@ -29,8 +29,8 @@ class TestOpenAIContextualizerInit:
             assert contextualizer.settings == mock_settings
             assert contextualizer.total_tokens == 0
             assert contextualizer.total_cost == 0.0
-            mock_async.assert_called_once_with(api_key="test-api-key")
-            mock_sync.assert_called_once_with(api_key="test-api-key")
+            mock_async.assert_called_once_with(api_key="test-api-key", max_retries=4)
+            mock_sync.assert_called_once_with(api_key="test-api-key", max_retries=4)
 
     def test_init_without_settings_uses_default(self):
         """Test initialization without settings uses default Settings."""
@@ -103,8 +103,8 @@ class TestOpenAIContextualizerInit:
             importlib.reload(ctx_mod)
             ctx_mod.OpenAIContextualizer(settings=mock_settings)
 
-            mock_lf_async.assert_called_once_with(api_key="test-key")
-            mock_lf_sync.assert_called_once_with(api_key="test-key")
+            mock_lf_async.assert_called_once_with(api_key="test-key", max_retries=4)
+            mock_lf_sync.assert_called_once_with(api_key="test-key", max_retries=4)
 
 
 class TestOpenAIContextualizerContextualize:
@@ -418,3 +418,104 @@ class TestOpenAIContextualizerGetStats:
 
             assert stats["total_tokens"] == 1234
             assert stats["total_cost_usd"] == 0.5679  # Rounded
+
+
+
+class TestOpenAIContextualizerSDKRetries:
+    """Contract: OpenAI SDK native retries replace Tenacity (#1651).
+
+    OpenAI client provides a built-in `max_retries` parameter (default 2)
+    that retries connection errors, 408, 409, 429, and >=500 with
+    exponential backoff. Tenacity wrapping these calls duplicates retry
+    policy and makes behavior harder to reason about (Context7
+    /openai/openai-python).
+    """
+
+    def test_async_client_initialized_with_max_retries(self):
+        """AsyncOpenAI must be constructed with max_retries=4 (matches prior Tenacity attempts)."""
+        mock_settings = MagicMock()
+        mock_settings.openai_api_key = "test-key"
+
+        with (
+            patch("src.contextualization.openai.AsyncOpenAI") as mock_async,
+            patch("src.contextualization.openai.OpenAI"),
+        ):
+            OpenAIContextualizer(settings=mock_settings)
+
+            mock_async.assert_called_once()
+            kwargs = mock_async.call_args.kwargs
+            assert kwargs.get("api_key") == "test-key"
+            assert kwargs.get("max_retries") == 4, (
+                "AsyncOpenAI client must be constructed with max_retries=4"
+            )
+
+    def test_sync_client_initialized_with_max_retries(self):
+        """Sync OpenAI must be constructed with max_retries=4."""
+        mock_settings = MagicMock()
+        mock_settings.openai_api_key = "test-key"
+
+        with (
+            patch("src.contextualization.openai.AsyncOpenAI"),
+            patch("src.contextualization.openai.OpenAI") as mock_sync,
+        ):
+            OpenAIContextualizer(settings=mock_settings)
+
+            mock_sync.assert_called_once()
+            kwargs = mock_sync.call_args.kwargs
+            assert kwargs.get("api_key") == "test-key"
+            assert kwargs.get("max_retries") == 4
+
+    def test_no_tenacity_retry_decorator_on_methods(self):
+        """contextualize_single and contextualize_sync must not use Tenacity @retry."""
+        import ast
+        import inspect
+
+        from src.contextualization import openai as mod
+
+        source = inspect.getsource(mod)
+        tree = ast.parse(source)
+
+        offending: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef) and not isinstance(
+                node, ast.AsyncFunctionDef
+            ):
+                continue
+            if node.name not in {"contextualize_single", "contextualize_sync"}:
+                continue
+            for dec in node.decorator_list:
+                target = dec.func if isinstance(dec, ast.Call) else dec
+                if isinstance(target, ast.Name) and target.id == "retry":
+                    offending.append(f"{node.name}: @retry(...)")
+                if isinstance(target, ast.Attribute) and target.attr == "retry":
+                    offending.append(f"{node.name}: @{ast.unparse(target)}(...)")
+
+        assert not offending, (
+            "Tenacity @retry decorators must be removed from contextualize_single/sync; "
+            "rely on OpenAI client max_retries instead. Offending:\n"
+            + "\n".join(offending)
+        )
+
+    def test_module_does_not_import_tenacity(self):
+        """The openai contextualizer module must not import tenacity at all."""
+        import ast
+        import inspect
+
+        from src.contextualization import openai as mod
+
+        source = inspect.getsource(mod)
+        tree = ast.parse(source)
+
+        bad: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "tenacity":
+                bad.append(
+                    "from tenacity import "
+                    + ", ".join(alias.name for alias in node.names)
+                )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "tenacity":
+                        bad.append("import tenacity")
+
+        assert not bad, "Tenacity imports must be removed:\n" + "\n".join(bad)
