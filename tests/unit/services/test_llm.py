@@ -593,3 +593,560 @@ class TestLLMServiceClose:
 
         # Should not raise
         await service.close()
+
+
+
+class TestLLMServiceObserveInstrumentation:
+    """Tests for @observe instrumentation on LLMService public methods (#1660).
+
+    Contract: ``generate_answer`` (line ~97), ``stream_answer`` (line ~213) and
+    ``generate`` (line ~366) must each be wrapped with::
+
+        @observe(name="llm-service-<method>",
+                 capture_input=False, capture_output=False)
+
+    so the auto-traced generation produced by ``langfuse.openai.AsyncOpenAI``
+    becomes a child of a named span instead of an orphan top-level trace.
+
+    CRITICAL (audit correction on #1660): the wrapper must NOT use
+    ``as_type="generation"``. ``langfuse.openai`` already creates a generation
+    observation for each ``chat.completions.create()`` call — making the
+    wrapper itself a generation would produce duplicate generation
+    observations for one LLM call. Plain span > nested generation is the
+    intended structure.
+
+    Curated ``update_current_span`` payloads avoid leaking full prompt/full
+    response into Langfuse. On LLM exception the span is recorded at
+    ``level="ERROR"`` with a truncated ``status_message``; ``generate``
+    re-raises while ``generate_answer``/``stream_answer`` already swallow API
+    errors and yield/return a fallback (existing public contract preserved).
+    """
+
+    @staticmethod
+    def _patched_lf(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        """Replace get_client used by the llm module with a recording mock."""
+        from telegram_bot.services import llm as llm_mod
+
+        mock_lf = MagicMock()
+        monkeypatch.setattr(llm_mod, "get_client", lambda: mock_lf)
+        return mock_lf
+
+    @staticmethod
+    def _disable_observe(monkeypatch: pytest.MonkeyPatch) -> None:
+        """Replace the @observe decorator at module-import time with a no-op.
+
+        Uses ``monkeypatch.delitem(sys.modules, ...)`` so that after the test
+        the ORIGINAL module object is restored — otherwise the reload would
+        leave a fresh ``LLMService`` class in ``sys.modules`` and downstream
+        tests that assert ``services.LLMService is LLMService`` (identity)
+        would fail due to drift between the lazy-imported package attribute
+        and the test-file-level binding.
+        """
+        import importlib
+        import sys
+
+        from telegram_bot import observability as observability_mod
+
+        def fake_observe(**_kwargs):
+            def decorator(func):
+                return func
+
+            return decorator
+
+        monkeypatch.setattr(observability_mod, "observe", fake_observe)
+        monkeypatch.delitem(sys.modules, "telegram_bot.services.llm", raising=False)
+        importlib.import_module("telegram_bot.services.llm")
+
+    @staticmethod
+    def _record_observe_calls(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> list[dict[str, object]]:
+        """Replace @observe with a recorder and reload the llm module.
+
+        Same ``monkeypatch.delitem`` strategy as ``_disable_observe`` — the
+        original module is restored on test teardown.
+        """
+        import importlib
+        import sys
+
+        from telegram_bot import observability as observability_mod
+
+        captured_calls: list[dict[str, object]] = []
+
+        def recording_observe(**kwargs):
+            captured_calls.append(kwargs)
+
+            def decorator(func):
+                return func
+
+            return decorator
+
+        monkeypatch.setattr(observability_mod, "observe", recording_observe)
+        monkeypatch.delitem(sys.modules, "telegram_bot.services.llm", raising=False)
+        importlib.import_module("telegram_bot.services.llm")
+        return captured_calls
+
+    # ------------------------------------------------------------------
+    # Module-level wiring
+    # ------------------------------------------------------------------
+
+    def test_module_imports_observe_and_get_client(self):
+        """Module wires the Langfuse decorator + client accessor (#1660 contract)."""
+        from telegram_bot.services import llm as llm_mod
+
+        assert hasattr(llm_mod, "observe"), (
+            "telegram_bot.services.llm must import `observe` from "
+            "telegram_bot.observability for the @observe decorator on "
+            "LLMService.{generate_answer,stream_answer,generate}"
+        )
+        assert hasattr(llm_mod, "get_client"), (
+            "telegram_bot.services.llm must import `get_client` from "
+            "telegram_bot.observability for curated update_current_span calls"
+        )
+
+    # ------------------------------------------------------------------
+    # Decorator kwargs (one test per method)
+    # ------------------------------------------------------------------
+
+    def test_generate_answer_decorator_kwargs(self, monkeypatch):
+        """``generate_answer`` is decorated with the audit's exact kwargs.
+
+        CRITICAL: ``as_type="generation"`` MUST NOT be present (audit
+        correction on #1660). The class uses ``langfuse.openai.AsyncOpenAI``
+        which already creates a generation for each call — the wrapper is a
+        plain span, langfuse.openai owns the nested generation.
+        """
+        captured = self._record_observe_calls(monkeypatch)
+
+        matches = [c for c in captured if c.get("name") == "llm-service-generate-answer"]
+        assert len(matches) == 1, (
+            "Expected exactly one @observe(name='llm-service-generate-answer', ...) "
+            f"on LLMService.generate_answer; observed names: {[c.get('name') for c in captured]}"
+        )
+        kwargs = matches[0]
+        assert kwargs.get("capture_input") is False
+        assert kwargs.get("capture_output") is False
+        assert "as_type" not in kwargs, (
+            "Wrapper must NOT use as_type='generation' (audit correction on #1660): "
+            "langfuse.openai already creates a generation for each chat.completions.create; "
+            "wrapping the public method as another generation would produce duplicates."
+        )
+
+    def test_stream_answer_decorator_kwargs(self, monkeypatch):
+        """``stream_answer`` is a plain span — NO as_type=generation (audit)."""
+        captured = self._record_observe_calls(monkeypatch)
+
+        matches = [c for c in captured if c.get("name") == "llm-service-stream-answer"]
+        assert len(matches) == 1, (
+            "Expected exactly one @observe(name='llm-service-stream-answer', ...) "
+            f"on LLMService.stream_answer; observed names: {[c.get('name') for c in captured]}"
+        )
+        kwargs = matches[0]
+        assert kwargs.get("capture_input") is False
+        assert kwargs.get("capture_output") is False
+        assert "as_type" not in kwargs, (
+            "stream_answer wrapper must NOT use as_type='generation' (audit "
+            "correction on #1660): langfuse.openai handles the streaming "
+            "generation; wrapper stays a plain span."
+        )
+
+    def test_generate_decorator_kwargs(self, monkeypatch):
+        """``generate`` is decorated as a plain span — NO as_type=generation."""
+        captured = self._record_observe_calls(monkeypatch)
+
+        matches = [c for c in captured if c.get("name") == "llm-service-generate"]
+        assert len(matches) == 1, (
+            "Expected exactly one @observe(name='llm-service-generate', ...) "
+            f"on LLMService.generate; observed names: {[c.get('name') for c in captured]}"
+        )
+        kwargs = matches[0]
+        assert kwargs.get("capture_input") is False
+        assert kwargs.get("capture_output") is False
+        assert "as_type" not in kwargs, (
+            "generate wrapper must NOT use as_type='generation' (audit "
+            "correction on #1660)."
+        )
+
+    # ------------------------------------------------------------------
+    # Behavior: generate_answer
+    # ------------------------------------------------------------------
+
+    async def test_generate_answer_curated_input_no_full_prompt(self, monkeypatch):
+        """``generate_answer`` records prompt_preview/model/with_confidence only.
+
+        Full prompt MUST NOT appear in span input (#1660 Forbidden section).
+        """
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        service = LLMService(api_key="test-key", model="gpt-4o-mini")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("ok")
+        )
+
+        long_question = (
+            "Это очень длинный вопрос про недвижимость в Болгарии, "
+            "который точно длиннее ста двадцати символов и должен быть "
+            "усечён в превью при записи в Langfuse span input."
+        )
+        assert len(long_question) > 120
+
+        await service.generate_answer(long_question, [{"text": "ctx"}])
+
+        input_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if "input" in c.kwargs
+        ]
+        assert input_calls, (
+            "update_current_span(input=...) was never called on generate_answer"
+        )
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        assert "prompt_preview" in captured_input
+        assert isinstance(captured_input["prompt_preview"], str)
+        assert len(captured_input["prompt_preview"]) <= 120
+        assert captured_input.get("model") == "gpt-4o-mini"
+        assert "with_confidence" in captured_input
+        assert captured_input["with_confidence"] is False
+
+        # Forbidden: full question MUST NOT appear in span input.
+        assert long_question not in str(captured_input)
+
+    async def test_generate_answer_curated_output_response_len(self, monkeypatch):
+        """``generate_answer`` records response_len after LLM (#1660 plan)."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        long_response = (
+            "Подобрал три варианта 2BR у моря в Несебре от 65к EUR. "
+            "Все с видом на море и инфраструктурой в шаговой доступности."
+        )
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(long_response)
+        )
+
+        result = await service.generate_answer("вопрос", [{"text": "ctx"}])
+        assert result == long_response  # behavior unchanged
+
+        output_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, (
+            "update_current_span(output=...) was never called on generate_answer"
+        )
+        captured_output = output_calls[-1]["output"]
+        assert isinstance(captured_output, dict)
+        assert captured_output.get("response_len") == len(long_response)
+        # Forbidden: full response text MUST NOT appear in span output.
+        assert long_response not in str(captured_output)
+
+    async def test_generate_answer_error_path_records_error_level(self, monkeypatch):
+        """Per audit: on internal failure, span level=ERROR with truncated msg.
+
+        ``generate_answer`` already swallows OpenAI errors and returns a
+        fallback string, so the public method does NOT re-raise. The error
+        path must still be recorded on the span (#1660 plan step 4).
+        """
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=RuntimeError("LLM exploded mid-generate-answer")
+        )
+
+        result = await service.generate_answer(
+            "q",
+            [{"text": "ctx", "metadata": {"title": "X"}}],
+        )
+        assert isinstance(result, str)
+        assert "Сервис генерации ответов временно недоступен" in result
+
+        error_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert error_calls, (
+            "Failure path must call update_current_span(level='ERROR', ...) "
+            "on LLMService.generate_answer (#1660 plan step 4)"
+        )
+        status = error_calls[0].get("status_message", "")
+        assert "LLM exploded mid-generate-answer" in status
+        assert len(status) <= 220
+
+    # ------------------------------------------------------------------
+    # Behavior: stream_answer
+    # ------------------------------------------------------------------
+
+    async def test_stream_answer_curated_input_no_full_prompt(self, monkeypatch):
+        """``stream_answer`` records prompt_preview/model only — no full prompt."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        long_question = (
+            "Это очень-очень-очень длинный вопрос на стрим, который "
+            "превышает сто двадцать символов и должен быть аккуратно "
+            "усечён до prompt_preview ровно в 120 символов или меньше."
+        )
+        assert len(long_question) > 120
+
+        chunk1 = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content="A"))])
+        chunk2 = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content="B"))])
+
+        async def stream():
+            for c in [chunk1, chunk2]:
+                yield c
+
+        service = LLMService(api_key="test-key", model="gpt-4o-mini")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=stream())
+
+        chunks = [c async for c in service.stream_answer(long_question, [{"text": "ctx"}])]
+        assert chunks == ["A", "B"]
+
+        input_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if "input" in c.kwargs
+        ]
+        assert input_calls, (
+            "update_current_span(input=...) was never called on stream_answer"
+        )
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        assert "prompt_preview" in captured_input
+        assert isinstance(captured_input["prompt_preview"], str)
+        assert len(captured_input["prompt_preview"]) <= 120
+        assert captured_input.get("model") == "gpt-4o-mini"
+        # Forbidden: full question MUST NOT appear in span input.
+        assert long_question not in str(captured_input)
+
+    async def test_stream_answer_curated_output_chunks_and_total_len(self, monkeypatch):
+        """``stream_answer`` records {chunks, total_len} after generator drains."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        contents = ["Hel", "lo ", "World!"]
+        body_chunks = [
+            MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content=c))])
+            for c in contents
+        ]
+        usage_tail = MagicMock(usage=MagicMock(total_tokens=42), choices=[])
+
+        async def stream():
+            for c in [*body_chunks, usage_tail]:
+                yield c
+
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=stream())
+
+        full = ""
+        async for c in service.stream_answer("q", [{"text": "ctx"}]):
+            full += c
+        assert full == "Hello World!"
+
+        output_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, (
+            "update_current_span(output=...) was never called on stream_answer "
+            "after the generator finished"
+        )
+        captured_output = output_calls[-1]["output"]
+        assert isinstance(captured_output, dict)
+        assert captured_output.get("chunks") == 3, (
+            f"Expected chunks=3 (body chunks only, usage chunk skipped), "
+            f"got {captured_output.get('chunks')}"
+        )
+        assert captured_output.get("total_len") == len(full)
+
+        # Forbidden: full response text MUST NOT appear in span output.
+        assert full not in str(captured_output)
+
+    async def test_stream_answer_error_path_records_error_level(self, monkeypatch):
+        """On stream failure, span level=ERROR + status_message; fallback yields."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=RuntimeError("LLM exploded mid-stream-answer")
+        )
+
+        chunks = [
+            c async for c in service.stream_answer(
+                "q", [{"text": "ctx", "metadata": {"title": "X"}}]
+            )
+        ]
+        assert chunks, "stream_answer must still yield a fallback chunk on error"
+
+        error_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert error_calls, (
+            "Failure path must call update_current_span(level='ERROR', ...) "
+            "on LLMService.stream_answer (#1660 plan step 4)"
+        )
+        status = error_calls[0].get("status_message", "")
+        assert "LLM exploded mid-stream-answer" in status
+        assert len(status) <= 220
+
+    async def test_stream_options_include_usage_preserved(self, monkeypatch):
+        """Sanity guard: ``stream_options={"include_usage": True}`` not regressed.
+
+        The audit on #1660 explicitly notes the existing call already passes
+        ``stream_options={"include_usage": True}`` (line ~245-252 of llm.py
+        on dev) and that it MUST be preserved so langfuse.openai can read
+        token usage from the final chunk and attach it to the nested
+        generation observation.
+        """
+        self._disable_observe(monkeypatch)
+        self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        async def empty_stream():
+            return
+            yield  # pragma: no cover
+
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=empty_stream())
+
+        async for _ in service.stream_answer("q", [{"text": "ctx"}]):
+            pass
+
+        kwargs = service.client.chat.completions.create.call_args.kwargs
+        assert kwargs.get("stream") is True
+        assert kwargs.get("stream_options") == {"include_usage": True}, (
+            "stream_options={'include_usage': True} must be preserved "
+            "(audit on #1660: required for langfuse.openai to capture token "
+            "usage from the final streaming chunk)"
+        )
+
+    # ------------------------------------------------------------------
+    # Behavior: generate
+    # ------------------------------------------------------------------
+
+    async def test_generate_curated_input_no_full_prompt(self, monkeypatch):
+        """``generate`` records prompt_preview/model only — no full prompt."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        long_prompt = (
+            "Очень длинный системный промт для CESC, который содержит "
+            "более ста двадцати символов и должен попасть в span только "
+            "в виде prompt_preview, никогда полностью."
+        )
+        assert len(long_prompt) > 120
+
+        service = LLMService(api_key="test-key", model="gpt-4o-mini")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("ok")
+        )
+
+        await service.generate(long_prompt)
+
+        input_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if "input" in c.kwargs
+        ]
+        assert input_calls, (
+            "update_current_span(input=...) was never called on generate"
+        )
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        assert "prompt_preview" in captured_input
+        assert isinstance(captured_input["prompt_preview"], str)
+        assert len(captured_input["prompt_preview"]) <= 120
+        assert captured_input.get("model") == "gpt-4o-mini"
+        # Forbidden: full prompt MUST NOT appear in span input.
+        assert long_prompt not in str(captured_input)
+
+    async def test_generate_curated_output_response_len(self, monkeypatch):
+        """``generate`` records response_len after LLM (#1660 plan)."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        long_response = "Сгенерированный длинный ответ для CESC извлечения предпочтений клиента."
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(long_response)
+        )
+
+        result = await service.generate("prompt")
+        assert result == long_response  # behavior unchanged
+
+        output_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, (
+            "update_current_span(output=...) was never called on generate"
+        )
+        captured_output = output_calls[-1]["output"]
+        assert isinstance(captured_output, dict)
+        assert captured_output.get("response_len") == len(long_response)
+        # Forbidden: full response text MUST NOT appear in span output.
+        assert long_response not in str(captured_output)
+
+    async def test_generate_error_path_records_error_level_and_reraises(self, monkeypatch):
+        """``generate`` records ERROR span and RE-RAISES (existing contract).
+
+        Unlike ``generate_answer``/``stream_answer`` which swallow API errors
+        and emit a fallback string, ``generate`` re-raises (verified by the
+        existing ``test_generate_raises_on_error`` test in this file). The
+        @observe wrapper must record the error span before the exception
+        propagates.
+        """
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.llm import LLMService
+
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=RuntimeError("LLM exploded mid-generate")
+        )
+
+        with pytest.raises(RuntimeError, match="LLM exploded mid-generate"):
+            await service.generate("prompt")
+
+        error_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert error_calls, (
+            "Failure path must call update_current_span(level='ERROR', ...) "
+            "on LLMService.generate (#1660 plan step 4)"
+        )
+        status = error_calls[0].get("status_message", "")
+        assert "LLM exploded mid-generate" in status
+        assert len(status) <= 220

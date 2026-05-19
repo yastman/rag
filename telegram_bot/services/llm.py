@@ -14,6 +14,8 @@ import openai
 from langfuse.openai import AsyncOpenAI
 from pydantic import BaseModel, Field, field_validator
 
+from telegram_bot.observability import get_client, observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,11 @@ class LLMService:
             )
             self._instructor_client = instructor.from_openai(self.client)
 
+    @observe(
+        name="llm-service-generate-answer",
+        capture_input=False,
+        capture_output=False,
+    )
     async def generate_answer(
         self,
         question: str,
@@ -101,7 +108,30 @@ class LLMService:
         system_prompt: str | None = None,
         with_confidence: bool = False,
     ) -> str | ConfidenceResult:
-        """Generate answer based on question and retrieved context."""
+        """Generate answer based on question and retrieved context.
+
+        Wrapped in ``@observe`` (#1660) so the auto-traced generation produced
+        by ``langfuse.openai`` becomes a child of a named ``llm-service-
+        generate-answer`` span instead of an orphan top-level trace when
+        invoked outside a request-scoped trace (background tasks, scripts,
+        fallback paths).
+
+        Per the audit correction on #1660 the wrapper is a *plain span*, not
+        ``as_type="generation"``: ``langfuse.openai.AsyncOpenAI`` already
+        emits a generation observation for each ``chat.completions.create``
+        call and an outer generation would produce duplicate observations.
+
+        Curated ``update_current_span`` payloads avoid leaking the full
+        prompt or full response into Langfuse.
+        """
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "prompt_preview": question[:120],
+                "model": self.model,
+                "with_confidence": with_confidence,
+            }
+        )
         try:
             context = self._format_context(context_chunks)
 
@@ -147,6 +177,9 @@ class LLMService:
                     max_tokens=self.model_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
                 )
+                lf.update_current_span(
+                    output={"response_len": len(response_model.answer)}
+                )
                 return ConfidenceResult(
                     answer=response_model.answer,
                     confidence=response_model.confidence,
@@ -163,10 +196,13 @@ class LLMService:
             )
 
             message = response.choices[0].message
-            return message.content or ""
+            response_text = message.content or ""
+            lf.update_current_span(output={"response_len": len(response_text)})
+            return response_text
 
         except (openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM API timeout/connection: {e}")
+            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -175,6 +211,7 @@ class LLMService:
             return fallback
         except openai.RateLimitError as e:
             logger.error(f"LLM API rate limit: {e}")
+            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -183,6 +220,7 @@ class LLMService:
             return fallback
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
+            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -210,13 +248,41 @@ class LLMService:
             "Если контекст не содержит релевантной информации, установи confidence < 0.5."
         )
 
+    @observe(
+        name="llm-service-stream-answer",
+        capture_input=False,
+        capture_output=False,
+    )
     async def stream_answer(
         self,
         question: str,
         context_chunks: list[dict[str, Any]],
         system_prompt: str | None = None,
     ) -> AsyncGenerator[str]:
-        """Stream answer generation token by token."""
+        """Stream answer generation token by token.
+
+        Wrapped in ``@observe`` (#1660) as a *plain span* — NOT
+        ``as_type="generation"``. Per the audit on #1660: ``langfuse.openai``
+        already creates a generation observation for the underlying
+        ``chat.completions.create()`` call (with ``stream_options.include_usage``
+        the final chunk carries ``usage``, attached to that nested generation
+        automatically). Wrapping the method itself as a generation would
+        produce duplicate generation observations for one LLM call.
+
+        After the stream finishes the wrapper records summary metadata via
+        ``update_current_span(output={"chunks": ..., "total_len": ...})``.
+        Token usage is intentionally NOT recorded here — let
+        ``langfuse.openai`` own that on the inner generation.
+        """
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "prompt_preview": question[:120],
+                "model": self.model,
+            }
+        )
+        chunks_count = 0
+        total_len = 0
         try:
             context = self._format_context(context_chunks)
 
@@ -259,13 +325,21 @@ class LLMService:
                     continue
                 delta = chunk.choices[0].delta
                 if delta.content:
+                    chunks_count += 1
+                    total_len += len(delta.content)
                     yield delta.content
+
+            lf.update_current_span(
+                output={"chunks": chunks_count, "total_len": total_len}
+            )
 
         except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM streaming error: {e}")
+            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             yield self._get_fallback_answer(question, context_chunks)
         except Exception as e:
             logger.error(f"LLM streaming failed: {e}", exc_info=True)
+            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             yield self._get_fallback_answer(question, context_chunks)
 
     def _format_context(self, chunks: list[dict[str, Any]]) -> str:
@@ -363,8 +437,28 @@ class LLMService:
 
         return response
 
+    @observe(
+        name="llm-service-generate",
+        capture_input=False,
+        capture_output=False,
+    )
     async def generate(self, prompt: str, max_tokens: int = 200) -> str:
-        """Simple text generation for internal use (CESC, preference extraction)."""
+        """Simple text generation for internal use (CESC, preference extraction).
+
+        Wrapped in ``@observe`` (#1660) as a plain span; ``langfuse.openai``
+        owns the nested generation. Curated ``update_current_span`` payloads
+        avoid leaking the full prompt/response into Langfuse. On failure the
+        span is recorded at ``level="ERROR"`` with a truncated
+        ``status_message`` and the exception is re-raised (existing
+        contract).
+        """
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "prompt_preview": prompt[:120],
+                "model": self.model,
+            }
+        )
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -373,9 +467,12 @@ class LLMService:
                 max_tokens=max_tokens,
                 name="generate-simple",  # type: ignore[call-overload]  # langfuse kwarg
             )
-            return response.choices[0].message.content or ""
+            response_text = response.choices[0].message.content or ""
+            lf.update_current_span(output={"response_len": len(response_text)})
+            return response_text
         except Exception as e:
             logger.error(f"LLM generate failed: {e}")
+            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             raise
 
     async def close(self):
