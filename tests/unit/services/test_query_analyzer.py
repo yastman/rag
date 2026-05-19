@@ -367,7 +367,6 @@ class TestQueryAnalyzerFlow:
         assert result2["semantic_query"] == "квартира"
 
 
-
 # =============================================================================
 # TestQueryAnalyzerInstructorLangfuseCompat (#1659 STEP 0 PREFLIGHT)
 # =============================================================================
@@ -608,8 +607,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         await analyzer.analyze(long_query)
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert input_calls, (
             "update_current_span(input=...) was never called on QueryAnalyzer.analyze"
@@ -672,8 +670,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         assert result["semantic_query"] == secret_semantic
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert output_calls, (
             "update_current_span(output=...) was never called on QueryAnalyzer.analyze"
@@ -692,6 +689,30 @@ class TestQueryAnalyzerObserveInstrumentation:
         assert secret_semantic not in captured_str, (
             "Full semantic_query content must not be captured to span output"
         )
+
+    async def test_analyze_works_when_langfuse_client_is_none(self, monkeypatch):
+        """Tracing must degrade gracefully when Langfuse is unavailable."""
+        self._disable_observe(monkeypatch)
+
+        from telegram_bot.services import query_analyzer as qa_mod
+        from telegram_bot.services.query_analyzer import (
+            QueryAnalysisResult,
+            QueryAnalyzer,
+        )
+
+        monkeypatch.setattr(qa_mod, "get_client", lambda: None)
+
+        analyzer = QueryAnalyzer(
+            api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
+        )
+        analyzer._instructor_client = AsyncMock()
+        analyzer._instructor_client.chat.completions.create = AsyncMock(
+            return_value=QueryAnalysisResult(filters={"city": "Бургас"}, semantic_query="квартира")
+        )
+
+        result = await analyzer.analyze("квартира в Бургасе")
+
+        assert result == {"filters": {"city": "Бургас"}, "semantic_query": "квартира"}
 
     # ------------------------------------------------------------------
     # Behavior: exception path
@@ -724,7 +745,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         assert result == {"filters": {}, "semantic_query": original_query}
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert error_calls, (
@@ -761,7 +783,8 @@ class TestQueryAnalyzerObserveInstrumentation:
         assert result == {"filters": {}, "semantic_query": original_query}
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert error_calls, (

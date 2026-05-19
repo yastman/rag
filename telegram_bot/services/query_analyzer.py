@@ -126,12 +126,13 @@ class QueryAnalyzer:
             Dict with 'filters' and 'semantic_query'
         """
         lf = get_client()
-        lf.update_current_span(
-            input={
-                "query_preview": query[:120],
-                "model": self.model,
-            }
-        )
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "query_preview": query[:120],
+                    "model": self.model,
+                }
+            )
         try:
             system_prompt = get_prompt("query-analysis", fallback=SYSTEM_PROMPT)
             result = await self._instructor_client.chat.completions.create(
@@ -150,24 +151,27 @@ class QueryAnalyzer:
             filters = result.filters
             semantic_query = result.semantic_query or query
 
-            lf.update_current_span(
-                output={
-                    "filter_keys": sorted(filters.keys()),
-                    "filter_count": len(filters),
-                    "semantic_query_len": len(semantic_query),
-                }
-            )
+            if lf is not None:
+                lf.update_current_span(
+                    output={
+                        "filter_keys": sorted(filters.keys()),
+                        "filter_count": len(filters),
+                        "semantic_query_len": len(semantic_query),
+                    }
+                )
 
             logger.info("QueryAnalyzer: filters=%s, semantic_query=%s", filters, semantic_query)
             return {"filters": filters, "semantic_query": semantic_query}
 
         except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError) as e:
             logger.error("QueryAnalyzer API error: %s", e)
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            if lf is not None:
+                lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             return {"filters": {}, "semantic_query": query}
         except Exception as e:
             logger.error("QueryAnalyzer error: %s", e, exc_info=True)
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            if lf is not None:
+                lf.update_current_span(level="ERROR", status_message=str(e)[:200])
             return {"filters": {}, "semantic_query": query}
 
     async def close(self):
