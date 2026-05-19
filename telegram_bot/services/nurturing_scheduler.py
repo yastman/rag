@@ -18,7 +18,7 @@ from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe, propagate_attributes
 
 
 logger = logging.getLogger(__name__)
@@ -96,24 +96,44 @@ class NurturingScheduler:
         except Exception:
             logger.exception("Nurturing batch failed")
 
+    @observe(name="job-nurturing-dispatch", capture_input=False, capture_output=False)
     async def run_nurturing_dispatch(self) -> None:
-        """Dispatch pending nurturing messages (called by scheduler)."""
-        try:
-            batch = getattr(self._config, "nurturing_dispatch_batch", 20)
-            count = await self._nurturing.dispatch_pending(batch_size=batch)
-            logger.info("Nurturing dispatch completed: %d messages sent", count)
-        except Exception:
-            logger.exception("Nurturing dispatch failed")
+        """Dispatch pending nurturing messages (called by scheduler).
 
+        Wrapped in ``@observe`` (#1663) so the job emits a named Langfuse span
+        tagged ``job/nurturing``. On failure, records ``level='ERROR'`` and
+        re-raises so APScheduler can mark the run as failed.
+        """
+        lf = get_client()
+        try:
+            with propagate_attributes(tags=["job", "nurturing"]):
+                batch = getattr(self._config, "nurturing_dispatch_batch", 20)
+                count = await self._nurturing.dispatch_pending(batch_size=batch)
+                logger.info("Nurturing dispatch completed: %d messages sent", count)
+        except Exception as exc:
+            logger.exception("Nurturing dispatch failed")
+            lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+            raise
+
+    @observe(name="job-funnel-rollup", capture_input=False, capture_output=False)
     async def run_funnel_rollup(self) -> None:
-        """Compute and persist daily funnel metrics (called by scheduler)."""
+        """Compute and persist daily funnel metrics (called by scheduler).
+
+        Wrapped in ``@observe`` (#1663) so the job emits a named Langfuse span
+        tagged ``job/analytics``. On failure, records ``level='ERROR'`` and
+        re-raises so APScheduler can mark the run as failed.
+        """
         import datetime as dt
 
+        lf = get_client()
         try:
-            today = dt.date.today()
-            snapshots = await self._analytics.build_daily_snapshot(metric_date=today)
-            if snapshots:
-                await self._analytics.persist_snapshots(snapshots=snapshots)
-            logger.info("Funnel rollup completed: %d stages", len(snapshots))
-        except Exception:
+            with propagate_attributes(tags=["job", "analytics"]):
+                today = dt.date.today()
+                snapshots = await self._analytics.build_daily_snapshot(metric_date=today)
+                if snapshots:
+                    await self._analytics.persist_snapshots(snapshots=snapshots)
+                logger.info("Funnel rollup completed: %d stages", len(snapshots))
+        except Exception as exc:
             logger.exception("Funnel rollup failed")
+            lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+            raise
