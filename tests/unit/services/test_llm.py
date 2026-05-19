@@ -595,7 +595,6 @@ class TestLLMServiceClose:
         await service.close()
 
 
-
 class TestLLMServiceObserveInstrumentation:
     """Tests for @observe instrumentation on LLMService public methods (#1660).
 
@@ -763,8 +762,7 @@ class TestLLMServiceObserveInstrumentation:
         assert kwargs.get("capture_input") is False
         assert kwargs.get("capture_output") is False
         assert "as_type" not in kwargs, (
-            "generate wrapper must NOT use as_type='generation' (audit "
-            "correction on #1660)."
+            "generate wrapper must NOT use as_type='generation' (audit correction on #1660)."
         )
 
     # ------------------------------------------------------------------
@@ -783,9 +781,7 @@ class TestLLMServiceObserveInstrumentation:
 
         service = LLMService(api_key="test-key", model="gpt-4o-mini")
         service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("ok")
-        )
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion("ok"))
 
         long_question = (
             "Это очень длинный вопрос про недвижимость в Болгарии, "
@@ -797,12 +793,9 @@ class TestLLMServiceObserveInstrumentation:
         await service.generate_answer(long_question, [{"text": "ctx"}])
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
-        assert input_calls, (
-            "update_current_span(input=...) was never called on generate_answer"
-        )
+        assert input_calls, "update_current_span(input=...) was never called on generate_answer"
         captured_input = input_calls[0]["input"]
         assert isinstance(captured_input, dict)
         assert "prompt_preview" in captured_input
@@ -836,12 +829,9 @@ class TestLLMServiceObserveInstrumentation:
         assert result == long_response  # behavior unchanged
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
-        assert output_calls, (
-            "update_current_span(output=...) was never called on generate_answer"
-        )
+        assert output_calls, "update_current_span(output=...) was never called on generate_answer"
         captured_output = output_calls[-1]["output"]
         assert isinstance(captured_output, dict)
         assert captured_output.get("response_len") == len(long_response)
@@ -874,7 +864,8 @@ class TestLLMServiceObserveInstrumentation:
         assert "Сервис генерации ответов временно недоступен" in result
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert error_calls, (
@@ -918,12 +909,9 @@ class TestLLMServiceObserveInstrumentation:
         assert chunks == ["A", "B"]
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
-        assert input_calls, (
-            "update_current_span(input=...) was never called on stream_answer"
-        )
+        assert input_calls, "update_current_span(input=...) was never called on stream_answer"
         captured_input = input_calls[0]["input"]
         assert isinstance(captured_input, dict)
         assert "prompt_preview" in captured_input
@@ -942,8 +930,7 @@ class TestLLMServiceObserveInstrumentation:
 
         contents = ["Hel", "lo ", "World!"]
         body_chunks = [
-            MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content=c))])
-            for c in contents
+            MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content=c))]) for c in contents
         ]
         usage_tail = MagicMock(usage=MagicMock(total_tokens=42), choices=[])
 
@@ -961,8 +948,7 @@ class TestLLMServiceObserveInstrumentation:
         assert full == "Hello World!"
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert output_calls, (
             "update_current_span(output=...) was never called on stream_answer "
@@ -993,14 +979,14 @@ class TestLLMServiceObserveInstrumentation:
         )
 
         chunks = [
-            c async for c in service.stream_answer(
-                "q", [{"text": "ctx", "metadata": {"title": "X"}}]
-            )
+            c
+            async for c in service.stream_answer("q", [{"text": "ctx", "metadata": {"title": "X"}}])
         ]
         assert chunks, "stream_answer must still yield a fallback chunk on error"
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert error_calls, (
@@ -1064,19 +1050,14 @@ class TestLLMServiceObserveInstrumentation:
 
         service = LLMService(api_key="test-key", model="gpt-4o-mini")
         service.client = AsyncMock()
-        service.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("ok")
-        )
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion("ok"))
 
         await service.generate(long_prompt)
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
-        assert input_calls, (
-            "update_current_span(input=...) was never called on generate"
-        )
+        assert input_calls, "update_current_span(input=...) was never called on generate"
         captured_input = input_calls[0]["input"]
         assert isinstance(captured_input, dict)
         assert "prompt_preview" in captured_input
@@ -1104,12 +1085,9 @@ class TestLLMServiceObserveInstrumentation:
         assert result == long_response  # behavior unchanged
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
-        assert output_calls, (
-            "update_current_span(output=...) was never called on generate"
-        )
+        assert output_calls, "update_current_span(output=...) was never called on generate"
         captured_output = output_calls[-1]["output"]
         assert isinstance(captured_output, dict)
         assert captured_output.get("response_len") == len(long_response)
@@ -1140,7 +1118,8 @@ class TestLLMServiceObserveInstrumentation:
             await service.generate("prompt")
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert error_calls, (

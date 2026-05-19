@@ -177,9 +177,7 @@ class LLMService:
                     max_tokens=self.model_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
                 )
-                lf.update_current_span(
-                    output={"response_len": len(response_model.answer)}
-                )
+                lf.update_current_span(output={"response_len": len(response_model.answer)})
                 return ConfidenceResult(
                     answer=response_model.answer,
                     confidence=response_model.confidence,
@@ -329,9 +327,7 @@ class LLMService:
                     total_len += len(delta.content)
                     yield delta.content
 
-            lf.update_current_span(
-                output={"chunks": chunks_count, "total_len": total_len}
-            )
+            lf.update_current_span(output={"chunks": chunks_count, "total_len": total_len})
 
         except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM streaming error: {e}")
