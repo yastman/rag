@@ -1,6 +1,9 @@
 """Query analyzer service using LLM to extract filters.
 
 Uses OpenAI SDK via Langfuse drop-in replacement for auto-tracing.
+``analyze`` is wrapped with ``@observe`` (#1659) so the auto-traced
+``litellm-acompletion`` generation is parented to a named span and inherits
+``session_id`` / ``user_id`` from the active ``propagate_attributes`` scope.
 """
 
 import logging
@@ -13,6 +16,7 @@ from langfuse.openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -83,6 +87,7 @@ class QueryAnalyzer:
             )
             self._instructor_client = instructor.from_openai(self.client)
 
+    @observe(name="query-analyzer", capture_input=False, capture_output=False)
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
 
@@ -92,6 +97,15 @@ class QueryAnalyzer:
         Returns:
             Dict with 'filters' and 'semantic_query'
         """
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "query_preview": query[:120],
+                    "query_len": len(query),
+                    "model": self.model,
+                },
+            )
         try:
             system_prompt = get_prompt("query-analysis", fallback=SYSTEM_PROMPT)
             result = await self._instructor_client.chat.completions.create(
@@ -111,13 +125,32 @@ class QueryAnalyzer:
             semantic_query = result.semantic_query or query
 
             logger.info("QueryAnalyzer: filters=%s, semantic_query=%s", filters, semantic_query)
+            if lf is not None:
+                lf.update_current_span(
+                    output={
+                        "filters_count": len(filters),
+                        "filter_keys": sorted(filters.keys()),
+                        "semantic_query_preview": semantic_query[:120],
+                        "semantic_query_len": len(semantic_query),
+                    },
+                )
             return {"filters": filters, "semantic_query": semantic_query}
 
         except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError) as e:
             logger.error("QueryAnalyzer API error: %s", e)
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             return {"filters": {}, "semantic_query": query}
         except Exception as e:
             logger.error("QueryAnalyzer error: %s", e, exc_info=True)
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             return {"filters": {}, "semantic_query": query}
 
     async def close(self):
