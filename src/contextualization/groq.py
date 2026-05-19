@@ -6,10 +6,10 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ra
 
 from src.config import Settings
 
-from .base import ContextualizedChunk, ContextualizeProvider
+from .base import BaseContextualizationProvider, ContextualizedChunk
 
 
-class GroqContextualizer(ContextualizeProvider):
+class GroqContextualizer(BaseContextualizationProvider):
     """
     Contextualize documents using Groq API (high-speed).
 
@@ -21,12 +21,18 @@ class GroqContextualizer(ContextualizeProvider):
     Note: Fast inference on LLaMA, trade-off with quality.
     """
 
+    context_method = "groq"
+
+    # Groq free tier — no cost
+    cost_per_input_token: float = 0.0
+    cost_per_output_token: float = 0.0
+
     def __init__(self, settings: Settings | None = None) -> None:
         """Initialize Groq contextualizer."""
+        super().__init__()
         self.settings = settings or Settings()
         self.client = AsyncGroq(api_key=self.settings.groq_api_key)
         self.sync_client = Groq(api_key=self.settings.groq_api_key)
-        self.total_tokens = 0
 
     @observe(name="groq-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
@@ -36,23 +42,7 @@ class GroqContextualizer(ContextualizeProvider):
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using Groq."""
-        _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
+        return await super().contextualize(chunks, query, context_window)
 
     @observe(name="groq-contextualize", capture_input=False, capture_output=False)
     @retry(
@@ -66,12 +56,17 @@ class GroqContextualizer(ContextualizeProvider):
         article_number: str,
         query: str | None = None,
     ) -> ContextualizedChunk:
-        """Contextualize a single chunk using Groq."""
-        system_prompt = self.get_system_prompt()
-        user_prompt = self.get_user_prompt(text, query)
+        """Contextualize a single chunk using Groq (with retry)."""
+        return await super().contextualize_single(text, article_number, query)
 
+    async def _call_llm_async(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute Groq API call."""
         response = await self.client.chat.completions.create(
-            model="llama3-70b-8192",  # Groq's default fast model
+            model="llama3-70b-8192",
             max_tokens=256,
             temperature=self.settings.temperature,
             messages=[
@@ -79,18 +74,10 @@ class GroqContextualizer(ContextualizeProvider):
                 {"role": "user", "content": user_prompt},
             ],
         )
-
-        # Track tokens
         usage = getattr(response, "usage", None)
-        if usage is not None:
-            self.total_tokens += int(usage.total_tokens or 0)
-
-        return ContextualizedChunk(
-            original_text=text,
-            contextual_summary=response.choices[0].message.content or "",
-            article_number=article_number,
-            context_method="groq",
-        )
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+        return response.choices[0].message.content or "", prompt_tokens, completion_tokens
 
     @observe(name="groq-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
@@ -105,9 +92,14 @@ class GroqContextualizer(ContextualizeProvider):
         query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization using Groq."""
-        system_prompt = self.get_system_prompt()
-        user_prompt = self.get_user_prompt(text, query)
+        return super().contextualize_sync(text, article_number, query)
 
+    def _call_llm_sync(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute sync Groq API call."""
         response = self.sync_client.chat.completions.create(
             model="llama3-70b-8192",
             max_tokens=256,
@@ -117,21 +109,14 @@ class GroqContextualizer(ContextualizeProvider):
                 {"role": "user", "content": user_prompt},
             ],
         )
-
         usage = getattr(response, "usage", None)
-        if usage is not None:
-            self.total_tokens += int(usage.total_tokens or 0)
-
-        return ContextualizedChunk(
-            original_text=text,
-            contextual_summary=response.choices[0].message.content or "",
-            article_number=article_number,
-            context_method="groq",
-        )
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+        return response.choices[0].message.content or "", prompt_tokens, completion_tokens
 
     def get_stats(self) -> dict[str, int | float]:
-        """Get contextualization statistics."""
+        """Get contextualization statistics (Groq is free)."""
         return {
             "total_tokens": self.total_tokens,
-            "total_cost_usd": 0.0,  # Groq is free
+            "total_cost_usd": 0.0,
         }

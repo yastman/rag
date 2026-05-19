@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from langfuse import observe
+
 
 @dataclass
 class ContextualizedChunk:
@@ -58,17 +60,7 @@ class ContextualizeProvider(ABC):
         query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
-        """
-        Contextualize a list of text chunks.
-
-        Args:
-            chunks: List of text chunks to contextualize
-            query: Optional user query to guide contextualization
-            context_window: Number of surrounding chunks to consider
-
-        Returns:
-            List of contextualized chunks with metadata
-        """
+        """Contextualize a list of text chunks."""
         _ = context_window
         raise NotImplementedError
 
@@ -79,17 +71,7 @@ class ContextualizeProvider(ABC):
         article_number: str,
         query: str | None = None,
     ) -> ContextualizedChunk:
-        """
-        Contextualize a single chunk.
-
-        Args:
-            text: Text to contextualize
-            article_number: Article/section identifier
-            query: Optional user query
-
-        Returns:
-            Contextualized chunk with metadata
-        """
+        """Contextualize a single chunk."""
 
     async def contextualize_batch(
         self,
@@ -98,16 +80,7 @@ class ContextualizeProvider(ABC):
         *,
         max_concurrency: int = 5,
     ) -> list[ContextualizedChunk]:
-        """Contextualize chunks in parallel using asyncio.gather with semaphore.
-
-        Args:
-            chunks: List of text chunks to contextualize
-            query: Optional user query to guide contextualization
-            max_concurrency: Maximum simultaneous API calls (default: 5)
-
-        Returns:
-            List of contextualized chunks preserving input order
-        """
+        """Contextualize chunks in parallel using asyncio.gather with semaphore."""
         sem = asyncio.Semaphore(max_concurrency)
 
         async def _process_with_semaphore(index: int, chunk: str) -> ContextualizedChunk:
@@ -142,3 +115,139 @@ Respond ONLY with the summary, no additional explanation."""
         if query:
             base += f"\n\nUser is searching for: {query}"
         return base
+
+
+class BaseContextualizationProvider(ContextualizeProvider):
+    """
+    Shared base for LLM-backed contextualization providers.
+
+    Extracts the common batch loop with fallback pattern shared across
+    Claude, OpenAI, and Groq providers (~80% code duplication eliminated).
+
+    Subclasses only need to implement:
+    - ``_call_llm_async``: single async LLM call returning (text, prompt_tokens, completion_tokens)
+    - ``_call_llm_sync``: single sync LLM call returning (text, prompt_tokens, completion_tokens)
+    - ``context_method``: provider identifier string ('claude', 'openai', 'groq')
+    - ``get_stats``: provider-specific statistics dict (optional override)
+
+    Token/cost tracking:
+    - ``total_tokens`` accumulated automatically from _call_llm_* return values
+    - ``total_cost`` accumulated via ``cost_per_input_token`` / ``cost_per_output_token``
+    """
+
+    context_method: str = "none"
+
+    # Override in subclasses to enable cost tracking (cost in USD per token)
+    cost_per_input_token: float = 0.0
+    cost_per_output_token: float = 0.0
+
+    def __init__(self) -> None:
+        self.total_tokens: int = 0
+        self.total_cost: float = 0.0
+
+    @abstractmethod
+    async def _call_llm_async(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute single async LLM call.
+
+        Returns:
+            Tuple of (generated_text, prompt_tokens, completion_tokens)
+        """
+
+    @abstractmethod
+    def _call_llm_sync(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute single sync LLM call.
+
+        Returns:
+            Tuple of (generated_text, prompt_tokens, completion_tokens)
+        """
+
+    def _track_usage(self, prompt_tokens: int, completion_tokens: int) -> None:
+        """Accumulate token and cost counters."""
+        self.total_tokens += prompt_tokens + completion_tokens
+        self.total_cost += (
+            prompt_tokens * self.cost_per_input_token
+            + completion_tokens * self.cost_per_output_token
+        )
+
+    @observe(name="contextualize-batch", capture_input=False, capture_output=False)
+    async def contextualize(
+        self,
+        chunks: list[str],
+        query: str | None = None,
+        context_window: int = 3,
+    ) -> list[ContextualizedChunk]:
+        """Contextualize multiple chunks sequentially with per-chunk fallback."""
+        _ = context_window
+        results: list[ContextualizedChunk] = []
+        for i, chunk in enumerate(chunks):
+            try:
+                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
+                results.append(result)
+            except Exception as e:
+                print(f"Warning: Failed to contextualize chunk {i}: {e}")
+                results.append(
+                    ContextualizedChunk(
+                        original_text=chunk,
+                        contextual_summary="",
+                        article_number=f"chunk_{i}",
+                        context_method="none",
+                    )
+                )
+        return results
+
+    async def contextualize_single(
+        self,
+        text: str,
+        article_number: str,
+        query: str | None = None,
+    ) -> ContextualizedChunk:
+        """Contextualize a single chunk (async)."""
+        system_prompt = self.get_system_prompt()
+        user_prompt = self.get_user_prompt(text, query)
+        summary, prompt_tokens, completion_tokens = await self._call_llm_async(
+            system_prompt, user_prompt
+        )
+        self._track_usage(prompt_tokens, completion_tokens)
+        if not summary.strip():
+            raise ValueError(f"Empty response from {self.context_method}")
+        return ContextualizedChunk(
+            original_text=text,
+            contextual_summary=summary,
+            article_number=article_number,
+            context_method=self.context_method,
+        )
+
+    def contextualize_sync(
+        self,
+        text: str,
+        article_number: str,
+        query: str | None = None,
+    ) -> ContextualizedChunk:
+        """Contextualize a single chunk (sync/blocking)."""
+        system_prompt = self.get_system_prompt()
+        user_prompt = self.get_user_prompt(text, query)
+        summary, prompt_tokens, completion_tokens = self._call_llm_sync(
+            system_prompt, user_prompt
+        )
+        self._track_usage(prompt_tokens, completion_tokens)
+        return ContextualizedChunk(
+            original_text=text,
+            contextual_summary=summary,
+            article_number=article_number,
+            context_method=self.context_method,
+        )
+
+    def get_stats(self) -> dict[str, int | float]:
+        """Return token/cost statistics. Override for provider-specific fields."""
+        return {
+            "total_tokens": self.total_tokens,
+            "total_cost_usd": round(self.total_cost, 4),
+        }

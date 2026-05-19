@@ -8,7 +8,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ra
 
 from src.config import Settings
 
-from .base import ContextualizedChunk, ContextualizeProvider
+from .base import BaseContextualizationProvider, ContextualizedChunk
 
 
 def _extract_claude_text(content_blocks: Any) -> str:
@@ -21,7 +21,7 @@ def _extract_claude_text(content_blocks: Any) -> str:
     return "".join(parts)
 
 
-class ClaudeContextualizer(ContextualizeProvider):
+class ClaudeContextualizer(BaseContextualizationProvider):
     """
     Contextualize documents using Anthropic Claude API.
 
@@ -37,6 +37,12 @@ class ClaudeContextualizer(ContextualizeProvider):
     - Quality: Highest among available providers
     """
 
+    context_method = "claude"
+
+    # Rough cost estimation: $5/MTok input, $15/MTok output
+    cost_per_input_token: float = 5 / 1_000_000
+    cost_per_output_token: float = 15 / 1_000_000
+
     def __init__(self, settings: Settings | None = None, use_cache: bool = True) -> None:
         """Initialize Claude contextualizer.
 
@@ -44,12 +50,11 @@ class ClaudeContextualizer(ContextualizeProvider):
             settings: Configuration settings (uses global if None)
             use_cache: Enable prompt caching for cost reduction
         """
+        super().__init__()
         self.settings = settings or Settings()
         self.use_cache = use_cache
         self.client = AsyncAnthropic(api_key=self.settings.anthropic_api_key)
         self.sync_client = Anthropic(api_key=self.settings.anthropic_api_key)
-        self.total_tokens = 0
-        self.total_cost = 0.0
 
     @observe(name="claude-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
@@ -58,29 +63,8 @@ class ClaudeContextualizer(ContextualizeProvider):
         query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
-        """
-        Contextualize multiple chunks using Claude.
-
-        Uses batch processing for efficiency.
-        """
-        _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                # Fallback: return chunk without context
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
+        """Contextualize multiple chunks using Claude."""
+        return await super().contextualize(chunks, query, context_window)
 
     @observe(name="claude-contextualize", capture_input=False, capture_output=False)
     @retry(
@@ -94,16 +78,17 @@ class ClaudeContextualizer(ContextualizeProvider):
         article_number: str,
         query: str | None = None,
     ) -> ContextualizedChunk:
-        """
-        Contextualize a single chunk using Claude.
+        """Contextualize a single chunk using Claude (with retry)."""
+        return await super().contextualize_single(text, article_number, query)
 
-        Implements prompt caching for cost efficiency.
-        """
-        system_prompt = self.get_system_prompt()
-        user_prompt = self.get_user_prompt(text, query)
+    async def _call_llm_async(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute Claude API call with optional prompt caching."""
         model_name = self.settings.model_name or "claude-3-5-haiku-latest"
 
-        # Build system param with optional prompt caching
         system_content: str | list[dict[str, Any]]
         if self.use_cache:
             system_content = [
@@ -118,24 +103,8 @@ class ClaudeContextualizer(ContextualizeProvider):
             system=cast(Any, system_content),
             messages=[{"role": "user", "content": user_prompt}],
         )
-
-        # Track tokens and cost
-        self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
-        # Rough cost estimation: $5/MTok input, $15/MTok output
-        self.total_cost += (
-            response.usage.input_tokens * 5 + response.usage.output_tokens * 15
-        ) / 1_000_000
-
-        summary = _extract_claude_text(response.content)
-        if not summary.strip():
-            raise ValueError("Empty Claude response content")
-
-        return ContextualizedChunk(
-            original_text=text,
-            contextual_summary=summary,
-            article_number=article_number,
-            context_method="claude",
-        )
+        text = _extract_claude_text(response.content)
+        return text, response.usage.input_tokens, response.usage.output_tokens
 
     @observe(name="claude-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
@@ -150,33 +119,30 @@ class ClaudeContextualizer(ContextualizeProvider):
         query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization (blocking)."""
-        system_prompt = self.get_system_prompt()
-        user_prompt = self.get_user_prompt(text, query)
-        model_name = self.settings.model_name or "claude-3-5-haiku-latest"
+        return super().contextualize_sync(text, article_number, query)
 
+    def _call_llm_sync(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute sync Claude API call."""
+        model_name = self.settings.model_name or "claude-3-5-haiku-latest"
         response = self.sync_client.messages.create(
             model=model_name,
             max_tokens=256,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
-
-        # Track tokens
-        self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
-
-        return ContextualizedChunk(
-            original_text=text,
-            contextual_summary=_extract_claude_text(response.content),
-            article_number=article_number,
-            context_method="claude",
-        )
+        text = _extract_claude_text(response.content)
+        return text, response.usage.input_tokens, response.usage.output_tokens
 
     def get_stats(self) -> dict[str, int | float]:
         """Get contextualization statistics."""
-        return {
-            "total_tokens": self.total_tokens,
-            "total_cost_usd": round(self.total_cost, 4),
-            "avg_cost_per_chunk": (
-                round(self.total_cost / self.total_tokens * 1000, 4) if self.total_tokens > 0 else 0
-            ),
-        }
+        stats = super().get_stats()
+        stats["avg_cost_per_chunk"] = (
+            round(self.total_cost / self.total_tokens * 1000, 4)
+            if self.total_tokens > 0
+            else 0
+        )
+        return stats

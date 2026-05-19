@@ -7,10 +7,10 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ra
 
 from src.config import Settings
 
-from .base import ContextualizedChunk, ContextualizeProvider
+from .base import BaseContextualizationProvider, ContextualizedChunk
 
 
-class OpenAIContextualizer(ContextualizeProvider):
+class OpenAIContextualizer(BaseContextualizationProvider):
     """
     Contextualize documents using OpenAI GPT API.
 
@@ -20,13 +20,18 @@ class OpenAIContextualizer(ContextualizeProvider):
     - Quality: Very good
     """
 
+    context_method = "openai"
+
+    # OpenAI pricing: $5/MTok input, $15/MTok output (gpt-4o-mini)
+    cost_per_input_token: float = 5 / 1_000_000
+    cost_per_output_token: float = 15 / 1_000_000
+
     def __init__(self, settings: Settings | None = None) -> None:
         """Initialize OpenAI contextualizer."""
+        super().__init__()
         self.settings = settings or Settings()
         self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
         self.sync_client = OpenAI(api_key=self.settings.openai_api_key)
-        self.total_tokens = 0
-        self.total_cost = 0.0
 
     @observe(name="openai-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
@@ -36,23 +41,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using OpenAI."""
-        _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
+        return await super().contextualize(chunks, query, context_window)
 
     @observe(name="openai-contextualize", capture_input=False, capture_output=False)
     @retry(
@@ -66,11 +55,16 @@ class OpenAIContextualizer(ContextualizeProvider):
         article_number: str,
         query: str | None = None,
     ) -> ContextualizedChunk:
-        """Contextualize a single chunk using OpenAI."""
-        system_prompt = self.get_system_prompt()
-        user_prompt = self.get_user_prompt(text, query)
-        model_name = self.settings.model_name or "gpt-4o-mini"
+        """Contextualize a single chunk using OpenAI (with retry)."""
+        return await super().contextualize_single(text, article_number, query)
 
+    async def _call_llm_async(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute OpenAI API call."""
+        model_name = self.settings.model_name or "gpt-4o-mini"
         response = await self.client.chat.completions.create(
             model=model_name,
             max_tokens=256,
@@ -80,23 +74,10 @@ class OpenAIContextualizer(ContextualizeProvider):
                 {"role": "user", "content": user_prompt},
             ],
         )
-
-        # Track tokens and cost
         usage = response.usage
-        if usage is not None:
-            total_tokens = int(usage.total_tokens or 0)
-            prompt_tokens = int(usage.prompt_tokens or 0)
-            completion_tokens = int(usage.completion_tokens or 0)
-            self.total_tokens += total_tokens
-            # OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
-            self.total_cost += (prompt_tokens * 5 + completion_tokens * 15) / 1_000_000
-
-        return ContextualizedChunk(
-            original_text=text,
-            contextual_summary=response.choices[0].message.content or "",
-            article_number=article_number,
-            context_method="openai",
-        )
+        prompt_tokens = int(usage.prompt_tokens or 0) if usage else 0
+        completion_tokens = int(usage.completion_tokens or 0) if usage else 0
+        return response.choices[0].message.content or "", prompt_tokens, completion_tokens
 
     @observe(name="openai-contextualize-sync", capture_input=False, capture_output=False)
     @retry(
@@ -111,10 +92,15 @@ class OpenAIContextualizer(ContextualizeProvider):
         query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization using OpenAI."""
-        system_prompt = self.get_system_prompt()
-        user_prompt = self.get_user_prompt(text, query)
-        model_name = self.settings.model_name or "gpt-4o-mini"
+        return super().contextualize_sync(text, article_number, query)
 
+    def _call_llm_sync(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> tuple[str, int, int]:
+        """Execute sync OpenAI API call."""
+        model_name = self.settings.model_name or "gpt-4o-mini"
         response = self.sync_client.chat.completions.create(
             model=model_name,
             max_tokens=256,
@@ -124,21 +110,7 @@ class OpenAIContextualizer(ContextualizeProvider):
                 {"role": "user", "content": user_prompt},
             ],
         )
-
         usage = response.usage
-        if usage is not None:
-            self.total_tokens += int(usage.total_tokens or 0)
-
-        return ContextualizedChunk(
-            original_text=text,
-            contextual_summary=response.choices[0].message.content or "",
-            article_number=article_number,
-            context_method="openai",
-        )
-
-    def get_stats(self) -> dict[str, int | float]:
-        """Get contextualization statistics."""
-        return {
-            "total_tokens": self.total_tokens,
-            "total_cost_usd": round(self.total_cost, 4),
-        }
+        prompt_tokens = int(usage.prompt_tokens or 0) if usage else 0
+        completion_tokens = int(usage.completion_tokens or 0) if usage else 0
+        return response.choices[0].message.content or "", prompt_tokens, completion_tokens

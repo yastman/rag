@@ -176,13 +176,6 @@ async def activate_catalog_state(
         await maybe_start
 
 
-async def _remove_reply_keyboard(message: Message) -> None:
-    sent = await message.answer(".", reply_markup=ReplyKeyboardRemove())
-    if hasattr(sent, "delete"):
-        with contextlib.suppress(Exception):
-            await sent.delete()
-
-
 async def load_next_catalog_page(
     *,
     message: Message,
