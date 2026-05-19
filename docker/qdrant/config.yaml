@@ -1,10 +1,10 @@
 # Qdrant storage optimization config — issue #1545
-# Mounted read-only at /etc/qdrant/config.yaml inside the container.
+# Mounted read-only at /qdrant/config/config.yaml inside the container.
 # Reduces RAM usage and prevents unbounded vector accumulation.
 #
 # compose.yml wires this via:
 #   volumes:
-#     - ./docker/qdrant/config.yaml:/etc/qdrant/config.yaml:ro
+#     - ./docker/qdrant/config.yaml:/qdrant/config/config.yaml:ro
 #
 # References:
 #   https://qdrant.tech/documentation/guides/configuration/
@@ -22,13 +22,14 @@ storage:
     # Search candidates during graph construction.
     # Higher = better recall, slower build time.
     ef_construct: 100
-    # Minimum segment size (points) before HNSW index is built.
+    # Keep the default full-scan threshold unless collection-specific
+    # benchmarking proves a different value is needed.
+    full_scan_threshold_kb: 10000
+
+  performance:
+    # Maximum size (in KiB) of vectors allowed for plain index.
     # Reduces overhead from very small segments.
-    indexing_threshold: 20000
+    indexing_threshold_kb: 20000
 
-service:
-  # Cap individual request payload size
-  max_request_size_mb: 32
-
-  # Disable anonymous telemetry for self-hosted deployments
-  telemetry_disabled: true
+# Disable anonymous telemetry for self-hosted deployments.
+telemetry_disabled: true

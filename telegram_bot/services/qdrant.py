@@ -1,14 +1,13 @@
-"""Qdrant service with Query API, Score Boosting, and MMR.
+"""Qdrant service with Query API and Score Boosting.
 
 Smart Gateway pattern for Qdrant vector database.
-Features: RRF fusion, freshness boosting, MMR diversity.
+Features: RRF fusion and freshness boosting.
 """
 
 import logging
 from typing import Any
 from urllib.parse import urlparse
 
-import numpy as np
 from qdrant_client import AsyncQdrantClient, models
 
 from src.config.qdrant_policy import resolve_collection_name
@@ -24,7 +23,6 @@ class QdrantService:
     Provides:
     - Hybrid search with RRF fusion (dense + sparse)
     - Score boosting with exp_decay (freshness)
-    - MMR diversity reranking
     - Async operations with AsyncQdrantClient
     - Quantization mode-based collection selection
     """
