@@ -136,13 +136,9 @@ class ContextualizeProvider(ABC):
         async def _process(index: int, chunk: str) -> None:
             async with sem:
                 try:
-                    results[index] = await self.contextualize_single(
-                        chunk, f"chunk_{index}", query
-                    )
+                    results[index] = await self.contextualize_single(chunk, f"chunk_{index}", query)
                 except Exception as exc:
-                    logger.warning(
-                        "contextualize_batch chunk %d failed: %s", index, exc
-                    )
+                    logger.warning("contextualize_batch chunk %d failed: %s", index, exc)
                     results[index] = ContextualizedChunk(
                         original_text=chunk,
                         contextual_summary="",
