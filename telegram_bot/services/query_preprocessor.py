@@ -1,6 +1,10 @@
 """Query preprocessing for RAG pipeline optimization.
 
 HyDEGenerator uses OpenAI SDK via Langfuse drop-in for auto-tracing.
+``generate_hypothetical_document`` is wrapped with ``@observe`` (#1661) so
+the auto-traced ``litellm-acompletion`` generation is parented to a named
+span and inherits ``session_id`` / ``user_id`` from the active scope.
+
 QueryPreprocessor is rule-based (no LLM calls).
 """
 
@@ -12,6 +16,7 @@ import openai
 from langfuse.openai import AsyncOpenAI
 
 from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -77,6 +82,11 @@ class HyDEGenerator:
             timeout=30.0,
         )
 
+    @observe(
+        name="hyde-generate-document",
+        capture_input=False,
+        capture_output=False,
+    )
     async def generate_hypothetical_document(self, query: str) -> str:
         """Generate a hypothetical document that would answer the query.
 
@@ -86,6 +96,15 @@ class HyDEGenerator:
         Returns:
             Hypothetical document text for embedding
         """
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "query_preview": query[:120],
+                    "query_len": len(query),
+                    "model": self.model,
+                },
+            )
         try:
             system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
             response = await self.client.chat.completions.create(
@@ -101,6 +120,15 @@ class HyDEGenerator:
 
             hypothetical_doc = response.choices[0].message.content or query
             logger.info("HyDE generated doc for '%s': %s...", query, hypothetical_doc[:100])
+            if lf is not None:
+                lf.update_current_span(
+                    output={
+                        "document_preview": hypothetical_doc[:200],
+                        "document_len": len(hypothetical_doc),
+                        "tokens_estimated": len(hypothetical_doc.split()),
+                        "fallback_to_query": hypothetical_doc == query,
+                    },
+                )
             return hypothetical_doc
 
         except (
@@ -109,9 +137,19 @@ class HyDEGenerator:
             openai.APITimeoutError,
         ) as e:
             logger.error("HyDE generation API error: %s", e)
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             return query
         except Exception as e:
             logger.error("HyDE generation failed: %s", e)
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             return query
 
     async def close(self):
