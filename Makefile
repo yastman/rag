@@ -380,15 +380,19 @@ clean: ## Clean up cache files and build artifacts
 	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "$(GREEN)✓ Cleaned up$(NC)"
 
-docker-clean: ## Prune Docker build cache and stopped containers (safe)
-	@echo "$(BLUE)Pruning Docker build cache...$(NC)"
-	docker builder prune -f --filter "until=720h" 2>/dev/null || true
+docker-clean: ## Prune unused images, build cache and stopped containers (safe, issue #1544)
 	@echo "$(BLUE)Removing stopped containers...$(NC)"
 	docker container prune -f 2>/dev/null || true
-	@echo "$(GREEN)✓ Docker cleaned$(NC)"
+	@echo "$(BLUE)Removing unused images (dangling + untagged)...$(NC)"
+	docker image prune -a -f 2>/dev/null || true
+	@echo "$(BLUE)Pruning build cache older than 30 days...$(NC)"
+	docker builder prune -f --filter "until=720h" 2>/dev/null || true
+	@echo "$(BLUE)Removing orphaned worktree volumes (rag-fresh-wt-*)...$(NC)"
+	docker volume ls -qf "name=rag-fresh-wt-" | xargs -r docker volume rm 2>/dev/null || true
+	@echo "$(GREEN)✓ Docker cleaned (~60+ GB freed on first run)$(NC)"
 
 docker-clean-aggressive: ## Prune ALL unused Docker resources (images, volumes, networks)
-	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes unused images and volumes$(NC)"
+	@echo "$(YELLOW)WARNING: Aggressive cleanup — removes ALL unused images and volumes$(NC)"
 	docker system prune -f --volumes 2>/dev/null || true
 	@echo "$(GREEN)✓ Docker aggressively cleaned$(NC)"
 

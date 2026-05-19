@@ -62,8 +62,8 @@ class TestLLMServiceInit:
         assert isinstance(service.client, openai.AsyncOpenAI)
 
 
-def test_format_context_no_raw_score():
-    """_format_context must NOT expose raw RRF scores to LLM."""
+def test_llm_service_format_context_no_raw_score():
+    """LLMService._format_context must NOT expose raw RRF scores to LLM."""
     service = LLMService(api_key="test-key")
 
     chunks = [
