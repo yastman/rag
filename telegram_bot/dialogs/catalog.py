@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from aiogram.enums import ContentType
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InaccessibleMessage, Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 from aiogram_dialog import Dialog, DialogManager, LaunchMode, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.text import Const
