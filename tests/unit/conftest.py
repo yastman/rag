@@ -86,15 +86,46 @@ def pytest_unconfigure(config):
 
 
 @pytest.fixture(autouse=True)
-def mock_get_client():
-    """Mock telegram_bot.bot.get_client for all unit tests.
+def mock_get_client(isolate_otel_langfuse):
+    """Mock telegram_bot.bot.get_client for unit tests that already imported it.
 
     Autouse fixture — no test signature changes needed.
     Uses a shared MagicMock that tests can inspect via
     ``telegram_bot.bot.get_client`` if they need the reference.
+
+    Lazy-patch behavior (#conftest-coverage-blocker fix): the fixture skips
+    patching when ``telegram_bot.bot`` is NOT already in ``sys.modules``.
+
+    Why: Eagerly resolving ``"telegram_bot.bot.get_client"`` triggers the
+    full ``telegram_bot.bot`` import chain (langgraph, qdrant_client,
+    numpy, …). Under ``pytest --cov`` the numpy C-extension
+    (``numpy._core._multiarray_umath``) raises
+    ``ImportError: cannot load module more than once per process`` because
+    coverage's PEP 669 / pkgutil walk re-traverses the package tree. The
+    failure surfaces as ``AttributeError: module 'telegram_bot' has no
+    attribute 'bot'`` for every unit test in this directory.
+
+    Tests that actually exercise ``telegram_bot.bot.get_client`` already
+    import the module before this fixture runs (via ``from
+    telegram_bot.bot import …`` at module top), so the lazy gate is
+    invisible to them. Tests that never touch the bot module (the vast
+    majority) no longer pay the cost of triggering the heavy import chain.
+
+    ``isolate_otel_langfuse`` is requested first so OTEL/Langfuse env
+    vars are set BEFORE we attempt the patch, in case a future bot import
+    introduces OTEL initialization side effects.
+
+    ``create=True`` keeps the patch safe even if a future refactor moves
+    ``get_client`` out of ``telegram_bot.bot``.
     """
+    if "telegram_bot.bot" not in sys.modules:
+        # Bot module not loaded — no test in this run is exercising it,
+        # so patching is unnecessary and would re-trigger the import chain.
+        yield MagicMock()
+        return
+
     mock = MagicMock()
-    with patch("telegram_bot.bot.get_client", return_value=mock):
+    with patch("telegram_bot.bot.get_client", return_value=mock, create=True):
         yield mock
 
 
@@ -157,3 +188,38 @@ def isolate_otel_langfuse(monkeypatch):
     for p in patches:
         with contextlib.suppress(Exception):
             p.stop()
+
+
+
+
+# =============================================================================
+# Regression test for the conftest mock_get_client lazy-patch contract.
+# =============================================================================
+# Kept inline so the test runs alongside every unit-test invocation that uses
+# this conftest. If the contract regresses (eager patching re-introduced),
+# `pytest --cov` against any pure-leaf module will fail with the numpy
+# `cannot load module more than once per process` symptom seen on dev@91cfcaa.
+def test_mock_get_client_does_not_eagerly_import_telegram_bot_bot():
+    """`mock_get_client` must not trigger telegram_bot.bot import on its own.
+
+    Contract: when a test does NOT itself import telegram_bot.bot, the
+    autouse `mock_get_client` fixture must skip the patch. Otherwise the
+    patch's pkgutil walk re-traverses the package tree and breaks
+    `pytest --cov` for every leaf module that imports numpy / qdrant_client
+    / langgraph (i.e., almost everything in this repo).
+
+    A pre-conftest assertion would have to run BEFORE conftest loads, which
+    is not possible. This test therefore validates the *post-condition*:
+    after the fixture has yielded, `telegram_bot.bot` is still NOT in
+    `sys.modules` for tests that didn't request it. Tests that DO import
+    `telegram_bot.bot` (test_history_tool / test_rerank / test_rewrite)
+    happen to have it imported at module-level, so the patch fires for them
+    — that path is covered by the existing tests in those files.
+    """
+    assert "telegram_bot.bot" not in sys.modules, (
+        "telegram_bot.bot was imported as a side effect of an autouse fixture. "
+        "Re-introducing eager patching of `telegram_bot.bot.get_client` will "
+        "cause `pytest --cov` to fail with `ImportError: cannot load module "
+        "more than once per process` on numpy's C-extensions. Keep the lazy "
+        "guard in `mock_get_client`."
+    )
