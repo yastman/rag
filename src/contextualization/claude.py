@@ -141,8 +141,6 @@ class ClaudeContextualizer(BaseContextualizationProvider):
         """Get contextualization statistics."""
         stats = super().get_stats()
         stats["avg_cost_per_chunk"] = (
-            round(self.total_cost / self.total_tokens * 1000, 4)
-            if self.total_tokens > 0
-            else 0
+            round(self.total_cost / self.total_tokens * 1000, 4) if self.total_tokens > 0 else 0
         )
         return stats

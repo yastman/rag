@@ -234,9 +234,7 @@ class BaseContextualizationProvider(ContextualizeProvider):
         """Contextualize a single chunk (sync/blocking)."""
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
-        summary, prompt_tokens, completion_tokens = self._call_llm_sync(
-            system_prompt, user_prompt
-        )
+        summary, prompt_tokens, completion_tokens = self._call_llm_sync(system_prompt, user_prompt)
         self._track_usage(prompt_tokens, completion_tokens)
         return ContextualizedChunk(
             original_text=text,
