@@ -11,8 +11,8 @@ from typing import Any
 import openai
 from langfuse.openai import AsyncOpenAI
 
-from telegram_bot.integrations.prompt_manager import get_prompt
 from telegram_bot.observability import get_client, observe
+from telegram_bot.integrations.prompt_manager import get_prompt_with_object
 
 
 logger = logging.getLogger(__name__)
@@ -110,16 +110,24 @@ class HyDEGenerator:
         )
 
         try:
-            system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            system_prompt, prompt_obj = get_prompt_with_object(
+                "hyde", fallback=self.HYDE_SYSTEM_PROMPT
+            )
+            create_kwargs: dict[str, Any] = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": query},
                 ],
-                temperature=0.7,
-                max_tokens=200,
-                name="hyde-generate",  # type: ignore[call-overload]  # langfuse kwarg
+                "temperature": 0.7,
+                "max_tokens": 200,
+                "name": "hyde-generate",  # langfuse kwarg
+            }
+            if prompt_obj is not None:
+                # Link generation observation to its Langfuse Prompt entry (#1666).
+                create_kwargs["langfuse_prompt"] = prompt_obj
+            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
+                **create_kwargs,
             )
 
             hypothetical_doc = response.choices[0].message.content or query

@@ -12,7 +12,11 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from telegram_bot.integrations.prompt_manager import get_prompt, get_prompt_with_config
+from telegram_bot.integrations.prompt_manager import (
+    get_prompt,
+    get_prompt_with_config,
+    get_prompt_with_object,
+)
 from telegram_bot.integrations.prompt_templates import (
     build_system_prompt_with_manager,
     get_token_limit,
@@ -132,6 +136,19 @@ def _build_system_prompt_with_config(domain: str) -> tuple[str, dict[str, Any]]:
     return get_prompt_with_config(
         "generate", fallback=_GENERATE_FALLBACK, variables={"domain": domain}
     )
+
+
+def _get_linkable_prompt_object(name: str, fallback: str, variables: dict[str, str]) -> Any | None:
+    """Return the raw Langfuse Prompt object (or None) for #1666 generation linking.
+
+    Companion to ``get_prompt_with_config``: fetches the same prompt and returns
+    only the raw object suitable for ``langfuse_prompt=`` linking. Langfuse's
+    SDK internal cache (cache_ttl_seconds) deduplicates the underlying network
+    call, so this is effectively free when called immediately after
+    ``get_prompt_with_config`` for the same name.
+    """
+    _, prompt_obj = get_prompt_with_object(name, fallback=fallback, variables=variables)
+    return prompt_obj
 
 
 def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEXT_DOCS) -> str:
@@ -298,6 +315,12 @@ def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
     return "unexpected keyword argument" in message and "'name'" in message
 
 
+def _is_unsupported_langfuse_prompt_kwarg(exc: TypeError) -> bool:
+    """Return True if client rejected Langfuse-specific `langfuse_prompt` kwarg."""
+    message = str(exc)
+    return "unexpected keyword argument" in message and "'langfuse_prompt'" in message
+
+
 async def _chat_create_with_optional_name(
     llm: Any,
     *,
@@ -306,21 +329,35 @@ async def _chat_create_with_optional_name(
 ) -> Any:
     """Call chat.completions.create with Langfuse `name` when supported.
 
-    Some clients (plain OpenAI SDK) reject `name` as an unexpected kwarg.
-    Langfuse-wrapped clients accept it and use it for generation naming.
+    Some clients (plain OpenAI SDK) reject `name` and `langfuse_prompt` as
+    unexpected kwargs. Langfuse-wrapped clients accept them and use them for
+    generation naming and Prompt Management linking (#1666) respectively.
     """
     create_fn = llm.chat.completions.create
     if getattr(llm, "_langfuse_auto_trace", True) is False:
         # Plain client created via GraphConfig.create_llm(auto_trace=False).
-        # Skip the Langfuse ``name`` kwarg entirely to avoid a needless
-        # TypeError → retry round-trip on every call.
+        # Skip both Langfuse-specific kwargs to avoid a needless TypeError →
+        # retry round-trip on every call. Generation linking for these clients
+        # happens via lf_client.update_current_generation(prompt=...) in caller.
+        kwargs.pop("langfuse_prompt", None)
         return await create_fn(**kwargs)
     try:
         return await create_fn(name=observation_name, **kwargs)
     except TypeError as exc:
+        if _is_unsupported_langfuse_prompt_kwarg(exc):
+            logger.debug("LLM client does not support `langfuse_prompt`; retrying without it")
+            kwargs.pop("langfuse_prompt", None)
+            try:
+                return await create_fn(name=observation_name, **kwargs)
+            except TypeError as exc2:
+                if not _is_unsupported_name_kwarg(exc2):
+                    raise
+                logger.debug("LLM client does not support `name`; retrying without it")
+                return await create_fn(**kwargs)
         if not _is_unsupported_name_kwarg(exc):
             raise
         logger.debug("LLM client does not support `name`; retrying without it")
+        kwargs.pop("langfuse_prompt", None)
         return await create_fn(**kwargs)
 
 
@@ -333,6 +370,7 @@ async def _generate_streaming(
     lf_client: Any | None = None,
     temperature: float = 0.7,
     sanitize_response: Callable[[str], str] | None = None,
+    langfuse_prompt: Any | None = None,
 ) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
     """Stream LLM response to Telegram via native sendMessageDraft (Bot API 9.5).
 
@@ -353,16 +391,23 @@ async def _generate_streaming(
 
     t_request_start = time.monotonic()
 
+    stream_create_kwargs: dict[str, Any] = {
+        "model": config.llm_model,
+        "messages": llm_messages,
+        "temperature": temperature,
+        "max_tokens": effective_max_tokens,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+        **config.get_reasoning_kwargs(),
+    }
+    if langfuse_prompt is not None:
+        # Link the streamed generation to its Langfuse Prompt entry (#1666).
+        stream_create_kwargs["langfuse_prompt"] = langfuse_prompt
+
     stream = await _chat_create_with_optional_name(
         llm,
         observation_name="generate-answer",
-        model=config.llm_model,
-        messages=llm_messages,
-        temperature=temperature,
-        max_tokens=effective_max_tokens,
-        stream=True,
-        stream_options={"include_usage": True},
-        **config.get_reasoning_kwargs(),
+        **stream_create_kwargs,
     )
 
     t_stream_start = time.monotonic()
@@ -630,9 +675,15 @@ async def generate_response(
 
     prompt_config: dict[str, Any] = {}
     prompt_name = "generate"
+    prompt_obj: Any | None = None
     use_style = False
     if needs_coverage:
         system_prompt, prompt_config = get_prompt_with_config(
+            "generate_exhaustive_list",
+            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
+            variables={"domain": config.domain},
+        )
+        prompt_obj = _get_linkable_prompt_object(
             "generate_exhaustive_list",
             fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
             variables={"domain": config.domain},
@@ -660,8 +711,14 @@ async def generate_response(
         style_budget = style_token_limit(style_info.style, style_info.difficulty)
         system_prompt = style_system_prompt
         max_tokens = min(style_budget, legacy_max_tokens)
+        # Style-mode prompts are built from internal templates, not Langfuse
+        # Prompt Management — there is no linkable Prompt object.
+        prompt_obj = None
     else:
         system_prompt, prompt_config = _build_system_prompt_with_config(config.domain)
+        prompt_obj = _get_linkable_prompt_object(
+            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
+        )
         # Langfuse prompt config overrides: temperature, max_tokens editable in UI
         if "max_tokens" in prompt_config:
             max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
@@ -721,6 +778,9 @@ async def generate_response(
                         text,
                         sources_enabled=sources_enabled,
                     )
+                if "langfuse_prompt" in params and prompt_obj is not None:
+                    # Link streamed generation to Langfuse Prompt entry (#1666).
+                    stream_kwargs["langfuse_prompt"] = prompt_obj
                 stream_result = await generate_streaming(
                     llm,
                     config,
@@ -770,14 +830,19 @@ async def generate_response(
                     )
                     sent_msg = getattr(stream_exc, "sent_msg", None)
                     t_llm_start = time.monotonic()
+                    create_kwargs: dict[str, Any] = {
+                        "model": config.llm_model,
+                        "messages": llm_messages,
+                        "temperature": effective_temperature,
+                        "max_tokens": max_tokens,
+                        **config.get_reasoning_kwargs(),
+                    }
+                    if prompt_obj is not None:
+                        create_kwargs["langfuse_prompt"] = prompt_obj
                     response_obj = await _chat_create_with_optional_name(
                         llm,
                         observation_name="generate-answer",
-                        model=config.llm_model,
-                        messages=llm_messages,
-                        temperature=effective_temperature,
-                        max_tokens=max_tokens,
-                        **config.get_reasoning_kwargs(),
+                        **create_kwargs,
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -835,14 +900,19 @@ async def generate_response(
                     # Recovery path succeeded below; keep normal-success span level.
                     # Degraded mode is tracked via llm_stream_recovery=True.
                     t_llm_start = time.monotonic()
+                    create_kwargs = {
+                        "model": config.llm_model,
+                        "messages": llm_messages,
+                        "temperature": effective_temperature,
+                        "max_tokens": max_tokens,
+                        **config.get_reasoning_kwargs(),
+                    }
+                    if prompt_obj is not None:
+                        create_kwargs["langfuse_prompt"] = prompt_obj
                     response_obj = await _chat_create_with_optional_name(
                         llm,
                         observation_name="generate-answer",
-                        model=config.llm_model,
-                        messages=llm_messages,
-                        temperature=effective_temperature,
-                        max_tokens=max_tokens,
-                        **config.get_reasoning_kwargs(),
+                        **create_kwargs,
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -861,14 +931,20 @@ async def generate_response(
         else:
             # Non-streaming path
             t_llm_start = time.monotonic()
+            create_kwargs = {
+                "model": config.llm_model,
+                "messages": llm_messages,
+                "temperature": effective_temperature,
+                "max_tokens": max_tokens,
+                **config.get_reasoning_kwargs(),
+            }
+            if prompt_obj is not None:
+                # Link the generation observation to its Langfuse Prompt entry (#1666).
+                create_kwargs["langfuse_prompt"] = prompt_obj
             response_obj = await _chat_create_with_optional_name(
                 llm,
                 observation_name="generate-answer",
-                model=config.llm_model,
-                messages=llm_messages,
-                temperature=effective_temperature,
-                max_tokens=max_tokens,
-                **config.get_reasoning_kwargs(),
+                **create_kwargs,
             )
             t_llm_end = time.monotonic()
             answer = response_obj.choices[0].message.content or ""
@@ -903,6 +979,12 @@ async def generate_response(
             generation_payload["usage_details"] = usage_details
         elif completion_tokens is not None:
             generation_payload["usage_details"] = {"output": int(completion_tokens)}
+        if prompt_obj is not None:
+            # Link the generation observation to its Langfuse Prompt entry (#1666).
+            # Belt-and-braces: redundant with the langfuse_prompt= kwarg above for
+            # langfuse.openai-wrapped clients, but required for plain OpenAI clients
+            # (auto_trace=False) where the kwarg is stripped by the helper.
+            generation_payload["prompt"] = prompt_obj
         with contextlib.suppress(Exception):
             lf_client.update_current_generation(**generation_payload)
 

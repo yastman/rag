@@ -12,8 +12,8 @@ import openai
 from langfuse.openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from telegram_bot.integrations.prompt_manager import get_prompt
 from telegram_bot.observability import get_client, observe
+from telegram_bot.integrations.prompt_manager import get_prompt_with_object
 
 
 logger = logging.getLogger(__name__)
@@ -134,18 +134,28 @@ class QueryAnalyzer:
                 }
             )
         try:
-            system_prompt = get_prompt("query-analysis", fallback=SYSTEM_PROMPT)
-            result = await self._instructor_client.chat.completions.create(
-                model=self.model,
-                messages=[
+            system_prompt, prompt_obj = get_prompt_with_object(
+                "query-analysis", fallback=SYSTEM_PROMPT
+            )
+            create_kwargs: dict[str, Any] = {
+                "model": self.model,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Запрос пользователя: {query}"},
                 ],
-                response_model=QueryAnalysisResult,
-                max_retries=2,
-                temperature=0.0,
-                max_tokens=1000,
-                name="query-analysis",  # type: ignore[call-overload]  # langfuse kwarg
+                "response_model": QueryAnalysisResult,
+                "max_retries": 2,
+                "temperature": 0.0,
+                "max_tokens": 1000,
+                "name": "query-analysis",  # langfuse kwarg
+            }
+            if prompt_obj is not None:
+                # Link generation observation to its Langfuse Prompt entry (#1666).
+                # Instructor preserves the langfuse.openai wrap, so the kwarg is
+                # forwarded to the underlying create() call (verified in #1681 preflight).
+                create_kwargs["langfuse_prompt"] = prompt_obj
+            result = await self._instructor_client.chat.completions.create(  # type: ignore[call-overload]
+                **create_kwargs,
             )
 
             filters = result.filters

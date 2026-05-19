@@ -306,3 +306,110 @@ class TestResetClient:
         _transient_failures_until["some-prompt"] = 9999999999.0
         _reset_client()
         assert "some-prompt" not in _transient_failures_until
+
+
+
+# ---------------------------------------------------------------------------
+# get_prompt_with_object — exposes raw Langfuse Prompt object alongside text
+# (#1666: Link Prompt Management entries to LLM generations)
+# ---------------------------------------------------------------------------
+
+
+from telegram_bot.integrations.prompt_manager import get_prompt_with_object
+
+
+class TestGetPromptWithObject:
+    """Tests for get_prompt_with_object — returns (compiled_text, raw_prompt_or_None)."""
+
+    def test_returns_prompt_object_when_langfuse_succeeds(self):
+        """When Langfuse is available and prompt is found, returns the raw Prompt object."""
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "Langfuse prompt text"
+        mock_prompt.version = 5
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback")
+
+        assert text == "Langfuse prompt text"
+        assert prompt_obj is mock_prompt
+        mock_client.get_prompt.assert_called_once_with(
+            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL
+        )
+
+    def test_returns_none_object_when_langfuse_client_unavailable(self):
+        """When Langfuse client is None (disabled), returns fallback string with None object."""
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=None):
+            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback text")
+
+        assert text == "fallback text"
+        assert prompt_obj is None
+
+    def test_returns_none_object_when_prompt_not_found(self):
+        """When Langfuse returns 404, returns fallback string with None object."""
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception(
+            "status_code: 404, body: {'message': \"Prompt not found: 'my-prompt'\"}"
+        )
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback text")
+
+        assert text == "fallback text"
+        assert prompt_obj is None
+
+    def test_returns_none_object_on_transient_failure(self):
+        """When Langfuse raises a transient error, returns fallback with None object."""
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception("[Errno 111] Connection refused")
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            text, prompt_obj = get_prompt_with_object("my-prompt", fallback="fallback")
+
+        assert text == "fallback"
+        assert prompt_obj is None
+
+    def test_compiles_with_variables_and_returns_prompt_object(self):
+        """Variables are passed to prompt.compile and the raw object is still returned."""
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "Ассистент по недвижимость"
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            text, prompt_obj = get_prompt_with_object(
+                "generate",
+                fallback="Ассистент по {{domain}}",
+                variables={"domain": "недвижимость"},
+            )
+
+        assert text == "Ассистент по недвижимость"
+        assert prompt_obj is mock_prompt
+        mock_prompt.compile.assert_called_once_with(domain="недвижимость")
+
+    def test_fallback_with_variables_returns_compiled_fallback_and_none(self):
+        """When falling back, fallback {{var}} placeholders are still substituted."""
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=None):
+            text, prompt_obj = get_prompt_with_object(
+                "generate",
+                fallback="Hello {{name}}",
+                variables={"name": "World"},
+            )
+
+        assert text == "Hello World"
+        assert prompt_obj is None
+
+    def test_does_not_break_existing_get_prompt_contract(self):
+        """get_prompt() still returns a plain string — no breaking change."""
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "compiled"
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            result = get_prompt("my-prompt", fallback="fallback")
+
+        # Must still be a plain string, not a tuple — backwards-compat guard.
+        assert isinstance(result, str)
+        assert result == "compiled"

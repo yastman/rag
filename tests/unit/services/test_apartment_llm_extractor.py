@@ -175,3 +175,137 @@ class TestGetSystemPrompt:
     def test_system_prompt_forbids_null_view_tags(self) -> None:
         assert "view_tags=[]" in EXTRACTION_SYSTEM_PROMPT
         assert "Никогда не возвращай null для массивов" in EXTRACTION_SYSTEM_PROMPT
+
+
+
+class TestApartmentExtractorPromptLinking:
+    """Tests for #1666 — Langfuse Prompt → generation linking on extract().
+
+    Contract: ``ApartmentLlmExtractor.extract`` is decorated with @observe;
+    the underlying client is plain ``openai.AsyncOpenAI`` (not
+    ``langfuse.openai``), so the SECONDARY prompt-linking path applies:
+    fetch the raw Langfuse Prompt object via ``get_prompt_with_object`` and
+    pass it to ``langfuse.update_current_generation(prompt=...)`` inside
+    the @observe-wrapped method.
+
+    Forbidden by #1666:
+    - Do not link a fallback string as a managed prompt (guard with
+      ``if prompt_obj is not None``).
+    - Do not break existing ``_get_system_prompt`` callers.
+    """
+
+    @pytest.fixture
+    def mock_extractor(self) -> ApartmentLlmExtractor:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key="test-key", base_url="http://test:4000")
+        return ApartmentLlmExtractor(client, model="test-model")
+
+    @pytest.fixture
+    def mock_llm_result_simple(self) -> ApartmentSearchFilters:
+        return ApartmentSearchFilters(
+            hard=HardFilters(city="Солнечный берег", rooms=2),
+            soft=SoftPreferences(),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+
+    async def test_extract_calls_update_current_generation_with_managed_prompt(
+        self, mock_extractor: ApartmentLlmExtractor, mock_llm_result_simple: ApartmentSearchFilters
+    ) -> None:
+        """When Langfuse Prompt object is available, link it to the generation."""
+        # Mock a managed Langfuse Prompt object (sentinel — not None).
+        managed_prompt = object()  # placeholder for langfuse.model.Prompt instance
+        mock_extractor._client.chat.completions.create = AsyncMock(  # type: ignore[method-assign]
+            return_value=mock_llm_result_simple
+        )
+
+        with (
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                return_value=("compiled prompt text", managed_prompt),
+            ),
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_client",
+            ) as mock_get_client,
+        ):
+            mock_lf = mock_get_client.return_value
+            await mock_extractor.extract("двушка у моря")
+
+            # Assert generation was linked to the managed prompt object.
+            mock_lf.update_current_generation.assert_called_once_with(prompt=managed_prompt)
+
+    async def test_extract_skips_linking_when_fallback_returned(
+        self, mock_extractor: ApartmentLlmExtractor, mock_llm_result_simple: ApartmentSearchFilters
+    ) -> None:
+        """Fallback strings (Langfuse unavailable) MUST NOT be linked as managed prompts."""
+        mock_extractor._client.chat.completions.create = AsyncMock(  # type: ignore[method-assign]
+            return_value=mock_llm_result_simple
+        )
+
+        with (
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                return_value=(EXTRACTION_SYSTEM_PROMPT, None),  # prompt_obj is None
+            ),
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_client",
+            ) as mock_get_client,
+        ):
+            mock_lf = mock_get_client.return_value
+            await mock_extractor.extract("двушка у моря")
+
+            # CRITICAL: must NOT call update_current_generation with prompt=None.
+            mock_lf.update_current_generation.assert_not_called()
+
+    async def test_extract_uses_compiled_text_from_with_object(
+        self, mock_extractor: ApartmentLlmExtractor, mock_llm_result_simple: ApartmentSearchFilters
+    ) -> None:
+        """The compiled string from get_prompt_with_object must reach the LLM call."""
+        mock_extractor._client.chat.completions.create = AsyncMock(  # type: ignore[method-assign]
+            return_value=mock_llm_result_simple
+        )
+        sentinel_prompt_text = "SENTINEL_COMPILED_PROMPT_TEXT_FROM_LANGFUSE"
+
+        with (
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                return_value=(sentinel_prompt_text, object()),
+            ),
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_client",
+            ),
+        ):
+            await mock_extractor.extract("двушка у моря")
+
+            call_kwargs = mock_extractor._client.chat.completions.create.call_args.kwargs
+            messages = call_kwargs["messages"]
+            assert messages[0]["role"] == "system"
+            assert sentinel_prompt_text in messages[0]["content"]
+
+    async def test_extract_swallows_update_current_generation_failure(
+        self, mock_extractor: ApartmentLlmExtractor, mock_llm_result_simple: ApartmentSearchFilters
+    ) -> None:
+        """Linking failures must NOT break the extraction flow.
+
+        Forbidden semantics: a transient Langfuse error during prompt linking
+        must not propagate and crash the apartment search hot path.
+        """
+        mock_extractor._client.chat.completions.create = AsyncMock(  # type: ignore[method-assign]
+            return_value=mock_llm_result_simple
+        )
+
+        with (
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_prompt_with_object",
+                return_value=("compiled", object()),
+            ),
+            patch(
+                "telegram_bot.services.apartment_llm_extractor.get_client",
+            ) as mock_get_client,
+        ):
+            mock_lf = mock_get_client.return_value
+            mock_lf.update_current_generation.side_effect = RuntimeError("Langfuse exploded")
+
+            # Should not raise — the contextlib.suppress(Exception) guard handles it.
+            result = await mock_extractor.extract("двушка у моря")
+            assert result.hard.city == "Солнечный берег"
