@@ -56,10 +56,14 @@ class BGEM3Embeddings(Embeddings):
         return result.vectors[0]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))
+        # Sync wrapper for LangChain compatibility. asyncio.run() raises
+        # RuntimeError if called from inside an active loop, which is the
+        # correct, loud failure mode — call sites must use the async API.
+        # Replaces deprecated asyncio.get_event_loop() (Python 3.13+ unsafe).
+        return asyncio.run(self.aembed_documents(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
+        return asyncio.run(self.aembed_query(text))
 
 
 class BGEM3SparseEmbeddings:
@@ -176,10 +180,11 @@ class BGEM3HybridEmbeddings(Embeddings):
         return dense_vecs
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_documents(texts))
+        # See BGEM3Embeddings.embed_documents for rationale.
+        return asyncio.run(self.aembed_documents(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        return asyncio.get_event_loop().run_until_complete(self.aembed_query(text))
+        return asyncio.run(self.aembed_query(text))
 
     async def aclose(self) -> None:
         await self._client.aclose()
