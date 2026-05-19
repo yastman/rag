@@ -155,18 +155,16 @@ def isolate_otel_langfuse(monkeypatch):
         # symbol is provided by a sibling package, not the package itself).
         # Anything else (TypeError, ValueError, etc.) is a real isolation
         # bug we want to surface.
-        try:
+        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError):
             p.start()
-        except (ModuleNotFoundError, ImportError, AttributeError):
-            pass
 
     yield
 
     for p in patches:
-        try:
+        # RuntimeError is raised by mock.patch when the start failed
+        # earlier and stop has no original to restore. AttributeError
+        # mirrors the start-time guard above.
+        with contextlib.suppress(
+            ModuleNotFoundError, ImportError, AttributeError, RuntimeError
+        ):
             p.stop()
-        except (ModuleNotFoundError, ImportError, AttributeError, RuntimeError):
-            # RuntimeError is raised by mock.patch when the start failed
-            # earlier and stop has no original to restore. AttributeError
-            # mirrors the start-time guard above.
-            pass
