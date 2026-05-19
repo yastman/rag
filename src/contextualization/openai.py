@@ -11,9 +11,10 @@ from .base import ContextualizedChunk, ContextualizeProvider
 # OpenAI SDK's built-in retry policy (Context7 /openai/openai-python):
 # - Default max_retries=2, exponential backoff
 # - Retries: connection errors, 408 Timeout, 409 Conflict, 429 Rate Limit, >=500
-# Setting max_retries=4 here matches the prior Tenacity stop_after_attempt(4)
-# semantics (4 retries == 5 total attempts) without duplicating the policy.
-_OPENAI_MAX_RETRIES = 4
+# OpenAI counts max_retries after the initial request. The previous Tenacity
+# stop_after_attempt(4) allowed four total attempts, so max_retries=3 preserves
+# that retry budget without duplicating the policy.
+_OPENAI_MAX_RETRIES = 3
 
 
 class OpenAIContextualizer(ContextualizeProvider):
