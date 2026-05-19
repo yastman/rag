@@ -21,9 +21,11 @@ services:
   # =============================================================================
 
   postgres:
+    <<: *security-defaults
     image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
     restart: unless-stopped
     stop_grace_period: 30s
+    read_only: false
     logging: *default-logging
     environment:
       POSTGRES_USER: postgres
@@ -44,9 +46,11 @@ services:
           memory: 512M
 
   redis:
+    <<: *security-defaults
     image: redis:8.6.3@sha256:0c341492924cad6f5483f9133e43bd6c51ecdecbcadfac5b51657393b6a7936c
     restart: unless-stopped
     stop_grace_period: 30s
+    read_only: false
     logging: *default-logging
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -69,9 +73,11 @@ services:
           memory: 300M
 
   qdrant:
+    <<: *security-defaults
     image: qdrant/qdrant:v1.18.0@sha256:b3063c673f3973877c038eeecc392bad5011f072ee7892b56c9a8e204a3bdea9
     restart: unless-stopped
     stop_grace_period: 30s
+    read_only: false
     logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
@@ -469,9 +475,11 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
+    <<: *security-defaults
     image: clickhouse/clickhouse-server:26.4.2@sha256:6d8f358747b59f7db044749eaf951e828e75cc16f9c487f855b114272c44b82c
     restart: unless-stopped
     stop_grace_period: 30s
+    read_only: false
     logging: *default-logging
     environment:
       CLICKHOUSE_DB: default
@@ -493,8 +501,10 @@ services:
 
   # MinIO S3-compatible storage for Langfuse v3
   minio:
+    <<: *security-defaults
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: unless-stopped
+    read_only: false
     logging: *default-logging
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
@@ -516,9 +526,11 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
+    <<: *security-defaults
     image: redis:8.6.3@sha256:0c341492924cad6f5483f9133e43bd6c51ecdecbcadfac5b51657393b6a7936c
     restart: unless-stopped
     stop_grace_period: 30s
+    read_only: false
     logging: *default-logging
     command:
       - /bin/sh
@@ -655,9 +667,11 @@ services:
   # =============================================================================
 
   loki:
+    <<: *security-defaults
     image: grafana/loki:3.7.1@sha256:73e905b51a7f917f7a1075e4be68759df30226e03dcb3cd2213b989cc0dc8eb4
     profiles: ["obs", "full"]
     restart: unless-stopped
+    read_only: false
     volumes:
       - ./docker/monitoring/loki.yaml:/etc/loki/local-config.yaml:ro
       - ./docker/monitoring/rules:/etc/loki/rules/fake:ro
@@ -671,9 +685,11 @@ services:
       start_period: 30s
 
   promtail:
+    <<: *security-defaults
     image: grafana/promtail:3.6.10@sha256:2a0f5e3e160ee5d549c585f6cc4f4e1c566ff783324a424bd75bc16503fc660e
     profiles: ["obs", "full"]
     restart: unless-stopped
+    read_only: false
     volumes:
       - ./docker/monitoring/promtail.yaml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -694,9 +710,11 @@ services:
           memory: 256M
 
   alertmanager:
+    <<: *security-defaults
     image: prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286
     profiles: ["obs", "full"]
     restart: unless-stopped
+    read_only: false
     volumes:
       - ./docker/monitoring/alertmanager.yaml:/etc/alertmanager/alertmanager.tmpl:ro
       - alertmanager_data:/alertmanager
@@ -792,9 +810,11 @@ services:
           memory: 512M
 
   livekit-server:
+    <<: *security-defaults
     image: livekit/livekit-server:v95a5e3c@sha256:6b5b4c34917e863dadbaf7f19af75c97030a05b36142a717dada9f19932a3ca9
     profiles: ["voice", "full"]
     restart: unless-stopped
+    read_only: false
     logging: *default-logging
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
@@ -814,9 +834,11 @@ services:
           memory: 256M
 
   livekit-sip:
+    <<: *security-defaults
     image: livekit/sip:v1.3.0@sha256:4bdff9dc85c7d28abd4785683136020dd0b7775d7a366fdf94d9aced70f05a6f
     profiles: ["voice", "full"]
     restart: unless-stopped
+    read_only: false
     logging: *default-logging
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
