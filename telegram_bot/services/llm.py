@@ -1,6 +1,12 @@
 """Deprecated compatibility shim for legacy answer generation helpers.
 
 Prefer telegram_bot.services.generate_response for active runtime paths.
+
+Observability (#1660): the three public methods ``generate_answer``,
+``stream_answer``, ``generate`` are wrapped with ``@observe`` so that the
+underlying ``langfuse.openai`` auto-traced generation is parented to a named
+span and inherits ``session_id`` / ``user_id`` from the active scope when
+called outside a request-scoped trace.
 """
 
 import logging
@@ -13,6 +19,8 @@ import instructor
 import openai
 from langfuse.openai import AsyncOpenAI
 from pydantic import BaseModel, Field, field_validator
+
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -94,6 +102,11 @@ class LLMService:
             )
             self._instructor_client = instructor.from_openai(self.client)
 
+    @observe(
+        name="llm-service-generate-answer",
+        capture_input=False,
+        capture_output=False,
+    )
     async def generate_answer(
         self,
         question: str,
@@ -102,6 +115,17 @@ class LLMService:
         with_confidence: bool = False,
     ) -> str | ConfidenceResult:
         """Generate answer based on question and retrieved context."""
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "prompt_preview": question[:120],
+                    "prompt_len": len(question),
+                    "context_chunks": len(context_chunks),
+                    "model": self.model,
+                    "with_confidence": with_confidence,
+                },
+            )
         try:
             context = self._format_context(context_chunks)
 
@@ -147,6 +171,15 @@ class LLMService:
                     max_tokens=self.model_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
                 )
+                if lf is not None:
+                    lf.update_current_span(
+                        output={
+                            "response_len": len(response_model.answer),
+                            "confidence": response_model.confidence,
+                            "is_low_confidence": response_model.confidence
+                            < self.low_confidence_threshold,
+                        },
+                    )
                 return ConfidenceResult(
                     answer=response_model.answer,
                     confidence=response_model.confidence,
@@ -163,10 +196,20 @@ class LLMService:
             )
 
             message = response.choices[0].message
-            return message.content or ""
+            response_text = message.content or ""
+            if lf is not None:
+                lf.update_current_span(
+                    output={"response_len": len(response_text)},
+                )
+            return response_text
 
         except (openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM API timeout/connection: {e}")
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -175,6 +218,11 @@ class LLMService:
             return fallback
         except openai.RateLimitError as e:
             logger.error(f"LLM API rate limit: {e}")
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -183,6 +231,11 @@ class LLMService:
             return fallback
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -210,6 +263,11 @@ class LLMService:
             "Если контекст не содержит релевантной информации, установи confidence < 0.5."
         )
 
+    @observe(
+        name="llm-service-stream-answer",
+        capture_input=False,
+        capture_output=False,
+    )
     async def stream_answer(
         self,
         question: str,
@@ -217,6 +275,18 @@ class LLMService:
         system_prompt: str | None = None,
     ) -> AsyncGenerator[str]:
         """Stream answer generation token by token."""
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "prompt_preview": question[:120],
+                    "prompt_len": len(question),
+                    "context_chunks": len(context_chunks),
+                    "model": self.model,
+                },
+            )
+        chunks_count = 0
+        total_len = 0
         try:
             context = self._format_context(context_chunks)
 
@@ -259,13 +329,30 @@ class LLMService:
                     continue
                 delta = chunk.choices[0].delta
                 if delta.content:
+                    chunks_count += 1
+                    total_len += len(delta.content)
                     yield delta.content
+
+            if lf is not None:
+                lf.update_current_span(
+                    output={"chunks": chunks_count, "total_len": total_len},
+                )
 
         except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM streaming error: {e}")
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             yield self._get_fallback_answer(question, context_chunks)
         except Exception as e:
             logger.error(f"LLM streaming failed: {e}", exc_info=True)
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             yield self._get_fallback_answer(question, context_chunks)
 
     def _format_context(self, chunks: list[dict[str, Any]]) -> str:
@@ -363,8 +450,23 @@ class LLMService:
 
         return response
 
+    @observe(
+        name="llm-service-generate",
+        capture_input=False,
+        capture_output=False,
+    )
     async def generate(self, prompt: str, max_tokens: int = 200) -> str:
         """Simple text generation for internal use (CESC, preference extraction)."""
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "prompt_preview": prompt[:120],
+                    "prompt_len": len(prompt),
+                    "model": self.model,
+                    "max_tokens": max_tokens,
+                },
+            )
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -373,9 +475,17 @@ class LLMService:
                 max_tokens=max_tokens,
                 name="generate-simple",  # type: ignore[call-overload]  # langfuse kwarg
             )
-            return response.choices[0].message.content or ""
+            content = response.choices[0].message.content or ""
+            if lf is not None:
+                lf.update_current_span(output={"response_len": len(content)})
+            return content
         except Exception as e:
             logger.error(f"LLM generate failed: {e}")
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(e).__name__}: {e!s}"[:200],
+                )
             raise
 
     async def close(self):
