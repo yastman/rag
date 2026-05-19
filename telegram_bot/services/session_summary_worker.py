@@ -149,8 +149,30 @@ class SessionSummaryWorker:
         """
         return []
 
+    @observe(name="session-summary-llm", capture_input=False, capture_output=False)
     async def _generate_summary(self, history: list[dict[str, str]]) -> str:
-        """Generate a summary of the conversation via LLM."""
+        """Generate a summary of the conversation via LLM.
+
+        Wrapped in ``@observe`` (#1662) so the auto-traced generation produced
+        by ``langfuse.openai`` becomes a child of a named ``session-summary-llm``
+        span instead of a flat child of the outer ``session-summary-check``
+        span. Curated ``update_current_span`` payloads avoid leaking full
+        conversation history or full summary text into Langfuse.
+
+        On LLM failure the span is recorded at ``level="ERROR"`` with a
+        truncated ``status_message`` and the exception is re-raised; the outer
+        ``_run_loop`` already swallows worker-cycle errors (#1662 plan step 4).
+        Placeholder fallback for empty history is owned by ``#1599``/``#1608``
+        and is intentionally not modified here.
+        """
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "history_turns": len(history),
+                "model": self._summary_model,
+            }
+        )
+
         messages_text = "\n".join(f"{m['role']}: {m['content']}" for m in history)
         try:
             response = await self._llm.chat.completions.create(
@@ -162,10 +184,21 @@ class SessionSummaryWorker:
                 max_tokens=300,
                 name="session-summary",
             )
-            return response.choices[0].message.content or ""
-        except Exception:
+            summary = response.choices[0].message.content or ""
+            lf.update_current_span(
+                output={
+                    "summary_len": len(summary),
+                    "summary_preview": summary[:120],
+                }
+            )
+            return summary
+        except Exception as exc:
             logger.exception("Summary generation failed for session")
-            return ""
+            lf.update_current_span(
+                level="ERROR",
+                status_message=str(exc)[:200],
+            )
+            raise
 
     async def _write_summary(self, user_id: str, summary: str) -> None:
         """Log the summary and write to Kommo if available."""
