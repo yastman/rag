@@ -135,7 +135,7 @@ class SessionSummaryWorker:
             await self._redis.delete(key)
 
         lf = get_client()
-        if count > 0:
+        if lf is not None and count > 0:
             lf.score_current_trace(name="session_summary_generated", value=1, data_type="BOOLEAN")
             lf.score_current_trace(name="session_summary_count", value=float(count))
 
@@ -149,8 +149,21 @@ class SessionSummaryWorker:
         """
         return []
 
+    @observe(
+        name="session-summary-llm",
+        capture_input=False,
+        capture_output=False,
+    )
     async def _generate_summary(self, history: list[dict[str, str]]) -> str:
         """Generate a summary of the conversation via LLM."""
+        lf = get_client()
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "history_turns": len(history),
+                    "model": self._summary_model,
+                },
+            )
         messages_text = "\n".join(f"{m['role']}: {m['content']}" for m in history)
         try:
             response = await self._llm.chat.completions.create(
@@ -162,9 +175,22 @@ class SessionSummaryWorker:
                 max_tokens=300,
                 name="session-summary",
             )
-            return response.choices[0].message.content or ""
-        except Exception:
+            summary = response.choices[0].message.content or ""
+            if lf is not None:
+                lf.update_current_span(
+                    output={
+                        "summary_len": len(summary),
+                        "summary_preview": summary[:120],
+                    },
+                )
+            return summary
+        except Exception as exc:
             logger.exception("Summary generation failed for session")
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=f"{type(exc).__name__}: {exc!s}"[:200],
+                )
             return ""
 
     async def _write_summary(self, user_id: str, summary: str) -> None:
