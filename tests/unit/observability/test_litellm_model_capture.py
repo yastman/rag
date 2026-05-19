@@ -104,9 +104,7 @@ class TestLangfuseOpenAIRuntimeContract:
         shape evolves with OpenAI SDK upgrades; the source-code grep tests
         above are the durable contract.
         """
-        extract_fn = getattr(
-            langfuse.openai, "_get_langfuse_data_from_default_response", None
-        )
+        extract_fn = getattr(langfuse.openai, "_get_langfuse_data_from_default_response", None)
         assert extract_fn is not None, (
             "langfuse.openai no longer exposes "
             "`_get_langfuse_data_from_default_response`; internal API "
