@@ -69,10 +69,7 @@ class HotLeadNotifier:
                     lf.update_current_span(output={"notified": False})
                     return False
 
-            text = (
-                f"Hot lead detected: lead_id={lead_id}, "
-                f"score={score}, session_id={session_id}"
-            )
+            text = f"Hot lead detected: lead_id={lead_id}, score={score}, session_id={session_id}"
             for manager_id in self._manager_ids:
                 await self._bot.send_message(chat_id=manager_id, text=text)
             lf.update_current_span(output={"notified": True})

@@ -31,14 +31,10 @@ async def sync_pending_lead_scores(
     try:
         with propagate_attributes(tags=["job", "lead-scoring"]):
             if scoring_store is None or kommo_client is None:
-                lf.update_current_span(
-                    output={"processed": 0, "failed": 0, "skipped": 0}
-                )
+                lf.update_current_span(output={"processed": 0, "failed": 0, "skipped": 0})
                 return {"synced": 0, "failed": 0, "skipped": 0}
             if score_field_id <= 0 or band_field_id <= 0:
-                lf.update_current_span(
-                    output={"processed": 0, "failed": 0, "skipped": 0}
-                )
+                lf.update_current_span(output={"processed": 0, "failed": 0, "skipped": 0})
                 return {"synced": 0, "failed": 0, "skipped": 0}
 
             pending = await scoring_store.list_pending_sync(limit=limit)
@@ -51,8 +47,7 @@ async def sync_pending_lead_scores(
                     skipped += 1
                     continue
                 key = (
-                    f"lead-score:{rec.lead_id}:{rec.session_id}:"
-                    f"{rec.score_value}:{rec.score_band}"
+                    f"lead-score:{rec.lead_id}:{rec.session_id}:{rec.score_value}:{rec.score_band}"
                 )
                 payload = LeadScoreSyncPayload.from_record(
                     rec,
@@ -69,9 +64,7 @@ async def sync_pending_lead_scores(
                     synced += 1
                 except Exception:
                     logger.exception("CRM score sync failed for lead %s", rec.lead_id)
-                    await scoring_store.mark_failed(
-                        lead_id=rec.lead_id, error="kommo_error"
-                    )
+                    await scoring_store.mark_failed(lead_id=rec.lead_id, error="kommo_error")
                     failed += 1
 
             lf.update_current_span(
