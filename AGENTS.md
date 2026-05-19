@@ -65,3 +65,6 @@ secrets in outputs.
 Use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and the nearest
 override for verification. Run focused checks for touched areas. State skipped
 checks.
+
+GitHub PR CI is a lightweight static gate. Run heavy pytest suites locally on
+the review machine and record commands/results in review or merge notes.
