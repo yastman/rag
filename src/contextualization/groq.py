@@ -9,6 +9,18 @@ from src.config import Settings
 from .base import BaseContextualizationProvider, ContextualizedChunk
 
 
+def _usage_counts(usage: object | None) -> tuple[int, int]:
+    """Return prompt/completion counts, falling back to total_tokens-only SDK mocks."""
+    if usage is None:
+        return 0, 0
+    prompt = getattr(usage, "prompt_tokens", None)
+    completion = getattr(usage, "completion_tokens", None)
+    if isinstance(prompt, int) or isinstance(completion, int):
+        return int(prompt or 0), int(completion or 0)
+    total = getattr(usage, "total_tokens", None)
+    return (int(total), 0) if isinstance(total, int) else (0, 0)
+
+
 class GroqContextualizer(BaseContextualizationProvider):
     """
     Contextualize documents using Groq API (high-speed).
@@ -75,8 +87,7 @@ class GroqContextualizer(BaseContextualizationProvider):
             ],
         )
         usage = getattr(response, "usage", None)
-        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
-        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+        prompt_tokens, completion_tokens = _usage_counts(usage)
         return response.choices[0].message.content or "", prompt_tokens, completion_tokens
 
     @observe(name="groq-contextualize-sync", capture_input=False, capture_output=False)
@@ -110,8 +121,7 @@ class GroqContextualizer(BaseContextualizationProvider):
             ],
         )
         usage = getattr(response, "usage", None)
-        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0) if usage else 0
-        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+        prompt_tokens, completion_tokens = _usage_counts(usage)
         return response.choices[0].message.content or "", prompt_tokens, completion_tokens
 
     def get_stats(self) -> dict[str, int | float]:
