@@ -142,7 +142,6 @@ async def test_scan_multi_page_cursor_accumulation(worker):
     assert worker._redis.scan.call_count == 2
 
 
-
 class TestSessionSummaryWorkerObserveInstrumentation:
     """Tests for @observe instrumentation on SessionSummaryWorker._generate_summary (#1662).
 
@@ -275,8 +274,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         await worker._generate_summary(history)
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert len(input_calls) >= 1, (
             "update_current_span(input=...) was never called on _generate_summary"
@@ -313,9 +311,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             redis=AsyncMock(),
             llm=AsyncMock(),
         )
-        worker._llm.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(long_summary)
-        )
+        worker._llm.chat.completions.create = AsyncMock(return_value=_mock_completion(long_summary))
 
         history = [
             {"role": "user", "content": "msg"},
@@ -326,8 +322,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert result == long_summary  # behavior unchanged on success path
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert len(output_calls) >= 1, (
             "update_current_span(output=...) was never called on _generate_summary"
@@ -337,14 +332,11 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert captured_output.get("summary_len") == len(long_summary)
         preview = captured_output.get("summary_preview", "")
         assert isinstance(preview, str)
-        assert len(preview) <= 120, (
-            f"summary_preview must be <=120 chars, got {len(preview)}"
-        )
+        assert len(preview) <= 120, f"summary_preview must be <=120 chars, got {len(preview)}"
 
         # Forbidden: full summary text must not appear in span output.
         assert long_summary not in str(captured_output), (
-            "Full summary text must not appear in span output "
-            "(issue #1662 Forbidden section)"
+            "Full summary text must not appear in span output (issue #1662 Forbidden section)"
         )
 
     async def test_exception_path_records_error_level_and_reraises(self, monkeypatch):
@@ -377,7 +369,8 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             await worker._generate_summary(history)
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert len(error_calls) >= 1, (
@@ -410,8 +403,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         )
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert output_calls, "update_current_span(output=...) was never called"
         captured_output = output_calls[-1]["output"]
