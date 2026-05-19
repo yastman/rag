@@ -1,5 +1,6 @@
 """Unit test specific fixtures for isolation."""
 
+import contextlib
 import importlib.util
 import sys
 from unittest.mock import MagicMock, patch
@@ -164,7 +165,5 @@ def isolate_otel_langfuse(monkeypatch):
         # RuntimeError is raised by mock.patch when the start failed
         # earlier and stop has no original to restore. AttributeError
         # mirrors the start-time guard above.
-        with contextlib.suppress(
-            ModuleNotFoundError, ImportError, AttributeError, RuntimeError
-        ):
+        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError, RuntimeError):
             p.stop()
