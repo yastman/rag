@@ -56,6 +56,28 @@ async def test_idle_session_detected(worker):
     worker._redis.delete.assert_called_once()
 
 
+async def test_idle_session_scoring_skipped_when_langfuse_client_missing(worker, monkeypatch):
+    """Missing Langfuse client must not break the idle-session worker loop."""
+    from telegram_bot.services import session_summary_worker as ssw_mod
+
+    monkeypatch.setattr(ssw_mod, "get_client", lambda: None)
+    worker._redis.scan = AsyncMock(return_value=(0, [b"session:last_active:123"]))
+    worker._redis.get = AsyncMock(return_value=str(time.time() - 2000).encode())
+    worker._redis.delete = AsyncMock()
+    worker._get_conversation_history = AsyncMock(
+        return_value=[
+            {"role": "user", "content": "Looking for 2-room apartment"},
+            {"role": "assistant", "content": "I found several options..."},
+        ]
+    )
+    worker._generate_summary = AsyncMock(return_value="Client looking for 2-room apartment")
+
+    count = await worker._check_idle_sessions()
+
+    assert count == 1
+    worker._redis.delete.assert_called_once()
+
+
 async def test_skip_short_conversations(worker):
     worker._redis.scan = AsyncMock(return_value=(0, [b"session:last_active:456"]))
     worker._redis.get = AsyncMock(return_value=str(time.time() - 2000).encode())
@@ -338,6 +360,29 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert long_summary not in str(captured_output), (
             "Full summary text must not appear in span output (issue #1662 Forbidden section)"
         )
+
+    async def test_generate_summary_works_when_langfuse_client_is_none(self, monkeypatch):
+        """Tracing must degrade gracefully when Langfuse is unavailable."""
+        self._disable_observe(monkeypatch)
+
+        from telegram_bot.services import session_summary_worker as ssw_mod
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        monkeypatch.setattr(ssw_mod, "get_client", lambda: None)
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+        )
+        worker._llm.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Краткая выжимка")
+        )
+
+        result = await worker._generate_summary(
+            [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
+        )
+
+        assert result == "Краткая выжимка"
 
     async def test_exception_path_records_error_level_and_reraises(self, monkeypatch):
         """On LLM exception: span level=ERROR with status_message, then re-raise.

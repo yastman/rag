@@ -135,7 +135,7 @@ class SessionSummaryWorker:
             await self._redis.delete(key)
 
         lf = get_client()
-        if count > 0:
+        if lf is not None and count > 0:
             lf.score_current_trace(name="session_summary_generated", value=1, data_type="BOOLEAN")
             lf.score_current_trace(name="session_summary_count", value=float(count))
 
@@ -166,12 +166,13 @@ class SessionSummaryWorker:
         and is intentionally not modified here.
         """
         lf = get_client()
-        lf.update_current_span(
-            input={
-                "history_turns": len(history),
-                "model": self._summary_model,
-            }
-        )
+        if lf is not None:
+            lf.update_current_span(
+                input={
+                    "history_turns": len(history),
+                    "model": self._summary_model,
+                }
+            )
 
         messages_text = "\n".join(f"{m['role']}: {m['content']}" for m in history)
         try:
@@ -185,19 +186,21 @@ class SessionSummaryWorker:
                 name="session-summary",
             )
             summary = response.choices[0].message.content or ""
-            lf.update_current_span(
-                output={
-                    "summary_len": len(summary),
-                    "summary_preview": summary[:120],
-                }
-            )
+            if lf is not None:
+                lf.update_current_span(
+                    output={
+                        "summary_len": len(summary),
+                        "summary_preview": summary[:120],
+                    }
+                )
             return summary
         except Exception as exc:
             logger.exception("Summary generation failed for session")
-            lf.update_current_span(
-                level="ERROR",
-                status_message=str(exc)[:200],
-            )
+            if lf is not None:
+                lf.update_current_span(
+                    level="ERROR",
+                    status_message=str(exc)[:200],
+                )
             raise
 
     async def _write_summary(self, user_id: str, summary: str) -> None:
