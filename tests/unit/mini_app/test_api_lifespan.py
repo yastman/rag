@@ -29,6 +29,11 @@ import textwrap
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+
+pytest.importorskip("fastapi")
+
 
 def test_module_no_longer_exposes_module_level_redis_global() -> None:
     """``_redis_client`` module global must be removed (#1645)."""
@@ -88,9 +93,7 @@ async def test_get_redis_returns_app_state_redis() -> None:
     from mini_app import api as mod
 
     sentinel_redis = MagicMock(name="redis-client")
-    fake_request = SimpleNamespace(
-        app=SimpleNamespace(state=SimpleNamespace(redis=sentinel_redis))
-    )
+    fake_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(redis=sentinel_redis)))
 
     result = await mod.get_redis(fake_request)
     assert result is sentinel_redis
@@ -110,8 +113,7 @@ def test_start_expert_handler_uses_depends_get_redis() -> None:
     func_def = next(
         node
         for node in ast.walk(tree)
-        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-        and node.name == "start_expert"
+        if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and node.name == "start_expert"
     )
 
     # Search default values + annotations for a Depends(get_redis) call.
