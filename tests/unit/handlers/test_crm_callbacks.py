@@ -466,7 +466,6 @@ def test_format_task_card_completed_task_no_postpone_button():
     assert not any("postpone" in cb for cb in all_callbacks)
 
 
-
 # --------------------------------------------------------------------------
 # @observe instrumentation tests (#1664)
 # --------------------------------------------------------------------------
@@ -502,9 +501,7 @@ class TestCrmCallbacksObserveInstrumentation:
         "crm-task-edit-date",
     }
     EXPECTED_SPAN_NAMES_EXISTING = {"crm-quick-complete", "crm-quick-note"}
-    EXPECTED_SPAN_NAMES_ALL = (
-        EXPECTED_SPAN_NAMES_NEW | EXPECTED_SPAN_NAMES_EXISTING
-    )
+    EXPECTED_SPAN_NAMES_ALL = EXPECTED_SPAN_NAMES_NEW | EXPECTED_SPAN_NAMES_EXISTING
 
     @staticmethod
     def _patched_lf(monkeypatch):
@@ -619,18 +616,14 @@ class TestCrmCallbacksObserveInstrumentation:
 
         kommo = AsyncMock()
         state = AsyncMock()
-        state.get_data = AsyncMock(
-            return_value={"entity_id": 1234, "entity_type": "leads"}
-        )
+        state.get_data = AsyncMock(return_value={"entity_id": 1234, "entity_type": "leads"})
         message = AsyncMock()
         message.text = "Call client back tomorrow about contract +380501112233"
 
         await on_task_text_received(message, state, kommo_client=kommo)
 
         input_calls = [
-            c.kwargs
-            for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert len(input_calls) >= 1, (
             "on_task_text_received must call update_current_span(input=...)"
@@ -662,9 +655,7 @@ class TestCrmCallbacksObserveInstrumentation:
         await on_edit_field_chosen(message, state)
 
         input_calls = [
-            c.kwargs
-            for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert len(input_calls) >= 1
         captured_input = input_calls[0]["input"]
@@ -673,9 +664,7 @@ class TestCrmCallbacksObserveInstrumentation:
         assert captured_input.get("field") == "text"
         assert captured_input.get("action") == "edit-field-choice"
 
-    async def test_on_edit_field_chosen_invalid_records_cancelled_action(
-        self, monkeypatch
-    ):
+    async def test_on_edit_field_chosen_invalid_records_cancelled_action(self, monkeypatch):
         """Invalid field choice must record a cancelled / no-op action in span output."""
         from unittest.mock import AsyncMock
 
@@ -691,9 +680,7 @@ class TestCrmCallbacksObserveInstrumentation:
         await on_edit_field_chosen(message, state)
 
         output_calls = [
-            c.kwargs
-            for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert len(output_calls) >= 1, (
             "Invalid field choice must record a span output describing the no-op."
@@ -720,9 +707,7 @@ class TestCrmCallbacksObserveInstrumentation:
         await on_edit_task_date_received(message, state, kommo_client=kommo)
 
         input_calls = [
-            c.kwargs
-            for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert len(input_calls) >= 1
         captured_input = input_calls[0]["input"]
@@ -732,9 +717,7 @@ class TestCrmCallbacksObserveInstrumentation:
         # Raw user-supplied date string must not appear.
         assert "31.12.2027 10:00" not in str(captured_input)
 
-    async def test_on_edit_task_date_received_kommo_failure_records_error(
-        self, monkeypatch
-    ):
+    async def test_on_edit_task_date_received_kommo_failure_records_error(self, monkeypatch):
         """Kommo failure must be recorded as update_current_span(level='ERROR', ...)."""
         from unittest.mock import AsyncMock
 
