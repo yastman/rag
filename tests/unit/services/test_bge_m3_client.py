@@ -432,3 +432,147 @@ class TestBGEM3SyncClient:
         assert len(result.dense_vecs) == 3
         assert len(result.lexical_weights) == 3
         assert len(result.colbert_vecs) == 3
+
+
+
+class TestBGEM3ClientReconnectRace:
+    """Reconnect race-condition contract for _get_client (#1641).
+
+    Goal: under concurrent reconnect (multiple tasks hitting _get_client when
+    self._client is None or closed), only ONE new httpx.AsyncClient must be
+    constructed, and any old non-closed client must be closed exactly once.
+
+    These tests use the real asyncio scheduler with multiple awaited tasks.
+    httpx.AsyncClient is patched at module level so we can count instantiations
+    without performing real I/O.
+    """
+
+    async def test_concurrent_first_call_creates_only_one_async_client(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """N concurrent first-time _get_client() callers => 1 AsyncClient construction."""
+        import asyncio
+
+        from telegram_bot.services import bge_m3_client as mod
+
+        instances: list[MagicMock] = []
+
+        def fake_async_client(*args: object, **kwargs: object) -> MagicMock:
+            inst = MagicMock()
+            inst.is_closed = False
+            inst.aclose = AsyncMock()
+            instances.append(inst)
+            return inst
+
+        monkeypatch.setattr(mod.httpx, "AsyncClient", fake_async_client)
+
+        client = mod.BGEM3Client(base_url="http://localhost:8000")
+
+        # Force a yield point inside _get_client so concurrent tasks observe
+        # the same self._client is None state before any of them assigns.
+        async def call_get_client() -> object:
+            return await client._get_client()
+
+        results = await asyncio.gather(*(call_get_client() for _ in range(8)))
+
+        assert len(instances) == 1, (
+            f"Expected exactly 1 AsyncClient instantiation, got {len(instances)}"
+        )
+        assert all(r is instances[0] for r in results)
+
+    async def test_concurrent_reconnect_after_close_creates_only_one_new_client(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When existing client is closed, concurrent reconnects produce 1 replacement."""
+        import asyncio
+
+        from telegram_bot.services import bge_m3_client as mod
+
+        instances: list[MagicMock] = []
+
+        def fake_async_client(*args: object, **kwargs: object) -> MagicMock:
+            inst = MagicMock()
+            inst.is_closed = False
+            inst.aclose = AsyncMock()
+            instances.append(inst)
+            return inst
+
+        monkeypatch.setattr(mod.httpx, "AsyncClient", fake_async_client)
+
+        client = mod.BGEM3Client(base_url="http://localhost:8000")
+
+        # Pre-seed a closed client so reconnect path triggers.
+        closed = MagicMock()
+        closed.is_closed = True
+        closed.aclose = AsyncMock()
+        client._client = closed
+
+        async def call_get_client() -> object:
+            return await client._get_client()
+
+        results = await asyncio.gather(*(call_get_client() for _ in range(8)))
+
+        assert len(instances) == 1, (
+            f"Expected exactly 1 replacement AsyncClient, got {len(instances)}"
+        )
+        assert all(r is instances[0] for r in results)
+        # A pre-closed client must NOT be aclose()'d again (already closed).
+        closed.aclose.assert_not_awaited()
+
+    async def test_get_client_returns_existing_open_client_without_replacement(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If self._client is open, _get_client must return it as-is (no new instance)."""
+        from telegram_bot.services import bge_m3_client as mod
+
+        instances: list[MagicMock] = []
+
+        def fake_async_client(*args: object, **kwargs: object) -> MagicMock:
+            inst = MagicMock()
+            inst.is_closed = False
+            instances.append(inst)
+            return inst
+
+        monkeypatch.setattr(mod.httpx, "AsyncClient", fake_async_client)
+
+        client = mod.BGEM3Client(base_url="http://localhost:8000")
+        existing = MagicMock()
+        existing.is_closed = False
+        client._client = existing
+
+        result = await client._get_client()
+
+        assert result is existing
+        assert instances == []  # no new construction
+
+    async def test_aclose_concurrent_with_get_client_does_not_double_close(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """aclose() racing with _get_client() must not aclose() the same client twice."""
+        from telegram_bot.services import bge_m3_client as mod
+
+        instances: list[MagicMock] = []
+
+        def fake_async_client(*args: object, **kwargs: object) -> MagicMock:
+            inst = MagicMock()
+            inst.is_closed = False
+            inst.aclose = AsyncMock()
+            instances.append(inst)
+            return inst
+
+        monkeypatch.setattr(mod.httpx, "AsyncClient", fake_async_client)
+
+        client = mod.BGEM3Client(base_url="http://localhost:8000")
+
+        # Establish initial client.
+        first = await client._get_client()
+        assert first is instances[0]
+
+        # Close it; concurrent _get_client must observe is_closed and replace.
+        await client.aclose()
+        first.aclose.assert_awaited_once()
+
+        second = await client._get_client()
+        assert second is not first
+        # Original closed client never aclose()'d twice.
+        first.aclose.assert_awaited_once()
