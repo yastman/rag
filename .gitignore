@@ -213,6 +213,8 @@ CLAUDE.md
 .claude/prompts/
 docs/audits/
 docs/archive/
+docs/runbooks/
+docs/engineering/
 
 # Build artifacts & test outputs
 test_output*.txt

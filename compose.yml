@@ -81,6 +81,7 @@ services:
     logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
+      - ./docker/qdrant/config.yaml:/etc/qdrant/config.yaml:ro  # issue #1545: on_disk_payload + HNSW opts
     environment:
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
