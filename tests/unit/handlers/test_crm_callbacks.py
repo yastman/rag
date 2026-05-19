@@ -464,3 +464,302 @@ def test_format_task_card_completed_task_no_postpone_button():
         btn.callback_data for row in keyboard.inline_keyboard for btn in row if btn.callback_data
     ]
     assert not any("postpone" in cb for cb in all_callbacks)
+
+
+
+# --------------------------------------------------------------------------
+# @observe instrumentation tests (#1664)
+# --------------------------------------------------------------------------
+
+
+class TestCrmCallbacksObserveInstrumentation:
+    """Tests for @observe instrumentation on CRM callback handlers (#1664).
+
+    Contract: every write-side aiogram handler in
+    ``telegram_bot.handlers.crm_callbacks`` must be wrapped with
+    ``@observe(name="crm-<action>", capture_input=False, capture_output=False)``
+    so that nested Kommo / FSM observations are parented under a named span
+    instead of becoming orphan traces.
+
+    Curated input/output payloads must be written via
+    ``get_client().update_current_span(...)`` using only allow-listed keys
+    (``deal_id``, ``task_id``, ``field``, ``action``).  Raw ``callback.data``
+    and FSM-state contents must NEVER appear in span fields (issue's
+    Forbidden list).
+    """
+
+    # The 9 handlers we are instrumenting in this PR plus the 2 that were
+    # already decorated by #1673 / #1674 — total 11 expected spans.
+    EXPECTED_SPAN_NAMES_NEW = {
+        "crm-lead-note-prompt",
+        "crm-lead-task-prompt",
+        "crm-task-postpone",
+        "crm-contact-note-prompt",
+        "crm-task-create",
+        "crm-task-edit-prompt",
+        "crm-task-edit-field",
+        "crm-task-edit-text",
+        "crm-task-edit-date",
+    }
+    EXPECTED_SPAN_NAMES_EXISTING = {"crm-quick-complete", "crm-quick-note"}
+    EXPECTED_SPAN_NAMES_ALL = (
+        EXPECTED_SPAN_NAMES_NEW | EXPECTED_SPAN_NAMES_EXISTING
+    )
+
+    @staticmethod
+    def _patched_lf(monkeypatch):
+        """Replace get_client used by crm_callbacks module with a recording mock."""
+        from unittest.mock import MagicMock
+
+        from telegram_bot.handlers import crm_callbacks as cb_mod
+
+        mock_lf = MagicMock()
+        monkeypatch.setattr(cb_mod, "get_client", lambda: mock_lf)
+        return mock_lf
+
+    @staticmethod
+    def _disable_observe(monkeypatch):
+        """Replace the @observe decorator at module-import time with a no-op.
+
+        This lets behavior assertions (input/output/error) run without the
+        real Langfuse SDK trying to start an OTEL span.
+        """
+        import importlib
+        import sys
+
+        from telegram_bot import observability as observability_mod
+
+        def fake_observe(*args, **kwargs):
+            def decorator(func):
+                return func
+
+            if args and callable(args[0]) and not kwargs:
+                return args[0]
+            return decorator
+
+        monkeypatch.setattr(observability_mod, "observe", fake_observe)
+        sys.modules.pop("telegram_bot.handlers.crm_callbacks", None)
+        importlib.import_module("telegram_bot.handlers.crm_callbacks")
+
+    # ---- Decorator-application contract ------------------------------------
+
+    def test_module_imports_observe_and_get_client(self):
+        """Module wires the Langfuse decorator + client accessor (#1664 contract)."""
+        from telegram_bot.handlers import crm_callbacks as cb_mod
+
+        assert hasattr(cb_mod, "observe"), (
+            "telegram_bot.handlers.crm_callbacks must import `observe` "
+            "from telegram_bot.observability for the @observe decorator on "
+            "write-side CRM callback handlers"
+        )
+        assert hasattr(cb_mod, "get_client"), (
+            "telegram_bot.handlers.crm_callbacks must import `get_client` "
+            "from telegram_bot.observability for curated update_current_span calls"
+        )
+
+    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+        """All 11 expected handlers must be wrapped with @observe(...) and the
+        right kwargs (capture_input=False, capture_output=False)."""
+        import importlib
+        import sys
+
+        from telegram_bot import observability as observability_mod
+
+        captured: list[dict] = []
+
+        def recording_observe(*args, **kwargs):
+            # The handlers in this module always use the kwargs form
+            # (`@observe(name=..., capture_input=False, capture_output=False)`),
+            # so we only have to record kwargs.
+            captured.append(dict(kwargs))
+
+            def decorator(func):
+                return func
+
+            if args and callable(args[0]) and not kwargs:
+                return args[0]
+            return decorator
+
+        monkeypatch.setattr(observability_mod, "observe", recording_observe)
+        sys.modules.pop("telegram_bot.handlers.crm_callbacks", None)
+        importlib.import_module("telegram_bot.handlers.crm_callbacks")
+
+        names = {entry.get("name") for entry in captured}
+
+        # All 11 expected spans (9 new + 2 existing) must be present.
+        missing = self.EXPECTED_SPAN_NAMES_ALL - names
+        assert not missing, (
+            f"Missing @observe spans on crm_callbacks handlers: {sorted(missing)}. "
+            f"Captured: {sorted(n for n in names if n)}"
+        )
+
+        # Each captured entry must use capture_input=False and capture_output=False.
+        for entry in captured:
+            name = entry.get("name")
+            if name not in self.EXPECTED_SPAN_NAMES_ALL:
+                continue
+            assert entry.get("capture_input") is False, (
+                f"@observe(name={name!r}) must use capture_input=False"
+            )
+            assert entry.get("capture_output") is False, (
+                f"@observe(name={name!r}) must use capture_output=False"
+            )
+
+    # ---- Behavior tests for representative new handlers --------------------
+
+    async def test_on_task_text_received_records_curated_input(self, monkeypatch):
+        """on_task_text_received writes a curated input payload (no PII, no raw FSM)."""
+        from unittest.mock import AsyncMock
+
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        # Re-import after observe was monkeypatched.
+        from telegram_bot.handlers.crm_callbacks import on_task_text_received
+
+        kommo = AsyncMock()
+        state = AsyncMock()
+        state.get_data = AsyncMock(
+            return_value={"entity_id": 1234, "entity_type": "leads"}
+        )
+        message = AsyncMock()
+        message.text = "Call client back tomorrow about contract +380501112233"
+
+        await on_task_text_received(message, state, kommo_client=kommo)
+
+        input_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if "input" in c.kwargs
+        ]
+        assert len(input_calls) >= 1, (
+            "on_task_text_received must call update_current_span(input=...)"
+        )
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        # Curated keys only: deal_id / task_id / field / action.
+        assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
+        assert captured_input.get("action") == "create"
+        assert captured_input.get("deal_id") == 1234
+        # Forbidden values: raw text / FSM state contents must not appear.
+        flat = str(captured_input)
+        assert message.text not in flat
+        assert "+380501112233" not in flat
+
+    async def test_on_edit_field_chosen_records_curated_field(self, monkeypatch):
+        """on_edit_field_chosen reports which field was chosen via curated keys."""
+        from unittest.mock import AsyncMock
+
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
+
+        state = AsyncMock()
+        message = AsyncMock()
+        message.text = "1"
+
+        await on_edit_field_chosen(message, state)
+
+        input_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if "input" in c.kwargs
+        ]
+        assert len(input_calls) >= 1
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
+        assert captured_input.get("field") == "text"
+        assert captured_input.get("action") == "edit-field-choice"
+
+    async def test_on_edit_field_chosen_invalid_records_cancelled_action(
+        self, monkeypatch
+    ):
+        """Invalid field choice must record a cancelled / no-op action in span output."""
+        from unittest.mock import AsyncMock
+
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
+
+        state = AsyncMock()
+        message = AsyncMock()
+        message.text = "5"  # neither '1' nor '2'
+
+        await on_edit_field_chosen(message, state)
+
+        output_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert len(output_calls) >= 1, (
+            "Invalid field choice must record a span output describing the no-op."
+        )
+        captured_output = output_calls[-1]["output"]
+        assert isinstance(captured_output, dict)
+        assert captured_output.get("action") == "cancelled"
+
+    async def test_on_edit_task_date_received_records_curated_input(self, monkeypatch):
+        """on_edit_task_date_received writes curated input payload with task_id only."""
+        from unittest.mock import AsyncMock
+
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
+
+        kommo = AsyncMock()
+        state = AsyncMock()
+        state.get_data = AsyncMock(return_value={"edit_task_id": 4242})
+        message = AsyncMock()
+        message.text = "31.12.2027 10:00"
+
+        await on_edit_task_date_received(message, state, kommo_client=kommo)
+
+        input_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if "input" in c.kwargs
+        ]
+        assert len(input_calls) >= 1
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
+        assert captured_input.get("task_id") == 4242
+        # Raw user-supplied date string must not appear.
+        assert "31.12.2027 10:00" not in str(captured_input)
+
+    async def test_on_edit_task_date_received_kommo_failure_records_error(
+        self, monkeypatch
+    ):
+        """Kommo failure must be recorded as update_current_span(level='ERROR', ...)."""
+        from unittest.mock import AsyncMock
+
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
+
+        kommo = AsyncMock()
+        kommo.update_task = AsyncMock(side_effect=RuntimeError("kommo HTTP 500"))
+        state = AsyncMock()
+        state.get_data = AsyncMock(return_value={"edit_task_id": 99})
+        message = AsyncMock()
+        message.text = "31.12.2027 10:00"
+
+        await on_edit_task_date_received(message, state, kommo_client=kommo)
+
+        error_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert len(error_calls) >= 1, (
+            "Kommo failure must call update_current_span(level='ERROR', ...)"
+        )
+        status = error_calls[0].get("status_message", "")
+        assert "kommo HTTP 500" in status
+        assert len(status) <= 220, "status_message must be truncated to ~200 chars"
