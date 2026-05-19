@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 # Default confidence threshold for triggering fallback response
 LOW_CONFIDENCE_THRESHOLD = 0.3
 
+# Default max tokens: matches GraphConfig.llm_max_tokens and API_LIMITS defaults.
+# Use GraphConfig.llm_max_tokens when integrating with the agent graph.
+_DEFAULT_MAX_TOKENS = 4096
+
 
 class ConfidenceResponse(BaseModel):
     """Pydantic model for LLM confidence extraction via Instructor.
@@ -66,7 +70,7 @@ class LLMService:
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
     ):
         warnings.warn(
@@ -78,7 +82,7 @@ class LLMService:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.model_max_tokens = max_tokens
+        self.model_max_tokens = max_tokens if max_tokens is not None else _DEFAULT_MAX_TOKENS
         self.low_confidence_threshold = low_confidence_threshold
         self.client = AsyncOpenAI(
             api_key=api_key,
