@@ -308,7 +308,6 @@ class TestResetClient:
         assert "some-prompt" not in _transient_failures_until
 
 
-
 # ---------------------------------------------------------------------------
 # get_prompt_with_object — exposes raw Langfuse Prompt object alongside text
 # (#1666: Link Prompt Management entries to LLM generations)

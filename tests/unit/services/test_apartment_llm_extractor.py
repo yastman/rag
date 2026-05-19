@@ -177,7 +177,6 @@ class TestGetSystemPrompt:
         assert "Никогда не возвращай null для массивов" in EXTRACTION_SYSTEM_PROMPT
 
 
-
 class TestApartmentExtractorPromptLinking:
     """Tests for #1666 — Langfuse Prompt → generation linking on extract().
 

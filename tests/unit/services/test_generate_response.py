@@ -1150,7 +1150,6 @@ async def test_streaming_uses_send_message_draft() -> None:
     assert "Часть 1 Часть 2" in str(call_kwargs)
 
 
-
 # ---------------------------------------------------------------------------
 # #1666 — link Langfuse Prompts to generations via langfuse_prompt= kwarg
 # ---------------------------------------------------------------------------
@@ -1241,9 +1240,7 @@ async def test_generate_response_links_prompt_via_update_current_generation() ->
         )
 
     update_calls = [
-        c
-        for c in lf.update_current_generation.call_args_list
-        if "prompt" in (c.kwargs or {})
+        c for c in lf.update_current_generation.call_args_list if "prompt" in (c.kwargs or {})
     ]
     assert update_calls, "Expected update_current_generation(prompt=...) for #1666 linking"
     assert update_calls[0].kwargs["prompt"] is fake_prompt
