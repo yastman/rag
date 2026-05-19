@@ -274,17 +274,14 @@ class TestHyDEObserveInstrumentation:
 
         hyde = HyDEGenerator(model="test-model")
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion("ok")
-        )
+        hyde.client.chat.completions.create = AsyncMock(return_value=_mock_completion("ok"))
 
         long_query = "квартира у моря " * 20  # > 120 chars
 
         await hyde.generate_hypothetical_document(long_query)
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert len(input_calls) >= 1, "update_current_span(input=...) was never called"
         captured_input = input_calls[0]["input"]
@@ -292,9 +289,7 @@ class TestHyDEObserveInstrumentation:
         assert captured_input.get("model") == "test-model"
         preview = captured_input.get("query_preview", "")
         assert len(preview) <= 120
-        assert long_query not in str(captured_input), (
-            "Full query must not appear in span input"
-        )
+        assert long_query not in str(captured_input), "Full query must not appear in span input"
         assert HyDEGenerator.HYDE_SYSTEM_PROMPT not in str(captured_input), (
             "System prompt must not be captured in span input"
         )
@@ -309,15 +304,12 @@ class TestHyDEObserveInstrumentation:
         long_doc = "Подробное описание объекта недвижимости. " * 30
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(
-            return_value=_mock_completion(long_doc)
-        )
+        hyde.client.chat.completions.create = AsyncMock(return_value=_mock_completion(long_doc))
 
         await hyde.generate_hypothetical_document("квартира у моря")
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert len(output_calls) >= 1, "update_current_span(output=...) was never called"
         captured_output = output_calls[-1]["output"]
@@ -339,9 +331,7 @@ class TestHyDEObserveInstrumentation:
 
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
-        hyde.client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("LLM exploded")
-        )
+        hyde.client.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM exploded"))
 
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
@@ -349,7 +339,8 @@ class TestHyDEObserveInstrumentation:
         assert result == "квартира у моря"
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert len(error_calls) >= 1, (
