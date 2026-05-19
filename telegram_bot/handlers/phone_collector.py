@@ -76,9 +76,7 @@ def _build_custom_fields(
         )
     if username:
         candidates.append(
-            KommoCustomField.build_simple(
-                field_id=telegram_username_field_id, value=f"@{username}"
-            )
+            KommoCustomField.build_simple(field_id=telegram_username_field_id, value=f"@{username}")
         )
     return KommoCustomField.dump_list(candidates)
 

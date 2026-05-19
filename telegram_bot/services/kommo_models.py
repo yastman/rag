@@ -71,9 +71,7 @@ class KommoCustomField(BaseModel):
         :class:`httpx.AsyncClient.post(json=...)` without further work.
         """
         return [
-            item.model_dump(by_alias=True, exclude_none=True)
-            for item in items
-            if item is not None
+            item.model_dump(by_alias=True, exclude_none=True) for item in items if item is not None
         ]
 
 
