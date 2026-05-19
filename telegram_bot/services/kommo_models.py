@@ -12,6 +12,71 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# --- Custom field building blocks (#1655) ---
+
+
+class KommoCustomFieldValue(BaseModel):
+    """One entry inside ``KommoCustomField.values`` (Kommo API v4).
+
+    Kommo's per-field value object is ``{"value": <scalar>, "enum_code"?: str}``.
+    Modelling it explicitly removes hand-built dicts at every emitter site.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    value: Any
+    enum_code: str | None = None
+
+
+class KommoCustomField(BaseModel):
+    """Single ``custom_fields_values`` entry on a Lead/Contact payload.
+
+    Serialised shape (``model_dump(by_alias=True, exclude_none=True)``):
+
+        {"field_id": 100, "values": [{"value": "..."}, ...]}
+
+    Use :meth:`build_simple` for the common single-string-value case and
+    :meth:`dump_list` to drop ``None`` placeholders that callers emit when
+    a field id is missing from configuration.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    field_id: int
+    values: list[KommoCustomFieldValue]
+
+    @classmethod
+    def build_simple(
+        cls, *, field_id: int | None, value: Any, enum_code: str | None = None
+    ) -> KommoCustomField | None:
+        """Return a single-value field, or ``None`` if ``field_id`` is falsy.
+
+        Mirrors the existing handler guard (``if service_field_id: ...``):
+        a ``None``/``0`` field id means the CRM has not configured this
+        custom field, so emit nothing instead of pointing at field 0.
+        """
+        if not field_id:
+            return None
+        return cls(
+            field_id=field_id,
+            values=[KommoCustomFieldValue(value=value, enum_code=enum_code)],
+        )
+
+    @staticmethod
+    def dump_list(items: list[KommoCustomField | None]) -> list[dict[str, Any]]:
+        """Serialise a list of fields, skipping ``None`` placeholders.
+
+        Returns the canonical Kommo API shape so emitters can pass the
+        result straight into ``LeadCreate.custom_fields_values`` or
+        :class:`httpx.AsyncClient.post(json=...)` without further work.
+        """
+        return [
+            item.model_dump(by_alias=True, exclude_none=True)
+            for item in items
+            if item is not None
+        ]
+
+
 # --- Request models (Create/Update) ---
 
 

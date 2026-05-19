@@ -167,3 +167,171 @@ def test_contact_update_build_empty():
 
     fields = ContactUpdate.build_contact_fields()
     assert fields == []
+
+
+
+# -----------------------------------------------------------------------------
+# KommoCustomField (#1655) — typed builder for custom_fields_values payloads
+# -----------------------------------------------------------------------------
+
+
+class TestKommoCustomFieldValue:
+    """Pydantic model for a single Kommo custom field value entry."""
+
+    def test_string_value_serializes_to_value_dict(self) -> None:
+        from telegram_bot.services.kommo_models import KommoCustomFieldValue
+
+        v = KommoCustomFieldValue(value="Telegram-бот")
+        assert v.model_dump(exclude_none=True) == {"value": "Telegram-бот"}
+
+    def test_int_value_serializes_to_value_dict(self) -> None:
+        from telegram_bot.services.kommo_models import KommoCustomFieldValue
+
+        v = KommoCustomFieldValue(value=12345)
+        assert v.model_dump(exclude_none=True) == {"value": 12345}
+
+    def test_enum_code_when_present(self) -> None:
+        from telegram_bot.services.kommo_models import KommoCustomFieldValue
+
+        v = KommoCustomFieldValue(value="+380501234567", enum_code="WORK")
+        assert v.model_dump(exclude_none=True) == {
+            "value": "+380501234567",
+            "enum_code": "WORK",
+        }
+
+
+class TestKommoCustomField:
+    """Pydantic model for a Kommo custom_fields_values entry (field_id + values)."""
+
+    def test_serialized_payload_matches_kommo_api_shape(self) -> None:
+        from telegram_bot.services.kommo_models import (
+            KommoCustomField,
+            KommoCustomFieldValue,
+        )
+
+        f = KommoCustomField(
+            field_id=100,
+            values=[KommoCustomFieldValue(value="Осмотр объектов")],
+        )
+        assert f.model_dump(by_alias=True, exclude_none=True) == {
+            "field_id": 100,
+            "values": [{"value": "Осмотр объектов"}],
+        }
+
+    def test_field_id_zero_is_rejected_by_helper(self) -> None:
+        """build_simple skips construction when field_id is falsy.
+
+        The handler today guards with ``if service_field_id: ...`` and the
+        new helper should preserve that contract — emitting a field with
+        id=0 would target a non-existent CRM field.
+        """
+        from telegram_bot.services.kommo_models import KommoCustomField
+
+        # field_id=0 / None must produce an explicit None so callers can filter.
+        assert KommoCustomField.build_simple(field_id=0, value="x") is None
+        assert KommoCustomField.build_simple(field_id=None, value="x") is None
+
+    def test_build_simple_returns_payload_for_valid_field(self) -> None:
+        from telegram_bot.services.kommo_models import KommoCustomField
+
+        f = KommoCustomField.build_simple(field_id=200, value="Telegram-бот")
+        assert f is not None
+        assert f.model_dump(by_alias=True, exclude_none=True) == {
+            "field_id": 200,
+            "values": [{"value": "Telegram-бот"}],
+        }
+
+    def test_dump_list_filters_none_entries(self) -> None:
+        from telegram_bot.services.kommo_models import KommoCustomField
+
+        items = [
+            KommoCustomField.build_simple(field_id=100, value="A"),
+            None,  # represents a missing field — must be skipped
+            KommoCustomField.build_simple(field_id=0, value="B"),  # also None
+            KommoCustomField.build_simple(field_id=300, value="C"),
+        ]
+        payload = KommoCustomField.dump_list(items)
+        assert payload == [
+            {"field_id": 100, "values": [{"value": "A"}]},
+            {"field_id": 300, "values": [{"value": "C"}]},
+        ]
+
+
+class TestPhoneCollectorBuildsViaPydantic:
+    """phone_collector._build_custom_fields must construct entries via KommoCustomField (#1655).
+
+    The function still returns ``list[dict]`` for httpx posting, but each entry
+    must come from KommoCustomField.model_dump(by_alias=True, exclude_none=True)
+    rather than a hand-rolled dict literal. AST scan keeps the contract enforced
+    even if the helper signature changes.
+    """
+
+    def test_handler_returns_payload_byte_compatible_with_kommo_api(self) -> None:
+        from telegram_bot.handlers.phone_collector import _build_custom_fields
+
+        fields = _build_custom_fields(
+            "Осмотр объектов",
+            12345,
+            "ivan",
+            service_field_id=100,
+            source_field_id=200,
+            telegram_field_id=300,
+            telegram_username_field_id=400,
+        )
+
+        # Existing dict shape preserved — Kommo API contract unchanged.
+        assert {"field_id": 100, "values": [{"value": "Осмотр объектов"}]} in fields
+        assert {"field_id": 200, "values": [{"value": "Telegram-бот"}]} in fields
+        assert {"field_id": 300, "values": [{"value": "12345"}]} in fields
+        assert {"field_id": 400, "values": [{"value": "@ivan"}]} in fields
+
+    def test_handler_uses_kommo_custom_field_model(self) -> None:
+        """AST contract: phone_collector._build_custom_fields uses KommoCustomField.
+
+        Forbids regressing to hand-built ``{"field_id": ..., "values": [...]}``
+        dict literals. The function may still produce dicts via
+        ``KommoCustomField.dump_list(...)`` or ``model_dump(by_alias=True)``.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from telegram_bot.handlers import phone_collector as mod
+
+        source = textwrap.dedent(inspect.getsource(mod._build_custom_fields))
+        tree = ast.parse(source)
+
+        uses_model = False
+        bad_literals: list[int] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr in {"build_simple", "dump_list", "model_dump"}
+                ) or (
+                    isinstance(func, ast.Name)
+                    and func.id in {"KommoCustomField", "KommoCustomFieldValue"}
+                ):
+                    uses_model = True
+            if isinstance(node, ast.Dict):
+                # A literal dict whose keys include 'field_id' AND 'values'
+                # is exactly the hand-built shape we want to remove.
+                key_strings = {
+                    k.value
+                    for k in node.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)
+                }
+                if {"field_id", "values"}.issubset(key_strings):
+                    bad_literals.append(node.lineno)
+
+        assert uses_model, (
+            "phone_collector._build_custom_fields must build entries via "
+            "KommoCustomField (build_simple / dump_list / model_dump), "
+            "not raw dict literals (#1655)"
+        )
+        assert not bad_literals, (
+            "phone_collector._build_custom_fields contains hand-built "
+            "{field_id, values} dict literals on lines: "
+            + ", ".join(map(str, bad_literals))
+        )

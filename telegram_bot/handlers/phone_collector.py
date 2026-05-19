@@ -23,7 +23,12 @@ from telegram_bot.keyboards.phone_keyboard import (
 )
 from telegram_bot.observability import observe
 from telegram_bot.services.content_loader import get_phone_config
-from telegram_bot.services.kommo_models import ContactCreate, LeadCreate, TaskCreate
+from telegram_bot.services.kommo_models import (
+    ContactCreate,
+    KommoCustomField,
+    LeadCreate,
+    TaskCreate,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -55,20 +60,27 @@ def _build_custom_fields(
     telegram_field_id: int = 0,
     telegram_username_field_id: int = 0,
 ) -> list[dict]:
-    """Build Kommo custom_fields_values for lead."""
-    fields: list[dict] = []
+    """Build Kommo ``custom_fields_values`` for a lead.
 
-    if service_field_id:
-        fields.append({"field_id": service_field_id, "values": [{"value": crm_title}]})
-    if source_field_id:
-        fields.append({"field_id": source_field_id, "values": [{"value": "Telegram-бот"}]})
-    if telegram_field_id and telegram_id:
-        fields.append({"field_id": telegram_field_id, "values": [{"value": str(telegram_id)}]})
-    if telegram_username_field_id and username:
-        fields.append(
-            {"field_id": telegram_username_field_id, "values": [{"value": f"@{username}"}]}
+    Each entry is constructed via :class:`KommoCustomField` so the API
+    payload shape is owned by Pydantic (#1655). ``KommoCustomField.build_simple``
+    skips fields whose CRM id is unset, matching the previous guard chain.
+    """
+    candidates: list[KommoCustomField | None] = [
+        KommoCustomField.build_simple(field_id=service_field_id, value=crm_title),
+        KommoCustomField.build_simple(field_id=source_field_id, value="Telegram-бот"),
+    ]
+    if telegram_id:
+        candidates.append(
+            KommoCustomField.build_simple(field_id=telegram_field_id, value=str(telegram_id))
         )
-    return fields
+    if username:
+        candidates.append(
+            KommoCustomField.build_simple(
+                field_id=telegram_username_field_id, value=f"@{username}"
+            )
+        )
+    return KommoCustomField.dump_list(candidates)
 
 
 def _build_note_text(
