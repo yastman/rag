@@ -14,8 +14,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tests.unit.helpers.voyage import skip_if_voyageai_unusable
 
-pytest.importorskip("voyageai", reason="voyageai not installed (***REMOVED***1773 voyage extra)")
+
+skip_if_voyageai_unusable()
 pytestmark = pytest.mark.requires_extras
 
 import voyageai
