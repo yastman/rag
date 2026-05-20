@@ -2067,6 +2067,10 @@ dependencies = [
     { name = "redis" },
     { name = "redisvl" },
     { name = "tenacity" },
+]
+
+[package.optional-dependencies]
+voyage = [
     { name = "voyageai" },
 ]
 
@@ -2097,8 +2101,9 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "redisvl", specifier = ">=0.3.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
-    { name = "voyageai", specifier = ">=0.3.0" },
+    { name = "voyageai", marker = "extra == 'voyage'", specifier = ">=0.3.0" },
 ]
+provides-extras = ["voyage"]
 
 [[package]]
 name = "redis"
