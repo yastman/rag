@@ -3,7 +3,11 @@
 import re
 from typing import Any
 
-from telegram_bot.constants.apartment_constants import APARTMENT_CITY_NAMES
+from telegram_bot.constants.apartment_constants import (
+    APARTMENT_CITY_ALIASES,
+    APARTMENT_CITY_ALIASES_SORTED,
+    APARTMENT_CITY_NAMES,
+)
 from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
 
 
@@ -156,9 +160,26 @@ class FilterExtractor(BaseFilterExtractor):
         return None
 
     def _extract_city(self, query: str) -> str | None:
-        """Extract city name."""
+        """Extract city name, normalizing RU morphological forms and EN aliases.
+
+        Aliases are matched longest-first (``APARTMENT_CITY_ALIASES_SORTED``)
+        so phrases like "святом власе" / "sunny beach" resolve to the same
+        canonical city as their full form. Without alias-aware matching the
+        pre-agent semantic-cache filter signature could omit ``city`` for
+        morphologically inflected queries and let cache reuse cross
+        locations (#1607).
+        """
+        query_lower = query.lower()
+
+        # Aliases first (longest match wins)
+        for alias in APARTMENT_CITY_ALIASES_SORTED:
+            if alias in query_lower:
+                return APARTMENT_CITY_ALIASES[alias]
+
+        # Canonical name fallback (covers cities without alias entries:
+        # Несебр, Бургас, Варна, София, Поморие, Созополь).
         for city in APARTMENT_CITY_NAMES:
-            if city.lower() in query.lower():
+            if city.lower() in query_lower:
                 return city
 
         return None
