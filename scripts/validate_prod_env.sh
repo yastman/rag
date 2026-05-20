@@ -10,7 +10,7 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-# Safe .env parsing — reject lines that look like shell commands
+# Safe .env parsing - reject lines that look like shell commands
 while IFS= read -r line || [[ -n "$line" ]]; do
   # skip empty lines and comments
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
@@ -38,41 +38,67 @@ if [ "${handoff_enabled}" = "true" ] && [ -z "${managers_group_id}" ]; then
   exit 1
 fi
 
-required_prod_vars=(
+# Core required vars (always needed for minimal RAG chatbot runtime)
+
+core_required_vars=(
   POSTGRES_PASSWORD
   REDIS_PASSWORD
   LITELLM_MASTER_KEY
   TELEGRAM_BOT_TOKEN
-  GDRIVE_SYNC_DIR
-  NEXTAUTH_SECRET
-  SALT
-  ENCRYPTION_KEY
-  CLICKHOUSE_PASSWORD
-  MINIO_ROOT_PASSWORD
-  LANGFUSE_REDIS_PASSWORD
 )
 
-for var_name in "${required_prod_vars[@]}"; do
-  if [ -z "${!var_name:-}" ]; then
-    echo "${var_name} is required in production env" >&2
-    exit 1
-  fi
-done
-
-# Minimum password complexity check (≥12 chars) for sensitive credentials
-password_vars=(
+core_password_vars=(
   POSTGRES_PASSWORD
   REDIS_PASSWORD
   LITELLM_MASTER_KEY
-  CLICKHOUSE_PASSWORD
-  MINIO_ROOT_PASSWORD
-  NEXTAUTH_SECRET
-  SALT
-  ENCRYPTION_KEY
-  LANGFUSE_REDIS_PASSWORD
 )
 
-for pw_var in "${password_vars[@]}"; do
+optional_profile_vars=()
+optional_password_vars=()
+
+compose_profiles=",${COMPOSE_PROFILES:-},"
+
+if [[ "${compose_profiles}" == *",ingest,"* || "${compose_profiles}" == *",full,"* || "${compose_profiles}" == *",vps-noncore,"* ]]; then
+  optional_profile_vars+=(GDRIVE_SYNC_DIR)
+fi
+
+if [[ "${compose_profiles}" == *",ml,"* || "${compose_profiles}" == *",full,"* || "${compose_profiles}" == *",vps-noncore,"* ]]; then
+  optional_profile_vars+=(
+    NEXTAUTH_SECRET
+    SALT
+    ENCRYPTION_KEY
+    CLICKHOUSE_PASSWORD
+    MINIO_ROOT_PASSWORD
+    LANGFUSE_REDIS_PASSWORD
+  )
+  optional_password_vars+=(
+    NEXTAUTH_SECRET
+    SALT
+    ENCRYPTION_KEY
+    CLICKHOUSE_PASSWORD
+    MINIO_ROOT_PASSWORD
+    LANGFUSE_REDIS_PASSWORD
+  )
+fi
+
+require_present() {
+  local var_name
+  for var_name in "$@"; do
+    if [ -z "${!var_name:-}" ]; then
+      echo "${var_name} is required in production env" >&2
+      exit 1
+    fi
+  done
+}
+
+require_present "${core_required_vars[@]}"
+
+if [ "${#optional_profile_vars[@]}" -gt 0 ]; then
+  require_present "${optional_profile_vars[@]}"
+fi
+
+# Minimum password complexity check (>=12 chars) for active sensitive credentials
+for pw_var in "${core_password_vars[@]}" "${optional_password_vars[@]}"; do
   pw_value="${!pw_var:-}"
   if [ "${#pw_value}" -lt 12 ]; then
     echo "${pw_var} must be at least 12 characters long (got ${#pw_value})" >&2
@@ -80,4 +106,22 @@ for pw_var in "${password_vars[@]}"; do
   fi
 done
 
-docker compose --env-file .env -f compose.yml config >/dev/null
+# VPS deploy guard: project name must be vps
+
+if [ "${COMPOSE_PROJECT_NAME:-vps}" != "vps" ]; then
+  echo "COMPOSE_PROJECT_NAME must be vps for VPS deploys" >&2
+  exit 1
+fi
+
+# Root disk usage deploy blocker
+
+vps_disk_usage_max_percent="${VPS_DISK_USAGE_MAX_PERCENT:-90}"
+root_usage_percent="$(df -P / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
+if [ -n "$root_usage_percent" ] && [ "$root_usage_percent" -gt "$vps_disk_usage_max_percent" ]; then
+  echo "root disk usage ${root_usage_percent}% exceeds ${vps_disk_usage_max_percent}% threshold; run minimal-runtime cleanup before deploy" >&2
+  exit 1
+fi
+
+# Validate merged Compose config
+
+docker compose --env-file .env -f compose.yml -f compose.vps.yml config >/dev/null
