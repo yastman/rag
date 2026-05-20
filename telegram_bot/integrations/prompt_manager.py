@@ -59,7 +59,35 @@ def get_prompt_with_config(
         Tuple of (compiled_prompt_text, config_dict).
         Returns empty dict for config when using fallback.
     """
-    return _fetch_prompt_core(name, fallback=fallback, cache_ttl=cache_ttl, variables=variables)
+    text, config, _ = _fetch_prompt_core(
+        name, fallback=fallback, cache_ttl=cache_ttl, variables=variables
+    )
+    return text, config
+
+
+def get_prompt_with_object(
+    name: str,
+    *,
+    fallback: str,
+    cache_ttl: int = DEFAULT_CACHE_TTL,
+    variables: dict[str, str] | None = None,
+) -> tuple[str, Any | None]:
+    """Return ``(compiled_prompt_string, raw_prompt_object_or_None)``.
+
+    The raw Prompt object is ``None`` when Langfuse is unavailable or the
+    prompt was loaded from the fallback. Callers can pass it as
+    ``langfuse_prompt=<prompt_obj>`` to ``chat.completions.create(...)`` on a
+    ``langfuse.openai`` client, or as ``prompt=<prompt_obj>`` to
+    ``langfuse.update_current_generation(...)`` for non-OpenAI providers.
+
+    Only managed Langfuse Prompt objects are linkable — fallback strings are
+    intentionally returned with ``None`` so callers can guard with
+    ``if prompt_obj is not None``.
+    """
+    text, _, prompt_obj = _fetch_prompt_core(
+        name, fallback=fallback, cache_ttl=cache_ttl, variables=variables
+    )
+    return text, prompt_obj
 
 
 @observe(name="get-prompt", capture_input=False, capture_output=False)
@@ -81,7 +109,9 @@ def get_prompt(
     Returns:
         Compiled prompt string from Langfuse, or the fallback.
     """
-    text, _ = _fetch_prompt_core(name, fallback=fallback, cache_ttl=cache_ttl, variables=variables)
+    text, _, _ = _fetch_prompt_core(
+        name, fallback=fallback, cache_ttl=cache_ttl, variables=variables
+    )
     return text
 
 
@@ -91,17 +121,22 @@ def _fetch_prompt_core(
     fallback: str,
     cache_ttl: int,
     variables: dict[str, str] | None = None,
-) -> tuple[str, dict[str, Any]]:
-    """Core prompt fetcher returning (text, config) tuple."""
+) -> tuple[str, dict[str, Any], Any | None]:
+    """Core prompt fetcher returning ``(text, config, prompt_obj_or_None)``.
+
+    ``prompt_obj`` is the raw Langfuse Prompt object (with ``.compile()``,
+    ``.version``, ``.config`` attributes) when fetched successfully; ``None``
+    otherwise (Langfuse unavailable, missing prompt, transient failure).
+    """
     vars_ = variables or {}
 
-    def _fallback_result() -> tuple[str, dict[str, Any]]:
+    def _fallback_result() -> tuple[str, dict[str, Any], Any | None]:
         _update_prompt_span_output(client, name=name, source="fallback")
-        return _apply_fallback_vars(fallback, vars_), {}
+        return _apply_fallback_vars(fallback, vars_), {}, None
 
     client = get_client()
     if client is None:
-        return _apply_fallback_vars(fallback, vars_), {}
+        return _apply_fallback_vars(fallback, vars_), {}, None
 
     if _is_temporarily_missing(name) or _is_transient_failure(name):
         return _fallback_result()
@@ -122,8 +157,8 @@ def _fetch_prompt_core(
             prompt_version=getattr(prompt, "version", None),
         )
         if vars_:
-            return str(prompt.compile(**vars_)), config
-        return str(prompt.compile()), config
+            return str(prompt.compile(**vars_)), config, prompt
+        return str(prompt.compile()), config, prompt
     except Exception as e:
         if _is_prompt_not_found(e):
             _missing_prompts_until[name] = time.monotonic() + cache_ttl
