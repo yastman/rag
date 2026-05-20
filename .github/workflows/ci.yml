@@ -78,6 +78,9 @@ jobs:
       - name: Install dev dependencies
         run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv sync --python 3.12 --frozen
 
+      - name: Verify test files are tracked
+        run: UV_PROJECT_ENVIRONMENT=.venv-py312 uv run python scripts/check_test_tracking.py
+
       - name: Unit tests (core)
         run: UV_PROJECT_ENVIRONMENT=.venv-py312 make test-unit
 
