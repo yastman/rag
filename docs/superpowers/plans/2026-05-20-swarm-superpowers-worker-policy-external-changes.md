@@ -32,3 +32,14 @@ No external changes have been applied yet.
   - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_swarm_plan_contract.py -q`
 - Result: `2 passed`
 - Notes: external swarm skill directories are not git repositories on this machine, so these file changes are recorded here rather than committed from the repo.
+
+***REMOVED******REMOVED******REMOVED*** 2026-05-20 Task 3: launcher Superpowers skill resolution
+
+- Files changed:
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_launch_opencode_worker.py`
+- Backup paths: none
+- Verification commands:
+  - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_launch_opencode_worker.py -q`
+- Result: `4 passed`
+- Notes: launcher now accepts `superpowers:<slug>` / `superpowers/<slug>`, searches OpenCode plugin and Codex Superpowers paths, rejects worker-forbidden Superpowers, and bundles namespaced skills under filesystem-safe names.
