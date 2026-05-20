@@ -14,6 +14,10 @@ skip_if_voyageai_unusable()
 pytestmark = pytest.mark.requires_extras
 
 
+pytest.importorskip("voyageai", reason="voyageai not installed (voyage extra)")
+pytestmark = pytest.mark.requires_extras
+
+
 class TestContextualizedEmbeddingService:
     """Tests for ContextualizedEmbeddingService initialization and configuration."""
 

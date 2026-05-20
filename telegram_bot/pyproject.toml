@@ -33,9 +33,6 @@ dependencies = [
     "phonenumbers>=9.0.25",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["telegram_bot"]
-
 [project.optional-dependencies]
 ***REMOVED*** Voyage AI (***REMOVED***1773) — optional. Only required for legacy GDrive ingestion,
 ***REMOVED*** contextualized-embedding paths, or `qdrant_writer` with
@@ -43,6 +40,12 @@ packages = ["telegram_bot"]
 voyage = [
     "voyageai>=0.3.0",
 ]
+all = [
+    "rag-telegram-bot[voyage]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["telegram_bot"]
 
 [build-system]
 requires = ["hatchling"]
