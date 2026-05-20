@@ -1148,3 +1148,142 @@ async def test_streaming_uses_send_message_draft() -> None:
     message.answer.assert_called_once()
     call_kwargs = message.answer.call_args
     assert "Часть 1 Часть 2" in str(call_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# #1666 — link Langfuse Prompts to generations via langfuse_prompt= kwarg
+# ---------------------------------------------------------------------------
+
+
+class _FakePrompt:
+    """Stand-in for a Langfuse-managed Prompt object."""
+
+    def __init__(self, text: str = "Compiled system prompt", version: int = 7):
+        self.compiled_text = text
+        self.version = version
+        self.config: dict[str, Any] = {}
+
+    def compile(self, **_kwargs: Any) -> str:
+        return self.compiled_text
+
+
+@pytest.mark.asyncio
+async def test_generate_response_forwards_langfuse_prompt_kwarg_when_prompt_object_available() -> (
+    None
+):
+    """The raw Langfuse Prompt object must be forwarded as ``langfuse_prompt=`` (#1666)."""
+    config, client = _make_non_streaming_config(answer="Ответ модели")
+    lf = MagicMock()
+    fake_prompt = _FakePrompt(text="Ассистент по недвижимость")
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_object",
+        return_value=("Ассистент по недвижимость", fake_prompt),
+    ):
+        await generate_response(
+            query="Что есть в Несебре?",
+            documents=[{"text": "Doc", "score": 0.9, "metadata": {"city": "Несебр"}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "Что есть в Несебре?"}],
+        )
+
+    client.chat.completions.create.assert_awaited_once()
+    call_kwargs = client.chat.completions.create.await_args.kwargs
+    assert call_kwargs.get("langfuse_prompt") is fake_prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is_none() -> None:
+    """No ``langfuse_prompt`` must be sent when prompt fell back to a hardcoded string (#1666)."""
+    config, client = _make_non_streaming_config(answer="Ответ")
+    lf = MagicMock()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_object",
+        return_value=("Hardcoded fallback prompt", None),
+    ):
+        await generate_response(
+            query="Тест",
+            documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "Тест"}],
+        )
+
+    client.chat.completions.create.assert_awaited_once()
+    call_kwargs = client.chat.completions.create.await_args.kwargs
+    assert "langfuse_prompt" not in call_kwargs
+
+
+@pytest.mark.asyncio
+async def test_generate_response_links_prompt_via_update_current_generation() -> None:
+    """When a Prompt object is available, ``update_current_generation`` is called with it (#1666).
+
+    Belt-and-braces backup for plain OpenAI clients (auto_trace=False) where the
+    helper strips the ``langfuse_prompt=`` kwarg.
+    """
+    config, _ = _make_non_streaming_config(answer="Ответ")
+    lf = MagicMock()
+    fake_prompt = _FakePrompt()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_object",
+        return_value=("Compiled", fake_prompt),
+    ):
+        await generate_response(
+            query="Тест",
+            documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "Тест"}],
+        )
+
+    update_calls = [
+        c for c in lf.update_current_generation.call_args_list if "prompt" in (c.kwargs or {})
+    ]
+    assert update_calls, "Expected update_current_generation(prompt=...) for #1666 linking"
+    assert update_calls[0].kwargs["prompt"] is fake_prompt
+
+
+@pytest.mark.asyncio
+async def test_generate_response_does_not_link_prompt_via_update_when_object_is_none() -> None:
+    """When prompt fell back to hardcoded string, no ``prompt=`` kwarg is sent (#1666)."""
+    config, _ = _make_non_streaming_config(answer="Ответ")
+    lf = MagicMock()
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_object",
+        return_value=("Hardcoded fallback", None),
+    ):
+        await generate_response(
+            query="Тест",
+            documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
+            config=config,
+            lf_client=lf,
+            raw_messages=[{"role": "user", "content": "Тест"}],
+        )
+
+    for call in lf.update_current_generation.call_args_list:
+        assert "prompt" not in (call.kwargs or {})
+
+
+@pytest.mark.asyncio
+async def test_generate_response_works_when_langfuse_client_unavailable() -> None:
+    """Prompt linking must degrade gracefully when Langfuse client is unavailable."""
+    config, client = _make_non_streaming_config(answer="Ответ без tracing")
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_object",
+        return_value=("Hardcoded fallback", None),
+    ):
+        result = await generate_response(
+            query="Тест",
+            documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
+            config=config,
+            get_lf_client=lambda: None,
+            raw_messages=[{"role": "user", "content": "Тест"}],
+        )
+
+    assert result["response"] == "Ответ без tracing"
+    client.chat.completions.create.assert_awaited_once()
