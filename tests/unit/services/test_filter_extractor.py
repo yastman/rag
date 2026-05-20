@@ -149,6 +149,29 @@ class TestFilterExtractorCity:
         assert _ext.extract_filters(query)["city"] == city
 
     @pytest.mark.parametrize(
+        ("query", "city"),
+        [
+            ***REMOVED*** Russian morphological forms — were lost from cache signatures (***REMOVED***1607)
+            ("квартира в Святом Власе", "Свети Влас"),
+            ("квартира в святом власе", "Свети Влас"),
+            ("дом на свети власе", "Свети Влас"),
+            ("апартаменты на солнечном берегу", "Солнечный берег"),
+            ("квартира на солнечного берега", "Солнечный берег"),
+            ***REMOVED*** English aliases
+            ("apartment in sunny beach", "Солнечный берег"),
+            ("villa in elenite", "Элените"),
+            ("санни бич студия", "Солнечный берег"),
+        ],
+    )
+    def test_city_alias_resolves_to_canonical_name(self, query: str, city: str) -> None:
+        """City aliases (RU morphological forms + EN) must resolve to canonical
+        names so semantic-cache filter signatures stay stable across phrasings.
+
+        Regression for ***REMOVED***1607.
+        """
+        assert _ext.extract_filters(query)["city"] == city
+
+    @pytest.mark.parametrize(
         "query",
         ["двукомнатная квартира до 50000", "квартира в Пловдив"],
     )
