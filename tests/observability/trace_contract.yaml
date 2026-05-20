@@ -270,6 +270,27 @@ spans:
     - groq-contextualize-batch
     - groq-contextualize-sync
 
+  observability_wrappers:
+    - crm-contact-note-prompt
+    - crm-lead-note-prompt
+    - crm-lead-task-prompt
+    - crm-task-create
+    - crm-task-edit-date
+    - crm-task-edit-field
+    - crm-task-edit-prompt
+    - crm-task-edit-text
+    - crm-task-postpone
+    - hyde-generate-document
+    - job-funnel-rollup
+    - job-hot-lead-notify
+    - job-lead-score-sync
+    - job-nurturing-dispatch
+    - llm-service-generate
+    - llm-service-generate-answer
+    - llm-service-stream-answer
+    - query-analyzer
+    - session-summary-llm
+
 # Spans that must set capture_input=False, capture_output=False in production.
 # These spans handle PII, raw embeddings, or security-sensitive payloads.
 sensitive_spans:
@@ -422,6 +443,26 @@ sensitive_spans:
   - groq-contextualize
   - groq-contextualize-batch
   - groq-contextualize-sync
+  # observability_wrappers (user messages, CRM notes/tasks, job payloads)
+  - crm-contact-note-prompt
+  - crm-lead-note-prompt
+  - crm-lead-task-prompt
+  - crm-task-create
+  - crm-task-edit-date
+  - crm-task-edit-field
+  - crm-task-edit-prompt
+  - crm-task-edit-text
+  - crm-task-postpone
+  - hyde-generate-document
+  - job-funnel-rollup
+  - job-hot-lead-notify
+  - job-lead-score-sync
+  - job-nurturing-dispatch
+  - llm-service-generate
+  - llm-service-generate-answer
+  - llm-service-stream-answer
+  - query-analyzer
+  - session-summary-llm
 
 scores:
   core_rag:
