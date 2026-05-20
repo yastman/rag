@@ -8,6 +8,7 @@ Runs every 5 minutes and checks:
 Logs are picked up by Promtail -> Loki -> Alertmanager.
 """
 
+import datetime as dt
 import logging
 
 import redis.asyncio as aioredis
@@ -64,6 +65,7 @@ class RedisHealthMonitor:
             seconds=self.check_interval,
             id="redis-health-monitor",
             replace_existing=True,
+            next_run_time=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=10),
         )
         self._scheduler.start()
         logger.info(
@@ -89,6 +91,14 @@ class RedisHealthMonitor:
         if self._redis is None:
             return
 
+        try:
+            await self._check_health_inner()
+        except Exception:
+            logger.exception("Redis health check failed")
+            raise
+
+    async def _check_health_inner(self):
+        """Inner health check logic."""
         try:
             info_memory = await self._redis.info("memory")
             info_stats = await self._redis.info("stats")
