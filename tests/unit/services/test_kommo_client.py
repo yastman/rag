@@ -522,6 +522,36 @@ class TestKommoOAuthAuthFlow:
 
         mock_token_store.force_refresh.assert_awaited_once()
 
+    async def test_async_auth_flow_deduplicates_concurrent_401_refreshes(
+        self, mock_token_store
+    ) -> None:
+        import httpx
+
+        from telegram_bot.services.kommo_client import KommoOAuthAuth
+
+        mock_token_store.get_valid_token.side_effect = [
+            "stale-token",
+            "stale-token",
+            "stale-token",
+            "refreshed-token",
+        ]
+        mock_token_store.force_refresh.return_value = "refreshed-token"
+        auth = KommoOAuthAuth(token_store=mock_token_store)
+        first_request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
+        second_request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/2")
+
+        first_flow = auth.async_auth_flow(first_request)
+        second_flow = auth.async_auth_flow(second_request)
+        await first_flow.__anext__()
+        await second_flow.__anext__()
+
+        first_retry = await first_flow.asend(httpx.Response(401, request=first_request))
+        second_retry = await second_flow.asend(httpx.Response(401, request=second_request))
+
+        assert first_retry.headers["Authorization"] == "Bearer refreshed-token"
+        assert second_retry.headers["Authorization"] == "Bearer refreshed-token"
+        mock_token_store.force_refresh.assert_awaited_once()
+
     async def test_async_auth_flow_swallows_runtime_error_from_refresh(
         self, mock_token_store
     ) -> None:

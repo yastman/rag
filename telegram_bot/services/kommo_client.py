@@ -54,8 +54,9 @@ class KommoOAuthAuth(httpx.Auth):
        without re-yielding so the original 401 response surfaces to the
        caller as a normal :class:`httpx.HTTPStatusError`.
 
-    Concurrent calls share an :class:`asyncio.Lock` so multiple in-flight
-    requests trigger at most one refresh.
+    Concurrent calls re-check the current token inside an :class:`asyncio.Lock`
+    so multiple in-flight 401s caused by the same stale bearer trigger at most
+    one refresh.
     """
 
     def __init__(self, *, token_store: KommoTokenStoreProtocol) -> None:
@@ -74,7 +75,11 @@ class KommoOAuthAuth(httpx.Auth):
 
         try:
             async with self._lock:
-                token = await self._token_store.force_refresh()
+                current_token = await self._token_store.get_valid_token()
+                if current_token != token:
+                    token = current_token
+                else:
+                    token = await self._token_store.force_refresh()
         except RuntimeError:
             # No refresh_token (seeded long-lived) — surface the original 401.
             return
