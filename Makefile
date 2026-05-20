@@ -6,7 +6,7 @@
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
-	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
+	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
 	docs-check \
@@ -1135,6 +1135,16 @@ git-hygiene: ## Git hygiene report (merged branches, stale worktrees, transient 
 git-hygiene-fix: ## Git hygiene safe cleanup preview (dry-run)
 	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
 	uv run python scripts/git_hygiene.py --fix --dry-run || true
+	@echo ""
+
+pr-hygiene: ## PR queue triage report (open PRs, blocked reasons, SLA)
+	@echo "$(BLUE)Running PR queue triage...$(NC)"
+	uv run python scripts/pr_queue_audit.py || true
+	@echo ""
+
+issue-hygiene: ## Issue queue hygiene report (no-label / no-assignee / no-lane / stale)
+	@echo "$(BLUE)Running issue queue hygiene audit...$(NC)"
+	uv run python scripts/issue_queue_audit.py || true
 	@echo ""
 
 repo-cleanup: ## Full repo cleanup: branches, worktrees, stashes (dry-run)
