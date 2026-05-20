@@ -125,61 +125,24 @@ class TestGenerateQueriesForArticle:
     """Tests for generate_queries_for_article function."""
 
     async def test_generate_queries_success(self, mock_imports):
-        """Test successful query generation for an article."""
-        # Mock LLM response
-        llm_response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": json.dumps(
-                            {
-                                "direct": "статья 115",
-                                "semantic": "наказание за убийство",
-                                "paraphrased": "что грозит за лишение жизни",
-                            }
-                        )
-                    }
-                }
-            ]
-        }
+        """Test successful query generation for an article using instructor client."""
+        from src.evaluation.generate_test_queries import (
+            GeneratedQueries,
+            generate_queries_for_article,
+        )
 
-        mock_session = AsyncMock()
-        mock_response = AsyncMock()
-        mock_response.json = AsyncMock(return_value=llm_response)
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=GeneratedQueries(
+                direct="статья 115",
+                semantic="наказание за убийство",
+                paraphrased="что грозит за лишение жизни",
+            )
+        )
 
-        # Create async context manager mocks
-        mock_context = AsyncMock()
-        mock_context.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_context.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session.post.return_value = mock_context
-
-        # Simulate generate_queries_for_article logic
-        article_num = "115"
-
-        content = llm_response["choices"][0]["message"]["content"]
-        queries_dict = json.loads(content)
-
-        queries = [
-            {
-                "query": queries_dict["direct"],
-                "type": "direct",
-                "expected_article": article_num,
-                "difficulty": "easy",
-            },
-            {
-                "query": queries_dict["semantic"],
-                "type": "semantic",
-                "expected_article": article_num,
-                "difficulty": "medium",
-            },
-            {
-                "query": queries_dict["paraphrased"],
-                "type": "paraphrased",
-                "expected_article": article_num,
-                "difficulty": "hard",
-            },
-        ]
+        queries = await generate_queries_for_article(
+            mock_client, "openai/gpt-oss-120b", "115", "Article 115 text content"
+        )
 
         assert len(queries) == 3
         assert queries[0]["type"] == "direct"
@@ -201,26 +164,6 @@ class TestGenerateQueriesForArticle:
         text_preview = short_text[:1000] if len(short_text) > 1000 else short_text
 
         assert text_preview == short_text
-
-    def test_json_extraction_from_response(self):
-        """Test JSON is correctly extracted from LLM response."""
-        content = """Here is the JSON response:
-{
-  "direct": "query 1",
-  "semantic": "query 2",
-  "paraphrased": "query 3"
-}
-Some additional text"""
-
-        start_idx = content.find("{")
-        end_idx = content.rfind("}") + 1
-        json_str = content[start_idx:end_idx]
-
-        queries_dict = json.loads(json_str)
-
-        assert queries_dict["direct"] == "query 1"
-        assert queries_dict["semantic"] == "query 2"
-        assert queries_dict["paraphrased"] == "query 3"
 
     def test_query_object_structure(self):
         """Test generated query objects have correct structure."""
@@ -257,63 +200,89 @@ class TestGenerateAllQueries:
     """Tests for generate_all_queries function."""
 
     async def test_generate_all_queries_success(self, mock_imports):
-        """Test generating queries for multiple articles."""
+        """Test generating queries for multiple articles with instructor client."""
+        from src.evaluation.generate_test_queries import (
+            GeneratedQueries,
+            generate_all_queries,
+        )
+
+        mock_instructor_client = MagicMock()
+        mock_instructor_client.chat.completions.create = AsyncMock(
+            return_value=GeneratedQueries(
+                direct="прямой запрос",
+                semantic="семантический запрос",
+                paraphrased="перефразированный запрос",
+            )
+        )
+
         article_texts = {
             "115": "Murder text",
             "121": "Injury text",
         }
 
-        # Simulate query generation
-        all_queries = []
-        for article_num in article_texts:
-            queries = [
-                {
-                    "query": f"direct {article_num}",
-                    "type": "direct",
-                    "expected_article": article_num,
-                },
-                {
-                    "query": f"semantic {article_num}",
-                    "type": "semantic",
-                    "expected_article": article_num,
-                },
-                {
-                    "query": f"paraphrased {article_num}",
-                    "type": "paraphrased",
-                    "expected_article": article_num,
-                },
-            ]
-            all_queries.extend(queries)
+        with patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod:
+            mock_instructor_mod.from_openai.return_value = mock_instructor_client
 
-        assert len(all_queries) == 6  # 3 queries per article * 2 articles
-        assert all_queries[0]["expected_article"] == "115"
-        assert all_queries[3]["expected_article"] == "121"
+            result = await generate_all_queries(
+                article_texts,
+                model="openai/gpt-oss-120b",
+                max_concurrent=5,
+                base_url="http://test.api/v1",
+                api_key="test-key",
+            )
+
+        assert len(result) == 6  # 3 queries per article * 2 articles
+        assert result[0]["expected_article"] == "115"
+        assert result[3]["expected_article"] == "121"
 
     async def test_generate_queries_with_errors(self, mock_imports):
-        """Test error handling during query generation."""
+        """Test error handling during query generation through real generate_all_queries."""
+        from src.evaluation.generate_test_queries import (
+            GeneratedQueries,
+            generate_all_queries,
+        )
+
+        call_count = 0
+
+        async def _create_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Determine which article based on the prompt content
+            content = kwargs.get("messages", [{}])[0].get("content", "")
+            if "999" in content:
+                raise ValueError("LLM API error")
+            return GeneratedQueries(
+                direct="прямой запрос",
+                semantic="семантический запрос",
+                paraphrased="перефразированный запрос",
+            )
+
+        mock_instructor_client = MagicMock()
+        mock_instructor_client.chat.completions.create = AsyncMock(side_effect=_create_side_effect)
+
         article_texts = {
             "115": "Normal text",
             "999": "Error text",
             "121": "Normal text",
         }
 
-        all_queries = []
-        errors = []
+        with patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod:
+            mock_instructor_mod.from_openai.return_value = mock_instructor_client
 
-        for article_num in article_texts:
-            try:
-                if article_num == "999":
-                    raise ValueError("LLM API error")
-                queries = [
-                    {"query": f"q {article_num}", "type": "direct", "expected_article": article_num}
-                ]
-                all_queries.extend(queries)
-            except ValueError as e:
-                errors.append(str(e))
+            result = await generate_all_queries(
+                article_texts,
+                model="openai/gpt-oss-120b",
+                max_concurrent=5,
+                base_url="http://test.api/v1",
+                api_key="test-key",
+            )
 
-        assert len(all_queries) == 2  # Only 115 and 121
-        assert len(errors) == 1
-        assert "LLM API error" in errors[0]
+        # Only articles 115 and 121 succeed (3 queries each)
+        assert len(result) == 6
+        expected_articles = {q["expected_article"] for q in result}
+        assert "115" in expected_articles
+        assert "121" in expected_articles
+        assert "999" not in expected_articles
 
 
 class TestSelectRepresentativeArticles:
@@ -498,18 +467,21 @@ class TestLLMClientConfiguration:
         assert max_concurrent == 5
 
     def test_llm_request_structure(self):
-        """Test LLM request has correct structure."""
-        request = {
+        """Test instructor client is called with correct parameters."""
+        from src.evaluation.generate_test_queries import GeneratedQueries
+
+        # Verify expected call parameters for instructor
+        expected_kwargs = {
             "model": "openai/gpt-oss-120b",
-            "messages": [{"role": "user", "content": "Generate queries..."}],
+            "response_model": GeneratedQueries,
             "temperature": 0.7,
-            "max_tokens": 1024,
+            "max_retries": 2,
         }
 
-        assert request["model"] == "openai/gpt-oss-120b"
-        assert request["temperature"] == 0.7
-        assert len(request["messages"]) == 1
-        assert request["messages"][0]["role"] == "user"
+        assert expected_kwargs["model"] == "openai/gpt-oss-120b"
+        assert expected_kwargs["response_model"] is GeneratedQueries
+        assert expected_kwargs["temperature"] == 0.7
+        assert expected_kwargs["max_retries"] == 2
 
 
 class TestErrorHandling:
@@ -528,18 +500,160 @@ class TestErrorHandling:
 
             fetch_article_texts("test_collection", ["115"])
 
-    def test_invalid_json_response(self):
-        """Test handling invalid JSON in LLM response."""
-        invalid_content = "This is not valid JSON"
+    def test_missing_model_fields_raise_validation_error(self):
+        """Test that missing fields in GeneratedQueries raise ValidationError."""
+        from pydantic import ValidationError
 
-        with pytest.raises(ValueError):
-            start_idx = invalid_content.find("{")
-            if start_idx == -1:
-                raise ValueError("No JSON found in response")
+        from src.evaluation.generate_test_queries import GeneratedQueries
 
-    def test_missing_json_keys(self):
-        """Test handling missing keys in LLM JSON response."""
-        partial_json = {"direct": "query 1"}  # Missing semantic and paraphrased
+        with pytest.raises(ValidationError):
+            GeneratedQueries(direct="query 1")  # type: ignore[call-arg]
 
-        with pytest.raises(KeyError):
-            _ = partial_json["semantic"]
+
+class TestStructuredOutputParsing:
+    """Regression tests for the instructor-based structured output refactor."""
+
+    def test_generated_queries_model_valid(self):
+        """Test GeneratedQueries model with valid input succeeds."""
+        from src.evaluation.generate_test_queries import GeneratedQueries
+
+        result = GeneratedQueries(
+            direct="статья 115",
+            semantic="наказание за убийство",
+            paraphrased="что грозит за лишение жизни",
+        )
+
+        assert result.direct == "статья 115"
+        assert result.semantic == "наказание за убийство"
+        assert result.paraphrased == "что грозит за лишение жизни"
+
+    def test_generated_queries_model_missing_field(self):
+        """Test that missing fields raise ValidationError."""
+        from pydantic import ValidationError
+
+        from src.evaluation.generate_test_queries import GeneratedQueries
+
+        with pytest.raises(ValidationError):
+            GeneratedQueries(direct="query 1", semantic="query 2")  # type: ignore[call-arg]
+
+        with pytest.raises(ValidationError):
+            GeneratedQueries(direct="query 1")  # type: ignore[call-arg]
+
+        with pytest.raises(ValidationError):
+            GeneratedQueries()  # type: ignore[call-arg]
+
+    async def test_structured_parsing_returns_correct_shape(self, mock_imports):
+        """Test generate_queries_for_article returns list of 3 dicts with correct keys."""
+        from src.evaluation.generate_test_queries import (
+            GeneratedQueries,
+            generate_queries_for_article,
+        )
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=GeneratedQueries(
+                direct="статья 121",
+                semantic="тяжкие телесные повреждения",
+                paraphrased="что будет за нанесение тяжких травм",
+            )
+        )
+
+        result = await generate_queries_for_article(
+            mock_client, "openai/gpt-oss-120b", "121", "Article 121 about injuries..."
+        )
+
+        # Correct number of queries
+        assert len(result) == 3
+
+        # Each dict has required keys
+        required_keys = {"query", "type", "expected_article", "difficulty"}
+        for query_dict in result:
+            assert set(query_dict.keys()) == required_keys
+
+        # Type and difficulty mappings are correct
+        assert result[0]["type"] == "direct"
+        assert result[0]["difficulty"] == "easy"
+        assert result[1]["type"] == "semantic"
+        assert result[1]["difficulty"] == "medium"
+        assert result[2]["type"] == "paraphrased"
+        assert result[2]["difficulty"] == "hard"
+
+        # Expected article is set correctly
+        assert all(q["expected_article"] == "121" for q in result)
+
+        # Query content matches model output
+        assert result[0]["query"] == "статья 121"
+        assert result[1]["query"] == "тяжкие телесные повреждения"
+        assert result[2]["query"] == "что будет за нанесение тяжких травм"
+
+    async def test_invalid_model_output_raises(self, mock_imports):
+        """Test that exception from instructor propagates to caller."""
+        from src.evaluation.generate_test_queries import generate_queries_for_article
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("Max retries exceeded: validation failed")
+        )
+
+        with pytest.raises(Exception, match="Max retries exceeded"):
+            await generate_queries_for_article(
+                mock_client, "openai/gpt-oss-120b", "115", "Some article text"
+            )
+
+    async def test_generate_all_queries_creates_instructor_client(self, mock_imports):
+        """Test that generate_all_queries creates instructor client with correct params."""
+        from src.evaluation.generate_test_queries import (
+            GeneratedQueries,
+            generate_all_queries,
+        )
+
+        mock_instructor_client = MagicMock()
+        mock_instructor_client.chat.completions.create = AsyncMock(
+            return_value=GeneratedQueries(
+                direct="direct query",
+                semantic="semantic query",
+                paraphrased="paraphrased query",
+            )
+        )
+
+        with (
+            patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod,
+            patch("src.evaluation.generate_test_queries.AsyncOpenAI") as mock_openai_cls,
+        ):
+            mock_instructor_mod.from_openai.return_value = mock_instructor_client
+            mock_openai_instance = MagicMock()
+            mock_openai_cls.return_value = mock_openai_instance
+
+            await generate_all_queries(
+                {"115": "Article text"},
+                model="openai/gpt-oss-120b",
+                base_url="http://custom.api/v1",
+                api_key="custom-key",
+            )
+
+            # Verify AsyncOpenAI was created with correct params
+            mock_openai_cls.assert_called_once_with(
+                base_url="http://custom.api/v1", api_key="custom-key"
+            )
+
+            # Verify instructor.from_openai was called with the AsyncOpenAI instance
+            mock_instructor_mod.from_openai.assert_called_once_with(mock_openai_instance)
+
+    def test_generated_queries_model_extra_fields_ignored(self):
+        """Test that extra fields do not break GeneratedQueries model."""
+        from src.evaluation.generate_test_queries import GeneratedQueries
+
+        # Pydantic v2 default ignores extra fields
+        result = GeneratedQueries.model_validate(
+            {
+                "direct": "query 1",
+                "semantic": "query 2",
+                "paraphrased": "query 3",
+                "extra_field": "ignored",
+            }
+        )
+
+        assert result.direct == "query 1"
+        assert result.semantic == "query 2"
+        assert result.paraphrased == "query 3"
+        assert not hasattr(result, "extra_field")
