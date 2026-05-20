@@ -31,6 +31,7 @@ from aiogram.types import (
     Message,
 )
 from aiogram.utils.chat_action import ChatActionSender
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
@@ -759,7 +760,8 @@ class PropertyBot:
         self._topic_manager: Any = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
         self._polling_lock: RedisPollingLock | None = None
-        self._polling_lock_task: asyncio.Task[None] | None = None
+        self._polling_lock_scheduler: AsyncIOScheduler | None = None
+        self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
         ***REMOVED*** Track initialization state
@@ -5162,52 +5164,53 @@ class PropertyBot:
             )
             self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
             await self._polling_lock.acquire(self._polling_lock_owner)
-            self._polling_lock_task = asyncio.create_task(
-                self._polling_lock_heartbeat(),
-                name="polling-lock-heartbeat",
+            refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+            self._polling_lock_scheduler = AsyncIOScheduler(
+                job_defaults={
+                    "coalesce": True,
+                    "max_instances": 1,
+                    "misfire_grace_time": refresh_interval,
+                }
             )
+            self._polling_lock_scheduler.add_job(
+                self._polling_lock_heartbeat_tick,
+                "interval",
+                seconds=refresh_interval,
+                id="polling-lock-heartbeat",
+                replace_existing=True,
+            )
+            self._polling_lock_scheduler.start()
 
         try:
             await self.dp.start_polling(self.bot)
         finally:
-            if self._polling_lock_task is not None:
-                self._polling_lock_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._polling_lock_task
-                self._polling_lock_task = None
+            if self._polling_lock_scheduler is not None:
+                self._polling_lock_scheduler.shutdown(wait=False)
+                self._polling_lock_scheduler = None
 
-    async def _polling_lock_heartbeat(self) -> None:
-        """Keep the Redis lease alive while polling is active."""
+    async def _polling_lock_heartbeat_tick(self) -> None:
+        """Single heartbeat tick: refresh the Redis polling lock."""
         if self._polling_lock is None:
             return
-
-        refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
-        consecutive_failures = 0
         try:
-            while True:
-                await asyncio.sleep(refresh_interval)
-                try:
-                    await self._polling_lock.refresh()
-                except Exception:
-                    consecutive_failures += 1
-                    if consecutive_failures < _POLLING_LOCK_MAX_REFRESH_FAILURES:
-                        logger.warning(
-                            "Polling lock heartbeat refresh failed (%d/%d); retrying",
-                            consecutive_failures,
-                            _POLLING_LOCK_MAX_REFRESH_FAILURES,
-                            exc_info=True,
-                        )
-                        continue
-                    logger.exception(
-                        "Polling lock heartbeat failed %d times; stopping polling",
-                        _POLLING_LOCK_MAX_REFRESH_FAILURES,
-                    )
-                    with contextlib.suppress(Exception):
-                        await self.dp.stop_polling()
-                    return
-                consecutive_failures = 0
-        except asyncio.CancelledError:
-            raise
+            await self._polling_lock.refresh()
+            self._polling_lock_consecutive_failures = 0
+        except Exception:
+            self._polling_lock_consecutive_failures += 1
+            if self._polling_lock_consecutive_failures < _POLLING_LOCK_MAX_REFRESH_FAILURES:
+                logger.warning(
+                    "Polling lock heartbeat refresh failed (%d/%d); retrying",
+                    self._polling_lock_consecutive_failures,
+                    _POLLING_LOCK_MAX_REFRESH_FAILURES,
+                    exc_info=True,
+                )
+                return
+            logger.exception(
+                "Polling lock heartbeat failed %d times; stopping polling",
+                _POLLING_LOCK_MAX_REFRESH_FAILURES,
+            )
+            with contextlib.suppress(Exception):
+                await self.dp.stop_polling()
 
     async def stop(self):
         """Stop bot and cleanup."""
@@ -5217,11 +5220,9 @@ class PropertyBot:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._miniapp_subscriber_task
             self._miniapp_subscriber_task = None
-        if self._polling_lock_task is not None:
-            self._polling_lock_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._polling_lock_task
-            self._polling_lock_task = None
+        if self._polling_lock_scheduler is not None:
+            self._polling_lock_scheduler.shutdown(wait=False)
+            self._polling_lock_scheduler = None
         if self._polling_lock is not None and self._polling_lock_owner is not None:
             try:
                 await self._polling_lock.release()
