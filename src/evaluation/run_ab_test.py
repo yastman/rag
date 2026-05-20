@@ -21,9 +21,6 @@ from datetime import datetime
 
 import numpy as np
 
-from src.evaluation.evaluator import SearchEvaluator
-from src.evaluation.search_engines import create_search_engine
-
 
 def run_ab_test(
     queries_file: str,
@@ -54,6 +51,9 @@ def run_ab_test(
     if not queries:
         print("⚠️  No queries found. Aborting A/B test.")
         return {"baseline": {}, "hybrid": {}, "dbsf_colbert": {}, "comparisons": {}, "reports": {}}
+
+    from src.evaluation.evaluator import SearchEvaluator
+    from src.evaluation.search_engines import create_search_engine
 
     print()
 
