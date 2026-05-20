@@ -1,5 +1,8 @@
 """Tests for QueryPreprocessor."""
 
+import re
+from unittest.mock import patch
+
 import pytest
 
 from telegram_bot.services.query_preprocessor import QueryPreprocessor
@@ -34,6 +37,97 @@ class TestQueryPreprocessorTranslit:
         result = _preprocessor.normalize_translit("apartments in Burgas or Varna")
         assert "Бургас" in result
         assert "Варна" in result
+
+
+class TestQueryPreprocessorTranslitPrecompiled:
+    """Tests for precompiled transliteration patterns (issue #1644).
+
+    The static TRANSLIT_MAP allows pattern compilation to be hoisted out of the
+    per-query hot path. These tests pin the contract:
+
+    1. ``normalize_translit`` MUST NOT call ``re.compile`` after the class /
+       module has been imported (compilation is a one-time cost).
+    2. Output for every supported Latin -> Cyrillic mapping MUST stay
+       byte-identical to the legacy per-call ``re.compile`` implementation.
+    3. The IGNORECASE flag MUST be preserved (e.g. ``"BURGAS"`` -> ``"Бургас"``).
+    """
+
+    def test_translit_patterns_compiled_once(self):
+        """``re.compile`` must NOT be invoked inside the per-query hot path.
+
+        Patterns derived from the static ``TRANSLIT_MAP`` should be compiled
+        once (at class definition / module import) and reused thereafter. We
+        patch ``re.compile`` AFTER import, then call ``normalize_translit``
+        many times and assert no compilations were triggered.
+        """
+        pp = QueryPreprocessor()
+        # Warm up to defeat any lazy first-call init; subsequent calls must hit
+        # zero compilations regardless.
+        pp.normalize_translit("warmup Burgas")
+
+        queries = [
+            "Burgas",
+            "Sunny Beach",
+            "Sveti Vlas Albena Nesebar",
+            "BURGAS apartment in Varna",
+            "квартира в Sofia рядом с Albena",
+            "Golden Sands hotel in Sozopol",
+        ]
+
+        with patch("re.compile", wraps=re.compile) as mock_compile:
+            for q in queries:
+                pp.normalize_translit(q)
+            assert mock_compile.call_count == 0, (
+                "normalize_translit should not call re.compile in the hot path; "
+                f"got {mock_compile.call_count} compilations across "
+                f"{len(queries)} queries. Precompile patterns at class/module "
+                "load time."
+            )
+
+    @pytest.mark.parametrize(
+        ("latin_input", "expected_output"),
+        [
+            # Cities (single-token)
+            pytest.param("apartments in Burgas", "apartments in Бургас", id="burgas"),
+            pytest.param("flights to Varna", "flights to Варна", id="varna"),
+            pytest.param("hotel in Sofia", "hotel in София", id="sofia"),
+            # Resorts (multi-word phrase — must match as a phrase)
+            pytest.param(
+                "Sunny Beach apartments",
+                "Солнечный берег apartments",
+                id="sunny_beach_phrase",
+            ),
+            pytest.param(
+                "villa in Sveti Vlas",
+                "villa in Святой Влас",
+                id="sveti_vlas_phrase",
+            ),
+            # Variant spellings collapse to the same Cyrillic form
+            pytest.param("Nessebar old town", "Несебър old town", id="nessebar_variant"),
+            pytest.param("Golden Sands hotel", "Золотые пески hotel", id="golden_sands"),
+        ],
+    )
+    def test_translit_output_unchanged(self, latin_input, expected_output):
+        """Byte-identical output guarantee vs. the legacy implementation.
+
+        These exact strings were captured from the per-call ``re.compile``
+        version — any deviation here is a behaviour regression.
+        """
+        assert _preprocessor.normalize_translit(latin_input) == expected_output
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            pytest.param("BURGAS", "Бургас", id="all_upper"),
+            pytest.param("burgas", "Бургас", id="all_lower"),
+            pytest.param("BuRgAs", "Бургас", id="mixed_case"),
+            pytest.param("SUNNY BEACH", "Солнечный берег", id="upper_phrase"),
+            pytest.param("sunny beach", "Солнечный берег", id="lower_phrase"),
+        ],
+    )
+    def test_translit_handles_case_insensitivity(self, query, expected):
+        """The IGNORECASE flag must be preserved across the refactor."""
+        assert _preprocessor.normalize_translit(query) == expected
 
 
 class TestQueryPreprocessorRRFWeights:
