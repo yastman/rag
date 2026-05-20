@@ -6,7 +6,7 @@ import asyncio
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -57,7 +57,7 @@ async def run_single_test(
 
     try:
         ***REMOVED*** Record start time for trace validation
-        test_started_at = datetime.utcnow()
+        test_started_at = datetime.now(UTC)
 
         ***REMOVED*** Determine scenario kind for trace validation
         delivery = getattr(scenario, "delivery", "text")
