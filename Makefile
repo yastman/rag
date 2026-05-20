@@ -279,6 +279,19 @@ test-all: ## Run all tests with coverage threshold (CI mode)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/ -v -n auto --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
 	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
 
+.PHONY: test-frontend test-all-local
+
+test-frontend: ## Run Mini App frontend tests (Vitest)
+	@echo "$(BLUE)Running Mini App frontend tests...$(NC)"
+	cd mini_app/frontend && npm test
+	@echo "$(GREEN)✓ Mini App frontend tests complete$(NC)"
+
+test-all-local: ## Run all local test suites (pytest all tiers + frontend)
+	@echo "$(BLUE)Running all local test suites...$(NC)"
+	make test-full
+	make test-frontend
+	@echo "$(GREEN)✓ All local test suites complete$(NC)"
+
 # =============================================================================
 # SMOKE & LOAD TESTS
 # =============================================================================
