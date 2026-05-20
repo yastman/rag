@@ -10,6 +10,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0004 - RedisVL semantic cache](0004-redisvl-semantic-cache.md)
 - [0005 - Hybrid search with RRF](0005-hybrid-search-rrf.md)
 - [0006 - Kommo CRM](0006-kommo-crm.md)
+- [0009 - LangGraph `Send` fan-out scoping](0009-langgraph-send-fanout-scoping.md)
 
 ***REMOVED******REMOVED*** When To Use
 
