@@ -66,7 +66,7 @@ class TestBGEM3Embeddings:
             assert "/encode/dense" in call_args[0][0]
 
     async def test_batching(self):
-        """Test that documents are batched correctly."""
+        """Test that all texts are sent in a single request with batch_size as server hint."""
         call_count = 0
 
         async def mock_post(url, json=None, **kwargs):
@@ -84,7 +84,7 @@ class TestBGEM3Embeddings:
             result = await emb.aembed_documents(["a", "b", "c"])
 
         assert len(result) == 3
-        assert call_count == 2  ***REMOVED*** 2 texts + 1 text
+        assert call_count == 1  ***REMOVED*** single request with batch_size=2 as server hint
 
 
 class TestBGEM3SparseEmbeddings:
