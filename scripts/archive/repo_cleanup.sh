@@ -187,7 +187,7 @@ echo
 
 ***REMOVED*** ---- Summary ----
 echo "=== Summary ==="
-echo "  Remote branches: $(git branch -r | grep -v HEAD | wc -l)"
+echo "  Remote branches: $(git branch -r | grep -vc HEAD)"
 echo "  Local branches:  $(git branch | wc -l)"
 echo "  Worktrees:       $(git worktree list | wc -l)"
 echo "  Stashes:         $(git stash list | wc -l)"
