@@ -270,32 +270,28 @@ class TestBGEM3Client:
         assert len(result.lexical_weights) == 1
 
     async def test_encode_dense_batching(self, client):
-        """Large input gets split into batches."""
+        """batch_size is passed as server hint in a single request."""
         from telegram_bot.services.bge_m3_client import BGEM3Client
 
         small_client = BGEM3Client(base_url="http://localhost:8000", batch_size=2)
 
-        call_count = 0
-
-        async def mock_post(url, json=None):
-            nonlocal call_count
-            call_count += 1
-            resp = MagicMock()
-            resp.status_code = 200
-            resp.raise_for_status = MagicMock()
-            n = len(json["texts"])
-            resp.json.return_value = {"dense_vecs": [[0.1] * 1024] * n}
-            return resp
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"dense_vecs": [[0.1] * 1024] * 5}
 
         mock_http = AsyncMock()
-        mock_http.post = mock_post
+        mock_http.post = AsyncMock(return_value=mock_resp)
         mock_http.is_closed = False
         small_client._client = mock_http
 
         result = await small_client.encode_dense(["a", "b", "c", "d", "e"])
 
         assert len(result.vectors) == 5
-        assert call_count == 3  ***REMOVED*** ceil(5/2) = 3 batches
+        mock_http.post.assert_called_once()
+        call_json = mock_http.post.call_args[1]["json"]
+        assert call_json["texts"] == ["a", "b", "c", "d", "e"]
+        assert call_json["batch_size"] == 2
 
 
 class TestBGEM3SyncClient:
@@ -405,30 +401,26 @@ class TestBGEM3SyncClient:
                 sync_client.encode_hybrid(["hello"])
 
     def test_encode_hybrid_batches_large_input(self, sync_client):
-        """Input larger than batch_size is split into multiple requests."""
+        """batch_size is passed as server hint in a single request."""
         sync_client.batch_size = 2
         texts = ["a", "b", "c"]
 
-        call_count = 0
+        mock_resp = mock.MagicMock()
+        mock_resp.json.return_value = {
+            "dense_vecs": [[0.1] * 1024] * 3,
+            "lexical_weights": [{"indices": [1], "values": [0.5]}] * 3,
+            "colbert_vecs": [[[0.1] * 1024] * 5] * 3,
+            "processing_time": 0.1,
+        }
+        mock_resp.raise_for_status = lambda: None
 
-        def mock_post(url, json=None):
-            nonlocal call_count
-            call_count += 1
-            n = len(json["texts"])
-            resp = mock.MagicMock()
-            resp.json.return_value = {
-                "dense_vecs": [[0.1] * 1024] * n,
-                "lexical_weights": [{"indices": [1], "values": [0.5]}] * n,
-                "colbert_vecs": [[[0.1] * 1024] * 5] * n,
-                "processing_time": 0.1,
-            }
-            resp.raise_for_status = lambda: None
-            return resp
-
-        with mock.patch.object(sync_client._client, "post", side_effect=mock_post):
+        with mock.patch.object(sync_client._client, "post", return_value=mock_resp) as mock_post:
             result = sync_client.encode_hybrid(texts)
 
-        assert call_count == 2  ***REMOVED*** batch of 2 + batch of 1
+        mock_post.assert_called_once()
+        call_json = mock_post.call_args[1]["json"]
+        assert call_json["texts"] == ["a", "b", "c"]
+        assert call_json["batch_size"] == 2
         assert len(result.dense_vecs) == 3
         assert len(result.lexical_weights) == 3
         assert len(result.colbert_vecs) == 3
