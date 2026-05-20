@@ -33,6 +33,19 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 
+def _create_voyage_client(api_key: str):
+    """Create a Voyage client only when the optional voyage extra is installed."""
+    try:
+        import voyageai
+    except ImportError as exc:
+        raise RuntimeError(
+            "voyageai is required for ContextualizedEmbeddingService. "
+            "Install it with `uv sync --extra voyage` or package extra "
+            "`contextual-rag[voyage]`."
+        ) from exc
+    return voyageai.Client(api_key=api_key)
+
+
 # Voyage AI is loaded lazily (#1773): the package is an optional extra and
 # must not be imported at module load time. We retry on transient Voyage SDK
 # errors by exception class name so the retry decorators do not need
@@ -118,12 +131,7 @@ class ContextualizedEmbeddingService:
                 f"Invalid output_dimension {output_dimension}. Supported: {self.SUPPORTED_DIMS}"
             )
 
-        # Lazy import (#1773): voyageai is an optional extra. Importing here
-        # keeps `import src.models.contextualized_embedding` cheap and lets
-        # default runtime ignore the dependency.
-        import voyageai
-
-        self._client = voyageai.Client(api_key=api_key)
+        self._client = _create_voyage_client(api_key)
         self._output_dimension = output_dimension
         self._output_dtype = output_dtype
 
