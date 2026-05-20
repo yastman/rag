@@ -1,4 +1,4 @@
-"""Regression tests for the VPS release gate contract."""
+"""Regression tests for release gate and public CI contracts."""
 
 import re
 from pathlib import Path
@@ -6,7 +6,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
-DEPLOY_SCRIPT = ROOT / "scripts" / "deploy-vps.sh"
 RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "test_release_health_vps.sh"
 
 
@@ -37,48 +36,28 @@ def test_release_smoke_asserts_removed_services_absent() -> None:
     assert "removed_services" in script
 
 
-def test_ci_deploy_uses_minimal_release_smoke() -> None:
+def test_public_ci_does_not_run_release_smoke() -> None:
+    """Public CI must not run production release smoke checks."""
     workflow = CI_WORKFLOW.read_text()
-    assert "REQUIRE_MINI_APP_ENDPOINT=false ./scripts/test_release_health_vps.sh" in workflow
     assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" not in workflow
 
 
-def test_ci_deploy_runs_prod_env_preflight_before_build() -> None:
-    """CI deploy must validate the production env contract before docker compose build."""
+def test_public_ci_does_not_run_prod_env_preflight() -> None:
+    """Public CI must not expose production env preflight wiring."""
     workflow = CI_WORKFLOW.read_text()
-    assert "./scripts/validate_prod_env.sh" in workflow
-    assert workflow.index("./scripts/validate_prod_env.sh") < workflow.index("docker compose build")
+    assert "./scripts/validate_prod_env.sh" not in workflow
 
 
-def test_ci_deploy_force_recreates_services_after_build() -> None:
-    """CI deploy must recreate services so rebuilt images actually reach runtime."""
+def test_public_ci_does_not_deploy_or_recreate_services() -> None:
+    """Public CI validates code and config; it must not deploy services."""
     workflow = CI_WORKFLOW.read_text()
-    assert "docker compose --compatibility up -d --wait --force-recreate" in workflow
-    assert workflow.index("docker compose build") < workflow.index(
-        "docker compose --compatibility up -d --wait --force-recreate"
-    )
+    assert "docker compose --compatibility up -d --wait --force-recreate" not in workflow
+    assert "docker compose --compatibility up -d --force-recreate" not in workflow
 
 
-def test_manual_deploy_uses_minimal_release_smoke() -> None:
-    script = DEPLOY_SCRIPT.read_text()
-    assert "REQUIRE_MINI_APP_ENDPOINT=false ./scripts/test_release_health_vps.sh" in script
-    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" not in script
-
-
-def test_manual_deploy_force_recreates_services_after_build() -> None:
-    """Manual deploy must recreate services so rebuilt images replace stale containers."""
-    script = DEPLOY_SCRIPT.read_text()
-    assert "docker compose --compatibility up -d --force-recreate" in script
-    assert script.index("docker compose build") < script.index(
-        "docker compose --compatibility up -d --force-recreate"
-    )
-
-
-def test_manual_deploy_runs_prod_env_preflight_before_build() -> None:
-    """Manual deploy must validate the production env contract before docker compose build."""
-    script = DEPLOY_SCRIPT.read_text()
-    assert "./scripts/validate_prod_env.sh" in script
-    assert script.index("./scripts/validate_prod_env.sh") < script.index("docker compose build")
+def test_public_repo_does_not_ship_manual_vps_deploy_script() -> None:
+    """Public repo cleanup removes maintainer-specific VPS deploy automation."""
+    assert not (ROOT / "scripts" / "deploy-vps.sh").exists()
 
 
 def test_release_gate_script_contains_handoff_contract() -> None:
@@ -96,21 +75,6 @@ def test_release_gate_script_core_required_vars_are_minimal() -> None:
     core_section = script.split("optional_profile_vars", 1)[0]
     for var in ["CLICKHOUSE_PASSWORD", "MINIO_ROOT_PASSWORD", "LANGFUSE_REDIS_PASSWORD"]:
         assert var not in core_section
-
-
-def test_release_gate_script_optional_profile_vars_are_gated() -> None:
-    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
-    assert "optional_profile_vars" in script
-    for var in [
-        "GDRIVE_SYNC_DIR",
-        "NEXTAUTH_SECRET",
-        "SALT",
-        "ENCRYPTION_KEY",
-        "CLICKHOUSE_PASSWORD",
-        "MINIO_ROOT_PASSWORD",
-        "LANGFUSE_REDIS_PASSWORD",
-    ]:
-        assert var in script
 
 
 def test_release_smoke_checks_handoff_contract_when_enabled() -> None:
@@ -132,6 +96,21 @@ def test_release_smoke_reads_handoff_gate_from_bot_runtime_env() -> None:
     script = RELEASE_SMOKE_SCRIPT.read_text()
     assert "docker compose exec -T bot python - <<'PY'" in script
     assert 'HANDOFF_ENABLED="${HANDOFF_ENABLED:-false}"' not in script
+
+
+def test_release_gate_script_optional_profile_vars_are_gated() -> None:
+    script = (ROOT / "scripts" / "validate_prod_env.sh").read_text()
+    assert "optional_profile_vars" in script
+    for var in [
+        "GDRIVE_SYNC_DIR",
+        "NEXTAUTH_SECRET",
+        "SALT",
+        "ENCRYPTION_KEY",
+        "CLICKHOUSE_PASSWORD",
+        "MINIO_ROOT_PASSWORD",
+        "LANGFUSE_REDIS_PASSWORD",
+    ]:
+        assert var in script
 
 
 def test_release_gate_script_enforces_password_length() -> None:
