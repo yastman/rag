@@ -43,3 +43,15 @@ No external changes have been applied yet.
   - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_launch_opencode_worker.py -q`
 - Result: `4 passed`
 - Notes: launcher now accepts `superpowers:<slug>` / `superpowers/<slug>`, searches OpenCode plugin and Codex Superpowers paths, rejects worker-forbidden Superpowers, and bundles namespaced skills under filesystem-safe names.
+
+### 2026-05-20 Task 4: prompt validator Superpowers policy
+
+- Files changed:
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_prompt.py`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_validate_worker_prompt.py`
+- Backup paths: none
+- Verification commands:
+  - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_validate_worker_prompt.py -q`
+  - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_launch_opencode_worker.py tests/test_validate_worker_prompt.py -q`
+- Result: `4 passed`; `8 passed`
+- Notes: validator now requires Superpowers policy and finish-report fields for code-changing workers, rejects forbidden worker Superpowers in `Required Superpowers`, and allows docs-only TDD skips with a reason.
