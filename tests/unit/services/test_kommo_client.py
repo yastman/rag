@@ -442,3 +442,178 @@ async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) 
 
     assert not captured
     assert result.id == 99
+
+
+
+***REMOVED*** -----------------------------------------------------------------------------
+***REMOVED*** httpx.Auth flow contract (***REMOVED***1646)
+***REMOVED*** -----------------------------------------------------------------------------
+
+
+class TestKommoOAuthAuthFlow:
+    """KommoClient delegates OAuth bearer/refresh to a httpx.Auth subclass (***REMOVED***1646).
+
+    Context7 baseline (/encode/httpx) recommends overriding ``async_auth_flow``
+    on a subclass of ``httpx.Auth`` for multi-request authentication, including
+    refresh-on-401. Coordinating concurrent refresh with ``asyncio.Lock`` is the
+    documented pattern.
+    """
+
+    def test_kommo_oauth_auth_class_is_subclass_of_httpx_auth(self) -> None:
+        import httpx
+
+        from telegram_bot.services.kommo_client import KommoOAuthAuth
+
+        assert issubclass(KommoOAuthAuth, httpx.Auth)
+
+    def test_kommo_client_attaches_oauth_auth_to_async_client(
+        self, mock_token_store
+    ) -> None:
+        """The shared httpx.AsyncClient must be constructed with KommoOAuthAuth."""
+        from telegram_bot.services.kommo_client import KommoClient, KommoOAuthAuth
+
+        client = KommoClient(subdomain="test-co", token_store=mock_token_store)
+        ***REMOVED*** httpx exposes the auth on the AsyncClient as ``client.auth``.
+        assert isinstance(client._client.auth, KommoOAuthAuth)
+
+    async def test_async_auth_flow_sets_bearer_then_yields(
+        self, mock_token_store
+    ) -> None:
+        import httpx
+
+        from telegram_bot.services.kommo_client import KommoOAuthAuth
+
+        auth = KommoOAuthAuth(token_store=mock_token_store)
+        request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
+
+        flow = auth.async_auth_flow(request)
+        first = await flow.__anext__()
+        assert first is request
+        assert first.headers["Authorization"] == "Bearer test-token"
+        ***REMOVED*** Simulate 200: flow completes after the first yield.
+        ok = httpx.Response(200, request=request)
+        with pytest.raises(StopAsyncIteration):
+            await flow.asend(ok)
+        mock_token_store.get_valid_token.assert_awaited_once()
+        mock_token_store.force_refresh.assert_not_called()
+
+    async def test_async_auth_flow_refreshes_and_yields_again_on_401(
+        self, mock_token_store
+    ) -> None:
+        import httpx
+
+        from telegram_bot.services.kommo_client import KommoOAuthAuth
+
+        auth = KommoOAuthAuth(token_store=mock_token_store)
+        request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
+
+        flow = auth.async_auth_flow(request)
+        first = await flow.__anext__()
+        assert first.headers["Authorization"] == "Bearer test-token"
+
+        unauthorized = httpx.Response(401, request=request)
+        retry = await flow.asend(unauthorized)
+        ***REMOVED*** Same Request object re-yielded with refreshed bearer.
+        assert retry.headers["Authorization"] == "Bearer refreshed-token"
+        ***REMOVED*** Flow ends after retry response.
+        ok = httpx.Response(200, request=retry)
+        with pytest.raises(StopAsyncIteration):
+            await flow.asend(ok)
+
+        mock_token_store.force_refresh.assert_awaited_once()
+
+    async def test_async_auth_flow_deduplicates_concurrent_401_refreshes(
+        self, mock_token_store
+    ) -> None:
+        import httpx
+
+        from telegram_bot.services.kommo_client import KommoOAuthAuth
+
+        mock_token_store.get_valid_token.side_effect = [
+            "stale-token",
+            "stale-token",
+            "stale-token",
+            "refreshed-token",
+        ]
+        mock_token_store.force_refresh.return_value = "refreshed-token"
+        auth = KommoOAuthAuth(token_store=mock_token_store)
+        first_request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
+        second_request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/2")
+
+        first_flow = auth.async_auth_flow(first_request)
+        second_flow = auth.async_auth_flow(second_request)
+        await first_flow.__anext__()
+        await second_flow.__anext__()
+
+        first_retry = await first_flow.asend(httpx.Response(401, request=first_request))
+        second_retry = await second_flow.asend(httpx.Response(401, request=second_request))
+
+        assert first_retry.headers["Authorization"] == "Bearer refreshed-token"
+        assert second_retry.headers["Authorization"] == "Bearer refreshed-token"
+        mock_token_store.force_refresh.assert_awaited_once()
+
+    async def test_async_auth_flow_swallows_runtime_error_from_refresh(
+        self, mock_token_store
+    ) -> None:
+        """Seeded long-lived tokens raise RuntimeError on force_refresh.
+
+        The auth flow must NOT propagate this RuntimeError out — httpx will
+        otherwise wrap it as a generic auth failure. Returning lets the original
+        401 response surface to the caller, where ``response.raise_for_status()``
+        produces the canonical ``httpx.HTTPStatusError``.
+        """
+        import httpx
+
+        from telegram_bot.services.kommo_client import KommoOAuthAuth
+
+        mock_token_store.force_refresh = AsyncMock(
+            side_effect=RuntimeError("No refresh_token available for Kommo.")
+        )
+        auth = KommoOAuthAuth(token_store=mock_token_store)
+        request = httpx.Request("GET", "https://test-co.kommo.com/api/v4/leads/1")
+
+        flow = auth.async_auth_flow(request)
+        await flow.__anext__()
+        unauthorized = httpx.Response(401, request=request)
+        ***REMOVED*** Flow must terminate without re-yielding when refresh is impossible.
+        with pytest.raises(StopAsyncIteration):
+            await flow.asend(unauthorized)
+
+
+class TestKommoClientRequestNoLongerHandles401:
+    """AST: ``KommoClient._request`` no longer carries the manual 401 branch (***REMOVED***1646).
+
+    Forbids regressing to the pre-***REMOVED***1646 manual ``if response.status_code == 401:``
+    refresh-and-retry block that duplicated httpx.Auth's responsibility.
+    """
+
+    def test_request_body_does_not_check_401_status_code(self) -> None:
+        import ast
+        import inspect
+        import textwrap
+
+        from telegram_bot.services import kommo_client as mod
+
+        source = textwrap.dedent(inspect.getsource(mod.KommoClient._request))
+        tree = ast.parse(source)
+
+        bad: list[int] = []
+        for node in ast.walk(tree):
+            ***REMOVED*** Look for `response.status_code == 401` comparisons in the body.
+            if not isinstance(node, ast.Compare):
+                continue
+            left = node.left
+            if not (
+                isinstance(left, ast.Attribute)
+                and left.attr == "status_code"
+            ):
+                continue
+            for cmp in node.comparators:
+                if isinstance(cmp, ast.Constant) and cmp.value == 401:
+                    bad.append(node.lineno)
+
+        assert not bad, (
+            "KommoClient._request must not check 401 inline; that is the "
+            "responsibility of KommoOAuthAuth.async_auth_flow (***REMOVED***1646). "
+            f"Offending lines: {bad}"
+        )
