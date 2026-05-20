@@ -46,7 +46,7 @@ async def test_initial_state_has_required_keys():
     assert required.issubset(state.keys())
     assert state["user_id"] == 123
     assert state["session_id"] == "smoke-abc-20260209"
-    assert state["messages"][0]["content"] == "test"
+    assert state["messages"][0].content == "test"
 
 
 @pytest.mark.smoke
