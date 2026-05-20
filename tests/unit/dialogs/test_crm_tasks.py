@@ -211,7 +211,7 @@ def test_render_tasks_text_empty():
     from telegram_bot.dialogs.crm_tasks import render_tasks_text
 
     result = render_tasks_text([])
-    assert "нет" in result.lower() or "пуст" in result.lower() or len(result) > 0
+    assert "нет" in result.lower() or "пуст" in result.lower()
 
 
 def test_render_tasks_text_single_task():
