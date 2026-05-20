@@ -3,17 +3,16 @@
 Polls Redis for ``session:last_active:{user_id}`` keys older than ``idle_timeout_min``.
 Generates summary via LLM, writes to Kommo as note (if available).
 
-Worker lifecycle pattern matches ``RedisHealthMonitor``:
-  start() -> asyncio.create_task(_run_loop()) -> stop() via asyncio.Event
+Worker lifecycle uses APScheduler interval job for periodic polling.
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import logging
 import time
 from typing import Any
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from telegram_bot.observability import get_client, observe
 
@@ -46,13 +45,21 @@ class SessionSummaryWorker:
         self._idle_timeout_min = idle_timeout_min
         self._poll_interval_sec = poll_interval_sec
         self._summary_model = summary_model
-        self._stop_event = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._scheduler: AsyncIOScheduler | None = None
 
     async def start(self) -> None:
-        """Start the background polling loop."""
-        self._stop_event.clear()
-        self._task = asyncio.create_task(self._run_loop(), name="session-summary-worker")
+        """Start the background polling using APScheduler."""
+        self._scheduler = AsyncIOScheduler(
+            job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 300}
+        )
+        self._scheduler.add_job(
+            self._check_idle_sessions,
+            "interval",
+            seconds=self._poll_interval_sec,
+            id="session-summary-worker",
+            replace_existing=True,
+        )
+        self._scheduler.start()
         logger.info(
             "SessionSummaryWorker started (poll=%ds, idle=%dmin)",
             self._poll_interval_sec,
@@ -60,32 +67,11 @@ class SessionSummaryWorker:
         )
 
     async def stop(self) -> None:
-        """Signal the worker to stop and wait for it to finish."""
-        self._stop_event.set()
-        if self._task is not None:
-            try:
-                await asyncio.wait_for(self._task, timeout=5.0)
-            except TimeoutError:
-                self._task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._task
+        """Shut down the scheduler."""
+        if self._scheduler is not None:
+            self._scheduler.shutdown(wait=False)
+            self._scheduler = None
         logger.info("SessionSummaryWorker stopped")
-
-    async def _run_loop(self) -> None:
-        """Infinite poll loop until stop_event is set."""
-        while not self._stop_event.is_set():
-            try:
-                await self._check_idle_sessions()
-            except Exception:
-                logger.exception("SessionSummaryWorker cycle failed")
-            try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._poll_interval_sec,
-                )
-                break  # stop_event was set
-            except TimeoutError:
-                pass  # normal: poll interval elapsed
 
     @observe(name="session-summary-check")
     async def _check_idle_sessions(self) -> int:
