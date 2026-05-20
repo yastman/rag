@@ -178,3 +178,30 @@ async def test_drop_when_langfuse_disabled_is_quiet():
 
     blocker.set()
     await asyncio.gather(*bot._history_save_tasks)
+
+
+async def test_drop_when_langfuse_score_write_fails_is_quiet():
+    """Langfuse failures on drop telemetry must not break the text path."""
+    bot = _make_bot(max_concurrency=1)
+    blocker = asyncio.Event()
+
+    async def slow_coro():
+        await blocker.wait()
+
+    bot._spawn_history_save(slow_coro(), user_id="a")
+
+    mock_lf = MagicMock()
+    mock_lf.get_current_trace_id.return_value = "trace-xyz"
+    mock_lf.create_score.side_effect = RuntimeError("langfuse unavailable")
+
+    with patch("telegram_bot.bot.get_client", return_value=mock_lf):
+
+        async def coro2():
+            await asyncio.sleep(0)
+
+        result = bot._spawn_history_save(coro2(), user_id="b")
+
+    assert result is None
+
+    blocker.set()
+    await asyncio.gather(*bot._history_save_tasks)
