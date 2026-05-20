@@ -614,7 +614,7 @@ services:
 
   ***REMOVED*** Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.173.0@sha256:dd9874fb6a29aa6b3070754760876b42d0e440bb34537d7196d51bc15abb0068
+    image: langfuse/langfuse:3.174.1@sha256:e54883f4535a08505e20169d51ed7cd5f8f0505294a6ba982dfa64c78edc5c0a
     restart: always
     depends_on:
       postgres:
