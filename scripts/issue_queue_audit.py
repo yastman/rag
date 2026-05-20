@@ -67,7 +67,7 @@ class IssueStatus:
 
     @property
     def is_triaged(self) -> bool:
-        return bool(self.labels and self.assignees and self.lane)
+        return self.flags == ["triaged"]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -243,9 +243,7 @@ def print_human_report(issues: list[IssueStatus], counts: dict[str, int]) -> Non
     else:
         for issue in actionable:
             flags_str = ",".join(issue.flags)
-            print(
-                f"  #{issue.number:>5} ({issue.age_days}d) [{flags_str}]  {issue.title}"
-            )
+            print(f"  #{issue.number:>5} ({issue.age_days}d) [{flags_str}]  {issue.title}")
             assignees = ", ".join(f"@{a}" for a in issue.assignees) or "—"
             lane = issue.lane or "—"
             print(f"         lane={lane}  assignees={assignees}")

@@ -350,11 +350,7 @@ def collect_branches(
     worktrees: list[WorktreeInfo],
 ) -> list[BranchInfo]:
     """Collect per-branch metadata required for classification."""
-    fmt = (
-        "%(refname:short)\t"
-        "%(upstream:short)\t"
-        "%(upstream:track)"
-    )
+    fmt = "%(refname:short)\t%(upstream:short)\t%(upstream:track)"
     raw = _run(
         ["git", "for-each-ref", f"--format={fmt}", "refs/heads/"],
         check=False,
@@ -689,11 +685,7 @@ def main() -> None:
             print("No safe-to-delete branches.")
 
         if args.include_requires_human:
-            elig = [
-                b
-                for b in report.requires_human
-                if not b.worktree_dirty and not b.is_current
-            ]
+            elig = [b for b in report.requires_human if not b.worktree_dirty and not b.is_current]
             if elig:
                 if not args.json:
                     label = "dry-run" if args.dry_run else "cleanup"
