@@ -10,11 +10,10 @@ import asyncio
 import logging
 from typing import cast
 
-import voyageai
 from tenacity import (
     before_sleep_log,
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_random_exponential,
 )
@@ -23,6 +22,30 @@ from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
+
+
+def _create_voyage_client(api_key: str):
+    """Create a Voyage client only when the optional voyage extra is installed."""
+    try:
+        import voyageai
+    except ImportError as exc:
+        raise RuntimeError(
+            "voyageai is required for VoyageService. "
+            "Install it with `uv sync --extra voyage` or package extra "
+            "`rag-telegram-bot[voyage]`."
+        ) from exc
+    return voyageai.Client(api_key=api_key)
+
+
+def _get_voyage_errors():
+    """Lazily import and return voyageai error types for retry predicates."""
+    import voyageai
+
+    return (
+        voyageai.error.RateLimitError,
+        voyageai.error.ServiceUnavailableError,
+        voyageai.error.Timeout,
+    )
 
 
 class VoyageService:
@@ -67,7 +90,7 @@ class VoyageService:
             Queries are embedded with voyage-4-lite (fast, cheap, continuous).
             Shared embedding space makes this possible.
         """
-        self._client = voyageai.Client(api_key=api_key)
+        self._client = _create_voyage_client(api_key)
         self._model_docs = model_docs
         self._model_queries = model_queries
         self._model_rerank = model_rerank
@@ -78,13 +101,7 @@ class VoyageService:
 
     @observe(name="voyage-embed-documents", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -146,13 +163,7 @@ class VoyageService:
 
     @observe(name="voyage-embed-query", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -199,12 +210,7 @@ class VoyageService:
 
     @observe(name="voyage-rerank", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=10),
         stop=stop_after_attempt(3),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -268,13 +274,7 @@ class VoyageService:
 
     @observe(name="voyage-embed-documents-matryoshka", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -356,13 +356,7 @@ class VoyageService:
 
     @observe(name="voyage-embed-query-matryoshka", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),

@@ -11,7 +11,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | File | Purpose |
 |------|---------|
 | [`__init__.py`](./__init__.py) | Public API exports (VoyageService, CacheService, QdrantService, etc.) |
-| [`voyage.py`](./voyage.py) | Voyage AI gateway: embeddings + reranking |
+| [`voyage.py`](./voyage.py) | Voyage AI gateway: embeddings + reranking (optional `voyage` extra) |
 | [`qdrant.py`](./qdrant.py) | Async Qdrant gateway: hybrid search, RRF, ColBERT, binary quantization |
 | [`query_preprocessor.py`](./query_preprocessor.py) | Rule-based preprocessing: translit normalization, dynamic RRF weights |
 | [`query_analyzer.py`](./query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
@@ -32,7 +32,7 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 
 - **Qdrant** — vector database queries
 - **Redis** — cache tiers and user context storage
-- **BGE-M3 / Voyage** — embedding providers
+- **BGE-M3 / Voyage** — embedding providers (Voyage is optional: `uv sync --extra voyage`)
 - **Langfuse** — prompt management and observability (optional)
 
 ***REMOVED******REMOVED*** Focused Checks
