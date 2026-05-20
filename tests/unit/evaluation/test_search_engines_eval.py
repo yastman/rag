@@ -371,11 +371,11 @@ class TestHybridSearchEngine:
         engine = HybridSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        ***REMOVED*** Verify query_points was called with FusionQuery(RRF)
+        ***REMOVED*** Verify query_points was called with RrfQuery
         call_kwargs = mock_client.query_points.call_args[1]
         query = call_kwargs["query"]
-        assert isinstance(query, models.FusionQuery)
-        assert query.fusion == models.Fusion.RRF
+        assert isinstance(query, models.RrfQuery)
+        assert query.rrf.k == 60
 
     @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
@@ -589,8 +589,8 @@ class TestHybridRRFColBERTSearchEngine:
         assert len(prefetch) == 1
         inner_prefetch = prefetch[0]
         assert isinstance(inner_prefetch, models.Prefetch)
-        assert isinstance(inner_prefetch.query, models.FusionQuery)
-        assert inner_prefetch.query.fusion == models.Fusion.RRF
+        assert isinstance(inner_prefetch.query, models.RrfQuery)
+        assert inner_prefetch.query.rrf.k == 60
 
 
 class TestCreateSearchEngine:
