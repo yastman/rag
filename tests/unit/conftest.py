@@ -149,11 +149,21 @@ def isolate_otel_langfuse(monkeypatch):
     ]
 
     for p in patches:
-        with contextlib.suppress(Exception):
+        # #1601: narrow suppression — only swallow expected optional-import
+        # failures (the patched module/class is intentionally missing in some
+        # envs) and lazy-attribute resolution misses (telegram_bot.services
+        # raises AttributeError from its lazy import handler when the target
+        # symbol is provided by a sibling package, not the package itself).
+        # Anything else (TypeError, ValueError, etc.) is a real isolation
+        # bug we want to surface.
+        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError):
             p.start()
 
     yield
 
     for p in patches:
-        with contextlib.suppress(Exception):
+        # RuntimeError is raised by mock.patch when the start failed
+        # earlier and stop has no original to restore. AttributeError
+        # mirrors the start-time guard above.
+        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError, RuntimeError):
             p.stop()
