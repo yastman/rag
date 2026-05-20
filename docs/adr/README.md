@@ -12,6 +12,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0006 - Kommo CRM](0006-kommo-crm.md)
 - [0007 - Custom HyDE justified](0007-hyde-custom-justified.md)
 - [0008 - `instructor.create_partial` deferred](0008-instructor-create-partial-deferred.md)
+- [0009 - LangGraph `Send` fan-out scoping](0009-langgraph-send-fanout-scoping.md)
 
 ## When To Use
 
