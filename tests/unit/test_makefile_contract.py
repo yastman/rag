@@ -305,3 +305,42 @@ def test_runtime_env_file_has_safe_fallback() -> None:
         "Makefile must export RAG_RUNTIME_ENV_FILE so recipe shells "
         "receive the Make-defined fallback even when the environment does not set it"
     )
+
+
+# --- Local all-test entrypoint contract tests ---
+
+
+def test_frontend_test_target_runs_vitest() -> None:
+    """The local test inventory includes Vitest tests outside pytest's testpaths."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^test-frontend:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "test-frontend target not found in Makefile"
+    block = block_match.group(0)
+    assert "mini_app/frontend" in block
+    assert "npm test" in block
+
+
+def test_all_local_target_runs_pytest_full_and_frontend() -> None:
+    """The explicit all-local gate must include both Python and frontend suites."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^test-all-local:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "test-all-local target not found in Makefile"
+    block = block_match.group(0)
+    assert "make test-full" in block
+    assert "make test-frontend" in block
+
+
+def test_local_all_test_targets_are_phony() -> None:
+    text = _makefile_text()
+    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
+    combined = " ".join(phony_blocks)
+    assert "test-frontend" in combined
+    assert "test-all-local" in combined
