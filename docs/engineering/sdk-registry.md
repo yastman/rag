@@ -358,17 +358,22 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Keep model choice and retry policy local to contextualization path
 
 ## voyageai
+- **status:** **OPTIONAL EXTRA** (#1773). Not used by the default bot/retrieval runtime (BGE-M3 + Qdrant). Install via `uv sync --extra voyage`.
 - **triggers:** rerank, embedding, voyage, ColBERT, contextualized embedding
 - **context7_id:** /voyage-ai/voyageai-python
 - **как_у_нас:**
-  - `telegram_bot/services/voyage.py` — reranking service
-  - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings
+  - `telegram_bot/services/voyage.py` — reranking service (legacy/optional)
+  - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings (`USE_CONTEXTUALIZED_EMBEDDINGS=true` only)
+  - `src/ingestion/unified/qdrant_writer.py` — optional dense provider when `use_local_embeddings=False`
+  - `src/ingestion/gdrive_indexer.py` — legacy GDrive ingestion (deprecated)
 - **паттерны:**
   - `voyageai.Client()` для sync, lazy import (тяжёлые deps: pandas, scipy)
   - Rerank: `client.rerank(query, documents, model="rerank-2")`
+  - Lazy import ОБЯЗАТЕЛЬНО (#1773): `import voyageai` / `from telegram_bot.services import VoyageService` only inside the function/method that needs it.
 - **gotchas:**
   - Тяжёлый import (pandas, scipy.stats) — lazy import ОБЯЗАТЕЛЬНО
-  - НЕ импортировать на top-level в модулях бота (замедляет старт)
+  - НЕ импортировать на top-level в модулях бота (замедляет старт + ломает Python 3.14 base test collection из-за Pydantic V1 моделей)
+  - Voyage-зависимые тесты помечены `pytest.importorskip("voyageai") + @pytest.mark.requires_extras` и пропускаются в core tier.
 
 ## anthropic
 - **triggers:** Claude, Anthropic, contextualization, claude judge
