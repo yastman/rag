@@ -96,9 +96,10 @@ def bge_app():
 
 
 @pytest.fixture
-def client(bge_app):
+async def client(bge_app):
     transport = httpx.ASGITransport(app=bge_app["app"])
-    return httpx.AsyncClient(transport=transport, base_url="http://test")
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
 
 
 ***REMOVED*** ── Endpoint tests ──
