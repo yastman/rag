@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
+from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.services.content_loader import load_mini_app_config
 
 
@@ -73,52 +74,97 @@ async def get_config() -> dict:
     return load_mini_app_config()
 
 
+def _update_current_span(**kwargs: Any) -> None:
+    """Curated update_current_span; no-op when Langfuse client absent."""
+    lf = get_client()
+    if lf is not None:
+        lf.update_current_span(**kwargs)
+
+
 @app.post("/api/start-expert")
+@observe(name="miniapp-start-expert", capture_input=False, capture_output=False)
 async def start_expert(
     request: StartExpertRequest,
     redis: Any = Depends(get_redis),
 ) -> StartExpertResponse:
-    """Store deep-link payload in Redis and return start_link for openTelegramLink."""
+    """Store deep-link payload in Redis and return start_link for openTelegramLink.
+
+    Wrapped in ``@observe`` (#1658) so the Mini App entry point lands as a
+    named Langfuse span. ``propagate_attributes(session_id="miniapp-{user_id}")``
+    groups the Mini App and the subsequent Telegram ``/start q_<expert>``
+    trace into the same Langfuse Session, reconstructing the funnel
+    ``Mini App -> /start q_<expert> -> Telegram dialog -> CRM``.
+
+    PII safety: ``capture_input/output=False`` and the curated
+    ``update_current_span(input=...)`` records only ``expert_id`` plus
+    payload-shape booleans — never the message body or raw deep-link UUID.
+    """
     from fastapi import HTTPException
 
-    config = load_mini_app_config()
-    experts = config.get("experts", [])
-    expert = next((e for e in experts if e["id"] == request.expert_id), None)
-    if expert is None:
-        raise HTTPException(status_code=404, detail="Expert not found")
+    with propagate_attributes(
+        session_id=f"miniapp-{request.user_id}",
+        user_id=str(request.user_id),
+        tags=["miniapp", "start-expert", request.expert_id],
+        metadata={"surface": "miniapp"},
+    ):
+        _update_current_span(
+            input={
+                "expert_id": request.expert_id,
+                "has_message": request.message is not None,
+                "has_query_id": request.query_id is not None,
+            }
+        )
 
-    uid = str(_uuid_lib.uuid4())
-    payload = json.dumps(
-        {
-            "expert_id": request.expert_id,
-            "message": request.message,
-            "user_id": request.user_id,
-            "query_id": request.query_id,
-        }
-    )
-    await redis.set(f"miniapp:q:{uid}", payload, ex=_DEEPLINK_TTL)
+        config = load_mini_app_config()
+        experts = config.get("experts", [])
+        expert = next((e for e in experts if e["id"] == request.expert_id), None)
+        if expert is None:
+            _update_current_span(level="ERROR", status_message="expert_not_found")
+            raise HTTPException(status_code=404, detail="Expert not found")
 
-    bot_username = os.environ.get("BOT_USERNAME", "")
-    if not bot_username:
-        raise HTTPException(status_code=500, detail="BOT_USERNAME not configured")
-    start_link = f"https://t.me/{bot_username}?start=q_{uid}"
-
-    # Notify bot via Redis pub/sub — bot calls answerWebAppQuery + creates topic + RAG
-    await redis.publish(
-        "miniapp:start",
-        json.dumps(
+        uid = str(_uuid_lib.uuid4())
+        payload = json.dumps(
             {
-                "uuid": uid,
+                "expert_id": request.expert_id,
+                "message": request.message,
                 "user_id": request.user_id,
                 "query_id": request.query_id,
             }
-        ),
-    )
+        )
+        await redis.set(f"miniapp:q:{uid}", payload, ex=_DEEPLINK_TTL)
 
-    return StartExpertResponse(
-        start_link=start_link,
-        expert_name=expert["name"],
-    )
+        bot_username = os.environ.get("BOT_USERNAME", "")
+        if not bot_username:
+            _update_current_span(level="ERROR", status_message="bot_username_not_configured")
+            raise HTTPException(status_code=500, detail="BOT_USERNAME not configured")
+        start_link = f"https://t.me/{bot_username}?start=q_{uid}"
+
+        # Notify bot via Redis pub/sub — bot calls answerWebAppQuery + creates
+        # topic + RAG.
+        await redis.publish(
+            "miniapp:start",
+            json.dumps(
+                {
+                    "uuid": uid,
+                    "user_id": request.user_id,
+                    "query_id": request.query_id,
+                }
+            ),
+        )
+
+        # Curated success metadata — no raw UUID, no full URL.
+        _update_current_span(
+            output={
+                "expert_id": request.expert_id,
+                "expert_name": expert["name"],
+                "deeplink_published": True,
+            }
+        )
+
+        return StartExpertResponse(
+            start_link=start_link,
+            expert_name=expert["name"],
+        )
 
 
 @app.post("/api/log")
@@ -132,9 +178,31 @@ async def remote_log(request: dict) -> dict:
 
 
 @app.post("/api/phone")
-async def phone(request: PhoneRequest) -> dict:
-    """Collect phone and create CRM lead."""
-    return await submit_phone(request)
+@observe(name="miniapp-submit-phone", capture_input=False, capture_output=False)
+async def phone(request: PhoneRequest) -> Any:
+    """Collect phone and create CRM lead.
+
+    Wrapped in ``@observe`` (#1658) with the same ``miniapp-{user_id}`` session
+    grouping as ``start_expert`` so the funnel reconstructs in Langfuse
+    Sessions. PII (phone, name) never reaches the span: ``capture_input/output``
+    are off, and the inner ``submit_phone`` curates its own output. On CRM
+    failure (``success=False``), return ``502 Bad Gateway`` so clients can
+    distinguish a captured lead from a dropped one (#1596).
+    """
+    from fastapi.responses import JSONResponse
+
+    with propagate_attributes(
+        session_id=f"miniapp-{request.user_id}",
+        user_id=str(request.user_id),
+        tags=["miniapp", "submit-phone", request.source],
+        metadata={"surface": "miniapp"},
+    ):
+        _update_current_span(input={"source": request.source, "has_name": request.name is not None})
+        result = await submit_phone(request)
+        if not result.get("success"):
+            _update_current_span(level="ERROR", status_message="crm_submission_failed")
+            return JSONResponse(status_code=502, content=result)
+        return result
 
 
 @app.get("/health")
