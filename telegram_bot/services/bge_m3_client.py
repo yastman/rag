@@ -12,6 +12,7 @@ Centralizes: httpx client lifecycle, retry/timeout policy, response parsing.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -97,14 +98,46 @@ class BGEM3Client:
         else:
             self._timeout = timeout
         self._client: httpx.AsyncClient | None = None
+        ***REMOVED*** Guards _get_client / aclose so concurrent reconnects after close do
+        ***REMOVED*** not race in creating multiple AsyncClient instances. Created lazily
+        ***REMOVED*** against the running loop so the lock is bound to the same event loop
+        ***REMOVED*** that uses the client (***REMOVED***1641).
+        self._client_lock: asyncio.Lock | None = None
 
-    def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                timeout=self._timeout,
-                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-            )
-        return self._client
+    def _get_client_lock(self) -> asyncio.Lock:
+        """Return the per-instance asyncio.Lock, creating it lazily.
+
+        The lock is created lazily so BGEM3Client construction does not
+        require a running event loop. asyncio.Lock binds to the running
+        loop on first use.
+        """
+        if self._client_lock is None:
+            self._client_lock = asyncio.Lock()
+        return self._client_lock
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Return a connected httpx.AsyncClient, reconnecting if needed.
+
+        Concurrent callers that arrive while ``self._client`` is ``None`` or
+        closed all observe a single replacement AsyncClient: the lock guards
+        the check-then-set window, and the post-lock re-check ensures only
+        the first task constructs the new instance (***REMOVED***1641).
+        """
+        client = self._client
+        if client is not None and not client.is_closed:
+            return client
+        async with self._get_client_lock():
+            client = self._client
+            if client is None or client.is_closed:
+                ***REMOVED*** Note: a pre-closed client does not need explicit aclose().
+                ***REMOVED*** We never replace a non-closed client here — the outer
+                ***REMOVED*** check would have returned it already.
+                client = httpx.AsyncClient(
+                    timeout=self._timeout,
+                    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+                )
+                self._client = client
+            return client
 
     @observe(
         name="bge-m3-encode-dense", as_type="embedding", capture_input=False, capture_output=False
@@ -127,7 +160,7 @@ class BGEM3Client:
                 metadata={"model": BGE_M3_MODEL_NAME},
             )
             return DenseResult(vectors=[])
-        client = self._get_client()
+        client = await self._get_client()
         all_vecs: list[list[float]] = []
         processing_time: float | None = None
         for i in range(0, len(texts), self.batch_size):
@@ -171,7 +204,7 @@ class BGEM3Client:
                 metadata={"model": BGE_M3_MODEL_NAME},
             )
             return SparseResult(weights=[])
-        client = self._get_client()
+        client = await self._get_client()
         all_weights: list[dict[str, Any]] = []
         processing_time: float | None = None
         for i in range(0, len(texts), self.batch_size):
@@ -210,7 +243,7 @@ class BGEM3Client:
                 metadata={"model": BGE_M3_MODEL_NAME},
             )
             return HybridResult(dense_vecs=[], lexical_weights=[])
-        client = self._get_client()
+        client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/hybrid",
             json={"texts": texts, "max_length": self.max_length},
@@ -255,7 +288,7 @@ class BGEM3Client:
                 metadata={"model": BGE_M3_MODEL_NAME},
             )
             return RerankResult()
-        client = self._get_client()
+        client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/rerank",
             json={
@@ -301,7 +334,7 @@ class BGEM3Client:
                 metadata={"model": BGE_M3_MODEL_NAME},
             )
             return ColbertResult(colbert_vecs=[])
-        client = self._get_client()
+        client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/colbert",
             json={"texts": texts, "max_length": self.max_length},
@@ -325,16 +358,23 @@ class BGEM3Client:
     async def health(self) -> bool:
         """Check BGE-M3 service health."""
         try:
-            client = self._get_client()
+            client = await self._get_client()
             resp = await client.get(f"{self.base_url}/health")
             return resp.status_code == 200
         except httpx.HTTPError:
             return False
 
     async def aclose(self) -> None:
-        """Close the underlying httpx client."""
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
+        """Close the underlying httpx client.
+
+        Coordinated with ``_get_client`` via the same asyncio.Lock so a
+        concurrent reconnect cannot observe a half-closed client (***REMOVED***1641).
+        """
+        async with self._get_client_lock():
+            client = self._client
+            if client is not None and not client.is_closed:
+                self._client = None
+                await client.aclose()
 
 
 class BGEM3SyncClient:
