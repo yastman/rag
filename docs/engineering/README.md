@@ -11,10 +11,11 @@ Concise index for engineering process docs. These pages describe workflow, valid
 | [`sdk-registry.md`](sdk-registry.md) | Checking SDK/framework ownership and preferred project patterns before code changes. |
 | [`docs-maintenance.md`](docs-maintenance.md) | Updating docs, choosing canonical owners, and running docs verification. |
 
-
 ## Historical Or Resolved Notes
 
-No active historical notes at this time.
+| Doc | Status |
+|---|---|
+| [`dependency-upgrade-blockers-2026-04.md`](dependency-upgrade-blockers-2026-04.md) | Historical/resolved Langfuse v4 blocker note; do not use as the current dependency backlog. |
 
 ## Fast Search
 

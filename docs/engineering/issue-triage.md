@@ -37,3 +37,19 @@
 3. Run SDK-first research with `docs/engineering/sdk-registry.md`, local code, and Context7 as needed.
 4. Choose exactly one lane: `Quick execution`, `Plan needed`, or `Design first`.
 5. Record the lane decision before implementation starts.
+
+## Split Into Separate Issue
+- Create a separate issue when scope crosses subsystem boundaries.
+- Create a separate issue when rollback or verification differs from the parent task.
+- Create a separate issue when the task can block unrelated delivery for more than one business day.
+- Keep the parent issue as coordination-only with links to child issues.
+
+## Ownership And SLA
+- PR owner must request review within 24h of opening.
+- If PR is `BLOCKED` by `REVIEW_REQUIRED` for more than 48h, assign an explicit reviewer.
+- Issues without assignee or labels older than 24h move to the triage queue.
+- Merge triage order: (1) `CLEAN` and approved, (2) `CLEAN` and `REVIEW_REQUIRED` older than 48h, (3) blocked by checks/conflicts, (4) drafts last.
+
+## Lane Taxonomy
+- `lane:quick-win`: one file (or <=30 lines) and no runtime contract change.
+- `lane:architecture-heavy`: cross-module change, rollout sequencing, or runtime contract change.

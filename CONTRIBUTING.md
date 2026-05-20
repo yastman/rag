@@ -1,44 +1,49 @@
 # Contributing
 
-Thank you for your interest in contributing.
+Thanks for improving this project. Keep changes focused, verifiable, and safe
+for local review.
 
-## Getting Started
+## Ground Rules
 
-- Read [`README.md`](README.md) for project overview.
-- Follow [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for setup instructions.
+- Work from a branch and keep each change scoped to one problem.
+- Prefer local/test environments. Do not use production, VPS, SSH, cloud
+  credentials, secrets, or real CRM write paths unless the task explicitly
+  requires it.
+- Redact secrets from issues, logs, screenshots, and reports.
+- Update the canonical documentation when commands, ports, env vars, runtime
+  behavior, API routes, or owner boundaries change.
 
-## Development Workflow
+## Local Setup
 
-1. Create a branch from `dev` for your changes.
-2. Make focused changes with clear commit messages.
-3. Run the local verification ladder before pushing:
+Read these first:
+
+- [README.md](README.md) for the project overview and reviewer path.
+- [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md) for local setup.
+- [DOCKER.md](DOCKER.md) for Compose profiles, services, ports, and env.
+- [docs/engineering/test-writing-guide.md](docs/engineering/test-writing-guide.md)
+  for test-writing rules.
+
+## Checks
+
+For documentation-only changes:
 
 ```bash
-make check
-uv run pytest tests/unit -q
-docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
+git diff --check
+make docs-links
 ```
 
-4. Open a pull request against `dev`.
+For code or runtime changes, run the focused checks for the touched area and at
+least:
 
-## What Not to Commit
+```bash
+make test-unit
+```
 
-- `.env` or any file containing real credentials
-- generated artifacts, logs, or local session data
-- Real datasets, personal recordings, or client exports
-- Production deploy scripts or VPS/SSH keys
+Use `make local-pr-ready` before opening a larger PR.
 
-## Code of Conduct
+## Pull Requests
 
-This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
-
-## Safe Boundaries
-
-- Do not run production or CRM write flows without maintainer approval.
-- Use fake/demo credentials for local development and testing.
-- Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external secrets.
-
-## Questions
-
-- For general questions, open a public discussion or issue.
-- For security concerns, see [`SECURITY.md`](SECURITY.md).
+- Explain the user-visible change and the verification commands you ran.
+- Link related issues or notes when available.
+- Call out skipped checks with a short reason.
+- Do not include local agent, swarm, prompt, or session artifacts.
