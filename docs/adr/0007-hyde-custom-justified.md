@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 
-**Date:** 2026-07-13
+**Date:** 2026-05-20
 
 **Issue:** ***REMOVED***1652
 
@@ -17,7 +17,7 @@ PR ***REMOVED***1622 proposed replacing the custom `HyDEGenerator` (in `telegram
 | `langchain` | 1.2.15 | New slim orchestration package |
 | `langchain-core` | 1.2.31 | Core abstractions (Embeddings, Runnables) |
 | `langchain-openai` | 1.1.9 | OpenAI LLM/Embeddings wrappers |
-| `langchain-classic` | 1.0.4 | Legacy chains (transitive via langchain-community) |
+| `langchain-classic` | 1.0.1 | Legacy chains (transitive via langchain-community) |
 | `langchain-community` | 0.4.1 | Community integrations (not a direct dependency) |
 
 ***REMOVED******REMOVED******REMOVED*** Key Finding: LangChain 1.2 Restructuring
@@ -49,7 +49,7 @@ ModuleNotFoundError: No module named 'langchain.chains'
 
 ***REMOVED******REMOVED******REMOVED*** 1. Wrong Package Location
 
-`HypotheticalDocumentEmbedder` lives in `langchain-classic==1.0.4`, which is:
+`HypotheticalDocumentEmbedder` lives in `langchain-classic==1.0.1`, which is:
 - A legacy compatibility package, not recommended for new code
 - Only transitively installed via `langchain-community` (not a direct dependency)
 - Adding it as a direct dependency increases maintenance burden for a deprecated package
