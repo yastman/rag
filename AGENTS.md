@@ -60,7 +60,7 @@ Prefer local/test environments. Do not access production, VPS, secrets, SSH,
 cloud credentials, or real CRM write paths unless explicitly required. Redact
 secrets in outputs.
 
-## Workspace And Swarm Hygiene
+## Workspace Hygiene
 
 Do not start non-trivial edits in a dirty checkout. Use an isolated git worktree
 for feature work or when unrelated local changes exist; see
