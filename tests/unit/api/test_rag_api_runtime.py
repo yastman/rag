@@ -399,3 +399,34 @@ async def test_query_graph_recursion_error_preserves_trace_context() -> None:
     assert output_payload["chunks_count"] == 1
     assert call_kwargs["metadata"]["source"] == "api"
     assert call_kwargs["metadata"]["query_type"] == "ERROR"
+
+
+async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> None:
+    """Regression for #1606: GraphRecursionError fallback must not crash with
+    UnboundLocalError when Langfuse is disabled (get_client() returns None)."""
+    from langgraph.errors import GraphRecursionError
+
+    class _FailingGraph:
+        async def ainvoke(self, state: dict) -> dict:
+            raise GraphRecursionError("recursion limit exceeded")
+
+    app.state.graph = _FailingGraph()
+    app.state.max_rewrite_attempts = 1
+
+    with (
+        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
+        patch("telegram_bot.observability.get_client", return_value=None),
+        patch("telegram_bot.scoring.write_langfuse_scores") as mock_write_scores,
+    ):
+        response = await query(QueryRequest(query="test", user_id=1))
+
+    # Must return a valid QueryResponse with the fallback message
+    assert isinstance(response, QueryResponse)
+    assert response.query_type == "ERROR"
+    assert response.documents_count == 0
+    assert response.cache_hit is False
+    assert response.latency_ms >= 0
+    assert response.response  # non-empty fallback message
+    assert "лимит" in response.response.lower() or "limit" in response.response.lower()
+    # When Langfuse is disabled, scores must not be written
+    mock_write_scores.assert_not_called()
