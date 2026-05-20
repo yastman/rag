@@ -1,16 +1,38 @@
 """
-Unit tests for src/evaluation/evaluate_with_ragas.py
+Unit tests for src/evaluation/ragas_evaluation.py
 
-Tests RAGAS evaluation functionality with mocked dependencies.
+Tests RAGAS evaluation helpers and threshold constants.
 """
 
 from __future__ import annotations
 
 import json
+import sys
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+# Mock heavy dependencies before importing the module under test
+_mock_modules = {
+    "datasets": MagicMock(),
+    "openai": MagicMock(),
+    "ragas": MagicMock(),
+    "ragas.dataset_schema": MagicMock(),
+    "ragas.llms": MagicMock(),
+    "ragas.metrics": MagicMock(),
+    "ragas.metrics.collections": MagicMock(),
+}
+
+with patch.dict(sys.modules, _mock_modules):
+    from src.evaluation.ragas_evaluation import (
+        ANSWER_RELEVANCY_THRESHOLD,
+        CONTEXT_PRECISION_THRESHOLD,
+        CONTEXT_RECALL_THRESHOLD,
+        FAITHFULNESS_THRESHOLD,
+        _metric_mean,
+    )
 
 
 # Mock modules using class-scope fixture to avoid test pollution
@@ -30,7 +52,7 @@ def mock_evaluation_imports():
     mock_ragas_metrics = MagicMock()
     mock_search_engines = MagicMock()
 
-    # Setup mock classes — use instances, NOT the MagicMock class itself.
+    # Setup mock classes -- use instances, NOT the MagicMock class itself.
     # Assigning `MagicMock` (the class) then setting `.return_value` on it
     # overwrites the class-level property descriptor and permanently corrupts
     # MagicMock for all subsequent tests in the process.
@@ -172,29 +194,28 @@ class TestEvaluateWithRagas:
                 raise ValueError(f"Unknown engine: {engine_name}")
 
     def test_ragas_score_calculation(self):
-        """Test RAGAS score is average of all metrics."""
+        """Test RAGAS score is average of all metrics using _metric_mean."""
+        # _metric_mean accepts a dict-like object and extracts values by key
         mock_result = {
-            "faithfulness": 0.8,
-            "context_relevancy": 0.7,
-            "answer_relevancy": 0.9,
-            "context_recall": 0.6,
+            "faithfulness": [0.8, 0.9, 0.7],
+            "context_relevancy": [0.7, 0.8, 0.6],
+            "answer_relevancy": [0.9, 0.85, 0.95],
+            "context_recall": [0.6, 0.7, 0.5],
         }
 
-        expected_score = (0.8 + 0.7 + 0.9 + 0.6) / 4
-        calculated_score = (
-            sum(
-                [
-                    mock_result["faithfulness"],
-                    mock_result["context_relevancy"],
-                    mock_result["answer_relevancy"],
-                    mock_result["context_recall"],
-                ]
-            )
-            / 4
-        )
+        faith_mean = _metric_mean(mock_result, "faithfulness")
+        ctx_rel_mean = _metric_mean(mock_result, "context_relevancy")
+        ans_rel_mean = _metric_mean(mock_result, "answer_relevancy")
+        ctx_rec_mean = _metric_mean(mock_result, "context_recall")
 
-        assert abs(calculated_score - expected_score) < 0.001
-        assert calculated_score == 0.75
+        assert faith_mean == pytest.approx(0.8)
+        assert ctx_rel_mean == pytest.approx(0.7)
+        assert ans_rel_mean == pytest.approx(0.9)
+        assert ctx_rec_mean == pytest.approx(0.6)
+
+        # Overall RAGAS score is the average of metric means
+        ragas_score = (faith_mean + ctx_rel_mean + ans_rel_mean + ctx_rec_mean) / 4
+        assert ragas_score == pytest.approx(0.75)
 
     def test_context_extraction_from_results(self):
         """Test contexts are extracted from top 5 results."""
@@ -366,30 +387,34 @@ class TestMetricsExtraction:
     """Tests for metrics extraction from RAGAS results."""
 
     def test_metrics_extraction(self):
-        """Test metrics are extracted and converted to float."""
-        ragas_result = {
-            "faithfulness": 0.85,
-            "context_relevancy": 0.78,
-            "answer_relevancy": 0.92,
-            "context_recall": 0.80,
+        """Test metrics are extracted using _metric_mean."""
+        # _metric_mean works with dict-like objects supporting __getitem__
+        mock_result = {
+            "faithfulness": [0.85],
+            "context_relevancy": [0.78],
+            "answer_relevancy": [0.92],
+            "context_recall": [0.80],
         }
 
-        metrics = {
-            "faithfulness": float(ragas_result["faithfulness"]),
-            "context_relevancy": float(ragas_result["context_relevancy"]),
-            "answer_relevancy": float(ragas_result["answer_relevancy"]),
-            "context_recall": float(ragas_result["context_recall"]),
-        }
+        faith = _metric_mean(mock_result, "faithfulness")
+        ctx_rel = _metric_mean(mock_result, "context_relevancy")
+        ans_rel = _metric_mean(mock_result, "answer_relevancy")
+        ctx_rec = _metric_mean(mock_result, "context_recall")
 
-        assert all(isinstance(v, float) for v in metrics.values())
-        assert metrics["faithfulness"] == 0.85
+        assert isinstance(faith, float)
+        assert faith == pytest.approx(0.85)
+        assert ctx_rel == pytest.approx(0.78)
+        assert ans_rel == pytest.approx(0.92)
+        assert ctx_rec == pytest.approx(0.80)
 
     def test_ragas_score_average(self):
-        """Test RAGAS score is calculated as average."""
-        metrics = [0.8, 0.7, 0.9, 0.6]
-        ragas_score = sum(metrics) / len(metrics)
+        """Test RAGAS score is calculated as average using _metric_mean."""
+        mock_result = {
+            "metric_a": [0.8, 0.7, 0.9, 0.6],
+        }
 
-        assert ragas_score == 0.75
+        mean_val = _metric_mean(mock_result, "metric_a")
+        assert mean_val == pytest.approx(0.75)
 
 
 class TestEnvironmentChecks:
@@ -410,6 +435,21 @@ class TestEnvironmentChecks:
 
             api_key = os.getenv("OPENAI_API_KEY")
             assert api_key == "sk-test123"
+
+    def test_threshold_constants(self):
+        """Test that threshold constants have expected values."""
+        assert FAITHFULNESS_THRESHOLD == 0.80
+        assert CONTEXT_PRECISION_THRESHOLD == 0.80
+        assert CONTEXT_RECALL_THRESHOLD == 0.90
+        assert ANSWER_RELEVANCY_THRESHOLD == 0.80
+
+    def test_metric_above_threshold(self):
+        """Test metric comparison against imported thresholds."""
+        faithfulness_score = 0.85
+        assert faithfulness_score >= FAITHFULNESS_THRESHOLD
+
+        context_recall_score = 0.88
+        assert context_recall_score < CONTEXT_RECALL_THRESHOLD
 
 
 class TestResultsFormat:
@@ -433,6 +473,9 @@ class TestResultsFormat:
         assert "metrics" in result
         assert "num_queries" in result
         assert "ragas_score" in result["metrics"]
+        # Verify metrics exceed thresholds
+        assert result["metrics"]["faithfulness"] >= FAITHFULNESS_THRESHOLD
+        assert result["metrics"]["answer_relevancy"] >= ANSWER_RELEVANCY_THRESHOLD
 
     def test_saved_results_format(self, tmp_path):
         """Test saved results file format."""
