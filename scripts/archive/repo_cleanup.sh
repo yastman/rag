@@ -1,6 +1,8 @@
 ***REMOVED***!/usr/bin/env bash
-***REMOVED*** scripts/repo_cleanup.sh — Repository hygiene: branches, worktrees, stashes
-***REMOVED*** Usage: ./scripts/repo_cleanup.sh [--dry-run] [--force] [--help]
+***REMOVED*** scripts/archive/repo_cleanup.sh — Archived repository hygiene helper
+***REMOVED*** Retired by issue ***REMOVED***1728. Use docs/runbooks/GIT_PR_ISSUE_NATIVE.md and Makefile
+***REMOVED*** native git/gh targets for active hygiene workflows.
+***REMOVED*** Original usage: ./scripts/repo_cleanup.sh [--dry-run] [--force] [--help]
 ***REMOVED***
 ***REMOVED*** Stages:
 ***REMOVED***   1. Prune stale remote tracking refs
@@ -185,7 +187,7 @@ echo
 
 ***REMOVED*** ---- Summary ----
 echo "=== Summary ==="
-echo "  Remote branches: $(git branch -r | grep -v HEAD | wc -l)"
+echo "  Remote branches: $(git branch -r | grep -vc HEAD)"
 echo "  Local branches:  $(git branch | wc -l)"
 echo "  Worktrees:       $(git worktree list | wc -l)"
 echo "  Stashes:         $(git stash list | wc -l)"

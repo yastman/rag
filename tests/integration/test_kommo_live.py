@@ -3,8 +3,11 @@
 Requires real credentials:
   KOMMO_SUBDOMAIN, KOMMO_ACCESS_TOKEN
 
-Run: uv run pytest tests/integration/test_kommo_live.py -v
-Skip when creds missing (CI).
+Requires explicit opt-in:
+  RUN_KOMMO_LIVE_WRITES=1
+
+Run: RUN_KOMMO_LIVE_WRITES=1 uv run pytest tests/integration/test_kommo_live.py -v
+Skip when creds or opt-in missing (CI).
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ import time
 import pytest
 
 
-***REMOVED*** Skip entire module if creds missing
+***REMOVED*** Skip entire module if creds or opt-in missing
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.kommo,
@@ -23,6 +26,15 @@ pytestmark = [
         not os.getenv("KOMMO_ACCESS_TOKEN"),
         reason="KOMMO_ACCESS_TOKEN not set",
     ),
+    pytest.mark.skipif(
+        not os.getenv("KOMMO_SUBDOMAIN"),
+        reason="KOMMO_SUBDOMAIN not set",
+    ),
+    pytest.mark.skipif(
+        os.getenv("RUN_KOMMO_LIVE_WRITES") != "1",
+        reason="RUN_KOMMO_LIVE_WRITES not set to '1' - live writes require explicit opt-in",
+    ),
+    pytest.mark.xdist_group(name="kommo_live"),
 ]
 
 
@@ -64,19 +76,25 @@ class TestKommoLiveCRUD:
         from telegram_bot.services.kommo_models import LeadCreate
 
         client = _make_client()
-        lead = await client.create_lead(LeadCreate(name=f"[CI] {_RUN_ID}", budget=1000))
-        assert lead.id > 0
-        TestKommoLiveCRUD._lead_id = lead.id
+        try:
+            lead = await client.create_lead(LeadCreate(name=f"[CI] {_RUN_ID}", budget=1000))
+            assert lead.id > 0
+            TestKommoLiveCRUD._lead_id = lead.id
+        finally:
+            await client.close()
 
     async def test_02_get_lead(self):
         """Verify created lead via GET returns full fields."""
         assert self._lead_id, "test_01 must run first"
 
         client = _make_client()
-        lead = await client.get_lead(self._lead_id)
-        assert lead.id == self._lead_id
-        assert lead.name == f"[CI] {_RUN_ID}"
-        assert lead.budget == 1000
+        try:
+            lead = await client.get_lead(self._lead_id)
+            assert lead.id == self._lead_id
+            assert lead.name == f"[CI] {_RUN_ID}"
+            assert lead.budget == 1000
+        finally:
+            await client.close()
 
     async def test_03_update_lead(self):
         """Update lead budget and verify."""
@@ -85,18 +103,24 @@ class TestKommoLiveCRUD:
         from telegram_bot.services.kommo_models import LeadUpdate
 
         client = _make_client()
-        await client.update_lead(self._lead_id, LeadUpdate(budget=2000))
+        try:
+            await client.update_lead(self._lead_id, LeadUpdate(budget=2000))
 
-        refreshed = await client.get_lead(self._lead_id)
-        assert refreshed.budget == 2000
+            refreshed = await client.get_lead(self._lead_id)
+            assert refreshed.budget == 2000
+        finally:
+            await client.close()
 
     async def test_04_add_note(self):
         """Add note to lead."""
         assert self._lead_id, "test_01 must run first"
 
         client = _make_client()
-        note = await client.add_note("leads", self._lead_id, f"Note {_RUN_ID}")
-        assert note.id > 0
+        try:
+            note = await client.add_note("leads", self._lead_id, f"Note {_RUN_ID}")
+            assert note.id > 0
+        finally:
+            await client.close()
 
     async def test_05_create_task(self):
         """Create task linked to lead."""
@@ -105,29 +129,35 @@ class TestKommoLiveCRUD:
         from telegram_bot.services.kommo_models import TaskCreate
 
         client = _make_client()
-        due = int(time.time()) + 86400
-        task = await client.create_task(
-            TaskCreate(
-                text=f"Task {_RUN_ID}",
-                entity_id=self._lead_id,
-                entity_type="leads",
-                complete_till=due,
+        try:
+            due = int(time.time()) + 86400
+            task = await client.create_task(
+                TaskCreate(
+                    text=f"Task {_RUN_ID}",
+                    entity_id=self._lead_id,
+                    entity_type="leads",
+                    complete_till=due,
+                )
             )
-        )
-        assert task.id > 0
+            assert task.id > 0
+        finally:
+            await client.close()
 
     async def test_06_upsert_contact(self):
         """Create a test contact via upsert."""
         from telegram_bot.services.kommo_models import ContactCreate
 
         client = _make_client()
-        phone = f"+38099{_RUN_ID[-7:]}"
-        contact = await client.upsert_contact(
-            phone,
-            ContactCreate(first_name="CI", last_name=_RUN_ID, phone=phone),
-        )
-        assert contact.id > 0
-        TestKommoLiveCRUD._contact_id = contact.id
+        try:
+            phone = f"+38099{_RUN_ID[-7:]}"
+            contact = await client.upsert_contact(
+                phone,
+                ContactCreate(first_name="CI", last_name=_RUN_ID, phone=phone),
+            )
+            assert contact.id > 0
+            TestKommoLiveCRUD._contact_id = contact.id
+        finally:
+            await client.close()
 
     async def test_07_link_contact_to_lead(self):
         """Link contact to lead."""
@@ -135,18 +165,59 @@ class TestKommoLiveCRUD:
         assert self._contact_id, "test_06 must run first"
 
         client = _make_client()
-        await client.link_contact_to_lead(self._lead_id, self._contact_id)
+        try:
+            await client.link_contact_to_lead(self._lead_id, self._contact_id)
+        finally:
+            await client.close()
 
     async def test_08_list_pipelines(self):
         """List pipelines (smoke test)."""
         client = _make_client()
-        pipelines = await client.list_pipelines()
-        assert len(pipelines) > 0
-        assert pipelines[0].id > 0
-        assert pipelines[0].name
+        try:
+            pipelines = await client.list_pipelines()
+            assert len(pipelines) > 0
+            assert pipelines[0].id > 0
+            assert pipelines[0].name
+        finally:
+            await client.close()
 
     async def test_09_get_contacts(self):
         """Search contacts by query."""
         client = _make_client()
-        contacts = await client.get_contacts("CI")
-        assert isinstance(contacts, list)
+        try:
+            contacts = await client.get_contacts("CI")
+            assert isinstance(contacts, list)
+        finally:
+            await client.close()
+
+    async def test_99_cleanup(self):
+        """Best-effort cleanup: archive created lead and contact.
+
+        Kommo does not support hard deletes via the public API; we PATCH
+        entities with is_deleted=True which moves them to the recycle bin.
+        If KommoClient gains a dedicated delete/archive method in the future,
+        prefer that instead.
+        """
+        client = _make_client()
+        try:
+            if self._lead_id:
+                try:
+                    await client._request(
+                        "PATCH",
+                        f"/leads/{self._lead_id}",
+                        json={"is_deleted": True},
+                    )
+                except Exception:  ***REMOVED*** noqa: BLE001
+                    pass  ***REMOVED*** best-effort
+
+            if self._contact_id:
+                try:
+                    await client._request(
+                        "PATCH",
+                        f"/contacts/{self._contact_id}",
+                        json={"is_deleted": True},
+                    )
+                except Exception:  ***REMOVED*** noqa: BLE001
+                    pass  ***REMOVED*** best-effort
+        finally:
+            await client.close()
