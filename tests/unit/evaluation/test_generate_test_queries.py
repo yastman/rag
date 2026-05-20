@@ -165,20 +165,6 @@ class TestGenerateQueriesForArticle:
 
         assert text_preview == short_text
 
-    def test_generated_queries_model_valid(self):
-        """Test GeneratedQueries Pydantic model validates correctly with valid input."""
-        from src.evaluation.generate_test_queries import GeneratedQueries
-
-        result = GeneratedQueries(
-            direct="статья 115",
-            semantic="наказание за убийство",
-            paraphrased="что грозит за лишение жизни",
-        )
-
-        assert result.direct == "статья 115"
-        assert result.semantic == "наказание за убийство"
-        assert result.paraphrased == "что грозит за лишение жизни"
-
     def test_query_object_structure(self):
         """Test generated query objects have correct structure."""
         query_obj = {
@@ -250,30 +236,53 @@ class TestGenerateAllQueries:
         assert result[3]["expected_article"] == "121"
 
     async def test_generate_queries_with_errors(self, mock_imports):
-        """Test error handling during query generation."""
+        """Test error handling during query generation through real generate_all_queries."""
+        from src.evaluation.generate_test_queries import (
+            GeneratedQueries,
+            generate_all_queries,
+        )
+
+        call_count = 0
+
+        async def _create_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Determine which article based on the prompt content
+            content = kwargs.get("messages", [{}])[0].get("content", "")
+            if "999" in content:
+                raise ValueError("LLM API error")
+            return GeneratedQueries(
+                direct="прямой запрос",
+                semantic="семантический запрос",
+                paraphrased="перефразированный запрос",
+            )
+
+        mock_instructor_client = MagicMock()
+        mock_instructor_client.chat.completions.create = AsyncMock(side_effect=_create_side_effect)
+
         article_texts = {
             "115": "Normal text",
             "999": "Error text",
             "121": "Normal text",
         }
 
-        all_queries = []
-        errors = []
+        with patch("src.evaluation.generate_test_queries.instructor") as mock_instructor_mod:
+            mock_instructor_mod.from_openai.return_value = mock_instructor_client
 
-        for article_num in article_texts:
-            try:
-                if article_num == "999":
-                    raise ValueError("LLM API error")
-                queries = [
-                    {"query": f"q {article_num}", "type": "direct", "expected_article": article_num}
-                ]
-                all_queries.extend(queries)
-            except ValueError as e:
-                errors.append(str(e))
+            result = await generate_all_queries(
+                article_texts,
+                model="openai/gpt-oss-120b",
+                max_concurrent=5,
+                base_url="http://test.api/v1",
+                api_key="test-key",
+            )
 
-        assert len(all_queries) == 2  # Only 115 and 121
-        assert len(errors) == 1
-        assert "LLM API error" in errors[0]
+        # Only articles 115 and 121 succeed (3 queries each)
+        assert len(result) == 6
+        expected_articles = {q["expected_article"] for q in result}
+        assert "115" in expected_articles
+        assert "121" in expected_articles
+        assert "999" not in expected_articles
 
 
 class TestSelectRepresentativeArticles:
@@ -490,20 +499,6 @@ class TestErrorHandling:
             from src.evaluation.generate_test_queries import fetch_article_texts
 
             fetch_article_texts("test_collection", ["115"])
-
-    async def test_invalid_model_output_raises(self, mock_imports):
-        """Test that instructor raises when LLM returns invalid output."""
-        from src.evaluation.generate_test_queries import generate_queries_for_article
-
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
-            side_effect=Exception("Instructor validation failed: max retries exceeded")
-        )
-
-        with pytest.raises(Exception, match="Instructor validation failed"):
-            await generate_queries_for_article(
-                mock_client, "openai/gpt-oss-120b", "115", "Some article text"
-            )
 
     def test_missing_model_fields_raise_validation_error(self):
         """Test that missing fields in GeneratedQueries raise ValidationError."""
