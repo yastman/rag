@@ -13,6 +13,7 @@ import re
 import socket
 import time
 import uuid
+from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
@@ -762,6 +763,19 @@ class PropertyBot:
         self._polling_lock_task: asyncio.Task[None] | None = None
         self._polling_lock_owner: str | None = None
 
+        ***REMOVED*** Bounded fan-out for fire-and-forget history persistence (***REMOVED***1600).
+        ***REMOVED*** Without a bound the text path could accumulate unbounded background
+        ***REMOVED*** tasks under burst traffic / slow DB writes. Track every spawned save
+        ***REMOVED*** so shutdown can drain them; reject new saves with a Langfuse signal
+        ***REMOVED*** once the in-flight count reaches `_history_save_max_concurrency`.
+        self._history_save_tasks: set[asyncio.Task[None]] = set()
+        self._history_save_max_concurrency: int = int(
+            os.getenv("HISTORY_SAVE_MAX_CONCURRENCY", "32")
+        )
+        self._history_save_drain_timeout_s: float = float(
+            os.getenv("HISTORY_SAVE_DRAIN_TIMEOUT_S", "5.0")
+        )
+
         ***REMOVED*** Track initialization state
         self._cache_initialized = False
         self._pre_agent_filter_extractor: Any | None = None
@@ -771,6 +785,50 @@ class PropertyBot:
 
         ***REMOVED*** Register handlers
         self._register_handlers()
+
+    def _spawn_history_save(
+        self, coro: Awaitable[None], *, user_id: int | str
+    ) -> asyncio.Task[None] | None:
+        """Track and bound fan-out for fire-and-forget history persistence (***REMOVED***1600).
+
+        Without a bound the text path could accumulate unbounded background
+        tasks under burst traffic / slow DB writes. This helper:
+
+        * rejects the save and logs/scores ``history_save_dropped=1`` once the
+          in-flight count reaches ``_history_save_max_concurrency``;
+        * tracks every spawned task in ``_history_save_tasks`` so ``stop()``
+          can drain them with a bounded timeout.
+
+        Returns the spawned task on success, ``None`` if dropped.
+        """
+        if len(self._history_save_tasks) >= self._history_save_max_concurrency:
+            logger.warning(
+                "history-save fan-out at limit (%d in flight); dropping save for user_id=%s",
+                self._history_save_max_concurrency,
+                user_id,
+            )
+            lf = get_client()
+            if lf is not None:
+                tid = lf.get_current_trace_id() or ""
+                if tid:
+                    lf.create_score(
+                        trace_id=tid,
+                        name="history_save_dropped",
+                        value=1,
+                        data_type="BOOLEAN",
+                        score_id=f"{tid}-history_save_dropped",
+                    )
+            ***REMOVED*** Close the unscheduled coroutine so we do not leak a "never awaited" warning.
+            close = getattr(coro, "close", None)
+            if callable(close):
+                with contextlib.suppress(Exception):
+                    close()
+            return None
+
+        task = asyncio.create_task(coro, name=f"history-save-{user_id}")
+        self._history_save_tasks.add(task)
+        task.add_done_callback(self._history_save_tasks.discard)
+        return task
 
     def _get_pre_agent_filter_extractor(self) -> Any:
         """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
@@ -3691,7 +3749,7 @@ class PropertyBot:
                     except Exception:
                         logger.warning("Failed to save history turn", exc_info=True)
 
-                asyncio.create_task(_bg_save_history(), name=f"history-save-{user_id}")  ***REMOVED*** noqa: RUF006
+                self._spawn_history_save(_bg_save_history(), user_id=user_id)
 
         return response_text
 
@@ -5212,6 +5270,28 @@ class PropertyBot:
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
+        ***REMOVED*** Drain pending fire-and-forget history saves before tearing services down
+        ***REMOVED*** so in-flight DB writes are not lost on shutdown (***REMOVED***1600). Bounded by
+        ***REMOVED*** _history_save_drain_timeout_s so a stuck DB cannot block shutdown.
+        if self._history_save_tasks:
+            in_flight = list(self._history_save_tasks)
+            logger.info("Draining %d in-flight history-save tasks...", len(in_flight))
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*in_flight, return_exceptions=True),
+                    timeout=self._history_save_drain_timeout_s,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "history-save drain timed out after %.1fs; cancelling %d task(s)",
+                    self._history_save_drain_timeout_s,
+                    sum(1 for t in in_flight if not t.done()),
+                )
+                for task in in_flight:
+                    if not task.done():
+                        task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await asyncio.gather(*in_flight, return_exceptions=True)
         if self._miniapp_subscriber_task is not None:
             self._miniapp_subscriber_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
