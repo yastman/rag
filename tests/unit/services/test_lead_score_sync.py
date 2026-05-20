@@ -103,7 +103,6 @@ async def test_sync_pending_lead_scores_marks_failed_on_kommo_error() -> None:
     scoring_store.mark_synced.assert_not_called()
 
 
-
 class TestLeadScoreSyncObserveInstrumentation:
     """Tests for @observe instrumentation on sync_pending_lead_scores (#1663).
 
@@ -192,8 +191,7 @@ class TestLeadScoreSyncObserveInstrumentation:
 
         sync_calls = [c for c in captured if c.get("name") == "job-lead-score-sync"]
         assert len(sync_calls) == 1, (
-            f"Expected exactly one @observe(name='job-lead-score-sync', ...). "
-            f"Captured: {captured}"
+            f"Expected exactly one @observe(name='job-lead-score-sync', ...). Captured: {captured}"
         )
         kwargs = sync_calls[0]
         assert kwargs.get("capture_input") is False
@@ -236,12 +234,29 @@ class TestLeadScoreSyncObserveInstrumentation:
             band_field_id=2,
         )
 
-        assert any(
-            kw.get("tags") == ["job", "lead-scoring"] for kw in recorded_kwargs
-        ), (
+        assert any(kw.get("tags") == ["job", "lead-scoring"] for kw in recorded_kwargs), (
             "propagate_attributes(tags=['job', 'lead-scoring']) was never called. "
             f"Recorded: {recorded_kwargs}"
         )
+
+    @pytest.mark.asyncio
+    async def test_sync_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """Lead-score sync must degrade gracefully when tracing is unavailable."""
+        self._disable_observe_and_propagate(monkeypatch)
+
+        from telegram_bot.services import lead_score_sync as lss_mod
+        from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
+
+        monkeypatch.setattr(lss_mod, "get_client", lambda: None)
+
+        result = await sync_pending_lead_scores(
+            scoring_store=None,
+            kommo_client=None,
+            score_field_id=1,
+            band_field_id=2,
+        )
+
+        assert result == {"synced": 0, "failed": 0, "skipped": 0}
 
     @pytest.mark.asyncio
     async def test_output_records_processed_failed_skipped_counts(self, monkeypatch):
@@ -278,8 +293,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         )
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert len(output_calls) >= 1, "update_current_span(output=...) was never called"
         captured_output = output_calls[-1]["output"]
@@ -312,7 +326,8 @@ class TestLeadScoreSyncObserveInstrumentation:
             )
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert len(error_calls) >= 1, (

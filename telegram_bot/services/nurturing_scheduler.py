@@ -24,6 +24,12 @@ from telegram_bot.observability import get_client, observe, propagate_attributes
 logger = logging.getLogger(__name__)
 
 
+def _update_current_span(lf: Any, **kwargs: Any) -> None:
+    """Update the current Langfuse span when tracing is available."""
+    if lf is not None:
+        lf.update_current_span(**kwargs)
+
+
 class NurturingScheduler:
     """Manage scheduled nurturing batches and funnel analytics rollups."""
 
@@ -112,7 +118,7 @@ class NurturingScheduler:
                 logger.info("Nurturing dispatch completed: %d messages sent", count)
         except Exception as exc:
             logger.exception("Nurturing dispatch failed")
-            lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
             raise
 
     @observe(name="job-funnel-rollup", capture_input=False, capture_output=False)
@@ -135,5 +141,5 @@ class NurturingScheduler:
                 logger.info("Funnel rollup completed: %d stages", len(snapshots))
         except Exception as exc:
             logger.exception("Funnel rollup failed")
-            lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
             raise

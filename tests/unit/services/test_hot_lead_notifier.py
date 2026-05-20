@@ -62,7 +62,6 @@ async def test_notifier_handles_non_numeric_score_without_crashing():
     assert "score=0" in bot.send_message.await_args.kwargs["text"]
 
 
-
 import pytest
 
 
@@ -137,12 +136,30 @@ class TestHotLeadNotifierObserveInstrumentation:
 
         sync_calls = [c for c in captured if c.get("name") == "job-hot-lead-notify"]
         assert len(sync_calls) == 1, (
-            f"Expected exactly one @observe(name='job-hot-lead-notify', ...). "
-            f"Captured: {captured}"
+            f"Expected exactly one @observe(name='job-hot-lead-notify', ...). Captured: {captured}"
         )
         kwargs = sync_calls[0]
         assert kwargs.get("capture_input") is False
         assert kwargs.get("capture_output") is False
+
+    async def test_notify_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """Hot-lead notification must not require an initialized Langfuse client."""
+        self._disable_observe(monkeypatch)
+
+        from telegram_bot.services import hot_lead_notifier as hln_mod
+        from telegram_bot.services.hot_lead_notifier import HotLeadNotifier
+
+        monkeypatch.setattr(hln_mod, "get_client", lambda: None)
+
+        cache = AsyncMock()
+        cache.redis = None
+        bot = AsyncMock()
+        notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
+
+        result = await notifier.notify_if_hot({"lead_id": 1, "score": 90, "session_id": "s1"})
+
+        assert result is True
+        bot.send_message.assert_awaited_once()
 
     async def test_input_payload_is_curated_lead_score_threshold_only(self, monkeypatch):
         """Span input must record curated keys (lead_id, score, threshold) only."""
@@ -155,9 +172,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         cache.redis = AsyncMock()
         cache.redis.set = AsyncMock(return_value=True)
         bot = AsyncMock()
-        notifier = HotLeadNotifier(
-            bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60
-        )
+        notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
 
         # Payload includes a "secret" PII-like field that MUST NOT leak into spans.
         await notifier.notify_if_hot(
@@ -171,8 +186,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         )
 
         input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "input" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
         ]
         assert len(input_calls) >= 1, "update_current_span(input=...) was never called"
         captured_input = input_calls[0]["input"]
@@ -198,17 +212,14 @@ class TestHotLeadNotifierObserveInstrumentation:
         cache.redis = AsyncMock()
         cache.redis.set = AsyncMock(return_value=True)
         bot = AsyncMock()
-        notifier = HotLeadNotifier(
-            bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60
-        )
+        notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
 
         result = await notifier.notify_if_hot(
             {"lead_id": 1, "score": 90, "session_id": "s1", "threshold": 70}
         )
 
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert len(output_calls) >= 1, "update_current_span(output=...) was never called"
         captured_output = output_calls[-1]["output"]
@@ -227,9 +238,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         cache.redis = AsyncMock()
         cache.redis.set = AsyncMock(return_value=False)  # deduped
         bot = AsyncMock()
-        notifier = HotLeadNotifier(
-            bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60
-        )
+        notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
 
         result = await notifier.notify_if_hot(
             {"lead_id": 1, "score": 90, "session_id": "s1", "threshold": 70}
@@ -237,8 +246,7 @@ class TestHotLeadNotifierObserveInstrumentation:
 
         assert result is False
         output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
-            if "output" in c.kwargs
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]
         assert len(output_calls) >= 1
         assert output_calls[-1]["output"].get("notified") is False
@@ -255,9 +263,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         cache.redis.set = AsyncMock(return_value=True)
         bot = AsyncMock()
         bot.send_message = AsyncMock(side_effect=RuntimeError("Telegram down"))
-        notifier = HotLeadNotifier(
-            bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60
-        )
+        notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
 
         with pytest.raises(RuntimeError, match="Telegram down"):
             await notifier.notify_if_hot(
@@ -265,7 +271,8 @@ class TestHotLeadNotifierObserveInstrumentation:
             )
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert len(error_calls) >= 1, (

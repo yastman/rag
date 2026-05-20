@@ -12,6 +12,12 @@ from telegram_bot.services.kommo_models import LeadScoreSyncPayload
 logger = logging.getLogger(__name__)
 
 
+def _update_current_span(lf: Any, **kwargs: Any) -> None:
+    """Update the current Langfuse span when tracing is available."""
+    if lf is not None:
+        lf.update_current_span(**kwargs)
+
+
 @observe(name="job-lead-score-sync", capture_input=False, capture_output=False)
 async def sync_pending_lead_scores(
     *,
@@ -31,10 +37,10 @@ async def sync_pending_lead_scores(
     try:
         with propagate_attributes(tags=["job", "lead-scoring"]):
             if scoring_store is None or kommo_client is None:
-                lf.update_current_span(output={"processed": 0, "failed": 0, "skipped": 0})
+                _update_current_span(lf, output={"processed": 0, "failed": 0, "skipped": 0})
                 return {"synced": 0, "failed": 0, "skipped": 0}
             if score_field_id <= 0 or band_field_id <= 0:
-                lf.update_current_span(output={"processed": 0, "failed": 0, "skipped": 0})
+                _update_current_span(lf, output={"processed": 0, "failed": 0, "skipped": 0})
                 return {"synced": 0, "failed": 0, "skipped": 0}
 
             pending = await scoring_store.list_pending_sync(limit=limit)
@@ -67,10 +73,10 @@ async def sync_pending_lead_scores(
                     await scoring_store.mark_failed(lead_id=rec.lead_id, error="kommo_error")
                     failed += 1
 
-            lf.update_current_span(
-                output={"processed": synced, "failed": failed, "skipped": skipped}
+            _update_current_span(
+                lf, output={"processed": synced, "failed": failed, "skipped": skipped}
             )
             return {"synced": synced, "failed": failed, "skipped": skipped}
     except Exception as exc:
-        lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         raise

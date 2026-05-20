@@ -64,7 +64,6 @@ async def test_scheduler_uses_funnel_rollup_cron_from_config(fake_services):
     await scheduler.stop()
 
 
-
 class TestNurturingSchedulerObserveInstrumentation:
     """Tests for @observe instrumentation on NurturingScheduler jobs (#1663).
 
@@ -119,9 +118,7 @@ class TestNurturingSchedulerObserveInstrumentation:
             "for tags=['job', 'nurturing'] / ['job', 'analytics']"
         )
 
-    def test_dispatch_and_rollup_observe_decorators_applied_with_correct_kwargs(
-        self, monkeypatch
-    ):
+    def test_dispatch_and_rollup_observe_decorators_applied_with_correct_kwargs(self, monkeypatch):
         """@observe must be applied with the exact issue-spec kwargs to both jobs."""
         import contextlib
         import importlib
@@ -199,9 +196,9 @@ class TestNurturingSchedulerObserveInstrumentation:
         scheduler = NurturingScheduler(**fake_services)
         await scheduler.run_nurturing_dispatch()
 
-        assert any(
-            kw.get("tags") == ["job", "nurturing"] for kw in recorded_kwargs
-        ), f"Expected tags=['job', 'nurturing']. Recorded: {recorded_kwargs}"
+        assert any(kw.get("tags") == ["job", "nurturing"] for kw in recorded_kwargs), (
+            f"Expected tags=['job', 'nurturing']. Recorded: {recorded_kwargs}"
+        )
 
     @pytest.mark.asyncio
     async def test_rollup_propagates_analytics_tags(self, monkeypatch, fake_services):
@@ -237,14 +234,31 @@ class TestNurturingSchedulerObserveInstrumentation:
         scheduler = NurturingScheduler(**fake_services)
         await scheduler.run_funnel_rollup()
 
-        assert any(
-            kw.get("tags") == ["job", "analytics"] for kw in recorded_kwargs
-        ), f"Expected tags=['job', 'analytics']. Recorded: {recorded_kwargs}"
+        assert any(kw.get("tags") == ["job", "analytics"] for kw in recorded_kwargs), (
+            f"Expected tags=['job', 'analytics']. Recorded: {recorded_kwargs}"
+        )
 
     @pytest.mark.asyncio
-    async def test_dispatch_exception_records_error_and_reraises(
+    async def test_dispatch_error_preserves_original_exception_when_langfuse_unavailable(
         self, monkeypatch, fake_services
     ):
+        """Missing Langfuse client must not mask the job failure."""
+        self._disable_observe_and_propagate(monkeypatch)
+
+        from telegram_bot.services import nurturing_scheduler as ns_mod
+        from telegram_bot.services.nurturing_scheduler import NurturingScheduler
+
+        monkeypatch.setattr(ns_mod, "get_client", lambda: None)
+        fake_services["nurturing_service"].dispatch_pending = AsyncMock(
+            side_effect=RuntimeError("Dispatch boom")
+        )
+        scheduler = NurturingScheduler(**fake_services)
+
+        with pytest.raises(RuntimeError, match="Dispatch boom"):
+            await scheduler.run_nurturing_dispatch()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_exception_records_error_and_reraises(self, monkeypatch, fake_services):
         """Dispatch must record ERROR level and re-raise so APScheduler logs failure."""
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
@@ -260,7 +274,8 @@ class TestNurturingSchedulerObserveInstrumentation:
             await scheduler.run_nurturing_dispatch()
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert len(error_calls) >= 1
@@ -268,9 +283,7 @@ class TestNurturingSchedulerObserveInstrumentation:
         assert len(error_calls[0].get("status_message", "")) <= 220
 
     @pytest.mark.asyncio
-    async def test_rollup_exception_records_error_and_reraises(
-        self, monkeypatch, fake_services
-    ):
+    async def test_rollup_exception_records_error_and_reraises(self, monkeypatch, fake_services):
         """Rollup must record ERROR level and re-raise so APScheduler logs failure."""
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
@@ -286,7 +299,8 @@ class TestNurturingSchedulerObserveInstrumentation:
             await scheduler.run_funnel_rollup()
 
         error_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
             if c.kwargs.get("level") == "ERROR"
         ]
         assert len(error_calls) >= 1

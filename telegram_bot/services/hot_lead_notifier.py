@@ -15,6 +15,12 @@ from telegram_bot.observability import get_client, observe
 logger = logging.getLogger(__name__)
 
 
+def _update_current_span(lf: Any, **kwargs: Any) -> None:
+    """Update the current Langfuse span when tracing is available."""
+    if lf is not None:
+        lf.update_current_span(**kwargs)
+
+
 class HotLeadNotifier:
     """Fan-out hot-lead alerts to configured manager Telegram IDs."""
 
@@ -48,17 +54,18 @@ class HotLeadNotifier:
             logger.warning("Invalid hot lead score %r; defaulting to 0", raw_score)
             score = 0
 
-        lf.update_current_span(
+        _update_current_span(
+            lf,
             input={
                 "lead_id": lead_id,
                 "score": score,
                 "threshold": payload.get("threshold"),
-            }
+            },
         )
 
         try:
             if not lead_id or not session_id:
-                lf.update_current_span(output={"notified": False})
+                _update_current_span(lf, output={"notified": False})
                 return False
 
             redis = getattr(self._cache, "redis", None)
@@ -66,14 +73,14 @@ class HotLeadNotifier:
                 key = f"hot-lead:{session_id}:{lead_id}"
                 fresh = await redis.set(key, "1", ex=self._dedupe_ttl_sec, nx=True)
                 if not fresh:
-                    lf.update_current_span(output={"notified": False})
+                    _update_current_span(lf, output={"notified": False})
                     return False
 
             text = f"Hot lead detected: lead_id={lead_id}, score={score}, session_id={session_id}"
             for manager_id in self._manager_ids:
                 await self._bot.send_message(chat_id=manager_id, text=text)
-            lf.update_current_span(output={"notified": True})
+            _update_current_span(lf, output={"notified": True})
             return True
         except Exception as exc:
-            lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
             raise
