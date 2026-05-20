@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # RUNTIME STAGE
 # =============================================================================
-FROM python:3.14-slim-bookworm@sha256:2e256d0381371566ed96980584957ed31297f437569b79b0e5f7e17f2720e53a AS runtime
+FROM python:3.14-slim-bookworm@sha256:a3974109d36f164ca70024bc0d0828ac706e4ccda849f8638d879e91f79e90ec AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
 
