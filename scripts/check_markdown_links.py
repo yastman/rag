@@ -23,6 +23,7 @@ SKIP_DIRS = {
     "node_modules",
     ".terraform",
     "vendor",
+    "tmp",
     "generated",
     "cache",
     "dist",
