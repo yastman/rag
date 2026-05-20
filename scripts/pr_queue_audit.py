@@ -8,12 +8,13 @@ close. Designed for the weekly governance runbook (issue ***REMOVED***1719).
 Buckets
 -------
 
-- ``ready``               : Mergeable, CI green, has at least one approval
-                            (or repo policy waives review). Merge candidate.
-- ``ci-failing``           : CI status is FAILURE / ERROR / CANCELLED.
-- ``ci-pending``           : CI not yet completed.
+- ``ready``               : Mergeable, static CI green, has at least one
+                            approval (or repo policy waives review). Confirm
+                            local test evidence before merge.
+- ``ci-failing``           : Static CI status is FAILURE / ERROR / CANCELLED.
+- ``ci-pending``           : Static CI not yet completed.
 - ``conflicts``            : ``mergeable`` reports CONFLICTING.
-- ``review-needed``        : CI green, no approvals yet.
+- ``review-needed``        : Static CI green, no approvals yet.
 - ``changes-requested``    : Reviewer asked for changes; awaits author.
 - ``draft``                : Marked as draft.
 - ``stale``                : Open longer than ``--stale-days`` (default 14).
@@ -45,7 +46,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
+import subprocess  ***REMOVED*** nosec B404
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
