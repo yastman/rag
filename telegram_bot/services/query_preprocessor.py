@@ -210,6 +210,18 @@ class QueryPreprocessor:
         "Byala": "Бяла",
     }
 
+    ***REMOVED*** Precompiled (pattern, replacement) pairs derived from TRANSLIT_MAP.
+    ***REMOVED***
+    ***REMOVED*** The TRANSLIT_MAP is static and shared across all instances, so the
+    ***REMOVED*** compiled patterns can be hoisted out of the per-query hot path
+    ***REMOVED*** (issue ***REMOVED***1644). Each pattern preserves the original IGNORECASE flag and
+    ***REMOVED*** iteration order matches dict insertion order, so multi-word phrases
+    ***REMOVED*** like "Sunny Beach" still match before any prefix subset would.
+    _COMPILED_TRANSLIT: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+        (re.compile(re.escape(_latin), re.IGNORECASE), _cyrillic)
+        for _latin, _cyrillic in TRANSLIT_MAP.items()
+    )
+
     ***REMOVED*** Patterns indicating exact search (favor sparse vectors)
     EXACT_PATTERNS = [
         r"\bID\s*\d+",  ***REMOVED*** "ID 12345"
@@ -234,11 +246,17 @@ class QueryPreprocessor:
     ]
 
     def normalize_translit(self, query: str) -> str:
-        """Convert Latin place names to Cyrillic for BM42 sparse search."""
+        """Convert Latin place names to Cyrillic for BM42 sparse search.
+
+        Uses precompiled patterns from ``_COMPILED_TRANSLIT`` (issue ***REMOVED***1644) so
+        the per-query cost is just N substitutions, not N compile + N
+        substitutions. Behaviour is byte-identical to the previous per-call
+        ``re.compile`` implementation, including the IGNORECASE flag and
+        dict-insertion-order substitution sequence.
+        """
         normalized = query
 
-        for latin, cyrillic in self.TRANSLIT_MAP.items():
-            pattern = re.compile(re.escape(latin), re.IGNORECASE)
+        for pattern, cyrillic in self._COMPILED_TRANSLIT:
             normalized = pattern.sub(cyrillic, normalized)
 
         if normalized != query:
