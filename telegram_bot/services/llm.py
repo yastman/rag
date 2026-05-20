@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 LOW_CONFIDENCE_THRESHOLD = 0.3
 
 
+def _update_current_span(lf: Any, **kwargs: Any) -> None:
+    """Update the current Langfuse span when tracing is available."""
+    if lf is not None:
+        lf.update_current_span(**kwargs)
+
+
 class ConfidenceResponse(BaseModel):
     """Pydantic model for LLM confidence extraction via Instructor.
 
@@ -125,12 +131,13 @@ class LLMService:
         prompt or full response into Langfuse.
         """
         lf = get_client()
-        lf.update_current_span(
+        _update_current_span(
+            lf,
             input={
                 "prompt_preview": question[:120],
                 "model": self.model,
                 "with_confidence": with_confidence,
-            }
+            },
         )
         try:
             context = self._format_context(context_chunks)
@@ -177,7 +184,7 @@ class LLMService:
                     max_tokens=self.model_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
                 )
-                lf.update_current_span(output={"response_len": len(response_model.answer)})
+                _update_current_span(lf, output={"response_len": len(response_model.answer)})
                 return ConfidenceResult(
                     answer=response_model.answer,
                     confidence=response_model.confidence,
@@ -195,12 +202,12 @@ class LLMService:
 
             message = response.choices[0].message
             response_text = message.content or ""
-            lf.update_current_span(output={"response_len": len(response_text)})
+            _update_current_span(lf, output={"response_len": len(response_text)})
             return response_text
 
         except (openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM API timeout/connection: {e}")
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(e)[:200])
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -209,7 +216,7 @@ class LLMService:
             return fallback
         except openai.RateLimitError as e:
             logger.error(f"LLM API rate limit: {e}")
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(e)[:200])
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -218,7 +225,7 @@ class LLMService:
             return fallback
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(e)[:200])
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -273,11 +280,12 @@ class LLMService:
         ``langfuse.openai`` own that on the inner generation.
         """
         lf = get_client()
-        lf.update_current_span(
+        _update_current_span(
+            lf,
             input={
                 "prompt_preview": question[:120],
                 "model": self.model,
-            }
+            },
         )
         chunks_count = 0
         total_len = 0
@@ -327,15 +335,15 @@ class LLMService:
                     total_len += len(delta.content)
                     yield delta.content
 
-            lf.update_current_span(output={"chunks": chunks_count, "total_len": total_len})
+            _update_current_span(lf, output={"chunks": chunks_count, "total_len": total_len})
 
         except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
             logger.error(f"LLM streaming error: {e}")
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(e)[:200])
             yield self._get_fallback_answer(question, context_chunks)
         except Exception as e:
             logger.error(f"LLM streaming failed: {e}", exc_info=True)
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(e)[:200])
             yield self._get_fallback_answer(question, context_chunks)
 
     def _format_context(self, chunks: list[dict[str, Any]]) -> str:
@@ -449,11 +457,12 @@ class LLMService:
         contract).
         """
         lf = get_client()
-        lf.update_current_span(
+        _update_current_span(
+            lf,
             input={
                 "prompt_preview": prompt[:120],
                 "model": self.model,
-            }
+            },
         )
         try:
             response = await self.client.chat.completions.create(
@@ -464,11 +473,11 @@ class LLMService:
                 name="generate-simple",  # type: ignore[call-overload]  # langfuse kwarg
             )
             response_text = response.choices[0].message.content or ""
-            lf.update_current_span(output={"response_len": len(response_text)})
+            _update_current_span(lf, output={"response_len": len(response_text)})
             return response_text
         except Exception as e:
             logger.error(f"LLM generate failed: {e}")
-            lf.update_current_span(level="ERROR", status_message=str(e)[:200])
+            _update_current_span(lf, level="ERROR", status_message=str(e)[:200])
             raise
 
     async def close(self):

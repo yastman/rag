@@ -110,6 +110,23 @@ class TestLLMServiceGenerateAnswer:
 
         assert result == "Generated answer text"
 
+    async def test_generate_answer_works_when_langfuse_client_unavailable(
+        self, sample_chunks, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Tracing must degrade gracefully when get_client() returns None."""
+        from telegram_bot.services import llm as llm_mod
+
+        monkeypatch.setattr(llm_mod, "get_client", lambda: None)
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Generated answer text")
+        )
+
+        result = await service.generate_answer("What apartments?", sample_chunks)
+
+        assert result == "Generated answer text"
+
     async def test_configured_max_tokens_used_for_answer_confidence_and_stream(self, sample_chunks):
         """LLM answer paths use the configured generation token budget."""
         service = LLMService(api_key="test-key", max_tokens=1234)
@@ -227,6 +244,27 @@ class TestLLMServiceStreamAnswer:
             chunks.append(chunk)
 
         assert chunks == ["Hello", " World"]
+
+    async def test_stream_answer_works_when_langfuse_client_unavailable(
+        self, sample_chunks, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Streaming must not require an initialized Langfuse client."""
+        from telegram_bot.services import llm as llm_mod
+
+        monkeypatch.setattr(llm_mod, "get_client", lambda: None)
+        service = LLMService(api_key="test-key")
+
+        chunk = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content="Hello"))])
+
+        async def mock_stream():
+            yield chunk
+
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=mock_stream())
+
+        chunks = [part async for part in service.stream_answer("Question?", sample_chunks)]
+
+        assert chunks == ["Hello"]
 
     async def test_stream_answer_skips_usage_chunks(self, sample_chunks):
         """Test that usage chunks are skipped."""
@@ -500,6 +538,23 @@ class TestLLMServiceGenerate:
 
     async def test_generate_returns_content(self):
         """Test successful generation."""
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Generated text")
+        )
+
+        result = await service.generate("Test prompt")
+
+        assert result == "Generated text"
+
+    async def test_generate_works_when_langfuse_client_unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Simple generation must not require an initialized Langfuse client."""
+        from telegram_bot.services import llm as llm_mod
+
+        monkeypatch.setattr(llm_mod, "get_client", lambda: None)
         service = LLMService(api_key="test-key")
         service.client = AsyncMock()
         service.client.chat.completions.create = AsyncMock(
