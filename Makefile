@@ -295,6 +295,7 @@ test-smoke: ***REMOVED******REMOVED*** Run smoke tests (requires live services)
 
 test-load-eviction: ***REMOVED******REMOVED*** Run Redis eviction tests
 	@echo "$(BLUE)Running Redis eviction tests...$(NC)"
+	REDIS_URL="$${REDIS_URL:-redis://localhost:6379}" \
 	uv run pytest tests/load/test_load_redis_eviction.py -v -s
 	@echo "$(GREEN)✓ Redis eviction tests complete$(NC)"
 
