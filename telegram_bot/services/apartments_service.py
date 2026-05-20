@@ -89,6 +89,7 @@ class ApartmentsService:
         colbert_query: list[list[float]] | None = None,
         filters: dict | None = None,
         top_k: int = 10,
+        rrf_k: int = 60,
     ) -> list[dict]:
         """Hybrid search on apartments collection with apartment-specific filters."""
         lf = get_client()
@@ -99,6 +100,7 @@ class ApartmentsService:
             sparse_vector=sparse_vector,
             filters=filters,
             top_k=top_k,
+            rrf_k=rrf_k,
         )
         return results
 
@@ -110,6 +112,7 @@ class ApartmentsService:
         sparse_vector: dict | None,
         filters: dict | None,
         top_k: int = 10,
+        rrf_k: int = 60,
     ) -> tuple[list[dict], int]:
         """Search with apartment-specific filter (no metadata. prefix).
 
@@ -143,7 +146,7 @@ class ApartmentsService:
                 )
             )
 
-        rrf_query = models.FusionQuery(fusion=models.Fusion.RRF)
+        rrf_query = models.RrfQuery(rrf=models.Rrf(k=rrf_k))
 
         if colbert_query:
             # 3-stage: dense+sparse → RRF → ColBERT rescore
