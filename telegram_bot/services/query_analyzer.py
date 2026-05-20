@@ -12,8 +12,8 @@ import openai
 from langfuse.openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from telegram_bot.observability import get_client, observe
 from telegram_bot.integrations.prompt_manager import get_prompt_with_object
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
