@@ -28,6 +28,7 @@ class GroqContextualizer(ContextualizeProvider):
         self.sync_client = Groq(api_key=self.settings.groq_api_key)
         self.total_tokens = 0
 
+    @observe(name="groq-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
         self,
         chunks: list[str],
