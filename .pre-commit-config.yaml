@@ -21,8 +21,12 @@ default_stages:
 fail_fast: true  # Stop on first failure (performance)
 
 repos:
+  # =============================================================================
+  # PRE-COMMIT HOOKS (Run before every commit - must be fast)
+  # =============================================================================
+
   # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
-  # Best Practice 2025: Run linter BEFORE formatter (lint → format order)
+  # Best Practice 2025: Run linter BEFORE formatter (lint -> format order)
   # Documentation: https://docs.astral.sh/ruff/integrations/
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12  # Latest: https://github.com/astral-sh/ruff-pre-commit/releases
@@ -35,12 +39,14 @@ repos:
           - --exit-non-zero-on-fix  # Fail if fixes were applied (to review changes)
         types_or: [python, pyi]
         exclude: ^legacy/
+        stages: [pre-commit]
 
       # Step 2: Formatter - formats code (runs AFTER linting)
       - id: ruff-format
         name: Ruff Formatter
         types_or: [python, pyi]
         exclude: ^legacy/
+        stages: [pre-commit]
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -48,40 +54,68 @@ repos:
     hooks:
       - id: trailing-whitespace
         name: Trim trailing whitespace
+        stages: [pre-commit]
       - id: end-of-file-fixer
         name: Fix end of files
+        stages: [pre-commit]
       - id: check-yaml
         name: Check YAML syntax
         args: ['--unsafe']  # Allow custom YAML tags
+        stages: [pre-commit]
       - id: check-toml
         name: Check TOML syntax
+        stages: [pre-commit]
       - id: check-json
         name: Check JSON syntax
+        stages: [pre-commit]
       - id: check-added-large-files
         name: Check for large files
         args: ['--maxkb=1000']
+        stages: [pre-commit]
       - id: check-merge-conflict
         name: Check for merge conflicts
+        stages: [pre-commit]
       - id: detect-private-key
         name: Detect private keys
+        stages: [pre-commit]
       - id: debug-statements
         name: Check for debugger imports
+        stages: [pre-commit]
       - id: mixed-line-ending
         name: Check mixed line endings
         args: ['--fix=lf']
+        stages: [pre-commit]
+      - id: check-case-conflict
+        name: Check case conflicts
+        stages: [pre-commit]
+      - id: check-symlinks
+        name: Check symlinks
+        stages: [pre-commit]
+      - id: destroyed-symlinks
+        name: Detect destroyed symlinks
+        stages: [pre-commit]
+      - id: check-executables-have-shebangs
+        name: Check executables have shebangs
+        stages: [pre-commit]
+      - id: check-shebang-scripts-are-executable
+        name: Check shebang scripts are executable
+        stages: [pre-commit]
+      - id: no-commit-to-branch
+        name: Prevent commits to main/dev
+        args: ['--branch', 'main', '--branch', 'dev']
+        stages: [pre-commit]
 
-  # Optional: mypy for type checking
-  # Uncomment to enable strict type checking
-  # - repo: https://github.com/pre-commit/mirrors-mypy
-  #   rev: v1.13.0
-  #   hooks:
-  #     - id: mypy
-  #       name: MyPy Type Checker
-  #       additional_dependencies:
-  #         - types-requests
-  #         - types-aiohttp
-  #       args:
-  #         - --config-file=pyproject.toml
+  # Gitleaks for secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: Gitleaks secret scanner
+        stages: [pre-commit]
+
+  # =============================================================================
+  # PRE-PUSH HOOKS (Run before git push - heavier checks)
+  # =============================================================================
 
   # Bandit for security issues
   - repo: https://github.com/PyCQA/bandit
@@ -94,28 +128,33 @@ repos:
           - -c
           - pyproject.toml
         additional_dependencies: ["bandit[toml]"]
+        stages: [pre-push]
 
-  # Gitleaks for secret scanning
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.1
+  # actionlint for GitHub Actions workflow linting
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
     hooks:
-      - id: gitleaks
-        name: Gitleaks secret scanner
+      - id: actionlint
+        name: actionlint
+        stages: [pre-push]
 
-  # Hadolint for Dockerfile linting (requires Docker)
-  - repo: local
+  # shellcheck for shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        stages: [pre-push]
+
+  # Hadolint for Dockerfile linting (Python wrapper, no Docker required)
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: v2.12.0.3
     hooks:
       - id: hadolint
         name: Hadolint Dockerfile linter
-        entry: hadolint/hadolint:v2.12.0 hadolint --failure-threshold error
-        language: docker_image
+        stages: [pre-push]
         files: Dockerfile.*|.*Dockerfile
-        pass_filenames: true
-
-  # =============================================================================
-  # PRE-PUSH HOOKS (Run before git push)
-  # =============================================================================
-  # These hooks run more expensive checks that shouldn't slow down commits
+        args: [--failure-threshold, error]
 
 # CI configuration
 ci:
