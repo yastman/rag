@@ -14,6 +14,22 @@ make issue-hygiene        ***REMOVED*** open issue queue hygiene
 Each command exits non-zero whenever something is actionable, so they're CI-
 friendly and can be wired into a weekly Slack/email digest.
 
+***REMOVED******REMOVED*** Before Starting New Work
+
+Do not start non-trivial edits in a dirty checkout. Start from a clean worktree
+or create a project-local `.worktrees/<branch>` checkout when unrelated local
+changes exist:
+
+```bash
+make git-hygiene
+git fetch origin
+git worktree add .worktrees/<branch> -b <branch> origin/dev
+```
+
+Use the new worktree for feature edits, verification, commits, and PR
+preparation. Leave unrelated dirty branches untouched until their owner or
+operator decides whether to keep, merge, or discard them.
+
 ***REMOVED******REMOVED*** What each tool covers
 
 | Tool                              | Covers                                | Issue   |
