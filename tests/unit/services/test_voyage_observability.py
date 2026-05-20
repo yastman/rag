@@ -56,7 +56,7 @@ class TestVoyageServiceObservabilityIntegration:
     @pytest.fixture
     def mock_voyage_client(self):
         """Mock Voyage AI client."""
-        with patch("telegram_bot.services.voyage.voyageai.Client") as mock_cls:
+        with patch("voyageai.Client") as mock_cls:
             mock_client = MagicMock()
             mock_cls.return_value = mock_client
             yield mock_client
