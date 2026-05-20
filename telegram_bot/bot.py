@@ -5136,11 +5136,7 @@ class PropertyBot:
             await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
         ***REMOVED*** Warm up BGE-M3 connection pool (***REMOVED***953)
-        try:
-            await self._hybrid.aembed_query("warmup")
-            logger.info("BGE-M3 warmup complete")
-        except Exception:
-            logger.warning("BGE-M3 warmup failed (will retry on first query)", exc_info=True)
+        await self._warmup_bge()
 
         ***REMOVED*** Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
         if self._topic_manager is not None:
@@ -5175,6 +5171,14 @@ class PropertyBot:
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._polling_lock_task
                 self._polling_lock_task = None
+
+    async def _warmup_bge(self) -> None:
+        """Warm up BGE-M3 connection pool (***REMOVED***953)."""
+        try:
+            await self._hybrid.aembed_query("warmup")
+            logger.info("BGE-M3 warmup complete")
+        except Exception:
+            logger.warning("BGE-M3 warmup failed (will retry on first query)", exc_info=True)
 
     async def _polling_lock_heartbeat(self) -> None:
         """Keep the Redis lease alive while polling is active."""

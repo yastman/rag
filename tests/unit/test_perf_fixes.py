@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -144,31 +143,83 @@ async def test_same_query_reuses_precomputed(
 ***REMOVED*** ---------------------------------------------------------------------------
 
 
-async def test_bge_warmup_called_on_start():
-    """***REMOVED***953: PropertyBot.start() should call _hybrid.aembed_query('warmup')."""
-    from telegram_bot.bot import PropertyBot
+async def test_warmup_bge_calls_hybrid_embed():
+    """***REMOVED***953: _warmup_bge() should call _hybrid.aembed_query('warmup')."""
+    import sys
+    from unittest.mock import MagicMock as _MagicMock
 
-    bot = MagicMock(spec=PropertyBot)
-    bot._hybrid = AsyncMock()
-    bot._hybrid.aembed_query = AsyncMock(return_value=[0.1] * 1024)
+    ***REMOVED*** Mock the problematic import chain before importing PropertyBot
+    _mocked = {}
+    for mod in ("src.retrieval", "src.retrieval.topic_classifier",
+                "src.retrieval.search_engines", "src.retrieval.search_engine_shared"):
+        if mod not in sys.modules:
+            _mocked[mod] = sys.modules.setdefault(mod, _MagicMock())
 
-    ***REMOVED*** Call the warmup logic directly (extracted pattern)
-    with contextlib.suppress(Exception):
-        await bot._hybrid.aembed_query("warmup")
+    try:
+        from telegram_bot.bot import PropertyBot
 
-    bot._hybrid.aembed_query.assert_called_once_with("warmup")
+        bot = object.__new__(PropertyBot)
+        bot._hybrid = AsyncMock()
+        bot._hybrid.aembed_query = AsyncMock(return_value=[0.1] * 1024)
+
+        await bot._warmup_bge()
+
+        bot._hybrid.aembed_query.assert_called_once_with("warmup")
+    finally:
+        for mod in _mocked:
+            sys.modules.pop(mod, None)
 
 
-async def test_bge_warmup_failure_nonfatal():
+async def test_warmup_bge_failure_nonfatal():
     """***REMOVED***953: BGE-M3 warmup failure should not prevent bot startup."""
-    hybrid = AsyncMock()
-    hybrid.aembed_query = AsyncMock(side_effect=ConnectionError("BGE-M3 down"))
+    import sys
+    from unittest.mock import MagicMock as _MagicMock
 
-    ***REMOVED*** Should not raise
-    with contextlib.suppress(Exception):
-        await hybrid.aembed_query("warmup")
+    _mocked = {}
+    for mod in ("src.retrieval", "src.retrieval.topic_classifier",
+                "src.retrieval.search_engines", "src.retrieval.search_engine_shared"):
+        if mod not in sys.modules:
+            _mocked[mod] = sys.modules.setdefault(mod, _MagicMock())
 
-    hybrid.aembed_query.assert_called_once_with("warmup")
+    try:
+        from telegram_bot.bot import PropertyBot
+
+        bot = object.__new__(PropertyBot)
+        bot._hybrid = AsyncMock()
+        bot._hybrid.aembed_query = AsyncMock(side_effect=ConnectionError("BGE-M3 down"))
+
+        ***REMOVED*** Should not raise
+        await bot._warmup_bge()
+
+        bot._hybrid.aembed_query.assert_called_once_with("warmup")
+    finally:
+        for mod in _mocked:
+            sys.modules.pop(mod, None)
+
+
+async def test_start_calls_warmup_bge():
+    """***REMOVED***953: PropertyBot.start() invokes _warmup_bge()."""
+    import ast
+    from pathlib import Path
+
+    ***REMOVED*** Use AST-based verification (same pattern as tests/unit/dialogs/_property_bot_ast.py)
+    ***REMOVED*** to confirm that start() calls self._warmup_bge() without running the full method.
+    tree = ast.parse(Path("telegram_bot/bot.py").read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "PropertyBot":
+            for item in node.body:
+                if isinstance(item, ast.AsyncFunctionDef) and item.name == "start":
+                    ***REMOVED*** Look for `await self._warmup_bge()` in start()
+                    for child in ast.walk(item):
+                        if (
+                            isinstance(child, ast.Await)
+                            and isinstance(child.value, ast.Call)
+                            and isinstance(child.value.func, ast.Attribute)
+                            and child.value.func.attr == "_warmup_bge"
+                        ):
+                            return  ***REMOVED*** Found it
+                    raise AssertionError("start() does not call self._warmup_bge()")
+    raise AssertionError("PropertyBot.start not found")
 
 
 ***REMOVED*** ---------------------------------------------------------------------------
