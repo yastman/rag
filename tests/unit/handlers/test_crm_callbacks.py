@@ -602,6 +602,58 @@ class TestCrmCallbacksObserveInstrumentation:
                 f"@observe(name={name!r}) must use capture_output=False"
             )
 
+    async def test_callback_prompt_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """Callback prompt handlers must degrade gracefully when tracing is off."""
+        self._disable_observe(monkeypatch)
+        from telegram_bot.handlers import crm_callbacks as cb_mod
+        from telegram_bot.handlers.crm_callbacks import on_lead_note
+
+        monkeypatch.setattr(cb_mod, "get_client", lambda: None)
+
+        callback = AsyncMock()
+        callback.data = "crm:lead:note:123"
+        state = AsyncMock()
+
+        await on_lead_note(callback, state, kommo_client=None)
+
+        callback.answer.assert_called_once()
+        assert callback.answer.call_args.kwargs.get("show_alert") is True
+
+    async def test_task_text_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """Message handlers must not require an initialized Langfuse client."""
+        self._disable_observe(monkeypatch)
+        from telegram_bot.handlers import crm_callbacks as cb_mod
+        from telegram_bot.handlers.crm_callbacks import on_task_text_received
+
+        monkeypatch.setattr(cb_mod, "get_client", lambda: None)
+
+        state = AsyncMock()
+        state.get_data = AsyncMock(return_value={"entity_id": 123})
+        message = AsyncMock()
+        message.text = ""
+
+        await on_task_text_received(message, state, kommo_client=AsyncMock())
+
+        state.clear.assert_called_once()
+        message.answer.assert_called_once()
+
+    async def test_edit_date_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """Date edit validation must still work when tracing is unavailable."""
+        self._disable_observe(monkeypatch)
+        from telegram_bot.handlers import crm_callbacks as cb_mod
+        from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
+
+        monkeypatch.setattr(cb_mod, "get_client", lambda: None)
+
+        state = AsyncMock()
+        state.get_data = AsyncMock(return_value={"edit_task_id": 456})
+        message = AsyncMock()
+        message.text = "bad date"
+
+        await on_edit_task_date_received(message, state, kommo_client=AsyncMock())
+
+        message.answer.assert_called_once()
+
     # ---- Behavior tests for representative new handlers --------------------
 
     async def test_on_task_text_received_records_curated_input(self, monkeypatch):

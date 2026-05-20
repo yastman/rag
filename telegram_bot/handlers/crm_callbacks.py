@@ -34,6 +34,12 @@ _TASK_SUCCESS = "✅ Задача создана."
 _NO_CRM = "⚠️ CRM недоступна."
 
 
+def _update_current_span(lf: Any, **kwargs: Any) -> None:
+    """Update the current Langfuse span when tracing is available."""
+    if lf is not None:
+        lf.update_current_span(**kwargs)
+
+
 @observe(name="crm-lead-note-prompt", capture_input=False, capture_output=False)
 async def on_lead_note(
     callback: CallbackQuery,
@@ -43,14 +49,14 @@ async def on_lead_note(
     """Handle crm:lead:note:{id} — start quick note FSM for a lead."""
     lf = get_client()
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await callback.answer(_NO_CRM, show_alert=True)
         return
     # callback.data is guaranteed non-None by F.data.regexp filter
     assert callback.data is not None
     # callback.data format: crm:lead:note:{id}
     lead_id = int(callback.data.split(":")[3])
-    lf.update_current_span(input={"deal_id": lead_id, "action": "lead-note-prompt"})
+    _update_current_span(lf, input={"deal_id": lead_id, "action": "lead-note-prompt"})
     await state.set_state(CrmQuickActionSG.waiting_note)
     await state.update_data(entity_type="leads", entity_id=lead_id)
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -67,14 +73,14 @@ async def on_lead_task(
     """Handle crm:lead:task:{id} — start quick task FSM for a lead."""
     lf = get_client()
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await callback.answer(_NO_CRM, show_alert=True)
         return
     # callback.data is guaranteed non-None by F.data.regexp filter
     assert callback.data is not None
     # callback.data format: crm:lead:task:{id}
     lead_id = int(callback.data.split(":")[3])
-    lf.update_current_span(input={"deal_id": lead_id, "action": "lead-task-prompt"})
+    _update_current_span(lf, input={"deal_id": lead_id, "action": "lead-task-prompt"})
     await state.set_state(CrmQuickActionSG.waiting_task)
     await state.update_data(entity_id=lead_id, entity_type="leads")
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -113,14 +119,14 @@ async def on_task_postpone(
     """Handle crm:task:postpone:{id} — postpone task by +1 day."""
     lf = get_client()
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await callback.answer(_NO_CRM, show_alert=True)
         return
     # callback.data is guaranteed non-None by F.data.regexp filter
     assert callback.data is not None
     # callback.data format: crm:task:postpone:{id}
     task_id = int(callback.data.split(":")[3])
-    lf.update_current_span(input={"task_id": task_id, "action": "postpone"})
+    _update_current_span(lf, input={"task_id": task_id, "action": "postpone"})
     due_ts = int(time.time()) + 86400
     try:
         await kommo_client.update_task(task_id, TaskUpdate(complete_till=due_ts))
@@ -131,7 +137,7 @@ async def on_task_postpone(
             await callback.message.edit_text(msg)
     except Exception as exc:
         logger.exception("Failed to postpone task %d", task_id)
-        lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await callback.answer("⚠️ Ошибка при откладывании задачи.", show_alert=True)
 
 
@@ -144,14 +150,14 @@ async def on_contact_note(
     """Handle crm:contact:note:{id} — start quick note FSM for a contact."""
     lf = get_client()
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await callback.answer(_NO_CRM, show_alert=True)
         return
     # callback.data is guaranteed non-None by F.data.regexp filter
     assert callback.data is not None
     # callback.data format: crm:contact:note:{id}
     contact_id = int(callback.data.split(":")[3])
-    lf.update_current_span(input={"deal_id": contact_id, "action": "contact-note-prompt"})
+    _update_current_span(lf, input={"deal_id": contact_id, "action": "contact-note-prompt"})
     await state.set_state(CrmQuickActionSG.waiting_note)
     await state.update_data(entity_type="contacts", entity_id=contact_id)
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -201,17 +207,17 @@ async def on_task_text_received(
     entity_id: int = data.get("entity_id", 0)
     text = (message.text or "").strip()
 
-    lf.update_current_span(input={"deal_id": entity_id, "action": "create"})
+    _update_current_span(lf, input={"deal_id": entity_id, "action": "create"})
 
     await state.clear()
 
     if not text:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer("⚠️ Текст задачи не может быть пустым.")
         return
 
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer(_NO_CRM)
         return
 
@@ -223,7 +229,7 @@ async def on_task_text_received(
         await message.answer(_TASK_SUCCESS)
     except Exception as exc:
         logger.exception("Failed to create task for lead #%d", entity_id)
-        lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await message.answer("⚠️ Ошибка при создании задачи.")
 
 
@@ -242,12 +248,12 @@ async def on_task_edit(
     """Handle crm:task:edit:{id} — start edit field choice FSM."""
     lf = get_client()
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await callback.answer(_NO_CRM, show_alert=True)
         return
     assert callback.data is not None
     task_id = int(callback.data.split(":")[3])
-    lf.update_current_span(input={"task_id": task_id, "action": "edit-prompt"})
+    _update_current_span(lf, input={"task_id": task_id, "action": "edit-prompt"})
     await state.set_state(CrmQuickActionSG.edit_task_choose_field)
     await state.update_data(edit_task_id=task_id)
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -265,15 +271,15 @@ async def on_edit_field_chosen(
     lf = get_client()
     choice = (message.text or "").strip()
     if choice == "1":
-        lf.update_current_span(input={"field": "text", "action": "edit-field-choice"})
+        _update_current_span(lf, input={"field": "text", "action": "edit-field-choice"})
         await state.set_state(CrmQuickActionSG.edit_task_text)
         await message.answer(_EDIT_TEXT_PROMPT)
     elif choice == "2":
-        lf.update_current_span(input={"field": "date", "action": "edit-field-choice"})
+        _update_current_span(lf, input={"field": "date", "action": "edit-field-choice"})
         await state.set_state(CrmQuickActionSG.edit_task_date)
         await message.answer(_EDIT_DATE_PROMPT)
     else:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer("⚠️ Отправьте 1 или 2.")
 
 
@@ -289,14 +295,14 @@ async def on_edit_task_text_received(
     task_id = data.get("edit_task_id", 0)
     text = (message.text or "").strip()
 
-    lf.update_current_span(input={"task_id": task_id, "field": "text", "action": "edit"})
+    _update_current_span(lf, input={"task_id": task_id, "field": "text", "action": "edit"})
 
     if not text:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer("⚠️ Текст не может быть пустым.")
         return
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await state.clear()
         await message.answer(_NO_CRM)
         return
@@ -307,7 +313,7 @@ async def on_edit_task_text_received(
         await message.answer(_EDIT_SUCCESS)
     except Exception as exc:
         logger.exception("Failed to update task %d text", task_id)
-        lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await state.clear()
         await message.answer("⚠️ Ошибка при обновлении задачи.")
 
@@ -324,10 +330,10 @@ async def on_edit_task_date_received(
     task_id = data.get("edit_task_id", 0)
     raw = (message.text or "").strip()
 
-    lf.update_current_span(input={"task_id": task_id, "field": "date", "action": "edit"})
+    _update_current_span(lf, input={"task_id": task_id, "field": "date", "action": "edit"})
 
     if kommo_client is None:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await state.clear()
         await message.answer(_NO_CRM)
         return
@@ -337,7 +343,7 @@ async def on_edit_task_date_received(
         dt = dt.replace(tzinfo=datetime.UTC)
         due_ts = int(dt.timestamp())
     except ValueError:
-        lf.update_current_span(output={"action": "cancelled"})
+        _update_current_span(lf, output={"action": "cancelled"})
         await message.answer("⚠️ Неверный формат. Используйте: ДД.ММ.ГГГГ ЧЧ:ММ")
         return
 
@@ -347,7 +353,7 @@ async def on_edit_task_date_received(
         await message.answer(_EDIT_SUCCESS)
     except Exception as exc:
         logger.exception("Failed to update task %d due date", task_id)
-        lf.update_current_span(level="ERROR", status_message=str(exc)[:200])
+        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await state.clear()
         await message.answer("⚠️ Ошибка при обновлении задачи.")
 
