@@ -17,8 +17,6 @@ dependencies = [
     "requests",
     "qdrant-client>=1.17.1",  ***REMOVED*** Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=4.0.0,<5.0",  ***REMOVED*** Native v4 observability migration
-    ***REMOVED*** Voyage AI Integration (2026-01-21)
-    "voyageai>=0.3.0",        ***REMOVED*** Voyage AI embeddings and reranking
     "tenacity>=8.2.0",        ***REMOVED*** Retry logic with exponential backoff
     "redis>=7.1.0",
     "redisvl>=0.16.0",
@@ -102,9 +100,15 @@ eval = [
     "pandas>=2.0.0",
 ]
 
+***REMOVED*** Voyage AI embeddings/reranking and contextualized embeddings
+***REMOVED*** Install: uv sync --extra voyage
+voyage = [
+    "voyageai>=0.3.0",
+]
+
 ***REMOVED*** All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval,ingest,ml-local]",
+    "contextual-rag[docs,voice,eval,ingest,ml-local,voyage]",
 ]
 
 ***REMOVED*** =============================================================================

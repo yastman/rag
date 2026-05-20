@@ -13,7 +13,10 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-import voyageai
+
+
+voyageai = pytest.importorskip("voyageai", reason="voyageai not installed (voyage extra)")
+pytestmark = pytest.mark.requires_extras
 
 
 @pytest.fixture
