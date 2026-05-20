@@ -9,6 +9,7 @@ Covers three issues (M7, M8, M9):
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ import yaml
 ROOT = Path(__file__).parents[2]
 BASE_COMPOSE = ROOT / "compose.yml"
 DEV_OVERRIDE = ROOT / "compose.dev.yml"
+VPS_OVERRIDE = ROOT / "compose.vps.yml"
 MAKEFILE = ROOT / "Makefile"
 MINI_APP_FRONTEND_DOCKERFILE = ROOT / "mini_app/frontend/Dockerfile"
 
@@ -25,6 +27,23 @@ MINI_APP_FRONTEND_DOCKERFILE = ROOT / "mini_app/frontend/Dockerfile"
 def _load_compose(path: Path) -> dict:
     with path.open() as f:
         return yaml.full_load(f)
+
+
+def _merge_value(base: object, override: object) -> object:
+    if isinstance(base, dict) and isinstance(override, dict):
+        merged = deepcopy(base)
+        for key, value in override.items():
+            merged[key] = _merge_value(merged[key], value) if key in merged else deepcopy(value)
+        return merged
+    return deepcopy(override)
+
+
+def _merge_compose(*paths: Path) -> dict:
+    merged: dict = {}
+    for path in paths:
+        data = _load_compose(path)
+        merged = _merge_value(merged, data)
+    return merged
 
 
 def _load_merged_dev() -> dict:
@@ -46,7 +65,7 @@ def dev() -> dict:
 
 @pytest.fixture(scope="module")
 def vps() -> dict:
-    return _load_compose(BASE_COMPOSE)
+    return _merge_compose(BASE_COMPOSE, VPS_OVERRIDE)
 
 
 # =============================================================================
@@ -258,21 +277,59 @@ class TestPostgresShutdownSafety:
         )
 
 
-class TestMiniAppVpsParity:
-    """Mini app must be part of the default VPS runtime stack."""
+VPS_CORE_SERVICES = {
+    "postgres",
+    "redis",
+    "qdrant",
+    "bge-m3",
+    "user-base",
+    "litellm",
+    "bot",
+}
 
-    @pytest.mark.parametrize("svc_name", ["mini-app-api", "mini-app-frontend"])
-    def test_vps_mini_app_service_is_not_profile_gated(self, vps: dict, svc_name: str) -> None:
-        """Default VPS compose up must include both mini-app services."""
+VPS_NONCORE_SERVICES = {
+    "docling",
+    "mini-app-api",
+    "mini-app-frontend",
+    "ingestion",
+    "clickhouse",
+    "minio",
+    "redis-langfuse",
+    "langfuse-worker",
+    "langfuse",
+}
+
+
+class TestVpsMinimalRuntime:
+    """Minimal VPS runtime: only RAG chatbot core starts by default."""
+
+    @pytest.mark.parametrize("svc_name", sorted(VPS_CORE_SERVICES))
+    def test_vps_core_service_is_profile_free(self, vps: dict, svc_name: str) -> None:
         svc = vps["services"][svc_name]
-        assert not svc.get("profiles"), (
-            f"{svc_name} must not declare optional profiles in compose.yml; "
-            "default VPS compose up skips profiled services"
+        assert not svc.get("profiles"), f"{svc_name} must start in default VPS runtime"
+
+    @pytest.mark.parametrize("svc_name", sorted(VPS_NONCORE_SERVICES))
+    def test_vps_noncore_service_is_profile_gated(self, vps: dict, svc_name: str) -> None:
+        svc = vps["services"][svc_name]
+        assert "vps-noncore" in (svc.get("profiles") or []), (
+            f"{svc_name} must not start in default VPS runtime"
         )
+
+    @pytest.mark.parametrize("svc_name", ["mini-app-frontend", "langfuse"])
+    def test_vps_noncore_host_ports_removed(self, vps: dict, svc_name: str) -> None:
+        assert not vps["services"][svc_name].get("ports"), (
+            f"{svc_name} should not publish host ports in minimal VPS default"
+        )
+
+    @pytest.mark.parametrize("svc_name", ["bot", "litellm"])
+    def test_vps_core_does_not_default_to_internal_langfuse(self, vps: dict, svc_name: str) -> None:
+        env = vps["services"][svc_name]["environment"]
+        assert env.get("LANGFUSE_HOST") != "${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}"
+        assert "http://langfuse:3000" not in str(env.get("LANGFUSE_HOST", ""))
 
 
 class TestMiniAppFrontendHealthcheck:
-    """Mini app frontend healthcheck must match nginx's IPv4-only loopback binding."""
+    """Optional mini app frontend healthcheck must match nginx's IPv4-only loopback binding."""
 
     _EXPECTED_PROBE = "wget -qO- http://127.0.0.1/health || exit 1"
 
