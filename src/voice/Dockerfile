@@ -1,5 +1,6 @@
 ***REMOVED*** syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ***REMOVED*** Voice Agent — uv sync pattern (2026 best practices)
+***REMOVED*** NOTE: Using Python 3.13 to match all other services. See issue ***REMOVED***1548.
 
 ***REMOVED*** ====== BUILD STAGE ======
 FROM ghcr.io/astral-sh/uv:0.9-python3.14-bookworm-slim@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1 AS builder
