@@ -207,16 +207,17 @@ make test-bot-health
 
 ***REMOVED******REMOVED*** Source Of Truth
 
-- `main` in Git is the official deployment source of truth for VPS.
+- `main` in Git is the official deployment source of truth for VPS snapshots.
 - Recommended production flow:
   1. Work on a feature branch.
-  2. Push the branch.
-  3. Stage on the MacBook Docker host with `make remote-core-up`.
-  4. Open/merge PR to `main`.
-  5. Let GitHub Actions deploy `main` to VPS.
-- Only merges to `main` should trigger VPS auto-deploy through GitHub Actions.
-- `make deploy-bot` prints the official PR-based deploy flow; it does not push directly to `main`.
-- Use `make deploy-vps-local` or `./scripts/deploy-vps.sh` only as fallback/manual recovery when GitHub-driven deploy is unavailable.
+  2. Open a PR to `dev`.
+  3. Stage runtime-sensitive changes on the MacBook Docker host with
+     `make remote-core-up`.
+  4. Merge `dev` to `main` for deployment snapshots.
+- Public GitHub Actions validate static guardrails only; they do not deploy to
+  VPS or expose production SSH targets.
+- `make deploy-bot` prints the official PR-based deploy flow; it does not push
+  directly to `main`.
 - Do not treat `/opt/rag-fresh` on the server as an editable working copy; it is a deployment target.
 
 ***REMOVED******REMOVED******REMOVED*** VPS cleanup
