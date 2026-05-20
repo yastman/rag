@@ -20,18 +20,41 @@ import logging
 from dataclasses import dataclass
 from typing import Literal
 
-import voyageai
 from langfuse import get_client, observe
 from tenacity import (
     before_sleep_log,
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_random_exponential,
 )
 
 
 logger = logging.getLogger(__name__)
+
+
+def _create_voyage_client(api_key: str):
+    """Create a Voyage client only when the optional voyage extra is installed."""
+    try:
+        import voyageai
+    except ImportError as exc:
+        raise RuntimeError(
+            "voyageai is required for ContextualizedEmbeddingService. "
+            "Install it with `uv sync --extra voyage` or package extra "
+            "`contextual-rag[voyage]`."
+        ) from exc
+    return voyageai.Client(api_key=api_key)
+
+
+def _get_voyage_errors():
+    """Lazily import and return voyageai error types for retry predicates."""
+    import voyageai
+
+    return (
+        voyageai.error.RateLimitError,
+        voyageai.error.ServiceUnavailableError,
+        voyageai.error.Timeout,
+    )
 
 
 @dataclass
@@ -103,7 +126,7 @@ class ContextualizedEmbeddingService:
                 f"Invalid output_dimension {output_dimension}. Supported: {self.SUPPORTED_DIMS}"
             )
 
-        self._client = voyageai.Client(api_key=api_key)
+        self._client = _create_voyage_client(api_key)
         self._output_dimension = output_dimension
         self._output_dtype = output_dtype
 
@@ -119,13 +142,7 @@ class ContextualizedEmbeddingService:
 
     @observe(name="voyage-contextualized-embed-documents", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -214,13 +231,7 @@ class ContextualizedEmbeddingService:
 
     @observe(name="voyage-contextualized-embed-query", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -267,13 +278,7 @@ class ContextualizedEmbeddingService:
 
     @observe(name="voyage-contextualized-embed-queries", as_type="generation")
     @retry(
-        retry=retry_if_exception_type(
-            (
-                voyageai.error.RateLimitError,
-                voyageai.error.ServiceUnavailableError,
-                voyageai.error.Timeout,
-            )
-        ),
+        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
