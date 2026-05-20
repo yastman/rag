@@ -318,7 +318,6 @@ class TestGraphConfig:
         )
 
 
-
 class TestCreateSummarizeModel:
     """Contract: _create_summarize_model must use SDK-native init_chat_model (***REMOVED***1653).
 
@@ -386,6 +385,5 @@ class TestCreateSummarizeModel:
                     bad.append(f"line {node.lineno}: ChatOpenAI(...)")
 
         assert not bad, (
-            "_create_summarize_model must use init_chat_model, not ChatOpenAI: "
-            + "; ".join(bad)
+            "_create_summarize_model must use init_chat_model, not ChatOpenAI: " + "; ".join(bad)
         )
