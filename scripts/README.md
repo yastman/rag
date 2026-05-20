@@ -13,7 +13,7 @@ Automation, indexing, benchmarking, validation, and maintenance scripts.
 | **Experiment** | `run_experiment.py`, `generate_test_properties.py` | Synthetic data and experiment runners |
 | **Maintenance** | `qdrant_snapshot.py`, `reindex_to_binary.py` | Disaster recovery and migration |
 | **Ops** | `test_release_health_vps.sh`, `test_bot_health.sh`, `smoke-zoo.sh` | Deployment and health checks |
-| **Hygiene** | `git_hygiene.py`, `repo_cleanup.sh` | Repo hygiene |
+| **Hygiene** | Native `make git-hygiene`, `make git-hygiene-fix`, `make repo-cleanup`, `make repo-cleanup-force` targets | Repo hygiene |
 | **Alerting** | `langfuse_alert.py`, `langfuse_triage.py` | Langfuse monitoring and triage |
 | **CRM / Seeding** | `kommo_seed.py`, `update_advisor_prompts.py` | CRM seeding and prompt updates |
 
@@ -29,4 +29,5 @@ uv run python scripts/setup_qdrant_collection.py
 
 - [`docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local commands and validation ladder
 - [`docs/INGESTION.md`](../docs/INGESTION.md) — Unified ingestion runbook
+- [`docs/runbooks/GIT_PR_ISSUE_NATIVE.md`](../docs/runbooks/GIT_PR_ISSUE_NATIVE.md) — Native Git/GitHub hygiene workflow
 - [`tests/README.md`](../tests/README.md) — Test pyramid and markers
