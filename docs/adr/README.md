@@ -11,6 +11,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0005 - Hybrid search with RRF](0005-hybrid-search-rrf.md)
 - [0006 - Kommo CRM](0006-kommo-crm.md)
 - [0007 - Custom HyDE justified](0007-hyde-custom-justified.md)
+- [0008 - `instructor.create_partial` deferred](0008-instructor-create-partial-deferred.md)
 
 ## When To Use
 
