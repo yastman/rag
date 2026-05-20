@@ -179,14 +179,18 @@ async def remote_log(request: dict) -> dict:
 
 @app.post("/api/phone")
 @observe(name="miniapp-submit-phone", capture_input=False, capture_output=False)
-async def phone(request: PhoneRequest) -> dict:
+async def phone(request: PhoneRequest) -> Any:
     """Collect phone and create CRM lead.
 
     Wrapped in ``@observe`` (#1658) with the same ``miniapp-{user_id}`` session
     grouping as ``start_expert`` so the funnel reconstructs in Langfuse
     Sessions. PII (phone, name) never reaches the span: ``capture_input/output``
-    are off, and the inner ``submit_phone`` curates its own output.
+    are off, and the inner ``submit_phone`` curates its own output. On CRM
+    failure (``success=False``), return ``502 Bad Gateway`` so clients can
+    distinguish a captured lead from a dropped one (#1596).
     """
+    from fastapi.responses import JSONResponse
+
     with propagate_attributes(
         session_id=f"miniapp-{request.user_id}",
         user_id=str(request.user_id),
@@ -194,7 +198,11 @@ async def phone(request: PhoneRequest) -> dict:
         metadata={"surface": "miniapp"},
     ):
         _update_current_span(input={"source": request.source, "has_name": request.name is not None})
-        return await submit_phone(request)
+        result = await submit_phone(request)
+        if not result.get("success"):
+            _update_current_span(level="ERROR", status_message="crm_submission_failed")
+            return JSONResponse(status_code=502, content=result)
+        return result
 
 
 @app.get("/health")
