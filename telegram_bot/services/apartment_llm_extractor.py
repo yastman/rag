@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import warnings
 from typing import Any, cast
@@ -9,8 +10,8 @@ from typing import Any, cast
 import instructor
 from openai import AsyncOpenAI
 
-from telegram_bot.integrations.prompt_manager import get_prompt
-from telegram_bot.observability import observe
+from telegram_bot.integrations.prompt_manager import get_prompt, get_prompt_with_object
+from telegram_bot.observability import get_client, observe
 from telegram_bot.services.apartment_models import (
     ApartmentSearchFilters,
     HardFilters,
@@ -52,6 +53,23 @@ def _get_system_prompt() -> str:
     Falls back to EXTRACTION_SYSTEM_PROMPT when Langfuse is unavailable.
     """
     return get_prompt(
+        "apartment-extraction-system-prompt",
+        fallback=EXTRACTION_SYSTEM_PROMPT,
+    )
+
+
+def _get_system_prompt_with_object() -> tuple[str, Any | None]:
+    """Fetch system prompt + raw Langfuse Prompt object for ***REMOVED***1666 linking.
+
+    Returns the same compiled string as ``_get_system_prompt`` plus the raw
+    Langfuse Prompt object (``None`` if Langfuse is unavailable / fallback
+    was used). Callers can pass the object to
+    ``langfuse.update_current_generation(prompt=...)`` to link the generation
+    observation to a Prompt Management entry. Only managed Langfuse Prompt
+    objects are linkable — fallback strings are intentionally returned with
+    ``None`` so callers can guard with ``if prompt_obj is not None``.
+    """
+    return get_prompt_with_object(
         "apartment-extraction-system-prompt",
         fallback=EXTRACTION_SYSTEM_PROMPT,
     )
@@ -113,8 +131,19 @@ class ApartmentLlmExtractor:
                 context = f"\nУже извлечено regex: {filled}\nДоизвлеки остальное."
 
         source = "hybrid" if partial_filters else "llm"
+
+        ***REMOVED*** Fetch the prompt + raw Prompt object so we can link the generation
+        ***REMOVED*** observation to Prompt Management (***REMOVED***1666). The underlying client is
+        ***REMOVED*** plain `openai.AsyncOpenAI` (not `langfuse.openai`) so the
+        ***REMOVED*** `langfuse_prompt=` kwarg path is not available; we use the
+        ***REMOVED*** `update_current_generation(prompt=...)` secondary path instead.
+        system_prompt, prompt_obj = _get_system_prompt_with_object()
+        if prompt_obj is not None:
+            with contextlib.suppress(Exception):
+                get_client().update_current_generation(prompt=prompt_obj)
+
         messages = [
-            {"role": "system", "content": _get_system_prompt() + context},
+            {"role": "system", "content": system_prompt + context},
             {"role": "user", "content": query},
         ]
 
