@@ -8,46 +8,6 @@ Canonical local setup and verification flow.
 - `uv`
 - Docker + Docker Compose v2
 
-> **Flexible Docker topology**: you can run Docker Compose locally (default) or target a remote Docker host via SSH. Choose the mode that fits your workstation resources.
-
-***REMOVED******REMOVED*** Remote Docker Host (Alternative)
-
-When local Docker resource usage is a concern, the dev Docker stack can run on a separate host reachable via SSH. Edit code on your workstation, push, then pull/operate on the remote host. The `remote-*` Makefile targets automate the SSH workflow.
-
-Quick start:
-
-```bash
-***REMOVED*** Sync .env and check required variables
-make remote-env-sync
-make remote-env-check
-
-***REMOVED*** Start the active dev stack including bot
-make remote-active-up
-
-***REMOVED*** Verify
-make remote-docker-ps
-make remote-service-health
-```
-
-Bot container operations:
-
-```bash
-make remote-bot-up
-make remote-bot-restart
-make remote-bot-logs
-```
-
-Native WSL bot (separate from Docker bot):
-
-```bash
-make local-up
-make bot
-```
-
-Only one process can poll a given Telegram bot token at a time. Do not run the remote Docker bot and native `make bot` against the same token at the same time.
-
-Full operator workflow, troubleshooting, and test boundaries are in the Docker runbook referenced below.
-
 ***REMOVED******REMOVED*** 1. Bootstrap Workspace
 
 ```bash
@@ -55,26 +15,7 @@ uv sync
 cp .env.example .env
 ```
 
-`.env.local` is legacy/manual-only and is not auto-loaded; use `.env` for local runs.
-
-***REMOVED******REMOVED******REMOVED*** Local artifact hygiene
-
-Keep generated heavy artifacts out of the repository tree when possible.
-
-- Python virtualenvs: prefer one root `.venv` and avoid nested envs in module folders.
-- JS dependencies/build output: keep `node_modules/` and `dist/` as generated-only assets.
-- Runtime outputs: keep logs, temp files, and ad-hoc reports under ignored paths (`logs/`, `tmp/`, `reports/`).
-- Service model caches (for example embedding models) should stay local-only and never be committed.
-
-Quick check before commit:
-
-```bash
-git ls-files --others --exclude-standard
-```
-
-This should be empty for routine development work.
-
-For local development, the canonical environment file is `.env` in the repo root.
+For local development, the canonical environment file is `.env` in the repo root. `.env.local` is legacy/manual-only and is not auto-loaded by local commands.
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
@@ -85,7 +26,7 @@ Minimum env for bot profile:
 Minimum env for Telegram E2E (Telethon userbot):
 - `TELEGRAM_API_ID` (from [my.telegram.org](https://my.telegram.org))
 - `TELEGRAM_API_HASH` (from [my.telegram.org](https://my.telegram.org))
-- `E2E_BOT_USERNAME` (defaults to `@test_your_bot`)
+- `E2E_BOT_USERNAME` (defaults to `@test_nika_homes_bot`)
 - an authorized Telethon session file (e.g., `e2e_tester.session`)
 - if the session is present but unauthorized, refresh it with `uv run python scripts/e2e/auth.py --phone <PHONE>`
 
@@ -115,10 +56,6 @@ Langfuse local development:
 - If `bot` logs show OTLP `401` / `No key found for public key`, recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file, then confirm the local Langfuse DB has an organization, project, and API key before debugging application tracing.
 
 ***REMOVED******REMOVED*** 2. Start Services
-
-When using a remote Docker host, prefer the lean bot/core flow by default
-to conserve resources. ML, observability, voice, and full stacks are
-temporary validation tools, not the idle development baseline.
 
 ```bash
 ***REMOVED*** Core services (default compose set)
@@ -180,12 +117,22 @@ The authoritative startup preflight still lives in [`telegram_bot/preflight.py`]
 
 ***REMOVED******REMOVED*** 4. Development Gates
 
+Git hooks and push gates are static guardrails only: lint, formatting, type
+checks, and repository policy checks. They should not run pytest suites. Run
+tests explicitly as local validation on the development machine.
+
 Local release gate:
 
 ```bash
 make check
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 make test-bot-health
+```
+
+PR-ready local gate:
+
+```bash
+make local-pr-ready
 ```
 
 Optional broader gates:
@@ -211,24 +158,40 @@ If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
 lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 ```
 
-***REMOVED******REMOVED*** 5. Python Runtime Note
+***REMOVED******REMOVED*** 5. Production Deployment (VPS)
+
+The recommended production flow is:
+
+1. Work on a feature branch.
+2. Push the branch.
+3. Stage on the MacBook Docker host with `make remote-core-up`.
+4. Open/merge PR to `main`.
+5. GitHub Actions deploys `main` to VPS.
+
+The VPS default runtime (`compose.yml:compose.vps.yml`) starts only the RAG
+chatbot core: `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `litellm`,
+and `bot`. Mini app, Docling, ingestion, and self-hosted Langfuse are
+optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
+[cleanup commands](../DOCKER.md***REMOVED***vps-cleanup).
+
+***REMOVED******REMOVED*** 6. Python Runtime Note
 
 Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
 
-***REMOVED******REMOVED*** 6. Running Components Without Docker Wrapper
+***REMOVED******REMOVED*** 7. Running Components Without Docker Wrapper
 
 ```bash
 ***REMOVED*** Telegram bot
 uv run python -m telegram_bot.main
 
 ***REMOVED*** Unified ingestion
-uv run python -m src.ingestion.unified.cli run --watch
+uv run python -m src.ingestion.unified.cli
 
 ***REMOVED*** RAG API
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
 
-***REMOVED******REMOVED*** 7. Minimal Stack (Fast Iteration)
+***REMOVED******REMOVED*** 8. Minimal Stack (Fast Iteration)
 
 Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
 
@@ -257,7 +220,7 @@ make local-ps
 make local-down
 ```
 
-***REMOVED******REMOVED*** 8. E2E Core Trace Gate (***REMOVED***1307)
+***REMOVED******REMOVED*** 9. E2E Core Trace Gate (***REMOVED***1307)
 
 Required core Telethon trace scenarios with Langfuse validation:
 
@@ -270,16 +233,16 @@ make e2e-test-traces-core
 
 Keep `make bot` running in another terminal while the E2E command executes. Use `make run-bot` only when you do not need the tee'd `logs/bot-run.log` evidence.
 
-***REMOVED******REMOVED*** 9. Runtime env in worktrees
+***REMOVED******REMOVED*** 10. Runtime env in worktrees
 
-New worktrees start from a fresh branch checkout and do not contain the primary checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
+Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the main checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
 
 - Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
 - Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
-- For isolated worktrees, set `RAG_RUNTIME_ENV_FILE` to the absolute path of the primary checkout's `.env` (e.g. `$(pwd)/.env`) when local Telegram credentials live only in the primary checkout.
-- Do not copy `.env`, Telegram sessions, or provider keys into worktree directories.
+- For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
+- Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
 
-***REMOVED******REMOVED*** 10. Common Issues
+***REMOVED******REMOVED*** 11. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.

@@ -24,11 +24,11 @@ from langfuse import Langfuse
 
 ***REMOVED*** Reuse contracts from the validator module to stay consistent.
 from scripts.e2e.langfuse_trace_validator import (
-    OBSERVATION_ALIAS_GROUPS,
     SCENARIO_CONTRACTS,
     SCORE_NAMES,
     _as_bool,
     _as_float,
+    resolve_missing_observations,
 )
 
 
@@ -85,17 +85,6 @@ class AuditResult:
 
 def _langfuse_is_configured() -> bool:
     return bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
-
-
-def _resolve_missing_observations(
-    required_observations: set[str], span_names: set[str]
-) -> set[str]:
-    missing: set[str] = set()
-    for required in required_observations:
-        aliases = OBSERVATION_ALIAS_GROUPS.get(required, {required})
-        if not (aliases & span_names):
-            missing.add(required)
-    return missing
 
 
 def _compute_branch_observations(
@@ -257,7 +246,7 @@ def _check_trace_coverage(trace: AuditTrace) -> TraceCoverage:
         required_observations |= _compute_branch_observations(trace.score_values)
 
     span_names = set(trace.observation_names)
-    missing_obs = _resolve_missing_observations(required_observations, span_names)
+    missing_obs = resolve_missing_observations(required_observations, span_names)
     missing_scores = set(required_scores) - set(trace.score_names)
 
     missing_root_input = "query_hash" not in trace.root_input_keys
