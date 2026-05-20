@@ -132,9 +132,20 @@ async def remote_log(request: dict) -> dict:
 
 
 @app.post("/api/phone")
-async def phone(request: PhoneRequest) -> dict:
-    """Collect phone and create CRM lead."""
-    return await submit_phone(request)
+async def phone(request: PhoneRequest) -> Any:
+    """Collect phone and create CRM lead.
+
+    Returns the same JSON shape as :func:`submit_phone`. On CRM failure
+    (``success=False``) the response is wrapped in a ``502 Bad Gateway``
+    so the frontend can distinguish a captured lead from a dropped one
+    (***REMOVED***1596). Pydantic validation failures continue to surface as ``422``.
+    """
+    from fastapi.responses import JSONResponse
+
+    result = await submit_phone(request)
+    if not result.get("success"):
+        return JSONResponse(status_code=502, content=result)
+    return result
 
 
 @app.get("/health")
