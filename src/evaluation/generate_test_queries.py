@@ -10,7 +10,6 @@ Creates 3 types of queries for each article:
 import asyncio
 import json
 import os
-from dataclasses import dataclass
 
 import instructor
 from openai import AsyncOpenAI
@@ -30,16 +29,6 @@ class GeneratedQueries(BaseModel):
         description="Semantic query describing the essence of the article in own words"
     )
     paraphrased: str = Field(description="Paraphrased question about the article content")
-
-
-@dataclass
-class LLMConfig:
-    """Configuration for the LLM client used in evaluation."""
-
-    api_url: str
-    api_key: str
-    model: str
-    max_tokens: int
 
 
 ***REMOVED*** Load settings
@@ -207,19 +196,31 @@ async def generate_all_queries(
         AsyncOpenAI(base_url=resolved_base_url, api_key=resolved_api_key)
     )
 
+    semaphore = asyncio.Semaphore(max_concurrent)
     all_queries: list[dict] = []
     completed = 0
 
-    ***REMOVED*** Process articles sequentially (respecting max_concurrent via semaphore if needed)
-    for article_num, text in article_texts.items():
-        try:
-            queries = await generate_queries_for_article(client, model, article_num, text)
-            all_queries.extend(queries)
-            completed += 1
-            print(f"[{completed}/{len(article_texts)}] Article {article_num}: 3 queries generated")
-        except Exception as e:
-            completed += 1
-            print(f"[{completed}/{len(article_texts)}] Article {article_num}: ERROR: {e}")
+    async def _process_article(article_num: str, text: str) -> list[dict]:
+        nonlocal completed
+        async with semaphore:
+            try:
+                queries = await generate_queries_for_article(client, model, article_num, text)
+                completed += 1
+                print(
+                    f"[{completed}/{len(article_texts)}] Article {article_num}: 3 queries generated"
+                )
+                return queries
+            except Exception as e:
+                completed += 1
+                print(f"[{completed}/{len(article_texts)}] Article {article_num}: ERROR: {e}")
+                return []
+
+    results = await asyncio.gather(
+        *(_process_article(article_num, text) for article_num, text in article_texts.items())
+    )
+
+    for queries in results:
+        all_queries.extend(queries)
 
     print(f"\nGenerated {len(all_queries)} queries total")
 
