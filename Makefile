@@ -1142,12 +1142,31 @@ verify-compose-images-json: ***REMOVED******REMOVED*** Check image drift (JSON o
 
 git-hygiene: ***REMOVED******REMOVED*** Git hygiene report (merged branches, stale worktrees, transient files)
 	@echo "$(BLUE)Running git hygiene report...$(NC)"
-	uv run python scripts/git_hygiene.py || true
+	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	echo "Base branch: $$BASE_BRANCH"; \
+	git fetch --prune origin; \
+	echo ""; \
+	echo "Merged local branches:"; \
+	git branch --merged "origin/$$BASE_BRANCH" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - " $$0}'; \
+	echo ""; \
+	echo "Branches without upstream:"; \
+	git for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads | awk 'NF == 1 {print "  - " $$1}'; \
+	echo ""; \
+	echo "Worktrees:"; \
+	git worktree list --porcelain; \
+	echo ""; \
+	echo "Transient untracked files:"; \
+	git ls-files --others --exclude-standard -- coverage.json 'test_output*' '*.log' | sed 's/^/  - /'
 	@echo ""
 
 git-hygiene-fix: ***REMOVED******REMOVED*** Git hygiene safe cleanup preview (dry-run)
 	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
-	uv run python scripts/git_hygiene.py --fix --dry-run || true
+	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	echo "Would delete local branches merged into origin/$$BASE_BRANCH, excluding protected/current branches:"; \
+	git fetch --prune origin; \
+	git branch --merged "origin/$$BASE_BRANCH" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - git branch -d " $$0}'
 	@echo ""
 
 pr-hygiene: ***REMOVED******REMOVED*** PR queue triage report (open PRs, blocked reasons, SLA)
@@ -1162,10 +1181,75 @@ issue-hygiene: ***REMOVED******REMOVED*** Issue queue hygiene report (no-label /
 
 repo-cleanup: ***REMOVED******REMOVED*** Full repo cleanup: branches, worktrees, stashes (dry-run)
 	@echo "$(BLUE)Running repo cleanup (dry-run)...$(NC)"
-	bash scripts/repo_cleanup.sh --dry-run
+	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
+	echo "Base branch: $$MAIN_BRANCH"; \
+	git fetch --prune origin; \
+	echo ""; \
+	echo "Local merged branches eligible for deletion:"; \
+	git branch --merged "$$MAIN_BRANCH" --format='%(refname:short)' | while read -r branch; do \
+		[ -z "$$branch" ] && continue; \
+		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
+		[ "$$branch" = "main" ] && continue; \
+		[ "$$branch" = "master" ] && continue; \
+		[ "$$branch" = "develop" ] && continue; \
+		[ "$$branch" = "$$CURRENT_BRANCH" ] && continue; \
+		printf '%s\n' "$$WORKTREE_BRANCHES" | grep -Fxq "$$branch" && continue; \
+		echo "  - $$branch"; \
+	done; \
+	echo ""; \
+	echo "Remote merged branches and open PR status:"; \
+	git branch -r --merged "origin/$$MAIN_BRANCH" --format='%(refname:short)' | sed 's|^origin/||' | while read -r branch; do \
+		[ -z "$$branch" ] && continue; \
+		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
+		[ "$$branch" = "main" ] && continue; \
+		[ "$$branch" = "master" ] && continue; \
+		[ "$$branch" = "develop" ] && continue; \
+		if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
+			open_prs=$$(gh pr list --head "$$branch" --state open --json number --jq length 2>/dev/null || echo unknown); \
+			echo "  - $$branch (open_prs=$$open_prs)"; \
+		else \
+			echo "  - $$branch (gh auth unavailable; review PR status manually)"; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "Worktree prune preview:"; \
+	git worktree prune --dry-run; \
+	echo ""; \
+	echo "Stashes:"; \
+	git stash list
 	@echo ""
 
 repo-cleanup-force: ***REMOVED******REMOVED*** Full repo cleanup: interactive deletion mode
 	@echo "$(BLUE)Running repo cleanup (interactive)...$(NC)"
-	bash scripts/repo_cleanup.sh --force
+	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
+	git fetch --prune origin; \
+	echo "Local merged branches eligible for deletion from $$MAIN_BRANCH:"; \
+	branches=$$(git branch --merged "$$MAIN_BRANCH" --format='%(refname:short)' | while read -r branch; do \
+		[ -z "$$branch" ] && continue; \
+		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
+		[ "$$branch" = "main" ] && continue; \
+		[ "$$branch" = "master" ] && continue; \
+		[ "$$branch" = "develop" ] && continue; \
+		[ "$$branch" = "$$CURRENT_BRANCH" ] && continue; \
+		printf '%s\n' "$$WORKTREE_BRANCHES" | grep -Fxq "$$branch" && continue; \
+		echo "$$branch"; \
+	done); \
+	if [ -z "$$branches" ]; then \
+		echo "  (none)"; \
+	else \
+		printf '%s\n' "$$branches" | sed 's/^/  - /'; \
+		printf 'Delete these local branches? [y/N] '; \
+		read -r confirm; \
+		if printf '%s' "$$confirm" | grep -Eq '^[Yy]$$'; then \
+			printf '%s\n' "$$branches" | xargs -r git branch -d; \
+		fi; \
+	fi; \
+	echo ""; \
+	echo "Pruning stale worktree administrative records..."; \
+	git worktree prune; \
+	echo "Dirty or active worktrees are not removed by this target."
 	@echo ""
