@@ -13,6 +13,20 @@ from telegram_bot.services.qdrant import QdrantService
 
 
 @pytest.fixture(scope="module")
+def redis_url() -> str:
+    """Redis URL for smoke tests, with REDIS_PASSWORD injected if not embedded.
+
+    Mirrors `scripts/validate_traces.py::_build_redis_url` so smoke tests work
+    against Compose dev defaults (auth-required Redis) without per-test plumbing.
+    """
+    base = os.getenv("REDIS_URL", "redis://localhost:6379")
+    password = os.getenv("REDIS_PASSWORD", "")
+    if password and "@" not in base:
+        base = base.replace("redis://", f"redis://:{password}@", 1)
+    return base
+
+
+@pytest.fixture(scope="module")
 def require_live_services(request):
     """Skip if live services not available. Checks BOTH Qdrant AND Redis."""
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")

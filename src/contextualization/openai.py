@@ -44,6 +44,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         self.total_tokens = 0
         self.total_cost = 0.0
 
+    @observe(name="openai-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
         self,
         chunks: list[str],

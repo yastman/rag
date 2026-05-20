@@ -11,8 +11,8 @@ qdrant-client>=1.14.0
 redis>=5.0.0
 redisvl>=0.3.0
 
-# Voyage AI (embeddings, reranking)
-voyageai>=0.3.0
+# Voyage AI is OPTIONAL (#1773); install via `uv sync --extra voyage`.
+# Not used by the default BGE-M3 + Qdrant runtime.
 tenacity>=8.2.0
 
 # FastEmbed for sparse vectors (BM42)

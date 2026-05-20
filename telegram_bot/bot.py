@@ -10,9 +10,11 @@ import json
 import logging
 import os
 import re
+import secrets
 import socket
 import time
 import uuid
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
@@ -267,6 +269,20 @@ async def _prepare_pre_agent_retrieval_vectors(
     result_store["pre_agent_retrieval_vector_ms"] = (time.perf_counter() - prep_start) * 1000
 
 
+def _new_draft_id() -> int:
+    """Generate a positive 31-bit draft id for `bot.send_message_draft`.
+
+    Bot API ``sendMessageDraft`` accepts arbitrary 32-bit positive integers
+    as the draft id; we keep the value within signed-int32 range so it
+    serialises cleanly across the aiogram client and the Bot API JSON wire
+    format. Moved here from ``services/draft_streamer.py`` (#1671) so the
+    streaming path stays SDK-only — direct ``bot.send_message_draft(...)``
+    calls plus ``agent.astream(stream_mode=[...])`` from LangGraph, no
+    custom abstraction in between.
+    """
+    return secrets.randbelow(2**31 - 1) + 1
+
+
 async def _stream_agent_to_draft(
     agent: Any,
     payload: dict[str, Any],
@@ -284,8 +300,6 @@ async def _stream_agent_to_draft(
     Only streams content-only chunks (not tool-call chunks). Returns final state dict.
     """
     import contextlib
-
-    from telegram_bot.services.draft_streamer import _new_draft_id
 
     accumulated = ""
     last_draft = 0.0
@@ -742,6 +756,19 @@ class PropertyBot:
         self._polling_lock_task: asyncio.Task[None] | None = None
         self._polling_lock_owner: str | None = None
 
+        # Bounded fan-out for fire-and-forget history persistence (#1600).
+        # Without a bound the text path could accumulate unbounded background
+        # tasks under burst traffic / slow DB writes. Track every spawned save
+        # so shutdown can drain them; reject new saves with a Langfuse signal
+        # once the in-flight count reaches `_history_save_max_concurrency`.
+        self._history_save_tasks: set[asyncio.Task[None]] = set()
+        self._history_save_max_concurrency: int = int(
+            os.getenv("HISTORY_SAVE_MAX_CONCURRENCY", "32")
+        )
+        self._history_save_drain_timeout_s: float = float(
+            os.getenv("HISTORY_SAVE_DRAIN_TIMEOUT_S", "5.0")
+        )
+
         # Track initialization state
         self._cache_initialized = False
         self._pre_agent_filter_extractor: Any | None = None
@@ -751,6 +778,53 @@ class PropertyBot:
 
         # Register handlers
         self._register_handlers()
+
+    def _spawn_history_save(
+        self, coro: Coroutine[Any, Any, None], *, user_id: int | str
+    ) -> asyncio.Task[None] | None:
+        """Track and bound fan-out for fire-and-forget history persistence (#1600).
+
+        Without a bound the text path could accumulate unbounded background
+        tasks under burst traffic / slow DB writes. This helper:
+
+        * rejects the save and logs/scores ``history_save_dropped=1`` once the
+          in-flight count reaches ``_history_save_max_concurrency``;
+        * tracks every spawned task in ``_history_save_tasks`` so ``stop()``
+          can drain them with a bounded timeout.
+
+        Returns the spawned task on success, ``None`` if dropped.
+        """
+        if len(self._history_save_tasks) >= self._history_save_max_concurrency:
+            logger.warning(
+                "history-save fan-out at limit (%d in flight); dropping save for user_id=%s",
+                self._history_save_max_concurrency,
+                user_id,
+            )
+            lf = get_client()
+            if lf is not None:
+                try:
+                    tid = lf.get_current_trace_id() or ""
+                    if tid:
+                        lf.create_score(
+                            trace_id=tid,
+                            name="history_save_dropped",
+                            value=1,
+                            data_type="BOOLEAN",
+                            score_id=f"{tid}-history_save_dropped",
+                        )
+                except Exception:
+                    logger.warning("Failed to write history-save drop score", exc_info=True)
+            # Close the unscheduled coroutine so we do not leak a "never awaited" warning.
+            close = getattr(coro, "close", None)
+            if callable(close):
+                with contextlib.suppress(Exception):
+                    close()
+            return None
+
+        task = asyncio.create_task(coro, name=f"history-save-{user_id}")
+        self._history_save_tasks.add(task)
+        task.add_done_callback(self._history_save_tasks.discard)
+        return task
 
     def _get_pre_agent_filter_extractor(self) -> Any:
         """Lazily construct the deterministic extractor used on pre-agent semantic misses."""
@@ -3423,8 +3497,6 @@ class PropertyBot:
                     sources_html = format_sources(documents)
                     rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
 
-                # Send via DraftStreamer (supports forum thread routing)
-                from telegram_bot.services.draft_streamer import DraftStreamer
                 from telegram_bot.services.telegram_formatting import (
                     build_html_messages,
                     record_langfuse_response_output,
@@ -3434,20 +3506,25 @@ class PropertyBot:
                 html_messages = build_html_messages(response_text, sources_html=sources_html)
 
                 if message.chat.type == "private":
-                    draft_streamer = rag_result_store.get("_draft_streamer")
+                    draft_state = rag_result_store.get("_draft_state")
                     try:
-                        if draft_streamer is None and len(html_messages) == 1:
-                            draft_streamer = DraftStreamer(
-                                bot=self.bot,
-                                chat_id=message.chat.id,
-                                thread_id=forum_thread_id,
-                            )
-                        if draft_streamer is not None and len(html_messages) == 1:
-                            await draft_streamer.finalize(
-                                html_messages[0],
-                                parse_mode="HTML",
-                                reply_markup=reply_markup,
-                            )
+                        if draft_state is None and len(html_messages) == 1:
+                            draft_state = {
+                                "chat_id": message.chat.id,
+                                "thread_id": forum_thread_id,
+                                "draft_id": _new_draft_id(),
+                            }
+                        if draft_state is not None and len(html_messages) == 1:
+                            send_kwargs: dict[str, Any] = {
+                                "chat_id": draft_state["chat_id"],
+                                "text": html_messages[0],
+                                "parse_mode": "HTML",
+                                "reply_markup": reply_markup,
+                            }
+                            thread_id = draft_state.get("thread_id")
+                            if thread_id is not None:
+                                send_kwargs["message_thread_id"] = thread_id
+                            await self.bot.send_message(**send_kwargs)
                             record_langfuse_response_output(response_text, len(html_messages))
                         else:
                             await send_html_messages(
@@ -3458,7 +3535,10 @@ class PropertyBot:
                             )
                         ctx.response_sent = True
                     except Exception:
-                        logger.warning("DraftStreamer failed, falling back to message.answer")
+                        logger.warning(
+                            "Draft finalize via bot.send_message failed, "
+                            "falling back to send_html_messages"
+                        )
                         try:
                             await send_html_messages(
                                 message,
@@ -3671,7 +3751,7 @@ class PropertyBot:
                     except Exception:
                         logger.warning("Failed to save history turn", exc_info=True)
 
-                asyncio.create_task(_bg_save_history(), name=f"history-save-{user_id}")  # noqa: RUF006
+                self._spawn_history_save(_bg_save_history(), user_id=user_id)
 
         return response_text
 
@@ -3716,13 +3796,11 @@ class PropertyBot:
                     )
                 return response_text, result
 
-            from telegram_bot.services.draft_streamer import DraftStreamer
-
-            draft_streamer = DraftStreamer(
-                bot=self.bot,
-                chat_id=chat_id,
-                thread_id=forum_thread_id,
-            )
+            draft_state: dict[str, Any] = {
+                "chat_id": chat_id,
+                "thread_id": forum_thread_id,
+                "draft_id": _new_draft_id(),
+            }
 
             accumulated = ""
             stream_messages: list[Any] = []
@@ -3757,11 +3835,18 @@ class PropertyBot:
                 accumulated += text
                 stream_messages.append(message_chunk)
                 with contextlib.suppress(Exception):
-                    await draft_streamer.send_chunk(accumulated)
+                    draft_kwargs: dict[str, Any] = {
+                        "chat_id": draft_state["chat_id"],
+                        "draft_id": draft_state["draft_id"],
+                        "text": accumulated,
+                    }
+                    if draft_state["thread_id"] is not None:
+                        draft_kwargs["message_thread_id"] = draft_state["thread_id"]
+                    await self.bot.send_message_draft(**draft_kwargs)
 
             if accumulated:
                 # Finalize later in _handle_query_supervisor after feedback/sources assembly.
-                rag_result_store["_draft_streamer"] = draft_streamer
+                rag_result_store["_draft_state"] = draft_state
 
             return accumulated, latest_state or {"messages": stream_messages}
 
@@ -5192,6 +5277,28 @@ class PropertyBot:
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
+        # Drain pending fire-and-forget history saves before tearing services down
+        # so in-flight DB writes are not lost on shutdown (#1600). Bounded by
+        # _history_save_drain_timeout_s so a stuck DB cannot block shutdown.
+        if self._history_save_tasks:
+            in_flight = list(self._history_save_tasks)
+            logger.info("Draining %d in-flight history-save tasks...", len(in_flight))
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*in_flight, return_exceptions=True),
+                    timeout=self._history_save_drain_timeout_s,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "history-save drain timed out after %.1fs; cancelling %d task(s)",
+                    self._history_save_drain_timeout_s,
+                    sum(1 for t in in_flight if not t.done()),
+                )
+                for task in in_flight:
+                    if not task.done():
+                        task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await asyncio.gather(*in_flight, return_exceptions=True)
         if self._miniapp_subscriber_task is not None:
             self._miniapp_subscriber_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

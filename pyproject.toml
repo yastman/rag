@@ -17,8 +17,9 @@ dependencies = [
     "requests",
     "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
-    # Voyage AI Integration (2026-01-21)
-    "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
+    # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
+    # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
+    # contextualized-embedding paths.
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.1.0",
     "redisvl>=0.16.0",
@@ -102,9 +103,17 @@ eval = [
     "pandas>=2.0.0",
 ]
 
+# Voyage AI (#1773) — optional. Not used by the default BGE-M3 + Qdrant
+# runtime. Required only for legacy GDrive ingestion, contextualized
+# embeddings, or the optional Voyage path in
+# `src/ingestion/unified/qdrant_writer.py` (`use_local_embeddings=False`).
+voyage = [
+    "voyageai>=0.3.0",
+]
+
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval,ingest,ml-local]",
+    "contextual-rag[docs,voice,eval,ingest,ml-local,voyage]",
 ]
 
 # =============================================================================
@@ -321,7 +330,7 @@ disallow_untyped_defs = true
 # Run: bandit -r . -c pyproject.toml
 
 [tool.bandit]
-exclude_dirs = [".venv", "tests", "evaluation", "legacy", "__pycache__"]
+exclude_dirs = [".venv", "tests", "evaluation", "legacy", "scripts/archive", "__pycache__"]
 skips = ["B101"]  # Skip assert_used (common in tests)
 
 # =============================================================================

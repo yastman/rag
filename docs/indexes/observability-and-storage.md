@@ -6,8 +6,8 @@ Quick orientation for Langfuse traces, Qdrant, and Redis/cache investigations. L
 
 Use this path when traces are missing, gaps appear, or you need to validate scoring.
 
-For inspecting traces, observations, and scores from the terminal, use
-Langfuse CLI on the remote Docker host.
+For terminal-first trace checks, start with `make validate-traces-fast` and the
+Langfuse tracing gaps runbook.
 
 ### Start Here
 
