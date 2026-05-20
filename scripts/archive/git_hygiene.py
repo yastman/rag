@@ -1,5 +1,8 @@
 ***REMOVED***!/usr/bin/env python3
-"""Git hygiene report and safe cleanup tool.
+"""Archived Git hygiene report and safe cleanup tool.
+
+Retired by issue ***REMOVED***1728. Use docs/runbooks/GIT_PR_ISSUE_NATIVE.md and Makefile
+native git/gh targets for active hygiene workflows.
 
 Classifies every local branch and worktree into one of three lanes:
 

@@ -58,6 +58,12 @@ if _FASTAPI_SHIM_ACTIVE:
     sys.modules.pop("fastapi", None)
 
 
+def _response_content(response) -> dict:
+    if hasattr(response, "content"):
+        return response.content
+    return json.loads(response.body.decode("utf-8"))
+
+
 class _DummyGraph:
     def __init__(self) -> None:
         self.last_state: dict | None = None
@@ -71,12 +77,6 @@ class _DummyGraph:
             "search_results_count": 0,
             "rerank_applied": False,
         }
-
-
-def _json_response_content(response) -> dict:
-    if hasattr(response, "content"):
-        return response.content
-    return json.loads(response.body)
 
 
 async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
@@ -310,7 +310,7 @@ async def test_generic_error_handler_returns_structured_payload() -> None:
         response = await generic_error_handler(None, RuntimeError("boom"))
 
     assert response.status_code == 500
-    content = _json_response_content(response)
+    content = _response_content(response)
     assert content["error"] == "internal_error"
     assert content["message"] == "Internal server error"
     assert content["recoverable"] is False
@@ -331,7 +331,7 @@ async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> 
     ):
         response = await generic_error_handler(None, ValueError("bad input"))
 
-    assert _json_response_content(response)["trace_id"] == "trace-abc-123"
+    assert _response_content(response)["trace_id"] == "trace-abc-123"
     mock_logger.exception.assert_called_once_with(
         "Unhandled error in RAG API", extra={"trace_id": "trace-abc-123"}
     )
