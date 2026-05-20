@@ -46,15 +46,20 @@ def _create_voyage_client(api_key: str):
     return voyageai.Client(api_key=api_key)
 
 
-def _get_voyage_errors():
-    """Lazily import and return voyageai error types for retry predicates."""
-    import voyageai
+# Voyage AI is loaded lazily (#1773): the package is an optional extra and
+# must not be imported at module load time. We retry on transient Voyage SDK
+# errors by exception class name so the retry decorators do not need
+# `voyageai.error.*` imports.
+_VOYAGE_RETRYABLE_ERRORS = frozenset({"RateLimitError", "ServiceUnavailableError", "Timeout"})
 
-    return (
-        voyageai.error.RateLimitError,
-        voyageai.error.ServiceUnavailableError,
-        voyageai.error.Timeout,
-    )
+
+def _is_voyage_retryable(exc: BaseException) -> bool:
+    """Return True for transient Voyage SDK errors, by exception class name."""
+    name = type(exc).__name__
+    if name not in _VOYAGE_RETRYABLE_ERRORS:
+        return False
+    module = type(exc).__module__ or ""
+    return module.startswith("voyageai")
 
 
 @dataclass
@@ -142,7 +147,7 @@ class ContextualizedEmbeddingService:
 
     @observe(name="voyage-contextualized-embed-documents", as_type="generation")
     @retry(
-        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
+        retry=retry_if_exception(_is_voyage_retryable),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -231,7 +236,7 @@ class ContextualizedEmbeddingService:
 
     @observe(name="voyage-contextualized-embed-query", as_type="generation")
     @retry(
-        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
+        retry=retry_if_exception(_is_voyage_retryable),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -278,7 +283,7 @@ class ContextualizedEmbeddingService:
 
     @observe(name="voyage-contextualized-embed-queries", as_type="generation")
     @retry(
-        retry=retry_if_exception(lambda exc: isinstance(exc, _get_voyage_errors())),
+        retry=retry_if_exception(_is_voyage_retryable),
         wait=wait_random_exponential(multiplier=1, max=60),
         stop=stop_after_attempt(6),
         before_sleep=before_sleep_log(logger, logging.WARNING),

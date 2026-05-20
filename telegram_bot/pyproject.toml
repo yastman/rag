@@ -12,6 +12,8 @@ dependencies = [
     "grpcio>=1.60.0",
     "redis>=5.0.0",
     "redisvl>=0.3.0",
+    # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
+    # Install via `uv sync --extra voyage` only for legacy ingestion paths.
     "tenacity>=8.2.0",
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
@@ -32,6 +34,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Voyage AI (#1773) — optional. Only required for legacy GDrive ingestion,
+# contextualized-embedding paths, or `qdrant_writer` with
+# `use_local_embeddings=False`. Default bot/retrieval runtime does not use it.
 voyage = [
     "voyageai>=0.3.0",
 ]

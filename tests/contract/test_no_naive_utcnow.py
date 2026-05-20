@@ -72,12 +72,10 @@ def test_no_naive_utcnow_in_production_code() -> None:
 
     if offenders:
         rel = [
-            f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {name}()"
-            for p, lineno, name in offenders
+            f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {name}()" for p, lineno, name in offenders
         ]
         msg = (
             "Naive UTC datetime constructors found in production code "
-            "(see #1640). Replace with `datetime.now(UTC)`:\n"
-            + "\n".join(rel)
+            "(see #1640). Replace with `datetime.now(UTC)`:\n" + "\n".join(rel)
         )
         raise AssertionError(msg)
