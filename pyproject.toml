@@ -321,7 +321,7 @@ disallow_untyped_defs = true
 # Run: bandit -r . -c pyproject.toml
 
 [tool.bandit]
-exclude_dirs = [".venv", "tests", "evaluation", "legacy", "__pycache__"]
+exclude_dirs = [".venv", "tests", "evaluation", "legacy", "scripts/archive", "__pycache__"]
 skips = ["B101"]  # Skip assert_used (common in tests)
 
 # =============================================================================

@@ -10,7 +10,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`indexes/runtime-services.md`](indexes/runtime-services.md) — Docker, ingestion, mini app, bot, voice
 - [`indexes/observability-and-storage.md`](indexes/observability-and-storage.md) — Langfuse, Qdrant, Redis, LiteLLM, Postgres
 - [`indexes/local-runtime.md`](indexes/local-runtime.md) — local bot startup, Telegram E2E, Telethon sessions, polling locks
-- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, and docs maintenance
+- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, docs maintenance, swarm process docs
 
 ## Understand the Project Fast
 
@@ -22,6 +22,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) — Test-writing rules and local-fast vs heavy-tier split.
 - [`engineering/sdk-registry.md`](engineering/sdk-registry.md) — SDK/framework lookup order and canonical versions.
 - [`engineering/issue-triage.md`](engineering/issue-triage.md) — Issue classification and routing playbook.
+- [`../skills/superpowers/`](../skills/superpowers/) — Repo-local agent skills, Kiro Web steering, and issue-to-skill map.
 - [`engineering/README.md`](engineering/README.md) — Engineering process index with active and historical notes.
 - [`adr/`](adr/) — Architecture decision records.
 
@@ -59,6 +60,11 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Development conventions and test guidance.
 - [`ADRS.md`](ADRS.md) — Architecture decision records.
 
+## Migration & SDK
+
+- [`engineering/sdk-registry.md`](engineering/sdk-registry.md) — Canonical SDK/framework lookup order and keeper stack.
+- [`indexes/docker-sdk-map.md`](indexes/docker-sdk-map.md) — Docker image and SDK ownership map.
+
 ## Engineering Notes
 
 - [`ERROR_RESPONSES.md`](ERROR_RESPONSES.md) — Error response taxonomy.
@@ -82,5 +88,6 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 |---|---|
 | `docs/runbooks/` | Operational troubleshooting and incident response |
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
+| `docs/plans/` | Shared implementation plans and design specs |
 | `docs/review/` and `docs/portfolio/` | Reviewer and portfolio entry points |
 | Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `k8s/`, `docker/`) |
