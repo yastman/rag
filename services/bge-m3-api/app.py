@@ -28,6 +28,11 @@ encode_requests_total = Counter(
 )
 encode_duration = Histogram("bge_encode_seconds", "Encoding duration", ["encode_type"])
 encode_batch_size = Histogram("bge_encode_batch_size", "Batch size per request")
+encode_partial_failures_total = Counter(
+    "bge_encode_partial_failures_total",
+    "Items that failed validation in batch",
+    ["encode_type"],
+)
 model_loaded = Gauge("bge_model_loaded", "Model loaded status (1=loaded, 0=not loaded)")
 
 ***REMOVED*** Global model instance
@@ -88,9 +93,15 @@ class EncodeRequest(BaseModel):
     batch_size: int = Field(settings.BATCH_SIZE, description="Batch size for processing")
 
 
+class PartialFailure(BaseModel):
+    index: int
+    error: str
+
+
 class DenseResponse(BaseModel):
     dense_vecs: list[list[float]] = Field(..., description="Dense embeddings (1024-dim)")
     processing_time: float
+    partial_failures: list[PartialFailure] = Field(default_factory=list)
 
 
 class SparseResponse(BaseModel):
@@ -98,11 +109,13 @@ class SparseResponse(BaseModel):
         ..., description="Sparse vectors (indices + values)"
     )
     processing_time: float
+    partial_failures: list[PartialFailure] = Field(default_factory=list)
 
 
 class ColbertResponse(BaseModel):
     colbert_vecs: list[list[list[float]]] = Field(..., description="ColBERT multivectors")
     processing_time: float
+    partial_failures: list[PartialFailure] = Field(default_factory=list)
 
 
 class HybridResponse(BaseModel):
@@ -110,6 +123,7 @@ class HybridResponse(BaseModel):
     lexical_weights: list[dict[str, Any]]
     colbert_vecs: list[list[list[float]]]
     processing_time: float
+    partial_failures: list[PartialFailure] = Field(default_factory=list)
 
 
 class RerankResult(BaseModel):
@@ -143,6 +157,25 @@ class RerankResponse(BaseModel):
 
     results: list[RerankResult] = Field(..., description="Ranked results")
     processing_time: float
+
+
+def _validate_texts(texts: list[str]) -> tuple[list[int], list[int], list[str]]:
+    """Validate batch texts and separate valid from invalid indices.
+
+    Returns:
+        (valid_indices, invalid_indices, error_messages)
+    """
+    valid_indices = []
+    invalid_indices = []
+    error_messages = []
+    for i, text in enumerate(texts):
+        if not text or not text.strip():
+            invalid_indices.append(i)
+            error_messages.append("empty or whitespace-only string")
+            logger.warning("Item %d failed validation: empty or whitespace-only string", i)
+        else:
+            valid_indices.append(i)
+    return valid_indices, invalid_indices, error_messages
 
 
 def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray]) -> list[float]:
@@ -194,23 +227,48 @@ async def encode_dense(request: EncodeRequest):
     encode_batch_size.observe(len(request.texts))
 
     try:
+        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
+        partial_failures = [
+            PartialFailure(index=idx, error=msg)
+            for idx, msg in zip(invalid_indices, error_messages)
+        ]
+        if invalid_indices:
+            encode_partial_failures_total.labels(encode_type="dense").inc(len(invalid_indices))
+
         model = get_model()
         start_time = time.time()
 
-        embeddings = model.encode(
-            request.texts,
-            batch_size=request.batch_size,
-            max_length=request.max_length,
-            return_dense=True,
-            return_sparse=False,
-            return_colbert_vecs=False,
-        )
+        ***REMOVED*** Encode only valid texts
+        if valid_indices:
+            valid_texts = [request.texts[i] for i in valid_indices]
+            embeddings = model.encode(
+                valid_texts,
+                batch_size=request.batch_size,
+                max_length=request.max_length,
+                return_dense=True,
+                return_sparse=False,
+                return_colbert_vecs=False,
+            )
+            valid_vecs = embeddings["dense_vecs"].tolist()
+        else:
+            valid_vecs = []
 
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="dense").observe(processing_time)
 
+        ***REMOVED*** Reconstruct full-cardinality response
+        dense_sentinel = [0.0] * 1024
+        dense_vecs = [None] * len(request.texts)
+        valid_iter = iter(valid_vecs)
+        for i in valid_indices:
+            dense_vecs[i] = next(valid_iter)
+        for i in invalid_indices:
+            dense_vecs[i] = dense_sentinel
+
         return DenseResponse(
-            dense_vecs=embeddings["dense_vecs"].tolist(), processing_time=processing_time
+            dense_vecs=dense_vecs,
+            processing_time=processing_time,
+            partial_failures=partial_failures,
         )
 
     except Exception as e:
@@ -235,32 +293,57 @@ async def encode_sparse(request: EncodeRequest):
     encode_batch_size.observe(len(request.texts))
 
     try:
+        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
+        partial_failures = [
+            PartialFailure(index=idx, error=msg)
+            for idx, msg in zip(invalid_indices, error_messages)
+        ]
+        if invalid_indices:
+            encode_partial_failures_total.labels(encode_type="sparse").inc(len(invalid_indices))
+
         model = get_model()
         start_time = time.time()
 
-        embeddings = model.encode(
-            request.texts,
-            batch_size=request.batch_size,
-            max_length=request.max_length,
-            return_dense=False,
-            return_sparse=True,
-            return_colbert_vecs=False,
-        )
+        ***REMOVED*** Encode only valid texts
+        if valid_indices:
+            valid_texts = [request.texts[i] for i in valid_indices]
+            embeddings = model.encode(
+                valid_texts,
+                batch_size=request.batch_size,
+                max_length=request.max_length,
+                return_dense=False,
+                return_sparse=True,
+                return_colbert_vecs=False,
+            )
+            ***REMOVED*** Convert sparse vectors to Qdrant format
+            valid_weights = []
+            for row in embeddings["lexical_weights"]:
+                indices = []
+                values = []
+                for idx, val in row.items():
+                    indices.append(int(idx))
+                    values.append(float(val))
+                valid_weights.append({"indices": indices, "values": values})
+        else:
+            valid_weights = []
 
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="sparse").observe(processing_time)
 
-        ***REMOVED*** Convert sparse vectors to Qdrant format
-        lexical_weights = []
-        for row in embeddings["lexical_weights"]:
-            indices = []
-            values = []
-            for idx, val in row.items():
-                indices.append(int(idx))
-                values.append(float(val))
-            lexical_weights.append({"indices": indices, "values": values})
+        ***REMOVED*** Reconstruct full-cardinality response
+        sparse_sentinel = {"indices": [], "values": []}
+        lexical_weights = [None] * len(request.texts)
+        valid_iter = iter(valid_weights)
+        for i in valid_indices:
+            lexical_weights[i] = next(valid_iter)
+        for i in invalid_indices:
+            lexical_weights[i] = sparse_sentinel
 
-        return SparseResponse(lexical_weights=lexical_weights, processing_time=processing_time)
+        return SparseResponse(
+            lexical_weights=lexical_weights,
+            processing_time=processing_time,
+            partial_failures=partial_failures,
+        )
 
     except Exception as e:
         logger.error(f"Sparse encoding error: {e!s}")
@@ -284,25 +367,49 @@ async def encode_colbert(request: EncodeRequest):
     encode_batch_size.observe(len(request.texts))
 
     try:
+        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
+        partial_failures = [
+            PartialFailure(index=idx, error=msg)
+            for idx, msg in zip(invalid_indices, error_messages)
+        ]
+        if invalid_indices:
+            encode_partial_failures_total.labels(encode_type="colbert").inc(len(invalid_indices))
+
         model = get_model()
         start_time = time.time()
 
-        embeddings = model.encode(
-            request.texts,
-            batch_size=request.batch_size,
-            max_length=request.max_length,
-            return_dense=False,
-            return_sparse=False,
-            return_colbert_vecs=True,
-        )
+        ***REMOVED*** Encode only valid texts
+        if valid_indices:
+            valid_texts = [request.texts[i] for i in valid_indices]
+            embeddings = model.encode(
+                valid_texts,
+                batch_size=request.batch_size,
+                max_length=request.max_length,
+                return_dense=False,
+                return_sparse=False,
+                return_colbert_vecs=True,
+            )
+            valid_vecs = [vec.tolist() for vec in embeddings["colbert_vecs"]]
+        else:
+            valid_vecs = []
 
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="colbert").observe(processing_time)
 
-        ***REMOVED*** Convert to nested lists
-        colbert_vecs = [vec.tolist() for vec in embeddings["colbert_vecs"]]
+        ***REMOVED*** Reconstruct full-cardinality response
+        colbert_sentinel = [[0.0] * 1024]
+        colbert_vecs = [None] * len(request.texts)
+        valid_iter = iter(valid_vecs)
+        for i in valid_indices:
+            colbert_vecs[i] = next(valid_iter)
+        for i in invalid_indices:
+            colbert_vecs[i] = colbert_sentinel
 
-        return ColbertResponse(colbert_vecs=colbert_vecs, processing_time=processing_time)
+        return ColbertResponse(
+            colbert_vecs=colbert_vecs,
+            processing_time=processing_time,
+            partial_failures=partial_failures,
+        )
 
     except Exception as e:
         logger.error(f"ColBERT encoding error: {e!s}")
@@ -327,39 +434,73 @@ async def encode_hybrid(request: EncodeRequest):
     encode_batch_size.observe(len(request.texts))
 
     try:
+        valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
+        partial_failures = [
+            PartialFailure(index=idx, error=msg)
+            for idx, msg in zip(invalid_indices, error_messages)
+        ]
+        if invalid_indices:
+            encode_partial_failures_total.labels(encode_type="hybrid").inc(len(invalid_indices))
+
         model = get_model()
         start_time = time.time()
 
-        embeddings = model.encode(
-            request.texts,
-            batch_size=request.batch_size,
-            max_length=request.max_length,
-            return_dense=True,
-            return_sparse=True,
-            return_colbert_vecs=True,
-        )
+        ***REMOVED*** Encode only valid texts
+        if valid_indices:
+            valid_texts = [request.texts[i] for i in valid_indices]
+            embeddings = model.encode(
+                valid_texts,
+                batch_size=request.batch_size,
+                max_length=request.max_length,
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=True,
+            )
+            valid_dense = embeddings["dense_vecs"].tolist()
+            valid_sparse = []
+            for row in embeddings["lexical_weights"]:
+                indices = []
+                values = []
+                for idx, val in row.items():
+                    indices.append(int(idx))
+                    values.append(float(val))
+                valid_sparse.append({"indices": indices, "values": values})
+            valid_colbert = [vec.tolist() for vec in embeddings["colbert_vecs"]]
+        else:
+            valid_dense = []
+            valid_sparse = []
+            valid_colbert = []
 
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="hybrid").observe(processing_time)
 
-        ***REMOVED*** Convert sparse vectors
-        lexical_weights = []
-        for row in embeddings["lexical_weights"]:
-            indices = []
-            values = []
-            for idx, val in row.items():
-                indices.append(int(idx))
-                values.append(float(val))
-            lexical_weights.append({"indices": indices, "values": values})
+        ***REMOVED*** Reconstruct full-cardinality responses
+        dense_sentinel = [0.0] * 1024
+        sparse_sentinel = {"indices": [], "values": []}
+        colbert_sentinel = [[0.0] * 1024]
 
-        ***REMOVED*** Convert colbert vectors
-        colbert_vecs = [vec.tolist() for vec in embeddings["colbert_vecs"]]
+        dense_vecs = [None] * len(request.texts)
+        lexical_weights = [None] * len(request.texts)
+        colbert_vecs = [None] * len(request.texts)
+
+        dense_iter = iter(valid_dense)
+        sparse_iter = iter(valid_sparse)
+        colbert_iter = iter(valid_colbert)
+        for i in valid_indices:
+            dense_vecs[i] = next(dense_iter)
+            lexical_weights[i] = next(sparse_iter)
+            colbert_vecs[i] = next(colbert_iter)
+        for i in invalid_indices:
+            dense_vecs[i] = dense_sentinel
+            lexical_weights[i] = sparse_sentinel
+            colbert_vecs[i] = colbert_sentinel
 
         return HybridResponse(
-            dense_vecs=embeddings["dense_vecs"].tolist(),
+            dense_vecs=dense_vecs,
             lexical_weights=lexical_weights,
             colbert_vecs=colbert_vecs,
             processing_time=processing_time,
+            partial_failures=partial_failures,
         )
 
     except Exception as e:
