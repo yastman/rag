@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
@@ -55,6 +56,12 @@ if _FASTAPI_SHIM_ACTIVE:
     # Prevent leaking shim into other tests that intentionally importorskip fastapi.
     sys.modules.pop("fastapi.responses", None)
     sys.modules.pop("fastapi", None)
+
+
+def _response_content(response) -> dict:
+    if hasattr(response, "content"):
+        return response.content
+    return json.loads(response.body.decode("utf-8"))
 
 
 class _DummyGraph:
@@ -303,7 +310,7 @@ async def test_generic_error_handler_returns_structured_payload() -> None:
         response = await generic_error_handler(None, RuntimeError("boom"))
 
     assert response.status_code == 500
-    content = response.content
+    content = _response_content(response)
     assert content["error"] == "internal_error"
     assert content["message"] == "Internal server error"
     assert content["recoverable"] is False
@@ -324,7 +331,7 @@ async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> 
     ):
         response = await generic_error_handler(None, ValueError("bad input"))
 
-    assert response.content["trace_id"] == "trace-abc-123"
+    assert _response_content(response)["trace_id"] == "trace-abc-123"
     mock_logger.exception.assert_called_once_with(
         "Unhandled error in RAG API", extra={"trace_id": "trace-abc-123"}
     )
