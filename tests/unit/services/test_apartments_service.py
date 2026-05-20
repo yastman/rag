@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from qdrant_client import models
 
 from telegram_bot.services.apartments_service import (
     ApartmentsService,
@@ -311,3 +312,71 @@ class TestScrollWithFilters:
             exclude_ids=["a4"],
         )
         assert len(r3) == 1
+
+
+class TestSearchWithFiltersQueryShape:
+    """Test the query shape sent to Qdrant by search_with_filters."""
+
+    @pytest.fixture
+    def mock_qdrant(self) -> MagicMock:
+        q = MagicMock()
+        q.client = MagicMock()
+        q.collection_name = "apartments"
+        mock_response = SimpleNamespace(points=[])
+        q.client.query_points = AsyncMock(return_value=mock_response)
+        return q
+
+    async def test_rrf_query_without_colbert(self, mock_qdrant: MagicMock) -> None:
+        """query_points is called with models.RrfQuery when no colbert_query."""
+        svc = ApartmentsService(mock_qdrant)
+        await svc.search_with_filters(
+            dense_vector=[0.1, 0.2, 0.3],
+            colbert_query=None,
+            sparse_vector={"indices": [1, 2], "values": [0.5, 0.8]},
+            filters=None,
+            top_k=5,
+        )
+
+        call_kwargs = mock_qdrant.client.query_points.call_args.kwargs
+        query = call_kwargs["query"]
+        assert isinstance(query, models.RrfQuery)
+        assert query.rrf.k == 60
+
+    async def test_rrf_query_with_colbert(self, mock_qdrant: MagicMock) -> None:
+        """When colbert_query is provided, intermediate prefetch uses RrfQuery and outer uses colbert."""
+        svc = ApartmentsService(mock_qdrant)
+        await svc.search_with_filters(
+            dense_vector=[0.1, 0.2, 0.3],
+            colbert_query=[[0.1, 0.2], [0.3, 0.4]],
+            sparse_vector={"indices": [1, 2], "values": [0.5, 0.8]},
+            filters=None,
+            top_k=5,
+        )
+
+        call_kwargs = mock_qdrant.client.query_points.call_args.kwargs
+        ***REMOVED*** Outer query uses colbert vectors
+        assert call_kwargs["using"] == "colbert"
+        assert call_kwargs["query"] == [[0.1, 0.2], [0.3, 0.4]]
+        ***REMOVED*** Inner prefetch uses RrfQuery
+        prefetch_list = call_kwargs["prefetch"]
+        assert len(prefetch_list) == 1
+        rrf_prefetch = prefetch_list[0]
+        assert isinstance(rrf_prefetch.query, models.RrfQuery)
+        assert rrf_prefetch.query.rrf.k == 60
+
+    async def test_rrf_k_parameter_threaded_through(self, mock_qdrant: MagicMock) -> None:
+        """Pass rrf_k=42 and verify the Rrf object has k=42."""
+        svc = ApartmentsService(mock_qdrant)
+        await svc.search_with_filters(
+            dense_vector=[0.1, 0.2, 0.3],
+            colbert_query=None,
+            sparse_vector={"indices": [1, 2], "values": [0.5, 0.8]},
+            filters=None,
+            top_k=5,
+            rrf_k=42,
+        )
+
+        call_kwargs = mock_qdrant.client.query_points.call_args.kwargs
+        query = call_kwargs["query"]
+        assert isinstance(query, models.RrfQuery)
+        assert query.rrf.k == 42
