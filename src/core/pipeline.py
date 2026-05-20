@@ -116,7 +116,7 @@ class RAGPipeline:
 
         if isinstance(self.search_engine, (HybridRRFSearchEngine, HybridRRFColBERTSearchEngine)):
             ***REMOVED*** Pass query string directly for hybrid search (async handled inside)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             search_results = await loop.run_in_executor(
                 None,
                 lambda: self.search_engine.search(
@@ -127,7 +127,7 @@ class RAGPipeline:
             )
         else:
             ***REMOVED*** For other engines, generate dense embedding (async)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             ctx = contextvars.copy_context()
             query_embedding = await loop.run_in_executor(
                 None, lambda: ctx.run(self._encode_query, query)

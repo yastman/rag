@@ -113,19 +113,24 @@ class VoyageEmbedFunction:
         async def _embed():
             return await self.service.embed_documents(texts)
 
-        ***REMOVED*** Run async in sync context
+        ***REMOVED*** Run async in sync context. asyncio.get_event_loop() is deprecated
+        ***REMOVED*** in 3.12+ and raises RuntimeError without a running loop in 3.14;
+        ***REMOVED*** use get_running_loop()/asyncio.run() per ***REMOVED***1639 / Context7 cpython.
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                ***REMOVED*** If we're in an async context, create a new task
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(asyncio.run, _embed())
-                    embeddings = future.result()
-            else:
-                embeddings = loop.run_until_complete(_embed())
+            loop = asyncio.get_running_loop()
         except RuntimeError:
+            loop = None
+        if loop is not None and loop.is_running():
+            ***REMOVED*** Called from inside an active event loop (e.g. CocoIndex executor
+            ***REMOVED*** invokes us during async flow execution). Drop to a worker thread
+            ***REMOVED*** so we can spin up a fresh loop via asyncio.run without re-entering.
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, _embed())
+                embeddings = future.result()
+        else:
+            ***REMOVED*** Called from purely sync context — own the loop for this call.
             embeddings = asyncio.run(_embed())
 
         return [np.array(emb, dtype=np.float32) for emb in embeddings]
