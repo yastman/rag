@@ -286,6 +286,20 @@ def _extract_usage_details(usage: Any | None) -> dict[str, int] | None:
     return details or None
 
 
+def _update_current_span(lf_client: Any | None, **kwargs: Any) -> None:
+    """Update the current Langfuse span when tracing is available."""
+    if lf_client is not None:
+        with contextlib.suppress(Exception):
+            lf_client.update_current_span(**kwargs)
+
+
+def _update_current_generation(lf_client: Any | None, **kwargs: Any) -> None:
+    """Update the current Langfuse generation when tracing is available."""
+    if lf_client is not None:
+        with contextlib.suppress(Exception):
+            lf_client.update_current_generation(**kwargs)
+
+
 def _select_recent_history(
     messages: list[Any], max_messages: int = _MAX_HISTORY_MESSAGES
 ) -> list[Any]:
@@ -338,7 +352,7 @@ async def _chat_create_with_optional_name(
         # Plain client created via GraphConfig.create_llm(auto_trace=False).
         # Skip both Langfuse-specific kwargs to avoid a needless TypeError →
         # retry round-trip on every call. Generation linking for these clients
-        # happens via lf_client.update_current_generation(prompt=...) in caller.
+        # happens via _update_current_generation(lf_client, prompt=...) in caller.
         kwargs.pop("langfuse_prompt", None)
         return await create_fn(**kwargs)
     try:
@@ -443,8 +457,8 @@ async def _generate_streaming(
                     stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
                     if lf_client is not None:
                         with contextlib.suppress(Exception):
-                            lf_client.update_current_generation(
-                                completion_start_time=datetime.now(UTC)
+                            _update_current_generation(
+                                lf_client, completion_start_time=datetime.now(UTC)
                             )
                 accumulated += text
                 now = time.monotonic()
@@ -598,7 +612,8 @@ async def generate_response(
         context = format_context(docs, effective_max_context_docs)
 
     # Curated span metadata
-    lf_client.update_current_span(
+    _update_current_span(
+        lf_client,
         input={
             "query_preview": effective_query[:120],
             "query_len": len(effective_query),
@@ -608,7 +623,7 @@ async def generate_response(
             "grounding_mode": grounding_mode,
             "needs_coverage": needs_coverage,
             "coverage_reason": coverage_reason,
-        }
+        },
     )
 
     if should_safe_fallback(
@@ -622,7 +637,8 @@ async def generate_response(
         PipelineMetrics.get().record("generate", elapsed * 1000)
         answer = build_safe_fallback_response(docs)
         current_latency = latency_stages or {}
-        lf_client.update_current_span(
+        _update_current_span(
+            lf_client,
             output={
                 "response_length": len(answer),
                 "llm_provider_model": "safe_fallback",
@@ -633,7 +649,7 @@ async def generate_response(
                 "needs_coverage": needs_coverage,
                 "coverage_mode": "exhaustive_list" if needs_coverage else "default",
                 "coverage_reason": coverage_reason,
-            }
+            },
         )
         return _ensure_generation_signal_defaults(
             {
@@ -960,7 +976,8 @@ async def generate_response(
                 )
     except Exception as e:
         logger.exception("generate_response: LLM call failed, using fallback")
-        lf_client.update_current_span(
+        _update_current_span(
+            lf_client,
             level="ERROR",
             status_message=f"LLM failed: {str(e)[:200]}",
         )
@@ -986,7 +1003,7 @@ async def generate_response(
             # (auto_trace=False) where the kwarg is stripped by the helper.
             generation_payload["prompt"] = prompt_obj
         with contextlib.suppress(Exception):
-            lf_client.update_current_generation(**generation_payload)
+            _update_current_generation(lf_client, **generation_payload)
 
     # Build eval context for managed evaluators (#386)
     retrieved_ctx = retrieved_context or []
@@ -1033,7 +1050,7 @@ async def generate_response(
                 "completion_tokens": getattr(usage, "completion_tokens", None),
                 "total_tokens": getattr(usage, "total_tokens", None),
             }
-    lf_client.update_current_span(output=span_output)
+    _update_current_span(lf_client, output=span_output)
 
     # --- Latency breakdown (#147) ---
     streaming_was_enabled = bool(message is not None and config.streaming_enabled)
@@ -1061,7 +1078,8 @@ async def generate_response(
             _drift_warn_threshold = 500
         if llm_ttft_drift_ms > _drift_warn_threshold:
             with contextlib.suppress(Exception):
-                lf_client.update_current_span(
+                _update_current_span(
+                    lf_client,
                     level="WARNING",
                     status_message=(
                         f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms "

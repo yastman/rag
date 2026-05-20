@@ -1266,3 +1266,24 @@ async def test_generate_response_does_not_link_prompt_via_update_when_object_is_
 
     for call in lf.update_current_generation.call_args_list:
         assert "prompt" not in (call.kwargs or {})
+
+
+@pytest.mark.asyncio
+async def test_generate_response_works_when_langfuse_client_unavailable() -> None:
+    """Prompt linking must degrade gracefully when Langfuse client is unavailable."""
+    config, client = _make_non_streaming_config(answer="Ответ без tracing")
+
+    with patch(
+        "telegram_bot.services.generate_response.get_prompt_with_object",
+        return_value=("Hardcoded fallback", None),
+    ):
+        result = await generate_response(
+            query="Тест",
+            documents=[{"text": "Doc", "score": 0.8, "metadata": {}}],
+            config=config,
+            get_lf_client=lambda: None,
+            raw_messages=[{"role": "user", "content": "Тест"}],
+        )
+
+    assert result["response"] == "Ответ без tracing"
+    client.chat.completions.create.assert_awaited_once()
