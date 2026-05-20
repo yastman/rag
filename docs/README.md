@@ -10,7 +10,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`indexes/runtime-services.md`](indexes/runtime-services.md) — Docker, ingestion, mini app, bot, voice
 - [`indexes/observability-and-storage.md`](indexes/observability-and-storage.md) — Langfuse, Qdrant, Redis, LiteLLM, Postgres
 - [`indexes/local-runtime.md`](indexes/local-runtime.md) — local bot startup, Telegram E2E, Telethon sessions, polling locks
-- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, and docs maintenance
+- [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, docs maintenance, swarm process docs
 
 ***REMOVED******REMOVED*** Understand the Project Fast
 
@@ -59,6 +59,12 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Development conventions and test guidance.
 - [`ADRS.md`](ADRS.md) — Architecture decision records.
 
+***REMOVED******REMOVED*** Migration & SDK
+
+- [`SDK_MIGRATION_AUDIT_2026-03-13.md`](SDK_MIGRATION_AUDIT_2026-03-13.md) — Canonical SDK keeper stack.
+- [`SDK_MIGRATION_ROADMAP_2026-03-13.md`](SDK_MIGRATION_ROADMAP_2026-03-13.md) — Post-audit execution order.
+- [`SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md`](SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md) — SDK canonical remediation report.
+
 ***REMOVED******REMOVED*** Engineering Notes
 
 - [`ERROR_RESPONSES.md`](ERROR_RESPONSES.md) — Error response taxonomy.
@@ -66,6 +72,10 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`HITL_CRM_FLOW.md`](HITL_CRM_FLOW.md) — CRM-specific HITL flow.
 - [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
+
+***REMOVED******REMOVED*** Archive
+
+- [`archive/`](archive/) — Historical documentation and retired CI workflows preserved for context.
 
 ***REMOVED******REMOVED*** Fast Doc Search
 
@@ -82,5 +92,6 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 |---|---|
 | `docs/runbooks/` | Operational troubleshooting and incident response |
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
+| `docs/plans/` | Shared implementation plans and design specs |
 | `docs/review/` and `docs/portfolio/` | Reviewer and portfolio entry points |
 | Folder `README.md` files | Local subsystem indexes (e.g., `services/`, `k8s/`, `docker/`) |

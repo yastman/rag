@@ -52,7 +52,7 @@ For **this** repository:
 - stable snapshot branch: `main` (lags behind `dev`).
 - protect both branches.
 - require PRs against `dev` for changes.
-- require fast CI checks before merge.
+- require fast static CI checks before merge.
 - disallow force pushes to protected branches.
 - create a review snapshot tag such as `portfolio-review-2026-05`.
 
@@ -61,17 +61,17 @@ is `dev`, every doc that mentions merging should say `dev`, not `main`.
 
 ***REMOVED******REMOVED*** CI Expectations
 
-Minimum useful checks:
+CI is intentionally limited to fast static guardrails:
 
 - lint and format
 - type checking
-- focused unit tests
 - Compose config validation for runtime-sensitive changes
 - secret scanning friendly repository layout
 
-For this repository, local verification remains stronger than CI. README should
-say that CI is a guardrail and local `make check` plus focused tests are the
-primary evidence for code changes.
+Do not put pytest suites in pull-request CI. For this repository, local
+verification remains stronger than CI. README should say that CI is a static
+guardrail and local `make check` plus focused tests are the primary evidence
+for code changes.
 
 ***REMOVED******REMOVED*** Security And Sanitization
 
