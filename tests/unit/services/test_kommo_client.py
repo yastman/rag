@@ -444,7 +444,6 @@ async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) 
     assert result.id == 99
 
 
-
 ***REMOVED*** -----------------------------------------------------------------------------
 ***REMOVED*** httpx.Auth flow contract (***REMOVED***1646)
 ***REMOVED*** -----------------------------------------------------------------------------
@@ -466,9 +465,7 @@ class TestKommoOAuthAuthFlow:
 
         assert issubclass(KommoOAuthAuth, httpx.Auth)
 
-    def test_kommo_client_attaches_oauth_auth_to_async_client(
-        self, mock_token_store
-    ) -> None:
+    def test_kommo_client_attaches_oauth_auth_to_async_client(self, mock_token_store) -> None:
         """The shared httpx.AsyncClient must be constructed with KommoOAuthAuth."""
         from telegram_bot.services.kommo_client import KommoClient, KommoOAuthAuth
 
@@ -476,9 +473,7 @@ class TestKommoOAuthAuthFlow:
         ***REMOVED*** httpx exposes the auth on the AsyncClient as ``client.auth``.
         assert isinstance(client._client.auth, KommoOAuthAuth)
 
-    async def test_async_auth_flow_sets_bearer_then_yields(
-        self, mock_token_store
-    ) -> None:
+    async def test_async_auth_flow_sets_bearer_then_yields(self, mock_token_store) -> None:
         import httpx
 
         from telegram_bot.services.kommo_client import KommoOAuthAuth
@@ -603,10 +598,7 @@ class TestKommoClientRequestNoLongerHandles401:
             if not isinstance(node, ast.Compare):
                 continue
             left = node.left
-            if not (
-                isinstance(left, ast.Attribute)
-                and left.attr == "status_code"
-            ):
+            if not (isinstance(left, ast.Attribute) and left.attr == "status_code"):
                 continue
             for cmp in node.comparators:
                 if isinstance(cmp, ast.Constant) and cmp.value == 401:
