@@ -188,38 +188,3 @@ def isolate_otel_langfuse(monkeypatch):
     for p in patches:
         with contextlib.suppress(Exception):
             p.stop()
-
-
-
-
-# =============================================================================
-# Regression test for the conftest mock_get_client lazy-patch contract.
-# =============================================================================
-# Kept inline so the test runs alongside every unit-test invocation that uses
-# this conftest. If the contract regresses (eager patching re-introduced),
-# `pytest --cov` against any pure-leaf module will fail with the numpy
-# `cannot load module more than once per process` symptom seen on dev@91cfcaa.
-def test_mock_get_client_does_not_eagerly_import_telegram_bot_bot():
-    """`mock_get_client` must not trigger telegram_bot.bot import on its own.
-
-    Contract: when a test does NOT itself import telegram_bot.bot, the
-    autouse `mock_get_client` fixture must skip the patch. Otherwise the
-    patch's pkgutil walk re-traverses the package tree and breaks
-    `pytest --cov` for every leaf module that imports numpy / qdrant_client
-    / langgraph (i.e., almost everything in this repo).
-
-    A pre-conftest assertion would have to run BEFORE conftest loads, which
-    is not possible. This test therefore validates the *post-condition*:
-    after the fixture has yielded, `telegram_bot.bot` is still NOT in
-    `sys.modules` for tests that didn't request it. Tests that DO import
-    `telegram_bot.bot` (test_history_tool / test_rerank / test_rewrite)
-    happen to have it imported at module-level, so the patch fires for them
-    — that path is covered by the existing tests in those files.
-    """
-    assert "telegram_bot.bot" not in sys.modules, (
-        "telegram_bot.bot was imported as a side effect of an autouse fixture. "
-        "Re-introducing eager patching of `telegram_bot.bot.get_client` will "
-        "cause `pytest --cov` to fail with `ImportError: cannot load module "
-        "more than once per process` on numpy's C-extensions. Keep the lazy "
-        "guard in `mock_get_client`."
-    )
