@@ -4945,6 +4945,10 @@ class PropertyBot:
                     idle_timeout_min=self.config.session_idle_timeout_min,
                     poll_interval_sec=self.config.session_summary_poll_sec,
                     summary_model=self.config.session_summary_model,
+                    ***REMOVED*** Real history retrieval (e.g. LangGraph checkpointer) is
+                    ***REMOVED*** not yet wired (***REMOVED***1599). Pass None explicitly so the worker
+                    ***REMOVED*** logs a startup warning instead of silently no-op'ing.
+                    history_source=None,
                 )
                 await self._session_summary_worker.start()
                 logger.info("SessionSummaryWorker started")

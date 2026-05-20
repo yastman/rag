@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
@@ -27,6 +28,9 @@ _SUMMARY_PROMPT = (
 )
 
 
+HistorySource = Callable[[str], Awaitable[list[dict[str, str]]]]
+
+
 class SessionSummaryWorker:
     """Background worker that detects idle sessions and generates LLM summaries."""
 
@@ -39,6 +43,7 @@ class SessionSummaryWorker:
         idle_timeout_min: int = 30,
         poll_interval_sec: int = 300,
         summary_model: str = "claude-haiku-4-5",
+        history_source: HistorySource | None = None,
     ) -> None:
         self._redis = redis
         self._llm = llm
@@ -46,17 +51,38 @@ class SessionSummaryWorker:
         self._idle_timeout_min = idle_timeout_min
         self._poll_interval_sec = poll_interval_sec
         self._summary_model = summary_model
+        self._history_source = history_source
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
-        """Start the background polling loop."""
+        """Start the background polling loop.
+
+        Logs a warning when ``history_source`` is not wired (***REMOVED***1599) — the
+        worker would otherwise start, scan idle sessions, and silently delete
+        keys without ever generating a summary, which looked like the feature
+        was running while it was actually a no-op.
+        """
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run_loop(), name="session-summary-worker")
+        if self._history_source is None:
+            logger.warning(
+                "SessionSummaryWorker started without history_source — idle "
+                "sessions will be detected but summaries will NOT be generated "
+                "until a real history retriever is wired. See issue ***REMOVED***1599."
+            )
+            lf = get_client()
+            if lf is not None:
+                lf.score_current_trace(
+                    name="session_summary_history_source_missing",
+                    value=1,
+                    data_type="BOOLEAN",
+                )
         logger.info(
-            "SessionSummaryWorker started (poll=%ds, idle=%dmin)",
+            "SessionSummaryWorker started (poll=%ds, idle=%dmin, history_source=%s)",
             self._poll_interval_sec,
             self._idle_timeout_min,
+            "wired" if self._history_source is not None else "missing",
         )
 
     async def stop(self) -> None:
@@ -142,11 +168,22 @@ class SessionSummaryWorker:
         return count
 
     async def _get_conversation_history(self, user_id: str) -> list[dict[str, str]]:
-        """Fetch conversation history for a user.
+        """Fetch conversation history for ``user_id``.
 
-        Placeholder: returns empty list until checkpointer integration is added.
-        Override in tests or subclass for real history retrieval.
+        Delegates to the constructor-injected ``history_source`` callable when
+        wired. Returns ``[]`` when no source is configured (worker is a no-op
+        in that mode — see ***REMOVED***1599 for the contract). Subclasses may still
+        override this method directly for tests.
         """
+        if self._history_source is not None:
+            try:
+                return await self._history_source(user_id)
+            except Exception:
+                logger.exception(
+                    "history_source raised for user_id=%s; treating as empty history",
+                    user_id,
+                )
+                return []
         return []
 
     @observe(name="session-summary-llm", capture_input=False, capture_output=False)
