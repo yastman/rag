@@ -37,7 +37,19 @@ def get_kommo_client():
 
 
 async def submit_phone(request: PhoneRequest) -> dict:
-    """Submit phone to CRM."""
+    """Submit phone to CRM.
+
+    Returns
+    -------
+    dict
+        ``{"success": True, "lead_id": <int>}`` on success.
+        ``{"success": False, "lead_id": None, "error": "crm_submission_failed"}``
+        on any CRM failure. Returning ``success: True`` for a swallowed
+        exception (***REMOVED***1596) made it impossible for clients to distinguish a
+        real captured lead from a dropped one. The error code is stable so
+        the frontend can show a retry/contact-support state without parsing
+        free-form text.
+    """
     try:
         client = get_kommo_client()
         contact = await client.upsert_contact(
@@ -51,4 +63,8 @@ async def submit_phone(request: PhoneRequest) -> dict:
         return {"success": True, "lead_id": lead["id"]}
     except Exception:
         logger.exception("CRM submission failed")
-        return {"success": True, "lead_id": None}  ***REMOVED*** Graceful degradation
+        return {
+            "success": False,
+            "lead_id": None,
+            "error": "crm_submission_failed",
+        }
