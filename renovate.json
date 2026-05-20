@@ -2,5 +2,17 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "livekit/livekit-server: prefer semver release tags (v<major>.<minor>...) over commit-SHA-like tags so compose.yml clearly identifies the deployed release. See ***REMOVED***1339.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "livekit/livekit-server"
+      ],
+      "allowedVersions": "/^v[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:-[a-zA-Z0-9.-]+)?$/"
+    }
   ]
 }
