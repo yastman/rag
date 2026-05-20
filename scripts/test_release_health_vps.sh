@@ -4,7 +4,7 @@ set -euo pipefail
 REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false
 MINI_APP_FRONTEND_URL="${MINI_APP_FRONTEND_URL:-http://127.0.0.1:8091/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
-export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml}"
+export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
 
 log() {
   printf '[release-smoke] %s\n' "$1"
@@ -60,10 +60,29 @@ if printf '%s\n' "$container_statuses" | grep -Eq '\(unhealthy\)'; then
   fail "compose project has unhealthy containers"
 fi
 
+removed_services=(
+  "mini-app-api"
+  "mini-app-frontend"
+  "docling"
+  "ingestion"
+  "langfuse"
+  "langfuse-worker"
+  "clickhouse"
+  "minio"
+  "redis-langfuse"
+)
+
+running_services="$(docker compose ps --status running --services 2>/dev/null || true)"
+for removed_service in "${removed_services[@]}"; do
+  if printf '%s\n' "$running_services" | grep -Eq "^${removed_service}$"; then
+    fail "removed service is running in minimal VPS runtime: ${removed_service}"
+  fi
+done
+
 log "Bot functional smoke (Qdrant + LiteLLM)"
 make test-bot-health-vps
 
-log "Bot network reachability (qdrant, litellm, postgres, redis)"
+log "Bot network reachability (qdrant, litellm, postgres, redis, bge-m3, user-base)"
 docker compose exec -T bot python - <<'PY'
 import socket
 import sys
@@ -73,6 +92,8 @@ targets = [
     ("litellm", 4000),
     ("postgres", 5432),
     ("redis", 6379),
+    ("bge-m3", 8000),
+    ("user-base", 8000),
 ]
 
 failed = []
