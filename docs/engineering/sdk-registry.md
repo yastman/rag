@@ -78,6 +78,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - recursion_limit=15 при compile().with_config()
   - Bot Docker image dependencies come from `telegram_bot/uv.lock`, not root `uv.lock`; check the bot-local frozen lock after LangChain/LangGraph changes.
   - `langchain.agents.create_agent` imports `langgraph.prebuilt`; keep `langchain`, `langgraph`, and `langgraph-prebuilt` compatible as one bundle and verify with `uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'`.
+  - Параллельный fan-out внутри графа = `langgraph.types.Send` (per [ADR-0009](../adr/0009-langgraph-send-fanout-scoping.md)). НЕ заменять `Send` на `asyncio.gather` в graph node — теряется checkpointer context и parent Langfuse span. `asyncio.gather` остаётся правильным выбором вне графа.
 
 ## qdrant-client
 - **triggers:** vector, search, qdrant, collection, embedding, hybrid, RRF, ColBERT, prefetch, filter, points
