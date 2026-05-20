@@ -1,160 +1,460 @@
 ***REMOVED***!/usr/bin/env python3
-"""Git hygiene report and cleanup tool.
+"""Git hygiene report and safe cleanup tool.
 
-Scans the repository for:
-- Branches merged to origin/main
-- Branches without upstream tracking
-- Detached or /tmp worktrees
-- Untracked transient files (coverage.json, test_output*, *.log)
+Classifies every local branch and worktree into one of three lanes:
+
+- ``safe-to-delete``   : merged into the configured base branch, has upstream,
+                         is not the current branch, and is not attached to a
+                         dirty or ``/tmp`` worktree.
+- ``protected``        : current branch, configured base branch, or one of the
+                         well-known long-lived branches (``main``, ``master``,
+                         ``develop``).
+- ``requires-human``   : everything else — unmerged, upstream-gone, ahead of
+                         upstream, no upstream tracking, or attached to a
+                         dirty/transient worktree. These are surfaced in the
+                         report but are NOT deleted by ``--fix`` unless the
+                         operator explicitly opts in via
+                         ``--include-requires-human``.
+
+Worktrees are also classified:
+
+- ``safe``         : on disk under the repository, attached to a known branch,
+                     and clean.
+- ``requires-human``: detached HEAD, located under ``/tmp``, or contains
+                      uncommitted changes.
 
 Usage:
-    python scripts/git_hygiene.py          ***REMOVED*** Human-readable report
-    python scripts/git_hygiene.py --json   ***REMOVED*** JSON output
-    python scripts/git_hygiene.py --fix    ***REMOVED*** Auto-cleanup merged branches
-    python scripts/git_hygiene.py --fix --dry-run  ***REMOVED*** Preview cleanup
+    python scripts/git_hygiene.py                    ***REMOVED*** Human-readable report
+    python scripts/git_hygiene.py --json             ***REMOVED*** Machine-readable
+    python scripts/git_hygiene.py --fix --dry-run    ***REMOVED*** Preview safe deletions
+    python scripts/git_hygiene.py --fix              ***REMOVED*** Apply safe deletions
+
+Exit code is non-zero whenever the report contains anything actionable
+(safe-to-delete, requires-human, dirty worktrees, transient files), so it can
+be wired into CI or weekly hygiene checks.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 DEFAULT_BASE_BRANCH = "dev"
+PROTECTED_NAMES: frozenset[str] = frozenset({"main", "master", "develop"})
+
 base_branch = os.environ.get("REPO_BASE_BRANCH", DEFAULT_BASE_BRANCH)
+
+BranchCategory = Literal["safe-to-delete", "protected", "requires-human"]
+WorktreeCategory = Literal["safe", "requires-human"]
+
+
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Data classes
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+@dataclass
+class BranchInfo:
+    """Per-branch hygiene metadata and classification."""
+
+    name: str
+    category: BranchCategory = "requires-human"
+    reasons: list[str] = field(default_factory=list)
+    upstream: str | None = None
+    upstream_gone: bool = False
+    ahead: int = 0
+    behind: int = 0
+    merged_into_base: bool = False
+    worktree_path: str | None = None
+    worktree_dirty: bool = False
+    is_current: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "category": self.category,
+            "reasons": list(self.reasons),
+            "upstream": self.upstream,
+            "upstream_gone": self.upstream_gone,
+            "ahead": self.ahead,
+            "behind": self.behind,
+            "merged_into_base": self.merged_into_base,
+            "worktree_path": self.worktree_path,
+            "worktree_dirty": self.worktree_dirty,
+            "is_current": self.is_current,
+        }
+
+
+@dataclass
+class WorktreeInfo:
+    """Per-worktree hygiene metadata and classification."""
+
+    path: str
+    branch: str | None = None
+    detached: bool = False
+    bare: bool = False
+    in_tmp: bool = False
+    dirty: bool = False
+    is_main: bool = False
+
+    @property
+    def reasons(self) -> list[str]:
+        out: list[str] = []
+        if self.bare:
+            out.append("bare")
+        if self.detached:
+            out.append("detached HEAD")
+        if self.in_tmp:
+            out.append("in /tmp")
+        if self.dirty:
+            out.append("uncommitted changes")
+        return out
+
+    @property
+    def category(self) -> WorktreeCategory:
+        return "safe" if not self.reasons else "requires-human"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "path": self.path,
+            "branch": self.branch,
+            "category": self.category,
+            "reasons": self.reasons,
+            "detached": self.detached,
+            "bare": self.bare,
+            "in_tmp": self.in_tmp,
+            "dirty": self.dirty,
+            "is_main": self.is_main,
+        }
 
 
 @dataclass
 class HygieneReport:
     """Aggregated hygiene findings."""
 
-    merged_branches: list[str] = field(default_factory=list)
-    no_upstream_branches: list[str] = field(default_factory=list)
-    stale_worktrees: list[dict[str, str]] = field(default_factory=list)
+    branches: list[BranchInfo] = field(default_factory=list)
+    worktrees: list[WorktreeInfo] = field(default_factory=list)
     transient_files: list[str] = field(default_factory=list)
+
+    ***REMOVED*** ----- New, lane-aware accessors -----
+
+    def branches_in_category(self, category: BranchCategory) -> list[BranchInfo]:
+        return [b for b in self.branches if b.category == category]
+
+    @property
+    def safe_to_delete(self) -> list[BranchInfo]:
+        return self.branches_in_category("safe-to-delete")
+
+    @property
+    def protected(self) -> list[BranchInfo]:
+        return self.branches_in_category("protected")
+
+    @property
+    def requires_human(self) -> list[BranchInfo]:
+        return self.branches_in_category("requires-human")
+
+    @property
+    def stale_worktrees_info(self) -> list[WorktreeInfo]:
+        return [w for w in self.worktrees if w.category != "safe"]
+
+    ***REMOVED*** ----- Backward-compatible accessors (kept for existing JSON consumers) -----
+
+    @property
+    def merged_branches(self) -> list[str]:
+        """Branches eligible for safe automatic deletion."""
+        return [b.name for b in self.safe_to_delete]
+
+    @property
+    def no_upstream_branches(self) -> list[str]:
+        """Branches surfaced under ``requires-human`` for missing upstream."""
+        return [b.name for b in self.requires_human if "no upstream" in b.reasons]
+
+    @property
+    def stale_worktrees(self) -> list[dict[str, str]]:
+        """Backward-compat shape: list of ``{path, reason}`` dicts."""
+        out: list[dict[str, str]] = []
+        for w in self.stale_worktrees_info:
+            out.append({"path": w.path, "reason": ", ".join(w.reasons) or "unknown"})
+        return out
+
+    ***REMOVED*** ----- Aggregate counters -----
 
     @property
     def total_issues(self) -> int:
+        ***REMOVED*** Protected branches are always present and not actionable, so they
+        ***REMOVED*** don't contribute to the count.
         return (
-            len(self.merged_branches)
-            + len(self.no_upstream_branches)
-            + len(self.stale_worktrees)
+            len(self.safe_to_delete)
+            + len(self.requires_human)
+            + len(self.stale_worktrees_info)
             + len(self.transient_files)
         )
 
     def to_dict(self) -> dict[str, object]:
         return {
+            ***REMOVED*** Backward-compat top-level keys
             "merged_branches": self.merged_branches,
             "no_upstream_branches": self.no_upstream_branches,
             "stale_worktrees": self.stale_worktrees,
             "transient_files": self.transient_files,
             "total_issues": self.total_issues,
+            ***REMOVED*** New lane-aware view
+            "classification": {
+                "safe_to_delete": [b.to_dict() for b in self.safe_to_delete],
+                "protected": [b.to_dict() for b in self.protected],
+                "requires_human": [b.to_dict() for b in self.requires_human],
+                "worktrees": [w.to_dict() for w in self.worktrees],
+            },
         }
 
 
-def _run(cmd: list[str], *, check: bool = True) -> str:
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Git helpers
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+def _run(cmd: list[str], *, check: bool = True, cwd: str | None = None) -> str:
     """Run a git command and return stripped stdout."""
     result = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
         check=check,
+        cwd=cwd,
     )
     return result.stdout.strip()
 
 
-def find_merged_branches() -> list[str]:
-    """Find local branches already merged into the configured base branch."""
-    ***REMOVED*** Fetch latest remote state silently
+def _current_branch() -> str | None:
+    name = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], check=False)
+    if not name or name == "HEAD":
+        return None
+    return name
+
+
+def _is_merged_into_base(branch: str, base: str) -> bool:
+    """Return True if ``branch`` tip is reachable from ``origin/base``.
+
+    Falls back to local ``base`` if the remote ref does not exist.
+    """
+    for ref in (f"origin/{base}", base):
+        result = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", branch, ref],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return True
+        ***REMOVED*** returncode 1 == not an ancestor; >1 means ref doesn't exist, try fallback
+        if result.returncode == 1:
+            return False
+    return False
+
+
+def _worktree_is_dirty(path: str) -> bool:
+    """Return True if the worktree at ``path`` has uncommitted changes.
+
+    Uses ``git status --porcelain`` against the given worktree path. Any
+    non-empty output (modified, staged, untracked) counts as dirty.
+    """
+    result = subprocess.run(
+        ["git", "-C", path, "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        ***REMOVED*** Treat unreachable worktree as suspicious -> dirty for safety.
+        return True
+    return bool(result.stdout.strip())
+
+
+def fetch_remote_state() -> None:
+    """Best-effort fetch with prune so upstream-gone is detectable."""
     subprocess.run(
         ["git", "fetch", "--prune"],
         capture_output=True,
         check=False,
     )
-    raw = _run(
-        [
-            "git",
-            "branch",
-            "--merged",
-            f"origin/{base_branch}",
-            "--format=%(refname:short)",
-        ]
-    )
+
+
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Worktree discovery
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+def collect_worktrees() -> list[WorktreeInfo]:
+    """Parse ``git worktree list --porcelain`` and check dirty state for each."""
+    raw = _run(["git", "worktree", "list", "--porcelain"], check=False)
+    worktrees: list[WorktreeInfo] = []
     if not raw:
-        return []
-    protected = {base_branch, "main", "master", "develop"}
-    return [b for b in raw.splitlines() if b.strip() not in protected]
+        return worktrees
 
+    current: dict[str, object] = {}
 
-def find_no_upstream_branches() -> list[str]:
-    """Find local branches with no upstream tracking branch."""
-    raw = _run(
-        [
-            "git",
-            "for-each-ref",
-            "--format=%(refname:short) %(upstream)",
-            "refs/heads/",
-        ]
-    )
-    if not raw:
-        return []
-    result: list[str] = []
-    for line in raw.splitlines():
-        parts = line.split(maxsplit=1)
-        branch = parts[0]
-        upstream = parts[1] if len(parts) > 1 else ""
-        if not upstream:
-            result.append(branch)
-    return result
+    def finalize(entry: dict[str, object]) -> None:
+        if not entry:
+            return
+        path = str(entry.get("path", ""))
+        if not path:
+            return
+        wt = WorktreeInfo(
+            path=path,
+            branch=entry.get("branch"),  ***REMOVED*** type: ignore[arg-type]
+            detached=bool(entry.get("detached", False)),
+            bare=bool(entry.get("bare", False)),
+            in_tmp=path.startswith("/tmp"),
+            is_main=bool(entry.get("is_main", False)),
+        )
+        ***REMOVED*** Bare worktrees are not real working trees; skip dirty probe.
+        if not wt.bare:
+            wt.dirty = _worktree_is_dirty(path)
+        worktrees.append(wt)
 
-
-def find_stale_worktrees() -> list[dict[str, str]]:
-    """Find worktrees that are detached or reside in /tmp."""
-    raw = _run(["git", "worktree", "list", "--porcelain"])
-    if not raw:
-        return []
-
-    stale: list[dict[str, str]] = []
-    current: dict[str, str] = {}
-
+    is_first = True
     for line in raw.splitlines():
         if line.startswith("worktree "):
-            current = {"path": line.split(" ", 1)[1]}
+            finalize(current)
+            current = {"path": line.split(" ", 1)[1], "is_main": is_first}
+            is_first = False
+        elif line.startswith("branch "):
+            ref = line.split(" ", 1)[1]
+            current["branch"] = ref.removeprefix("refs/heads/")
         elif line == "detached":
-            current["reason"] = "detached HEAD"
+            current["detached"] = True
         elif line == "bare":
-            current["reason"] = "bare"
+            current["bare"] = True
         elif line == "":
-            if current:
-                path = current.get("path", "")
-                if current.get("reason") or path.startswith("/tmp"):
-                    if path.startswith("/tmp") and "reason" not in current:
-                        current["reason"] = "in /tmp"
-                    stale.append(current)
+            finalize(current)
             current = {}
+    finalize(current)
+    return worktrees
 
-    ***REMOVED*** Handle last entry
-    if current:
-        path = current.get("path", "")
-        if current.get("reason") or path.startswith("/tmp"):
-            if path.startswith("/tmp") and "reason" not in current:
-                current["reason"] = "in /tmp"
-            stale.append(current)
 
-    return stale
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Branch discovery & classification
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+def collect_branches(
+    *,
+    base: str,
+    current: str | None,
+    worktrees: list[WorktreeInfo],
+) -> list[BranchInfo]:
+    """Collect per-branch metadata required for classification."""
+    fmt = "%(refname:short)\t%(upstream:short)\t%(upstream:track)"
+    raw = _run(
+        ["git", "for-each-ref", f"--format={fmt}", "refs/heads/"],
+        check=False,
+    )
+    if not raw:
+        return []
+
+    wt_by_branch: dict[str, WorktreeInfo] = {}
+    for wt in worktrees:
+        if wt.branch:
+            wt_by_branch[wt.branch] = wt
+
+    branches: list[BranchInfo] = []
+    for line in raw.splitlines():
+        parts = line.split("\t")
+        if not parts or not parts[0]:
+            continue
+        name = parts[0]
+        upstream = parts[1] if len(parts) > 1 and parts[1] else None
+        track = parts[2] if len(parts) > 2 else ""
+
+        info = BranchInfo(
+            name=name,
+            upstream=upstream,
+            is_current=(name == current),
+        )
+
+        ***REMOVED*** Parse upstream tracking ([gone], [ahead 1], [ahead 1, behind 2])
+        if track == "[gone]":
+            info.upstream_gone = True
+        elif track:
+            inside = track.strip("[]")
+            for token in (t.strip() for t in inside.split(",")):
+                if token.startswith("ahead "):
+                    with contextlib.suppress(ValueError, IndexError):
+                        info.ahead = int(token.split()[1])
+                elif token.startswith("behind "):
+                    with contextlib.suppress(ValueError, IndexError):
+                        info.behind = int(token.split()[1])
+
+        info.merged_into_base = _is_merged_into_base(name, base)
+
+        wt = wt_by_branch.get(name)
+        if wt is not None:
+            info.worktree_path = wt.path
+            info.worktree_dirty = wt.dirty
+
+        branches.append(info)
+
+    return branches
+
+
+def classify_branch(info: BranchInfo, *, base: str) -> BranchInfo:
+    """Set ``info.category`` and ``info.reasons`` based on collected metadata."""
+    reasons: list[str] = []
+
+    ***REMOVED*** Protected branches are not deletable regardless of state.
+    if info.is_current or info.name == base or info.name in PROTECTED_NAMES:
+        info.category = "protected"
+        if info.is_current:
+            reasons.append("current branch")
+        elif info.name == base:
+            reasons.append(f"base branch ({base})")
+        else:
+            reasons.append("long-lived branch")
+        info.reasons = reasons
+        return info
+
+    ***REMOVED*** Anything below this point is deletable in principle, so collect risk
+    ***REMOVED*** signals and decide between safe-to-delete and requires-human.
+    if info.upstream is None:
+        reasons.append("no upstream")
+    if info.upstream_gone:
+        reasons.append("upstream gone")
+    if info.ahead > 0:
+        reasons.append(f"{info.ahead} commit(s) ahead of upstream")
+    if not info.merged_into_base:
+        reasons.append(f"not merged into {base}")
+    if info.worktree_path:
+        reasons.append(f"checked out at {info.worktree_path}")
+        if info.worktree_dirty:
+            reasons.append("uncommitted changes in worktree")
+
+    if not reasons:
+        info.category = "safe-to-delete"
+        info.reasons = [f"merged into {base}", "upstream tracking present", "no live worktree"]
+    else:
+        info.category = "requires-human"
+        info.reasons = reasons
+
+    return info
+
+
+def classify_branches(branches: list[BranchInfo], *, base: str) -> list[BranchInfo]:
+    return [classify_branch(b, base=base) for b in branches]
+
+
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Transient files (unchanged)
+***REMOVED*** ---------------------------------------------------------------------------
 
 
 def find_transient_files() -> list[str]:
-    """Find untracked transient files (coverage, test output, logs).
-
-    Uses ``git ls-files --others --exclude-standard`` so that tracked files
-    and files matched by ``.gitignore`` are excluded.  This also avoids
-    expensive filesystem walks through ``.venv/`` or ``node_modules/``.
-    """
+    """Find untracked transient files (coverage, test output, logs)."""
     raw = _run(
         [
             "git",
@@ -171,12 +471,73 @@ def find_transient_files() -> list[str]:
     return sorted(raw.splitlines()) if raw else []
 
 
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Backward-compat helpers (kept so external callers/tests stay green)
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+def find_merged_branches() -> list[str]:
+    """Backward-compat: list of branch names eligible for safe deletion."""
+    fetch_remote_state()
+    current = _current_branch()
+    worktrees = collect_worktrees()
+    branches = classify_branches(
+        collect_branches(base=base_branch, current=current, worktrees=worktrees),
+        base=base_branch,
+    )
+    return [b.name for b in branches if b.category == "safe-to-delete"]
+
+
+def find_no_upstream_branches() -> list[str]:
+    """Backward-compat: branches without upstream tracking."""
+    raw = _run(
+        [
+            "git",
+            "for-each-ref",
+            "--format=%(refname:short) %(upstream)",
+            "refs/heads/",
+        ],
+        check=False,
+    )
+    if not raw:
+        return []
+    out: list[str] = []
+    for line in raw.splitlines():
+        parts = line.split(maxsplit=1)
+        branch = parts[0]
+        upstream = parts[1] if len(parts) > 1 else ""
+        if not upstream:
+            out.append(branch)
+    return out
+
+
+def find_stale_worktrees() -> list[dict[str, str]]:
+    """Backward-compat: dicts of ``{path, reason}`` for any non-safe worktree."""
+    worktrees = collect_worktrees()
+    out: list[dict[str, str]] = []
+    for wt in worktrees:
+        if wt.category != "safe":
+            out.append({"path": wt.path, "reason": ", ".join(wt.reasons) or "unknown"})
+    return out
+
+
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Report assembly
+***REMOVED*** ---------------------------------------------------------------------------
+
+
 def build_report() -> HygieneReport:
-    """Build a complete hygiene report."""
+    """Assemble a complete hygiene report."""
+    fetch_remote_state()
+    current = _current_branch()
+    worktrees = collect_worktrees()
+    branches = classify_branches(
+        collect_branches(base=base_branch, current=current, worktrees=worktrees),
+        base=base_branch,
+    )
     return HygieneReport(
-        merged_branches=find_merged_branches(),
-        no_upstream_branches=find_no_upstream_branches(),
-        stale_worktrees=find_stale_worktrees(),
+        branches=branches,
+        worktrees=worktrees,
         transient_files=find_transient_files(),
     )
 
@@ -184,32 +545,35 @@ def build_report() -> HygieneReport:
 def print_human_report(report: HygieneReport) -> None:
     """Print a human-readable summary."""
     print("=== Git Hygiene Report ===\n")
+    print(f"Base branch: {base_branch}\n")
 
-    ***REMOVED*** Merged branches
-    print(f"Merged branches ({len(report.merged_branches)}):")
-    if report.merged_branches:
-        for b in report.merged_branches:
-            print(f"  - {b}")
+    safe = report.safe_to_delete
+    print(f"Safe to delete ({len(safe)}):")
+    if safe:
+        for b in safe:
+            print(f"  - {b.name}")
     else:
         print("  (none)")
 
-    ***REMOVED*** No upstream
-    print(f"\nBranches without upstream ({len(report.no_upstream_branches)}):")
-    if report.no_upstream_branches:
-        for b in report.no_upstream_branches:
-            print(f"  - {b}")
+    rh = report.requires_human
+    print(f"\nRequires human review ({len(rh)}):")
+    if rh:
+        for b in rh:
+            wt = f" [worktree: {b.worktree_path}]" if b.worktree_path else ""
+            print(f"  - {b.name}{wt}")
+            for reason in b.reasons:
+                print(f"      • {reason}")
     else:
         print("  (none)")
 
-    ***REMOVED*** Stale worktrees
-    print(f"\nStale worktrees ({len(report.stale_worktrees)}):")
-    if report.stale_worktrees:
-        for wt in report.stale_worktrees:
-            print(f"  - {wt['path']} ({wt.get('reason', 'unknown')})")
+    stale = report.stale_worktrees_info
+    print(f"\nStale / dirty worktrees ({len(stale)}):")
+    if stale:
+        for wt in stale:
+            print(f"  - {wt.path}  ({', '.join(wt.reasons)})")
     else:
         print("  (none)")
 
-    ***REMOVED*** Transient files
     print(f"\nTransient files ({len(report.transient_files)}):")
     if report.transient_files:
         for f in report.transient_files:
@@ -217,75 +581,119 @@ def print_human_report(report: HygieneReport) -> None:
     else:
         print("  (none)")
 
-    print(f"\nTotal issues: {report.total_issues}")
+    print(f"\nProtected branches: {len(report.protected)}")
+    for b in report.protected:
+        print(f"  - {b.name}  ({', '.join(b.reasons)})")
+
+    print(f"\nTotal actionable issues: {report.total_issues}")
 
 
-def fix_merged_branches(
-    branches: list[str], *, dry_run: bool = False, quiet: bool = False
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Cleanup actions
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+def fix_safe_branches(
+    branches: list[BranchInfo], *, dry_run: bool = False, quiet: bool = False
 ) -> list[str]:
-    """Delete branches merged to the configured base branch."""
+    """Delete branches that are safely mergeable into base."""
     deleted: list[str] = []
     for branch in branches:
         if dry_run:
             if not quiet:
-                print(f"  [dry-run] would delete: {branch}")
-            deleted.append(branch)
-        else:
-            result = subprocess.run(
-                ["git", "branch", "-d", branch],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if result.returncode == 0:
-                if not quiet:
-                    print(f"  deleted: {branch}")
-                deleted.append(branch)
-            elif not quiet:
-                print(f"  FAILED to delete {branch}: {result.stderr.strip()}")
+                print(f"  [dry-run] would delete: {branch.name}")
+            deleted.append(branch.name)
+            continue
+        result = subprocess.run(
+            ["git", "branch", "-d", branch.name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            if not quiet:
+                print(f"  deleted: {branch.name}")
+            deleted.append(branch.name)
+        elif not quiet:
+            print(f"  FAILED to delete {branch.name}: {result.stderr.strip()}")
     return deleted
+
+
+***REMOVED*** Backward-compat shim: existing tests/code may call ``fix_merged_branches``.
+def fix_merged_branches(
+    branches: list[str], *, dry_run: bool = False, quiet: bool = False
+) -> list[str]:
+    """Backward-compatible shim accepting plain branch names."""
+    return fix_safe_branches(
+        [BranchInfo(name=b, category="safe-to-delete") for b in branches],
+        dry_run=dry_run,
+        quiet=quiet,
+    )
+
+
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** CLI
+***REMOVED*** ---------------------------------------------------------------------------
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Git hygiene report and cleanup tool",
+        description="Git hygiene report and safe cleanup tool",
     )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output report as JSON",
-    )
+    parser.add_argument("--json", action="store_true", help="Output report as JSON")
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="Auto-cleanup merged branches (conservative: only merged to origin/base branch)",
+        help="Auto-cleanup safe-to-delete branches (merged + clean worktree + has upstream).",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Preview cleanup actions without executing (use with --fix)",
+        help="Preview cleanup actions without executing (use with --fix).",
+    )
+    parser.add_argument(
+        "--include-requires-human",
+        action="store_true",
+        help=(
+            "Also delete branches in the 'requires-human' lane. "
+            "Refuses to delete a branch attached to a dirty worktree even with this flag."
+        ),
     )
     args = parser.parse_args()
 
     if args.dry_run and not args.fix:
         parser.error("--dry-run requires --fix")
+    if args.include_requires_human and not args.fix:
+        parser.error("--include-requires-human requires --fix")
 
     report = build_report()
 
     if args.fix:
         if not args.json:
             print("=== Git Hygiene Cleanup ===\n")
-        if report.merged_branches:
+
+        if report.safe_to_delete:
             if not args.json:
                 label = "dry-run" if args.dry_run else "cleanup"
-                print(f"Merged branches ({label}):")
-            fix_merged_branches(
-                report.merged_branches,
+                print(f"Safe-to-delete branches ({label}):")
+            fix_safe_branches(
+                report.safe_to_delete,
                 dry_run=args.dry_run,
                 quiet=args.json,
             )
         elif not args.json:
-            print("No merged branches to clean up.")
+            print("No safe-to-delete branches.")
+
+        if args.include_requires_human:
+            elig = [b for b in report.requires_human if not b.worktree_dirty and not b.is_current]
+            if elig:
+                if not args.json:
+                    label = "dry-run" if args.dry_run else "cleanup"
+                    print(f"\nRequires-human branches ({label}, opt-in):")
+                fix_safe_branches(elig, dry_run=args.dry_run, quiet=args.json)
+            elif not args.json:
+                print("\nNo eligible requires-human branches (all blocked by safety guard).")
+
         if not args.json:
             print()
 
