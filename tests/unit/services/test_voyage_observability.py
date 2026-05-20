@@ -5,6 +5,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+pytest.importorskip("voyageai", reason="voyageai not installed (***REMOVED***1773 voyage extra)")
+pytestmark = pytest.mark.requires_extras
+
+
 class TestVoyageServiceObservability:
     """Test VoyageService has @observe decorators."""
 
