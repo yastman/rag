@@ -26,6 +26,32 @@ class TestGraphConfig:
             cfg = GraphConfig.from_env()
         assert cfg.rewrite_max_tokens == 128
 
+    def test_from_env_llm_max_tokens(self):
+        """Regression for #1537: LLM_MAX_TOKENS must drive llm_max_tokens.
+        Before the fix the field defaulted to 4096 with no env override path."""
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"LLM_MAX_TOKENS": "2048"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.llm_max_tokens == 2048
+
+    def test_from_env_llm_temperature(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"LLM_TEMPERATURE": "0.2"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.llm_temperature == 0.2
+
+    def test_from_env_llm_max_tokens_default(self):
+        """When LLM_MAX_TOKENS is unset, the dataclass default (4096) is preserved."""
+        from telegram_bot.graph.config import GraphConfig
+
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.llm_max_tokens == 4096
+
     def test_from_env_max_rewrite_attempts(self):
         from telegram_bot.graph.config import GraphConfig
 
@@ -292,7 +318,6 @@ class TestGraphConfig:
         )
 
 
-
 class TestCreateSummarizeModel:
     """Contract: _create_summarize_model must use SDK-native init_chat_model (#1653).
 
@@ -360,6 +385,5 @@ class TestCreateSummarizeModel:
                     bad.append(f"line {node.lineno}: ChatOpenAI(...)")
 
         assert not bad, (
-            "_create_summarize_model must use init_chat_model, not ChatOpenAI: "
-            + "; ".join(bad)
+            "_create_summarize_model must use init_chat_model, not ChatOpenAI: " + "; ".join(bad)
         )
