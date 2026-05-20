@@ -109,6 +109,30 @@ class TestChunkingSmoke:
         assert "Стаття" in all_text, "Stattya marker not preserved in chunks"
         assert "Розділ" in all_text, "Rozdil marker not preserved in chunks"
 
+        # Semantic splitting should produce chunk boundaries at structural markers
+        assert any(c.text.startswith("Стаття") for c in chunks), (
+            "No chunk starts with a structural marker - semantic splitting may not be working"
+        )
+
+    def test_extract_metadata_from_chunk_text(self, chunks):
+        """Test that extract_metadata can parse article numbers from chunk text."""
+        # At least one chunk should contain an article marker that extract_metadata can parse
+        found_article = False
+        for chunk in chunks:
+            metadata = DocumentChunker.extract_metadata(chunk.text)
+            if "article_number" in metadata:
+                found_article = True
+                # Parsed article number should be a numeric string
+                assert metadata["article_number"].isdigit(), (
+                    f"Extracted article_number is not numeric: {metadata['article_number']}"
+                )
+                break
+
+        assert found_article, (
+            "No chunk text contains a parseable article number - "
+            "extract_metadata integration may be broken"
+        )
+
     def test_chunk_ids_are_sequential(self, chunks):
         """Test that chunk IDs are assigned sequentially."""
         ids = [c.chunk_id for c in chunks]
