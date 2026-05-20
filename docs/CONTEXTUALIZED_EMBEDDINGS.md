@@ -2,6 +2,12 @@
 
 > Voyage AI contextualized embeddings for improved document retrieval quality.
 
+Install the optional Voyage extra before using this feature:
+
+```bash
+uv sync --extra voyage
+```
+
 **Runtime status:** Experimental/planned. `USE_CONTEXTUALIZED_EMBEDDINGS` is
 parsed by `src/config/settings.py`, and the service has unit/integration tests
 plus an A/B script, but the main ingestion/query runtime does not currently
@@ -268,6 +274,6 @@ logging.getLogger("src.models.contextualized_embedding").setLevel(logging.DEBUG)
 ***REMOVED******REMOVED*** See Also
 
 - `scripts/test_contextualized_ab.py` - A/B testing script
-- `tests/integration/test_contextualized_pipeline.py` - Integration tests
+- `tests/unit/models/test_contextualized_pipeline.py` - Service pipeline tests
 - `docs/PIPELINE_OVERVIEW.md` - Overall architecture
 - [Voyage AI Documentation](https://docs.voyageai.com/docs/contextualized-chunk-embeddings)
