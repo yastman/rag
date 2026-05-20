@@ -12,7 +12,7 @@ Keeps heavy ML imports lazy so normal imports do not require local model extras.
 |------|---------|
 | [`__init__.py`](./__init__.py) | Exports `get_bge_m3_model`, `get_sentence_transformer` |
 | [`embedding_model.py`](./embedding_model.py) | Singleton BGE-M3 (`FlagEmbedding`) and `SentenceTransformer` |
-| [`contextualized_embedding.py`](./contextualized_embedding.py) | Voyage AI `voyage-context-3` contextualized embeddings client |
+| [`contextualized_embedding.py`](./contextualized_embedding.py) | Voyage AI `voyage-context-3` contextualized embeddings client (lazy-import, optional `voyage` extra) |
 
 ## Usage
 
@@ -37,6 +37,7 @@ st = get_sentence_transformer("BAAI/bge-m3")
 - Does not own retrieval algorithms or Qdrant search behavior.
 - Does not own provider/model selection policy outside model-loading helpers.
 - Local ML dependencies are optional; install the `ml-local` extra when running real local models.
+- Voyage AI dependencies are optional; install the `voyage` extra (`uv sync --extra voyage`) for contextualized embeddings.
 
 ## Focused checks
 

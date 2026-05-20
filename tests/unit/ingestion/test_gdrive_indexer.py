@@ -9,7 +9,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+pytest.importorskip("voyageai", reason="voyageai not installed (voyage extra)")
+pytestmark = [
+    pytest.mark.requires_extras,
+    pytest.mark.filterwarnings("ignore::DeprecationWarning"),
+]
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", DeprecationWarning)

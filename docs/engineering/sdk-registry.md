@@ -365,6 +365,8 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **status:** **OPTIONAL EXTRA** (#1773). Not used by the default bot/retrieval runtime (BGE-M3 + Qdrant). Install via `uv sync --extra voyage`.
 - **triggers:** rerank, embedding, voyage, ColBERT, contextualized embedding
 - **context7_id:** /voyage-ai/voyageai-python
+- **install:** `uv sync --extra voyage`
+- **runtime rule:** keep `voyageai` out of default import paths; import lazily inside Voyage-only services.
 - **как_у_нас:**
   - `telegram_bot/services/voyage.py` — reranking service (legacy/optional)
   - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings (`USE_CONTEXTUALIZED_EMBEDDINGS=true` only)
@@ -375,6 +377,9 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Rerank: `client.rerank(query, documents, model="rerank-2")`
   - Lazy import ОБЯЗАТЕЛЬНО (#1773): `import voyageai` / `from telegram_bot.services import VoyageService` only inside the function/method that needs it.
 - **gotchas:**
+  - Voyage is an optional extra (`uv sync --extra voyage`); not installed by default.
+  - `voyageai` is lazy-loaded inside services; default imports do not require it.
+  - On Python ≥3.14 the `voyageai` SDK may trip Pydantic-v1 issues (tracked separately).
   - Тяжёлый import (pandas, scipy.stats) — lazy import ОБЯЗАТЕЛЬНО
   - НЕ импортировать на top-level в модулях бота (замедляет старт + ломает Python 3.14 base test collection из-за Pydantic V1 моделей)
   - Voyage-зависимые тесты помечены `pytest.importorskip("voyageai") + @pytest.mark.requires_extras` и пропускаются в core tier.
