@@ -105,15 +105,18 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **triggers:** structured extraction, LLM parsing, response_model, Pydantic extraction, фильтры квартир
 - **context7_id:** /instructor-ai/instructor
 - **как_у_нас:**
-  - `telegram_bot/services/apartment_llm_extractor.py` — единственное использование
+  - `telegram_bot/services/apartment_llm_extractor.py` — apartment filter extraction (single non-streaming call)
+  - `telegram_bot/services/query_analyzer.py` — query intent / language classification (single non-streaming call)
+  - `telegram_bot/services/llm.py` — confidence scoring (single non-streaming call)
 - **паттерны:**
-  - `ApartmentLlmExtractor(llm=...)` → `instructor.from_openai(llm)` → `chat.completions.create(response_model=PydanticModel)`
-  - max_retries=2 для автоматического retry при validation error
-  - Результат merge с regex extraction (regex wins на числовых полях)
+  - REQUIRED shape: `instructor.from_openai(langfuse.openai.AsyncOpenAI(...))` — это сохраняет langfuse auto-trace wrap. Preflight: `tests/unit/services/test_query_analyzer.py::TestQueryAnalyzerInstructorLangfuseCompat`.
+  - `chat.completions.create(response_model=PydanticModel, max_retries=2)` для retry на validation error.
+  - Результат extraction merge с regex (regex wins на числовых полях).
 - **gotchas:**
-  - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model
-  - Для Instructor-совместимого extraction path допустим native OpenAI client, если это текущий совместимый runtime contract
-  - response_model = Pydantic v2 модель с Field(description=) для каждого поля
+  - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model.
+  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой клиент и ломает `langfuse.openai` auto-trace. Регрессионный тест: `tests/unit/services/test_instructor_sdk_contract.py`.
+  - Streaming primitives `client.create_partial` / `client.create_iterable` сейчас **отключены** проектным решением — см. [ADR-0008](../adr/0008-instructor-create-partial-deferred.md). Не вводить без обновления ADR.
+  - response_model = Pydantic v2 модель с `Field(description=)` для каждого поля.
 
 ## redisvl
 - **triggers:** cache, semantic cache, embedding cache, кеш, кэш, redis vector, similarity
