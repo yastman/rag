@@ -12,7 +12,8 @@ dependencies = [
     "grpcio>=1.60.0",
     "redis>=5.0.0",
     "redisvl>=0.3.0",
-    "voyageai>=0.3.0",
+    ***REMOVED*** Voyage AI is OPTIONAL (***REMOVED***1773): not used by default bot/retrieval runtime.
+    ***REMOVED*** Install via `uv sync --extra voyage` only for legacy ingestion paths.
     "tenacity>=8.2.0",
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
@@ -34,6 +35,14 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["telegram_bot"]
+
+[project.optional-dependencies]
+***REMOVED*** Voyage AI (***REMOVED***1773) — optional. Only required for legacy GDrive ingestion,
+***REMOVED*** contextualized-embedding paths, or `qdrant_writer` with
+***REMOVED*** `use_local_embeddings=False`. Default bot/retrieval runtime does not use it.
+voyage = [
+    "voyageai>=0.3.0",
+]
 
 [build-system]
 requires = ["hatchling"]

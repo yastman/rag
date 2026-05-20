@@ -28,7 +28,6 @@ from qdrant_client.models import (
 )
 
 from src.ingestion.chunker import Chunk
-from telegram_bot.services import VoyageService
 
 
 warnings.warn(
@@ -98,7 +97,11 @@ class GDriveIndexer:
         else:
             self.client = QdrantClient(url=self.qdrant_url, timeout=120)
 
-        ***REMOVED*** Voyage AI for dense embeddings
+        ***REMOVED*** Voyage AI for dense embeddings.
+        ***REMOVED*** Lazy import (***REMOVED***1773): voyageai is an optional extra and must not
+        ***REMOVED*** be imported by the default ingestion path.
+        from telegram_bot.services import VoyageService
+
         self.voyage_service = VoyageService(
             api_key=self.voyage_api_key,
             model_docs=voyage_model,
