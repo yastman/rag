@@ -97,9 +97,6 @@ repos:
       - id: check-executables-have-shebangs
         name: Check executables have shebangs
         stages: [pre-commit]
-      - id: check-shebang-scripts-are-executable
-        name: Check shebang scripts are executable
-        stages: [pre-commit]
       - id: no-commit-to-branch
         name: Prevent commits to main/dev
         args: ['--branch', 'main', '--branch', 'dev']

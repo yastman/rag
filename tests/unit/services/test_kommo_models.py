@@ -169,7 +169,6 @@ def test_contact_update_build_empty():
     assert fields == []
 
 
-
 # -----------------------------------------------------------------------------
 # KommoCustomField (#1655) — typed builder for custom_fields_values payloads
 # -----------------------------------------------------------------------------
@@ -332,6 +331,5 @@ class TestPhoneCollectorBuildsViaPydantic:
         )
         assert not bad_literals, (
             "phone_collector._build_custom_fields contains hand-built "
-            "{field_id, values} dict literals on lines: "
-            + ", ".join(map(str, bad_literals))
+            "{field_id, values} dict literals on lines: " + ", ".join(map(str, bad_literals))
         )
