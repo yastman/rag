@@ -50,6 +50,7 @@ def _run_hybrid_search_with_sparse() -> bool:
         "Що таке крайня необхідність?",  # Legal concept
     ]
 
+    total_results = 0
     for i, query in enumerate(test_queries, 1):
         print(f"\n{'=' * 80}")
         print(f"🔍 Test Query {i}: {query}")
@@ -64,6 +65,7 @@ def _run_hybrid_search_with_sparse() -> bool:
             )
 
             print(f"\n   ✅ Found {len(results)} results")
+            total_results += len(results)
 
             for j, result in enumerate(results, 1):
                 print(f"\n   📄 Result {j}:")
@@ -80,10 +82,10 @@ def _run_hybrid_search_with_sparse() -> bool:
             return False
 
     print(f"\n{'=' * 80}")
-    print("✅ ALL TESTS PASSED!")
+    print(f"✅ ALL TESTS PASSED — total results across queries: {total_results}")
     print(f"{'=' * 80}\n")
 
-    return True
+    return total_results
 
 
 def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
@@ -119,9 +121,20 @@ def test_hybrid_search_with_sparse():
         settings.qdrant_url, settings.qdrant_api_key, settings.collection_name
     ):
         pytest.skip(f"Collection not found: {settings.collection_name}")
-    assert _run_hybrid_search_with_sparse()
+
+    # Run the search; the helper returns the total result count across probe
+    # queries. Zero results across every query means the sparse search path
+    # is silently empty — fail instead of reporting green (#1631).
+    total_results = _run_hybrid_search_with_sparse()
+    assert total_results is not False, "hybrid search execution failed"
+    assert total_results > 0, (
+        "hybrid search returned 0 results across all probe queries — "
+        "sparse search path is empty or misconfigured (#1631)"
+    )
 
 
 if __name__ == "__main__":
-    success = _run_hybrid_search_with_sparse()
-    sys.exit(0 if success else 1)
+    result = _run_hybrid_search_with_sparse()
+    if result is False:
+        sys.exit(1)
+    sys.exit(0 if int(result) > 0 else 2)
