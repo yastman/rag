@@ -194,7 +194,7 @@ make test-bot-health
 ***REMOVED******REMOVED*** Source Of Truth
 
 - `main` in Git is the official deployment source of truth.
-- Standard flow: work locally, push to `dev` or a feature branch, open a PR to `main`, and merge the PR.
+- Standard flow: work locally, push to a feature branch, open a PR to `dev`, and merge `dev` to `main` for deployment snapshots.
 
 
 

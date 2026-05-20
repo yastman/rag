@@ -82,11 +82,12 @@ uv run python scripts/pr_queue_audit.py --base dev
 Buckets in priority order:
 
 1. **conflicts**          — needs rebase / merge resolution.
-2. **ci-failing**         — author must fix.
-3. **ci-pending**         — wait or re-run.
+2. **ci-failing**         — static CI guardrail failed; author must fix.
+3. **ci-pending**         — static CI guardrail is still running; wait or re-run.
 4. **changes-requested**  — reviewer asked for changes; ping author.
-5. **review-needed**      — CI green, no approval; assign reviewer.
-6. **ready**              — green and approved; merge it.
+5. **review-needed**      — static CI green, no approval; assign reviewer.
+6. **ready**              — static CI green and approved; confirm local test
+                            evidence before merge.
 7. **draft**              — author still working.
 8. **stale**              — flag is independent; surfaced for any PR older
                             than `--stale-days` (default 14).
