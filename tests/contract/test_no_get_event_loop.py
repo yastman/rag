@@ -68,6 +68,27 @@ def _find_get_event_loop_calls(
     return offenders
 
 
+def _format_new_offenders_message(new_offenders: list[tuple[Path, int]]) -> str:
+    offender_lines = "\n".join(
+        f"  {p.relative_to(REPO_ROOT)}:{lineno}" for p, lineno in new_offenders
+    )
+    return (
+        "New asyncio.get_event_loop() calls outside the allowlist (#1639):\n"
+        + offender_lines
+        + "\nReplace with asyncio.get_running_loop() (in async),"
+        " asyncio.to_thread(...) (blocking sync work),"
+        " or asyncio.Runner() (sync-async bridge)."
+    )
+
+
+def _format_stale_allowlist_message(stale_allowlist: list[tuple[str, int]]) -> str:
+    stale_lines = "\n".join(f"  {rel}:{lineno}" for rel, lineno in stale_allowlist)
+    return (
+        "Stale ALLOWLIST entries — remove from the dict in this test (#1639):\n"
+        + stale_lines
+    )
+
+
 def test_no_unallowlisted_get_event_loop_calls() -> None:
     """Production code may not introduce new `asyncio.get_event_loop()` callsites.
 
@@ -102,20 +123,35 @@ def test_no_unallowlisted_get_event_loop_calls() -> None:
 
     msgs: list[str] = []
     if new_offenders:
-        msgs.append(
-            "New asyncio.get_event_loop() calls outside the allowlist (#1639):\n"
-            + "\n".join(
-                f"  {p.relative_to(REPO_ROOT)}:{lineno}" for p, lineno in new_offenders
-            )
-            + "\nReplace with asyncio.get_running_loop() (in async),"
-            " asyncio.to_thread(...) (blocking sync work),"
-            " or asyncio.Runner() (sync-async bridge)."
-        )
+        msgs.append(_format_new_offenders_message(new_offenders))
     if stale_allowlist:
-        msgs.append(
-            "Stale ALLOWLIST entries — remove from the dict in this test (#1639):\n"
-            + "\n".join(f"  {rel}:{lineno}" for rel, lineno in stale_allowlist)
-        )
+        msgs.append(_format_stale_allowlist_message(stale_allowlist))
 
     if msgs:
         raise AssertionError("\n\n".join(msgs))
+
+
+def test_new_offenders_message_formats_all_paths() -> None:
+    msg = _format_new_offenders_message(
+        [
+            (REPO_ROOT / "src/core/pipeline.py", 119),
+            (REPO_ROOT / "src/ingestion/indexer.py", 381),
+        ]
+    )
+
+    assert "src/core/pipeline.py:119" in msg
+    assert "src/ingestion/indexer.py:381" in msg
+    assert "asyncio.to_thread" in msg
+    assert "asyncio.Runner" in msg
+
+
+def test_stale_allowlist_message_formats_all_entries() -> None:
+    msg = _format_stale_allowlist_message(
+        [
+            ("telegram_bot/integrations/embeddings.py", 59),
+            ("telegram_bot/integrations/embeddings.py", 62),
+        ]
+    )
+
+    assert "telegram_bot/integrations/embeddings.py:59" in msg
+    assert "telegram_bot/integrations/embeddings.py:62" in msg
