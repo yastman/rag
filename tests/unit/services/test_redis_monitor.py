@@ -1,6 +1,6 @@
 """Tests for RedisHealthMonitor checkpoint key growth monitoring (***REMOVED***159)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.services.redis_monitor import RedisHealthMonitor
 
@@ -132,11 +132,46 @@ async def test_start_sets_max_connections_for_monitor_pool():
     """RedisHealthMonitor uses max_connections=5 for its Redis pool."""
     monitor = RedisHealthMonitor("redis://localhost:6379")
 
-    with patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url:
+    with (
+        patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url,
+        patch(
+            "telegram_bot.services.redis_monitor.AsyncIOScheduler"
+        ) as mock_scheduler_cls,
+    ):
         mock_client = AsyncMock()
         mock_from_url.return_value = mock_client
+        mock_scheduler = MagicMock()
+        mock_scheduler_cls.return_value = mock_scheduler
         await monitor.start()
-        await monitor.stop()  ***REMOVED*** cleanup background task created by start()
 
     call_kwargs = mock_from_url.call_args[1]
     assert call_kwargs["max_connections"] == 5
+    mock_scheduler.start.assert_called_once()
+
+
+async def test_start_registers_scheduler_job_and_stop_shuts_down():
+    """start() creates a scheduler with job id='redis-health-monitor'; stop() shuts it down."""
+    monitor = RedisHealthMonitor("redis://localhost:6379")
+
+    with (
+        patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url,
+        patch(
+            "telegram_bot.services.redis_monitor.AsyncIOScheduler"
+        ) as mock_scheduler_cls,
+    ):
+        mock_client = AsyncMock()
+        mock_from_url.return_value = mock_client
+        mock_scheduler = MagicMock()
+        mock_scheduler_cls.return_value = mock_scheduler
+        await monitor.start()
+
+    ***REMOVED*** Verify job was added with correct id
+    mock_scheduler.add_job.assert_called_once()
+    add_job_kwargs = mock_scheduler.add_job.call_args
+    assert add_job_kwargs[1]["id"] == "redis-health-monitor"
+    assert add_job_kwargs[1]["replace_existing"] is True
+    assert add_job_kwargs[0][1] == "interval"
+
+    ***REMOVED*** Verify stop shuts down the scheduler
+    await monitor.stop()
+    mock_scheduler.shutdown.assert_called_once_with(wait=False)
