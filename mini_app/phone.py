@@ -7,6 +7,8 @@ import re
 
 from pydantic import BaseModel, field_validator
 
+from telegram_bot.observability import get_client, observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ def get_kommo_client():
     return KommoClient()
 
 
+@observe(name="miniapp-kommo-create-lead", capture_input=False, capture_output=False)
 async def submit_phone(request: PhoneRequest) -> dict:
     """Submit phone to CRM.
 
@@ -48,8 +51,10 @@ async def submit_phone(request: PhoneRequest) -> dict:
         exception (#1596) made it impossible for clients to distinguish a
         real captured lead from a dropped one. The error code is stable so
         the frontend can show a retry/contact-support state without parsing
-        free-form text.
+        free-form text. The ``@observe`` wrapper records success/failure
+        metadata without capturing PII.
     """
+    lf = get_client()
     try:
         client = get_kommo_client()
         contact = await client.upsert_contact(
@@ -60,11 +65,28 @@ async def submit_phone(request: PhoneRequest) -> dict:
             name=f"Mini App: {request.source}",
             contact_id=contact["id"],
         )
-        return {"success": True, "lead_id": lead["id"]}
-    except Exception:
+    except Exception as exc:
         logger.exception("CRM submission failed")
+        if lf is not None:
+            # Bounded status_message keeps Langfuse payload small and PII-free.
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"kommo_submission_failed: {type(exc).__name__}"[:200],
+                output={"crm_ok": False, "lead_created": False},
+            )
         return {
             "success": False,
             "lead_id": None,
             "error": "crm_submission_failed",
         }
+
+    # Curated success output — no phone, no name, no raw Kommo IDs.
+    if lf is not None:
+        lf.update_current_span(
+            output={
+                "crm_ok": True,
+                "lead_created": lead.get("id") is not None,
+                "contact_resolved": contact.get("id") is not None,
+            }
+        )
+    return {"success": True, "lead_id": lead["id"]}
