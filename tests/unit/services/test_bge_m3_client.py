@@ -434,7 +434,6 @@ class TestBGEM3SyncClient:
         assert len(result.colbert_vecs) == 3
 
 
-
 class TestBGEM3ClientReconnectRace:
     """Reconnect race-condition contract for _get_client (***REMOVED***1641).
 
