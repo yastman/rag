@@ -325,26 +325,6 @@ async def _stream_agent_to_draft(
     return final_state
 
 
-def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
-    """Merge extra results into existing, deduplicating by id."""
-    seen_ids: set[str] = set()
-    for item in existing:
-        if isinstance(item, dict) and item.get("id") is not None:
-            seen_ids.add(str(item["id"]))
-    merged = list(existing)
-    for item in extra:
-        if not isinstance(item, dict):
-            continue
-        item_id = item.get("id")
-        item_key = str(item_id) if item_id is not None else ""
-        if item_key and item_key in seen_ids:
-            continue
-        if item_key:
-            seen_ids.add(item_key)
-        merged.append(item)
-    return merged
-
-
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
     """Read cached apartment payloads from legacy or dialog-owned state."""
     raw_results = state_data.get("apartment_results")

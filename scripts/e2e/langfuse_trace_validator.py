@@ -177,15 +177,26 @@ def _as_float(value: object) -> float | None:
     return None
 
 
-def _resolve_missing_observations(
+def resolve_missing_observations(
     required_observations: set[str], span_names: set[str]
 ) -> set[str]:
+    """Return the subset of ``required_observations`` not satisfied by any
+    of their alias spans in ``span_names``.
+
+    Shared between :mod:`scripts.e2e.langfuse_trace_validator` and
+    :mod:`scripts.e2e.langfuse_latest_trace_audit` (***REMOVED***1621).
+    """
     missing: set[str] = set()
     for required in required_observations:
         aliases = OBSERVATION_ALIAS_GROUPS.get(required, {required})
         if not (aliases & span_names):
             missing.add(required)
     return missing
+
+
+***REMOVED*** Backwards compatibility shim for any external callers still using the
+***REMOVED*** private name. Slated for removal once 1.x consumers migrate.
+_resolve_missing_observations = resolve_missing_observations
 
 
 def wait_for_trace(
@@ -294,7 +305,7 @@ def validate_latest_trace(
     score_names = set(scores.keys())
 
     ***REMOVED*** Base observation misses from the scenario contract.
-    missing_spans = _resolve_missing_observations(required_observations, span_names)
+    missing_spans = resolve_missing_observations(required_observations, span_names)
 
     ***REMOVED*** Root trace input/output checks (trace-level, not observation-level).
     trace_input = getattr(trace, "input", None) or {}
@@ -332,7 +343,7 @@ def validate_latest_trace(
             required_observations |= {"node-generate", "node-cache-store", "node-respond"}
 
     ***REMOVED*** Recompute observation misses after branch-aware additions.
-    missing_spans |= _resolve_missing_observations(required_observations, span_names)
+    missing_spans |= resolve_missing_observations(required_observations, span_names)
     missing_scores = set(required_scores - score_names)
 
     ***REMOVED*** Invalid/non-numeric query_type must be treated as a missing required score.
