@@ -13,7 +13,7 @@ import re
 import socket
 import time
 import uuid
-from collections.abc import Awaitable
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
@@ -787,7 +787,7 @@ class PropertyBot:
         self._register_handlers()
 
     def _spawn_history_save(
-        self, coro: Awaitable[None], *, user_id: int | str
+        self, coro: Coroutine[Any, Any, None], *, user_id: int | str
     ) -> asyncio.Task[None] | None:
         """Track and bound fan-out for fire-and-forget history persistence (#1600).
 
@@ -809,15 +809,18 @@ class PropertyBot:
             )
             lf = get_client()
             if lf is not None:
-                tid = lf.get_current_trace_id() or ""
-                if tid:
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_save_dropped",
-                        value=1,
-                        data_type="BOOLEAN",
-                        score_id=f"{tid}-history_save_dropped",
-                    )
+                try:
+                    tid = lf.get_current_trace_id() or ""
+                    if tid:
+                        lf.create_score(
+                            trace_id=tid,
+                            name="history_save_dropped",
+                            value=1,
+                            data_type="BOOLEAN",
+                            score_id=f"{tid}-history_save_dropped",
+                        )
+                except Exception:
+                    logger.warning("Failed to write history-save drop score", exc_info=True)
             # Close the unscheduled coroutine so we do not leak a "never awaited" warning.
             close = getattr(coro, "close", None)
             if callable(close):
