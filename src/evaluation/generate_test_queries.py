@@ -9,32 +9,36 @@ Creates 3 types of queries for each article:
 
 import asyncio
 import json
-from typing import Protocol, cast
+import os
 
+import instructor
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient, models
 
 from src.config import Settings
 
 
-class ContextualRetrievalGroqAsyncProtocol(Protocol):
-    api_url: str
-    api_key: str
-    model: str
-    max_tokens: int
+class GeneratedQueries(BaseModel):
+    """Structured output model for LLM-generated test queries."""
 
-    def print_stats(self) -> None: ...
-
-
-class ContextualRetrievalGroqAsyncFactoryProtocol(Protocol):
-    def __call__(
-        self, *, model: str, max_concurrent: int
-    ) -> ContextualRetrievalGroqAsyncProtocol: ...
+    direct: str = Field(
+        description="Direct query mentioning the article number or its key legal concept"
+    )
+    semantic: str = Field(
+        description="Semantic query describing the essence of the article in own words"
+    )
+    paraphrased: str = Field(description="Paraphrased question about the article content")
 
 
 # Load settings
 _settings = Settings()
 QDRANT_URL = _settings.qdrant_url
 QDRANT_API_KEY = _settings.qdrant_api_key or ""
+
+# LLM configuration from environment
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 
 
 def _make_client() -> QdrantClient:
@@ -92,10 +96,16 @@ def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dic
 
 
 async def generate_queries_for_article(
-    llm: ContextualRetrievalGroqAsyncProtocol, article_num: str, article_text: str
+    client: instructor.AsyncInstructor, model: str, article_num: str, article_text: str
 ) -> list[dict]:
     """
     Generate 3 types of queries for a single article.
+
+    Args:
+        client: Instructor-patched AsyncOpenAI client
+        model: Model name to use
+        article_num: Article number string
+        article_text: Full text of the article
 
     Returns:
         List of query objects with type and expected_article
@@ -122,68 +132,45 @@ async def generate_queries_for_article(
 ВАЖНО:
 - Запросы должны быть короткими (5-15 слов)
 - Каждый запрос должен логически вести к этой статье
-- Используй естественный язык, как будто спрашивает обычный человек
+- Используй естественный язык, как будто спрашивает обычный человек"""
 
-ОТВЕТ в формате JSON:
-{{
-  "direct": "...",
-  "semantic": "...",
-  "paraphrased": "..."
-}}"""
-
-    # Call LLM using aiohttp directly
-    import aiohttp
-
-    async with (
-        aiohttp.ClientSession() as session,
-        session.post(
-            llm.api_url,
-            headers={"Authorization": f"Bearer {llm.api_key}", "Content-Type": "application/json"},
-            json={
-                "model": llm.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
-                "max_tokens": llm.max_tokens,
-            },
-        ) as resp,
-    ):
-        response = await resp.json()
-
-    # Parse JSON response
-    content = response["choices"][0]["message"]["content"]
-
-    # Extract JSON from response (in case there's extra text)
-    start_idx = content.find("{")
-    end_idx = content.rfind("}") + 1
-    json_str = content[start_idx:end_idx]
-
-    queries_dict = json.loads(json_str)
+    result = await client.chat.completions.create(
+        model=model,
+        response_model=GeneratedQueries,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_retries=2,
+    )
 
     # Create query objects
     return [
         {
-            "query": queries_dict["direct"],
+            "query": result.direct,
             "type": "direct",
-            "expected_article": article_num,  # Already a string
+            "expected_article": article_num,
             "difficulty": "easy",
         },
         {
-            "query": queries_dict["semantic"],
+            "query": result.semantic,
             "type": "semantic",
-            "expected_article": article_num,  # Already a string
+            "expected_article": article_num,
             "difficulty": "medium",
         },
         {
-            "query": queries_dict["paraphrased"],
+            "query": result.paraphrased,
             "type": "paraphrased",
-            "expected_article": article_num,  # Already a string
+            "expected_article": article_num,
             "difficulty": "hard",
         },
     ]
 
 
 async def generate_all_queries(
-    article_texts: dict[str, str], model: str = "openai/gpt-oss-120b", max_concurrent: int = 5
+    article_texts: dict[str, str],
+    model: str = "openai/gpt-oss-120b",
+    max_concurrent: int = 5,
+    base_url: str | None = None,
+    api_key: str | None = None,
 ) -> list[dict]:
     """
     Generate queries for all articles asynchronously.
@@ -192,6 +179,8 @@ async def generate_all_queries(
         article_texts: Dict mapping article_number (str) -> text
         model: LLM model to use
         max_concurrent: Max parallel requests
+        base_url: LLM API base URL (defaults to LLM_BASE_URL env var)
+        api_key: LLM API key (defaults to LLM_API_KEY env var)
 
     Returns:
         List of all generated queries
@@ -200,50 +189,40 @@ async def generate_all_queries(
     print(f"   Max concurrent: {max_concurrent}")
     print(f"   Total articles: {len(article_texts)}\n")
 
-    # Lazy import — legacy module not on sys.path by default
-    import importlib.util
-    import os
+    resolved_base_url = base_url or LLM_BASE_URL
+    resolved_api_key = api_key or LLM_API_KEY
 
-    _spec = importlib.util.spec_from_file_location(
-        "contextualize_groq_async",
-        os.path.join(
-            os.path.dirname(__file__), "..", "..", "legacy", "contextualize_groq_async.py"
-        ),
+    client = instructor.from_openai(
+        AsyncOpenAI(base_url=resolved_base_url, api_key=resolved_api_key)
     )
-    if _spec is None or _spec.loader is None:
-        raise ImportError("legacy/contextualize_groq_async.py not found")
-    _mod = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
 
-    llm_factory = cast(
-        ContextualRetrievalGroqAsyncFactoryProtocol, _mod.ContextualRetrievalGroqAsync
-    )
-    llm = llm_factory(model=model, max_concurrent=max_concurrent)
-
-    all_queries = []
+    semaphore = asyncio.Semaphore(max_concurrent)
+    all_queries: list[dict] = []
     completed = 0
 
-    # Create async tasks
-    tasks = []
-    for article_num, text in article_texts.items():
-        task = generate_queries_for_article(llm, article_num, text)
-        tasks.append((article_num, task))
+    async def _process_article(article_num: str, text: str) -> list[dict]:
+        nonlocal completed
+        async with semaphore:
+            try:
+                queries = await generate_queries_for_article(client, model, article_num, text)
+                completed += 1
+                print(
+                    f"[{completed}/{len(article_texts)}] Article {article_num}: 3 queries generated"
+                )
+                return queries
+            except Exception as e:
+                completed += 1
+                print(f"[{completed}/{len(article_texts)}] Article {article_num}: ERROR: {e}")
+                return []
 
-    # Process with progress tracking
-    for article_num, task_coro in tasks:
-        try:
-            queries = await task_coro
-            all_queries.extend(queries)
-            completed += 1
-            print(f"[{completed}/{len(tasks)}] Article {article_num}: 3 queries generated")
-        except Exception as e:
-            print(f"[{completed}/{len(tasks)}] Article {article_num}: ERROR: {e}")
-            completed += 1
+    results = await asyncio.gather(
+        *(_process_article(article_num, text) for article_num, text in article_texts.items())
+    )
+
+    for queries in results:
+        all_queries.extend(queries)
 
     print(f"\nGenerated {len(all_queries)} queries total")
-
-    # Print stats
-    llm.print_stats()
 
     return all_queries
 
@@ -302,7 +281,7 @@ async def main():
     print("Step 3: Generate test queries with LLM")
     queries = await generate_all_queries(
         article_texts,
-        model="openai/gpt-oss-120b",  # 120B parameters, 100% accuracy
+        model="openai/gpt-oss-120b",
         max_concurrent=5,
     )
 
