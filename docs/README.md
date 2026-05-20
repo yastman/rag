@@ -22,6 +22,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`engineering/test-writing-guide.md`](engineering/test-writing-guide.md) — Test-writing rules and local-fast vs heavy-tier split.
 - [`engineering/sdk-registry.md`](engineering/sdk-registry.md) — SDK/framework lookup order and canonical versions.
 - [`engineering/issue-triage.md`](engineering/issue-triage.md) — Issue classification and routing playbook.
+- [`../skills/superpowers/`](../skills/superpowers/) — Repo-local agent skills, Kiro Web steering, and issue-to-skill map.
 - [`engineering/README.md`](engineering/README.md) — Engineering process index with active and historical notes.
 - [`adr/`](adr/) — Architecture decision records.
 
