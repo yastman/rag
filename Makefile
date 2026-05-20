@@ -735,17 +735,17 @@ endif
 	git tag v$(VERSION)
 	git push origin v$(VERSION)
 
-deploy-bot:  ## Show official deploy flow: push dev/feature, open PR, merge to main for auto-deploy
+deploy-bot:  ## Show official deploy flow: PR to dev, then merge dev to main snapshot
 	@echo "$(CYAN)Official deploy flow:$(NC)"
 	@echo "  1. Commit locally"
-	@echo "  2. Push your work branch or dev"
-	@echo "  3. Open PR to main"
-	@echo "  4. Merge PR into main"
-	@echo "  5. GitHub Actions auto-deploys main to VPS"
+	@echo "  2. Push your work branch"
+	@echo "  3. Open PR to dev"
+	@echo "  4. Stage runtime-sensitive changes with make remote-core-up"
+	@echo "  5. Merge dev to main for deployment snapshots"
 	@echo "$(GREEN)No direct push to main is performed by this target.$(NC)"
 
 deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scripts removed from public repo)
-	@echo "$(CYAN)Manual deploy: push to main and let CI handle it, or use Docker Compose on VPS$(NC)"
+	@echo "$(CYAN)Manual deploy: use private operator runbooks or Docker Compose on VPS$(NC)"
 
 # =============================================================================
 # E2E TESTING
