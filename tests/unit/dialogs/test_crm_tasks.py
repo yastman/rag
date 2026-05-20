@@ -207,11 +207,13 @@ def test_task_type_id_from_key_unknown_raises():
 
 
 def test_render_tasks_text_empty():
-    """render_tasks_text returns empty indicator when no tasks."""
+    """render_tasks_text returns the canonical empty-state message when no tasks."""
     from telegram_bot.dialogs.crm_tasks import render_tasks_text
 
     result = render_tasks_text([])
-    assert "нет" in result.lower() or "пуст" in result.lower() or len(result) > 0
+    ***REMOVED*** Must be exactly the canonical empty-state string. The previous loose
+    ***REMOVED*** assertion (`len(result) > 0`) accepted any non-empty wrong output.
+    assert result == "Задач нет."
 
 
 def test_render_tasks_text_single_task():
