@@ -363,6 +363,6 @@ class TestBGEM3HybridTimeout:
         """Timeout is configured correctly (default granular or custom override)."""
         emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", **kwargs)
         ***REMOVED*** Access internal BGEM3Client's httpx client
-        client = emb._client._get_client()
+        client = await emb._client._get_client()
         assert client.timeout.read == expected_read
         assert client.timeout.connect == expected_connect
