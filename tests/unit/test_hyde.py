@@ -322,6 +322,25 @@ class TestHyDEObserveInstrumentation:
             "Full generated document must not appear in span output"
         )
 
+    async def test_generate_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """HyDE generation must not require an initialized Langfuse client."""
+        self._disable_observe(monkeypatch)
+
+        from telegram_bot.services import query_preprocessor as qp_mod
+        from telegram_bot.services.query_preprocessor import HyDEGenerator
+
+        monkeypatch.setattr(qp_mod, "get_client", lambda: None)
+
+        hyde = HyDEGenerator()
+        hyde.client = AsyncMock()
+        hyde.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Уютная квартира рядом с морем.")
+        )
+
+        result = await hyde.generate_hypothetical_document("квартира у моря")
+
+        assert result == "Уютная квартира рядом с морем."
+
     async def test_exception_path_records_error_level(self, monkeypatch):
         """On exception, update_current_span must be called with level='ERROR'."""
         self._disable_observe(monkeypatch)
