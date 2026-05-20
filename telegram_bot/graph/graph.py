@@ -279,17 +279,20 @@ def build_graph(
 
 
 def _create_summarize_model(config: Any) -> Any:
-    """Create a LangChain ChatOpenAI for SummarizationNode via LiteLLM proxy.
+    """Create a LangChain chat model for SummarizationNode via LiteLLM proxy.
 
-    Tracing is handled by @observe on pipeline nodes and LiteLLM proxy logging.
-    CallbackHandler removed: broken context propagation in async LangGraph (***REMOVED***157).
+    Uses LangChain's SDK-native ``init_chat_model`` (LangChain 1.x) instead of
+    direct ChatOpenAI construction so the abstraction stays provider-neutral
+    (***REMOVED***1653). Tracing is handled by @observe on pipeline nodes and LiteLLM
+    proxy logging. CallbackHandler removed: broken context propagation in
+    async LangGraph (***REMOVED***157).
     """
-    from langchain_openai import ChatOpenAI
-    from pydantic import SecretStr
+    from langchain.chat_models import init_chat_model
 
-    return ChatOpenAI(
+    return init_chat_model(
         model=config.llm_model,
-        api_key=SecretStr(config.llm_api_key or "no-key"),
+        model_provider="openai",
+        api_key=config.llm_api_key or "no-key",
         base_url=config.llm_base_url,
     )
 
