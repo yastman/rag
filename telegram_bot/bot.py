@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import socket
 import time
 import uuid
@@ -267,6 +268,20 @@ async def _prepare_pre_agent_retrieval_vectors(
     result_store["pre_agent_retrieval_vector_ms"] = (time.perf_counter() - prep_start) * 1000
 
 
+def _new_draft_id() -> int:
+    """Generate a positive 31-bit draft id for `bot.send_message_draft`.
+
+    Bot API ``sendMessageDraft`` accepts arbitrary 32-bit positive integers
+    as the draft id; we keep the value within signed-int32 range so it
+    serialises cleanly across the aiogram client and the Bot API JSON wire
+    format. Moved here from ``services/draft_streamer.py`` (***REMOVED***1671) so the
+    streaming path stays SDK-only — direct ``bot.send_message_draft(...)``
+    calls plus ``agent.astream(stream_mode=[...])`` from LangGraph, no
+    custom abstraction in between.
+    """
+    return secrets.randbelow(2**31 - 1) + 1
+
+
 async def _stream_agent_to_draft(
     agent: Any,
     payload: dict[str, Any],
@@ -284,8 +299,6 @@ async def _stream_agent_to_draft(
     Only streams content-only chunks (not tool-call chunks). Returns final state dict.
     """
     import contextlib
-
-    from telegram_bot.services.draft_streamer import _new_draft_id
 
     accumulated = ""
     last_draft = 0.0
@@ -3443,8 +3456,6 @@ class PropertyBot:
                     sources_html = format_sources(documents)
                     rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
 
-                ***REMOVED*** Send via DraftStreamer (supports forum thread routing)
-                from telegram_bot.services.draft_streamer import DraftStreamer
                 from telegram_bot.services.telegram_formatting import (
                     build_html_messages,
                     record_langfuse_response_output,
@@ -3454,20 +3465,25 @@ class PropertyBot:
                 html_messages = build_html_messages(response_text, sources_html=sources_html)
 
                 if message.chat.type == "private":
-                    draft_streamer = rag_result_store.get("_draft_streamer")
+                    draft_state = rag_result_store.get("_draft_state")
                     try:
-                        if draft_streamer is None and len(html_messages) == 1:
-                            draft_streamer = DraftStreamer(
-                                bot=self.bot,
-                                chat_id=message.chat.id,
-                                thread_id=forum_thread_id,
-                            )
-                        if draft_streamer is not None and len(html_messages) == 1:
-                            await draft_streamer.finalize(
-                                html_messages[0],
-                                parse_mode="HTML",
-                                reply_markup=reply_markup,
-                            )
+                        if draft_state is None and len(html_messages) == 1:
+                            draft_state = {
+                                "chat_id": message.chat.id,
+                                "thread_id": forum_thread_id,
+                                "draft_id": _new_draft_id(),
+                            }
+                        if draft_state is not None and len(html_messages) == 1:
+                            send_kwargs: dict[str, Any] = {
+                                "chat_id": draft_state["chat_id"],
+                                "text": html_messages[0],
+                                "parse_mode": "HTML",
+                                "reply_markup": reply_markup,
+                            }
+                            thread_id = draft_state.get("thread_id")
+                            if thread_id is not None:
+                                send_kwargs["message_thread_id"] = thread_id
+                            await self.bot.send_message(**send_kwargs)
                             record_langfuse_response_output(response_text, len(html_messages))
                         else:
                             await send_html_messages(
@@ -3478,7 +3494,10 @@ class PropertyBot:
                             )
                         ctx.response_sent = True
                     except Exception:
-                        logger.warning("DraftStreamer failed, falling back to message.answer")
+                        logger.warning(
+                            "Draft finalize via bot.send_message failed, "
+                            "falling back to send_html_messages"
+                        )
                         try:
                             await send_html_messages(
                                 message,
@@ -3736,13 +3755,11 @@ class PropertyBot:
                     )
                 return response_text, result
 
-            from telegram_bot.services.draft_streamer import DraftStreamer
-
-            draft_streamer = DraftStreamer(
-                bot=self.bot,
-                chat_id=chat_id,
-                thread_id=forum_thread_id,
-            )
+            draft_state: dict[str, Any] = {
+                "chat_id": chat_id,
+                "thread_id": forum_thread_id,
+                "draft_id": _new_draft_id(),
+            }
 
             accumulated = ""
             stream_messages: list[Any] = []
@@ -3777,11 +3794,18 @@ class PropertyBot:
                 accumulated += text
                 stream_messages.append(message_chunk)
                 with contextlib.suppress(Exception):
-                    await draft_streamer.send_chunk(accumulated)
+                    draft_kwargs: dict[str, Any] = {
+                        "chat_id": draft_state["chat_id"],
+                        "draft_id": draft_state["draft_id"],
+                        "text": accumulated,
+                    }
+                    if draft_state["thread_id"] is not None:
+                        draft_kwargs["message_thread_id"] = draft_state["thread_id"]
+                    await self.bot.send_message_draft(**draft_kwargs)
 
             if accumulated:
                 ***REMOVED*** Finalize later in _handle_query_supervisor after feedback/sources assembly.
-                rag_result_store["_draft_streamer"] = draft_streamer
+                rag_result_store["_draft_state"] = draft_state
 
             return accumulated, latest_state or {"messages": stream_messages}
 
