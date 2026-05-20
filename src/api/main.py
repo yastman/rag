@@ -208,11 +208,11 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
             result = await app.state.graph.ainvoke(state)
         except GraphRecursionError:
             elapsed_ms = (time.perf_counter() - start) * 1000
+            fallback_response = (
+                "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
+            )
             lf = get_client()
             if lf is not None:
-                fallback_response = (
-                    "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
-                )
                 lf.update_current_span(
                     input=build_safe_input_payload(
                         content_type="api", text=req.query, route="rag-api-query"
@@ -227,9 +227,6 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
                         "query_type": "ERROR",
                         "error_reason": "recursion_limit",
                     },
-                )
-                fallback_response = (
-                    "Запрос слишком сложный — достигнут лимит обработки. Попробуйте упростить его."
                 )
                 fallback_result: dict[str, Any] = {
                     "input_type": "api",
