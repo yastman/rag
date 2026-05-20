@@ -133,6 +133,8 @@ class HybridSearchEngine(SearchEngine):
     Note: ColBERT multi-vector matching is disabled for now.
     """
 
+    rrf_k: int = 60
+
     def __init__(self, collection_name: str, embedding_model):
         super().__init__(collection_name)
         self.embedding_model = embedding_model
@@ -163,7 +165,7 @@ class HybridSearchEngine(SearchEngine):
         response = self.client.query_points(
             collection_name=self.collection_name,
             prefetch=prefetch,
-            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            query=models.RrfQuery(rrf=models.Rrf(k=self.rrf_k)),
             limit=top_k,
             with_payload=True,
         )
@@ -269,6 +271,8 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
     - ColBERT: https://qdrant.tech/documentation/concepts/hybrid-queries/
     """
 
+    rrf_k: int = 60
+
     def __init__(self, collection_name: str, embedding_model):
         super().__init__(collection_name)
         self.embedding_model = embedding_model
@@ -306,7 +310,7 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
                 models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
             ],
-            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            query=models.RrfQuery(rrf=models.Rrf(k=self.rrf_k)),
         )
 
         response = self.client.query_points(
