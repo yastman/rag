@@ -73,6 +73,9 @@ jobs:
           EOF
           /tmp/gitleaks detect --source . --no-git --config /tmp/gitleaks.toml --verbose
 
+      - name: Verify test files are tracked
+        run: uv run --python 3.14 python scripts/check_test_tracking.py
+
       - name: Security scan (bandit + vulture)
         run: |
           uv run --python 3.14 bandit -r src/ telegram_bot/ -c pyproject.toml
