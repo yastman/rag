@@ -3,17 +3,17 @@
 Polls Redis for ``session:last_active:{user_id}`` keys older than ``idle_timeout_min``.
 Generates summary via LLM, writes to Kommo as note (if available).
 
-Worker lifecycle pattern matches ``RedisHealthMonitor``:
-  start() -> asyncio.create_task(_run_loop()) -> stop() via asyncio.Event
+Worker lifecycle uses APScheduler interval job for periodic polling.
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from telegram_bot.observability import get_client, observe
 
@@ -25,6 +25,9 @@ _SUMMARY_PROMPT = (
     "Focus on: customer needs, property preferences, budget, next steps. "
     "Write in Russian."
 )
+
+
+HistorySource = Callable[[str], Awaitable[list[dict[str, str]]]]
 
 
 class SessionSummaryWorker:
@@ -40,6 +43,7 @@ class SessionSummaryWorker:
         poll_interval_sec: int = 300,
         summary_model: str = "claude-haiku-4-5",
         max_sessions_per_cycle: int = 50,
+        history_source: HistorySource | None = None,
     ) -> None:
         self._redis = redis
         self._llm = llm
@@ -48,46 +52,54 @@ class SessionSummaryWorker:
         self._poll_interval_sec = poll_interval_sec
         self._summary_model = summary_model
         self._max_sessions_per_cycle = max(1, max_sessions_per_cycle)
-        self._stop_event = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._history_source = history_source
+        self._scheduler: AsyncIOScheduler | None = None
 
     async def start(self) -> None:
-        """Start the background polling loop."""
-        self._stop_event.clear()
-        self._task = asyncio.create_task(self._run_loop(), name="session-summary-worker")
+        """Start the background polling using APScheduler.
+
+        Logs a warning when ``history_source`` is not wired (#1599) — the
+        worker would otherwise start, scan idle sessions, and silently delete
+        keys without ever generating a summary, which looked like the feature
+        was running while it was actually a no-op.
+        """
+        self._scheduler = AsyncIOScheduler(
+            job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 300}
+        )
+        self._scheduler.add_job(
+            self._check_idle_sessions,
+            "interval",
+            seconds=self._poll_interval_sec,
+            id="session-summary-worker",
+            replace_existing=True,
+        )
+        self._scheduler.start()
+        if self._history_source is None:
+            logger.warning(
+                "SessionSummaryWorker started without history_source — idle "
+                "sessions will be detected but summaries will NOT be generated "
+                "until a real history retriever is wired. See issue #1599."
+            )
+            lf = get_client()
+            if lf is not None:
+                lf.score_current_trace(
+                    name="session_summary_history_source_missing",
+                    value=1,
+                    data_type="BOOLEAN",
+                )
         logger.info(
-            "SessionSummaryWorker started (poll=%ds, idle=%dmin)",
+            "SessionSummaryWorker started (poll=%ds, idle=%dmin, history_source=%s)",
             self._poll_interval_sec,
             self._idle_timeout_min,
+            "wired" if self._history_source is not None else "missing",
         )
 
     async def stop(self) -> None:
-        """Signal the worker to stop and wait for it to finish."""
-        self._stop_event.set()
-        if self._task is not None:
-            try:
-                await asyncio.wait_for(self._task, timeout=5.0)
-            except TimeoutError:
-                self._task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._task
+        """Shut down the scheduler."""
+        if self._scheduler is not None:
+            self._scheduler.shutdown(wait=False)
+            self._scheduler = None
         logger.info("SessionSummaryWorker stopped")
-
-    async def _run_loop(self) -> None:
-        """Infinite poll loop until stop_event is set."""
-        while not self._stop_event.is_set():
-            try:
-                await self._check_idle_sessions()
-            except Exception:
-                logger.exception("SessionSummaryWorker cycle failed")
-            try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=self._poll_interval_sec,
-                )
-                break  # stop_event was set
-            except TimeoutError:
-                pass  # normal: poll interval elapsed
 
     @observe(name="session-summary-check")
     async def _check_idle_sessions(self) -> int:
@@ -102,6 +114,14 @@ class SessionSummaryWorker:
         Returns:
             Number of sessions summarized this cycle.
         """
+        try:
+            return await self._check_idle_sessions_inner()
+        except Exception:
+            logger.exception("SessionSummaryWorker cycle failed")
+            raise
+
+    async def _check_idle_sessions_inner(self) -> int:
+        """Inner idle session check logic."""
         now = time.time()
         threshold = self._idle_timeout_min * 60
         count = 0
@@ -134,9 +154,7 @@ class SessionSummaryWorker:
                 scanned += 1
 
                 user_id = (
-                    key.decode().split(":")[-1]
-                    if isinstance(key, bytes)
-                    else key.split(":")[-1]
+                    key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
                 )
 
                 history = await self._get_conversation_history(user_id)
@@ -171,18 +189,27 @@ class SessionSummaryWorker:
                 )
                 lf.score_current_trace(name="session_summary_count", value=float(count))
             if cap_hit:
-                lf.score_current_trace(
-                    name="session_summary_cap_hit", value=1, data_type="BOOLEAN"
-                )
+                lf.score_current_trace(name="session_summary_cap_hit", value=1, data_type="BOOLEAN")
 
         return count
 
     async def _get_conversation_history(self, user_id: str) -> list[dict[str, str]]:
-        """Fetch conversation history for a user.
+        """Fetch conversation history for ``user_id``.
 
-        Placeholder: returns empty list until checkpointer integration is added.
-        Override in tests or subclass for real history retrieval.
+        Delegates to the constructor-injected ``history_source`` callable when
+        wired. Returns ``[]`` when no source is configured (worker is a no-op
+        in that mode — see #1599 for the contract). Subclasses may still
+        override this method directly for tests.
         """
+        if self._history_source is not None:
+            try:
+                return await self._history_source(user_id)
+            except Exception:
+                logger.exception(
+                    "history_source raised for user_id=%s; treating as empty history",
+                    user_id,
+                )
+                return []
         return []
 
     @observe(name="session-summary-llm", capture_input=False, capture_output=False)
