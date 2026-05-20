@@ -67,6 +67,8 @@ def _make_graph_mocks(
     cache.store_search_results = AsyncMock()
     cache.get_sparse_embedding = AsyncMock(return_value=cache_sparse)
     cache.store_sparse_embedding = AsyncMock()
+    cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
+    cache.store_bge_m3_query_bundle = AsyncMock()
 
     ***REMOVED*** -- Embeddings (dense) --
     embeddings = MagicMock()

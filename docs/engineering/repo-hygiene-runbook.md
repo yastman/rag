@@ -14,16 +14,37 @@ make issue-hygiene        ***REMOVED*** open issue queue hygiene
 Each command exits non-zero whenever something is actionable, so they're CI-
 friendly and can be wired into a weekly Slack/email digest.
 
+***REMOVED******REMOVED*** Before Starting New Work
+
+Do not start non-trivial edits in a dirty checkout. Start from a clean worktree
+or create a project-local `.worktrees/<branch>` checkout when unrelated local
+changes exist:
+
+```bash
+make git-hygiene
+git fetch origin
+git worktree add .worktrees/<branch> -b <branch> origin/dev
+```
+
+Use the new worktree for feature edits, verification, commits, and PR
+preparation. Leave unrelated dirty branches untouched until their owner or
+operator decides whether to keep, merge, or discard them.
+
 ***REMOVED******REMOVED*** What each tool covers
 
 | Tool                              | Covers                                | Issue   |
 | --------------------------------- | ------------------------------------- | ------- |
-| `scripts/git_hygiene.py`          | branches, worktrees, transient files  | ***REMOVED***1718   |
+| `make git-hygiene` (native git)   | branches, worktrees, transient files  | ***REMOVED***1718   |
 | `scripts/pr_queue_audit.py`       | open PR queue, blocked reasons, SLA   | ***REMOVED***1719   |
 | `scripts/issue_queue_audit.py`    | open issue labels, lanes, assignees   | ***REMOVED***1720   |
 
-All three accept `--json` for programmatic consumption and human-readable
-output by default.
+The PR and issue audits accept `--json` for programmatic consumption and
+human-readable output by default. The git hygiene path is now native git
+(`git fetch --prune`, `git branch --merged`, `git for-each-ref`,
+`git worktree list --porcelain`, `git ls-files --others`) — there is no
+Python helper to call directly. See
+[`docs/engineering/script-native-migration-matrix.md`](script-native-migration-matrix.md)
+for the audit decisions behind this split.
 
 ***REMOVED******REMOVED*** Safety guarantees
 
@@ -41,19 +62,27 @@ on Monday morning cannot lose work:
 - **Default to non-destructive checks.** `--fix` requires an explicit flag;
   `--dry-run` previews any deletion.
 
-The `--include-requires-human` opt-in flag will additionally delete branches
-in the requires-human lane, but still refuses dirty worktrees.
+The `--include-requires-human` opt-in flag (in the audit scripts for PR
+and issue lanes) will additionally surface borderline items, but git
+cleanup itself stays native and conservative — it never force-removes
+dirty worktrees.
 
 ***REMOVED******REMOVED*** 1. Git hygiene
 
 ```bash
 make git-hygiene                              ***REMOVED*** report
 make git-hygiene-fix                          ***REMOVED*** dry-run cleanup of safe lane
-uv run python scripts/git_hygiene.py --fix    ***REMOVED*** apply cleanup
-uv run python scripts/git_hygiene.py --json   ***REMOVED*** machine-readable
+make git-hygiene-fix | sh                     ***REMOVED*** apply cleanup (review first!)
 ```
 
-Lanes you'll see in the output:
+`make git-hygiene-fix` prints the exact `git merge-base --is-ancestor … &&
+git branch -D <branch>` commands it would run, but does not execute them.
+Pipe to `sh` only after reviewing the list. There is no `--json` flag in
+this lane; consume the output via standard text tooling (`grep`, `awk`)
+or extend the Makefile target.
+
+Lanes you'll see in the output (driven by `git branch --merged` /
+`git for-each-ref` / `git worktree list`):
 
 | Lane               | Action                                                |
 | ------------------ | ----------------------------------------------------- |
@@ -82,11 +111,12 @@ uv run python scripts/pr_queue_audit.py --base dev
 Buckets in priority order:
 
 1. **conflicts**          — needs rebase / merge resolution.
-2. **ci-failing**         — author must fix.
-3. **ci-pending**         — wait or re-run.
+2. **ci-failing**         — static CI guardrail failed; author must fix.
+3. **ci-pending**         — static CI guardrail is still running; wait or re-run.
 4. **changes-requested**  — reviewer asked for changes; ping author.
-5. **review-needed**      — CI green, no approval; assign reviewer.
-6. **ready**              — green and approved; merge it.
+5. **review-needed**      — static CI green, no approval; assign reviewer.
+6. **ready**              — static CI green and approved; confirm local test
+                            evidence before merge.
 7. **draft**              — author still working.
 8. **stale**              — flag is independent; surfaced for any PR older
                             than `--stale-days` (default 14).
