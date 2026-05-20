@@ -7,6 +7,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Operator request | First command / doc |
 |---|---|
 | Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
+| Native Git/GitHub hygiene | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 | Recent Langfuse traces (`изучи последние трейсы`) | `make validate-traces-fast` → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 | Qdrant health / query / index issues (`изучи последние qdrant запросы`) | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Redis / cache degradation (`сломался redis`) | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
@@ -18,12 +19,14 @@ Operator entrypoint for container/service investigations and incident response. 
 | Symptom / Request | Runbook |
 |---|---|
 | Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
+| Git/GitHub branch, PR, issue, worktree, and stash hygiene | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 | Langfuse traces missing, gaps, or drift | [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
 | LiteLLM / LLM connection failures or proxy errors | [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Redis cache degradation, eviction, or latency | [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
 | Qdrant health, collection, or vector search issues | [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Postgres WAL recovery or replication issues | [`POSTGRESQL_WAL_RECOVERY.md`](POSTGRESQL_WAL_RECOVERY.md) |
 | VPS / Google Drive ingestion recovery | [`vps-gdrive-ingestion-recovery.md`](vps-gdrive-ingestion-recovery.md) |
+| Weekly git/pr/issue hygiene workflow | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 
 ## Container / Service Map
 
