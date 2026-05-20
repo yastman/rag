@@ -12,6 +12,10 @@ hygiene. This replaces the archived legacy helpers under `scripts/archive/`.
 - Do not remove dirty worktrees with normal cleanup commands.
 - Check open PRs before deleting remote branches.
 - Use report/dry-run commands before destructive commands.
+- For local branch deletion, select candidates from `origin/<base>`, re-check
+  `git merge-base --is-ancestor <branch> origin/<base>`, then delete with
+  `git branch -D`. Do not rely on `git branch -d`, because it checks merge
+  safety against the current `HEAD`.
 
 ***REMOVED******REMOVED*** Weekly Report
 
@@ -57,12 +61,14 @@ Triage order:
 
 ```bash
 MAIN_BRANCH="${MAIN_BRANCH:-dev}"
+BASE_REF="origin/$MAIN_BRANCH"
 CURRENT_BRANCH="$(git branch --show-current)"
 WORKTREE_BRANCHES="$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p')"
 
 git fetch --prune origin
+git rev-parse --verify --quiet "$BASE_REF" >/dev/null
 
-git branch --merged "$MAIN_BRANCH" --format='%(refname:short)' |
+git branch --merged "$BASE_REF" --format='%(refname:short)' |
 while read -r branch; do
   [ -z "$branch" ] && continue
   [ "$branch" = "$MAIN_BRANCH" ] && continue
@@ -97,9 +103,14 @@ For manual native cleanup:
 
 ```bash
 MAIN_BRANCH="${MAIN_BRANCH:-dev}"
+BASE_REF="origin/$MAIN_BRANCH"
 CURRENT_BRANCH="$(git branch --show-current)"
+WORKTREE_BRANCHES="$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p')"
 
-git branch --merged "$MAIN_BRANCH" --format='%(refname:short)' |
+git fetch --prune origin
+git rev-parse --verify --quiet "$BASE_REF" >/dev/null
+
+git branch --merged "$BASE_REF" --format='%(refname:short)' |
 while read -r branch; do
   [ -z "$branch" ] && continue
   [ "$branch" = "$MAIN_BRANCH" ] && continue
@@ -107,7 +118,8 @@ while read -r branch; do
   [ "$branch" = "master" ] && continue
   [ "$branch" = "develop" ] && continue
   [ "$branch" = "$CURRENT_BRANCH" ] && continue
-  git branch -d "$branch"
+  printf '%s\n' "$WORKTREE_BRANCHES" | grep -Fxq "$branch" && continue
+  git merge-base --is-ancestor "$branch" "$BASE_REF" && git branch -D "$branch"
 done
 
 git worktree prune
