@@ -1202,9 +1202,10 @@ git-hygiene-fix: ***REMOVED******REMOVED*** Git hygiene safe cleanup preview (dr
 	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
 	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
 	CURRENT_BRANCH=$$(git branch --show-current); \
-	echo "Would delete local branches merged into origin/$$BASE_BRANCH, excluding protected/current branches:"; \
+	BASE_REF=origin/$$BASE_BRANCH; \
+	echo "Would delete local branches merged into $$BASE_REF, excluding protected/current branches:"; \
 	git fetch --prune origin; \
-	git branch --merged "origin/$$BASE_BRANCH" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - git branch -d " $$0}'
+	git branch --merged "$$BASE_REF" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v base_ref="$$BASE_REF" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - git merge-base --is-ancestor " $$0 " " base_ref " && git branch -D " $$0}'
 	@echo ""
 
 pr-hygiene: ***REMOVED******REMOVED*** PR queue triage report (open PRs, blocked reasons, SLA)
@@ -1220,13 +1221,16 @@ issue-hygiene: ***REMOVED******REMOVED*** Issue queue hygiene report (no-label /
 repo-cleanup: ***REMOVED******REMOVED*** Full repo cleanup: branches, worktrees, stashes (dry-run)
 	@echo "$(BLUE)Running repo cleanup (dry-run)...$(NC)"
 	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
+	BASE_REF=origin/$$MAIN_BRANCH; \
 	CURRENT_BRANCH=$$(git branch --show-current); \
 	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
 	echo "Base branch: $$MAIN_BRANCH"; \
+	echo "Base ref: $$BASE_REF"; \
 	git fetch --prune origin; \
+	git rev-parse --verify --quiet "$$BASE_REF" >/dev/null || { echo "Missing base ref: $$BASE_REF"; exit 1; }; \
 	echo ""; \
 	echo "Local merged branches eligible for deletion:"; \
-	git branch --merged "$$MAIN_BRANCH" --format='%(refname:short)' | while read -r branch; do \
+	git branch --merged "$$BASE_REF" --format='%(refname:short)' | while read -r branch; do \
 		[ -z "$$branch" ] && continue; \
 		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
 		[ "$$branch" = "main" ] && continue; \
@@ -1262,11 +1266,13 @@ repo-cleanup: ***REMOVED******REMOVED*** Full repo cleanup: branches, worktrees,
 repo-cleanup-force: ***REMOVED******REMOVED*** Full repo cleanup: interactive deletion mode
 	@echo "$(BLUE)Running repo cleanup (interactive)...$(NC)"
 	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
+	BASE_REF=origin/$$MAIN_BRANCH; \
 	CURRENT_BRANCH=$$(git branch --show-current); \
 	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
 	git fetch --prune origin; \
-	echo "Local merged branches eligible for deletion from $$MAIN_BRANCH:"; \
-	branches=$$(git branch --merged "$$MAIN_BRANCH" --format='%(refname:short)' | while read -r branch; do \
+	git rev-parse --verify --quiet "$$BASE_REF" >/dev/null || { echo "Missing base ref: $$BASE_REF"; exit 1; }; \
+	echo "Local merged branches eligible for deletion from $$BASE_REF:"; \
+	branches=$$(git branch --merged "$$BASE_REF" --format='%(refname:short)' | while read -r branch; do \
 		[ -z "$$branch" ] && continue; \
 		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
 		[ "$$branch" = "main" ] && continue; \
@@ -1283,7 +1289,14 @@ repo-cleanup-force: ***REMOVED******REMOVED*** Full repo cleanup: interactive de
 		printf 'Delete these local branches? [y/N] '; \
 		read -r confirm; \
 		if printf '%s' "$$confirm" | grep -Eq '^[Yy]$$'; then \
-			printf '%s\n' "$$branches" | xargs -r git branch -d; \
+			printf '%s\n' "$$branches" | while read -r branch; do \
+				[ -z "$$branch" ] && continue; \
+				if git merge-base --is-ancestor "$$branch" "$$BASE_REF"; then \
+					git branch -D "$$branch"; \
+				else \
+					echo "  skip $$branch: not an ancestor of $$BASE_REF"; \
+				fi; \
+			done; \
 		fi; \
 	fi; \
 	echo ""; \
