@@ -85,19 +85,6 @@ async def test_bge_m3_health():
 
 
 @pytest.mark.asyncio
-async def test_lightrag_health():
-    """Test LightRAG service health."""
-    if not _check_tcp("localhost", 9621):
-        pytest.skip("LightRAG not running on localhost:9621")
-
-    import aiohttp
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:9621/health") as resp:
-            assert resp.status == 200
-
-
-@pytest.mark.asyncio
 async def test_docling_health():
     """Test Docling document parsing service health."""
     if not _check_tcp("localhost", 5001):

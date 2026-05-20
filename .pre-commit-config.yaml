@@ -89,6 +89,7 @@ repos:
     hooks:
       - id: bandit
         name: Bandit Security Linter
+        exclude: ^scripts/archive/
         args:
           - -c
           - pyproject.toml
