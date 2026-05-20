@@ -61,9 +61,8 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 
 ***REMOVED******REMOVED*** Migration & SDK
 
-- [`SDK_MIGRATION_AUDIT_2026-03-13.md`](SDK_MIGRATION_AUDIT_2026-03-13.md) — Canonical SDK keeper stack.
-- [`SDK_MIGRATION_ROADMAP_2026-03-13.md`](SDK_MIGRATION_ROADMAP_2026-03-13.md) — Post-audit execution order.
-- [`SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md`](SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md) — SDK canonical remediation report.
+- [`engineering/sdk-registry.md`](engineering/sdk-registry.md) — Canonical SDK/framework lookup order and keeper stack.
+- [`indexes/docker-sdk-map.md`](indexes/docker-sdk-map.md) — Docker image and SDK ownership map.
 
 ***REMOVED******REMOVED*** Engineering Notes
 
@@ -72,10 +71,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`HITL_CRM_FLOW.md`](HITL_CRM_FLOW.md) — CRM-specific HITL flow.
 - [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
-
-***REMOVED******REMOVED*** Archive
-
-- [`archive/`](archive/) — Historical documentation and retired CI workflows preserved for context.
 
 ***REMOVED******REMOVED*** Fast Doc Search
 
