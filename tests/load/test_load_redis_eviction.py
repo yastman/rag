@@ -137,6 +137,18 @@ class TestLoadRedisEviction:
 
         print(f"\nWrote {num_keys} keys ({total_mb}MB), evictions: {evictions}")
 
+        assert evictions > 0, (
+            f"Expected evictions under {total_mb}MB write pressure against "
+            f"configured maxmemory, but got 0 evictions"
+        )
+
+        if len(stats_timeseries) >= 2:
+            assert stats_timeseries[-1]["evicted_keys"] > stats_timeseries[0]["evicted_keys"], (
+                "Expected eviction count to grow over time during sustained write pressure, "
+                f"but first={stats_timeseries[0]['evicted_keys']} "
+                f"last={stats_timeseries[-1]['evicted_keys']}"
+            )
+
     async def test_hit_rate_under_zipf_access(self, redis_client):
         """Test hit rate under Zipf-like access pattern."""
         test_prefix = f"rag:zipf_test:{int(time.time())}"
