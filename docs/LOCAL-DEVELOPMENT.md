@@ -117,12 +117,22 @@ The authoritative startup preflight still lives in [`telegram_bot/preflight.py`]
 
 ## 4. Development Gates
 
+Git hooks and push gates are static guardrails only: lint, formatting, type
+checks, and repository policy checks. They should not run pytest suites. Run
+tests explicitly as local validation on the development machine.
+
 Local release gate:
 
 ```bash
 make check
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 make test-bot-health
+```
+
+PR-ready local gate:
+
+```bash
+make local-pr-ready
 ```
 
 Optional broader gates:

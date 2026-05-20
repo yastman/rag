@@ -35,7 +35,7 @@ def test_no_sensitive_deploy_patterns() -> None:
 
 
 def test_validation_jobs_exist() -> None:
-    """Core validation: the static Lint job runs."""
+    """Core validation: the Lint job runs."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     data = yaml.safe_load(text)
     assert "lint" in data["jobs"], "missing 'lint' job key"
