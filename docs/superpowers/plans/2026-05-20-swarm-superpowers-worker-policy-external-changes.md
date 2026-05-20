@@ -103,3 +103,26 @@ No external changes have been applied yet.
   - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_launch_opencode_worker.py tests/test_validate_worker_prompt.py tests/test_validate_worker_signal.py tests/test_swarm_plan_contract.py tests/test_swarm_launch_contract.py tests/test_worker_contract.py tests/test_swarm_acceptance_contract.py tests/test_opencode_agent_contract.py tests/test_swarm_superpowers_dry_run.py -q`
 - Result: `8 passed`; `3 passed`; full external swarm subset `21 passed`.
 - Notes: removed default push/PR language from worker agents, changed legacy signal validation so code-producing workers may finish locally without push by default, and expanded prompt validation to catch forbidden Superpowers in multiline/bullet `Required Superpowers` blocks.
+
+### 2026-05-20 Subagent Audit Autofix: policy hardening
+
+- Files changed:
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_prompt.py`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_launch_opencode_worker.py`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_validate_worker_prompt.py`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_worker_contract.py`
+  - `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_opencode_agent_contract.py`
+  - `/home/user/.codex/skills/swarm-worker-contract/SKILL.md`
+  - `/home/user/.config/opencode/agents/pr-worker.md`
+  - `/home/user/.config/opencode/agents/pr-review-fix.md`
+  - `/home/user/.config/opencode/agents/pr-review.md`
+  - `/home/user/.config/opencode/skills/swarm-worker-contract/SKILL.md`
+  - `/home/user/.config/opencode/skills/swarm-pr-finish/SKILL.md`
+- Backup paths: none
+- Verification commands:
+  - `uv run pytest tests/unit/test_agents_contract.py tests/unit/test_ci_deploy_workflow.py -q`
+  - `uv run ruff check tests/unit/test_agents_contract.py tests/unit/test_ci_deploy_workflow.py`
+  - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_launch_opencode_worker.py tests/test_validate_worker_prompt.py tests/test_validate_worker_signal.py tests/test_swarm_plan_contract.py tests/test_swarm_launch_contract.py tests/test_worker_contract.py tests/test_swarm_acceptance_contract.py tests/test_opencode_agent_contract.py tests/test_swarm_superpowers_dry_run.py -q`
+- Result: repo `10 passed`; ruff passed; external swarm subset `24 passed`.
+- Notes: tightened `.gitignore` plan allowlist in the repo, renamed the AGENTS heading to generic `Workspace Hygiene`, required TDD for code-changing prompts, rejected ORCH_PANE wake-up regardless of tmux option order, accepted numbered Superpowers lists, blocked subagent/review/planning Superpowers in launcher-required worker skills, and clarified OpenCode skill permission versus use policy.
