@@ -86,15 +86,46 @@ def pytest_unconfigure(config):
 
 
 @pytest.fixture(autouse=True)
-def mock_get_client():
-    """Mock telegram_bot.bot.get_client for all unit tests.
+def mock_get_client(isolate_otel_langfuse):
+    """Mock telegram_bot.bot.get_client for unit tests that already imported it.
 
     Autouse fixture — no test signature changes needed.
     Uses a shared MagicMock that tests can inspect via
     ``telegram_bot.bot.get_client`` if they need the reference.
+
+    Lazy-patch behavior (#conftest-coverage-blocker fix): the fixture skips
+    patching when ``telegram_bot.bot`` is NOT already in ``sys.modules``.
+
+    Why: Eagerly resolving ``"telegram_bot.bot.get_client"`` triggers the
+    full ``telegram_bot.bot`` import chain (langgraph, qdrant_client,
+    numpy, …). Under ``pytest --cov`` the numpy C-extension
+    (``numpy._core._multiarray_umath``) raises
+    ``ImportError: cannot load module more than once per process`` because
+    coverage's PEP 669 / pkgutil walk re-traverses the package tree. The
+    failure surfaces as ``AttributeError: module 'telegram_bot' has no
+    attribute 'bot'`` for every unit test in this directory.
+
+    Tests that actually exercise ``telegram_bot.bot.get_client`` already
+    import the module before this fixture runs (via ``from
+    telegram_bot.bot import …`` at module top), so the lazy gate is
+    invisible to them. Tests that never touch the bot module (the vast
+    majority) no longer pay the cost of triggering the heavy import chain.
+
+    ``isolate_otel_langfuse`` is requested first so OTEL/Langfuse env
+    vars are set BEFORE we attempt the patch, in case a future bot import
+    introduces OTEL initialization side effects.
+
+    ``create=True`` keeps the patch safe even if a future refactor moves
+    ``get_client`` out of ``telegram_bot.bot``.
     """
+    if "telegram_bot.bot" not in sys.modules:
+        # Bot module not loaded — no test in this run is exercising it,
+        # so patching is unnecessary and would re-trigger the import chain.
+        yield MagicMock()
+        return
+
     mock = MagicMock()
-    with patch("telegram_bot.bot.get_client", return_value=mock):
+    with patch("telegram_bot.bot.get_client", return_value=mock, create=True):
         yield mock
 
 
