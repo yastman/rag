@@ -454,3 +454,106 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         captured_output = output_calls[-1]["output"]
         assert captured_output.get("summary_preview") == short_summary
         assert captured_output.get("summary_len") == len(short_summary)
+
+
+
+class TestHistorySourceWiring:
+    """Regression tests for #1599: history_source must be configurable.
+
+    Before this fix the worker silently no-op'd whenever it was enabled
+    because ``_get_conversation_history`` was a placeholder returning ``[]``,
+    so it deleted idle session keys without ever generating a summary.
+    """
+
+    async def test_idle_session_uses_history_source_callable(self):
+        """A wired history_source produces real history → summary is generated."""
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        async def fake_history_source(user_id: str) -> list[dict[str, str]]:
+            assert user_id == "777"
+            return [
+                {"role": "user", "content": "Ищу 2BR в Несебре"},
+                {"role": "assistant", "content": "Подобрал три варианта"},
+            ]
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            history_source=fake_history_source,
+            idle_timeout_min=30,
+        )
+        worker._redis.scan = AsyncMock(return_value=(0, [b"session:last_active:777"]))
+        worker._redis.get = AsyncMock(return_value=str(time.time() - 2000).encode())
+        worker._redis.delete = AsyncMock()
+        worker._generate_summary = AsyncMock(return_value="Клиент: 2BR Несебр")
+
+        count = await worker._check_idle_sessions()
+
+        assert count == 1
+        worker._generate_summary.assert_called_once()
+        passed_history = worker._generate_summary.call_args.args[0]
+        assert len(passed_history) == 2
+
+    async def test_default_get_history_returns_empty_without_source(self):
+        """Without history_source the placeholder still returns []."""
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
+        result = await worker._get_conversation_history("123")
+        assert result == []
+
+    async def test_history_source_exception_falls_back_to_empty(self):
+        """A buggy history_source must not crash the worker — returns []."""
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        async def boom(_user_id: str) -> list[dict[str, str]]:
+            raise RuntimeError("checkpointer down")
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            history_source=boom,
+        )
+        result = await worker._get_conversation_history("123")
+        assert result == []
+
+    async def test_start_logs_warning_when_history_source_missing(self, caplog):
+        """Operators must see a startup warning when the worker is a no-op."""
+        import logging
+
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
+        with caplog.at_level(logging.WARNING, logger="telegram_bot.services.session_summary_worker"):
+            await worker.start()
+            await worker.stop()
+
+        warnings = [
+            rec for rec in caplog.records if "without history_source" in rec.getMessage()
+        ]
+        assert warnings, (
+            "Worker must log WARNING at start when history_source is not wired (#1599)"
+        )
+
+    async def test_start_does_not_warn_when_history_source_present(self, caplog):
+        """A wired worker must not log the no-op warning."""
+        import logging
+
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        async def empty_source(_user_id: str) -> list[dict[str, str]]:
+            return []
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            history_source=empty_source,
+        )
+        with caplog.at_level(logging.WARNING, logger="telegram_bot.services.session_summary_worker"):
+            await worker.start()
+            await worker.stop()
+
+        warnings = [
+            rec for rec in caplog.records if "without history_source" in rec.getMessage()
+        ]
+        assert not warnings
