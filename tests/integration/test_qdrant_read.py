@@ -49,8 +49,7 @@ def _run_qdrant_read_checks() -> bool:
         print(f"\n📦 Коллекций: {len(collections.collections)}")
 
         if not collections.collections:
-            print("   ℹ️  Нет коллекций для тестирования")
-            return True
+            pytest.skip("No collections available for testing")
 
         # Детали первой коллекции
         collection_name = collections.collections[0].name
@@ -60,6 +59,9 @@ def _run_qdrant_read_checks() -> bool:
         print(f"   Статус: {info.status}")
         print(f"   Точек: {info.points_count:,}")
         print(f"   Векторов: {info.indexed_vectors_count:,}")
+
+        if info.points_count == 0:
+            pytest.skip(f"Collection '{collection_name}' has no points")
 
         # Получить несколько точек
         if info.points_count > 0:

@@ -64,6 +64,7 @@ def _run_hybrid_search_with_sparse() -> bool:
             )
 
             print(f"\n   ✅ Found {len(results)} results")
+            assert len(results) > 0, f"Query '{query}' returned no results"
 
             for j, result in enumerate(results, 1):
                 print(f"\n   📄 Result {j}:")
@@ -72,6 +73,8 @@ def _run_hybrid_search_with_sparse() -> bool:
                 text_preview = result.text[:150].replace("\n", " ")
                 print(f"      Text: {text_preview}...")
 
+        except AssertionError:
+            raise
         except Exception as e:
             print(f"\n   ❌ Error: {type(e).__name__}: {e}")
             import traceback
@@ -100,7 +103,17 @@ def _collection_exists(url: str, api_key: str, collection_name: str) -> bool:
         req.add_header("api-key", api_key)
     try:
         with urllib.request.urlopen(req, timeout=5) as response:
-            return response.status == 200
+            if response.status != 200:
+                return False
+            import json
+
+            data = json.loads(response.read())
+            points_count = data.get("result", {}).get("points_count", 0)
+            if points_count == 0:
+                pytest.skip(
+                    f"Collection '{collection_name}' exists but has no points"
+                )
+            return True
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return False
