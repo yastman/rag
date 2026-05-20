@@ -42,9 +42,17 @@ def _redis_url_candidates() -> list[str]:
     return urls
 
 
-@pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="REDIS_URL not set")
+@pytest.mark.load
 class TestLoadRedisEviction:
-    """Test Redis eviction behavior under load."""
+    """Test Redis eviction behavior under load.
+
+    Reachability is handled by the redis_client fixture below — it tries
+    a TCP probe and several auth fallbacks before skipping. The previous
+    class-level ``@pytest.mark.skipif(not os.getenv("REDIS_URL"), ...)``
+    caused ``make test-load-eviction`` to silently skip when the env var
+    was unset even though a Redis was listening on localhost:6379. See
+    issue ***REMOVED***1633.
+    """
 
     @pytest.fixture
     async def redis_client(self):
