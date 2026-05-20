@@ -259,6 +259,17 @@ class TestPartialFailureIsolation:
         assert data["partial_failures"] == []
         assert len(data["dense_vecs"]) == 2
 
+    async def test_dense_all_items_invalid_returns_all_sentinels(self, client):
+        """When ALL items fail validation, response is all sentinels with no model call."""
+        resp = await client.post("/encode/dense", json={"texts": ["", "   "]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["dense_vecs"]) == 2
+        assert len(data["partial_failures"]) == 2
+        # Both are zero sentinels
+        assert all(v == 0.0 for v in data["dense_vecs"][0])
+        assert all(v == 0.0 for v in data["dense_vecs"][1])
+
     async def test_model_exception_still_returns_500(self, client, bge_app):
         """Infrastructure/model errors still produce HTTP 500."""
         fake_model = bge_app["fake_model"]
