@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import openai
+import pytest
 
 from telegram_bot.services.query_preprocessor import HyDEGenerator, QueryPreprocessor
 
@@ -180,6 +181,193 @@ class TestHyDEGenerator:
 
         # Should fallback to query when content is None
         assert result == "квартира"
+
+
+class TestHyDEObserveInstrumentation:
+    """Tests for @observe instrumentation on HyDEGenerator (#1661).
+
+    Contract: generate_hypothetical_document must be wrapped with @observe so
+    nested generation observations created by langfuse.openai are parented
+    under a named span instead of becoming orphan traces. Curated input/output
+    payloads are written via update_current_span; full prompts and full
+    documents must NOT appear in span fields.
+    """
+
+    @staticmethod
+    def _patched_lf(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        """Replace get_client used by HyDE module with a recording mock."""
+        from telegram_bot.services import query_preprocessor as qp_mod
+
+        mock_lf = MagicMock()
+        monkeypatch.setattr(qp_mod, "get_client", lambda: mock_lf)
+        return mock_lf
+
+    @staticmethod
+    def _disable_observe(monkeypatch: pytest.MonkeyPatch) -> None:
+        """Replace the @observe decorator at module-import time with a no-op.
+
+        This lets behavior assertions (input/output/error) run without the real
+        Langfuse SDK trying to start an OTEL span.
+        """
+        import importlib
+        import sys
+
+        from telegram_bot import observability as observability_mod
+
+        def fake_observe(**_kwargs):
+            def decorator(func):
+                return func
+
+            return decorator
+
+        monkeypatch.setattr(observability_mod, "observe", fake_observe)
+        # Reload query_preprocessor so it picks up the no-op decorator.
+        sys.modules.pop("telegram_bot.services.query_preprocessor", None)
+        importlib.import_module("telegram_bot.services.query_preprocessor")
+
+    def test_module_imports_observe_and_get_client(self):
+        """Module wires the Langfuse decorator + client accessor (#1661 contract)."""
+        from telegram_bot.services import query_preprocessor as qp_mod
+
+        assert hasattr(qp_mod, "observe"), (
+            "telegram_bot.services.query_preprocessor must import `observe` "
+            "from telegram_bot.observability for the @observe decorator on "
+            "HyDEGenerator.generate_hypothetical_document"
+        )
+        assert hasattr(qp_mod, "get_client"), (
+            "telegram_bot.services.query_preprocessor must import `get_client` "
+            "from telegram_bot.observability for curated update_current_span calls"
+        )
+
+    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+        """@observe must be applied with the trace-coverage audit's exact kwargs."""
+        import importlib
+        import sys
+
+        from telegram_bot import observability as observability_mod
+
+        captured: dict[str, object] = {}
+
+        def recording_observe(**kwargs):
+            captured.update(kwargs)
+
+            def decorator(func):
+                return func
+
+            return decorator
+
+        monkeypatch.setattr(observability_mod, "observe", recording_observe)
+        sys.modules.pop("telegram_bot.services.query_preprocessor", None)
+        importlib.import_module("telegram_bot.services.query_preprocessor")
+
+        assert captured.get("name") == "hyde-generate-document"
+        assert captured.get("capture_input") is False
+        assert captured.get("capture_output") is False
+
+    async def test_input_payload_is_curated_preview_only(self, monkeypatch):
+        """Span input must be a curated dict (no full query, no full prompt)."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        # Re-import to bind the no-op observe applied above.
+        from telegram_bot.services.query_preprocessor import HyDEGenerator
+
+        hyde = HyDEGenerator(model="test-model")
+        hyde.client = AsyncMock()
+        hyde.client.chat.completions.create = AsyncMock(return_value=_mock_completion("ok"))
+
+        long_query = "квартира у моря " * 20  # > 120 chars
+
+        await hyde.generate_hypothetical_document(long_query)
+
+        input_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
+        ]
+        assert len(input_calls) >= 1, "update_current_span(input=...) was never called"
+        captured_input = input_calls[0]["input"]
+        assert isinstance(captured_input, dict)
+        assert captured_input.get("model") == "test-model"
+        preview = captured_input.get("query_preview", "")
+        assert len(preview) <= 120
+        assert long_query not in str(captured_input), "Full query must not appear in span input"
+        assert HyDEGenerator.HYDE_SYSTEM_PROMPT not in str(captured_input), (
+            "System prompt must not be captured in span input"
+        )
+
+    async def test_output_payload_is_curated_preview_only(self, monkeypatch):
+        """Span output must record preview + token-estimate, not full document."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.query_preprocessor import HyDEGenerator
+
+        long_doc = "Подробное описание объекта недвижимости. " * 30
+        hyde = HyDEGenerator()
+        hyde.client = AsyncMock()
+        hyde.client.chat.completions.create = AsyncMock(return_value=_mock_completion(long_doc))
+
+        await hyde.generate_hypothetical_document("квартира у моря")
+
+        output_calls = [
+            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
+        ]
+        assert len(output_calls) >= 1, "update_current_span(output=...) was never called"
+        captured_output = output_calls[-1]["output"]
+        assert isinstance(captured_output, dict)
+        preview = captured_output.get("document_preview", "")
+        assert len(preview) <= 200
+        assert "tokens_estimated" in captured_output
+        assert isinstance(captured_output["tokens_estimated"], int)
+        assert long_doc not in str(captured_output), (
+            "Full generated document must not appear in span output"
+        )
+
+    async def test_generate_works_when_langfuse_client_unavailable(self, monkeypatch):
+        """HyDE generation must not require an initialized Langfuse client."""
+        self._disable_observe(monkeypatch)
+
+        from telegram_bot.services import query_preprocessor as qp_mod
+        from telegram_bot.services.query_preprocessor import HyDEGenerator
+
+        monkeypatch.setattr(qp_mod, "get_client", lambda: None)
+
+        hyde = HyDEGenerator()
+        hyde.client = AsyncMock()
+        hyde.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Уютная квартира рядом с морем.")
+        )
+
+        result = await hyde.generate_hypothetical_document("квартира у моря")
+
+        assert result == "Уютная квартира рядом с морем."
+
+    async def test_exception_path_records_error_level(self, monkeypatch):
+        """On exception, update_current_span must be called with level='ERROR'."""
+        self._disable_observe(monkeypatch)
+        mock_lf = self._patched_lf(monkeypatch)
+
+        from telegram_bot.services.query_preprocessor import HyDEGenerator
+
+        hyde = HyDEGenerator()
+        hyde.client = AsyncMock()
+        hyde.client.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM exploded"))
+
+        result = await hyde.generate_hypothetical_document("квартира у моря")
+
+        # Fallback semantics preserved (issue forbids changing fallback path).
+        assert result == "квартира у моря"
+
+        error_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert len(error_calls) >= 1, (
+            "Failure path must call update_current_span(level='ERROR', ...)"
+        )
+        status = error_calls[0].get("status_message", "")
+        assert "LLM exploded" in status
+        assert len(status) <= 220, "status_message must be truncated to ~200 chars"
 
 
 class TestHyDEIntegration:

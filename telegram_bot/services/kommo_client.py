@@ -1,12 +1,17 @@
 """Async Kommo CRM API adapter (#413).
 
-First-party httpx adapter with OAuth2 auto-refresh.
+First-party httpx adapter with OAuth2 auto-refresh delegated to a custom
+``httpx.Auth`` flow (#1646). Bearer header injection and refresh-on-401
+live in :class:`KommoOAuthAuth`, exactly as documented for multi-request
+auth flows in the upstream HTTPX advanced authentication docs.
 Pattern: BGEM3Client (same project).
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
@@ -34,6 +39,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class KommoOAuthAuth(httpx.Auth):
+    """Bearer-token auth flow for Kommo with refresh-on-401 (#1646).
+
+    The flow:
+
+    1. Fetch the current token via ``token_store.get_valid_token()``,
+       attach ``Authorization: Bearer ...`` and yield the request.
+    2. If the response is 401, ask the token store for a fresh token via
+       ``force_refresh()`` and yield the request a second time with the
+       new bearer.
+    3. If ``force_refresh()`` raises ``RuntimeError`` (e.g. seeded
+       long-lived tokens that have no refresh_token), terminate the flow
+       without re-yielding so the original 401 response surfaces to the
+       caller as a normal :class:`httpx.HTTPStatusError`.
+
+    Concurrent calls re-check the current token inside an :class:`asyncio.Lock`
+    so multiple in-flight 401s caused by the same stale bearer trigger at most
+    one refresh.
+    """
+
+    def __init__(self, *, token_store: KommoTokenStoreProtocol) -> None:
+        self._token_store = token_store
+        self._lock = asyncio.Lock()
+
+    async def async_auth_flow(
+        self, request: httpx.Request
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        token = await self._token_store.get_valid_token()
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = yield request
+
+        if response.status_code != 401:
+            return
+
+        try:
+            async with self._lock:
+                current_token = await self._token_store.get_valid_token()
+                if current_token != token:
+                    token = current_token
+                else:
+                    token = await self._token_store.force_refresh()
+        except RuntimeError:
+            # No refresh_token (seeded long-lived) — surface the original 401.
+            return
+
+        request.headers["Authorization"] = f"Bearer {token}"
+        yield request
+
+
 class KommoClient:
     """Async Kommo CRM API adapter with auto-refresh OAuth2."""
 
@@ -46,31 +100,20 @@ class KommoClient:
             timeout=httpx.Timeout(30.0, connect=10.0),
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
             headers={"Content-Type": "application/json"},
+            auth=KommoOAuthAuth(token_store=token_store),
         )
 
     @kommo_retry
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
-        """Execute request with auto-refresh on 401."""
-        token = await self._token_store.get_valid_token()
-        extra_headers = kwargs.pop("headers", None) or {}
-        headers = {"Authorization": f"Bearer {token}", **extra_headers}
-
-        response = await self._client.request(method, path, headers=headers, **kwargs)
-
-        if response.status_code == 401:
-            try:
-                token = await self._token_store.force_refresh()
-            except RuntimeError:
-                # Seeded long-lived tokens have no refresh_token — re-raise as HTTP error.
-                response.raise_for_status()
-                return {}  # unreachable, raise_for_status always throws on 401
-            headers["Authorization"] = f"Bearer {token}"
-            response = await self._client.request(method, path, headers=headers, **kwargs)
+        """Execute a request; bearer + refresh handled by ``KommoOAuthAuth``."""
+        response = await self._client.request(method, path, **kwargs)
 
         if response.status_code == 204:
             return {}
 
-        # Raises for 429/5xx so tenacity can retry.
+        # Raises for 401 (after the auth flow has already retried), 429, 5xx so
+        # tenacity retries transient cases and a seeded-token 401 surfaces
+        # as the canonical HTTPStatusError.
         response.raise_for_status()
 
         # Kommo can return empty body on some successful endpoints.

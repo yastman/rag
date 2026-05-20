@@ -2,12 +2,19 @@
 
 from langfuse import observe
 from langfuse.openai import AsyncOpenAI, OpenAI
-from openai import APIStatusError, RateLimitError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
 
 from .base import ContextualizedChunk, ContextualizeProvider
+
+
+# OpenAI SDK's built-in retry policy (Context7 /openai/openai-python):
+# - Default max_retries=2, exponential backoff
+# - Retries: connection errors, 408 Timeout, 409 Conflict, 429 Rate Limit, >=500
+# OpenAI counts max_retries after the initial request. The previous Tenacity
+# stop_after_attempt(4) allowed four total attempts, so max_retries=3 preserves
+# that retry budget without duplicating the policy.
+_OPENAI_MAX_RETRIES = 3
 
 
 class OpenAIContextualizer(ContextualizeProvider):
@@ -18,16 +25,26 @@ class OpenAIContextualizer(ContextualizeProvider):
     - ~5-8 minutes for 100 chunks
     - Cost: ~$0.008-0.012 per chunk
     - Quality: Very good
+
+    Retries are handled natively by the OpenAI SDK via the ``max_retries``
+    client parameter (#1651). No Tenacity decorator wraps the per-call path.
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
         """Initialize OpenAI contextualizer."""
         self.settings = settings or Settings()
-        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
-        self.sync_client = OpenAI(api_key=self.settings.openai_api_key)
+        self.client = AsyncOpenAI(
+            api_key=self.settings.openai_api_key,
+            max_retries=_OPENAI_MAX_RETRIES,
+        )
+        self.sync_client = OpenAI(
+            api_key=self.settings.openai_api_key,
+            max_retries=_OPENAI_MAX_RETRIES,
+        )
         self.total_tokens = 0
         self.total_cost = 0.0
 
+    @observe(name="openai-contextualize-batch", capture_input=False, capture_output=False)
     async def contextualize(
         self,
         chunks: list[str],
@@ -54,18 +71,18 @@ class OpenAIContextualizer(ContextualizeProvider):
         return results
 
     @observe(name="openai-contextualize", capture_input=False, capture_output=False)
-    @retry(
-        retry=retry_if_exception_type((RateLimitError, APIStatusError)),
-        wait=wait_random_exponential(multiplier=1, max=60),
-        stop=stop_after_attempt(4),
-    )
     async def contextualize_single(
         self,
         text: str,
         article_number: str,
         query: str | None = None,
     ) -> ContextualizedChunk:
-        """Contextualize a single chunk using OpenAI."""
+        """Contextualize a single chunk using OpenAI.
+
+        SDK-native retries via ``max_retries`` on the AsyncOpenAI client
+        cover RateLimitError, APIStatusError (>=500), connection errors,
+        408 and 409. No additional retry layer is required.
+        """
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "gpt-4o-mini"
@@ -98,18 +115,16 @@ class OpenAIContextualizer(ContextualizeProvider):
         )
 
     @observe(name="openai-contextualize-sync", capture_input=False, capture_output=False)
-    @retry(
-        retry=retry_if_exception_type((RateLimitError, APIStatusError)),
-        wait=wait_random_exponential(multiplier=1, max=60),
-        stop=stop_after_attempt(4),
-    )
     def contextualize_sync(
         self,
         text: str,
         article_number: str,
         query: str | None = None,
     ) -> ContextualizedChunk:
-        """Synchronous contextualization using OpenAI."""
+        """Synchronous contextualization using OpenAI.
+
+        SDK-native retries via ``max_retries`` on the sync OpenAI client.
+        """
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "gpt-4o-mini"

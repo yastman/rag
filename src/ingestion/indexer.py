@@ -378,15 +378,13 @@ class DocumentIndexer:
 
         # Run embedding in threadpool to avoid blocking
         encode_start = time.time()
-        output = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: self.embedding_model.encode(
-                texts,
-                batch_size=self.settings.batch_size_embeddings,
-                return_dense=True,
-                return_sparse=True,
-                return_colbert_vecs=True,
-            ),
+        output = await asyncio.to_thread(
+            self.embedding_model.encode,
+            texts,
+            batch_size=self.settings.batch_size_embeddings,
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=True,
         )
         encode_time = time.time() - encode_start
         logger.debug(f"BGE-M3 encode completed in {encode_time:.2f}s")

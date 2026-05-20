@@ -23,6 +23,7 @@ resources:
   - ../../base/bge-m3/deployment.yaml
   - ../../base/bge-m3/service.yaml
   # Ingestion
+  - ../../base/ingestion/pvc.yaml
   - ../../base/ingestion/deployment.yaml
 
 labels:

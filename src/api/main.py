@@ -56,11 +56,14 @@ async def lifespan(app: FastAPI):
         timeout=30,
     )
 
-    reranker = None
+    # Reranking is performed server-side by Qdrant via the ColBERT vector;
+    # there is no per-process Python reranker to construct. We log the
+    # configured path here so misconfiguration is visible at startup.
     if cfg.rerank_provider == "colbert":
         logger.info("Reranking via server-side Qdrant ColBERT path")
     elif cfg.rerank_provider != "none":
         logger.warning("Unknown RERANK_PROVIDER=%s, reranking disabled", cfg.rerank_provider)
+
     llm = cfg.create_llm()
 
     graph = build_graph(
@@ -68,7 +71,7 @@ async def lifespan(app: FastAPI):
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
-        reranker=reranker,
+        reranker=None,
         llm=llm,
         message=None,
     )

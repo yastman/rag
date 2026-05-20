@@ -1344,10 +1344,46 @@ class PropertyBot:
         )
 
     @observe(name="cmd-clear", capture_input=False, capture_output=False)
-    async def cmd_clear(self, message: Message):
-        """Handle /clear command - clear conversation history."""
+    async def cmd_clear(
+        self,
+        message: Message,
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
+    ):
+        """Handle /clear command - clear conversation history and exit any active dialog state.
+
+        Closes any active aiogram-dialog stack (e.g. DemoSG apartment-search) and
+        resets the FSM state so subsequent free-text questions are routed back to
+        the supervisor / RAG path. See #1454.
+        """
         assert message.from_user is not None
         user_id = message.from_user.id
+        # #1454: drop any active aiogram-dialog stack BEFORE clearing FSM, so
+        # the dialog framework can clean up its own state correctly. Without
+        # this the user remained in DemoSG.search after /clear and the next
+        # free-text message was handled by demo-search instead of telegram-rag.
+        dialog_reset_failed = False
+        if dialog_manager is not None:
+            try:
+                if getattr(dialog_manager, "has_context", lambda: False)():
+                    await dialog_manager.reset_stack(remove_keyboard=False)
+            except Exception:
+                logger.warning(
+                    "Failed to reset aiogram-dialog stack during /clear for user_id=%s",
+                    user_id,
+                    exc_info=True,
+                )
+                dialog_reset_failed = True
+        if state is not None:
+            try:
+                await state.clear()
+            except Exception:
+                logger.warning(
+                    "Failed to clear FSM state during /clear for user_id=%s",
+                    user_id,
+                    exc_info=True,
+                )
+                dialog_reset_failed = True
         checkpointer_cleared = True
         history_cleared = True
         text_thread_id = _supervisor_thread_id(message.chat.id)
@@ -1386,8 +1422,13 @@ class PropertyBot:
                 )
                 history_cleared = False
 
-        if checkpointer_cleared and history_cleared:
+        if checkpointer_cleared and history_cleared and not dialog_reset_failed:
             await message.answer("✅ История диалога очищена.")
+        elif dialog_reset_failed and checkpointer_cleared and history_cleared:
+            await message.answer(
+                "⚠️ История очищена, но не удалось сбросить состояние активного диалога. "
+                "Используйте /start, если бот продолжает отвечать в режиме поиска."
+            )
         else:
             await message.answer(
                 "⚠️ История очищена частично: локальный контекст сброшен, "

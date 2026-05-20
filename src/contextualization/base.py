@@ -1,10 +1,14 @@
 """Base class for contextualization providers."""
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,7 +102,14 @@ class ContextualizeProvider(ABC):
         *,
         max_concurrency: int = 5,
     ) -> list[ContextualizedChunk]:
-        """Contextualize chunks in parallel using asyncio.gather with semaphore.
+        """Contextualize chunks in parallel using asyncio.TaskGroup.
+
+        Per-chunk failures are caught inside each worker so the TaskGroup
+        stays alive and produces a fallback ``ContextualizedChunk`` with
+        ``context_method="none"`` and an empty ``contextual_summary`` at
+        the failed index. Output cardinality and order match the input
+        list (#1656). Callers can filter on ``context_method`` to detect
+        which chunks were skipped.
 
         Args:
             chunks: List of text chunks to contextualize
@@ -106,19 +117,42 @@ class ContextualizeProvider(ABC):
             max_concurrency: Maximum simultaneous API calls (default: 5)
 
         Returns:
-            List of contextualized chunks preserving input order
+            List of contextualized chunks preserving input order. Failed
+            chunks are represented as fallback records, never dropped.
         """
         sem = asyncio.Semaphore(max_concurrency)
+        # Pre-allocate so each task can write to its index slot — preserves
+        # order without sorting after the fact.
+        results: list[ContextualizedChunk] = [
+            ContextualizedChunk(
+                original_text="",
+                contextual_summary="",
+                article_number="",
+                context_method="none",
+            )
+            for _ in chunks
+        ]
 
-        async def _process_with_semaphore(index: int, chunk: str) -> ContextualizedChunk:
+        async def _process(index: int, chunk: str) -> None:
             async with sem:
-                return await self.contextualize_single(chunk, f"chunk_{index}", query)
+                try:
+                    results[index] = await self.contextualize_single(chunk, f"chunk_{index}", query)
+                except Exception as exc:
+                    logger.warning("contextualize_batch chunk %d failed: %s", index, exc)
+                    results[index] = ContextualizedChunk(
+                        original_text=chunk,
+                        contextual_summary="",
+                        article_number=f"chunk_{index}",
+                        context_method="none",
+                    )
 
-        results = await asyncio.gather(
-            *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)],
-            return_exceptions=True,
-        )
-        return [r for r in results if isinstance(r, ContextualizedChunk)]
+        if not chunks:
+            return []
+        async with asyncio.TaskGroup() as tg:
+            for i, chunk in enumerate(chunks):
+                tg.create_task(_process(i, chunk))
+
+        return results
 
     @staticmethod
     def get_system_prompt() -> str:

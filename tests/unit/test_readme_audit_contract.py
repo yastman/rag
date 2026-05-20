@@ -88,9 +88,7 @@ class TestDocsReadme:
             "BOT_INTERNAL_STRUCTURE.md",
             "ONBOARDING.md",
             "ONBOARDING_CHECKLIST.md",
-            "INFRA_ISSUES_REPORT_1113_1126.md",
             "TROUBLESHOOTING_CACHE.md",
-            "SDK_CANONICAL_REMEDIATION_REPORT_2026-03-15.md",
             "ADD_NEW_RAG_NODE.md",
         ]
         for name in required:
