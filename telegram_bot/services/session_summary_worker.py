@@ -42,6 +42,7 @@ class SessionSummaryWorker:
         idle_timeout_min: int = 30,
         poll_interval_sec: int = 300,
         summary_model: str = "claude-haiku-4-5",
+        max_sessions_per_cycle: int = 50,
         history_source: HistorySource | None = None,
     ) -> None:
         self._redis = redis
@@ -50,6 +51,7 @@ class SessionSummaryWorker:
         self._idle_timeout_min = idle_timeout_min
         self._poll_interval_sec = poll_interval_sec
         self._summary_model = summary_model
+        self._max_sessions_per_cycle = max(1, max_sessions_per_cycle)
         self._history_source = history_source
         self._scheduler: AsyncIOScheduler | None = None
 
@@ -103,8 +105,14 @@ class SessionSummaryWorker:
     async def _check_idle_sessions(self) -> int:
         """Scan Redis for idle sessions and process them.
 
+        Streams SCAN pages and processes idle keys incrementally, capped by
+        ``max_sessions_per_cycle`` (#1608). Excess work is deferred to the
+        next worker tick so a large idle-user batch cannot trigger an
+        unbounded burst of Redis reads, history fetches, LLM calls, and
+        Kommo writes in a single cycle.
+
         Returns:
-            Number of sessions summarized.
+            Number of sessions summarized this cycle.
         """
         try:
             return await self._check_idle_sessions_inner()
@@ -117,47 +125,71 @@ class SessionSummaryWorker:
         now = time.time()
         threshold = self._idle_timeout_min * 60
         count = 0
+        scanned = 0
+        deferred = 0
+        cap = self._max_sessions_per_cycle
         cursor: int = 0
-        keys_to_process: list = []
+        cap_hit = False
 
-        while True:
+        while not cap_hit:
             cursor, batch = await self._redis.scan(
                 cursor=cursor, match="session:last_active:*", count=100
             )
-            keys_to_process.extend(batch)
+            for key in batch:
+                if scanned >= cap:
+                    cap_hit = True
+                    deferred += 1
+                    continue
+
+                raw = await self._redis.get(key)
+                if raw is None:
+                    continue
+
+                last_active = float(raw)
+                if now - last_active < threshold:
+                    continue
+
+                # Reserve a processing slot only after we know the key is idle —
+                # active sessions do not count toward the per-cycle cap.
+                scanned += 1
+
+                user_id = (
+                    key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
+                )
+
+                history = await self._get_conversation_history(user_id)
+                if len(history) < 2:
+                    await self._redis.delete(key)
+                    continue
+
+                summary = await self._generate_summary(history)
+                if summary:
+                    await self._write_summary(user_id, summary)
+                    count += 1
+
+                await self._redis.delete(key)
+
             if cursor == 0:
                 break
 
-        if not keys_to_process:
-            return 0
-
-        for key in keys_to_process:
-            raw = await self._redis.get(key)
-            if raw is None:
-                continue
-
-            last_active = float(raw)
-            if now - last_active < threshold:
-                continue
-
-            user_id = key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
-
-            history = await self._get_conversation_history(user_id)
-            if len(history) < 2:
-                await self._redis.delete(key)
-                continue
-
-            summary = await self._generate_summary(history)
-            if summary:
-                await self._write_summary(user_id, summary)
-                count += 1
-
-            await self._redis.delete(key)
+        if cap_hit:
+            logger.info(
+                "SessionSummaryWorker reached per-cycle cap %d; deferring %d+ key(s) "
+                "to next tick (poll=%ds).",
+                cap,
+                deferred,
+                self._poll_interval_sec,
+            )
 
         lf = get_client()
-        if lf is not None and count > 0:
-            lf.score_current_trace(name="session_summary_generated", value=1, data_type="BOOLEAN")
-            lf.score_current_trace(name="session_summary_count", value=float(count))
+        if lf is not None:
+            if count > 0:
+                lf.score_current_trace(
+                    name="session_summary_generated", value=1, data_type="BOOLEAN"
+                )
+                lf.score_current_trace(name="session_summary_count", value=float(count))
+            if cap_hit:
+                lf.score_current_trace(name="session_summary_cap_hit", value=1, data_type="BOOLEAN")
 
         return count
 
