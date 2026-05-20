@@ -42,11 +42,17 @@ def get_kommo_client():
 async def submit_phone(request: PhoneRequest) -> dict:
     """Submit phone to CRM.
 
-    Wrapped in ``@observe`` (***REMOVED***1658). On Kommo failure the surrounding span is
-    flipped to ``level="ERROR"`` with a bounded ``status_message`` so the
-    funnel break is visible in Langfuse, not just in logs. The success/failure
-    return contract is intentionally untouched here (***REMOVED***1596 / PR ***REMOVED***1767 owns the
-    fake-success regression separately).
+    Returns
+    -------
+    dict
+        ``{"success": True, "lead_id": <int>}`` on success.
+        ``{"success": False, "lead_id": None, "error": "crm_submission_failed"}``
+        on any CRM failure. Returning ``success: True`` for a swallowed
+        exception (***REMOVED***1596) made it impossible for clients to distinguish a
+        real captured lead from a dropped one. The error code is stable so
+        the frontend can show a retry/contact-support state without parsing
+        free-form text. The ``@observe`` wrapper records success/failure
+        metadata without capturing PII.
     """
     lf = get_client()
     try:
@@ -68,7 +74,11 @@ async def submit_phone(request: PhoneRequest) -> dict:
                 status_message=f"kommo_submission_failed: {type(exc).__name__}"[:200],
                 output={"crm_ok": False, "lead_created": False},
             )
-        return {"success": True, "lead_id": None}  ***REMOVED*** Graceful degradation
+        return {
+            "success": False,
+            "lead_id": None,
+            "error": "crm_submission_failed",
+        }
 
     ***REMOVED*** Curated success output — no phone, no name, no raw Kommo IDs.
     if lf is not None:

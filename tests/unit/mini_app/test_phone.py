@@ -44,10 +44,38 @@ async def test_submit_phone_invalid():
 
 
 @pytest.mark.asyncio
-async def test_submit_phone_crm_failure_graceful():
+async def test_submit_phone_crm_failure_returns_error_payload():
+    """CRM failures must surface as success=False so clients can react.
+    Previously every exception was swallowed into success=True, leaving
+    the UI unable to distinguish a real lead from a dropped one (***REMOVED***1596).
+    """
     with patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")):
         result = await submit_phone(PhoneRequest(phone="+359888123456", source="test", user_id=123))
-    assert result == {"success": True, "lead_id": None}
+    assert result["success"] is False
+    assert result["lead_id"] is None
+    assert result.get("error") == "crm_submission_failed"
+
+
+@pytest.mark.asyncio
+async def test_phone_endpoint_returns_502_on_crm_failure():
+    """The /api/phone endpoint must return a non-2xx status (502 Bad Gateway)
+    when the CRM submission fails so the frontend can show a retry/error
+    UI instead of treating the lead as captured (***REMOVED***1596)."""
+    with patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/phone",
+                json={
+                    "phone": "+359888123456",
+                    "source": "viewing_consultant",
+                    "user_id": 123,
+                },
+            )
+    assert resp.status_code == 502
+    body = resp.json()
+    assert body["success"] is False
+    assert body["lead_id"] is None
+    assert body.get("error") == "crm_submission_failed"
 
 
 @pytest.mark.asyncio
