@@ -409,6 +409,75 @@ class TestCommandHandlers:
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
+    async def test_cmd_clear_resets_active_dialog_stack(self, mock_config):
+        """***REMOVED***1454: /clear must reset any active aiogram-dialog stack so the next
+        free-text message is routed back to the supervisor / RAG path
+        (e.g. user is no longer stuck inside DemoSG.search)."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        message = _make_text_message()
+        dialog_manager = AsyncMock()
+        dialog_manager.has_context = MagicMock(return_value=True)
+        dialog_manager.reset_stack = AsyncMock()
+        state = AsyncMock()
+
+        await bot.cmd_clear(message, state=state, dialog_manager=dialog_manager)
+
+        dialog_manager.reset_stack.assert_awaited_once()
+        ***REMOVED*** remove_keyboard=False — keep the chat composer untouched after /clear
+        assert dialog_manager.reset_stack.await_args.kwargs.get("remove_keyboard") is False
+        state.clear.assert_awaited_once()
+        message.answer.assert_awaited_once()
+        assert "очищена" in message.answer.await_args.args[0].lower()
+
+    async def test_cmd_clear_clears_fsm_state_without_active_dialog(self, mock_config):
+        """***REMOVED***1454: when no aiogram-dialog stack is active, /clear still clears FSM."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        message = _make_text_message()
+        dialog_manager = AsyncMock()
+        dialog_manager.has_context = MagicMock(return_value=False)
+        dialog_manager.reset_stack = AsyncMock()
+        state = AsyncMock()
+
+        await bot.cmd_clear(message, state=state, dialog_manager=dialog_manager)
+
+        dialog_manager.reset_stack.assert_not_awaited()
+        state.clear.assert_awaited_once()
+
+    async def test_cmd_clear_handles_dialog_reset_failure_gracefully(self, mock_config):
+        """***REMOVED***1454: a failure inside reset_stack must NOT raise; it surfaces as a
+        partial-success message so the user knows to fall back to /start."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        message = _make_text_message()
+        dialog_manager = AsyncMock()
+        dialog_manager.has_context = MagicMock(return_value=True)
+        dialog_manager.reset_stack = AsyncMock(side_effect=RuntimeError("dialog stack corrupted"))
+        state = AsyncMock()
+
+        await bot.cmd_clear(message, state=state, dialog_manager=dialog_manager)
+
+        dialog_manager.reset_stack.assert_awaited_once()
+        message.answer.assert_awaited_once()
+        text = message.answer.await_args.args[0].lower()
+        assert "/start" in text or "состояния" in text or "диалога" in text
+
+    async def test_cmd_clear_works_without_state_or_manager(self, mock_config):
+        """Backward-compat: /clear must still work when state/dialog_manager are not injected."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        message = _make_text_message()
+
+        await bot.cmd_clear(message)
+
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+        message.answer.assert_awaited_once()
+
     async def test_cmd_clear_falls_back_to_sync_delete_thread(self, mock_config):
         """Test /clear supports sync checkpointers exposing delete_thread only."""
 
