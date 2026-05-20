@@ -19,7 +19,6 @@ from qdrant_client.models import (
 
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 from src.retrieval.topic_classifier import classify_chunk_topic, classify_doc_type
-from telegram_bot.services import VoyageService
 
 
 logger = logging.getLogger(__name__)
@@ -98,6 +97,10 @@ class QdrantHybridWriter:
         else:
             if not voyage_api_key:
                 raise ValueError("voyage_api_key is required when use_local_embeddings=False")
+            # Lazy import (#1773): voyageai is an optional extra and must not
+            # be imported by the default ingestion path.
+            from telegram_bot.services import VoyageService
+
             self.voyage = VoyageService(
                 api_key=voyage_api_key,
                 model_docs=voyage_model,
