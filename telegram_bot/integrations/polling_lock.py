@@ -80,7 +80,7 @@ class RedisPollingLock:
     async def refresh(self) -> None:
         if self._lock is None:
             raise RuntimeError("Polling lock is not acquired")
-        await self._call("reacquire")
+        await self._call("extend", additional_time=self.ttl_sec, replace_ttl=True)
 
     async def release(self) -> None:
         if self._lock is None:
