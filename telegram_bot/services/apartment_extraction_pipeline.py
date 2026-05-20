@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from telegram_bot.observability import observe
 from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
+from telegram_bot.services.apartment_llm_extractor import merge_extraction_results
 from telegram_bot.services.apartment_models import (
     ApartmentSearchFilters,
     ExtractionMeta,
@@ -42,24 +43,42 @@ class ApartmentExtractionPipeline:
 
     @observe(name="apartment-extraction-pipeline", capture_input=False, capture_output=False)
     async def extract(self, query: str) -> ApartmentSearchFilters:
-        """Main entry point: cache → LLM (primary) → regex (fallback)."""
-        # 1. Check cache
+        """Hybrid extraction: cache → regex (deterministic numeric) → LLM (gap fill) → merge.
+
+        Regex runs first so deterministic numeric filters (rooms, price, area,
+        floor) are never lost even if the LLM mis-extracts them. The regex
+        ``HardFilters`` are forwarded to the LLM as ``partial_filters`` so the
+        LLM only fills gaps. The two results are merged with
+        :func:`merge_extraction_results` (regex wins for numeric, LLM keeps
+        soft preferences and fills missing fields). See issue #1609.
+        """
+        # 1. Cache
         cached = await self._cache_get(query)
         if cached:
             return cached
 
-        # 2. LLM primary
+        # 2. Regex first — deterministic, cheap. Serves as both the numeric
+        #    floor for hybrid merging AND the offline fallback if LLM fails.
+        parsed = self._regex.parse(query)
+        regex_result = self._parsed_to_search_filters(parsed)
+
+        # 3. LLM gap-fill. Pass regex hard filters as partial_filters so the
+        #    LLM does not re-extract what regex already found. Merge results
+        #    so regex numeric values win.
         if self._llm is not None:
             try:
-                result = await self._llm.extract(query=query)
-                await self._cache_set(query, result)
-                return result
+                llm_result = await self._llm.extract(
+                    query=query,
+                    partial_filters=regex_result.hard,
+                )
+                merged = merge_extraction_results(regex_result, llm_result)
+                await self._cache_set(query, merged)
+                return merged
             except Exception:
                 logger.warning("LLM extraction failed, falling back to regex", exc_info=True)
 
-        # 3. Regex fallback
-        parsed = self._regex.parse(query)
-        return self._parsed_to_search_filters(parsed)
+        # 4. Regex-only fallback (no LLM configured or LLM failed).
+        return regex_result
 
     def _parsed_to_search_filters(self, parsed: object) -> ApartmentSearchFilters:
         """Convert legacy ApartmentQueryParseResult to ApartmentSearchFilters."""
