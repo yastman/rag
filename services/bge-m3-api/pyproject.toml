@@ -20,7 +20,7 @@ dependencies = [
     ***REMOVED*** Observability
     "langfuse>=4.0.0,<5.0",
     ***REMOVED*** Utilities
-    "numpy==1.26.4",
+    "numpy==2.4.6",
     "scipy==1.17.1",
     "lxml>=6.1.0",
 ]
