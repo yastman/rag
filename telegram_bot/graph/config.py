@@ -113,6 +113,8 @@ class GraphConfig:
                 "LLM_API_KEY", os.getenv("OPENAI_API_KEY", "")
             ),  ***REMOVED*** LLM_API_KEY preferred
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
+            llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
             rewrite_model=os.getenv("REWRITE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
             rewrite_max_tokens=int(os.getenv("REWRITE_MAX_TOKENS", "64")),
             generate_max_tokens=int(os.getenv("GENERATE_MAX_TOKENS", "1024")),

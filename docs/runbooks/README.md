@@ -26,6 +26,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Qdrant health, collection, or vector search issues | [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Postgres WAL recovery or replication issues | [`POSTGRESQL_WAL_RECOVERY.md`](POSTGRESQL_WAL_RECOVERY.md) |
 | VPS / Google Drive ingestion recovery | [`vps-gdrive-ingestion-recovery.md`](vps-gdrive-ingestion-recovery.md) |
+| Weekly git/pr/issue hygiene workflow | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 
 ***REMOVED******REMOVED*** Container / Service Map
 

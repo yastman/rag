@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint & Type Check
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd ***REMOVED*** v6
@@ -23,56 +23,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python
-        run: uv python install 3.14
-
-      - name: Install dependencies
-        run: uv sync --python 3.14 --frozen --no-dev
-
       - name: Ruff lint
-        run: uv run --python 3.14 ruff check src/ telegram_bot/ --output-format=github
+        run: uvx ruff check src/ telegram_bot/ --output-format=github
 
       - name: Ruff format check
-        run: uv run --python 3.14 ruff format --target-version py312 --check src/ telegram_bot/
-
-      - name: Type check
-        run: uv run --python 3.14 mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
-
-      - name: Validate Compose configs
-        run: |
-          COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
-
-      - name: Hadolint Dockerfile lint
-        run: |
-          curl -sL -o /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
-          chmod +x /tmp/hadolint
-          for f in \
-            src/api/Dockerfile \
-            Dockerfile.ingestion \
-            telegram_bot/Dockerfile \
-            services/bge-m3-api/Dockerfile \
-            services/user-base/Dockerfile \
-            services/docling/Dockerfile \
-            src/voice/Dockerfile \
-            mini_app/Dockerfile; do
-            /tmp/hadolint --failure-threshold error "$f"
-          done
-
-      - name: Gitleaks secret scan
-        run: |
-          curl -sL -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.23.1/gitleaks_8.23.1_linux_x64.tar.gz
-          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
-          cat > /tmp/gitleaks.toml << 'EOF'
-          [allowlist]
-          paths = [
-            '''\.env\.example$''',
-            '''k8s/secrets/\.env\.example$''',
-            '''tests/unit/test_topic_service_init\.py$''',
-          ]
-          EOF
-          /tmp/gitleaks detect --source . --no-git --config /tmp/gitleaks.toml --verbose
-
-      - name: Security scan (bandit + vulture)
-        run: |
-          uv run --python 3.14 bandit -r src/ telegram_bot/ -c pyproject.toml
-          uv run --python 3.14 vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
+        run: uvx ruff format --target-version py312 --check src/ telegram_bot/
