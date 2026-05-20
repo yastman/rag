@@ -60,6 +60,15 @@ Prefer local/test environments. Do not access production, VPS, secrets, SSH,
 cloud credentials, or real CRM write paths unless explicitly required. Redact
 secrets in outputs.
 
+***REMOVED******REMOVED*** Workspace And Swarm Hygiene
+
+Do not start non-trivial edits in a dirty checkout. Use an isolated git worktree
+for feature work or when unrelated local changes exist; see
+[`docs/engineering/repo-hygiene-runbook.md`](docs/engineering/repo-hygiene-runbook.md).
+
+Git hooks and push gates run lint/static guardrails only. Run tests explicitly as local validation; see
+[`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
+
 ***REMOVED******REMOVED*** Validation
 
 Use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and the nearest
