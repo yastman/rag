@@ -126,3 +126,16 @@ No external changes have been applied yet.
   - `/home/user/projects/rag-fresh/.worktrees/plan-swarm-superpowers-worker-policy/.venv/bin/python -m pytest tests/test_launch_opencode_worker.py tests/test_validate_worker_prompt.py tests/test_validate_worker_signal.py tests/test_swarm_plan_contract.py tests/test_swarm_launch_contract.py tests/test_worker_contract.py tests/test_swarm_acceptance_contract.py tests/test_opencode_agent_contract.py tests/test_swarm_superpowers_dry_run.py -q`
 - Result: repo `10 passed`; ruff passed; external swarm subset `24 passed`.
 - Notes: tightened `.gitignore` plan allowlist in the repo, renamed the AGENTS heading to generic `Workspace Hygiene`, required TDD for code-changing prompts, rejected ORCH_PANE wake-up regardless of tmux option order, accepted numbered Superpowers lists, blocked subagent/review/planning Superpowers in launcher-required worker skills, and clarified OpenCode skill permission versus use policy.
+
+### 2026-05-20 Rebase Verification Note
+
+- Files changed:
+  - No external files changed in this step.
+- Backup paths: none
+- Verification commands:
+  - `git rebase origin/dev`
+  - `git diff --name-only origin/dev..HEAD`
+  - `uv run pytest tests/unit/test_agents_contract.py tests/unit/test_ci_deploy_workflow.py -q`
+  - `uv run ruff check tests/unit/test_agents_contract.py tests/unit/test_ci_deploy_workflow.py`
+- Result: rebase succeeded; diff now contains only repo policy/plan/test files; repo `10 passed`; ruff passed.
+- Notes: after rebasing onto current `origin/dev`, the upstream CI job name is `Lint`, so the repo-side CI workflow contract was updated from the stale `Lint & Type Check` expectation.
