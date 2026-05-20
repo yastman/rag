@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import uuid as _uuid_lib
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
@@ -15,7 +17,47 @@ from mini_app.phone import PhoneRequest, submit_phone
 from telegram_bot.services.content_loader import load_mini_app_config
 
 
-app = FastAPI(title="FortNoks Mini App API", version="0.1.0")
+_DEEPLINK_TTL = 300  ***REMOVED*** seconds
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Open the Redis client on startup and close it on shutdown.
+
+    The Mini App backend uses Redis for short-lived deeplink payloads
+    (``miniapp:q:<uuid>``) and pub/sub notifications to the bot. Owning
+    the connection lifecycle here (instead of a module-level lazy
+    global) ensures graceful close on process shutdown and matches the
+    FastAPI-native pattern (***REMOVED***1645).
+    """
+    import redis.asyncio as aioredis
+
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+    client = aioredis.from_url(redis_url, decode_responses=True)
+    app.state.redis = client
+    try:
+        yield
+    finally:
+        ***REMOVED*** ``aioredis`` clients expose ``aclose`` in modern versions; fall back to
+        ***REMOVED*** ``close`` for older releases. Either way, the connection pool drains.
+        close = getattr(client, "aclose", None) or getattr(client, "close", None)
+        if close is not None:
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+
+
+async def get_redis(request: Request) -> Any:
+    """FastAPI dependency that returns the app-scoped Redis client.
+
+    Handlers receive the connection via ``Depends(get_redis)`` so the
+    lifecycle stays owned by ``lifespan`` instead of leaking into module
+    globals.
+    """
+    return request.app.state.redis
+
+
+app = FastAPI(title="FortNoks Mini App API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,21 +65,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-_redis_client: Any = None
-
-_DEEPLINK_TTL = 300  ***REMOVED*** seconds
-
-
-async def _get_redis() -> Any:
-    """Lazy-init Redis client from REDIS_URL env var."""
-    global _redis_client
-    if _redis_client is None:
-        import redis.asyncio as aioredis
-
-        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-        _redis_client = aioredis.from_url(redis_url, decode_responses=True)
-    return _redis_client
 
 
 @app.get("/api/config")
@@ -47,7 +74,10 @@ async def get_config() -> dict:
 
 
 @app.post("/api/start-expert")
-async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
+async def start_expert(
+    request: StartExpertRequest,
+    redis: Any = Depends(get_redis),
+) -> StartExpertResponse:
     """Store deep-link payload in Redis and return start_link for openTelegramLink."""
     from fastapi import HTTPException
 
@@ -66,7 +96,6 @@ async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
             "query_id": request.query_id,
         }
     )
-    redis = await _get_redis()
     await redis.set(f"miniapp:q:{uid}", payload, ex=_DEEPLINK_TTL)
 
     bot_username = os.environ.get("BOT_USERNAME", "")

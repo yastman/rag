@@ -10,7 +10,17 @@ pytest.importorskip("fastapi")
 
 from httpx import ASGITransport, AsyncClient
 
-from mini_app.api import app
+from mini_app.api import app, get_redis
+
+
+def _override_redis(mock_redis: AsyncMock) -> None:
+    """Install ``mock_redis`` as the FastAPI Depends(get_redis) override."""
+    app.dependency_overrides[get_redis] = lambda: mock_redis
+
+
+def _clear_redis_override() -> None:
+    """Remove the dependency override after the test."""
+    app.dependency_overrides.pop(get_redis, None)
 
 
 @pytest.mark.asyncio
@@ -26,8 +36,9 @@ async def test_health_endpoint():
 async def test_start_expert_not_found():
     """Unknown expert_id should return 404."""
     mock_redis = AsyncMock()
-    with patch("mini_app.api.load_mini_app_config", return_value={"experts": []}):
-        with patch("mini_app.api._get_redis", new=AsyncMock(return_value=mock_redis)):
+    _override_redis(mock_redis)
+    try:
+        with patch("mini_app.api.load_mini_app_config", return_value={"experts": []}):
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -35,6 +46,8 @@ async def test_start_expert_not_found():
                     "/api/start-expert",
                     json={"user_id": 123, "expert_id": "nonexistent"},
                 )
+    finally:
+        _clear_redis_override()
     assert resp.status_code == 404
 
 
@@ -43,8 +56,9 @@ async def test_start_expert_returns_start_link():
     """Valid expert should return start_link for deep linking."""
     mock_redis = AsyncMock()
     experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
-    with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
-        with patch("mini_app.api._get_redis", new=AsyncMock(return_value=mock_redis)):
+    _override_redis(mock_redis)
+    try:
+        with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
             with patch.dict(os.environ, {"BOT_USERNAME": "testbot"}):
                 async with AsyncClient(
                     transport=ASGITransport(app=app), base_url="http://test"
@@ -57,6 +71,8 @@ async def test_start_expert_returns_start_link():
                             "message": "Подбери квартиру",
                         },
                     )
+    finally:
+        _clear_redis_override()
     assert resp.status_code == 200
     data = resp.json()
     assert "start_link" in data
@@ -71,8 +87,9 @@ async def test_start_expert_stores_payload_in_redis():
     """API should store payload in Redis with TTL 300s."""
     mock_redis = AsyncMock()
     experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
-    with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
-        with patch("mini_app.api._get_redis", new=AsyncMock(return_value=mock_redis)):
+    _override_redis(mock_redis)
+    try:
+        with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
             with patch.dict(os.environ, {"BOT_USERNAME": "testbot"}):
                 async with AsyncClient(
                     transport=ASGITransport(app=app), base_url="http://test"
@@ -81,6 +98,8 @@ async def test_start_expert_stores_payload_in_redis():
                         "/api/start-expert",
                         json={"user_id": 123, "expert_id": "consultant", "message": "Тест"},
                     )
+    finally:
+        _clear_redis_override()
     assert resp.status_code == 200
     ***REMOVED*** Redis.set should have been called with TTL=300
     mock_redis.set.assert_called_once()
@@ -99,8 +118,9 @@ async def test_start_expert_fails_without_bot_username():
     """Missing BOT_USERNAME should return 500."""
     mock_redis = AsyncMock()
     experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
-    with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
-        with patch("mini_app.api._get_redis", new=AsyncMock(return_value=mock_redis)):
+    _override_redis(mock_redis)
+    try:
+        with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
             with patch.dict(os.environ, {"BOT_USERNAME": ""}, clear=False):
                 async with AsyncClient(
                     transport=ASGITransport(app=app), base_url="http://test"
@@ -109,4 +129,6 @@ async def test_start_expert_fails_without_bot_username():
                         "/api/start-expert",
                         json={"user_id": 123, "expert_id": "consultant"},
                     )
+    finally:
+        _clear_redis_override()
     assert resp.status_code == 500
