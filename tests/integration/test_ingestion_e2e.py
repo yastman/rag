@@ -72,7 +72,7 @@ class TestIngestionServiceE2E:
             # Verify collection has points
             collection_stats = await service.get_collection_stats()
             assert "error" not in collection_stats
-            assert collection_stats.get("points_count", 0) >= 0
+            assert collection_stats.get("points_count", 0) > 0
 
         finally:
             await service.close()
@@ -86,9 +86,10 @@ class TestIngestionServiceE2E:
         try:
             stats = await service.get_collection_stats()
 
-            # Should return dict with stats or error
+            # Should return dict with collection stats
             assert isinstance(stats, dict)
-            assert "name" in stats or "error" in stats
+            assert "error" not in stats
+            assert "name" in stats
 
         finally:
             await service.close()
@@ -148,5 +149,5 @@ class TestConvenienceFunctionsE2E:
         status = await get_ingestion_status()
 
         assert isinstance(status, dict)
-        # Should have name or error
-        assert "name" in status or "error" in status
+        assert "error" not in status
+        assert "name" in status
