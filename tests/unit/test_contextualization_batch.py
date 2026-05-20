@@ -204,3 +204,117 @@ class TestClaudeContextualizerBatch:
         claude_ctx.contextualize_single = _mock_single  ***REMOVED*** type: ignore[method-assign]
         await claude_ctx.contextualize_batch([f"c{i}" for i in range(10)], max_concurrency=2)
         assert peak <= 2
+
+
+
+***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Failure surfacing (***REMOVED***1656) — TaskGroup contract
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+class TestContextualizeBatchFailureSurfacing:
+    """contextualize_batch must NOT silently drop failed chunks (***REMOVED***1656).
+
+    Previous behavior used asyncio.gather(..., return_exceptions=True) and
+    filtered exceptions out, dropping the chunks entirely. New contract:
+    failures surface as fallback ContextualizedChunk records with
+    context_method='none' at the correct index, preserving cardinality
+    and order.
+
+    SDK baseline: asyncio.TaskGroup (PEP 654, Python 3.11+) is the
+    structured-concurrency primitive. Per-task try/except inside the
+    TaskGroup body keeps the group alive while recording per-chunk
+    failure outcomes.
+    """
+
+    @pytest.mark.asyncio
+    async def test_failed_chunks_produce_fallback_record_at_correct_index(self) -> None:
+        class _FlakyContextualizer(ContextualizeProvider):
+            async def contextualize(self, chunks, query=None, context_window=3):
+                return []
+
+            async def contextualize_single(self, text, article_number, query=None):
+                if "fail" in text:
+                    raise RuntimeError(f"boom: {text}")
+                return ContextualizedChunk(
+                    original_text=text,
+                    contextual_summary=f"ok: {text}",
+                    article_number=article_number,
+                    context_method="test",
+                )
+
+        chunks = ["ok-0", "fail-1", "ok-2", "fail-3", "ok-4"]
+        results = await _FlakyContextualizer().contextualize_batch(chunks)
+
+        ***REMOVED*** No silent drops: cardinality preserved.
+        assert len(results) == len(chunks)
+        ***REMOVED*** Order preserved by index.
+        assert [r.original_text for r in results] == chunks
+        ***REMOVED*** Failed slots carry context_method='none'; succeeded slots keep 'test'.
+        methods = [r.context_method for r in results]
+        assert methods == ["test", "none", "test", "none", "test"]
+        ***REMOVED*** Failed slots have empty summary so downstream filtering is clear.
+        assert results[1].contextual_summary == ""
+        assert results[3].contextual_summary == ""
+
+    @pytest.mark.asyncio
+    async def test_all_failed_returns_fallbacks_not_empty_list(self) -> None:
+        class _AlwaysFails(ContextualizeProvider):
+            async def contextualize(self, chunks, query=None, context_window=3):
+                return []
+
+            async def contextualize_single(self, text, article_number, query=None):
+                raise RuntimeError("always")
+
+        results = await _AlwaysFails().contextualize_batch(["a", "b"])
+        assert len(results) == 2
+        assert all(r.context_method == "none" for r in results)
+        ***REMOVED*** Article numbers still indexed for traceability.
+        assert results[0].article_number == "chunk_0"
+        assert results[1].article_number == "chunk_1"
+
+    def test_base_module_uses_task_group_not_silent_gather(self) -> None:
+        """AST contract: contextualize_batch uses TaskGroup; no return_exceptions=True."""
+        import ast
+        import inspect
+        import textwrap
+
+        from src.contextualization import base as mod
+
+        source = textwrap.dedent(
+            inspect.getsource(mod.ContextualizeProvider.contextualize_batch)
+        )
+        tree = ast.parse(source)
+
+        uses_task_group = False
+        uses_silent_gather = False
+
+        for node in ast.walk(tree):
+            ***REMOVED*** asyncio.TaskGroup() — accept attribute or name reference.
+            if isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Attribute) and func.attr == "TaskGroup":
+                    uses_task_group = True
+                if isinstance(func, ast.Name) and func.id == "TaskGroup":
+                    uses_task_group = True
+                ***REMOVED*** asyncio.gather(..., return_exceptions=True) — forbidden silent drop.
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr == "gather"
+                ) or (isinstance(func, ast.Name) and func.id == "gather"):
+                    for kw in node.keywords:
+                        if (
+                            kw.arg == "return_exceptions"
+                            and isinstance(kw.value, ast.Constant)
+                            and kw.value.value is True
+                        ):
+                            uses_silent_gather = True
+
+        assert uses_task_group, (
+            "contextualize_batch must use asyncio.TaskGroup for structured "
+            "concurrency (***REMOVED***1656)"
+        )
+        assert not uses_silent_gather, (
+            "contextualize_batch must not call asyncio.gather(..., "
+            "return_exceptions=True) — failures must be surfaced explicitly"
+        )
