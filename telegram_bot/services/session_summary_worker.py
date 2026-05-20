@@ -80,6 +80,14 @@ class SessionSummaryWorker:
         Returns:
             Number of sessions summarized.
         """
+        try:
+            return await self._check_idle_sessions_inner()
+        except Exception:
+            logger.exception("SessionSummaryWorker cycle failed")
+            raise
+
+    async def _check_idle_sessions_inner(self) -> int:
+        """Inner idle session check logic."""
         now = time.time()
         threshold = self._idle_timeout_min * 60
         count = 0

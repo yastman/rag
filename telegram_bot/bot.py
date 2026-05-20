@@ -5165,6 +5165,7 @@ class PropertyBot:
             self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
             await self._polling_lock.acquire(self._polling_lock_owner)
             refresh_interval = max(1, self._polling_lock.ttl_sec // 3)
+            self._polling_lock_consecutive_failures = 0
             self._polling_lock_scheduler = AsyncIOScheduler(
                 job_defaults={
                     "coalesce": True,
