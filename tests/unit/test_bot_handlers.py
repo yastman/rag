@@ -1702,7 +1702,7 @@ class TestBotLifecycle:
         assert caplog.text.count("Startup verdict:") == 1
 
     async def test_start_starts_polling_lock_heartbeat_when_redis_available(self, mock_config):
-        """start() should create a polling lock heartbeat task after acquiring the lock."""
+        """start() should create a polling lock heartbeat scheduler after acquiring the lock."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.initialize = AsyncMock()
@@ -1717,24 +1717,21 @@ class TestBotLifecycle:
 
         polling_lock = AsyncMock()
         polling_lock.ttl_sec = 90
-        created_task_names: list[str | None] = []
 
-        def fake_create_task(coro, *, name=None):
-            created_task_names.append(name)
-            coro.close()
-            task = asyncio.Future()
-            task.set_result(None)
-            return task
+        mock_scheduler = MagicMock()
 
         with (
             patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
             patch("telegram_bot.bot.RedisPollingLock", return_value=polling_lock),
-            patch("telegram_bot.bot.asyncio.create_task", side_effect=fake_create_task),
+            patch("telegram_bot.bot.AsyncIOScheduler", return_value=mock_scheduler),
         ):
             await bot.start()
 
         polling_lock.acquire.assert_awaited_once()
-        assert "polling-lock-heartbeat" in created_task_names
+        mock_scheduler.add_job.assert_called_once()
+        add_job_kwargs = mock_scheduler.add_job.call_args[1]
+        assert add_job_kwargs["id"] == "polling-lock-heartbeat"
+        mock_scheduler.start.assert_called_once()
 
     async def test_start_skips_postgres_pool_when_preflight_already_failed(self, mock_config):
         """Startup should not probe Postgres again after authoritative preflight failure."""
@@ -1897,32 +1894,33 @@ class TestBotLifecycle:
         bot, _ = _create_bot(mock_config)
         bot._polling_lock = AsyncMock()
         bot._polling_lock.ttl_sec = 3
-        bot._polling_lock.refresh = AsyncMock(
-            side_effect=[RuntimeError("redis lost"), None, asyncio.CancelledError()]
-        )
+        bot._polling_lock.refresh = AsyncMock(side_effect=RuntimeError("redis lost"))
+        bot._polling_lock_consecutive_failures = 0
         bot.dp = MagicMock()
         bot.dp.stop_polling = AsyncMock()
 
-        with (
-            patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()),
-            pytest.raises(asyncio.CancelledError),
-        ):
-            await bot._polling_lock_heartbeat()
+        await bot._polling_lock_heartbeat_tick()
 
         bot.dp.stop_polling.assert_not_awaited()
+        assert bot._polling_lock_consecutive_failures == 1
 
     async def test_polling_lock_heartbeat_stops_before_lease_can_expire(self, mock_config):
         """Two missed refreshes must stop polling before a third interval can expire the lease."""
         bot, _ = _create_bot(mock_config)
         bot._polling_lock = AsyncMock()
         bot._polling_lock.ttl_sec = 3
-        bot._polling_lock.refresh = AsyncMock(side_effect=[RuntimeError("redis lost")] * 2)
+        bot._polling_lock.refresh = AsyncMock(side_effect=RuntimeError("redis lost"))
+        bot._polling_lock_consecutive_failures = 0
         bot.dp = MagicMock()
         bot.dp.stop_polling = AsyncMock()
 
-        with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()):
-            await bot._polling_lock_heartbeat()
+        # First tick: failure 1 of 2, should not stop yet
+        await bot._polling_lock_heartbeat_tick()
+        assert bot._polling_lock_consecutive_failures == 1
+        bot.dp.stop_polling.assert_not_awaited()
 
+        # Second tick: failure 2 of 2, should trigger stop_polling
+        await bot._polling_lock_heartbeat_tick()
         assert bot._polling_lock.refresh.await_count == 2
         bot.dp.stop_polling.assert_awaited_once_with()
 

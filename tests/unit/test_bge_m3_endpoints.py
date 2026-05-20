@@ -96,9 +96,10 @@ def bge_app():
 
 
 @pytest.fixture
-def client(bge_app):
+async def client(bge_app):
     transport = httpx.ASGITransport(app=bge_app["app"])
-    return httpx.AsyncClient(transport=transport, base_url="http://test")
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
 
 
 # ── Endpoint tests ──
@@ -174,6 +175,112 @@ class TestConfigDefaults:
         assert _cfg.settings.USE_FP16 is True
         assert _cfg.settings.RERANK_MAX_DOCS == 30
         assert _cfg.settings.RERANK_MAX_LENGTH == 512
+
+
+class TestPartialFailureIsolation:
+    """Tests for per-item validation and partial failure isolation in batch encode."""
+
+    async def test_dense_batch_with_empty_string_returns_partial_failure(self, client):
+        """POST /encode/dense with ['hello', '', 'world'] returns 200 with partial_failures."""
+        resp = await client.post("/encode/dense", json={"texts": ["hello", "", "world"]})
+        assert resp.status_code == 200
+        data = resp.json()
+        # Response cardinality matches input cardinality
+        assert len(data["dense_vecs"]) == 3
+        # partial_failures reports index 1
+        assert "partial_failures" in data
+        assert len(data["partial_failures"]) == 1
+        assert data["partial_failures"][0]["index"] == 1
+        assert "error" in data["partial_failures"][0]
+        # Valid items have non-zero vectors
+        assert any(v != 0.0 for v in data["dense_vecs"][0])
+        assert any(v != 0.0 for v in data["dense_vecs"][2])
+        # Invalid item has zero-vector sentinel
+        assert all(v == 0.0 for v in data["dense_vecs"][1])
+        assert len(data["dense_vecs"][1]) == 1024
+
+    async def test_sparse_batch_with_empty_string(self, client):
+        """POST /encode/sparse with ['hello', '', 'world'] returns sentinel for empty."""
+        resp = await client.post("/encode/sparse", json={"texts": ["hello", "", "world"]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["lexical_weights"]) == 3
+        assert "partial_failures" in data
+        assert len(data["partial_failures"]) == 1
+        assert data["partial_failures"][0]["index"] == 1
+        # Invalid item has empty indices/values
+        assert data["lexical_weights"][1]["indices"] == []
+        assert data["lexical_weights"][1]["values"] == []
+        # Valid items have non-empty weights
+        assert len(data["lexical_weights"][0]["indices"]) > 0
+        assert len(data["lexical_weights"][2]["indices"]) > 0
+
+    async def test_colbert_batch_with_empty_string(self, client):
+        """POST /encode/colbert with ['hello', '', 'world'] returns sentinel for empty."""
+        resp = await client.post("/encode/colbert", json={"texts": ["hello", "", "world"]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["colbert_vecs"]) == 3
+        assert "partial_failures" in data
+        assert len(data["partial_failures"]) == 1
+        assert data["partial_failures"][0]["index"] == 1
+        # Invalid item: single zero-vector token [[0.0]*1024]
+        assert len(data["colbert_vecs"][1]) == 1
+        assert all(v == 0.0 for v in data["colbert_vecs"][1][0])
+        assert len(data["colbert_vecs"][1][0]) == 1024
+        # Valid items have multi-token vectors
+        assert len(data["colbert_vecs"][0]) > 0
+        assert len(data["colbert_vecs"][2]) > 0
+
+    async def test_hybrid_batch_with_empty_string(self, client):
+        """POST /encode/hybrid with ['hello', '', 'world'] returns sentinels for all types."""
+        resp = await client.post("/encode/hybrid", json={"texts": ["hello", "", "world"]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "partial_failures" in data
+        assert len(data["partial_failures"]) == 1
+        assert data["partial_failures"][0]["index"] == 1
+        # Dense sentinel
+        assert len(data["dense_vecs"]) == 3
+        assert all(v == 0.0 for v in data["dense_vecs"][1])
+        # Sparse sentinel
+        assert len(data["lexical_weights"]) == 3
+        assert data["lexical_weights"][1]["indices"] == []
+        assert data["lexical_weights"][1]["values"] == []
+        # ColBERT sentinel
+        assert len(data["colbert_vecs"]) == 3
+        assert len(data["colbert_vecs"][1]) == 1
+        assert all(v == 0.0 for v in data["colbert_vecs"][1][0])
+
+    async def test_all_valid_items_no_partial_failures(self, client):
+        """A fully-valid batch returns empty partial_failures (backward compatible)."""
+        resp = await client.post("/encode/dense", json={"texts": ["hello", "world"]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["partial_failures"] == []
+        assert len(data["dense_vecs"]) == 2
+
+    async def test_dense_all_items_invalid_returns_all_sentinels(self, client):
+        """When ALL items fail validation, response is all sentinels with no model call."""
+        resp = await client.post("/encode/dense", json={"texts": ["", "   "]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["dense_vecs"]) == 2
+        assert len(data["partial_failures"]) == 2
+        # Both are zero sentinels
+        assert all(v == 0.0 for v in data["dense_vecs"][0])
+        assert all(v == 0.0 for v in data["dense_vecs"][1])
+
+    async def test_model_exception_still_returns_500(self, client, bge_app):
+        """Infrastructure/model errors still produce HTTP 500."""
+        fake_model = bge_app["fake_model"]
+        original_side_effect = fake_model.encode.side_effect
+        fake_model.encode.side_effect = RuntimeError("GPU OOM")
+        try:
+            resp = await client.post("/encode/dense", json={"texts": ["hello", "world"]})
+            assert resp.status_code == 500
+        finally:
+            fake_model.encode.side_effect = original_side_effect
 
 
 class TestWarmup:

@@ -8,11 +8,11 @@ Runs every 5 minutes and checks:
 Logs are picked up by Promtail -> Loki -> Alertmanager.
 """
 
-import asyncio
-import contextlib
+import datetime as dt
 import logging
 
 import redis.asyncio as aioredis
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
@@ -38,13 +38,13 @@ class RedisHealthMonitor:
         """
         self.redis_url = redis_url
         self.check_interval = check_interval
-        self._task: asyncio.Task | None = None
+        self._scheduler: AsyncIOScheduler | None = None
         self._redis: aioredis.Redis | None = None
         self._prev_evicted_keys: int | None = None
         self._prev_checkpoint_count: int | None = None
 
     async def start(self):
-        """Start the periodic health check loop as a background task."""
+        """Start the periodic health check using APScheduler."""
         self._redis = aioredis.from_url(
             self.redis_url,
             encoding="utf-8",
@@ -56,7 +56,18 @@ class RedisHealthMonitor:
             retry=Retry(ExponentialBackoff(), 3),
             health_check_interval=30,
         )
-        self._task = asyncio.create_task(self._loop(), name="redis-health-monitor")
+        self._scheduler = AsyncIOScheduler(
+            job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 300}
+        )
+        self._scheduler.add_job(
+            self._check_health,
+            "interval",
+            seconds=self.check_interval,
+            id="redis-health-monitor",
+            replace_existing=True,
+            next_run_time=dt.datetime.now(dt.UTC) + dt.timedelta(seconds=10),
+        )
+        self._scheduler.start()
         logger.info(
             "Redis health monitor started (interval=%ds, hit_rate_threshold=%.0f%%, "
             "memory_threshold=%.0f%%)",
@@ -66,36 +77,28 @@ class RedisHealthMonitor:
         )
 
     async def stop(self):
-        """Cancel the background task and close Redis connection."""
-        if self._task is not None:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
+        """Shut down the scheduler and close Redis connection."""
+        if self._scheduler is not None:
+            self._scheduler.shutdown(wait=False)
+            self._scheduler = None
         if self._redis is not None:
             await self._redis.aclose()
             self._redis = None
         logger.info("Redis health monitor stopped")
-
-    async def _loop(self):
-        """Run health checks in a loop until cancelled."""
-        # Small initial delay to let the bot finish startup
-        await asyncio.sleep(10)
-
-        while True:
-            try:
-                await self._check_health()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                logger.exception("Redis health check failed (will retry next cycle)")
-            await asyncio.sleep(self.check_interval)
 
     async def _check_health(self):
         """Run a single health check cycle."""
         if self._redis is None:
             return
 
+        try:
+            await self._check_health_inner()
+        except Exception:
+            logger.exception("Redis health check failed")
+            raise
+
+    async def _check_health_inner(self):
+        """Inner health check logic."""
         try:
             info_memory = await self._redis.info("memory")
             info_stats = await self._redis.info("stats")
