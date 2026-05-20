@@ -886,7 +886,6 @@ dependencies = [
     { name = "tenacity" },
     { name = "typing-extensions" },
     { name = "uvloop" },
-    { name = "voyageai" },
 ]
 
 [package.optional-dependencies]
@@ -920,6 +919,7 @@ all = [
     { name = "torchvision", version = "0.26.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "transformers" },
     { name = "uvicorn" },
+    { name = "voyageai" },
 ]
 docling = [
     { name = "docling-serve", extra = ["ui"] },
@@ -968,6 +968,9 @@ voice = [
     { name = "opentelemetry-sdk" },
     { name = "uvicorn" },
 ]
+voyage = [
+    { name = "voyageai" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1000,7 +1003,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "cachetools", specifier = ">=5.0.0" },
     { name = "cocoindex", marker = "extra == 'ingest'", specifier = ">=0.3.28" },
-    { name = "contextual-rag", extras = ["docs", "voice", "eval", "ingest", "ml-local"], marker = "extra == 'all'" },
+    { name = "contextual-rag", extras = ["docs", "voice", "eval", "ingest", "ml-local", "voyage"], marker = "extra == 'all'" },
     { name = "datasets", marker = "extra == 'eval'", specifier = ">=3.0.0" },
     { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.70.0" },
     { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.61.0" },
@@ -1051,9 +1054,9 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'mini-app'", specifier = ">=0.30.0" },
     { name = "uvicorn", marker = "extra == 'voice'", specifier = ">=0.30.0" },
     { name = "uvloop", specifier = ">=0.21.0" },
-    { name = "voyageai", specifier = ">=0.3.0" },
+    { name = "voyageai", marker = "extra == 'voyage'", specifier = ">=0.3.0" },
 ]
-provides-extras = ["ml-local", "docs", "mini-app", "voice", "docling", "ingest", "eval", "all"]
+provides-extras = ["ml-local", "docs", "mini-app", "voice", "docling", "ingest", "eval", "voyage", "all"]
 
 [package.metadata.requires-dev]
 dev = [

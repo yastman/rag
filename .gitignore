@@ -264,6 +264,11 @@ docs/SDK_*_20*.md
 
 ***REMOVED*** Internal AI/orchestration tool directories
 docs/superpowers/
+!docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/plans/
+docs/superpowers/plans/*
+!docs/superpowers/plans/*.md
 .planning/
 rag-small-to-big-research.md
 .gsd/
