@@ -19,8 +19,7 @@ import json
 import time
 from datetime import datetime
 
-from src.evaluation.evaluator import SearchEvaluator
-from src.evaluation.search_engines import create_search_engine
+import numpy as np
 
 
 def run_ab_test(
@@ -52,6 +51,9 @@ def run_ab_test(
     if not queries:
         print("⚠️  No queries found. Aborting A/B test.")
         return {"baseline": {}, "hybrid": {}, "dbsf_colbert": {}, "comparisons": {}, "reports": {}}
+
+    from src.evaluation.evaluator import SearchEvaluator
+    from src.evaluation.search_engines import create_search_engine
 
     print()
 
@@ -261,20 +263,6 @@ def run_ab_test(
     # Save comparison (convert numpy types to Python types for JSON)
     comparison_report_file = f"{output_dir}/comparison_report_{timestamp}.json"
 
-    def convert_numpy(obj):
-        """Convert numpy types to Python types for JSON serialization."""
-        import numpy as np
-
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        if isinstance(obj, (np.integer, np.floating)):
-            return float(obj)
-        if isinstance(obj, dict):
-            return {k: convert_numpy(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [convert_numpy(item) for item in obj]
-        return obj
-
     comparison_hybrid_clean = convert_numpy(comparison_hybrid)
     comparison_dbsf_clean = convert_numpy(comparison_dbsf)
     comparison_hybrid_dbsf_clean = convert_numpy(comparison_hybrid_dbsf)
@@ -393,6 +381,39 @@ def print_comparison(comparison: dict):
             print("   ⚠️  NOT SIGNIFICANT (p ≥ 0.05)")
 
 
+def convert_numpy(obj):
+    """Convert numpy types to Python types for JSON serialization."""
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, (np.integer, np.floating)):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: convert_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_numpy(item) for item in obj]
+    return obj
+
+
+def determine_conclusion(dbsf_vs_baseline: float, dbsf_vs_hybrid: float) -> str:
+    """Determine overall winner conclusion for A/B test report.
+
+    Args:
+        dbsf_vs_baseline: Relative improvement percentage of DBSF+ColBERT over baseline (Recall@10).
+        dbsf_vs_hybrid: Relative improvement percentage of DBSF+ColBERT over hybrid (Recall@10).
+
+    Returns:
+        Conclusion string: one of 'SIGNIFICANTLY OUTPERFORMS', 'MODERATELY OUTPERFORMS',
+        'SLIGHTLY OUTPERFORMS', or 'BASELINE STILL PERFORMS BEST'.
+    """
+    if dbsf_vs_baseline > 10 and dbsf_vs_hybrid > 5:
+        return "SIGNIFICANTLY OUTPERFORMS"
+    if dbsf_vs_baseline > 5:
+        return "MODERATELY OUTPERFORMS"
+    if dbsf_vs_baseline > 0:
+        return "SLIGHTLY OUTPERFORMS"
+    return "BASELINE STILL PERFORMS BEST"
+
+
 def generate_markdown_report(filename: str, data: dict):
     """Generate human-readable markdown report for 3-way comparison."""
     baseline = data["baseline_eval"]["metrics"]
@@ -509,11 +530,13 @@ def generate_markdown_report(filename: str, data: dict):
     dbsf_vs_baseline = comp_dbsf["improvements"]["recall@10"]["relative_improvement_pct"]
     dbsf_vs_hybrid = comp_hybrid_dbsf["improvements"]["recall@10"]["relative_improvement_pct"]
 
-    if dbsf_vs_baseline > 10 and dbsf_vs_hybrid > 5:
+    conclusion_label = determine_conclusion(dbsf_vs_baseline, dbsf_vs_hybrid)
+
+    if conclusion_label == "SIGNIFICANTLY OUTPERFORMS":
         conclusion = "✅ **DBSF+ColBERT SIGNIFICANTLY OUTPERFORMS BOTH BASELINE AND HYBRID**"
-    elif dbsf_vs_baseline > 5:
+    elif conclusion_label == "MODERATELY OUTPERFORMS":
         conclusion = "✅ **DBSF+ColBERT MODERATELY OUTPERFORMS BASELINE**"
-    elif dbsf_vs_baseline > 0:
+    elif conclusion_label == "SLIGHTLY OUTPERFORMS":
         conclusion = "⚠️ **DBSF+ColBERT SLIGHTLY OUTPERFORMS BASELINE**"
     else:
         conclusion = "❌ **BASELINE STILL PERFORMS BEST - INVESTIGATE DBSF+ColBERT IMPLEMENTATION**"
