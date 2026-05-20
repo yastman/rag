@@ -12,7 +12,7 @@ dependencies = [
     # FastAPI & Web Server
     "fastapi==0.136.1",
     "uvicorn[standard]==0.46.0",
-    "python-multipart==0.0.28",
+    "python-multipart==0.0.29",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
     # Monitoring & Metrics
