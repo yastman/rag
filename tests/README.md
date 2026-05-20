@@ -173,6 +173,12 @@ See `pyproject.toml` for the full marker list (including exclusions for old API 
 | `smoke/test_preflight.py` | Qdrant/Redis preflight checks |
 | `eval/ground_truth.json` | Q&A pairs for RAG evaluation |
 
+Voyage-dependent tests (unit/test_voyage_service.py, unit/test_contextualized_embeddings.py, etc.) are guarded with `pytest.mark.requires_extras` and require:
+
+```bash
+uv sync --extra voyage
+```
+
 ## Writing Tests
 
 - **Default guide**: [`docs/engineering/test-writing-guide.md`](../docs/engineering/test-writing-guide.md)
