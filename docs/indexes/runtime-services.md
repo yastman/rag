@@ -10,12 +10,16 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 
 | Profile | When You Need It |
 |---|---|
-| (default, no profile) | Core services: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base, mini-app |
-| `bot` | Telegram bot + LiteLLM proxy |
+| (default, no profile) | **Dev**: Postgres, Redis, Qdrant, BGE-M3, Docling, user-base, mini-app. **VPS**: Postgres, Redis, Qdrant, BGE-M3, user-base, litellm, bot — the minimal RAG chatbot core. |
+| `bot` | Telegram bot + LiteLLM proxy (dev only; VPS includes both in the default) |
 | `ingest` | Unified ingestion service |
 | `ml` | Langfuse + ClickHouse + MinIO |
 | `obs` | Loki + Promtail + Alertmanager |
 | `voice` | LiveKit + SIP + voice agent (off by default) |
+
+> On VPS (`compose.yml:compose.vps.yml`), Docling, mini app, ingestion, and the
+> ML platform (Langfuse/ClickHouse/MinIO) are gated behind the `vps-noncore`
+> profile. See [DOCKER.md](../../DOCKER.md) for the full VPS runtime contract.
 
 Common commands:
 
@@ -28,8 +32,6 @@ make docker-obs-up      # observability profile (Loki, Promtail, Alertmanager)
 make monitoring-up      # observability alias with endpoint hints
 make docker-ps          # list running containers
 ```
-
-> **Remote Docker workflow**: when using an SSH-accessible Docker host (instead of local Docker), use the `remote-*` targets such as `make remote-active-up`, `make remote-bot-up`, and `make remote-service-health`. See [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md) and [`../../DOCKER.md`](../../DOCKER.md) for details.
 
 ### Local Service Containers
 
@@ -108,7 +110,7 @@ Key flows:
 
 Subsystems:
 - `telegram_bot/graph/` — LangGraph nodes, edges, and state
-- `telegram_bot/services/` — Qdrant queries, cache, catalog search, CRM tools
+- `telegram_bot/services/` — Qdrant queries, cache, apartment search, CRM tools
 - `telegram_bot/agents/` — Agent SDK RAG functions
 - `telegram_bot/dialogs/` — Funnel UI and filter extraction
 - `telegram_bot/middlewares/` — Throttling, i18n, error handling
@@ -119,6 +121,7 @@ Quick commands:
 make run-bot           # native bot run (fast iteration)
 make docker-bot-up     # bot in Docker
 make test-bot-health   # local prerequisite check
+python -m telegram_bot.preflight   # startup health check
 ```
 
 ## Voice Agent

@@ -11,7 +11,8 @@
 	test-contract \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
-	remote-active-up remote-full-up remote-bot-up remote-bot-restart remote-bot-logs \
+	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
+	remote-full-up remote-bot-up remote-bot-restart remote-bot-logs \
 	remote-local-up remote-local-down remote-local-logs remote-service-health
 
 # Configurable container names & thresholds
@@ -225,8 +226,8 @@ test-fast: ## Run unit tests in parallel (xdist, loadscope)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
-test-all-fast: ## Run ALL test suites in parallel (unit + integration + smoke)
-	@echo "$(BLUE)Running all tests in parallel...$(NC)"
+test-all-fast: ## Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
+	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
@@ -278,6 +279,19 @@ test-all: ## Run all tests with coverage threshold (CI mode)
 	@echo "$(BLUE)Running all tests with coverage...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/ -v -n auto --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
 	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
+
+.PHONY: test-frontend test-all-local
+
+test-frontend: ## Run Mini App frontend tests (Vitest)
+	@echo "$(BLUE)Running Mini App frontend tests...$(NC)"
+	cd mini_app/frontend && npm test
+	@echo "$(GREEN)✓ Mini App frontend tests complete$(NC)"
+
+test-all-local: ## Run all local test suites (pytest all tiers + frontend)
+	@echo "$(BLUE)Running all local test suites...$(NC)"
+	make test-full
+	make test-frontend
+	@echo "$(GREEN)✓ All local test suites complete$(NC)"
 
 # =============================================================================
 # SMOKE & LOAD TESTS
@@ -422,6 +436,7 @@ REMOTE_BGE_M3_MEMORY_LIMIT ?= 6G
 REMOTE_SSH := ssh $(REMOTE_DOCKER_HOST)
 
 REMOTE_ACTIVE_SERVICES := mini-app-frontend mini-app-api bge-m3 litellm redis langfuse langfuse-worker postgres redis-langfuse qdrant rag-api minio clickhouse user-base bot
+REMOTE_CORE_SERVICES := postgres redis qdrant bge-m3 user-base litellm bot
 
 remote-docker-status: ## Remote Docker diagnostics: hostname, git, Colima, Docker/buildx versions
 	@echo "$(BLUE)Remote Docker status ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -474,6 +489,19 @@ remote-active-up: ## Start active remote stack (bot + ml + voice profiles)
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot --profile ml --profile voice up -d $(REMOTE_ACTIVE_SERVICES)"
 	@echo "$(GREEN)✓ Active remote stack started$(NC)"
 
+remote-core-up: ## Start minimal RAG bot core on remote MacBook Docker
+	@echo "$(BLUE)Starting minimal RAG bot core on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile bot up -d $(REMOTE_CORE_SERVICES)"
+	@echo "$(GREEN)Remote core stack started$(NC)"
+
+remote-core-ps: ## Show remote core container status
+	@echo "$(BLUE)Remote core containers ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}' $(REMOTE_CORE_SERVICES)"
+
+remote-core-logs: ## Show recent remote core logs
+	@echo "$(BLUE)Remote core logs ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` logs --tail 100 $(REMOTE_CORE_SERVICES)"
+
 remote-full-up: ## Start full remote stack (all profiles)
 	@echo "$(BLUE)Starting full remote stack on $(REMOTE_DOCKER_HOST)...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full up -d"
@@ -507,6 +535,29 @@ remote-local-logs: ## Show recent remote MacBook compose logs
 	@echo "$(BLUE)Remote compose logs ($(REMOTE_DOCKER_HOST))...$(NC)"
 	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && export DOCKER_BUILDKIT=1 && export COMPOSE_BAKE=true && export BGE_M3_MEMORY_LIMIT=$(REMOTE_BGE_M3_MEMORY_LIMIT) && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` --profile full logs --tail 120"
 	@echo "$(GREEN)✓ Remote compose logs shown$(NC)"
+
+remote-core-health: ## Check minimal RAG bot core health on remote MacBook Docker
+	@echo "$(BLUE)Remote core health ($(REMOTE_DOCKER_HOST))...$(NC)"
+	@fail=0; \
+	if ! $(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` exec -T bot python - <<'PY'\nimport socket, sys\nfailed=[]\nfor host, port in [('qdrant',6333),('bge-m3',8000),('litellm',4000),('postgres',5432),('redis',6379),('user-base',8000)]:\n    s=socket.socket(); s.settimeout(5)\n    try:\n        s.connect((host, port)); print(f'  ok: {host}:{port}')\n    except Exception as exc:\n        failed.append(f'{host}:{port} -> {exc}')\n    finally:\n        s.close()\nif failed:\n    print('\n'.join(failed), file=sys.stderr); sys.exit(1)\nPY"; then fail=1; fi; \
+	bot_restarts=$$($(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && export PATH=$(REMOTE_DOCKER_PATH):$$PATH && cid=\$$(COMPOSE_FILE=$(REMOTE_COMPOSE_FILE) docker compose --compatibility --env-file \`[ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env\` ps -q bot 2>/dev/null); if [ -n \"\$$cid\" ]; then docker inspect --format='{{.RestartCount}}' \$$cid 2>/dev/null; else echo N/A; fi"); \
+	if [ "$$bot_restarts" != "N/A" ]; then echo "  Bot: running (restarts: $$bot_restarts)"; else echo "  Bot: $(RED)container not found$(NC)"; fail=1; fi; \
+	exit $$fail
+
+remote-core-env-check: ## Verify core-only required variables in remote .env
+	@echo "$(BLUE)Checking core env on $(REMOTE_DOCKER_HOST)...$(NC)"
+	@$(REMOTE_SSH) "cd $(REMOTE_DOCKER_REPO) && \
+		if [ ! -f .env ]; then echo 'Error: remote .env not found'; exit 1; fi; \
+		missing=''; \
+		if ! grep -qE '^TELEGRAM_BOT_TOKEN=' .env; then missing=\"$$missing TELEGRAM_BOT_TOKEN\"; fi; \
+		if ! grep -qE '^LITELLM_MASTER_KEY=' .env; then missing=\"$$missing LITELLM_MASTER_KEY\"; fi; \
+		if ! grep -qE '^(CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)=' .env; then missing=\"$$missing (CEREBRAS_API_KEY|GROQ_API_KEY|OPENAI_API_KEY)\"; fi; \
+		if [ -n \"$$missing\" ]; then \
+			echo \"Missing variables:$$missing\"; \
+			exit 1; \
+		else \
+			echo 'Core required variables present'; \
+		fi"
 
 remote-service-health: ## Check remote service health over SSH on 127.0.0.1
 	@echo "$(BLUE)Remote service health ($(REMOTE_DOCKER_HOST))...$(NC)"
@@ -684,17 +735,17 @@ endif
 	git tag v$(VERSION)
 	git push origin v$(VERSION)
 
-deploy-bot:  ## Show official deploy flow: push dev/feature, open PR, merge to main for auto-deploy
+deploy-bot:  ## Show official deploy flow: PR to dev, then merge dev to main snapshot
 	@echo "$(CYAN)Official deploy flow:$(NC)"
 	@echo "  1. Commit locally"
-	@echo "  2. Push your work branch or dev"
-	@echo "  3. Open PR to main"
-	@echo "  4. Merge PR into main"
-	@echo "  5. GitHub Actions auto-deploys main to VPS"
+	@echo "  2. Push your work branch"
+	@echo "  3. Open PR to dev"
+	@echo "  4. Stage runtime-sensitive changes with make remote-core-up"
+	@echo "  5. Merge dev to main for deployment snapshots"
 	@echo "$(GREEN)No direct push to main is performed by this target.$(NC)"
 
 deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scripts removed from public repo)
-	@echo "$(CYAN)Manual deploy: push to main and let CI handle it, or use Docker Compose on VPS$(NC)"
+	@echo "$(CYAN)Manual deploy: use private operator runbooks or Docker Compose on VPS$(NC)"
 
 # =============================================================================
 # E2E TESTING
@@ -1129,12 +1180,32 @@ verify-compose-images-json: ## Check image drift (JSON output for CI)
 
 git-hygiene: ## Git hygiene report (merged branches, stale worktrees, transient files)
 	@echo "$(BLUE)Running git hygiene report...$(NC)"
-	uv run python scripts/git_hygiene.py || true
+	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	echo "Base branch: $$BASE_BRANCH"; \
+	git fetch --prune origin; \
+	echo ""; \
+	echo "Merged local branches:"; \
+	git branch --merged "origin/$$BASE_BRANCH" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - " $$0}'; \
+	echo ""; \
+	echo "Branches without upstream:"; \
+	git for-each-ref --format='%(refname:short) %(upstream:short)' refs/heads | awk 'NF == 1 {print "  - " $$1}'; \
+	echo ""; \
+	echo "Worktrees:"; \
+	git worktree list --porcelain; \
+	echo ""; \
+	echo "Transient untracked files:"; \
+	git ls-files --others --exclude-standard -- coverage.json 'test_output*' '*.log' | sed 's/^/  - /'
 	@echo ""
 
 git-hygiene-fix: ## Git hygiene safe cleanup preview (dry-run)
 	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
-	uv run python scripts/git_hygiene.py --fix --dry-run || true
+	@BASE_BRANCH=$${REPO_BASE_BRANCH:-dev}; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	BASE_REF=origin/$$BASE_BRANCH; \
+	echo "Would delete local branches merged into $$BASE_REF, excluding protected/current branches:"; \
+	git fetch --prune origin; \
+	git branch --merged "$$BASE_REF" --format='%(refname:short)' | awk -v base="$$BASE_BRANCH" -v base_ref="$$BASE_REF" -v current="$$CURRENT_BRANCH" '$$0 != base && $$0 != "main" && $$0 != "master" && $$0 != "develop" && $$0 != current {print "  - git merge-base --is-ancestor " $$0 " " base_ref " && git branch -D " $$0}'
 	@echo ""
 
 pr-hygiene: ## PR queue triage report (open PRs, blocked reasons, SLA)
@@ -1149,10 +1220,87 @@ issue-hygiene: ## Issue queue hygiene report (no-label / no-assignee / no-lane /
 
 repo-cleanup: ## Full repo cleanup: branches, worktrees, stashes (dry-run)
 	@echo "$(BLUE)Running repo cleanup (dry-run)...$(NC)"
-	bash scripts/repo_cleanup.sh --dry-run
+	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
+	BASE_REF=origin/$$MAIN_BRANCH; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
+	echo "Base branch: $$MAIN_BRANCH"; \
+	echo "Base ref: $$BASE_REF"; \
+	git fetch --prune origin; \
+	git rev-parse --verify --quiet "$$BASE_REF" >/dev/null || { echo "Missing base ref: $$BASE_REF"; exit 1; }; \
+	echo ""; \
+	echo "Local merged branches eligible for deletion:"; \
+	git branch --merged "$$BASE_REF" --format='%(refname:short)' | while read -r branch; do \
+		[ -z "$$branch" ] && continue; \
+		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
+		[ "$$branch" = "main" ] && continue; \
+		[ "$$branch" = "master" ] && continue; \
+		[ "$$branch" = "develop" ] && continue; \
+		[ "$$branch" = "$$CURRENT_BRANCH" ] && continue; \
+		printf '%s\n' "$$WORKTREE_BRANCHES" | grep -Fxq "$$branch" && continue; \
+		echo "  - $$branch"; \
+	done; \
+	echo ""; \
+	echo "Remote merged branches and open PR status:"; \
+	git branch -r --merged "origin/$$MAIN_BRANCH" --format='%(refname:short)' | sed 's|^origin/||' | while read -r branch; do \
+		[ -z "$$branch" ] && continue; \
+		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
+		[ "$$branch" = "main" ] && continue; \
+		[ "$$branch" = "master" ] && continue; \
+		[ "$$branch" = "develop" ] && continue; \
+		if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
+			open_prs=$$(gh pr list --head "$$branch" --state open --json number --jq length 2>/dev/null || echo unknown); \
+			echo "  - $$branch (open_prs=$$open_prs)"; \
+		else \
+			echo "  - $$branch (gh auth unavailable; review PR status manually)"; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "Worktree prune preview:"; \
+	git worktree prune --dry-run; \
+	echo ""; \
+	echo "Stashes:"; \
+	git stash list
 	@echo ""
 
 repo-cleanup-force: ## Full repo cleanup: interactive deletion mode
 	@echo "$(BLUE)Running repo cleanup (interactive)...$(NC)"
-	bash scripts/repo_cleanup.sh --force
+	@MAIN_BRANCH=$${MAIN_BRANCH:-dev}; \
+	BASE_REF=origin/$$MAIN_BRANCH; \
+	CURRENT_BRANCH=$$(git branch --show-current); \
+	WORKTREE_BRANCHES=$$(git worktree list --porcelain | sed -n 's/^branch refs\/heads\///p'); \
+	git fetch --prune origin; \
+	git rev-parse --verify --quiet "$$BASE_REF" >/dev/null || { echo "Missing base ref: $$BASE_REF"; exit 1; }; \
+	echo "Local merged branches eligible for deletion from $$BASE_REF:"; \
+	branches=$$(git branch --merged "$$BASE_REF" --format='%(refname:short)' | while read -r branch; do \
+		[ -z "$$branch" ] && continue; \
+		[ "$$branch" = "$$MAIN_BRANCH" ] && continue; \
+		[ "$$branch" = "main" ] && continue; \
+		[ "$$branch" = "master" ] && continue; \
+		[ "$$branch" = "develop" ] && continue; \
+		[ "$$branch" = "$$CURRENT_BRANCH" ] && continue; \
+		printf '%s\n' "$$WORKTREE_BRANCHES" | grep -Fxq "$$branch" && continue; \
+		echo "$$branch"; \
+	done); \
+	if [ -z "$$branches" ]; then \
+		echo "  (none)"; \
+	else \
+		printf '%s\n' "$$branches" | sed 's/^/  - /'; \
+		printf 'Delete these local branches? [y/N] '; \
+		read -r confirm; \
+		if printf '%s' "$$confirm" | grep -Eq '^[Yy]$$'; then \
+			printf '%s\n' "$$branches" | while read -r branch; do \
+				[ -z "$$branch" ] && continue; \
+				if git merge-base --is-ancestor "$$branch" "$$BASE_REF"; then \
+					git branch -D "$$branch"; \
+				else \
+					echo "  skip $$branch: not an ancestor of $$BASE_REF"; \
+				fi; \
+			done; \
+		fi; \
+	fi; \
+	echo ""; \
+	echo "Pruning stale worktree administrative records..."; \
+	git worktree prune; \
+	echo "Dirty or active worktrees are not removed by this target."
 	@echo ""
