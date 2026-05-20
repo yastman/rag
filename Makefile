@@ -226,8 +226,8 @@ test-fast: ***REMOVED******REMOVED*** Run unit tests in parallel (xdist, loadsco
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
-test-all-fast: ***REMOVED******REMOVED*** Run ALL test suites in parallel (unit + integration + smoke)
-	@echo "$(BLUE)Running all tests in parallel...$(NC)"
+test-all-fast: ***REMOVED******REMOVED*** Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
+	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
