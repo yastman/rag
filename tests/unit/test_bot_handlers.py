@@ -1923,7 +1923,6 @@ class TestBotLifecycle:
         await bot._polling_lock_heartbeat_tick()
         assert bot._polling_lock.refresh.await_count == 2
         bot.dp.stop_polling.assert_awaited_once_with()
-        bot.dp.stop_polling.assert_awaited_once_with()
 
 
 class TestAgentCheckpointerLifecycle:
