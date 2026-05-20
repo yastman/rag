@@ -531,6 +531,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
             for result in response.points
         ]
 
+    @observe(name="colbert-rerank-search", capture_input=False, capture_output=False)
     def _search_hybrid_colbert(
         self,
         query: str,

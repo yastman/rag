@@ -13,6 +13,13 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from tests.unit.helpers.voyage import skip_if_voyageai_unusable
+
+
+skip_if_voyageai_unusable()
+pytestmark = pytest.mark.requires_extras
+
 import voyageai
 
 

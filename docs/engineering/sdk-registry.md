@@ -78,6 +78,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - recursion_limit=15 при compile().with_config()
   - Bot Docker image dependencies come from `telegram_bot/uv.lock`, not root `uv.lock`; check the bot-local frozen lock after LangChain/LangGraph changes.
   - `langchain.agents.create_agent` imports `langgraph.prebuilt`; keep `langchain`, `langgraph`, and `langgraph-prebuilt` compatible as one bundle and verify with `uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'`.
+  - Параллельный fan-out внутри графа = `langgraph.types.Send` (per [ADR-0009](../adr/0009-langgraph-send-fanout-scoping.md)). НЕ заменять `Send` на `asyncio.gather` в graph node — теряется checkpointer context и parent Langfuse span. `asyncio.gather` остаётся правильным выбором вне графа.
 
 ## qdrant-client
 - **triggers:** vector, search, qdrant, collection, embedding, hybrid, RRF, ColBERT, prefetch, filter, points
@@ -105,15 +106,18 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **triggers:** structured extraction, LLM parsing, response_model, Pydantic extraction, фильтры квартир
 - **context7_id:** /instructor-ai/instructor
 - **как_у_нас:**
-  - `telegram_bot/services/apartment_llm_extractor.py` — единственное использование
+  - `telegram_bot/services/apartment_llm_extractor.py` — apartment filter extraction (single non-streaming call)
+  - `telegram_bot/services/query_analyzer.py` — query intent / language classification (single non-streaming call)
+  - `telegram_bot/services/llm.py` — confidence scoring (single non-streaming call)
 - **паттерны:**
-  - `ApartmentLlmExtractor(llm=...)` → `instructor.from_openai(llm)` → `chat.completions.create(response_model=PydanticModel)`
-  - max_retries=2 для автоматического retry при validation error
-  - Результат merge с regex extraction (regex wins на числовых полях)
+  - REQUIRED shape: `instructor.from_openai(langfuse.openai.AsyncOpenAI(...))` — это сохраняет langfuse auto-trace wrap. Preflight: `tests/unit/services/test_query_analyzer.py::TestQueryAnalyzerInstructorLangfuseCompat`.
+  - `chat.completions.create(response_model=PydanticModel, max_retries=2)` для retry на validation error.
+  - Результат extraction merge с regex (regex wins на числовых полях).
 - **gotchas:**
-  - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model
-  - Для Instructor-совместимого extraction path допустим native OpenAI client, если это текущий совместимый runtime contract
-  - response_model = Pydantic v2 модель с Field(description=) для каждого поля
+  - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model.
+  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой клиент и ломает `langfuse.openai` auto-trace. Регрессионный тест: `tests/unit/services/test_instructor_sdk_contract.py`.
+  - Streaming primitives `client.create_partial` / `client.create_iterable` сейчас **отключены** проектным решением — см. [ADR-0008](../adr/0008-instructor-create-partial-deferred.md). Не вводить без обновления ADR.
+  - response_model = Pydantic v2 модель с `Field(description=)` для каждого поля.
 
 ## redisvl
 - **triggers:** cache, semantic cache, embedding cache, кеш, кэш, redis vector, similarity
@@ -358,17 +362,22 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Keep model choice and retry policy local to contextualization path
 
 ## voyageai
+- **status:** **OPTIONAL EXTRA** (#1773). Not used by the default bot/retrieval runtime (BGE-M3 + Qdrant). Install via `uv sync --extra voyage`.
 - **triggers:** rerank, embedding, voyage, ColBERT, contextualized embedding
 - **context7_id:** /voyage-ai/voyageai-python
 - **как_у_нас:**
-  - `telegram_bot/services/voyage.py` — reranking service
-  - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings
+  - `telegram_bot/services/voyage.py` — reranking service (legacy/optional)
+  - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings (`USE_CONTEXTUALIZED_EMBEDDINGS=true` only)
+  - `src/ingestion/unified/qdrant_writer.py` — optional dense provider when `use_local_embeddings=False`
+  - `src/ingestion/gdrive_indexer.py` — legacy GDrive ingestion (deprecated)
 - **паттерны:**
   - `voyageai.Client()` для sync, lazy import (тяжёлые deps: pandas, scipy)
   - Rerank: `client.rerank(query, documents, model="rerank-2")`
+  - Lazy import ОБЯЗАТЕЛЬНО (#1773): `import voyageai` / `from telegram_bot.services import VoyageService` only inside the function/method that needs it.
 - **gotchas:**
   - Тяжёлый import (pandas, scipy.stats) — lazy import ОБЯЗАТЕЛЬНО
-  - НЕ импортировать на top-level в модулях бота (замедляет старт)
+  - НЕ импортировать на top-level в модулях бота (замедляет старт + ломает Python 3.14 base test collection из-за Pydantic V1 моделей)
+  - Voyage-зависимые тесты помечены `pytest.importorskip("voyageai") + @pytest.mark.requires_extras` и пропускаются в core tier.
 
 ## anthropic
 - **triggers:** Claude, Anthropic, contextualization, claude judge

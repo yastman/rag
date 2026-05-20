@@ -1,8 +1,7 @@
 """Tests for SessionSummaryWorker (#445 Task 5)."""
 
-import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,10 +27,19 @@ def worker():
 
 
 async def test_worker_starts_and_stops(worker):
-    await worker.start()
-    assert worker._task is not None
-    await worker.stop()
-    assert worker._task.done()
+    with patch(
+        "telegram_bot.services.session_summary_worker.AsyncIOScheduler"
+    ) as mock_scheduler_cls:
+        mock_scheduler = MagicMock()
+        mock_scheduler_cls.return_value = mock_scheduler
+        await worker.start()
+        mock_scheduler.start.assert_called_once()
+        mock_scheduler.add_job.assert_called_once()
+        add_job_kwargs = mock_scheduler.add_job.call_args[1]
+        assert add_job_kwargs["id"] == "session-summary-worker"
+
+        await worker.stop()
+        mock_scheduler.shutdown.assert_called_once_with(wait=False)
 
 
 async def test_no_idle_sessions(worker):
@@ -92,11 +100,17 @@ async def test_skip_short_conversations(worker):
 
 async def test_graceful_stop_during_processing(worker):
     """Worker stops cleanly even if already running."""
-    await worker.start()
-    assert worker._task is not None
-    # stop() must complete without hanging
-    await asyncio.wait_for(worker.stop(), timeout=3.0)
-    assert worker._task.done()
+    with patch(
+        "telegram_bot.services.session_summary_worker.AsyncIOScheduler"
+    ) as mock_scheduler_cls:
+        mock_scheduler = MagicMock()
+        mock_scheduler_cls.return_value = mock_scheduler
+        await worker.start()
+        assert worker._scheduler is mock_scheduler
+        # stop() must complete without hanging
+        await worker.stop()
+        mock_scheduler.shutdown.assert_called_once_with(wait=False)
+        assert worker._scheduler is None
 
 
 async def test_recent_session_not_processed(worker):
@@ -456,7 +470,6 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert captured_output.get("summary_len") == len(short_summary)
 
 
-
 class TestHistorySourceWiring:
     """Regression tests for #1599: history_source must be configurable.
 
@@ -524,16 +537,14 @@ class TestHistorySourceWiring:
         from telegram_bot.services.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
-        with caplog.at_level(logging.WARNING, logger="telegram_bot.services.session_summary_worker"):
+        with caplog.at_level(
+            logging.WARNING, logger="telegram_bot.services.session_summary_worker"
+        ):
             await worker.start()
             await worker.stop()
 
-        warnings = [
-            rec for rec in caplog.records if "without history_source" in rec.getMessage()
-        ]
-        assert warnings, (
-            "Worker must log WARNING at start when history_source is not wired (#1599)"
-        )
+        warnings = [rec for rec in caplog.records if "without history_source" in rec.getMessage()]
+        assert warnings, "Worker must log WARNING at start when history_source is not wired (#1599)"
 
     async def test_start_does_not_warn_when_history_source_present(self, caplog):
         """A wired worker must not log the no-op warning."""
@@ -549,11 +560,11 @@ class TestHistorySourceWiring:
             llm=AsyncMock(),
             history_source=empty_source,
         )
-        with caplog.at_level(logging.WARNING, logger="telegram_bot.services.session_summary_worker"):
+        with caplog.at_level(
+            logging.WARNING, logger="telegram_bot.services.session_summary_worker"
+        ):
             await worker.start()
             await worker.stop()
 
-        warnings = [
-            rec for rec in caplog.records if "without history_source" in rec.getMessage()
-        ]
+        warnings = [rec for rec in caplog.records if "without history_source" in rec.getMessage()]
         assert not warnings
