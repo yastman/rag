@@ -206,7 +206,6 @@ class TestClaudeContextualizerBatch:
         assert peak <= 2
 
 
-
 ***REMOVED*** ---------------------------------------------------------------------------
 ***REMOVED*** Failure surfacing (***REMOVED***1656) — TaskGroup contract
 ***REMOVED*** ---------------------------------------------------------------------------
@@ -281,9 +280,7 @@ class TestContextualizeBatchFailureSurfacing:
 
         from src.contextualization import base as mod
 
-        source = textwrap.dedent(
-            inspect.getsource(mod.ContextualizeProvider.contextualize_batch)
-        )
+        source = textwrap.dedent(inspect.getsource(mod.ContextualizeProvider.contextualize_batch))
         tree = ast.parse(source)
 
         uses_task_group = False
@@ -298,10 +295,9 @@ class TestContextualizeBatchFailureSurfacing:
                 if isinstance(func, ast.Name) and func.id == "TaskGroup":
                     uses_task_group = True
                 ***REMOVED*** asyncio.gather(..., return_exceptions=True) — forbidden silent drop.
-                if (
-                    isinstance(func, ast.Attribute)
-                    and func.attr == "gather"
-                ) or (isinstance(func, ast.Name) and func.id == "gather"):
+                if (isinstance(func, ast.Attribute) and func.attr == "gather") or (
+                    isinstance(func, ast.Name) and func.id == "gather"
+                ):
                     for kw in node.keywords:
                         if (
                             kw.arg == "return_exceptions"
@@ -311,8 +307,7 @@ class TestContextualizeBatchFailureSurfacing:
                             uses_silent_gather = True
 
         assert uses_task_group, (
-            "contextualize_batch must use asyncio.TaskGroup for structured "
-            "concurrency (***REMOVED***1656)"
+            "contextualize_batch must use asyncio.TaskGroup for structured concurrency (***REMOVED***1656)"
         )
         assert not uses_silent_gather, (
             "contextualize_batch must not call asyncio.gather(..., "
