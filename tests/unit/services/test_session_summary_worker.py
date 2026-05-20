@@ -470,6 +470,190 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert captured_output.get("summary_len") == len(short_summary)
 
 
+class TestPerCycleCap:
+    """Regression tests for #1608: max_sessions_per_cycle backpressure.
+
+    Before the fix, _check_idle_sessions accumulated every matching key into
+    a list and processed all of them in one tick. With #1599 wiring a real
+    history source, a large idle-user batch would trigger an unbounded
+    burst of Redis reads, history fetches, LLM calls, and Kommo writes.
+    """
+
+    @staticmethod
+    def _idle_keys(n: int) -> list[bytes]:
+        return [f"session:last_active:{i}".encode() for i in range(n)]
+
+    async def test_cap_enforced_excess_keys_are_deferred(self):
+        """Only ``max_sessions_per_cycle`` idle keys are processed per tick."""
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        keys = self._idle_keys(20)
+        idle_ts = str(time.time() - 9999).encode()
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            idle_timeout_min=30,
+            max_sessions_per_cycle=5,
+        )
+        worker._redis.scan = AsyncMock(side_effect=[(0, keys)])
+        worker._redis.get = AsyncMock(return_value=idle_ts)
+        worker._redis.delete = AsyncMock()
+        worker._get_conversation_history = AsyncMock(
+            return_value=[
+                {"role": "user", "content": "msg"},
+                {"role": "assistant", "content": "reply"},
+            ]
+        )
+        worker._generate_summary = AsyncMock(return_value="summary")
+
+        count = await worker._check_idle_sessions()
+
+        assert count == 5
+        # Only 5 deletions, the other 15 keys are deferred to the next tick.
+        assert worker._redis.delete.call_count == 5
+        # GET fetched the timestamp only for the 5 processed keys (cap check
+        # short-circuits before _redis.get for the rest).
+        assert worker._redis.get.call_count == 5
+
+    async def test_active_sessions_do_not_consume_cap_slots(self):
+        """Only IDLE sessions count toward the per-cycle cap.
+
+        If most keys are still active (under the threshold), the worker
+        should keep scanning past them until it finds enough idle keys to
+        fill the cap.
+        """
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        keys = self._idle_keys(10)
+        active_ts = str(time.time() - 60).encode()  # 1 min ago: NOT idle
+        idle_ts = str(time.time() - 9999).encode()
+        # Alternate active / idle, so first 5 idle keys are at indices 1,3,5,7,9
+        gets = [
+            active_ts,
+            idle_ts,
+            active_ts,
+            idle_ts,
+            active_ts,
+            idle_ts,
+            active_ts,
+            idle_ts,
+            active_ts,
+            idle_ts,
+        ]
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            idle_timeout_min=30,
+            max_sessions_per_cycle=3,
+        )
+        worker._redis.scan = AsyncMock(side_effect=[(0, keys)])
+        worker._redis.get = AsyncMock(side_effect=gets)
+        worker._redis.delete = AsyncMock()
+        worker._get_conversation_history = AsyncMock(
+            return_value=[
+                {"role": "user", "content": "msg"},
+                {"role": "assistant", "content": "reply"},
+            ]
+        )
+        worker._generate_summary = AsyncMock(return_value="summary")
+
+        count = await worker._check_idle_sessions()
+
+        # Cap=3 idle sessions processed; some active keys observed.
+        assert count == 3
+        assert worker._redis.delete.call_count == 3
+
+    async def test_cap_hit_emits_langfuse_score(self, monkeypatch):
+        """When the cap is hit, emit ``session_summary_cap_hit=1`` for visibility."""
+        from telegram_bot.services import session_summary_worker as ssw_mod
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        mock_lf = MagicMock()
+        monkeypatch.setattr(ssw_mod, "get_client", lambda: mock_lf)
+
+        keys = self._idle_keys(5)
+        idle_ts = str(time.time() - 9999).encode()
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            idle_timeout_min=30,
+            max_sessions_per_cycle=2,
+        )
+        worker._redis.scan = AsyncMock(side_effect=[(0, keys)])
+        worker._redis.get = AsyncMock(return_value=idle_ts)
+        worker._redis.delete = AsyncMock()
+        worker._get_conversation_history = AsyncMock(
+            return_value=[
+                {"role": "user", "content": "msg"},
+                {"role": "assistant", "content": "reply"},
+            ]
+        )
+        worker._generate_summary = AsyncMock(return_value="summary")
+
+        await worker._check_idle_sessions()
+
+        cap_calls = [
+            c
+            for c in mock_lf.score_current_trace.call_args_list
+            if c.kwargs.get("name") == "session_summary_cap_hit"
+        ]
+        assert cap_calls, "Worker must emit session_summary_cap_hit=1 score when cap is reached"
+
+    async def test_under_cap_does_not_emit_cap_hit_score(self, monkeypatch):
+        """Below the cap -> no cap_hit signal."""
+        from telegram_bot.services import session_summary_worker as ssw_mod
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        mock_lf = MagicMock()
+        monkeypatch.setattr(ssw_mod, "get_client", lambda: mock_lf)
+
+        keys = self._idle_keys(2)
+        idle_ts = str(time.time() - 9999).encode()
+
+        worker = SessionSummaryWorker(
+            redis=AsyncMock(),
+            llm=AsyncMock(),
+            idle_timeout_min=30,
+            max_sessions_per_cycle=10,
+        )
+        worker._redis.scan = AsyncMock(side_effect=[(0, keys)])
+        worker._redis.get = AsyncMock(return_value=idle_ts)
+        worker._redis.delete = AsyncMock()
+        worker._get_conversation_history = AsyncMock(
+            return_value=[
+                {"role": "user", "content": "msg"},
+                {"role": "assistant", "content": "reply"},
+            ]
+        )
+        worker._generate_summary = AsyncMock(return_value="summary")
+
+        await worker._check_idle_sessions()
+
+        cap_calls = [
+            c
+            for c in mock_lf.score_current_trace.call_args_list
+            if c.kwargs.get("name") == "session_summary_cap_hit"
+        ]
+        assert not cap_calls
+
+    async def test_cap_default_is_50(self):
+        """Default ``max_sessions_per_cycle`` keeps current behavior bounded."""
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
+        assert worker._max_sessions_per_cycle == 50
+
+    async def test_cap_clamps_at_minimum_one(self):
+        """A non-positive cap is normalized to 1 (must process at least one)."""
+        from telegram_bot.services.session_summary_worker import SessionSummaryWorker
+
+        worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock(), max_sessions_per_cycle=0)
+        assert worker._max_sessions_per_cycle == 1
+
+
 class TestHistorySourceWiring:
     """Regression tests for #1599: history_source must be configurable.
 
