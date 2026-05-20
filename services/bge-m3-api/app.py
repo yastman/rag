@@ -230,7 +230,7 @@ async def encode_dense(request: EncodeRequest):
         valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
         partial_failures = [
             PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages)
+            for idx, msg in zip(invalid_indices, error_messages, strict=True)
         ]
         if invalid_indices:
             encode_partial_failures_total.labels(encode_type="dense").inc(len(invalid_indices))
@@ -263,7 +263,7 @@ async def encode_dense(request: EncodeRequest):
         for i in valid_indices:
             dense_vecs[i] = next(valid_iter)
         for i in invalid_indices:
-            dense_vecs[i] = dense_sentinel
+            dense_vecs[i] = dense_sentinel.copy()
 
         return DenseResponse(
             dense_vecs=dense_vecs,
@@ -296,7 +296,7 @@ async def encode_sparse(request: EncodeRequest):
         valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
         partial_failures = [
             PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages)
+            for idx, msg in zip(invalid_indices, error_messages, strict=True)
         ]
         if invalid_indices:
             encode_partial_failures_total.labels(encode_type="sparse").inc(len(invalid_indices))
@@ -337,7 +337,7 @@ async def encode_sparse(request: EncodeRequest):
         for i in valid_indices:
             lexical_weights[i] = next(valid_iter)
         for i in invalid_indices:
-            lexical_weights[i] = sparse_sentinel
+            lexical_weights[i] = sparse_sentinel.copy()
 
         return SparseResponse(
             lexical_weights=lexical_weights,
@@ -370,7 +370,7 @@ async def encode_colbert(request: EncodeRequest):
         valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
         partial_failures = [
             PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages)
+            for idx, msg in zip(invalid_indices, error_messages, strict=True)
         ]
         if invalid_indices:
             encode_partial_failures_total.labels(encode_type="colbert").inc(len(invalid_indices))
@@ -403,7 +403,7 @@ async def encode_colbert(request: EncodeRequest):
         for i in valid_indices:
             colbert_vecs[i] = next(valid_iter)
         for i in invalid_indices:
-            colbert_vecs[i] = colbert_sentinel
+            colbert_vecs[i] = [row[:] for row in colbert_sentinel]
 
         return ColbertResponse(
             colbert_vecs=colbert_vecs,
@@ -437,7 +437,7 @@ async def encode_hybrid(request: EncodeRequest):
         valid_indices, invalid_indices, error_messages = _validate_texts(request.texts)
         partial_failures = [
             PartialFailure(index=idx, error=msg)
-            for idx, msg in zip(invalid_indices, error_messages)
+            for idx, msg in zip(invalid_indices, error_messages, strict=True)
         ]
         if invalid_indices:
             encode_partial_failures_total.labels(encode_type="hybrid").inc(len(invalid_indices))
@@ -491,9 +491,9 @@ async def encode_hybrid(request: EncodeRequest):
             lexical_weights[i] = next(sparse_iter)
             colbert_vecs[i] = next(colbert_iter)
         for i in invalid_indices:
-            dense_vecs[i] = dense_sentinel
-            lexical_weights[i] = sparse_sentinel
-            colbert_vecs[i] = colbert_sentinel
+            dense_vecs[i] = dense_sentinel.copy()
+            lexical_weights[i] = sparse_sentinel.copy()
+            colbert_vecs[i] = [row[:] for row in colbert_sentinel]
 
         return HybridResponse(
             dense_vecs=dense_vecs,
