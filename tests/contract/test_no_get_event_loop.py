@@ -51,9 +51,7 @@ def _iter_python_files(directories: list[Path]) -> list[Path]:
     return files
 
 
-def _find_get_event_loop_calls(
-    source: str, file_path: Path
-) -> list[tuple[Path, int]]:
+def _find_get_event_loop_calls(source: str, file_path: Path) -> list[tuple[Path, int]]:
     try:
         tree = ast.parse(source, filename=str(file_path))
     except SyntaxError:
@@ -83,10 +81,7 @@ def _format_new_offenders_message(new_offenders: list[tuple[Path, int]]) -> str:
 
 def _format_stale_allowlist_message(stale_allowlist: list[tuple[str, int]]) -> str:
     stale_lines = "\n".join(f"  {rel}:{lineno}" for rel, lineno in stale_allowlist)
-    return (
-        "Stale ALLOWLIST entries — remove from the dict in this test (***REMOVED***1639):\n"
-        + stale_lines
-    )
+    return "Stale ALLOWLIST entries — remove from the dict in this test (***REMOVED***1639):\n" + stale_lines
 
 
 def test_no_unallowlisted_get_event_loop_calls() -> None:

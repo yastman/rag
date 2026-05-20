@@ -1,9 +1,5 @@
 ***REMOVED*** tests/unit/evaluation/test_run_ab_test.py
-"""Tests for src/evaluation/run_ab_test.py.
-
-Note: The run_ab_test.py module has relative imports that make it difficult to test
-in isolation. These tests focus on the testable parts and skip module-level imports.
-"""
+"""Tests for src/evaluation/run_ab_test.py helper functions."""
 
 import json
 import os
@@ -12,30 +8,16 @@ import tempfile
 import numpy as np
 import pytest
 
+from src.evaluation.run_ab_test import convert_numpy, determine_conclusion, print_metrics
+
 
 class TestConvertNumpy:
-    """Tests for convert_numpy helper function.
-
-    Note: This function is defined inside run_ab_test function,
-    so we test the logic pattern here with a local implementation.
-    """
-
-    def _convert_numpy(self, obj):
-        """Local implementation of convert_numpy for testing."""
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        if isinstance(obj, (np.integer, np.floating)):
-            return float(obj)
-        if isinstance(obj, dict):
-            return {k: self._convert_numpy(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [self._convert_numpy(item) for item in obj]
-        return obj
+    """Tests for convert_numpy helper function."""
 
     def test_convert_numpy_bool(self):
         """Test numpy bool to Python bool conversion."""
         val = np.bool_(True)
-        result = self._convert_numpy(val)
+        result = convert_numpy(val)
 
         assert result is True
         assert isinstance(result, bool)
@@ -43,7 +25,7 @@ class TestConvertNumpy:
     def test_convert_numpy_int(self):
         """Test numpy int to Python float conversion."""
         val = np.int64(42)
-        result = self._convert_numpy(val)
+        result = convert_numpy(val)
 
         assert result == 42.0
         assert isinstance(result, float)
@@ -51,7 +33,7 @@ class TestConvertNumpy:
     def test_convert_numpy_float(self):
         """Test numpy float to Python float conversion."""
         val = np.float32(3.14)
-        result = self._convert_numpy(val)
+        result = convert_numpy(val)
 
         assert result == pytest.approx(3.14, rel=1e-5)
         assert isinstance(result, float)
@@ -63,7 +45,7 @@ class TestConvertNumpy:
             "int_val": np.int32(10),
             "float_val": np.float64(2.5),
         }
-        result = self._convert_numpy(data)
+        result = convert_numpy(data)
 
         assert result["bool_val"] is False
         assert isinstance(result["int_val"], float)
@@ -72,7 +54,7 @@ class TestConvertNumpy:
     def test_convert_list_with_numpy(self):
         """Test conversion of list with numpy types."""
         data = [np.bool_(True), np.int64(5), np.float32(1.5)]
-        result = self._convert_numpy(data)
+        result = convert_numpy(data)
 
         assert result[0] is True
         assert isinstance(result[1], float)
@@ -81,7 +63,7 @@ class TestConvertNumpy:
     def test_convert_python_types_unchanged(self):
         """Test that Python types are unchanged."""
         data = {"string": "text", "int": 42, "float": 3.14, "bool": True}
-        result = self._convert_numpy(data)
+        result = convert_numpy(data)
 
         assert result == data
 
@@ -92,7 +74,7 @@ class TestConvertNumpy:
                 "inner": [np.int64(1), np.float32(2.0)],
             }
         }
-        result = self._convert_numpy(data)
+        result = convert_numpy(data)
 
         assert result["outer"]["inner"] == [1.0, 2.0]
 
@@ -100,20 +82,7 @@ class TestConvertNumpy:
 class TestPrintMetricsStandalone:
     """Standalone tests for print_metrics output format."""
 
-    def _print_metrics(self, metrics: dict):
-        """Local implementation matching the expected output format."""
-        output = []
-        output.append(f"   Recall@1:  {metrics.get('recall@1', 0):.4f}")
-        output.append(f"   Recall@3:  {metrics.get('recall@3', 0):.4f}")
-        output.append(f"   Recall@5:  {metrics.get('recall@5', 0):.4f}")
-        output.append(f"   Recall@10: {metrics.get('recall@10', 0):.4f}")
-        output.append(f"   MRR:       {metrics.get('mrr', 0):.4f}")
-        output.append(f"   NDCG@10:   {metrics.get('ndcg@10', 0):.4f}")
-        failure_rate = metrics.get("failure_rate", 0)
-        output.append(f"   Failure:   {failure_rate:.4f} ({failure_rate * 100:.1f}%)")
-        return "\n".join(output)
-
-    def test_print_metrics_basic(self):
+    def test_print_metrics_basic(self, capsys):
         """Test print_metrics outputs correct format."""
         metrics = {
             "recall@1": 0.9123,
@@ -125,23 +94,25 @@ class TestPrintMetricsStandalone:
             "failure_rate": 0.0234,
         }
 
-        output = self._print_metrics(metrics)
+        print_metrics(metrics)
+        captured = capsys.readouterr()
 
-        assert "Recall@1:  0.9123" in output
-        assert "Recall@3:  0.9456" in output
-        assert "Recall@10: 0.9890" in output
-        assert "MRR:       0.8765" in output
-        assert "NDCG@10:   0.8543" in output
-        assert "Failure:   0.0234" in output
+        assert "Recall@1:  0.9123" in captured.out
+        assert "Recall@3:  0.9456" in captured.out
+        assert "Recall@10: 0.9890" in captured.out
+        assert "MRR:       0.8765" in captured.out
+        assert "NDCG@10:   0.8543" in captured.out
+        assert "Failure:   0.0234" in captured.out
 
-    def test_print_metrics_missing_values(self):
+    def test_print_metrics_missing_values(self, capsys):
         """Test print_metrics handles missing values."""
         metrics = {}
 
-        output = self._print_metrics(metrics)
+        print_metrics(metrics)
+        captured = capsys.readouterr()
 
-        assert "Recall@1:  0.0000" in output
-        assert "MRR:       0.0000" in output
+        assert "Recall@1:  0.0000" in captured.out
+        assert "MRR:       0.0000" in captured.out
 
 
 class TestMarkdownReportGeneration:
@@ -205,14 +176,7 @@ class TestMarkdownReportGeneration:
         dbsf_vs_baseline = 18.75  ***REMOVED*** > 10%
         dbsf_vs_hybrid = 8.0  ***REMOVED*** > 5%
 
-        if dbsf_vs_baseline > 10 and dbsf_vs_hybrid > 5:
-            conclusion = "SIGNIFICANTLY OUTPERFORMS"
-        elif dbsf_vs_baseline > 5:
-            conclusion = "MODERATELY OUTPERFORMS"
-        elif dbsf_vs_baseline > 0:
-            conclusion = "SLIGHTLY OUTPERFORMS"
-        else:
-            conclusion = "BASELINE STILL PERFORMS BEST"
+        conclusion = determine_conclusion(dbsf_vs_baseline, dbsf_vs_hybrid)
 
         assert conclusion == "SIGNIFICANTLY OUTPERFORMS"
 
@@ -221,14 +185,7 @@ class TestMarkdownReportGeneration:
         dbsf_vs_baseline = 7.5  ***REMOVED*** > 5% but <= 10%
         dbsf_vs_hybrid = 3.0  ***REMOVED*** <= 5%
 
-        if dbsf_vs_baseline > 10 and dbsf_vs_hybrid > 5:
-            conclusion = "SIGNIFICANTLY OUTPERFORMS"
-        elif dbsf_vs_baseline > 5:
-            conclusion = "MODERATELY OUTPERFORMS"
-        elif dbsf_vs_baseline > 0:
-            conclusion = "SLIGHTLY OUTPERFORMS"
-        else:
-            conclusion = "BASELINE STILL PERFORMS BEST"
+        conclusion = determine_conclusion(dbsf_vs_baseline, dbsf_vs_hybrid)
 
         assert conclusion == "MODERATELY OUTPERFORMS"
 

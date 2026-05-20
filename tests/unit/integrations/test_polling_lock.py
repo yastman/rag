@@ -50,10 +50,10 @@ async def test_acquire_uses_ttl_when_pttl_unavailable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresh_reacquires_owned_lock() -> None:
+async def test_refresh_extends_owned_lock() -> None:
     backend_lock = MagicMock()
     backend_lock.acquire = AsyncMock(return_value=True)
-    backend_lock.reacquire = AsyncMock(return_value=True)
+    backend_lock.extend = AsyncMock(return_value=True)
     redis = MagicMock()
     redis.lock.return_value = backend_lock
     lock = RedisPollingLock(redis=redis, key="bot:polling", ttl_sec=90)
@@ -61,7 +61,7 @@ async def test_refresh_reacquires_owned_lock() -> None:
     await lock.acquire(owner="host:123")
     await lock.refresh()
 
-    backend_lock.reacquire.assert_awaited_once_with()
+    backend_lock.extend.assert_awaited_once_with(additional_time=90, replace_ttl=True)
 
 
 @pytest.mark.asyncio

@@ -161,18 +161,14 @@ class BGEM3Client:
             )
             return DenseResult(vectors=[])
         client = await self._get_client()
-        all_vecs: list[list[float]] = []
-        processing_time: float | None = None
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            resp = await client.post(
-                f"{self.base_url}/encode/dense",
-                json={"texts": batch, "batch_size": len(batch), "max_length": self.max_length},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            all_vecs.extend(data["dense_vecs"])
-            processing_time = data.get("processing_time")
+        resp = await client.post(
+            f"{self.base_url}/encode/dense",
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        all_vecs = data["dense_vecs"]
+        processing_time = data.get("processing_time")
         lf.update_current_span(
             output={
                 "vectors_count": len(all_vecs),
@@ -205,18 +201,14 @@ class BGEM3Client:
             )
             return SparseResult(weights=[])
         client = await self._get_client()
-        all_weights: list[dict[str, Any]] = []
-        processing_time: float | None = None
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            resp = await client.post(
-                f"{self.base_url}/encode/sparse",
-                json={"texts": batch, "batch_size": len(batch), "max_length": self.max_length},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            all_weights.extend(data["lexical_weights"])
-            processing_time = data.get("processing_time")
+        resp = await client.post(
+            f"{self.base_url}/encode/sparse",
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        all_weights = data["lexical_weights"]
+        processing_time = data.get("processing_time")
         lf.update_current_span(
             output={"weights_count": len(all_weights), "processing_time": processing_time},
             metadata={"model": BGE_M3_MODEL_NAME},
@@ -246,7 +238,7 @@ class BGEM3Client:
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/hybrid",
-            json={"texts": texts, "max_length": self.max_length},
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -337,7 +329,7 @@ class BGEM3Client:
         client = await self._get_client()
         resp = await client.post(
             f"{self.base_url}/encode/colbert",
-            json={"texts": texts, "max_length": self.max_length},
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -399,37 +391,27 @@ class BGEM3SyncClient:
         """Encode texts to dense vectors (sync)."""
         if not texts:
             return DenseResult(vectors=[])
-        all_vecs: list[list[float]] = []
-        processing_time: float | None = None
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            resp = self._client.post(
-                f"{self.base_url}/encode/dense",
-                json={"texts": batch, "batch_size": len(batch), "max_length": self.max_length},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            all_vecs.extend(data["dense_vecs"])
-            processing_time = data.get("processing_time")
-        return DenseResult(vectors=all_vecs, processing_time=processing_time)
+        resp = self._client.post(
+            f"{self.base_url}/encode/dense",
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return DenseResult(vectors=data["dense_vecs"], processing_time=data.get("processing_time"))
 
     def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors (sync)."""
         if not texts:
             return SparseResult(weights=[])
-        all_weights: list[dict[str, Any]] = []
-        processing_time: float | None = None
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            resp = self._client.post(
-                f"{self.base_url}/encode/sparse",
-                json={"texts": batch, "batch_size": len(batch), "max_length": self.max_length},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            all_weights.extend(data["lexical_weights"])
-            processing_time = data.get("processing_time")
-        return SparseResult(weights=all_weights, processing_time=processing_time)
+        resp = self._client.post(
+            f"{self.base_url}/encode/sparse",
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return SparseResult(
+            weights=data["lexical_weights"], processing_time=data.get("processing_time")
+        )
 
     def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors (sync)."""
@@ -437,7 +419,7 @@ class BGEM3SyncClient:
             return ColbertResult(colbert_vecs=[])
         resp = self._client.post(
             f"{self.base_url}/encode/colbert",
-            json={"texts": texts, "max_length": self.max_length},
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -454,28 +436,17 @@ class BGEM3SyncClient:
         """
         if not texts:
             return HybridResult(dense_vecs=[], lexical_weights=[])
-        all_dense: list[list[float]] = []
-        all_weights: list[dict[str, Any]] = []
-        all_colbert: list[list[list[float]]] = []
-        processing_time: float | None = None
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            resp = self._client.post(
-                f"{self.base_url}/encode/hybrid",
-                json={"texts": batch, "batch_size": len(batch), "max_length": self.max_length},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            all_dense.extend(data["dense_vecs"])
-            all_weights.extend(data["lexical_weights"])
-            if data.get("colbert_vecs"):
-                all_colbert.extend(data["colbert_vecs"])
-            processing_time = data.get("processing_time")
+        resp = self._client.post(
+            f"{self.base_url}/encode/hybrid",
+            json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
         return HybridResult(
-            dense_vecs=all_dense,
-            lexical_weights=all_weights,
-            colbert_vecs=all_colbert or None,
-            processing_time=processing_time,
+            dense_vecs=data["dense_vecs"],
+            lexical_weights=data["lexical_weights"],
+            colbert_vecs=data.get("colbert_vecs"),
+            processing_time=data.get("processing_time"),
         )
 
     def close(self) -> None:
