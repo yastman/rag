@@ -15,6 +15,7 @@ Task-oriented entrypoint for engineering process docs. Use this when the request
 | Testing and validation | [`../engineering/test-writing-guide.md`](../engineering/test-writing-guide.md) | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md), `Makefile`, `pyproject.toml` |
 | Issue triage | [`../engineering/issue-triage.md`](../engineering/issue-triage.md) | Current issue, nearest folder `README.md`, nearest `AGENTS.override.md` |
 | SDK/framework lookup | [`../engineering/sdk-registry.md`](../engineering/sdk-registry.md) | Current code usage, Context7 or official docs for version-sensitive behavior |
+| Script/helper migration | [`../engineering/script-native-migration-matrix.md`](../engineering/script-native-migration-matrix.md) | `scripts/README.md`, `Makefile`, `.github/workflows/`, current script callsites |
 | Dependency updates | Dependency update skill when available; otherwise `Makefile` uv targets and package manifests | Current package manifests, lockfiles, and SDK registry notes |
 | Docs maintenance | [`../engineering/docs-maintenance.md`](../engineering/docs-maintenance.md) | [`../README.md`](../README.md), [`README.md`](README.md), nearest folder `README.md` |
 

@@ -99,6 +99,8 @@ spans:
     - cache-search-store
     - cache-rerank-get
     - cache-rerank-store
+    - cache-bge-m3-bundle-get
+    - cache-bge-m3-bundle-store
 
   bge_m3_client:
     - bge-m3-encode-dense
@@ -113,6 +115,7 @@ spans:
     - bge-m3-sparse-embed-batch
     - bge-m3-hybrid-embed
     - bge-m3-hybrid-colbert-embed
+    - bge-m3-dense-query-embed
     - bge-m3-colbert-query-embed
     - bge-m3-hybrid-embed-batch
 
@@ -131,6 +134,7 @@ spans:
     - search-engine-encode-hybrid
     - search-engine-encode-hybrid-colbert
     - search-engine-encode-dbsf-colbert
+    - colbert-rerank-search
 
   qdrant:
     - qdrant-ensure-collection
@@ -257,11 +261,35 @@ spans:
 
   contextualization:
     - claude-contextualize
+    - claude-contextualize-batch
     - claude-contextualize-sync
     - openai-contextualize
+    - openai-contextualize-batch
     - openai-contextualize-sync
     - groq-contextualize
+    - groq-contextualize-batch
     - groq-contextualize-sync
+
+  observability_wrappers:
+    - crm-contact-note-prompt
+    - crm-lead-note-prompt
+    - crm-lead-task-prompt
+    - crm-task-create
+    - crm-task-edit-date
+    - crm-task-edit-field
+    - crm-task-edit-prompt
+    - crm-task-edit-text
+    - crm-task-postpone
+    - hyde-generate-document
+    - job-funnel-rollup
+    - job-hot-lead-notify
+    - job-lead-score-sync
+    - job-nurturing-dispatch
+    - llm-service-generate
+    - llm-service-generate-answer
+    - llm-service-stream-answer
+    - query-analyzer
+    - session-summary-llm
 
 ***REMOVED*** Spans that must set capture_input=False, capture_output=False in production.
 ***REMOVED*** These spans handle PII, raw embeddings, or security-sensitive payloads.
@@ -303,12 +331,16 @@ sensitive_spans:
   - cache-search-store
   - cache-rerank-get
   - cache-rerank-store
+  - cache-bge-m3-bundle-get
+  - cache-bge-m3-bundle-store
   ***REMOVED*** bge_m3_client (raw vectors)
   - bge-m3-encode-dense
   - bge-m3-encode-sparse
   - bge-m3-encode-hybrid
   - bge-m3-rerank
   - bge-m3-encode-colbert
+  ***REMOVED*** bge_m3_embeddings (raw vectors)
+  - bge-m3-dense-query-embed
   ***REMOVED*** bge_m3_service (raw vectors)
   - bge-m3-service-encode-dense
   - bge-m3-service-encode-sparse
@@ -322,6 +354,7 @@ sensitive_spans:
   - search-engine-encode-hybrid
   - search-engine-encode-hybrid-colbert
   - search-engine-encode-dbsf-colbert
+  - colbert-rerank-search
   ***REMOVED*** qdrant (raw search payloads + lifecycle)
   - qdrant-ensure-collection
   - qdrant-apply-strict-mode
@@ -402,11 +435,34 @@ sensitive_spans:
   - ingestion-indexer-embed-texts
   ***REMOVED*** contextualization (raw text chunks and queries)
   - claude-contextualize
+  - claude-contextualize-batch
   - claude-contextualize-sync
   - openai-contextualize
+  - openai-contextualize-batch
   - openai-contextualize-sync
   - groq-contextualize
+  - groq-contextualize-batch
   - groq-contextualize-sync
+  ***REMOVED*** observability_wrappers (user messages, CRM notes/tasks, job payloads)
+  - crm-contact-note-prompt
+  - crm-lead-note-prompt
+  - crm-lead-task-prompt
+  - crm-task-create
+  - crm-task-edit-date
+  - crm-task-edit-field
+  - crm-task-edit-prompt
+  - crm-task-edit-text
+  - crm-task-postpone
+  - hyde-generate-document
+  - job-funnel-rollup
+  - job-hot-lead-notify
+  - job-lead-score-sync
+  - job-nurturing-dispatch
+  - llm-service-generate
+  - llm-service-generate-answer
+  - llm-service-stream-answer
+  - query-analyzer
+  - session-summary-llm
 
 scores:
   core_rag:
