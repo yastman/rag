@@ -69,10 +69,11 @@ class TestIngestionServiceE2E:
             assert stats.total_documents >= 1
             assert stats.errors == []
 
-            ***REMOVED*** Verify collection has points
+            ***REMOVED*** Verify collection has points (***REMOVED***1629 — success path must require
+            ***REMOVED*** actual data, not a no-op).
             collection_stats = await service.get_collection_stats()
             assert "error" not in collection_stats
-            assert collection_stats.get("points_count", 0) >= 0
+            assert collection_stats.get("points_count", 0) > 0
 
         finally:
             await service.close()
@@ -86,9 +87,12 @@ class TestIngestionServiceE2E:
         try:
             stats = await service.get_collection_stats()
 
-            ***REMOVED*** Should return dict with stats or error
+            ***REMOVED*** Success path: stats must describe a healthy collection. Graceful
+            ***REMOVED*** failures are covered by the dedicated negative test
+            ***REMOVED*** test_ingest_gdrive_without_credentials_fails_gracefully (***REMOVED***1629).
             assert isinstance(stats, dict)
-            assert "name" in stats or "error" in stats
+            assert "error" not in stats
+            assert "name" in stats
 
         finally:
             await service.close()
@@ -147,6 +151,7 @@ class TestConvenienceFunctionsE2E:
 
         status = await get_ingestion_status()
 
+        ***REMOVED*** Success path: status must describe a healthy collection (***REMOVED***1629).
         assert isinstance(status, dict)
-        ***REMOVED*** Should have name or error
-        assert "name" in status or "error" in status
+        assert "error" not in status
+        assert "name" in status
