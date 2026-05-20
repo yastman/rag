@@ -86,7 +86,14 @@ class TestSmokeQuantization:
         overlap = len(ids_with & ids_without) / max(len(ids_with), 1)
         assert overlap >= 0.6, f"Overlap {overlap:.0%} < 60%"
 
-    @pytest.mark.xfail(reason="Flaky timing comparison — depends on system load", strict=False)
+    @pytest.mark.skip(
+        reason=(
+            "Quantization latency comparison is timing-flaky on shared CI runners "
+            "and produced no actionable signal under xfail(strict=False). "
+            "Re-enable as a strict benchmark with a baseline + tolerance once a "
+            "dedicated benchmark host is available — see ***REMOVED***1601 follow-up."
+        )
+    )
     async def test_quantization_latency_comparison(self, voyage_service, qdrant_service):
         """Measure latency with/without quantization (5 runs each, compare p95)."""
         embedding = await voyage_service.embed_query("апартаменты с бассейном")

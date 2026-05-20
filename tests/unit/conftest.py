@@ -149,11 +149,21 @@ def isolate_otel_langfuse(monkeypatch):
     ]
 
     for p in patches:
-        with contextlib.suppress(Exception):
+        ***REMOVED*** ***REMOVED***1601: narrow suppression — only swallow expected optional-import
+        ***REMOVED*** failures (the patched module/class is intentionally missing in some
+        ***REMOVED*** envs) and lazy-attribute resolution misses (telegram_bot.services
+        ***REMOVED*** raises AttributeError from its lazy import handler when the target
+        ***REMOVED*** symbol is provided by a sibling package, not the package itself).
+        ***REMOVED*** Anything else (TypeError, ValueError, etc.) is a real isolation
+        ***REMOVED*** bug we want to surface.
+        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError):
             p.start()
 
     yield
 
     for p in patches:
-        with contextlib.suppress(Exception):
+        ***REMOVED*** RuntimeError is raised by mock.patch when the start failed
+        ***REMOVED*** earlier and stop has no original to restore. AttributeError
+        ***REMOVED*** mirrors the start-time guard above.
+        with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError, RuntimeError):
             p.stop()
