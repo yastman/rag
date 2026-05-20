@@ -42,9 +42,17 @@ def _redis_url_candidates() -> list[str]:
     return urls
 
 
-@pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="REDIS_URL not set")
+@pytest.mark.load
 class TestLoadRedisEviction:
-    """Test Redis eviction behavior under load."""
+    """Test Redis eviction behavior under load.
+
+    Reachability is handled by the redis_client fixture below — it tries
+    a TCP probe and several auth fallbacks before skipping. The previous
+    class-level ``@pytest.mark.skipif(not os.getenv("REDIS_URL"), ...)``
+    caused ``make test-load-eviction`` to silently skip when the env var
+    was unset even though a Redis was listening on localhost:6379. See
+    issue #1633.
+    """
 
     @pytest.fixture
     async def redis_client(self):
@@ -89,13 +97,30 @@ class TestLoadRedisEviction:
         assert int(maxmem.get("maxmemory", 0)) > 0
 
     async def test_eviction_under_pressure(self, redis_client, eviction_config):
-        """Test eviction behavior under write pressure."""
-        total_mb = eviction_config["total_mb"]
-        value_size_kb = eviction_config["value_size_kb"]
+        """Test that write pressure beyond maxmemory triggers evictions.
 
-        total_bytes = total_mb * 1024 * 1024
+        Reads ``maxmemory`` from Redis, sizes the workload so the bytes
+        written are guaranteed to exceed the limit (with a 1.5x safety
+        factor), then asserts at least one eviction was observed during
+        the burst. Without the assertion the test was tautologically green
+        (#1634).
+        """
+        value_size_kb = eviction_config["value_size_kb"]
         value_size = value_size_kb * 1024
+
+        # Size the workload to guarantee pressure beyond the configured
+        # maxmemory. Operators can still raise EVICTION_TEST_MB to widen
+        # the burst on hosts with large maxmemory.
+        configured_mb = eviction_config["total_mb"]
+        configured_bytes = configured_mb * 1024 * 1024
+
+        maxmem_cfg = await redis_client.config_get("maxmemory")
+        maxmemory = int(maxmem_cfg.get("maxmemory", 0))
+        required_bytes = int(maxmemory * 1.5) if maxmemory > 0 else configured_bytes
+
+        total_bytes = max(configured_bytes, required_bytes)
         num_keys = total_bytes // value_size
+        total_mb = total_bytes // (1024 * 1024)
 
         test_prefix = f"rag:eviction_test:{int(time.time())}"
         stats_timeseries = []
@@ -136,6 +161,16 @@ class TestLoadRedisEviction:
             json.dump(stats_timeseries, f, indent=2)
 
         print(f"\nWrote {num_keys} keys ({total_mb}MB), evictions: {evictions}")
+
+        # Behavioral assertion: pressure beyond maxmemory must trigger evictions.
+        # If maxmemory is 0 (unbounded) we cannot make this guarantee — skip.
+        if maxmemory <= 0:
+            pytest.skip("Redis maxmemory not configured; cannot exercise eviction policy.")
+        assert evictions > 0, (
+            f"Expected evictions under pressure ({total_mb}MB written, "
+            f"maxmemory={maxmemory} bytes, policy={(await redis_client.config_get('maxmemory-policy')).get('maxmemory-policy')}), "
+            f"got 0. The eviction policy or maxmemory may have regressed."
+        )
 
     async def test_hit_rate_under_zipf_access(self, redis_client):
         """Test hit rate under Zipf-like access pattern."""

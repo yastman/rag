@@ -47,7 +47,13 @@ class TestQdrantRecovery:
     """Tests for Qdrant failure recovery."""
 
     async def test_qdrant_recovers_after_transient_failure(self):
-        """Verify service recovers after transient failures."""
+        """Verify service recovers after transient failures.
+
+        Asserts the full transient-failure → recovery sequence:
+        - first two calls raise TimeoutError and gracefully degrade to []
+        - third call returns the recovered point with id/score/text intact
+        - the underlying client is invoked exactly 3 times
+        """
 
         from telegram_bot.services.qdrant import QdrantService
 
@@ -64,12 +70,16 @@ class TestQdrantRecovery:
             call_count += 1
             if call_count <= 2:
                 raise TimeoutError("Transient timeout")
-            # Third call succeeds
+            # Third call succeeds. Use payload keys consumed by
+            # QdrantService._format_results: page_content + metadata.
             mock_result = MagicMock()
             mock_point = MagicMock()
             mock_point.id = "1"
             mock_point.score = 0.9
-            mock_point.payload = {"text": "recovered result", "metadata": {}}
+            mock_point.payload = {
+                "page_content": "recovered result",
+                "metadata": {"source": "chaos-test"},
+            }
             mock_result.points = [mock_point]
             return mock_result
 
@@ -84,13 +94,19 @@ class TestQdrantRecovery:
             )
             assert results == []
 
-        # Third call succeeds
+        # Third call must surface the recovered point — assert the actual
+        # contract, not just `len(results) >= 0` which trivially passes.
         results = await service.hybrid_search_rrf(
             dense_vector=[0.1] * 1024,
             top_k=10,
         )
-        # Should have results after recovery
-        assert len(results) >= 0  # May or may not have results
+        assert call_count == 3
+        assert len(results) == 1
+        recovered = results[0]
+        assert recovered["id"] == "1"
+        assert recovered["score"] == 0.9
+        assert recovered["text"] == "recovered result"
+        assert recovered["metadata"] == {"source": "chaos-test"}
 
 
 class TestQdrantServiceInitialization:
