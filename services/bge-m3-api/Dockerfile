@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # ====== RUNTIME STAGE ======
-FROM python:3.14-slim-bookworm@sha256:eae5d4c3ba20e5f89782e37950bb4815460e8f27564fd25112c3d950cd5351c9 AS runtime
+FROM python:3.14-slim-bookworm@sha256:a9bee15510a364124aa24692899d269835683b883de42f7ebec8c293cf679ccb AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
 
