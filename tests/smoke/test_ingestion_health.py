@@ -8,8 +8,9 @@ import urllib.request
 import pytest
 
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-BGE_M3_URL = os.getenv("BGE_M3_URL", "http://localhost:8000")
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
+QDRANT_URL = os.getenv("QDRANT_URL", f"http://{SERVICES_HOST}:6333")
+BGE_M3_URL = os.getenv("BGE_M3_URL", f"http://{SERVICES_HOST}:8000")
 COLLECTION = os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")
 SCROLL_SAMPLE_LIMIT = 20
 
@@ -35,13 +36,13 @@ def _http_post(url: str, data: dict) -> dict:
 
 
 def _require_qdrant() -> None:
-    if not _port_open("localhost", 6333):
-        pytest.skip("Qdrant not running on localhost:6333")
+    if not _port_open(SERVICES_HOST, 6333):
+        pytest.skip(f"Qdrant not running on {SERVICES_HOST}:6333")
 
 
 def _require_bge_m3() -> None:
-    if not _port_open("localhost", 8000):
-        pytest.skip("BGE-M3 not running on localhost:8000")
+    if not _port_open(SERVICES_HOST, 8000):
+        pytest.skip(f"BGE-M3 not running on {SERVICES_HOST}:8000")
 
 
 def _first_document_point(points: list[dict]) -> dict:

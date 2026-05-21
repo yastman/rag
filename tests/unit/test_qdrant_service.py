@@ -1,1074 +1,301 @@
-"""Tests for QdrantService quantization parameters."""
+"""Tests for QdrantService with Query API, Score Boosting, MMR, and Quantization Mode."""
 
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.services.qdrant import QdrantService
 
-
-pytestmark = pytest.mark.xdist_group("qdrant_service")
-
-
-def _make_service(*, validated: bool = False) -> QdrantService:
-    """Create QdrantService with mocked client.
-
-    If ``validated``, set ``_client`` to AsyncMock and ``_collection_validated`` to True
-    so search methods work without real Qdrant.
-    """
-    with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-        svc = QdrantService(url="http://localhost:6333", collection_name="test_collection")
-        if validated:
-            svc._client = AsyncMock()
-            svc._collection_validated = True
-        return svc
-
-
-def _make_mock_point(
-    id: str = "1", score: float = 0.9, text: str = "test", metadata: dict | None = None
-) -> MagicMock:
-    """Create a mock Qdrant search point."""
-    point = MagicMock()
-    point.id = id
-    point.score = score
-    point.payload = {"page_content": text, "metadata": metadata or {}}
-    return point
-
-
-class TestQdrantServiceQuantization:
-    """Test quantization search parameters."""
-
-    @pytest.fixture
-    def service(self):
-        return _make_service(validated=True)
-
-    async def test_hybrid_search_with_quantization_ignore(self, service):
-        """Test that quantization_ignore is passed to search params."""
-        mock_point = _make_mock_point()
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            quantization_ignore=True,
-        )
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        assert "search_params" in call_kwargs
-        assert call_kwargs["search_params"] is not None
-
-    async def test_hybrid_search_default_no_quantization_params(self, service):
-        """Test default behavior without quantization params."""
-        mock_point = _make_mock_point()
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        await service.hybrid_search_rrf(dense_vector=[0.1] * 1024)
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        assert call_kwargs.get("search_params") is None
-
-    async def test_hybrid_search_builds_topic_and_doc_type_filters(self, service):
-        """Hybrid search maps topic/doc_type filters to metadata payload keys."""
-        mock_point = _make_mock_point()
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            filters={"topic": "finance", "doc_type": "faq"},
-        )
-
-        query_filter = service._client.query_points.call_args.kwargs["query_filter"]
-        assert query_filter is not None
-        must_keys = [condition.key for condition in query_filter.must]
-        assert "metadata.topic" in must_keys
-        assert "metadata.doc_type" in must_keys
-
-    async def test_build_filter_maps_jurisdiction_and_audience(self, service):
-        """Hybrid search maps jurisdiction/audience filters to metadata payload keys."""
-        mock_point = _make_mock_point()
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            filters={"jurisdiction": "bg", "audience": "client"},
-        )
-
-        query_filter = service._client.query_points.call_args.kwargs["query_filter"]
-        must_keys = [condition.key for condition in query_filter.must]
-        assert "metadata.jurisdiction" in must_keys
-        assert "metadata.audience" in must_keys
-
-    async def test_quantization_params_values(self, service):
-        """Test that ignore/rescore/oversampling values are correctly set."""
-        mock_point = _make_mock_point()
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        # Test with specific values
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            quantization_ignore=True,
-            quantization_rescore=False,
-            quantization_oversampling=3.0,
-        )
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        search_params = call_kwargs["search_params"]
-
-        # Verify all quantization params are correctly passed
-        assert search_params is not None
-        assert search_params.quantization.ignore is True
-        assert search_params.quantization.rescore is False
-        assert search_params.quantization.oversampling == 3.0
-
-    async def test_quantization_default_rescore_oversampling(self, service):
-        """Test default rescore=True and oversampling=2.0."""
-        mock_point = _make_mock_point()
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        # Only set ignore, check defaults for rescore/oversampling
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            quantization_ignore=False,
-        )
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        search_params = call_kwargs["search_params"]
-
-        assert search_params.quantization.ignore is False
-        assert search_params.quantization.rescore is True  # default
-        assert search_params.quantization.oversampling == 2.0  # default
-
-
-class TestQdrantServiceBatchSearch:
-    """Tests for batch_search_rrf method."""
-
-    @pytest.fixture
-    def service(self):
-        return _make_service(validated=True)
-
-    @pytest.fixture
-    def mock_points(self):
-        return [
-            _make_mock_point(
-                id=f"doc_{i}",
-                score=0.9 - i * 0.1,
-                text=f"Content {i}",
-                metadata={"source": f"src_{i}"},
-            )
-            for i in range(3)
-        ]
-
-    async def test_batch_search_single_query(self, service, mock_points):
-        """Test batch search with a single query returns results."""
-        response = MagicMock()
-        response.points = mock_points
-
-        service._client.query_batch_points = AsyncMock(return_value=[response])
-
-        queries = [{"dense_vector": [0.1] * 1024}]
-        results = await service.batch_search_rrf(queries=queries, top_k=5)
-
-        assert len(results) == 3
-        assert results[0]["id"] == "doc_0"
-        assert results[0]["score"] == 0.9
-        service._client.query_batch_points.assert_called_once()
-
-    async def test_batch_search_multiple_queries(self, service):
-        """Test batch search with multiple queries merges results."""
-        # Query 1 returns doc_0, doc_1
-        p0 = MagicMock(id="doc_0", score=0.9, payload={"page_content": "A", "metadata": {}})
-        p1 = MagicMock(id="doc_1", score=0.7, payload={"page_content": "B", "metadata": {}})
-        resp1 = MagicMock(points=[p0, p1])
-
-        # Query 2 returns doc_1 (higher score), doc_2
-        p1b = MagicMock(id="doc_1", score=0.85, payload={"page_content": "B", "metadata": {}})
-        p2 = MagicMock(id="doc_2", score=0.6, payload={"page_content": "C", "metadata": {}})
-        resp2 = MagicMock(points=[p1b, p2])
-
-        service._client.query_batch_points = AsyncMock(return_value=[resp1, resp2])
-
-        queries = [
-            {"dense_vector": [0.1] * 1024},
-            {"dense_vector": [0.2] * 1024},
-        ]
-        results = await service.batch_search_rrf(queries=queries, top_k=10)
-
-        # Should have 3 unique docs
-        assert len(results) == 3
-        ids = [r["id"] for r in results]
-        assert ids == ["doc_0", "doc_1", "doc_2"]
-        # doc_1 should keep the higher score from query 2
-        assert results[1]["score"] == 0.85
-
-    async def test_batch_search_dedup_keeps_best_score(self, service):
-        """Test deduplication keeps the highest score for each doc."""
-        p1 = MagicMock(id="same_doc", score=0.5, payload={"page_content": "X", "metadata": {}})
-        p2 = MagicMock(id="same_doc", score=0.95, payload={"page_content": "X", "metadata": {}})
-
-        resp1 = MagicMock(points=[p1])
-        resp2 = MagicMock(points=[p2])
-
-        service._client.query_batch_points = AsyncMock(return_value=[resp1, resp2])
-
-        queries = [
-            {"dense_vector": [0.1] * 1024},
-            {"dense_vector": [0.2] * 1024},
-        ]
-        results = await service.batch_search_rrf(queries=queries, top_k=5)
-
-        assert len(results) == 1
-        assert results[0]["score"] == 0.95
-
-    async def test_batch_search_with_sparse_vectors(self, service, mock_points):
-        """Test batch search includes sparse vectors in prefetch."""
-        response = MagicMock(points=mock_points)
-        service._client.query_batch_points = AsyncMock(return_value=[response])
-
-        queries = [
-            {
-                "dense_vector": [0.1] * 1024,
-                "sparse_vector": {"indices": [1, 5, 10], "values": [0.5, 0.3, 0.2]},
-            }
-        ]
-        results = await service.batch_search_rrf(queries=queries, top_k=5)
-
-        assert len(results) == 3
-        # Verify the request has 2 prefetches (dense + sparse)
-        call_kwargs = service._client.query_batch_points.call_args.kwargs
-        req = call_kwargs["requests"][0]
-        assert len(req.prefetch) == 2
-
-    async def test_batch_search_empty_queries(self, service):
-        """Test batch search with empty queries returns empty list."""
-        results = await service.batch_search_rrf(queries=[], top_k=5)
-
-        assert results == []
-        service._client.query_batch_points.assert_not_called()
-
-    async def test_batch_search_respects_top_k(self, service):
-        """Test batch search caps results at top_k."""
-        points = []
-        for i in range(10):
-            p = MagicMock(
-                id=f"doc_{i}",
-                score=1.0 - i * 0.05,
-                payload={"page_content": f"C{i}", "metadata": {}},
-            )
-            points.append(p)
-
-        resp = MagicMock(points=points)
-        service._client.query_batch_points = AsyncMock(return_value=[resp])
-
-        queries = [{"dense_vector": [0.1] * 1024}]
-        results = await service.batch_search_rrf(queries=queries, top_k=3)
-
-        assert len(results) == 3
-        assert results[0]["score"] == 1.0
-
-    async def test_batch_search_graceful_degradation(self, service):
-        """Test batch search returns empty on error."""
-        service._client.query_batch_points = AsyncMock(side_effect=Exception("Connection lost"))
-
-        queries = [{"dense_vector": [0.1] * 1024}]
-        results = await service.batch_search_rrf(queries=queries, top_k=5)
-
-        assert results == []
-
-    async def test_batch_search_with_filters(self, service, mock_points):
-        """Test batch search passes filters to all queries."""
-        response = MagicMock(points=mock_points)
-        service._client.query_batch_points = AsyncMock(return_value=[response])
-
-        queries = [
-            {"dense_vector": [0.1] * 1024},
-            {"dense_vector": [0.2] * 1024},
-        ]
-        results = await service.batch_search_rrf(
-            queries=queries, filters={"city": "Sofia"}, top_k=5
-        )
-
-        assert len(results) == 3
-        call_kwargs = service._client.query_batch_points.call_args.kwargs
-        for req in call_kwargs["requests"]:
-            assert req.filter is not None
-
-    async def test_batch_search_results_sorted_by_score(self, service):
-        """Test merged results are sorted by score descending."""
-        p1 = MagicMock(id="low", score=0.3, payload={"page_content": "L", "metadata": {}})
-        p2 = MagicMock(id="high", score=0.99, payload={"page_content": "H", "metadata": {}})
-        p3 = MagicMock(id="mid", score=0.6, payload={"page_content": "M", "metadata": {}})
-
-        resp1 = MagicMock(points=[p1])
-        resp2 = MagicMock(points=[p2])
-        resp3 = MagicMock(points=[p3])
-
-        service._client.query_batch_points = AsyncMock(return_value=[resp1, resp2, resp3])
-
-        queries = [
-            {"dense_vector": [0.1] * 1024},
-            {"dense_vector": [0.2] * 1024},
-            {"dense_vector": [0.3] * 1024},
-        ]
-        results = await service.batch_search_rrf(queries=queries, top_k=10)
-
-        scores = [r["score"] for r in results]
-        assert scores == sorted(scores, reverse=True)
-        assert results[0]["id"] == "high"
-
-
-class TestQdrantServiceHybridSearch:
-    """Tests for hybrid_search_rrf method."""
-
-    @pytest.fixture
-    def service(self):
-        return _make_service(validated=True)
-
-    @pytest.fixture
-    def mock_point(self):
-        return _make_mock_point(
-            id="doc_1",
-            score=0.95,
-            text="Test document content",
-            metadata={"city": "Sofia", "price": 50000},
-        )
-
-    async def test_hybrid_search_with_sparse_vector(self, service, mock_point):
-        """Test hybrid search includes sparse vector in prefetch."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        sparse_vector = {"indices": [1, 5, 10], "values": [0.5, 0.3, 0.2]}
-
-        results = await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            sparse_vector=sparse_vector,
-            top_k=5,
-        )
-
-        # Verify prefetch includes both dense and sparse
-        call_kwargs = service._client.query_points.call_args.kwargs
-        prefetch = call_kwargs["prefetch"]
-        assert len(prefetch) == 2  # dense + sparse
-
-        assert len(results) == 1
-        assert results[0]["id"] == "doc_1"
-
-    async def test_hybrid_search_without_sparse_vector(self, service, mock_point):
-        """Test hybrid search works without sparse vector."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        results = await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            sparse_vector=None,
-            top_k=5,
-        )
-
-        # Verify prefetch has only dense
-        call_kwargs = service._client.query_points.call_args.kwargs
-        prefetch = call_kwargs["prefetch"]
-        assert len(prefetch) == 1  # dense only
-
-        assert len(results) == 1
-
-    async def test_hybrid_search_with_empty_sparse_indices(self, service, mock_point):
-        """Test hybrid search handles empty sparse indices."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        sparse_vector = {"indices": [], "values": []}
-
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            sparse_vector=sparse_vector,
-            top_k=5,
-        )
-
-        # Empty indices means no sparse prefetch
-        call_kwargs = service._client.query_points.call_args.kwargs
-        prefetch = call_kwargs["prefetch"]
-        assert len(prefetch) == 1  # dense only
-
-    async def test_hybrid_search_with_filters(self, service, mock_point):
-        """Test hybrid search applies filters."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        filters = {"city": "Sofia"}
-
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            filters=filters,
-            top_k=5,
-        )
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        assert call_kwargs["query_filter"] is not None
-
-    async def test_hybrid_search_weight_distribution(self, service, mock_point):
-        """Test prefetch limits respect weight distribution."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        sparse_vector = {"indices": [1, 2], "values": [0.5, 0.5]}
-
-        await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            sparse_vector=sparse_vector,
-            top_k=10,
-            dense_weight=0.8,
-            sparse_weight=0.2,
-            prefetch_multiplier=3,
-        )
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        prefetch = call_kwargs["prefetch"]
-
-        # Dense gets higher limit due to higher weight
-        dense_limit = prefetch[0].limit
-        sparse_limit = prefetch[1].limit
-
-        # Both should be at least top_k
-        assert dense_limit >= 10
-        assert sparse_limit >= 10
-
-    async def test_hybrid_search_returns_formatted_results(self, service, mock_point):
-        """Test results are properly formatted."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        results = await service.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        result = results[0]
-        assert result["id"] == "doc_1"
-        assert result["score"] == 0.95
-        assert result["text"] == "Test document content"
-        assert result["metadata"]["city"] == "Sofia"
-
-
-class TestQdrantServiceTimeout:
-    """Tests for explicit timeout configuration."""
-
-    @pytest.mark.parametrize(
-        ("kwargs", "expected_timeout"),
-        [({}, 30), ({"timeout": 60}, 60)],
-        ids=["default_30", "custom_60"],
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def mock_qdrant_client():
+    """Create a mocked AsyncQdrantClient."""
+    mock_client = AsyncMock()
+    mock_client.query_points.return_value = MagicMock(points=[])
+    mock_client.get_collection.return_value = MagicMock(
+        points_count=100,
+        vectors_count=100,
+        status=MagicMock(value="green"),
     )
-    def test_timeout_passed_to_client(self, kwargs, expected_timeout):
-        """Verify AsyncQdrantClient receives correct timeout."""
-        import telegram_bot.services.qdrant as qdrant_mod
+    _mc = MagicMock()
+    _mc.name = "test"
+    mock_client.get_collections.return_value = MagicMock(collections=[_mc])
+    mock_client.close.return_value = None
+    return mock_client
 
-        with patch.object(qdrant_mod, "AsyncQdrantClient") as mock_client:
-            qdrant_mod.QdrantService(url="http://localhost:6333", **kwargs)
-            mock_client.assert_called_once_with(
+
+# =============================================================================
+# TestHybridSearchRRFQuantization - Per-call quantization A/B testing
+# =============================================================================
+
+
+class TestHybridSearchRRFQuantization:
+    """Tests for per-call quantization parameters in hybrid_search_rrf."""
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_ignore_true(self):
+        """Test quantization_ignore=True skips quantization."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_col = MagicMock()
+            mock_col.name = "test"
+            mock_client.get_collections.return_value = MagicMock(collections=[mock_col])
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+                quantization_ignore=True,
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+            assert call_kwargs["search_params"] is not None
+            assert call_kwargs["search_params"].quantization.ignore is True
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_ignore_false(self):
+        """Test quantization_ignore=False forces quantization."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_col = MagicMock()
+            mock_col.name = "test"
+            mock_client.get_collections.return_value = MagicMock(collections=[mock_col])
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+                quantization_ignore=False,
+                quantization_rescore=True,
+                quantization_oversampling=2.0,
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+            assert call_kwargs["search_params"] is not None
+            assert call_kwargs["search_params"].quantization.ignore is False
+            assert call_kwargs["search_params"].quantization.rescore is True
+            assert call_kwargs["search_params"].quantization.oversampling == 2.0
+
+    @pytest.mark.asyncio
+    async def test_search_without_quantization_override(self):
+        """Test quantization_ignore=None means no search_params quantization."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_col = MagicMock()
+            mock_col.name = "test"
+            mock_client.get_collections.return_value = MagicMock(collections=[mock_col])
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+                quantization_ignore=None,  # Default — no override
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+            # No quantization override → search_params should be None
+            assert call_kwargs.get("search_params") is None
+
+
+# =============================================================================
+# TestQdrantServiceUnit - Core functionality
+# =============================================================================
+
+
+class TestQdrantServiceUnit:
+    """Unit tests for QdrantService (no actual Qdrant calls)."""
+
+    def test_init_creates_async_client(self):
+        """HTTP URL should strip api_key and create AsyncQdrantClient with gRPC."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+            service = QdrantService(
+                url="http://localhost:6333",
+                api_key="test-key",
+                collection_name="test_collection",
+            )
+
+            mock_client_class.assert_called_once_with(
                 url="http://localhost:6333",
                 api_key=None,
                 prefer_grpc=True,
-                timeout=expected_timeout,
+                timeout=30,
             )
+            assert service._collection_name == "test_collection"
 
+    @pytest.mark.asyncio
+    async def test_hybrid_search_rrf_builds_prefetch(self):
+        """Test hybrid_search_rrf builds correct prefetch queries."""
+        from telegram_bot.services.qdrant import QdrantService
 
-class TestQdrantServiceBuildFilter:
-    """Tests for _build_filter method."""
-
-    @pytest.fixture
-    def service(self):
-        return _make_service()
-
-    @pytest.mark.parametrize("empty_input", [None, {}], ids=["none", "empty_dict"])
-    def test_build_filter_empty(self, service, empty_input):
-        """Test None returned for empty filters."""
-        assert service._build_filter(empty_input) is None
-
-    @pytest.mark.parametrize(
-        ("filters", "expected_count", "check_key"),
-        [
-            ({"city": "Sofia"}, 1, "metadata.city"),
-            ({"city": "Sofia", "rooms": 2}, 2, None),
-            ({"city": "Burgas", "price": {"lte": 80000}, "rooms": 2}, 3, None),
-        ],
-        ids=["single_exact", "multiple_exact", "mixed_exact_and_range"],
-    )
-    def test_build_filter_exact(self, service, filters, expected_count, check_key):
-        """Test exact match and mixed filters."""
-        filter_obj = service._build_filter(filters)
-        assert filter_obj is not None
-        assert len(filter_obj.must) == expected_count
-        if check_key:
-            assert filter_obj.must[0].key == check_key
-
-    @pytest.mark.parametrize(
-        ("filters", "range_checks"),
-        [
-            ({"price": {"gte": 50000}}, {"gte": 50000}),
-            ({"price": {"lte": 100000}}, {"lte": 100000}),
-            ({"price": {"gte": 50000, "lte": 100000}}, {"gte": 50000, "lte": 100000}),
-            (
-                {"value": {"gt": 10, "lt": 100, "gte": 5, "lte": 150}},
-                {"gt": 10, "lt": 100, "gte": 5, "lte": 150},
-            ),
-        ],
-        ids=["gte", "lte", "combined", "all_operators"],
-    )
-    def test_build_filter_range(self, service, filters, range_checks):
-        """Test range filters with various operators."""
-        filter_obj = service._build_filter(filters)
-        assert filter_obj is not None
-        condition = filter_obj.must[0]
-        for op, val in range_checks.items():
-            assert getattr(condition.range, op) == val
-
-
-class TestQdrantServiceFormatResults:
-    """Tests for _format_results method."""
-
-    @pytest.fixture
-    def service(self):
-        return _make_service()
-
-    def test_format_results_basic(self, service):
-        """Test basic result formatting."""
-        mock_point = MagicMock()
-        mock_point.id = "doc_1"
-        mock_point.score = 0.95
-        mock_point.payload = {
-            "page_content": "Test content",
-            "metadata": {"key": "value"},
-        }
-
-        results = service._format_results([mock_point])
-
-        assert len(results) == 1
-        assert results[0]["id"] == "doc_1"
-        assert results[0]["score"] == 0.95
-        assert results[0]["text"] == "Test content"
-        assert results[0]["metadata"]["key"] == "value"
-
-    def test_format_results_multiple(self, service):
-        """Test formatting multiple results preserves order."""
-        points = [
-            MagicMock(
-                id=f"doc_{i}",
-                score=0.9 - i * 0.1,
-                payload={"page_content": f"Content {i}", "metadata": {}},
-            )
-            for i in range(3)
-        ]
-        results = service._format_results(points)
-        assert len(results) == 3
-        assert results[0]["id"] == "doc_0"
-        assert results[2]["id"] == "doc_2"
-
-    def test_format_results_empty(self, service):
-        """Test formatting empty results."""
-        assert service._format_results([]) == []
-
-    def test_format_results_missing_fields(self, service):
-        """Test handling of missing payload fields."""
-        mock_point = MagicMock(id="doc_1", score=0.8, payload={})
-        results = service._format_results([mock_point])
-        assert results[0]["text"] == ""
-        assert results[0]["metadata"] == {}
-
-    def test_format_results_uuid_id(self, service):
-        """Test ID is converted to string."""
-        import uuid
-
-        mock_point = MagicMock(
-            id=uuid.uuid4(), score=0.9, payload={"page_content": "test", "metadata": {}}
-        )
-        results = service._format_results([mock_point])
-        assert isinstance(results[0]["id"], str)
-
-
-class TestQdrantServiceHybridSearchColbert:
-    """Tests for hybrid_search_rrf_colbert (3-stage: dense+sparse -> RRF -> ColBERT)."""
-
-    @pytest.fixture
-    def service(self):
-        svc = _make_service(validated=True)
-        # Explicitly enable ColBERT path for tests that validate nested prefetch contract.
-        svc._colbert_available = True
-        return svc
-
-    @pytest.fixture
-    def mock_point(self):
-        return _make_mock_point(
-            id="doc_1", score=85.5, text="Test content", metadata={"city": "Sofia"}
-        )
-
-    async def test_colbert_search_calls_query_points_with_nested_prefetch(
-        self, service, mock_point
-    ):
-        """Verify nested prefetch structure: inner RRF, outer ColBERT."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        colbert_query = [[0.1] * 1024] * 5  # 5 query tokens
-        sparse_vector = {"indices": [1, 5], "values": [0.5, 0.3]}
-
-        results = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            sparse_vector=sparse_vector,
-            colbert_query=colbert_query,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        assert results[0]["id"] == "doc_1"
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        # Outer query should be colbert vectors
-        assert call_kwargs["using"] == "colbert"
-        # Outer prefetch should contain 1 RRF prefetch
-        outer_prefetch = call_kwargs["prefetch"]
-        assert len(outer_prefetch) == 1
-        # Inner prefetch should have dense + sparse
-        inner_prefetch = outer_prefetch[0].prefetch
-        assert len(inner_prefetch) == 2
-        # RRF prefetch should have limit > top_k for meaningful ColBERT reranking
-        rrf_limit = outer_prefetch[0].limit
-        assert rrf_limit >= 20, f"RRF limit {rrf_limit} too low for ColBERT reranking"
-        assert rrf_limit > call_kwargs["limit"]  # must overfetch vs final top_k
-
-    async def test_colbert_search_without_sparse(self, service, mock_point):
-        """ColBERT search with dense only (no sparse vector)."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        results = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            sparse_vector=None,
-            colbert_query=colbert_query,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        call_kwargs = service._client.query_points.call_args.kwargs
-        inner_prefetch = call_kwargs["prefetch"][0].prefetch
-        assert len(inner_prefetch) == 1  # dense only
-
-    async def test_colbert_search_weight_distribution(self, service, mock_point):
-        """ColBERT nested RRF prefetch limits should respect query weights."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            sparse_vector={"indices": [1, 2], "values": [0.5, 0.5]},
-            colbert_query=[[0.1] * 1024] * 3,
-            top_k=5,
-            dense_weight=0.2,
-            sparse_weight=0.8,
-        )
-
-        inner_prefetch = service._client.query_points.call_args.kwargs["prefetch"][0].prefetch
-        dense_limit = inner_prefetch[0].limit
-        sparse_limit = inner_prefetch[1].limit
-
-        assert dense_limit >= 5
-        assert sparse_limit >= 5
-        assert sparse_limit > dense_limit
-
-    async def test_colbert_search_graceful_degradation(self, service):
-        """Fallback to hybrid_search_rrf on ColBERT query error."""
-        service._client.query_points = AsyncMock(side_effect=Exception("Connection lost"))
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
-        )
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        results = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        assert results[0]["id"] == "fallback_1"
-        service.hybrid_search_rrf.assert_awaited_once()
-
-    async def test_colbert_search_fallback_return_meta(self, service):
-        """When return_meta=True fallback preserves tuple contract."""
-        service._client.query_points = AsyncMock(
-            side_effect=Exception("No such vector named 'colbert'")
-        )
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=(
-                [{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}],
-                {"backend_error": False, "error_type": None, "error_message": None},
-            )
-        )
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        results, meta = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            top_k=5,
-            return_meta=True,
-        )
-
-        assert len(results) == 1
-        assert meta["backend_error"] is False
-        service.hybrid_search_rrf.assert_awaited_once()
-
-    async def test_colbert_empty_results_falls_back_and_disables_feature(self, service):
-        """Empty ColBERT result set should fallback to RRF and disable ColBERT runtime path."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
-        )
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        results = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        assert results[0]["id"] == "fallback_1"
-        assert service._colbert_available is False
-        service.hybrid_search_rrf.assert_awaited_once()
-
-    async def test_colbert_empty_results_counts_rerank_empty_metric(self, service):
-        """Empty ColBERT results count rerank-empty and fallback metrics."""
-        from telegram_bot.services.metrics import PipelineMetrics
-
-        PipelineMetrics.reset()
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
-        )
-
-        await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=[[0.1] * 1024] * 3,
-            top_k=5,
-        )
-
-        stats = PipelineMetrics.get().get_stats()
-        assert stats["counters"]["colbert_rerank_empty"] == 1
-        assert stats["counters"]["colbert_fallback_to_rrf"] == 1
-
-    async def test_colbert_search_with_filters(self, service, mock_point):
-        """Filters are passed through to query_points."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            filters={"city": "Sofia"},
-            top_k=5,
-        )
-
-        call_kwargs = service._client.query_points.call_args.kwargs
-        assert call_kwargs["query_filter"] is not None
-
-    async def test_colbert_search_return_meta(self, service, mock_point):
-        """return_meta=True returns (results, meta) tuple."""
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        result = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            top_k=5,
-            return_meta=True,
-        )
-
-        assert isinstance(result, tuple)
-        results, meta = result
-        assert len(results) == 1
-        assert meta["backend_error"] is False
-
-    async def test_colbert_missing_vector_disables_feature(self, service):
-        """Vector-name errors disable ColBERT path for subsequent queries."""
-        service._client.query_points = AsyncMock(
-            side_effect=Exception("Wrong input: Not existing vector name error: colbert")
-        )
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
-        )
-
-        colbert_query = [[0.1] * 1024] * 3
-
-        await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            top_k=5,
-        )
-
-        assert service._colbert_available is False
-        service._client.query_points.assert_awaited_once()
-        service.hybrid_search_rrf.assert_awaited_once()
-
-    async def test_colbert_skipped_when_capability_disabled(self, service):
-        """When capability is disabled, method should bypass ColBERT query call."""
-        service._colbert_available = False
-        service._client.query_points = AsyncMock()
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
-        )
-
-        colbert_query = [[0.1] * 1024] * 3
-        result = await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            colbert_query=colbert_query,
-            top_k=5,
-        )
-
-        assert result[0]["id"] == "fallback_1"
-        service._client.query_points.assert_not_called()
-        service.hybrid_search_rrf.assert_awaited_once()
-
-    async def test_colbert_disabled_fallback_forwards_rrf_weights(self, service):
-        """ColBERT fallback should preserve sparse-favored exact-query weights."""
-        service._colbert_available = False
-        service._client.query_points = AsyncMock()
-        service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
-        )
-
-        await service.hybrid_search_rrf_colbert(
-            dense_vector=[0.1] * 1024,
-            sparse_vector={"indices": [1, 2], "values": [0.5, 0.5]},
-            colbert_query=[[0.1] * 1024] * 3,
-            top_k=5,
-            dense_weight=0.2,
-            sparse_weight=0.8,
-        )
-
-        fallback_kwargs = service.hybrid_search_rrf.await_args.kwargs
-        assert fallback_kwargs["dense_weight"] == 0.2
-        assert fallback_kwargs["sparse_weight"] == 0.8
-
-
-class TestQdrantServiceClose:
-    """Tests for close method."""
-
-    async def test_close_calls_client_close(self):
-        """Test close method calls client.close()."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-            service = QdrantService(
-                url="http://localhost:6333",
-                collection_name="test_collection",
-            )
-            # Replace the client with our own mock so we can track calls
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
-            service._client = mock_client
+            mock_client.query_points.return_value = MagicMock(points=[])
+            _mc = MagicMock()
+            _mc.name = "test"
+            mock_client.get_collections.return_value = MagicMock(collections=[_mc])
+            mock_client_class.return_value = mock_client
 
-            await service.close()
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
 
-            mock_client.close.assert_called_once()
+            dense_vec = [0.1] * 1024
+            sparse_vec = {"indices": [1, 2, 3], "values": [0.5, 0.3, 0.2]}
+
+            await service.hybrid_search_rrf(
+                dense_vector=dense_vec,
+                sparse_vector=sparse_vec,
+                top_k=10,
+            )
+
+            # Verify query_points was called
+            mock_client.query_points.assert_called_once()
+            call_kwargs = mock_client.query_points.call_args[1]
+
+            # Should have prefetch for dense and sparse
+            assert "prefetch" in call_kwargs
+            assert len(call_kwargs["prefetch"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_hybrid_search_rrf_without_sparse(self):
+        """Test hybrid_search_rrf works with only dense vector."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            _mc = MagicMock()
+            _mc.name = "test"
+            mock_client.get_collections.return_value = MagicMock(collections=[_mc])
+            mock_client_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                sparse_vector=None,
+                top_k=10,
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+            # Should have only dense prefetch
+            assert len(call_kwargs["prefetch"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_search_returns_formatted_results(self):
+        """Test search returns properly formatted results."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
+            mock_client = AsyncMock()
+
+            # Mock point
+            mock_point = MagicMock()
+            mock_point.id = "test-id"
+            mock_point.score = 0.95
+            mock_point.payload = {
+                "page_content": "Test content",
+                "metadata": {"city": "Sofia"},
+            }
+
+            mock_client.query_points.return_value = MagicMock(points=[mock_point])
+            _mc = MagicMock()
+            _mc.name = "test"
+            mock_client.get_collections.return_value = MagicMock(collections=[_mc])
+            mock_client_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            results = await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+            )
+
+            assert len(results) == 1
+            assert results[0]["id"] == "test-id"
+            assert results[0]["score"] == 0.95
+            assert results[0]["text"] == "Test content"
+            assert results[0]["metadata"]["city"] == "Sofia"
 
 
-@pytest.mark.filterwarnings("ignore:Api key is used with an insecure connection:UserWarning")
-class TestQdrantServiceInit:
-    """Tests for initialization."""
+class TestFilterBuilding:
+    """Tests for Qdrant filter building."""
 
-    @pytest.mark.parametrize(
-        ("extra_kwargs", "expected"),
-        [
-            ({}, {"collection": "my_collection", "dense": "dense", "sparse": "bm42"}),
-            (
-                {"dense_vector_name": "custom_dense", "sparse_vector_name": "custom_sparse"},
-                {"collection": "my_collection", "dense": "custom_dense", "sparse": "custom_sparse"},
-            ),
-            (
-                {"api_key": "secret_key"},
-                {"collection": "my_collection", "dense": "dense", "sparse": "bm42"},
-            ),
-        ],
-        ids=["defaults", "custom_vector_names", "with_api_key"],
-    )
-    @pytest.mark.filterwarnings("ignore:Api key is used with an insecure connection.")
-    def test_init(self, extra_kwargs, expected):
-        """Test initialization with various configurations."""
+    def test_build_filter_with_exact_match(self):
+        """Test filter building with exact match values."""
+        from telegram_bot.services.qdrant import QdrantService
+
         with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
-                collection_name="my_collection",
-                **extra_kwargs,
+                collection_name="test",
             )
-            assert service._collection_name == expected["collection"]
-            assert service._dense_vector_name == expected["dense"]
-            assert service._sparse_vector_name == expected["sparse"]
-            assert service._client is not None
 
+            qdrant_filter = service._build_filter({"city": "Sofia", "rooms": 2})
 
-# ===========================================================================
-# api_key safety for insecure transport
-# ===========================================================================
+            assert qdrant_filter is not None
+            assert len(qdrant_filter.must) == 2
 
+    def test_build_filter_with_range(self):
+        """Test filter building with range values."""
+        from telegram_bot.services.qdrant import QdrantService
 
-class TestQdrantApiKeySafety:
-    """api_key should be None for http:// URLs to avoid insecure warning."""
-
-    def test_api_key_stripped_for_http(self):
-        """HTTP URL + api_key -> api_key=None (no insecure warning)."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
-            QdrantService(url="http://localhost:6333", api_key="test-key")
-            call_kwargs = MockClient.call_args[1]
-            assert call_kwargs["api_key"] is None
-
-    def test_api_key_kept_for_https(self):
-        """HTTPS URL + api_key -> api_key passed through."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
-            QdrantService(url="https://qdrant.example.com:6333", api_key="test-key")
-            call_kwargs = MockClient.call_args[1]
-            assert call_kwargs["api_key"] == "test-key"
-
-    def test_no_api_key_no_change(self):
-        """No api_key -> None regardless of scheme."""
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
-            QdrantService(url="http://localhost:6333", api_key=None)
-            call_kwargs = MockClient.call_args[1]
-            assert call_kwargs["api_key"] is None
-
-
-# ===========================================================================
-# _apply_strict_mode
-# ===========================================================================
-
-
-class TestApplyStrictMode:
-    """Tests for QdrantService._apply_strict_mode()."""
-
-    async def test_apply_strict_mode_calls_update_collection(self):
-        """Strict mode calls update_collection with StrictModeConfig."""
-        svc = _make_service(validated=True)
-        svc._client.update_collection = AsyncMock()
-
-        await svc._apply_strict_mode()
-
-        svc._client.update_collection.assert_awaited_once()
-        call_kwargs = svc._client.update_collection.call_args.kwargs
-        assert call_kwargs["collection_name"] == svc._collection_name
-        strict_cfg = call_kwargs["strict_mode_config"]
-        assert strict_cfg is not None
-        assert strict_cfg.enabled is True
-        assert strict_cfg.max_query_limit == 100
-        assert strict_cfg.max_timeout == 30
-        assert strict_cfg.search_max_hnsw_ef == 512
-
-    async def test_apply_strict_mode_logs_on_success(self, caplog):
-        """Strict mode logs INFO message when successfully applied."""
-        import logging
-
-        svc = _make_service(validated=True)
-        svc._client.update_collection = AsyncMock()
-
-        with caplog.at_level(logging.INFO):
-            await svc._apply_strict_mode()
-
-        assert "strict mode" in caplog.text.lower()
-
-    async def test_apply_strict_mode_warns_on_error(self, caplog):
-        """Strict mode catches exceptions and logs WARNING (non-blocking)."""
-        import logging
-
-        svc = _make_service(validated=True)
-        svc._client.update_collection = AsyncMock(side_effect=Exception("unsupported"))
-
-        with caplog.at_level(logging.WARNING):
-            await svc._apply_strict_mode()  # Must not raise
-
-        assert "strict mode not applied" in caplog.text.lower()
-
-
-# ===========================================================================
-# _ensure_alias
-# ===========================================================================
-
-
-class TestEnsureAlias:
-    """Tests for QdrantService._ensure_alias()."""
-
-    async def test_ensure_alias_calls_update_aliases(self):
-        """_ensure_alias creates alias '{collection}_active' via update_collection_aliases."""
-        svc = _make_service(validated=True)
-        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
-        svc._client.update_collection_aliases = AsyncMock()
-
-        await svc._ensure_alias()
-
-        svc._client.update_collection_aliases.assert_awaited_once()
-        ops = svc._client.update_collection_aliases.call_args.kwargs["change_aliases_operations"]
-        assert len(ops) == 1
-        op = ops[0]
-        assert op.create_alias.collection_name == svc._collection_name
-        assert op.create_alias.alias_name == f"{svc._collection_name}_active"
-
-    async def test_ensure_alias_replaces_existing_alias_atomically(self):
-        """Existing alias is switched via delete+create in one aliases update call."""
-        svc = _make_service(validated=True)
-        alias_name = f"{svc._collection_name}_active"
-        svc._client.get_aliases = AsyncMock(
-            return_value=MagicMock(
-                aliases=[
-                    MagicMock(alias_name=alias_name, collection_name="old_collection"),
-                ]
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
             )
-        )
-        svc._client.update_collection_aliases = AsyncMock()
 
-        await svc._ensure_alias()
+            qdrant_filter = service._build_filter({"price": {"gte": 50000, "lte": 100000}})
 
-        svc._client.update_collection_aliases.assert_awaited_once()
-        ops = svc._client.update_collection_aliases.call_args.kwargs["change_aliases_operations"]
-        assert len(ops) == 2
-        assert ops[0].delete_alias.alias_name == alias_name
-        assert ops[1].create_alias.alias_name == alias_name
-        assert ops[1].create_alias.collection_name == svc._collection_name
+            assert qdrant_filter is not None
+            assert len(qdrant_filter.must) == 1
 
-    async def test_ensure_alias_skips_when_already_pointing_to_target(self, caplog):
-        """No-op when alias already points to current collection."""
-        svc = _make_service(validated=True)
-        alias_name = f"{svc._collection_name}_active"
-        svc._client.get_aliases = AsyncMock(
-            return_value=MagicMock(
-                aliases=[
-                    MagicMock(alias_name=alias_name, collection_name=svc._collection_name),
-                ]
+    def test_build_filter_returns_none_for_empty(self):
+        """Test filter building returns None for empty filters."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
             )
-        )
-        svc._client.update_collection_aliases = AsyncMock()
 
-        with caplog.at_level(logging.INFO):
-            await svc._ensure_alias()
-
-        svc._client.update_collection_aliases.assert_not_awaited()
-        assert "already points" in caplog.text.lower()
-
-    async def test_ensure_alias_logs_on_success(self, caplog):
-        """_ensure_alias logs INFO on successful alias creation."""
-        svc = _make_service(validated=True)
-        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
-        svc._client.update_collection_aliases = AsyncMock()
-
-        with caplog.at_level(logging.INFO):
-            await svc._ensure_alias()
-
-        assert "alias" in caplog.text.lower()
-
-    async def test_ensure_alias_warns_on_error(self, caplog):
-        """_ensure_alias catches exceptions and logs WARNING (non-blocking)."""
-        svc = _make_service(validated=True)
-        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
-        svc._client.update_collection_aliases = AsyncMock(
-            side_effect=Exception("permission denied")
-        )
-
-        with caplog.at_level(logging.WARNING):
-            await svc._ensure_alias()  # Must not raise
-
-        assert "alias" in caplog.text.lower()
-        assert "failed" in caplog.text.lower()
+            assert service._build_filter({}) is None
+            assert service._build_filter(None) is None

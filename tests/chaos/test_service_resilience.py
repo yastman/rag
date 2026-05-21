@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -13,11 +14,13 @@ from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.bge_m3_client import BGEM3Client
 from telegram_bot.services.kommo_client import KommoClient
 
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
+
 
 @pytest.mark.asyncio
 async def test_semantic_cache_timeout_gracefully_bypasses():
     """Redis semantic cache timeout should return miss, not crash pipeline."""
-    cache = CacheLayerManager(redis_url="redis://localhost:6379")
+    cache = CacheLayerManager(redis_url=f"redis://{SERVICES_HOST}:6379")
     cache.semantic_cache = AsyncMock()
 
     async def _slow_check(*args, **kwargs):
@@ -38,7 +41,7 @@ async def test_semantic_cache_timeout_gracefully_bypasses():
 @pytest.mark.asyncio
 async def test_semantic_cache_exception_gracefully_bypasses():
     """Redis semantic cache backend error should degrade to cache miss."""
-    cache = CacheLayerManager(redis_url="redis://localhost:6379")
+    cache = CacheLayerManager(redis_url=f"redis://{SERVICES_HOST}:6379")
     cache.semantic_cache = AsyncMock()
     cache.semantic_cache.acheck = AsyncMock(side_effect=RuntimeError("redis unavailable"))
 
@@ -53,7 +56,7 @@ async def test_semantic_cache_exception_gracefully_bypasses():
 @pytest.mark.asyncio
 async def test_bge_timeout_retries_and_recovers():
     """BGE-M3 timeout should retry and recover when backend becomes available."""
-    client = BGEM3Client(base_url="http://localhost:8000")
+    client = BGEM3Client(base_url=f"http://{SERVICES_HOST}:8000")
 
     ok_resp = MagicMock()
     ok_resp.status_code = 200

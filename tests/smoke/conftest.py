@@ -11,6 +11,8 @@ import redis.asyncio as redis
 from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.qdrant import QdrantService
 
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
+
 
 @pytest.fixture(scope="module")
 def redis_url() -> str:
@@ -19,7 +21,7 @@ def redis_url() -> str:
     Mirrors `scripts/validate_traces.py::_build_redis_url` so smoke tests work
     against Compose dev defaults (auth-required Redis) without per-test plumbing.
     """
-    base = os.getenv("REDIS_URL", "redis://localhost:6379")
+    base = os.getenv("REDIS_URL", f"redis://{SERVICES_HOST}:6379")
     password = os.getenv("REDIS_PASSWORD", "")
     if password and "@" not in base:
         base = base.replace("redis://", f"redis://:{password}@", 1)
@@ -29,7 +31,7 @@ def redis_url() -> str:
 @pytest.fixture(scope="module")
 def require_live_services(request):
     """Skip if live services not available. Checks BOTH Qdrant AND Redis."""
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+    qdrant_url = os.getenv("QDRANT_URL", f"http://{SERVICES_HOST}:6333")
     redis_url = request.getfixturevalue("redis_url")
 
     # Check Qdrant
@@ -72,7 +74,7 @@ async def voyage_service():
 @pytest.fixture(scope="module")
 async def qdrant_service():
     """QdrantService for search."""
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
+    url = os.getenv("QDRANT_URL", f"http://{SERVICES_HOST}:6333")
     api_key = os.getenv("QDRANT_API_KEY", "")
     collection = os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge")
 

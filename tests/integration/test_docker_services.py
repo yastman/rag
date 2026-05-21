@@ -4,6 +4,8 @@ Each test gracefully skips if the target service is not available.
 Run with `make docker-up` or `make docker-full-up` first.
 """
 
+import os
+
 import pytest
 import redis.asyncio as aioredis
 from qdrant_client import QdrantClient
@@ -11,6 +13,8 @@ from redis.exceptions import AuthenticationError as RedisAuthError
 
 
 asyncpg = pytest.importorskip("asyncpg", reason="asyncpg not installed")
+
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
 
 
 def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -29,11 +33,11 @@ def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
 @pytest.mark.asyncio
 async def test_postgres_connection():
     """Test PostgreSQL connectivity."""
-    if not _check_tcp("localhost", 5432):
-        pytest.skip("PostgreSQL not running on localhost:5432")
+    if not _check_tcp(SERVICES_HOST, 5432):
+        pytest.skip(f"PostgreSQL not running on {SERVICES_HOST}:5432")
 
     conn = await asyncpg.connect(
-        user="postgres", password="postgres", database="postgres", host="localhost", port=5432
+        user="postgres", password="postgres", database="postgres", host=SERVICES_HOST, port=5432
     )
     version = await conn.fetchval("SELECT version()")
     await conn.close()
@@ -43,13 +47,13 @@ async def test_postgres_connection():
 @pytest.mark.asyncio
 async def test_redis_connection():
     """Test Redis connectivity."""
-    if not _check_tcp("localhost", 6379):
-        pytest.skip("Redis not running on localhost:6379")
+    if not _check_tcp(SERVICES_HOST, 6379):
+        pytest.skip(f"Redis not running on {SERVICES_HOST}:6379")
 
     import os
 
     password = os.getenv("REDIS_PASSWORD", "")
-    url = f"redis://:{password}@localhost:6379" if password else "redis://localhost:6379"
+    url = f"redis://:{password}@{SERVICES_HOST}:6379" if password else f"redis://{SERVICES_HOST}:6379"
     r = aioredis.from_url(url)
     try:
         assert await r.ping() is True
@@ -61,10 +65,10 @@ async def test_redis_connection():
 
 def test_qdrant_health():
     """Test Qdrant connectivity."""
-    if not _check_tcp("localhost", 6333):
-        pytest.skip("Qdrant not running on localhost:6333")
+    if not _check_tcp(SERVICES_HOST, 6333):
+        pytest.skip(f"Qdrant not running on {SERVICES_HOST}:6333")
 
-    client = QdrantClient(url="http://localhost:6333", timeout=5)
+    client = QdrantClient(url=f"http://{SERVICES_HOST}:6333", timeout=5)
     collections = client.get_collections()
     assert collections is not None
 
@@ -72,13 +76,13 @@ def test_qdrant_health():
 @pytest.mark.asyncio
 async def test_bge_m3_health():
     """Test BGE-M3 embedding service health."""
-    if not _check_tcp("localhost", 8000):
-        pytest.skip("BGE-M3 not running on localhost:8000")
+    if not _check_tcp(SERVICES_HOST, 8000):
+        pytest.skip(f"BGE-M3 not running on {SERVICES_HOST}:8000")
 
     import aiohttp
 
     async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:8000/health") as resp:
+        async with session.get(f"http://{SERVICES_HOST}:8000/health") as resp:
             assert resp.status == 200
             data = await resp.json()
             assert data["status"] == "ok"
@@ -87,11 +91,11 @@ async def test_bge_m3_health():
 @pytest.mark.asyncio
 async def test_docling_health():
     """Test Docling document parsing service health."""
-    if not _check_tcp("localhost", 5001):
-        pytest.skip("Docling not running on localhost:5001")
+    if not _check_tcp(SERVICES_HOST, 5001):
+        pytest.skip(f"Docling not running on {SERVICES_HOST}:5001")
 
     import aiohttp
 
     async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:5001/health") as resp:
+        async with session.get(f"http://{SERVICES_HOST}:5001/health") as resp:
             assert resp.status == 200

@@ -17,6 +17,7 @@ from redis.exceptions import AuthenticationError
 
 
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
 
 
 def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
@@ -31,7 +32,7 @@ def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
 
 def _redis_url_candidates() -> list[str]:
     """Return Redis URLs to try in order (auth first, then plain)."""
-    base_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    base_url = os.getenv("REDIS_URL", f"redis://{SERVICES_HOST}:6379")
     if "@" in base_url:
         return [base_url]
 
@@ -54,9 +55,9 @@ def _require_qdrant_collection() -> bool:
 
 @pytest.fixture(scope="module")
 def qdrant_url():
-    if not _check_tcp("localhost", 6333):
-        pytest.skip("Qdrant not running on localhost:6333")
-    return os.getenv("QDRANT_URL", "http://localhost:6333")
+    if not _check_tcp(SERVICES_HOST, 6333):
+        pytest.skip(f"Qdrant not running on {SERVICES_HOST}:6333")
+    return os.getenv("QDRANT_URL", f"http://{SERVICES_HOST}:6333")
 
 
 @pytest.fixture(scope="module")
@@ -127,8 +128,8 @@ class TestPreflightRedis:
 
     @pytest.fixture
     async def redis_client(self, redis_url):
-        if not _check_tcp("localhost", 6379):
-            pytest.skip("Redis not running on localhost:6379")
+        if not _check_tcp(SERVICES_HOST, 6379):
+            pytest.skip(f"Redis not running on {SERVICES_HOST}:6379")
         last_error: Exception | None = None
         for url in _redis_url_candidates():
             client = redis.from_url(url, decode_responses=True)
@@ -230,8 +231,8 @@ class TestPreflightReport:
 
     async def test_generate_preflight_report(self, qdrant_url, redis_url, collection_name):
         """Generate reports/preflight.json with all config values."""
-        if not _check_tcp("localhost", 6333) or not _check_tcp("localhost", 6379):
-            pytest.skip("Qdrant/Redis not running locally")
+        if not _check_tcp(SERVICES_HOST, 6333) or not _check_tcp(SERVICES_HOST, 6379):
+            pytest.skip("Qdrant/Redis not running")
         require_collection = _require_qdrant_collection()
         report = {
             "qdrant": {},

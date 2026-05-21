@@ -14,6 +14,7 @@ from redis.exceptions import AuthenticationError
 
 
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
 
 
 def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
@@ -26,7 +27,7 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 def _redis_url_candidates() -> list[str]:
     """Return Redis URLs to try in order (auth first, then plain)."""
-    base_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    base_url = os.getenv("REDIS_URL", f"redis://{SERVICES_HOST}:6379")
     if "@" in base_url:
         return [base_url]
 
@@ -56,8 +57,8 @@ class TestLoadRedisEviction:
 
     @pytest.fixture
     async def redis_client(self):
-        if not _is_port_open("localhost", 6379):
-            pytest.skip("Redis not running on localhost:6379")
+        if not _is_port_open(SERVICES_HOST, 6379):
+            pytest.skip(f"Redis not running on {SERVICES_HOST}:6379")
         last_error: Exception | None = None
         for url in _redis_url_candidates():
             client = redis.from_url(url, decode_responses=True)

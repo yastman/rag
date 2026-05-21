@@ -19,8 +19,9 @@ from scripts.e2e.test_scenarios import TestGroup as _ScenarioGroup
 
 pytestmark = [pytest.mark.e2e, pytest.mark.integration]
 
-RAG_URL = os.getenv("RAG_API_URL", "http://localhost:8080")
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+SERVICES_HOST = os.environ.get("TEST_SERVICES_HOST", "localhost")
+RAG_URL = os.getenv("RAG_API_URL", f"http://{SERVICES_HOST}:8080")
+REDIS_URL = os.getenv("REDIS_URL", f"redis://{SERVICES_HOST}:6379")
 
 
 def _api_client() -> httpx.AsyncClient:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
-from unittest.mock import patch
 
 
 @dataclass
@@ -152,11 +151,10 @@ async def test_backfill_enables_server_side_colbert_search(tmp_path):
         retry_backoff_seconds=0.0,
     )
 
-    with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-        service = QdrantService(
-            url="http://localhost:6333",
-            collection_name=storage.collection_name,
-        )
+    service = QdrantService(
+        url="http://localhost:6333",
+        collection_name=storage.collection_name,
+    )
     service._client = _FakeAsyncQdrantClient(storage)
 
     before = await service.hybrid_search_rrf_colbert(
