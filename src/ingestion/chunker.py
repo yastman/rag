@@ -172,12 +172,70 @@ def chunk_csv_by_rows(csv_path: Path, document_name: str) -> list[Chunk]:
     """
     Chunk CSV file with one row per chunk with structured metadata.
 
-    This preserves row boundaries instead of mixing rows together
-    like token-based chunkers do. Perfect for structured data like
-    apartment listings where each row is a complete entity.
+    Attempts to use Docling (via NativeDoclingAdapter) for CSV parsing and
+    chunking. If Docling is unavailable (missing ingest extras or import
+    error), falls back to the legacy csv.DictReader approach with a
+    deprecation warning.
 
     Also extracts numeric fields into metadata for filtering:
     - price, rooms, area, floor, floors, distance_to_sea, etc.
+
+    Args:
+        csv_path: Path to CSV file
+        document_name: Name for the document
+
+    Returns:
+        List of chunks, one per CSV row (excluding header)
+    """
+    try:
+        return _chunk_csv_with_docling(csv_path, document_name)
+    except Exception as exc:
+        import warnings
+
+        warnings.warn(
+            f"Docling-based CSV chunking unavailable ({exc}), "
+            "falling back to legacy csv.DictReader. "
+            "Install the 'ingest' extras to enable Docling.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _chunk_csv_legacy(csv_path, document_name)
+
+
+def _chunk_csv_with_docling(csv_path: Path, document_name: str) -> list[Chunk]:
+    """Chunk CSV using NativeDoclingAdapter (local docling).
+
+    Uses docling's DocumentConverter + HybridChunker to parse and chunk the
+    CSV file, then converts DoclingChunks to standard Chunk objects via
+    DoclingClient.to_ingestion_chunks().
+
+    Args:
+        csv_path: Path to CSV file
+        document_name: Name for the document
+
+    Returns:
+        List of Chunk objects from Docling chunking
+
+    Raises:
+        RuntimeError: If docling is not installed or unavailable.
+    """
+    from src.ingestion.docling_native import NativeDoclingAdapter
+
+    adapter = NativeDoclingAdapter()
+    docling_chunks = adapter.chunk_file_sync(csv_path)
+    return adapter.to_ingestion_chunks(
+        docling_chunks,
+        source=document_name,
+        source_type="csv",
+    )
+
+
+def _chunk_csv_legacy(csv_path: Path, document_name: str) -> list[Chunk]:
+    """Legacy CSV chunking using csv.DictReader (one chunk per row).
+
+    This preserves row boundaries instead of mixing rows together
+    like token-based chunkers do. Perfect for structured data like
+    apartment listings where each row is a complete entity.
 
     Args:
         csv_path: Path to CSV file

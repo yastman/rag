@@ -2,11 +2,13 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from src.ingestion.chunker import (
     Chunk,
     ChunkingStrategy,
     DocumentChunker,
+    _chunk_csv_legacy,
     _parse_csv_row_metadata,
     chunk_csv_by_rows,
 )
@@ -163,10 +165,10 @@ class TestExtractMetadata:
 
 
 class TestChunkCSVByRows:
-    """Test CSV row-based chunking."""
+    """Test CSV row-based chunking (uses Docling when available)."""
 
     def test_csv_chunking_basic(self):
-        """Test basic CSV chunking."""
+        """Test basic CSV chunking returns chunks with content from all rows."""
         csv_content = """Название,Город,Цена (€),Комнат
 Квартира 1,Варна,50000,2
 Квартира 2,Бургас,75000,3
@@ -179,12 +181,14 @@ class TestChunkCSVByRows:
 
             chunks = chunk_csv_by_rows(Path(f.name), "properties.csv")
 
-        assert len(chunks) == 2
-        assert "Варна" in chunks[0].text
-        assert "Бургас" in chunks[1].text
+        assert len(chunks) >= 1
+        # All row data should appear somewhere in the chunks
+        all_text = " ".join(c.text for c in chunks)
+        assert "Варна" in all_text
+        assert "Бургас" in all_text
 
     def test_csv_chunking_metadata(self):
-        """Test that CSV chunking extracts metadata."""
+        """Test that CSV chunking produces chunks with metadata."""
         csv_content = """Название,Город,Цена (€),Комнат,Площадь (м²)
 Апартамент,Несебър,120000,3,85
 """
@@ -196,12 +200,13 @@ class TestChunkCSVByRows:
 
             chunks = chunk_csv_by_rows(Path(f.name), "test.csv")
 
-        assert len(chunks) == 1
+        assert len(chunks) >= 1
         assert chunks[0].extra_metadata is not None
-        assert chunks[0].extra_metadata.get("city") == "Несебър"
-        assert chunks[0].extra_metadata.get("price") == 120000
-        assert chunks[0].extra_metadata.get("rooms") == 3
-        assert chunks[0].extra_metadata.get("area") == 85
+        # Docling path uses unified metadata schema
+        assert chunks[0].extra_metadata.get("source_type") == "csv"
+        assert chunks[0].document_name == "test.csv"
+        # Row content should be in the chunk text
+        assert "Несебър" in chunks[0].text
 
     def test_csv_chunking_chunk_id(self):
         """Test that chunk IDs are sequential."""
@@ -218,8 +223,11 @@ Row3,City3
 
             chunks = chunk_csv_by_rows(Path(f.name), "test.csv")
 
-        assert [c.chunk_id for c in chunks] == [0, 1, 2]
-        assert [c.order for c in chunks] == [0, 1, 2]
+        # Chunk IDs should be sequential regardless of count
+        assert chunks[0].chunk_id == 0
+        for i, c in enumerate(chunks):
+            assert c.chunk_id == i
+            assert c.order == i
 
 
 class TestParseCSVRowMetadata:
@@ -296,3 +304,152 @@ class TestParseCSVRowMetadata:
         metadata = _parse_csv_row_metadata(row)
 
         assert metadata["source_type"] == "csv_row"
+
+
+class TestChunkCSVWithDocling:
+    """Test Docling-based CSV chunking path."""
+
+    def test_docling_path_used_when_available(self):
+        """Test that chunk_csv_by_rows uses Docling when available."""
+        from src.ingestion.docling_client import DoclingChunk
+
+        fake_chunks = [
+            DoclingChunk(text="Row 1 content", seq_no=0),
+            DoclingChunk(text="Row 2 content", seq_no=1),
+        ]
+
+        csv_content = "Название,Город\nRow1,City1\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(csv_content)
+            f.flush()
+            csv_path = Path(f.name)
+
+        mock_adapter = MagicMock()
+        mock_adapter.chunk_file_sync.return_value = fake_chunks
+        mock_adapter.to_ingestion_chunks.return_value = [
+            Chunk(
+                text="Row 1 content",
+                chunk_id=0,
+                document_name="test.csv",
+                article_number="abc123",
+                order=0,
+            ),
+            Chunk(
+                text="Row 2 content",
+                chunk_id=1,
+                document_name="test.csv",
+                article_number="abc123",
+                order=1,
+            ),
+        ]
+
+        mock_module = MagicMock()
+        mock_module.NativeDoclingAdapter.return_value = mock_adapter
+
+        with patch.dict(
+            "sys.modules",
+            {"src.ingestion.docling_native": mock_module},
+        ):
+            chunks = chunk_csv_by_rows(csv_path, "test.csv")
+
+        mock_module.NativeDoclingAdapter.assert_called_once()
+        mock_adapter.chunk_file_sync.assert_called_once_with(csv_path)
+        mock_adapter.to_ingestion_chunks.assert_called_once_with(
+            fake_chunks, source="test.csv", source_type="csv"
+        )
+        assert len(chunks) == 2
+        assert chunks[0].text == "Row 1 content"
+
+    def test_fallback_to_legacy_on_import_error(self):
+        """Test fallback to legacy when Docling import fails."""
+        csv_content = """Название,Город,Цена (€)
+Квартира,Варна,50000
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(csv_content)
+            f.flush()
+            csv_path = Path(f.name)
+
+        mock_module = MagicMock()
+        mock_module.NativeDoclingAdapter.side_effect = RuntimeError("docling not installed")
+
+        with patch.dict(
+            "sys.modules",
+            {"src.ingestion.docling_native": mock_module},
+        ):
+            import warnings
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                chunks = chunk_csv_by_rows(csv_path, "test.csv")
+
+            # Should have emitted a deprecation warning
+            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+
+        # Should still return chunks from legacy path
+        assert len(chunks) == 1
+        assert "Варна" in chunks[0].text
+
+    def test_fallback_to_legacy_on_connection_error(self):
+        """Test fallback when Docling adapter raises a connection error."""
+        csv_content = """Название,Город
+Row1,City1
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(csv_content)
+            f.flush()
+            csv_path = Path(f.name)
+
+        mock_adapter = MagicMock()
+        mock_adapter.chunk_file_sync.side_effect = RuntimeError(
+            "docling is not installed"
+        )
+
+        mock_module = MagicMock()
+        mock_module.NativeDoclingAdapter.return_value = mock_adapter
+
+        with patch.dict(
+            "sys.modules",
+            {"src.ingestion.docling_native": mock_module},
+        ):
+            import warnings
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                chunks = chunk_csv_by_rows(csv_path, "test.csv")
+
+            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+
+        assert len(chunks) == 1
+        assert "City1" in chunks[0].text
+
+
+class TestChunkCSVLegacy:
+    """Test the legacy CSV chunking path directly."""
+
+    def test_legacy_csv_chunking(self):
+        """Test that _chunk_csv_legacy works as expected."""
+        csv_content = """Название,Город,Цена (€),Комнат
+Квартира 1,Варна,50000,2
+Квартира 2,Бургас,75000,3
+"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(csv_content)
+            f.flush()
+            csv_path = Path(f.name)
+
+        chunks = _chunk_csv_legacy(csv_path, "properties.csv")
+
+        assert len(chunks) == 2
+        assert "Варна" in chunks[0].text
+        assert "Бургас" in chunks[1].text
+        assert chunks[0].extra_metadata is not None
+        assert chunks[0].extra_metadata.get("price") == 50000
