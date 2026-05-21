@@ -1,0 +1,27 @@
+{
+  "project_type": "Python RAG pipeline with Telegram bot, compose stack, k8s manifests",
+  "language": "Python 3.12",
+  "build_system": "uv for Python, Docker Compose for services, k8s for production",
+  "test_framework": "pytest with xdist parallel, conftest fixtures",
+  "build_command": "uv sync --no-dev",
+  "test_command": "uv run --python 3.12 pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m 'not legacy_api and not requires_extras and not slow'",
+  "verification_instructions": "1. Run test-unit (make test-unit). 2. Run k8s image sync test. 3. Validate compose YAML structure. 4. Review Qdrant release notes for breaking changes.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "uv sync for dependencies",
+  "environment_constraints": "docker-compose plugin not available in sandbox (expected 2 test failures). No Docker daemon for live container tests.",
+  "contribution_requirements": "Branch from dev. Run make check + pytest tests/unit before claiming completion. Include verification evidence.",
+  "key_patterns": "compose.yml pins images with @sha256 digests. k8s/base/ mirrors compose image tags. test_k8s_image_version_sync.py guards tag drift.",
+  "relevant_files": [
+    "compose.yml",
+    "k8s/base/qdrant/deployment.yaml",
+    "k8s/base/redis/deployment.yaml",
+    "docker/qdrant/config.yaml",
+    "tests/unit/test_k8s_image_version_sync.py",
+    "tests/unit/test_compose.py",
+    "tests/unit/test_compose_config.py",
+    "tests/unit/test_qdrant_service.py",
+    "tests/unit/test_search_engines.py",
+    "tests/unit/retrieval/test_search_engines.py"
+  ],
+  "directory_structure": "compose.yml (base config), compose.dev.yml (dev ports), compose.vps.yml (VPS overrides), k8s/base/<svc>/deployment.yaml, telegram_bot/ (bot code), src/ (shared retrieval/ingestion), tests/unit/ (fast tests)"
+}

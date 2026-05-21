@@ -1,0 +1,7 @@
+{
+  "task_id": "task-verify-qdrant-redis-upgrade",
+  "task_description": "Verify Qdrant v1.17.1->v1.18.0 and Redis 8.6.2->8.6.3 upgrade from Renovate PR #1467 (issue #1472)",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}
