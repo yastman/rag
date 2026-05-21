@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.ingestion.apartments.runner import IncrementalApartmentIngester
-from telegram_bot.services.bge_m3_client import HybridResult
+from src.services.bge_m3_client import HybridResult
 
 
 def _write_csv(rows: list[dict], path: Path) -> None:
@@ -198,7 +198,7 @@ class TestHybridEncoding:
         )
 
         with (
-            patch("telegram_bot.services.bge_m3_client.BGEM3SyncClient") as MockBGE,
+            patch("src.services.bge_m3_client.BGEM3SyncClient") as MockBGE,
             patch("qdrant_client.QdrantClient"),
             patch("src.ingestion.apartments.runner.build_ingestion_batch", return_value=[]),
         ):

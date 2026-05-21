@@ -11,7 +11,7 @@ import csv
 import hashlib
 from pathlib import Path
 
-from telegram_bot.services.apartment_models import ApartmentRecord
+from src.models.apartment import ApartmentRecord
 
 
 ***REMOVED*** Mutable fields — changes in these trigger re-embedding

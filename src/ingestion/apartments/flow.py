@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from telegram_bot.services.apartment_models import ApartmentRecord
+from src.models.apartment import ApartmentRecord
 
 
 COLLECTION = "apartments"
