@@ -5,7 +5,8 @@ Thank you for your interest in contributing.
 ***REMOVED******REMOVED*** Getting Started
 
 - Read [`README.md`](README.md) for project overview.
-- Follow [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for setup instructions.
+- Follow [`docs/ONBOARDING.md`](docs/ONBOARDING.md) for the full onboarding guide.
+- See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for day-to-day development workflow.
 
 ***REMOVED******REMOVED*** Development Workflow
 
