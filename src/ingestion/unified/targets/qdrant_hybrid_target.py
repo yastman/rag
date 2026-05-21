@@ -119,6 +119,7 @@ class QdrantHybridTargetConnector:
     ***REMOVED*** Shared resources (initialized lazily)
     ***REMOVED*** Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
     _writer: QdrantHybridWriter | None = None
+    _writer_key: tuple | None = None  ***REMOVED*** fingerprint for writer cache invalidation (***REMOVED***1605)
     _docling: DoclingClient | NativeDoclingAdapter | None = None
     _docling_key: tuple[str, str, float, int] | None = None
     _writer_lock = threading.Lock()
@@ -160,20 +161,38 @@ class QdrantHybridTargetConnector:
 
     @classmethod
     def _get_writer(cls, spec: QdrantHybridTargetSpec) -> QdrantHybridWriter:
-        """Get or create QdrantHybridWriter."""
-        if cls._writer is None:
+        """Get or create QdrantHybridWriter, invalidating the cache when the
+        effective spec fingerprint changes (***REMOVED***1605).
+
+        Cache key covers every field consumed by QdrantHybridWriter.__init__:
+        qdrant_url, qdrant_api_key, voyage_api_key, voyage_model,
+        use_local_embeddings, bge_m3_url, bge_m3_timeout, bge_m3_concurrency.
+        """
+        voyage_api_key = spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", "")
+        writer_key = (
+            spec.qdrant_url,
+            spec.qdrant_api_key,
+            voyage_api_key,
+            spec.voyage_model,
+            spec.use_local_embeddings,
+            spec.bge_m3_url,
+            spec.bge_m3_timeout,
+            spec.bge_m3_concurrency,
+        )
+        if cls._writer is None or cls._writer_key != writer_key:
             with cls._writer_lock:
-                if cls._writer is None:
+                if cls._writer is None or cls._writer_key != writer_key:
                     cls._writer = QdrantHybridWriter(
                         qdrant_url=spec.qdrant_url,
                         qdrant_api_key=spec.qdrant_api_key,
-                        voyage_api_key=spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", ""),
+                        voyage_api_key=voyage_api_key,
                         voyage_model=spec.voyage_model,
                         use_local_embeddings=spec.use_local_embeddings,
                         bge_m3_url=spec.bge_m3_url,
                         bge_m3_timeout=spec.bge_m3_timeout,
                         bge_m3_concurrency=spec.bge_m3_concurrency,
                     )
+                    cls._writer_key = writer_key
         return cls._writer
 
     @classmethod
