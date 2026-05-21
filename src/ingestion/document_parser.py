@@ -278,7 +278,11 @@ class UniversalDocumentParser:
 
         content = "\n\n".join(chunk.text for chunk in chunks)
 
-        # Attempt to extract num_pages from the page_range of the last chunk
+        # Attempt to extract num_pages from the page_range of the last chunk.
+        # NOTE: This is a best-effort estimate derived from chunk page ranges.
+        # It may undercount if trailing pages (blank pages, cover sheets) produce
+        # no chunks, since those pages will not appear in any chunk's page_range.
+        # The PyMuPDF (speed) path always returns the true page count.
         num_pages: int | None = None
         for chunk in reversed(chunks):
             if chunk.page_range is not None:

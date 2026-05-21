@@ -26,6 +26,7 @@ def _load_runtime_document_converter() -> Any | None:
 
 def _load_hybrid_chunker() -> Any | None:
     """Load HybridChunker from docling_core (optional ingest dependency)."""
+    global _hybrid_chunker_load_error
     try:
         module = import_module("docling_core.transforms.chunker")
         return getattr(module, "HybridChunker", None)
@@ -33,6 +34,7 @@ def _load_hybrid_chunker() -> Any | None:
         pass
     except Exception as exc:
         logger.warning("Failed to load HybridChunker from docling_core.transforms.chunker: %s", exc)
+        _hybrid_chunker_load_error = exc
         return None
     try:
         module = import_module("docling.chunking")
@@ -41,8 +43,12 @@ def _load_hybrid_chunker() -> Any | None:
         pass
     except Exception as exc:
         logger.warning("Failed to load HybridChunker from docling.chunking: %s", exc)
+        _hybrid_chunker_load_error = exc
         return None
     return None
+
+
+_hybrid_chunker_load_error: Exception | None = None
 
 
 RuntimeDocumentConverter: Any | None = _load_runtime_document_converter()
@@ -77,8 +83,9 @@ class NativeDoclingAdapter(DoclingClient):
         if RuntimeHybridChunker is None:
             raise RuntimeError(
                 "docling_core is not installed; docling_native backend requires the optional "
-                "docling-core dependency for HybridChunker"
-            )
+                "docling-core dependency for HybridChunker. "
+                "Check WARNING logs for the original error if docling-core is installed."
+            ) from _hybrid_chunker_load_error
         return RuntimeHybridChunker(max_tokens=self._max_tokens)
 
     def chunk_file_sync(

@@ -184,6 +184,12 @@ def chunk_csv_by_rows(csv_path: Path, document_name: str) -> list[Chunk]:
     Also extracts numeric fields into metadata for filtering:
     - price, rooms, area, floor, floors, distance_to_sea, etc.
 
+    Note: The Docling path does not produce typed numeric metadata fields
+    (price, rooms, area, etc.) used by Qdrant payload filters. Downstream
+    filters relying on those typed fields (e.g. ``metadata.price <= 100000``)
+    should ensure the legacy CSV path is used when those filters are needed.
+    The legacy path is automatically used when Docling is unavailable.
+
     Args:
         csv_path: Path to CSV file
         document_name: Name for the document

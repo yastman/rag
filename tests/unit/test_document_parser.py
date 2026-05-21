@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 
@@ -483,3 +484,102 @@ class TestQualityProfileIntegration:
 
             assert result.content == "Quality content"
             assert result.metadata["parser"] == "docling"
+
+
+class TestQualityProfileFallback:
+    """Test quality profile falls back to PyMuPDF on connection errors."""
+
+    @patch.object(document_parser, "pymupdf")
+    def test_fallback_on_connect_error(self, mock_pymupdf):
+        """Test that httpx.ConnectError triggers fallback to PyMuPDF."""
+        mock_page = MagicMock()
+        mock_page.get_text.return_value = "Fallback content from PyMuPDF"
+
+        mock_doc = MagicMock()
+        mock_doc.page_count = 3
+        mock_doc.load_page.return_value = mock_page
+        mock_doc.metadata = {"title": "Fallback PDF"}
+
+        mock_pymupdf.open.return_value = mock_doc
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "test.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            with patch(
+                "src.ingestion.docling_client.DoclingClient.__init__",
+                return_value=None,
+            ), patch(
+                "src.ingestion.docling_client.DoclingClient.chunk_file_sync",
+                side_effect=httpx.ConnectError("Connection refused"),
+            ):
+                parser = UniversalDocumentParser(use_cache=False, profile="quality")
+                result = parser._parse_pdf(pdf_file)
+
+            # Verify fallback produced a valid ParsedDocument
+            assert isinstance(result, ParsedDocument)
+            assert result.metadata["parser"] == "pymupdf"
+            assert result.num_pages == 3
+            assert "Fallback content from PyMuPDF" in result.content
+
+    @patch.object(document_parser, "pymupdf")
+    def test_fallback_on_timeout_exception(self, mock_pymupdf):
+        """Test that httpx.TimeoutException triggers fallback to PyMuPDF."""
+        mock_page = MagicMock()
+        mock_page.get_text.return_value = "Timeout fallback"
+
+        mock_doc = MagicMock()
+        mock_doc.page_count = 5
+        mock_doc.load_page.return_value = mock_page
+        mock_doc.metadata = {"title": "Timeout PDF"}
+
+        mock_pymupdf.open.return_value = mock_doc
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "test.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            with patch(
+                "src.ingestion.docling_client.DoclingClient.__init__",
+                return_value=None,
+            ), patch(
+                "src.ingestion.docling_client.DoclingClient.chunk_file_sync",
+                side_effect=httpx.TimeoutException("Read timed out"),
+            ):
+                parser = UniversalDocumentParser(use_cache=False, profile="quality")
+                result = parser._parse_pdf(pdf_file)
+
+            assert isinstance(result, ParsedDocument)
+            assert result.metadata["parser"] == "pymupdf"
+            assert result.num_pages == 5
+
+    @patch.object(document_parser, "pymupdf")
+    def test_fallback_on_generic_exception(self, mock_pymupdf):
+        """Test that a generic exception from Docling also falls back to PyMuPDF."""
+        mock_page = MagicMock()
+        mock_page.get_text.return_value = "Generic fallback"
+
+        mock_doc = MagicMock()
+        mock_doc.page_count = 2
+        mock_doc.load_page.return_value = mock_page
+        mock_doc.metadata = {}
+
+        mock_pymupdf.open.return_value = mock_doc
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "test.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            with patch(
+                "src.ingestion.docling_client.DoclingClient.__init__",
+                return_value=None,
+            ), patch(
+                "src.ingestion.docling_client.DoclingClient.chunk_file_sync",
+                side_effect=RuntimeError("Docling internal error"),
+            ):
+                parser = UniversalDocumentParser(use_cache=False, profile="quality")
+                result = parser._parse_pdf(pdf_file)
+
+            assert isinstance(result, ParsedDocument)
+            assert result.metadata["parser"] == "pymupdf"
+            assert result.num_pages == 2
