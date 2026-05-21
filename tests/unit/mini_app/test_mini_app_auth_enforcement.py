@@ -70,7 +70,6 @@ def _make_invalid_init_data(bot_token: str, user_id: int = 42) -> str:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_start_expert_without_init_data_returns_401() -> None:
     """POST /api/start-expert without X-Init-Data header must return 401."""
 
@@ -92,7 +91,6 @@ async def test_start_expert_without_init_data_returns_401() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_start_expert_with_invalid_hash_returns_401() -> None:
     """POST /api/start-expert with a tampered HMAC must return 401."""
     invalid_init_data = _make_invalid_init_data(TEST_BOT_TOKEN)
@@ -119,7 +117,6 @@ async def test_start_expert_with_invalid_hash_returns_401() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_start_expert_with_valid_init_data_succeeds_and_derives_user_id() -> None:
     """Valid signed initData → 200 and user_id sourced from initData, not body."""
     valid_init_data = _make_init_data(TEST_BOT_TOKEN, user_id=99)
@@ -175,7 +172,6 @@ async def test_start_expert_with_valid_init_data_succeeds_and_derives_user_id() 
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_phone_without_init_data_returns_401() -> None:
     """POST /api/phone without X-Init-Data header must return 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -188,7 +184,6 @@ async def test_phone_without_init_data_returns_401() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_phone_with_valid_init_data_succeeds() -> None:
     """POST /api/phone with valid signed initData succeeds and overrides user_id."""
     valid_init_data = _make_init_data(TEST_BOT_TOKEN, user_id=42)

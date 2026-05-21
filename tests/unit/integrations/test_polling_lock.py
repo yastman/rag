@@ -5,7 +5,6 @@ import pytest
 from telegram_bot.integrations.polling_lock import PollingLockBusy, RedisPollingLock
 
 
-@pytest.mark.asyncio
 async def test_acquire_raises_when_lock_already_exists() -> None:
     backend_lock = MagicMock()
     backend_lock.acquire = AsyncMock(return_value=False)
@@ -32,7 +31,6 @@ async def test_acquire_raises_when_lock_already_exists() -> None:
     redis.pttl.assert_awaited_once_with("bot:polling")
 
 
-@pytest.mark.asyncio
 async def test_acquire_uses_ttl_when_pttl_unavailable() -> None:
     backend_lock = MagicMock()
     backend_lock.acquire = AsyncMock(return_value=False)
@@ -49,7 +47,6 @@ async def test_acquire_uses_ttl_when_pttl_unavailable() -> None:
     redis.ttl.assert_awaited_once_with("bot:polling")
 
 
-@pytest.mark.asyncio
 async def test_refresh_extends_owned_lock() -> None:
     backend_lock = MagicMock()
     backend_lock.acquire = AsyncMock(return_value=True)
@@ -64,7 +61,6 @@ async def test_refresh_extends_owned_lock() -> None:
     backend_lock.extend.assert_awaited_once_with(additional_time=90, replace_ttl=True)
 
 
-@pytest.mark.asyncio
 async def test_release_deletes_only_owned_lock() -> None:
     backend_lock = MagicMock()
     backend_lock.acquire = AsyncMock(return_value=True)

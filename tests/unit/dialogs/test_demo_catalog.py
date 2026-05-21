@@ -75,7 +75,6 @@ def _make_svc(results: list | None = None, total: int = 42) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_dialog_search_starts_catalog_results() -> None:
     """After search, dialog should hand off to CatalogSG.results."""
     from telegram_bot.dialogs.demo import _dialog_search
@@ -102,7 +101,6 @@ async def test_dialog_search_starts_catalog_results() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_dialog_search_saves_pagination_data() -> None:
     """catalog_runtime should be stored in FSM state."""
     from telegram_bot.dialogs.demo import _dialog_search
@@ -127,7 +125,6 @@ async def test_dialog_search_saves_pagination_data() -> None:
     assert kwargs["catalog_runtime"]["shown_count"] == 10
 
 
-@pytest.mark.asyncio
 async def test_dialog_search_uses_scroll_not_vector() -> None:
     """Should use scroll_with_filters, not search_with_filters."""
     from telegram_bot.dialogs.demo import _dialog_search
@@ -149,7 +146,6 @@ async def test_dialog_search_uses_scroll_not_vector() -> None:
     svc.scroll_with_filters.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_dialog_search_sends_results_as_regular_messages() -> None:
     """Results should still be sent as normal chat messages."""
     from telegram_bot.dialogs.demo import _dialog_search
@@ -171,7 +167,6 @@ async def test_dialog_search_sends_results_as_regular_messages() -> None:
     assert any("Premier Fort Beach" in str(c.args[0]) for c in answer_calls)
 
 
-@pytest.mark.asyncio
 async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
     """After transition, demo dialog should be replaced by CatalogSG."""
     from telegram_bot.dialogs.demo import _dialog_search
@@ -203,7 +198,6 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_handler_run_demo_search_transitions_to_catalog() -> None:
     """FSM handler should store catalog_runtime for CatalogSG."""
     from telegram_bot.handlers.demo_handler import _run_demo_search
@@ -224,7 +218,6 @@ async def test_handler_run_demo_search_transitions_to_catalog() -> None:
     assert kwargs["catalog_runtime"]["source"] == "demo"
 
 
-@pytest.mark.asyncio
 async def test_handler_run_demo_search_uses_scroll() -> None:
     """FSM handler should call scroll_with_filters."""
     from telegram_bot.handlers.demo_handler import _run_demo_search
@@ -249,7 +242,6 @@ async def test_handler_run_demo_search_uses_scroll() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_voice_input_triggers_search_and_catalog() -> None:
     """Voice → STT → extraction → scroll → catalog dialog flow."""
     from telegram_bot.dialogs.demo import on_voice_input
@@ -279,7 +271,6 @@ async def test_voice_input_triggers_search_and_catalog() -> None:
     svc.scroll_with_filters.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_text_input_triggers_search_and_catalog() -> None:
     """Text input → extraction → scroll → catalog dialog flow."""
     from telegram_bot.dialogs.demo import on_text_input
@@ -308,7 +299,6 @@ async def test_text_input_triggers_search_and_catalog() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_catalog_more_works_after_demo_search() -> None:
     """After demo search, dialog-native 'more' should load next page."""
     from telegram_bot.dialogs.catalog import on_catalog_more
@@ -345,7 +335,6 @@ async def test_catalog_more_works_after_demo_search() -> None:
     assert update_kwargs["catalog_runtime"]["shown_count"] == 20
 
 
-@pytest.mark.asyncio
 async def test_catalog_exit_returns_to_main_menu() -> None:
     """'Главное меню' should clear state and return to main."""
     from telegram_bot.dialogs.catalog import on_catalog_home
@@ -417,7 +406,6 @@ def test_demo_dialog_has_voice_input() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_legacy_demo_exit_clears_fsm_state() -> None:
     """After legacy _run_demo_search (dialog_manager=None), FSM state is cleared
     so that subsequent '🏠 Главное меню' catalog keyboard text is NOT
@@ -441,7 +429,6 @@ async def test_legacy_demo_exit_clears_fsm_state() -> None:
     state.set_state.assert_awaited_once_with(None)
 
 
-@pytest.mark.asyncio
 async def test_dialog_demo_exit_does_not_clear_raw_fsm() -> None:
     """Dialog-managed path must NOT touch raw FSM state; dialog manages lifecycle."""
     from telegram_bot.handlers.demo_handler import _run_demo_search
@@ -470,7 +457,6 @@ async def test_dialog_demo_exit_does_not_clear_raw_fsm() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_full_demo_flow_text_to_pagination() -> None:
     """Full flow: text → extraction → scroll → catalog → show more."""
     from telegram_bot.dialogs.catalog import on_catalog_more

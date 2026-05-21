@@ -100,7 +100,6 @@ class TestBuildGraph:
         assert graph is not None
         assert hasattr(graph, "ainvoke")
 
-    @pytest.mark.asyncio
     async def test_graph_ainvoke_allows_context_override(self):
         """ainvoke(context=...) should not fail with duplicate keyword arguments."""
         cache = AsyncMock()

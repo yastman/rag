@@ -19,7 +19,6 @@ def service(mock_pool):
     return UserService(pool=mock_pool)
 
 
-@pytest.mark.asyncio
 async def test_get_or_create_existing_user(service, mock_pool):
     """Existing user returned from DB."""
     row = {
@@ -39,7 +38,6 @@ async def test_get_or_create_existing_user(service, mock_pool):
     mock_pool.fetchrow.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_get_or_create_new_user(service, mock_pool):
     """New user created when not found."""
     # First call (SELECT) returns None, second call (INSERT) returns new row
@@ -62,7 +60,6 @@ async def test_get_or_create_new_user(service, mock_pool):
     assert mock_pool.fetchrow.call_count == 2
 
 
-@pytest.mark.asyncio
 async def test_get_role(service, mock_pool):
     """Get user role by telegram_id."""
     mock_pool.fetchval.return_value = "manager"
@@ -70,7 +67,6 @@ async def test_get_role(service, mock_pool):
     assert role == "manager"
 
 
-@pytest.mark.asyncio
 async def test_get_role_unknown_user(service, mock_pool):
     """Unknown user returns 'client' as default."""
     mock_pool.fetchval.return_value = None
@@ -78,7 +74,6 @@ async def test_get_role_unknown_user(service, mock_pool):
     assert role == "client"
 
 
-@pytest.mark.asyncio
 async def test_set_locale(service, mock_pool):
     """Set user locale (PG + Redis cache concept)."""
     mock_pool.execute.return_value = "UPDATE 1"
@@ -89,7 +84,6 @@ async def test_set_locale(service, mock_pool):
     assert "ON CONFLICT (telegram_id)" in sql
 
 
-@pytest.mark.asyncio
 async def test_get_locale(service, mock_pool):
     """Get user locale."""
     mock_pool.fetchval.return_value = "uk"
@@ -97,7 +91,6 @@ async def test_get_locale(service, mock_pool):
     assert locale == "uk"
 
 
-@pytest.mark.asyncio
 async def test_get_locale_default(service, mock_pool):
     """Unknown user returns default locale."""
     mock_pool.fetchval.return_value = None
@@ -105,7 +98,6 @@ async def test_get_locale_default(service, mock_pool):
     assert locale == "ru"
 
 
-@pytest.mark.asyncio
 async def test_set_locale_rejects_unsupported(service):
     """set_locale raises ValueError for unsupported locale."""
     with pytest.raises(ValueError, match="Unsupported locale"):

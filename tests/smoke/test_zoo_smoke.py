@@ -48,7 +48,6 @@ class TestZooHealth:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 8003), reason="user-base not running (port 8003)"
     )
-    @pytest.mark.asyncio
     async def test_user_base_health(self, user_base_url):
         """user-base /health returns status=healthy."""
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -62,7 +61,6 @@ class TestZooHealth:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 8003), reason="user-base not running (port 8003)"
     )
-    @pytest.mark.asyncio
     async def test_user_base_embed_returns_768_dim(self, user_base_url):
         """user-base /embed returns 768-dimensional vector."""
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -72,7 +70,6 @@ class TestZooHealth:
             embedding = data.get("embedding", [])
             assert len(embedding) == 768, f"Expected 768 dims, got {len(embedding)}"
 
-    @pytest.mark.asyncio
     async def test_litellm_health(self, litellm_url):
         """litellm /health/liveliness returns 200."""
         # Only test if URL points to local LiteLLM proxy
@@ -87,7 +84,6 @@ class TestZooHealth:
             response = await client.get(f"{health_base_url}/health/liveliness")
             assert response.status_code == 200
 
-    @pytest.mark.asyncio
     async def test_litellm_completion(self, litellm_url):
         """litellm chat completion works."""
         api_key = os.getenv("LLM_API_KEY") or os.getenv("LITELLM_MASTER_KEY")
@@ -188,7 +184,6 @@ class TestZooCache:
 
         pytest.skip("Redis requires authentication (set REDIS_PASSWORD)")
 
-    @pytest.mark.asyncio
     async def test_sparse_cache_roundtrip(self, cache_service):
         """Sparse cache store -> get works."""
         import time
@@ -227,7 +222,6 @@ class TestZooEndToEnd:
 
         pytest.skip("Redis requires authentication (set REDIS_PASSWORD)")
 
-    @pytest.mark.asyncio
     async def test_second_request_has_cache_hits(self, cache_service):
         """Second identical request should have cache hits."""
         import time

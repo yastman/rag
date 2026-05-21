@@ -8,7 +8,6 @@ import pytest
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 
-@pytest.mark.asyncio()
 async def test_handle_manager_no_forum_bridge_starts_phone_collection():
     """Without forum_bridge, manager button should start phone collection."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):

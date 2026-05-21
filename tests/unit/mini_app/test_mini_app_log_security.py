@@ -50,7 +50,6 @@ async def _post_log(json: dict, headers: dict[str, str] | None = None):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_requires_init_data_header():
     """POST /api/log without X-Init-Data must fail closed with 401."""
     with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
@@ -61,7 +60,6 @@ async def test_log_endpoint_requires_init_data_header():
     )
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_rejects_invalid_init_data():
     """POST /api/log with invalid signed initData must fail with 401."""
     with patch.dict(
@@ -79,7 +77,6 @@ async def test_log_endpoint_rejects_invalid_init_data():
     )
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_rejects_unknown_level():
     """POST with level='CRITICAL' (not in allowed set) must return 422."""
     with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
@@ -92,7 +89,6 @@ async def test_log_endpoint_rejects_unknown_level():
     )
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_rejects_oversized_message():
     """POST with message longer than 1000 chars must return 422."""
     with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
@@ -105,7 +101,6 @@ async def test_log_endpoint_rejects_oversized_message():
     )
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_rejects_oversized_data():
     """POST with data value longer than 10000 chars must return 422."""
     with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
@@ -118,7 +113,6 @@ async def test_log_endpoint_rejects_oversized_data():
     )
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_accepts_valid_request():
     """Valid payload must return 200 with status ok."""
     with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
@@ -132,7 +126,6 @@ async def test_log_endpoint_accepts_valid_request():
     assert resp.json().get("status") == "ok"
 
 
-@pytest.mark.asyncio
 async def test_log_endpoint_accepts_all_valid_levels():
     """All allowed levels (debug/info/warn/error) must return 200."""
     with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):

@@ -8,7 +8,6 @@ import pytest
 import telegram_bot.services.ingestion_cocoindex as cocoindex
 
 
-@pytest.mark.asyncio
 async def test_ingest_from_directory_delegates_to_ingestion_service(monkeypatch) -> None:
     expected = SimpleNamespace(total_documents=1, indexed_nodes=2, duration_seconds=0.2, errors=[])
     delegate = AsyncMock(return_value=expected)
@@ -20,7 +19,6 @@ async def test_ingest_from_directory_delegates_to_ingestion_service(monkeypatch)
     delegate.assert_awaited_once_with("/tmp/docs", "unit_collection")
 
 
-@pytest.mark.asyncio
 async def test_get_ingestion_status_delegates(monkeypatch) -> None:
     expected = {"points": 100, "collection": "documents"}
     delegate = AsyncMock(return_value=expected)

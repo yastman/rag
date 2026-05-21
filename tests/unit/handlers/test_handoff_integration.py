@@ -8,7 +8,6 @@ from telegram_bot.services.forum_bridge import ForumBridge
 from telegram_bot.services.handoff_state import HandoffData, HandoffState
 
 
-@pytest.mark.asyncio
 async def test_full_handoff_flow(mock_redis):
     """Test: qualification → topic creation → relay → close."""
     # Setup
@@ -89,7 +88,6 @@ def test_parse_qual_callback_wrong_prefix():
 # --- start_qualification ---
 
 
-@pytest.mark.asyncio
 async def test_start_qualification_active_fsm_guard():
     """start_qualification returns early when FSM state is already active."""
     from telegram_bot.handlers.handoff import HandoffStates, start_qualification
@@ -105,7 +103,6 @@ async def test_start_qualification_active_fsm_guard():
     message.answer.assert_awaited_once_with("Вы уже на связи с менеджером, ожидайте ответа 💬")
 
 
-@pytest.mark.asyncio
 async def test_start_qualification_with_goal():
     """start_qualification starts HandoffSG.contact when goal is provided."""
     from telegram_bot.handlers.handoff import start_qualification
@@ -124,7 +121,6 @@ async def test_start_qualification_with_goal():
     assert call_args.kwargs["data"] == {"goal": "services"}
 
 
-@pytest.mark.asyncio
 async def test_start_qualification_without_goal():
     """start_qualification starts HandoffSG.goal when no goal is provided."""
     from telegram_bot.dialogs.states import HandoffSG
@@ -144,7 +140,6 @@ async def test_start_qualification_without_goal():
     assert call_args.args[0] is HandoffSG.goal
 
 
-@pytest.mark.asyncio
 async def test_start_qualification_fallback_without_dialog_manager():
     """start_qualification sends plain text when dialog_manager is None."""
     from telegram_bot.handlers.handoff import start_qualification

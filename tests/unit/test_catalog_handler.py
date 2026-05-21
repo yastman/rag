@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 
 def _make_state(data: dict) -> MagicMock:
     state = MagicMock()
@@ -44,7 +42,6 @@ def test_results_callback_route_is_compat_only_not_primary_catalog_owner() -> No
     assert "CatalogSG.results" in source
 
 
-@pytest.mark.asyncio
 async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
     from aiogram_dialog import ShowMode, StartMode
 
@@ -84,7 +81,6 @@ async def test_catalog_more_loads_next_page_and_updates_runtime() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_more
 
@@ -117,7 +113,6 @@ async def test_catalog_more_uses_callback_user_id_for_cards() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog() -> None:
     from aiogram_dialog import ShowMode, StartMode
 
@@ -140,7 +135,6 @@ async def test_catalog_filters_starts_filter_dialog() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_catalog_bookmarks_delegates_to_property_bot() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_bookmarks
 
@@ -156,7 +150,6 @@ async def test_catalog_bookmarks_delegates_to_property_bot() -> None:
     property_bot._handle_bookmarks.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_catalog_viewing_delegates_to_existing_handler() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_viewing
 
@@ -172,7 +165,6 @@ async def test_catalog_viewing_delegates_to_existing_handler() -> None:
     property_bot._handle_viewing.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_catalog_manager_delegates_to_existing_handler() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_manager
 
@@ -188,7 +180,6 @@ async def test_catalog_manager_delegates_to_existing_handler() -> None:
     property_bot._handle_manager.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_catalog_text_input_routes_actions_before_search() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_text_input
 
@@ -208,7 +199,6 @@ async def test_catalog_text_input_routes_actions_before_search() -> None:
     search_mock.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_catalog_text_input_routes_home_before_search() -> None:
     """Regression #1298: '🏠 Главное меню' must not fall through to _run_demo_search."""
     from telegram_bot.dialogs.catalog import on_catalog_text_input

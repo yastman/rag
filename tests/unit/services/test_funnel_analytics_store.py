@@ -3,12 +3,9 @@ from __future__ import annotations
 import datetime as dt
 from unittest.mock import AsyncMock
 
-import pytest
-
 from telegram_bot.services.funnel_analytics_store import FunnelAnalyticsStore
 
 
-@pytest.mark.asyncio
 async def test_fetch_stage_counts_queries_metric_date() -> None:
     pool = AsyncMock()
     rows = [{"stage_name": "inquiry", "entered_count": 10, "converted_count": 4}]
@@ -27,7 +24,6 @@ async def test_fetch_stage_counts_queries_metric_date() -> None:
     assert day_end == dt.datetime(2026, 2, 20, tzinfo=dt.UTC)
 
 
-@pytest.mark.asyncio
 async def test_fetch_latest_summary_queries_daily_table() -> None:
     pool = AsyncMock()
     rows = [{"stage_name": "inquiry", "metric_date": dt.date(2026, 2, 19)}]

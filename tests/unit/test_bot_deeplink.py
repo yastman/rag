@@ -60,7 +60,6 @@ def _make_message(user_id=123, chat_id=123):
     return msg
 
 
-@pytest.mark.asyncio
 async def test_deeplink_expired_uuid(mock_config):
     """Expired/missing UUID should reply with 'link expired' message."""
     bot = _create_bot(mock_config)
@@ -75,7 +74,6 @@ async def test_deeplink_expired_uuid(mock_config):
     assert "устарела" in msg.answer.call_args.args[0].lower()
 
 
-@pytest.mark.asyncio
 async def test_deeplink_invalid_json(mock_config):
     """Invalid JSON payload should reply with error."""
     bot = _create_bot(mock_config)
@@ -90,7 +88,6 @@ async def test_deeplink_invalid_json(mock_config):
     assert "ошибка" in msg.answer.call_args.args[0].lower()
 
 
-@pytest.mark.asyncio
 async def test_deeplink_unknown_expert(mock_config):
     """Unknown expert_id should reply with 'expert not found'."""
     bot = _create_bot(mock_config)
@@ -110,7 +107,6 @@ async def test_deeplink_unknown_expert(mock_config):
     assert "не найден" in msg.answer.call_args.args[0].lower()
 
 
-@pytest.mark.asyncio
 async def test_deeplink_success_creates_topic_and_triggers_rag(mock_config):
     """Valid deep link should create topic, echo message, and trigger RAG."""
     bot = _create_bot(mock_config)
@@ -146,7 +142,6 @@ async def test_deeplink_success_creates_topic_and_triggers_rag(mock_config):
     bot.handle_query.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_deeplink_no_message_skips_rag(mock_config):
     """Deep link without message should create topic but not trigger RAG."""
     bot = _create_bot(mock_config)
@@ -173,7 +168,6 @@ async def test_deeplink_no_message_skips_rag(mock_config):
     bot.handle_query.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_deeplink_redis_deletes_key(mock_config):
     """Deep link should use atomic getdel (key consumed after read)."""
     bot = _create_bot(mock_config)
@@ -196,7 +190,6 @@ async def test_deeplink_redis_deletes_key(mock_config):
     bot._deeplink_redis.getdel.assert_called_once_with("miniapp:q:test-uuid")
 
 
-@pytest.mark.asyncio
 async def test_deeplink_topic_manager_none_skips(mock_config):
     """If TopicManager not initialized, deep link should silently return."""
     bot = _create_bot(mock_config)
@@ -209,7 +202,6 @@ async def test_deeplink_topic_manager_none_skips(mock_config):
     msg.answer.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_pubsub_process_miniapp_start_no_message(mock_config):
     """Pub/sub path (no message) — expired UUID logs warning, no crash."""
     bot = _create_bot(mock_config)
@@ -222,7 +214,6 @@ async def test_pubsub_process_miniapp_start_no_message(mock_config):
     # Should not raise — just logs warning
 
 
-@pytest.mark.asyncio
 async def test_pubsub_success_calls_run_miniapp_rag(mock_config):
     """Pub/sub path calls _run_miniapp_rag instead of handle_query."""
     bot = _create_bot(mock_config)
@@ -247,7 +238,6 @@ async def test_pubsub_success_calls_run_miniapp_rag(mock_config):
     bot.handle_query.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_stale_topic_invalidate_and_recreate(mock_config):
     """Stale topic (deleted in Telegram) triggers invalidate + recreate."""
     from aiogram.exceptions import TelegramBadRequest
@@ -281,7 +271,6 @@ async def test_stale_topic_invalidate_and_recreate(mock_config):
     bot._run_miniapp_rag.assert_called_once_with(123, 99, "test")
 
 
-@pytest.mark.asyncio
 async def test_run_miniapp_rag_success(mock_config):
     """_run_miniapp_rag sends RAG response to topic thread."""
     bot = _create_bot(mock_config)
@@ -309,7 +298,6 @@ async def test_run_miniapp_rag_success(mock_config):
     assert call_kwargs["text"] == "Ответ от RAG"
 
 
-@pytest.mark.asyncio
 async def test_run_miniapp_rag_error_sends_fallback(mock_config):
     """_run_miniapp_rag sends fallback message on pipeline error."""
     bot = _create_bot(mock_config)
@@ -326,7 +314,6 @@ async def test_run_miniapp_rag_error_sends_fallback(mock_config):
     assert "ошибка" in bot.bot.send_message.call_args.kwargs["text"].lower()
 
 
-@pytest.mark.asyncio
 async def test_run_miniapp_rag_no_documents(mock_config):
     """_run_miniapp_rag sends 'not found' when no documents retrieved."""
     bot = _create_bot(mock_config)
@@ -343,7 +330,6 @@ async def test_run_miniapp_rag_no_documents(mock_config):
     assert "не нашёл" in bot.bot.send_message.call_args.kwargs["text"].lower()
 
 
-@pytest.mark.asyncio
 async def test_subscriber_not_started_without_topic_manager(mock_config):
     """Pub/sub subscriber not started when _topic_manager is None (feature disabled)."""
     bot = _create_bot(mock_config)
@@ -370,7 +356,6 @@ def _make_mock_pubsub(listen_fn):
     return mock_redis, mock_pubsub
 
 
-@pytest.mark.asyncio
 async def test_subscriber_loop_invalid_message(mock_config):
     """Subscriber loop skips invalid JSON messages without crashing."""
     bot = _create_bot(mock_config)
@@ -393,7 +378,6 @@ async def test_subscriber_loop_invalid_message(mock_config):
     bot._process_miniapp_start.assert_called_once_with(chat_id=123, uuid_str="abc")
 
 
-@pytest.mark.asyncio
 async def test_subscriber_loop_crash_logged(mock_config):
     """Subscriber loop logs exception on unexpected crash and cleans up."""
     bot = _create_bot(mock_config)
@@ -413,7 +397,6 @@ async def test_subscriber_loop_crash_logged(mock_config):
     mock_redis.aclose.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_deeplink_create_topic_error(mock_config):
     """TelegramBadRequest from create_forum_topic should be handled gracefully."""
     from aiogram.exceptions import TelegramBadRequest

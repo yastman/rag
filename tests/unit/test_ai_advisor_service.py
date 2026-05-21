@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
 
@@ -15,7 +13,6 @@ def _llm_with_response(content: str = "ok") -> MagicMock:
     return llm
 
 
-@pytest.mark.asyncio
 async def test_ai_advisor_uses_env_llm_model() -> None:
     llm = _llm_with_response()
     service = AIAdvisorService(kommo_client=MagicMock(), llm=llm)
@@ -26,7 +23,6 @@ async def test_ai_advisor_uses_env_llm_model() -> None:
     assert llm.chat.completions.create.call_args.kwargs["model"] == "router-model"
 
 
-@pytest.mark.asyncio
 async def test_ai_advisor_defaults_to_gpt_4o_mini_model() -> None:
     llm = _llm_with_response()
     service = AIAdvisorService(kommo_client=MagicMock(), llm=llm)
