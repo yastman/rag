@@ -206,6 +206,12 @@ CLAUDE.md
 !telegram_bot/AGENTS.override.md
 !k8s/AGENTS.override.md
 !src/ingestion/unified/AGENTS.override.md
+!scripts/AGENTS.override.md
+!services/AGENTS.override.md
+!services/bge-m3-api/AGENTS.override.md
+!services/user-base/AGENTS.override.md
+!services/docling/AGENTS.override.md
+!mini_app/frontend/src/AGENTS.override.md
 
 # Internal dev tools & AI agent configs
 .claude/rules/
