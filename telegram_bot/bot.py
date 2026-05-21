@@ -57,6 +57,11 @@ from .keyboards.client_keyboard import (
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
+from .integrations.memory import (
+    begin_checkpoint_overhead_capture,
+    end_checkpoint_overhead_capture,
+    sum_checkpoint_overhead_ms,
+)
 from .observability import (
     create_callback_handler,
     get_client,
@@ -4042,8 +4047,22 @@ class PropertyBot:
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     invoke_start = time.perf_counter()
-                    result = await graph.ainvoke(state, config=invoke_config)
+                    ***REMOVED*** Direct checkpoint overhead measurement (***REMOVED***1258): the
+                    ***REMOVED*** checkpointer wrapper accumulates per-method I/O times
+                    ***REMOVED*** into a ContextVar bucket while this capture is active.
+                    ***REMOVED*** Falls back to the proxy when the checkpointer is not
+                    ***REMOVED*** instrumented (e.g. MemorySaver in tests).
+                    overhead_bucket = begin_checkpoint_overhead_capture()
+                    try:
+                        result = await graph.ainvoke(state, config=invoke_config)
+                    finally:
+                        overhead_bucket = end_checkpoint_overhead_capture()
                     ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                    if overhead_bucket and overhead_bucket.get("calls", 0):
+                        result["checkpointer_overhead_ms"] = sum_checkpoint_overhead_ms(
+                            overhead_bucket
+                        )
+                        result["checkpointer_op_count"] = int(overhead_bucket.get("calls", 0))
                     result["checkpointer_overhead_proxy_ms"] = (
                         compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
                     )
