@@ -18,6 +18,16 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
+from telegram_bot.handlers.command_handlers import (
+    cmd_call,
+    cmd_clear,
+    cmd_clearcache,
+    cmd_help,
+    cmd_history,
+    cmd_metrics,
+    cmd_start,
+    cmd_stats,
+)
 from telegram_bot.preflight import PreflightError
 from telegram_bot.services.error_utils import walk_traceback_frames
 from telegram_bot.startup_status import DependencyCheckResult, StartupReport
@@ -261,7 +271,7 @@ class TestCommandHandlers:
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
-        await bot.cmd_start(message)
+        await cmd_start(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args
@@ -282,7 +292,7 @@ class TestCommandHandlers:
         i18n = MagicMock()
         i18n.get.return_value = "Привет, Test! 👋"
 
-        await bot.cmd_start(message, i18n=i18n)
+        await cmd_start(bot, message, i18n=i18n)
 
         ***REMOVED*** Verify i18n.get was called with name= kwarg
         i18n.get.assert_any_call("welcome-text", name="Test")
@@ -292,7 +302,7 @@ class TestCommandHandlers:
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
-        await bot.cmd_help(message)
+        await cmd_help(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
@@ -304,7 +314,7 @@ class TestCommandHandlers:
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
-        await bot.cmd_help(message)
+        await cmd_help(bot, message)
 
         call_args = message.answer.call_args[0][0]
         for cmd in ["/history", "/metrics", "/clearcache"]:
@@ -323,7 +333,7 @@ class TestCommandHandlers:
         message = _make_text_message(user_id=12345)
         dialog_manager = AsyncMock()
 
-        await bot.cmd_start(message, dialog_manager=dialog_manager)
+        await cmd_start(bot, message, dialog_manager=dialog_manager)
 
         dialog_manager.start.assert_called_once()
 
@@ -345,7 +355,7 @@ class TestCommandHandlers:
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_called_once_with(12345)
         message.answer.assert_called_once()
@@ -360,7 +370,7 @@ class TestCommandHandlers:
         bot._history_service.delete_user_history = AsyncMock(return_value=True)
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         bot._history_service.delete_user_history.assert_awaited_once_with(12345)
@@ -376,7 +386,7 @@ class TestCommandHandlers:
         bot._history_service.delete_user_history = AsyncMock(return_value=False)
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         bot._history_service.delete_user_history.assert_awaited_once_with(12345)
@@ -392,7 +402,7 @@ class TestCommandHandlers:
         bot._agent_checkpointer = AsyncMock()
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         ***REMOVED*** Both text thread (tg_12345) and voice thread (12345) must be deleted
         cp_calls = bot._checkpointer.adelete_thread.call_args_list
@@ -422,7 +432,7 @@ class TestCommandHandlers:
         dialog_manager.reset_stack = AsyncMock()
         state = AsyncMock()
 
-        await bot.cmd_clear(message, state=state, dialog_manager=dialog_manager)
+        await cmd_clear(bot, message, state=state, dialog_manager=dialog_manager)
 
         dialog_manager.reset_stack.assert_awaited_once()
         ***REMOVED*** remove_keyboard=False — keep the chat composer untouched after /clear
@@ -442,7 +452,7 @@ class TestCommandHandlers:
         dialog_manager.reset_stack = AsyncMock()
         state = AsyncMock()
 
-        await bot.cmd_clear(message, state=state, dialog_manager=dialog_manager)
+        await cmd_clear(bot, message, state=state, dialog_manager=dialog_manager)
 
         dialog_manager.reset_stack.assert_not_awaited()
         state.clear.assert_awaited_once()
@@ -459,7 +469,7 @@ class TestCommandHandlers:
         dialog_manager.reset_stack = AsyncMock(side_effect=RuntimeError("dialog stack corrupted"))
         state = AsyncMock()
 
-        await bot.cmd_clear(message, state=state, dialog_manager=dialog_manager)
+        await cmd_clear(bot, message, state=state, dialog_manager=dialog_manager)
 
         dialog_manager.reset_stack.assert_awaited_once()
         message.answer.assert_awaited_once()
@@ -473,7 +483,7 @@ class TestCommandHandlers:
         bot._cache.clear_conversation = AsyncMock()
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         message.answer.assert_awaited_once()
@@ -495,7 +505,7 @@ class TestCommandHandlers:
         bot._agent_checkpointer = SyncCheckpointer()
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         assert set(bot._checkpointer.calls) == {"tg_12345", "12345"}
         assert set(bot._agent_checkpointer.calls) == {"tg_12345", "12345"}
@@ -512,7 +522,7 @@ class TestCommandHandlers:
         bot._agent_checkpointer = AsyncMock()
         message = _make_text_message(user_id=777, chat_id=42)
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         cp_calls = bot._checkpointer.adelete_thread.call_args_list
         called_ids = {c.args[0] for c in cp_calls}
@@ -535,7 +545,7 @@ class TestCommandHandlers:
         bot._agent_checkpointer = None
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         message.answer.assert_called_once()
@@ -550,7 +560,7 @@ class TestCommandHandlers:
         bot._agent_checkpointer = AsyncMock()
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         ***REMOVED*** Both text and voice thread deletions are attempted for the failing checkpointer
@@ -572,7 +582,7 @@ class TestCommandHandlers:
         bot._agent_checkpointer = shared_cp
         message = _make_text_message()
 
-        await bot.cmd_clear(message)
+        await cmd_clear(bot, message)
 
         ***REMOVED*** Deduplicated to 1 instance, but that instance deletes both text and voice threads
         assert shared_cp.adelete_thread.await_count == 2
@@ -591,7 +601,7 @@ class TestCommandHandlers:
         }
         message = _make_text_message()
 
-        await bot.cmd_stats(message)
+        await cmd_stats(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
@@ -607,7 +617,7 @@ class TestCommandHandlers:
         }
         message = _make_text_message()
 
-        await bot.cmd_stats(message)
+        await cmd_stats(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
@@ -619,12 +629,12 @@ class TestCommandHandlers:
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
-        with patch("telegram_bot.bot.PipelineMetrics") as mock_pm:
+        with patch("telegram_bot.handlers.command_handlers.PipelineMetrics") as mock_pm:
             mock_metrics = MagicMock()
             mock_metrics.format_text.return_value = "p50=100ms p95=200ms"
             mock_pm.get.return_value = mock_metrics
 
-            await bot.cmd_metrics(message)
+            await cmd_metrics(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
@@ -657,9 +667,9 @@ class TestCommandHandlers:
 
         with (
             patch.dict(sys.modules, {"livekit": fake_livekit}),
-            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.handlers.command_handlers.get_client", return_value=mock_lf),
         ):
-            await bot.cmd_call(message)
+            await cmd_call(bot, message)
 
         dispatch_request = fake_lk.agent_dispatch.create_dispatch.await_args.args[0]
         metadata = json.loads(dispatch_request.metadata)
@@ -1073,7 +1083,7 @@ class TestCmdHistory:
         bot._history_service = AsyncMock()
         message = _make_text_message("/history")
 
-        await bot.cmd_history(message)
+        await cmd_history(bot, message)
 
         message.answer.assert_called_once()
         assert (
@@ -1097,7 +1107,7 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history цены")
 
-        await bot.cmd_history(message)
+        await cmd_history(bot, message)
 
         bot._history_service.search_user_history.assert_awaited_once_with(
             user_id=12345, query="цены", limit=5
@@ -1114,7 +1124,7 @@ class TestCmdHistory:
         bot._history_service.search_user_history = AsyncMock(return_value=[])
         message = _make_text_message("/history   цены на квартиры в аликанте")
 
-        await bot.cmd_history(message)
+        await cmd_history(bot, message)
 
         bot._history_service.search_user_history.assert_awaited_once_with(
             user_id=12345,
@@ -1129,7 +1139,7 @@ class TestCmdHistory:
         bot._history_service.search_user_history = AsyncMock(return_value=[])
         message = _make_text_message("/history несуществующее")
 
-        await bot.cmd_history(message)
+        await cmd_history(bot, message)
 
         message.answer.assert_called_once()
         assert (
@@ -1143,15 +1153,16 @@ class TestCmdHistory:
         bot._history_service = None
         message = _make_text_message("/history цены")
 
-        await bot.cmd_history(message)
+        await cmd_history(bot, message)
 
         message.answer.assert_called_once()
         assert "недоступн" in message.answer.call_args[0][0].lower()
 
     def test_history_command_registered(self, mock_config):
         """Verify /history handler is registered."""
-        bot, _ = _create_bot(mock_config)
-        assert hasattr(bot, "cmd_history")
+        from telegram_bot.handlers.command_handlers import cmd_history as _cmd_history
+
+        assert callable(_cmd_history)
 
     async def test_history_backend_exception_returns_safe_message(self, mock_config):
         """Backend exception is caught and user gets a safe error message."""
@@ -1162,8 +1173,8 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history цены")
 
-        with patch("telegram_bot.bot.propagate_attributes"):
-            await bot.cmd_history(message)
+        with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
+            await cmd_history(bot, message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -1188,8 +1199,8 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history тест")
 
-        with patch("telegram_bot.bot.propagate_attributes"):
-            await bot.cmd_history(message)
+        with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
+            await cmd_history(bot, message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -1207,8 +1218,8 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history тест")
 
-        with patch("telegram_bot.bot.propagate_attributes"):
-            await bot.cmd_history(message)
+        with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
+            await cmd_history(bot, message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -1231,9 +1242,9 @@ class TestCmdHistory:
         message = _make_text_message("/history цены")
 
         mock_lf = MagicMock()
-        with patch("telegram_bot.bot.get_client", return_value=mock_lf):
-            with patch("telegram_bot.bot.propagate_attributes"):
-                await bot.cmd_history(message)
+        with patch("telegram_bot.handlers.command_handlers.get_client", return_value=mock_lf):
+            with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
+                await cmd_history(bot, message)
 
         ***REMOVED*** Trace metadata
         mock_lf.update_current_span.assert_called_once()
@@ -1265,9 +1276,9 @@ class TestCmdHistory:
         message = _make_text_message("/history несуществующее")
 
         mock_lf = MagicMock()
-        with patch("telegram_bot.bot.get_client", return_value=mock_lf):
-            with patch("telegram_bot.bot.propagate_attributes"):
-                await bot.cmd_history(message)
+        with patch("telegram_bot.handlers.command_handlers.get_client", return_value=mock_lf):
+            with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
+                await cmd_history(bot, message)
 
         score_calls = mock_lf.create_score.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs["value"] for c in score_calls}
@@ -1281,9 +1292,9 @@ class TestCmdHistory:
         message = _make_text_message("/history цены")
 
         mock_lf = MagicMock()
-        with patch("telegram_bot.bot.get_client", return_value=mock_lf):
-            with patch("telegram_bot.bot.propagate_attributes"):
-                await bot.cmd_history(message)
+        with patch("telegram_bot.handlers.command_handlers.get_client", return_value=mock_lf):
+            with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
+                await cmd_history(bot, message)
 
         ***REMOVED*** Trace should indicate error
         trace_kwargs = mock_lf.update_current_span.call_args[1]
@@ -2262,12 +2273,24 @@ class TestRegisterHandlers:
 
     @pytest.mark.parametrize(
         "handler_name",
-        ["cmd_start", "cmd_help", "cmd_clear", "cmd_stats", "handle_query"],
+        ["handle_query"],
     )
     def test_handler_registered(self, mock_config, handler_name):
         """Test that expected handler is registered on init."""
         bot, _ = _create_bot(mock_config)
         assert hasattr(bot, handler_name)
+
+    def test_command_handlers_available_as_standalone(self, mock_config):
+        """Command handlers are available as standalone functions in the handlers module."""
+        from telegram_bot.handlers.command_handlers import (
+            cmd_clear,
+            cmd_help,
+            cmd_start,
+            cmd_stats,
+        )
+
+        for handler in (cmd_clear, cmd_help, cmd_start, cmd_stats):
+            assert callable(handler)
 
 
 class TestWriteLangfuseScores:
@@ -5249,7 +5272,7 @@ class TestClearCacheCommand:
         bot, _ = _create_bot(mock_config)
         message = _make_text_message("/clearcache")
 
-        await bot.cmd_clearcache(message)
+        await cmd_clearcache(bot, message)
 
         message.answer.assert_called_once()
         call_kwargs = message.answer.call_args
