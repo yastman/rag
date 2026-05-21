@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "fix",
   "description": "Fix sparse vector name mismatch in src/evaluation/search_engines.py: change 'sparse' to 'bm42' in all Prefetch queries, and add a regression test that asserts the correct vector name is used in query construction.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create a dedicated branch named 'fix/1083-sparse-vector-name-mismatch' from dev.",
     "Write a failing test in tests/unit/evaluation/test_search_engines_eval.py that asserts the sparse vector name passed to Qdrant Prefetch queries is 'bm42' (not 'sparse'). The test should cover all 3 engine classes that use sparse vectors: HybridSearchEngine, HybridDBSFColBERTSearchEngine, and HybridRRFColBERTSearchEngine. Follow the existing test patterns that mock QdrantClient and Settings. The test should inspect the prefetch argument of the call to client.query_points and verify the 'using' field of the sparse Prefetch is 'bm42'.",
@@ -27,5 +27,5 @@
     "make check"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 3 occurrences fixed. Pre-existing test failures in mini_app (import errors), docker validation, markdown links, and cocoindex tests are unrelated. The mypy error in telegram_bot/bot.py:4059 is also pre-existing and unrelated to this change."
 }
