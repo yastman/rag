@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 import time
 from datetime import UTC, datetime, timedelta
@@ -60,14 +61,14 @@ def parse_args() -> argparse.Namespace:
 
 def check_langfuse_connectivity(host: str, public_key: str, secret_key: str) -> bool:
     """Verify Langfuse API is reachable and auth works."""
-    os.environ["LANGFUSE_HOST"] = host
-    os.environ["LANGFUSE_PUBLIC_KEY"] = public_key
-    os.environ["LANGFUSE_SECRET_KEY"] = secret_key
-
     from langfuse import Langfuse
 
     try:
-        lf = Langfuse()
+        lf = Langfuse(
+            host=host,
+            public_key=public_key,
+            secret_key=secret_key,
+        )
         result = lf.auth_check()
         lf.flush()
         if not result:
@@ -106,8 +107,13 @@ def wait_for_ingestion(seconds: int = 3) -> None:
     time.sleep(seconds)
 
 
-def validate_traces(lookback_minutes: int) -> dict:
+def validate_traces(lookback_minutes: int, expected_session_id: str | None = None) -> dict:
     """Read back voice-session traces from Langfuse and validate.
+
+    Args:
+        lookback_minutes: How far back to look for traces.
+        expected_session_id: If provided, filter traces to match this session_id.
+            When None (e.g., --skip-produce mode), validate the most recent trace.
 
     Returns a result dict with 'ok', 'evidence', and 'errors' keys.
     """
@@ -137,8 +143,26 @@ def validate_traces(lookback_minutes: int) -> dict:
             "errors": [f"No voice-session traces found in last {lookback_minutes} minutes"],
         }
 
-    # Validate the most recent trace
-    trace = traces_data[0]
+    # Filter by expected session_id if provided
+    if expected_session_id:
+        matching = [
+            t for t in traces_data
+            if getattr(t, "session_id", "") == expected_session_id
+        ]
+        if not matching:
+            return {
+                "ok": False,
+                "evidence": None,
+                "errors": [
+                    f"No trace with session_id={expected_session_id!r} found "
+                    f"(found {len(traces_data)} other voice-session traces)"
+                ],
+            }
+        trace = matching[0]
+    else:
+        # Validate the most recent trace
+        trace = traces_data[0]
+
     errors: list[str] = []
 
     # Check service attribution
@@ -170,14 +194,14 @@ def validate_traces(lookback_minutes: int) -> dict:
 
 
 def check_compose_service_name() -> bool:
-    """Static check: verify OTEL_SERVICE_NAME=voice-agent is set in compose.yml."""
+    """Static check: verify OTEL_SERVICE_NAME is associated with voice-agent in compose.yml."""
     compose_path = Path(__file__).resolve().parent.parent / "compose.yml"
     if not compose_path.exists():
         print("WARNING: compose.yml not found; skipping static OTEL check")
         return True
 
     content = compose_path.read_text()
-    if "OTEL_SERVICE_NAME" in content and "voice-agent" in content:
+    if re.search(r"OTEL_SERVICE_NAME.*voice-agent", content):
         print("OK: OTEL_SERVICE_NAME=voice-agent found in compose.yml")
         return True
 
@@ -194,6 +218,11 @@ def main() -> None:
     print("=" * 60)
     print()
 
+    # Set environment variables for Langfuse client instances used later
+    os.environ["LANGFUSE_HOST"] = args.host
+    os.environ["LANGFUSE_PUBLIC_KEY"] = args.public_key
+    os.environ["LANGFUSE_SECRET_KEY"] = args.secret_key
+
     # Step 1: Connectivity check
     print("[1/5] Checking Langfuse connectivity...")
     if not check_langfuse_connectivity(args.host, args.public_key, args.secret_key):
@@ -206,10 +235,11 @@ def main() -> None:
     print()
 
     # Step 3: Produce trace (unless --skip-produce)
+    produced_session_id: str | None = None
     if not args.skip_produce:
         print("[3/5] Producing voice-session trace...")
         try:
-            produce_voice_trace()
+            produced_session_id = produce_voice_trace()
         except Exception as e:
             print(f"WARNING: Could not produce trace: {e}")
             print("    Continuing with validation of existing traces...")
@@ -226,7 +256,7 @@ def main() -> None:
 
     # Step 5: Validate
     print("[5/5] Validating voice-session traces...")
-    result = validate_traces(args.lookback_minutes)
+    result = validate_traces(args.lookback_minutes, expected_session_id=produced_session_id)
 
     if result["evidence"]:
         print()

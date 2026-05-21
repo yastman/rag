@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from tests.observability.test_voice_trace_gate import (
+from tests.observability.gate_logic import (
     FakeObservation,
     FakeTrace,
     build_evidence_summary,
