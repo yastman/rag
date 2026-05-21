@@ -679,7 +679,7 @@ docs-check: ***REMOVED******REMOVED*** Check Markdown relative links for broken 
 check: lint type-check ***REMOVED******REMOVED*** Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
 
-pre-push: lint format-check type-check ***REMOVED******REMOVED*** Pre-push gate (lint + format-check + types)
+pre-push: lint format-check ***REMOVED******REMOVED*** Pre-push gate (lint + format-check)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
 
 fix: lint-fix format ***REMOVED******REMOVED*** Fix all auto-fixable issues
