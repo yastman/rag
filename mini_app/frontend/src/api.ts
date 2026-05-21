@@ -1,10 +1,20 @@
+import { retrieveRawInitData } from "@tma.js/bridge";
+
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-export function remoteLog(level: "info" | "error" | "warn", message: string, data?: unknown) {
+function jsonHeaders(): Record<string, string> {
+  const rawInitData = retrieveRawInitData();
+  return {
+    "Content-Type": "application/json",
+    ...(rawInitData ? { "X-Init-Data": rawInitData } : {}),
+  };
+}
+
+export function remoteLog(level: "debug" | "info" | "error" | "warn", message: string, data?: unknown) {
   console.log(`[remote:${level}]`, message, data);
   fetch(`${API_BASE}/log`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ level, message, data: data ? JSON.stringify(data) : undefined }),
   }).catch(() => {});
 }
@@ -34,7 +44,7 @@ export async function startExpert(
 ): Promise<StartExpertResponse> {
   const resp = await fetch(`${API_BASE}/start-expert`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({
       user_id: userId,
       expert_id: expertId,
