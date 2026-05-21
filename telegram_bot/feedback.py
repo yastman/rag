@@ -1,10 +1,15 @@
-"""User feedback utilities — inline keyboard builder and callback parser (***REMOVED***229, ***REMOVED***755)."""
+"""User feedback utilities — inline keyboard builder and callback parser (***REMOVED***229, ***REMOVED***755).
+
+Keyboards are constructed with :class:`aiogram.utils.keyboard.InlineKeyboardBuilder`
+to follow the SDK convention enforced by issue ***REMOVED***1238.
+"""
 
 from __future__ import annotations
 
 import logging
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .callback_data import FeedbackCB, FeedbackReasonCB
 
@@ -34,54 +39,49 @@ _REASON_LABELS: dict[str, str] = {
 
 
 def build_feedback_keyboard(trace_id: str) -> InlineKeyboardMarkup:
-    """Build inline keyboard with like/dislike buttons encoding trace_id."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="\U0001f44d Полезно",
-                    callback_data=FeedbackCB(action="like", trace_id=trace_id).pack(),
-                ),
-                InlineKeyboardButton(
-                    text="\U0001f44e Не помогло",
-                    callback_data=FeedbackCB(action="dislike", trace_id=trace_id).pack(),
-                ),
-            ]
-        ]
+    """Build inline keyboard with like/dislike buttons encoding ``trace_id``.
+
+    Layout: a single row of 2 buttons.
+    """
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="\U0001f44d Полезно",
+        callback_data=FeedbackCB(action="like", trace_id=trace_id),
     )
+    builder.button(
+        text="\U0001f44e Не помогло",
+        callback_data=FeedbackCB(action="dislike", trace_id=trace_id),
+    )
+    builder.adjust(2)
+    return builder.as_markup()
 
 
 def build_dislike_reason_keyboard(trace_id: str) -> InlineKeyboardMarkup:
-    """Build inline keyboard with 6 dislike reason buttons (3 rows × 2) (***REMOVED***755)."""
-    ***REMOVED*** dict insertion order guaranteed in Python 3.7+; layout follows _REASON_CODES order
-    codes = list(_REASON_CODES.keys())
-    rows = []
-    for i in range(0, len(codes), 2):
-        row = []
-        for code in codes[i : i + 2]:
-            row.append(
-                InlineKeyboardButton(
-                    text=_REASON_LABELS[code],
-                    callback_data=FeedbackReasonCB(code=code, trace_id=trace_id).pack(),
-                )
-            )
-        rows.append(row)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    """Build inline keyboard with 6 dislike reason buttons (3 rows × 2) (***REMOVED***755).
+
+    Button order follows :data:`_REASON_CODES` insertion order, which is
+    guaranteed since Python 3.7.
+    """
+    builder = InlineKeyboardBuilder()
+    for code in _REASON_CODES:
+        builder.button(
+            text=_REASON_LABELS[code],
+            callback_data=FeedbackReasonCB(code=code, trace_id=trace_id),
+        )
+    builder.adjust(2)
+    return builder.as_markup()
 
 
 def build_feedback_confirmation(*, liked: bool) -> InlineKeyboardMarkup:
     """Build single-button confirmation keyboard after feedback submitted."""
     emoji = "\u2705" if liked else "\U0001f4dd"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"{emoji} Спасибо за отзыв!",
-                    callback_data=FeedbackCB(action="done", trace_id="").pack(),
-                ),
-            ]
-        ]
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text=f"{emoji} Спасибо за отзыв!",
+        callback_data=FeedbackCB(action="done", trace_id=""),
     )
+    builder.adjust(1)
+    return builder.as_markup()
 
 
 def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
