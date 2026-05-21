@@ -141,6 +141,10 @@ class TestCmdStart:
         message = _make_message()
         mock_bot._resolve_user_role = AsyncMock(return_value="client")
 
-        await cmd_start(mock_bot, message)
+        with patch(
+            "telegram_bot.dialogs.root_nav.show_client_main_menu",
+            new_callable=AsyncMock,
+        ) as mock_show_menu:
+            await cmd_start(mock_bot, message)
 
-        message.answer.assert_called_once()
+            mock_show_menu.assert_called_once_with(message, i18n=None)
