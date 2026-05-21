@@ -25,6 +25,7 @@ This contract uses AST inspection to keep both files honest:
 from __future__ import annotations
 
 import ast
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -79,10 +80,8 @@ def test_qdrant_read_skips_on_empty_collections() -> None:
     skip_messages = []
     for call in skip_calls:
         if call.args and isinstance(call.args[0], (ast.Constant, ast.JoinedStr)):
-            try:
+            with suppress(Exception):
                 skip_messages.append(ast.unparse(call.args[0]).lower())
-            except Exception:  # pragma: no cover - defensive
-                pass
     has_empty_data_skip = any(
         any(token in msg for token in ("collection", "data", "point", "empty"))
         for msg in skip_messages
