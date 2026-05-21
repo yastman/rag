@@ -298,8 +298,20 @@ class QdrantHybridTargetConnector:
         content_hash = compute_content_hash(abs_path)
         logger.debug(f"Hash: {content_hash}")
 
-        # Check if processing needed (skip unchanged)
-        if not state_manager.should_process_sync(file_id, content_hash):
+        # Resolve processing fingerprint pieces.
+        # Mirrors the FileState upsert below: bge-m3-api when local embeddings
+        # are used, otherwise the configured Voyage model.
+        current_embedding_model = "bge-m3-api" if spec.use_local_embeddings else spec.voyage_model
+        current_pipeline_version = spec.pipeline_version
+
+        # Check if processing needed (skip unchanged content AND matching
+        # processing fingerprint — see issue #1604).
+        if not state_manager.should_process_sync(
+            file_id,
+            content_hash,
+            embedding_model=current_embedding_model,
+            pipeline_version=current_pipeline_version,
+        ):
             logger.debug(f"Skipping unchanged: {source_path}")
             return
 
@@ -312,9 +324,9 @@ class QdrantHybridTargetConnector:
                 mime_type=mutation.mime_type,
                 file_size=mutation.file_size,
                 content_hash=content_hash,
-                embedding_model="bge-m3-api" if spec.use_local_embeddings else spec.voyage_model,
+                embedding_model=current_embedding_model,
                 collection_name=spec.collection_name,
-                pipeline_version=spec.pipeline_version,
+                pipeline_version=current_pipeline_version,
                 status="processing",
             )
         )
