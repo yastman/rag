@@ -840,7 +840,7 @@ async def test_streaming_raw_reasoning_merged_into_response() -> None:
 
 
 @pytest.mark.asyncio
-async def test_streaming_mixed_content_and_reasoning() -> None:
+async def test_service_streaming_mixed_content_and_reasoning() -> None:
     """Streaming with mixed delta.content and delta.reasoning_content works.
 
     Real-world scenario: some chunks have delta.content (after LiteLLM merge works),
@@ -1109,7 +1109,7 @@ async def test_ttft_drift_warn_ms_config() -> None:
 
 
 @pytest.mark.asyncio
-async def test_streaming_uses_send_message_draft() -> None:
+async def test_text_streaming_uses_send_message_draft() -> None:
     """Streaming path uses bot.send_message_draft instead of edit_text."""
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True
