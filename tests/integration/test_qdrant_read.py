@@ -50,7 +50,11 @@ def _run_qdrant_read_checks() -> bool:
 
         if not collections.collections:
             print("   ℹ️  Нет коллекций для тестирования")
-            return True
+            # Empty Qdrant is not a successful read test (#1631).
+            # The wrapper test skips earlier, so reaching this point during
+            # an actual run means we lost data between the skip check and
+            # the helper invocation — fail loudly.
+            return False
 
         # Детали первой коллекции
         collection_name = collections.collections[0].name
@@ -141,6 +145,18 @@ def test_qdrant_read():
     port = parsed.port or 6333
     if not _is_port_open(host, port):
         pytest.skip(f"Qdrant not running on {host}:{port}")
+
+    # Empty Qdrant is not a successful read test (#1631) — skip BEFORE the
+    # helper runs so absent data is reported as skipped, not green.
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
+    collections = client.get_collections().collections
+    if not collections:
+        pytest.skip("No Qdrant collections available — read test requires existing data")
+    target = collections[0].name
+    info = client.get_collection(target)
+    if not info.points_count:
+        pytest.skip(f"Collection '{target}' has zero points — read test requires data")
+
     assert _run_qdrant_read_checks()
 
 
