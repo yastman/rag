@@ -344,3 +344,45 @@ def test_local_all_test_targets_are_phony() -> None:
     combined = " ".join(phony_blocks)
     assert "test-frontend" in combined
     assert "test-all-local" in combined
+
+
+# --- #1778 bounded parallelism contract tests ---
+
+
+def test_test_full_uses_bounded_parallelism_by_default() -> None:
+    """Regression test for #1778.
+
+    test-full must use PYTEST_FULL_PARALLEL_ARGS (bounded, e.g. -n 2) instead of
+    PYTEST_PARALLEL_ARGS (-n auto) to prevent WSL/Docker OOM under heavy local
+    test sessions.
+    """
+    text = _makefile_text()
+
+    # 1. PYTEST_FULL_PARALLEL_ARGS must be defined
+    var_match = re.search(
+        r"^PYTEST_FULL_PARALLEL_ARGS\s*\?=\s*(.+)$", text, re.MULTILINE
+    )
+    assert var_match, "PYTEST_FULL_PARALLEL_ARGS not found in Makefile"
+
+    # 2. Its default must NOT be unbounded -n auto
+    default_value = var_match.group(1).strip()
+    assert "-n auto" not in default_value, (
+        f"PYTEST_FULL_PARALLEL_ARGS must use bounded parallelism, "
+        f"got {default_value!r} which contains '-n auto'"
+    )
+
+    # 3. test-full target must reference PYTEST_FULL_PARALLEL_ARGS, not PYTEST_PARALLEL_ARGS
+    block_match = re.search(
+        r"^test-full:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "test-full target not found in Makefile"
+    block = block_match.group(0)
+    assert "$(PYTEST_FULL_PARALLEL_ARGS)" in block, (
+        "test-full must use $(PYTEST_FULL_PARALLEL_ARGS) for bounded parallelism"
+    )
+    assert "$(PYTEST_PARALLEL_ARGS)" not in block, (
+        "test-full must NOT use $(PYTEST_PARALLEL_ARGS) (unbounded -n auto); "
+        "use $(PYTEST_FULL_PARALLEL_ARGS) instead"
+    )
