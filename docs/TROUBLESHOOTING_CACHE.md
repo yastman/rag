@@ -147,7 +147,7 @@ _SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 
 | Query Pattern | Reason |
 |---------------|--------|
-| Contextual follow-ups ("подробнее", "первый", "это", "ещё") | Different context |
+| Contextual follow-ups ("подробнее"/"more details", "первый"/"the first one", "это"/"this", "ещё"/"more") | Different context |
 | CHITCHAT/OFF_TOPIC | Not RAG queries |
 
 ### Cache Thresholds by Query Type
