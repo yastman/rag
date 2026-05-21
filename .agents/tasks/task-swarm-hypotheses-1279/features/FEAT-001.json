@@ -1,0 +1,23 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Set up the feature branch and install dev dependencies to confirm baseline tests pass",
+  "status": "in_progress",
+  "steps": [
+    "Create and checkout branch `feat/swarm-hypotheses-1279` from `dev`",
+    "Run `uv sync` to install dev dependencies",
+    "Run `uv run pytest tests/unit/scripts/ -q --timeout=30 -x` to confirm existing script tests pass",
+    "Create empty directory `tests/fixtures/swarm/` with a placeholder to ensure git tracks it"
+  ],
+  "acceptance_criteria": [
+    "Branch `feat/swarm-hypotheses-1279` exists and is checked out",
+    "Existing unit tests in tests/unit/scripts/ pass",
+    "Directory tests/fixtures/swarm/ exists"
+  ],
+  "verification": [
+    "Run `git branch --show-current` shows `feat/swarm-hypotheses-1279`",
+    "Run `uv run pytest tests/unit/scripts/ -q --timeout=30` passes"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
