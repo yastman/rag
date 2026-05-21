@@ -323,7 +323,7 @@ class TestTracedPipelineContract:
     def test_traced_pipeline_propagates_metadata_and_tags(self):
         from telegram_bot.observability import traced_pipeline
 
-        with patch("telegram_bot.observability.propagate_attributes") as propagate:
+        with patch("src.observability.propagate_attributes") as propagate:
             traced_pipeline(
                 session_id="chat-1",
                 user_id="42",

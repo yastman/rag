@@ -98,6 +98,7 @@ def test_filter_runs_at_module_import() -> None:
         warnings.resetwarnings()
         ***REMOVED*** Force re-import so module-level code runs again.
         sys.modules.pop("telegram_bot.observability", None)
+        sys.modules.pop("src.observability", None)
         importlib.import_module("telegram_bot.observability")
 
         ***REMOVED*** Each entry in warnings.filters is a 5-tuple:
