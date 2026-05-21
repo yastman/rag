@@ -1,4 +1,11 @@
-"""Tests for LLM-first extraction pipeline."""
+"""Tests for the regex-first hybrid apartment extraction pipeline.
+
+The pipeline runs regex first for deterministic numeric filters, then asks the
+LLM to fill gaps, and merges the two results via ``merge_extraction_results``
+(see issue #1609). When both regex and LLM participate, the merged result
+carries ``meta.source == "hybrid"``. Regex-only / LLM-error / cache paths keep
+their original sources.
+"""
 
 from __future__ import annotations
 
@@ -34,15 +41,29 @@ def pipeline(mock_llm):
     )
 
 
-class TestLlmFirstPipeline:
-    """LLM is called first, regex is fallback."""
+class TestHybridPipeline:
+    """Regex runs first; LLM fills gaps; results are merged into a hybrid source."""
 
     @pytest.mark.asyncio
-    async def test_llm_called_first(self, pipeline, mock_llm) -> None:
+    async def test_llm_participates_in_hybrid_merge(self, pipeline, mock_llm) -> None:
+        """LLM is invoked for gap-fill and the merged result reports source=hybrid.
+
+        After the regex-first hybrid merge introduced in #1609, the pipeline no
+        longer returns the raw LLM result: it merges regex (deterministic
+        numeric floor) with the LLM result and stamps ``source="hybrid"`` via
+        ``merge_extraction_results``. The test verifies that:
+
+        * the LLM does participate (``assert_awaited_once``);
+        * the merged result reports ``source == "hybrid"``;
+        * regex wins for numeric fields — the regex value (``rooms=3``) is
+          preserved over the LLM's ``rooms=2``, which guards the #1609 contract.
+        """
         result = await pipeline.extract("двушка в солнечном береге до 100к")
         mock_llm.extract.assert_awaited_once()
-        assert result.meta.source == "llm"
-        assert result.hard.rooms == 2
+        assert result.meta.source == "hybrid"
+        # Regex-wins-on-numeric: regex extracts rooms=3 from this query and
+        # must override the LLM's rooms=2 in the merged result.
+        assert result.hard.rooms == 3
 
     @pytest.mark.asyncio
     async def test_regex_fallback_on_llm_error(self, pipeline, mock_llm) -> None:

@@ -28,14 +28,25 @@ from pathlib import Path
 from typing import Any
 
 
-# Import search engines and evaluator
-sys.path.insert(0, str(Path(__file__).parent))
-from config_snapshot import get_config_hash
-from search_engines import (
-    BaselineSearchEngine,
-    HybridDBSFColBERTSearchEngine,
-    HybridSearchEngine,
-)
+# Import search engines and evaluator. Prefer package-relative imports so the
+# module is fully importable as ``src.evaluation.smoke_test`` (used by
+# ``tests/unit/evaluation/test_smoke_test.py`` and the contract test for
+# #1619). Fall back to the script-style imports for ``python smoke_test.py``.
+try:  # package import path
+    from src.evaluation.config_snapshot import get_config_hash
+    from src.evaluation.search_engines import (
+        BaselineSearchEngine,
+        HybridDBSFColBERTSearchEngine,
+        HybridSearchEngine,
+    )
+except ImportError:  # script-style fallback (``python smoke_test.py``)
+    sys.path.insert(0, str(Path(__file__).parent))
+    from config_snapshot import get_config_hash  # type: ignore[no-redef]
+    from search_engines import (  # type: ignore[no-redef]
+        BaselineSearchEngine,
+        HybridDBSFColBERTSearchEngine,
+        HybridSearchEngine,
+    )
 
 
 # Smoke test queries: 30 carefully selected queries
