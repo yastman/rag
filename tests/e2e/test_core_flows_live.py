@@ -39,7 +39,7 @@ async def _require_live_stack() -> None:
     redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
     try:
         await redis_client.ping()
-    except Exception:
+    except (aioredis.RedisError, OSError):
         pytest.skip("Redis not running or inaccessible")
     finally:
         await redis_client.aclose()
@@ -133,6 +133,7 @@ async def test_cache_miss_then_hit_on_repeated_query() -> None:
         "Live cache test observed misses but no cache hit across 4 "
         "repeated queries — cache is not promoting recent answers."
     )
+
 
 @pytest.mark.asyncio
 async def test_multi_turn_conversation_same_session() -> None:
