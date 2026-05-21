@@ -5,7 +5,7 @@
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
-	qdrant-backup \
+	qdrant-backup qdrant-cleanup \
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
@@ -44,6 +44,7 @@ export TMPDIR TMP TEMP
 # Override: PYTHON_VERSION=3.13 make test-unit
 PYTHON_VERSION ?= 3.12
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
+PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
@@ -130,22 +131,22 @@ local-pr-ready: ## Full PR readiness gate (check + unit tests) - run manually
 
 lint: ## Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
-	uv run ruff check src/
+	uv run ruff check src/ telegram_bot/
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
 
 lint-fix: ## Run Ruff linter with auto-fix
 	@echo "$(BLUE)Running Ruff with auto-fix...$(NC)"
-	uv run ruff check src/ --fix
+	uv run ruff check src/ telegram_bot/ --fix
 	@echo "$(GREEN)✓ Ruff auto-fix complete$(NC)"
 
 format: ## Format code with Ruff
 	@echo "$(BLUE)Formatting code with Ruff...$(NC)"
-	uv run ruff format src/
+	uv run ruff format src/ telegram_bot/
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 format-check: ## Check if code is formatted
 	@echo "$(BLUE)Checking code format...$(NC)"
-	uv run ruff format src/ --check
+	uv run ruff format src/ telegram_bot/ --check
 	@echo "$(GREEN)✓ Format check complete$(NC)"
 
 type-check: ## Run MyPy type checking
@@ -187,7 +188,7 @@ test-full: ## Run full test suite with hybrid parallelism (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
 	@echo "$(BLUE)Phase 1/2: parallel-safe suites...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
+	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_FULL_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(BLUE)Phase 2/2: stateful/live suites sequentially...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
@@ -679,6 +680,9 @@ docs-check: ## Check Markdown relative links for broken targets
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
 
+pre-push: lint format-check ## Pre-push gate (lint + format-check)
+	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
+
 fix: lint-fix format ## Fix all auto-fixable issues
 	@echo "$(GREEN)✓ Auto-fixes applied$(NC)"
 
@@ -708,6 +712,42 @@ run-bot:  ## Run bot locally (requires: make local-up)
 bot:  ## Alias: run bot and tee output to logs/bot-run.log
 	@mkdir -p logs
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
+
+# =============================================================================
+# BOT LOG TRIAGE (issue #1418)
+# Operator workflow:
+#   make bot                  # produce logs/bot-run.log
+#   make bot-logs-tail        # follow live log
+#   make bot-logs-errors      # show ERROR/CRITICAL lines + tracebacks
+#   make bot-logs-startup     # show preflight + Startup verdict events
+# =============================================================================
+
+.PHONY: bot-logs-tail bot-logs-errors bot-logs-startup
+
+bot-logs-tail:  ## Follow logs/bot-run.log (live stream of bot output)
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@tail -F logs/bot-run.log
+
+bot-logs-errors:  ## Show recent ERROR/CRITICAL lines and Tracebacks from logs/bot-run.log
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Recent errors in logs/bot-run.log:$(NC)"
+	@grep -nE 'ERROR|CRITICAL|Traceback|exception' logs/bot-run.log | tail -n $${BOT_LOG_LINES:-200} || \
+		echo "$(GREEN)No error/critical lines found$(NC)"
+
+bot-logs-startup:  ## Show recent startup/preflight events from logs/bot-run.log
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Recent startup events in logs/bot-run.log:$(NC)"
+	@grep -nE 'Startup verdict|Preflight|Logging configured' logs/bot-run.log | tail -n $${BOT_LOG_LINES:-100} || \
+		echo "$(YELLOW)No startup events found$(NC)"
 
 local-down:  ## Stop local Docker services
 	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_ALL_SERVICES) || true
@@ -1068,12 +1108,49 @@ ingest-unified-logs: ## Show ingestion service logs
 # QDRANT BACKUP
 # =============================================================================
 
-.PHONY: qdrant-backup
+.PHONY: qdrant-backup qdrant-cleanup
 
 qdrant-backup: ## Create Qdrant collection snapshots (all collections)
 	@echo "$(BLUE)Creating Qdrant snapshots...$(NC)"
 	uv run python scripts/qdrant_snapshot.py
 	@echo "$(GREEN)✓ Qdrant backup complete$(NC)"
+
+qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
+	@echo "$(YELLOW)Qdrant storage cleanup — issue #1545$(NC)"
+	@echo "$(BLUE)Step 1/3: taking collection snapshot before cleanup...$(NC)"
+	@QDRANT_URL=$${QDRANT_URL:-http://localhost:6333}; \
+	COLLECTION=$${QDRANT_COLLECTION:-gdrive_documents_bge}; \
+	result=$$(curl -sf -X POST "$$QDRANT_URL/collections/$$COLLECTION/snapshots" 2>&1); \
+	if [ $$? -eq 0 ]; then \
+		echo "$(GREEN)  ✓ Snapshot created for $$COLLECTION$(NC)"; \
+	else \
+		echo "$(YELLOW)  ⚠ Snapshot skipped (Qdrant may not be running): $$result$(NC)"; \
+	fi
+	@echo "$(BLUE)Step 2/3: requesting optimiser run on all segments...$(NC)"
+	@QDRANT_URL=$${QDRANT_URL:-http://localhost:6333}; \
+	COLLECTION=$${QDRANT_COLLECTION:-gdrive_documents_bge}; \
+	result=$$(curl -sf -X PATCH "$$QDRANT_URL/collections/$$COLLECTION" \
+		-H 'Content-Type: application/json' \
+		-d '{"optimizers_config": {"indexing_threshold": 0}}' 2>&1); \
+	if [ $$? -eq 0 ]; then \
+		echo "$(GREEN)  ✓ Indexing threshold set to 0 — segments will be merged$(NC)"; \
+		echo "$(BLUE)  Restoring indexing_threshold to 20000 kB...$(NC)"; \
+		curl -sf -X PATCH "$$QDRANT_URL/collections/$$COLLECTION" \
+			-H 'Content-Type: application/json' \
+			-d '{"optimizers_config": {"indexing_threshold": 20000}}' > /dev/null && \
+		echo "$(GREEN)  ✓ Indexing threshold restored to 20000 kB$(NC)"; \
+	else \
+		echo "$(YELLOW)  ⚠ Optimiser trigger skipped (Qdrant may not be running): $$result$(NC)"; \
+	fi
+	@echo "$(BLUE)Step 3/3: operator checklist$(NC)"
+	@echo "  • Restart Qdrant to apply docker/qdrant/config.yaml changes:"
+	@echo "      docker compose restart qdrant"
+	@echo "  • To enable on_disk_payload on existing collection, patch via REST:"
+	@echo "      curl -X PATCH http://localhost:6333/collections/gdrive_documents_bge \\"
+	@echo "           -H 'Content-Type: application/json' \\"
+	@echo "           -d '{\"on_disk_payload\": true}'"
+	@echo "  • Monitor volume size: docker system df -v | grep qdrant"
+	@echo "$(GREEN)✓ Qdrant cleanup complete$(NC)"
 
 # =============================================================================
 # TRACE VALIDATION (#110)

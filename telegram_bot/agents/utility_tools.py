@@ -1,21 +1,22 @@
 """Utility tools: mortgage_calculator, daily_summary, handoff (#445).
 
 All tools follow the @tool + @observe + RunnableConfig DI pattern from crm_tools.py.
-Dependencies injected via config["configurable"]["bot_context"].
+Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+(SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
+— see #1252).
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.observability import get_client, observe
-from telegram_bot.services.kommo_models import TaskCreate
 
 
 logger = logging.getLogger(__name__)
@@ -24,8 +25,8 @@ _DEFAULT_SUMMARY_MODEL = "claude-haiku-4-5"
 
 
 def _get_ctx(config: RunnableConfig) -> Any | None:
-    """Get BotContext from config."""
-    return config.get("configurable", {}).get("bot_context")
+    """Get BotContext via the SDK-native helper (runtime.context preferred)."""
+    return get_bot_context(None, config)
 
 
 def _fmt(value: float) -> str:
@@ -226,26 +227,10 @@ async def handoff(
         except Exception:
             logger.warning("Failed to notify manager %s", mid, exc_info=True)
 
-    # Create Kommo task if available
-    # TODO: resolve lead_id from telegram_user_id via lead scoring store
-    kommo = getattr(ctx, "kommo_client", None)
-    lead_id: int | None = None  # lead_id resolution not yet implemented
-    if kommo and lead_id:
-        try:
-            await kommo.create_task(
-                TaskCreate(
-                    text=f"Handoff: {reason}",
-                    entity_id=lead_id,
-                    entity_type="leads",
-                    complete_till=int(time.time()) + 3600,
-                )
-            )
-        except Exception:
-            logger.warning("Failed to create Kommo handoff task", exc_info=True)
-    elif kommo:
-        logger.debug(
-            "Skipping Kommo handoff task: lead_id not resolved for user %s", ctx.telegram_user_id
-        )
+    # Kommo handoff task creation was removed in #1541: the legacy branch was
+    # guarded by ``lead_id`` which was always ``None`` (resolution was never
+    # implemented). Manager notification above remains the single handoff
+    # surface until lead_id resolution lands as a separate behavioural change.
 
     lf = get_client()
     lf.score_current_trace(name="handoff_triggered", value=1, data_type="BOOLEAN")

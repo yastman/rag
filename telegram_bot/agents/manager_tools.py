@@ -8,6 +8,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.observability import observe
 from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 
@@ -17,7 +18,7 @@ def _resolve_role(config: RunnableConfig) -> str:
     role = configurable.get("role")
     if isinstance(role, str) and role.strip():
         return role.strip().lower()
-    ctx = configurable.get("bot_context")
+    ctx = get_bot_context(None, config)
     ctx_role = getattr(ctx, "role", None)
     if isinstance(ctx_role, str) and ctx_role.strip():
         return ctx_role.strip().lower()

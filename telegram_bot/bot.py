@@ -13,22 +13,19 @@ import re
 import secrets
 import socket
 import time
-import uuid
 from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
     CallbackQuery,
     FSInputFile,
     InaccessibleMessage,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     InputMediaPhoto,
     Message,
 )
@@ -50,6 +47,11 @@ from .handlers.handoff import (
     HandoffStates,
     start_qualification,
 )
+from .integrations.memory import (
+    begin_checkpoint_overhead_capture,
+    end_checkpoint_overhead_capture,
+    sum_checkpoint_overhead_ms,
+)
 from .integrations.polling_lock import RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
@@ -68,7 +70,6 @@ from .observability_payloads import build_safe_input_payload, build_safe_output_
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     score,
-    write_history_scores,
     write_langfuse_scores,
 )
 from .services.business_hours import is_business_hours
@@ -83,7 +84,6 @@ from .services.error_utils import walk_traceback_frames
 from .services.forum_bridge import ForumBridge
 from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
-from .services.metrics import PipelineMetrics
 from .services.query_filter_signal import detect_filter_sensitive_query
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
@@ -369,31 +369,14 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
+# Re-export checkpointer helpers from shared utility module for backward compat
+from .services.checkpointer_utils import (  # noqa: E402
+    _delete_checkpointer_thread as _delete_checkpointer_thread,
+)
+from .services.checkpointer_utils import (  # noqa: E402
+    _supervisor_thread_id as _supervisor_thread_id,
+)
 from .tracing_context import make_session_id as make_session_id  # noqa: E402
-
-
-def _supervisor_thread_id(chat_id: int | str, thread_id: int | None = None) -> str:
-    """Build checkpointer thread id for text-agent conversations."""
-    if thread_id is not None:
-        return f"tg_{chat_id}:{thread_id}"
-    return f"tg_{chat_id}"
-
-
-async def _delete_checkpointer_thread(checkpointer: Any, thread_id: str) -> None:
-    """Delete checkpointer thread via async or sync SDK API."""
-    adelete_thread = getattr(checkpointer, "adelete_thread", None)
-    if callable(adelete_thread):
-        await adelete_thread(thread_id)
-        return
-
-    delete_thread = getattr(checkpointer, "delete_thread", None)
-    if callable(delete_thread):
-        result = delete_thread(thread_id)
-        if inspect.isawaitable(result):
-            await result
-        return
-
-    raise AttributeError("checkpointer does not expose delete_thread/adelete_thread")
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
@@ -1073,18 +1056,10 @@ class PropertyBot:
                 F.message_thread_id,
             )(self._handle_group_message)
 
-        # Deep link: /start q_<uuid> — must be registered BEFORE generic /start
-        self.dp.message(CommandStart(deep_link=True, magic=F.args.startswith("q_")))(
-            self.cmd_start_deeplink
-        )
-        self.dp.message(Command("start"))(self.cmd_start)
-        self.dp.message(Command("help"))(self.cmd_help)
-        self.dp.message(Command("clear"))(self.cmd_clear)
-        self.dp.message(Command("stats"))(self.cmd_stats)
-        self.dp.message(Command("metrics"))(self.cmd_metrics)
-        self.dp.message(Command("call"))(self.cmd_call)
-        self.dp.message(Command("history"))(self.cmd_history)
-        self.dp.message(Command("clearcache"))(self.cmd_clearcache)
+        # Command handlers Router (extracted from class methods)
+        from .handlers.command_handlers import create_commands_router
+
+        self.dp.include_router(create_commands_router(self))
         self.dp.message(
             StateFilter(None),
             F.voice,
@@ -1145,45 +1120,6 @@ class PropertyBot:
         if user_id in self.config.manager_ids:
             return "manager"
         return db_role or "client"
-
-    @observe(name="cmd-start", capture_input=False, capture_output=False)
-    async def cmd_start_deeplink(
-        self,
-        message: Message,
-        command: CommandObject,
-    ):
-        """Handle /start q_<uuid> — Mini App deep link flow."""
-        assert message.from_user is not None
-        assert command.args is not None
-        uuid_str = command.args[2:]  # strip "q_" prefix
-        await self._handle_deeplink_start(message, uuid_str)
-
-    async def cmd_start(
-        self,
-        message: Message,
-        command: CommandObject | None = None,
-        dialog_manager: Any = None,
-        i18n: Any = None,
-    ):
-        """Handle /start command with lower-menu client root and SDK dialogs for flows."""
-        assert message.from_user is not None
-
-        role = await self._resolve_user_role(message.from_user.id)
-
-        kommo_enabled = getattr(self.config, "kommo_enabled", False)
-        if role == "manager" and kommo_enabled and dialog_manager is not None:
-            from aiogram_dialog import StartMode
-
-            from .dialogs.states import ManagerMenuSG
-
-            await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
-        else:
-            if dialog_manager is not None:
-                with contextlib.suppress(Exception):
-                    await dialog_manager.reset_stack(remove_keyboard=True)
-            from .dialogs.root_nav import show_client_main_menu
-
-            await show_client_main_menu(message, i18n=i18n)
 
     async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
         """Handle Mini App deep link: /start q_<uuid>.
@@ -1374,350 +1310,9 @@ class PropertyBot:
             await pubsub.unsubscribe("miniapp:start")
             await sub_redis.aclose()
 
-    async def cmd_help(self, message: Message):
-        """Handle /help command."""
-        await message.answer(
-            "🔍 Примеры запросов:\n\n"
-            "По цене:\n"
-            "• Дешевле 80 000 евро\n"
-            "• От 100к до 150к\n\n"
-            "По комнатам:\n"
-            "• 2-комнатные квартиры\n"
-            "• Трехкомнатная\n"
-            "• Студия\n\n"
-            "По городу:\n"
-            "• В Несебр\n"
-            "• Солнечный берег\n\n"
-            "Комбинированные:\n"
-            "• 3 комнаты в Солнечный берег до 120к\n"
-            "• Студия дешевле 60000\n\n"
-            "Команды:\n"
-            "/clear - Очистить историю диалога\n"
-            "/stats - Показать статистику кеша\n"
-            "/history <запрос> - Поиск по истории диалогов\n"
-            "/metrics - Метрики пайплайна (p50/p95)\n"
-            "/clearcache - Очистить кеш Redis\n"
-        )
-
-    @observe(name="cmd-clear", capture_input=False, capture_output=False)
-    async def cmd_clear(
-        self,
-        message: Message,
-        state: FSMContext | None = None,
-        dialog_manager: Any = None,
-    ):
-        """Handle /clear command - clear conversation history and exit any active dialog state.
-
-        Closes any active aiogram-dialog stack (e.g. DemoSG apartment-search) and
-        resets the FSM state so subsequent free-text questions are routed back to
-        the supervisor / RAG path. See #1454.
-        """
-        assert message.from_user is not None
-        user_id = message.from_user.id
-        # #1454: drop any active aiogram-dialog stack BEFORE clearing FSM, so
-        # the dialog framework can clean up its own state correctly. Without
-        # this the user remained in DemoSG.search after /clear and the next
-        # free-text message was handled by demo-search instead of telegram-rag.
-        dialog_reset_failed = False
-        if dialog_manager is not None:
-            try:
-                if getattr(dialog_manager, "has_context", lambda: False)():
-                    await dialog_manager.reset_stack(remove_keyboard=False)
-            except Exception:
-                logger.warning(
-                    "Failed to reset aiogram-dialog stack during /clear for user_id=%s",
-                    user_id,
-                    exc_info=True,
-                )
-                dialog_reset_failed = True
-        if state is not None:
-            try:
-                await state.clear()
-            except Exception:
-                logger.warning(
-                    "Failed to clear FSM state during /clear for user_id=%s",
-                    user_id,
-                    exc_info=True,
-                )
-                dialog_reset_failed = True
-        checkpointer_cleared = True
-        history_cleared = True
-        text_thread_id = _supervisor_thread_id(message.chat.id)
-        voice_thread_id = str(user_id)
-        seen_checkpointers: set[int] = set()
-        for cp_name, checkpointer in (
-            ("conversation", self._checkpointer),
-            ("agent", self._agent_checkpointer),
-        ):
-            if checkpointer is None:
-                continue
-            cp_id = id(checkpointer)
-            if cp_id in seen_checkpointers:
-                continue
-            seen_checkpointers.add(cp_id)
-            for thread_id in (text_thread_id, voice_thread_id):
-                try:
-                    await _delete_checkpointer_thread(checkpointer, thread_id)
-                except Exception:
-                    logger.warning(
-                        "Failed to clear %s checkpointer thread %s",
-                        cp_name,
-                        thread_id,
-                        exc_info=True,
-                    )
-                    checkpointer_cleared = False
-
-        await self._cache.clear_conversation(user_id)
-
-        if self._history_service is not None:
-            try:
-                history_cleared = bool(await self._history_service.delete_user_history(user_id))
-            except Exception:
-                logger.warning(
-                    "Failed to clear Qdrant history for user_id=%s", user_id, exc_info=True
-                )
-                history_cleared = False
-
-        if checkpointer_cleared and history_cleared and not dialog_reset_failed:
-            await message.answer("✅ История диалога очищена.")
-        elif dialog_reset_failed and checkpointer_cleared and history_cleared:
-            await message.answer(
-                "⚠️ История очищена, но не удалось сбросить состояние активного диалога. "
-                "Используйте /start, если бот продолжает отвечать в режиме поиска."
-            )
-        else:
-            await message.answer(
-                "⚠️ История очищена частично: локальный контекст сброшен, "
-                "но долговременная память временно недоступна."
-            )
-
-    async def cmd_stats(self, message: Message):
-        """Handle /stats command - show cache statistics."""
-        stats = self._cache.get_metrics()
-        lines = ["📊 Статистика кеша:\n"]
-        for tier, data in stats.items():
-            hit_rate = data.get("hit_rate", 0)
-            hits = data.get("hits", 0)
-            misses = data.get("misses", 0)
-            total = hits + misses
-            lines.append(f"• {tier}: {hit_rate:.0f}% ({hits}/{total})")
-        await message.answer("\n".join(lines))
-
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
         return user_id in self.config.admin_ids
-
-    async def cmd_metrics(self, message: Message):
-        """Handle /metrics command - show pipeline p50/p95 timing stats."""
-        metrics = PipelineMetrics.get()
-        text = f"```\n{metrics.format_text()}\n```"
-        await message.answer(text, parse_mode="Markdown")
-
-    @observe(name="cmd-clearcache", capture_input=False, capture_output=False)
-    async def cmd_clearcache(self, message: Message) -> None:
-        """Handle /clearcache command — show inline keyboard to select cache tier for clearing."""
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="Semantic", callback_data="cc:semantic"),
-                    InlineKeyboardButton(text="Embeddings", callback_data="cc:embeddings"),
-                ],
-                [
-                    InlineKeyboardButton(text="Sparse", callback_data="cc:sparse"),
-                    InlineKeyboardButton(text="Search+Rerank", callback_data="cc:search"),
-                ],
-                [InlineKeyboardButton(text="Все", callback_data="cc:all")],
-            ]
-        )
-        await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
-
-    @observe(name="cmd-call", capture_input=False, capture_output=False)
-    async def cmd_call(self, message: Message):
-        """Handle /call command — trigger outbound voice call.
-
-        Usage: /call +380501234567 [lead description]
-        Admin-only command.
-        """
-        assert message.from_user is not None
-        if not self._is_admin(message.from_user.id):
-            await message.answer("Только администраторы могут инициировать звонки.")
-            return
-
-        if not self.config.livekit_url or not self.config.sip_trunk_id:
-            await message.answer("Voice service не настроен (LIVEKIT_URL, SIP_TRUNK_ID).")
-            return
-
-        text = (message.text or "").strip()
-        parts = text.split(maxsplit=2)  # /call +380... description
-        if len(parts) < 2:
-            await message.answer("Использование: /call +380501234567 [описание заявки]")
-            return
-
-        phone = parts[1]
-        if not re.match(r"^\+?\d{10,15}$", phone):
-            await message.answer("Неверный формат номера. Пример: +380501234567")
-            return
-
-        lead_desc = parts[2] if len(parts) > 2 else ""
-        trace_id = ""
-        try:
-            trace_id = get_client().get_current_trace_id() or ""
-        except Exception:
-            logger.debug("Failed to resolve current Langfuse trace id for /call", exc_info=True)
-        if not trace_id:
-            trace_id = f"call-{uuid.uuid4().hex}"
-
-        try:
-            from livekit import api
-
-            lk = api.LiveKitAPI(
-                url=self.config.livekit_url,
-                api_key=self.config.livekit_api_key,
-                api_secret=self.config.livekit_api_secret,
-            )
-
-            try:
-                room_name = f"voice-call-{uuid.uuid4().hex[:8]}"
-                call_id = str(uuid.uuid4())
-
-                # 1. Dispatch voice agent to room
-                await lk.agent_dispatch.create_dispatch(
-                    api.CreateAgentDispatchRequest(
-                        agent_name="voice-bot",
-                        room=room_name,
-                        metadata=json.dumps(
-                            {
-                                "call_id": call_id,
-                                "phone": phone,
-                                "lead_data": {
-                                    "description": lead_desc,
-                                    "triggered_by": message.from_user.id,
-                                },
-                                "callback_chat_id": message.chat.id,
-                                "langfuse_trace_id": trace_id,
-                            }
-                        ),
-                    )
-                )
-
-                # 2. Create SIP participant (dials the phone)
-                await lk.sip.create_sip_participant(
-                    api.CreateSIPParticipantRequest(
-                        room_name=room_name,
-                        sip_trunk_id=self.config.sip_trunk_id,
-                        sip_call_to=phone,
-                        participant_identity=f"phone-{phone}",
-                        participant_name="Phone User",
-                        krisp_enabled=True,
-                        wait_until_answered=True,
-                    )
-                )
-
-                await message.answer(
-                    f"Звонок инициирован!\nID: `{call_id}`\nТелефон: {phone}\nRoom: {room_name}",
-                    parse_mode="Markdown",
-                )
-            finally:
-                await lk.aclose()
-
-        except Exception:
-            logger.exception("Failed to initiate call to %s", phone)
-            await message.answer("Ошибка инициации звонка. Попробуйте позже.")
-
-    @observe(name="telegram-history-search")
-    async def cmd_history(self, message: Message):
-        """Handle /history command — semantic search in conversation history."""
-        search_start = time.perf_counter()
-        assert message.from_user is not None
-        user_id = message.from_user.id
-        session_id = make_session_id("history", message.chat.id)
-
-        text = (message.text or "").strip()
-        parts = text.split(maxsplit=1)
-
-        if len(parts) < 2:
-            await message.answer(
-                "Использование: /history <запрос>\nПример: /history цены на квартиры"
-            )
-            return
-
-        query = parts[1]
-
-        with propagate_attributes(
-            session_id=session_id,
-            user_id=str(user_id),
-            tags=["telegram", "history"],
-        ):
-            lf = get_client()
-            tid = lf.get_current_trace_id() or ""
-
-            if self._history_service is None:
-                lf.update_current_span(
-                    input={"command": "/history", "query": query},
-                    output={"error": "service_unavailable"},
-                    metadata={"user_id": user_id},
-                )
-                write_history_scores(lf, tid, count=0)
-                await message.answer("История диалогов временно недоступна.")
-                return
-
-            try:
-                results = await self._history_service.search_user_history(
-                    user_id=user_id,
-                    query=query,
-                    limit=5,
-                )
-            except Exception:
-                logger.exception("History search failed for user %s", user_id)
-                lf.update_current_span(
-                    input={"command": "/history", "query": query},
-                    output={"error": "backend_exception"},
-                    metadata={"user_id": user_id},
-                )
-                write_history_scores(lf, tid, count=0)
-                await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
-                return
-
-            search_ms = (time.perf_counter() - search_start) * 1000
-
-            valid = []
-            for r in results:
-                if not isinstance(r, dict):
-                    continue
-                q = r.get("query")
-                resp = r.get("response")
-                if not isinstance(q, str) or not isinstance(resp, str):
-                    continue
-                valid.append(r)
-
-            lf.update_current_span(
-                input={"command": "/history", "query": query},
-                output={"results_count": len(results), "valid_count": len(valid)},
-                metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
-            )
-            write_history_scores(
-                lf,
-                tid,
-                count=len(valid),
-                latency_ms=search_ms,
-            )
-
-            if not valid:
-                await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
-                return
-
-            lines = [f"📋 Найдено {len(valid)} записей:\n"]
-            for i, r in enumerate(valid, 1):
-                ts = r.get("timestamp", "")
-                ts = ts[:16].replace("T", " ") if isinstance(ts, str) else ""
-                lines.append(f"{i}. [{ts}]")
-                lines.append(f"   В: {r['query']}")
-                resp_preview = r["response"][:150]
-                if len(r["response"]) > 150:
-                    resp_preview += "..."
-                lines.append(f"   О: {resp_preview}\n")
-
-            await message.answer("\n".join(lines))
 
     @observe(name="menu-router", capture_input=False, capture_output=False)
     async def handle_menu_button(
@@ -2957,10 +2552,7 @@ class PropertyBot:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
 
         from .agents.agent import LOCALE_TO_LANGUAGE
-        from .agents.apartment_tools import apartment_search
         from .agents.context import BotContext
-        from .agents.history_tool import history_search
-        from .agents.rag_tool import rag_search
         from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
         from .graph.nodes.guard import _BLOCKED_RESPONSE
 
@@ -3313,58 +2905,18 @@ class PropertyBot:
                         "Client direct pipeline failed; falling back to sdk_agent",
                     )
 
-            # Build base tools list (client-only: rag_search)
-            base_tools: list[Any] = [rag_search, apartment_search]
+            # Build tools list via shared helper
+            from .agents.tool_assembly import build_agent_tools
 
-            manager_tools: list[Any] = []
-            if role == "manager":
-                from .agents.manager_tools import (
-                    build_tools_for_role,
-                    create_crm_score_sync_tool,
-                    create_manager_nurturing_tools,
-                )
-
-                # history_search is manager-only: search past conversations with clients/deals
-                if self._history_service is not None:
-                    manager_tools.append(history_search)
-
-                manager_tools.extend(
-                    create_manager_nurturing_tools(
-                        analytics_service=self._funnel_analytics_service,
-                        nurturing_service=self._nurturing_service,
-                    )
-                )
-
-                if self._lead_scoring_store is not None:
-                    manager_tools.append(
-                        create_crm_score_sync_tool(
-                            scoring_store=self._lead_scoring_store,
-                            kommo_client=getattr(self, "_kommo_client", None),
-                            score_field_id=self.config.kommo_lead_score_field_id,
-                            band_field_id=self.config.kommo_lead_band_field_id,
-                        )
-                    )
-
-                # Add direct CRM tools conditionally
-                if getattr(self.config, "kommo_enabled", False) and getattr(
-                    self, "_kommo_client", None
-                ):
-                    from .agents.crm_tools import get_crm_tools
-
-                    manager_tools.extend(get_crm_tools())
-
-                tools = build_tools_for_role(
-                    role=role,
-                    base_tools=base_tools,
-                    manager_tools=manager_tools,
-                )
-            else:
-                tools = base_tools
-
-            # Add utility tools for all roles (#445)
-            from .agents.utility_tools import get_utility_tools
-
-            tools.extend(get_utility_tools())
+            tools = build_agent_tools(
+                role=role,
+                config=self.config,
+                history_service=self._history_service,
+                funnel_analytics_service=self._funnel_analytics_service,
+                nurturing_service=self._nurturing_service,
+                lead_scoring_store=self._lead_scoring_store,
+                kommo_client=getattr(self, "_kommo_client", None),
+            )
 
             # Create agent via SDK — route through LiteLLM proxy (#420)
             agent = create_bot_agent(
@@ -4042,8 +3594,22 @@ class PropertyBot:
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     invoke_start = time.perf_counter()
-                    result = await graph.ainvoke(state, config=invoke_config)
+                    # Direct checkpoint overhead measurement (#1258): the
+                    # checkpointer wrapper accumulates per-method I/O times
+                    # into a ContextVar bucket while this capture is active.
+                    # Falls back to the proxy when the checkpointer is not
+                    # instrumented (e.g. MemorySaver in tests).
+                    overhead_bucket = begin_checkpoint_overhead_capture()
+                    try:
+                        result = await graph.ainvoke(state, config=invoke_config)
+                    finally:
+                        overhead_bucket = end_checkpoint_overhead_capture()
                     ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                    if overhead_bucket and overhead_bucket.get("calls", 0):
+                        result["checkpointer_overhead_ms"] = sum_checkpoint_overhead_ms(
+                            overhead_bucket
+                        )
+                        result["checkpointer_op_count"] = int(overhead_bucket.get("calls", 0))
                     result["checkpointer_overhead_proxy_ms"] = (
                         compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
                     )
@@ -4244,58 +3810,20 @@ class PropertyBot:
             await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
 
         # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
-        from .agents.apartment_tools import apartment_search
-        from .agents.rag_tool import rag_search
-        from .agents.utility_tools import get_utility_tools
+        from .agents.tool_assembly import build_agent_tools
 
         role = await self._resolve_user_role(user_id)
         session_id = make_session_id("chat", chat_id)
 
-        base_tools: list[Any] = [rag_search, apartment_search]
-        manager_tools: list[Any] = []
-        if role == "manager":
-            from .agents.manager_tools import (
-                build_tools_for_role,
-                create_crm_score_sync_tool,
-                create_manager_nurturing_tools,
-            )
-
-            if self._history_service is not None:
-                from .agents.history_tool import history_search
-
-                manager_tools.append(history_search)
-
-            manager_tools.extend(
-                create_manager_nurturing_tools(
-                    analytics_service=self._funnel_analytics_service,
-                    nurturing_service=self._nurturing_service,
-                )
-            )
-
-            if self._lead_scoring_store is not None:
-                manager_tools.append(
-                    create_crm_score_sync_tool(
-                        scoring_store=self._lead_scoring_store,
-                        kommo_client=getattr(self, "_kommo_client", None),
-                        score_field_id=self.config.kommo_lead_score_field_id,
-                        band_field_id=self.config.kommo_lead_band_field_id,
-                    )
-                )
-
-            if getattr(self.config, "kommo_enabled", False) and getattr(
-                self, "_kommo_client", None
-            ):
-                from .agents.crm_tools import get_crm_tools
-
-                manager_tools.extend(get_crm_tools())
-
-            tools = build_tools_for_role(
-                role=role, base_tools=base_tools, manager_tools=manager_tools
-            )
-        else:
-            tools = base_tools
-
-        tools.extend(get_utility_tools())
+        tools = build_agent_tools(
+            role=role,
+            config=self.config,
+            history_service=self._history_service,
+            funnel_analytics_service=self._funnel_analytics_service,
+            nurturing_service=self._nurturing_service,
+            lead_scoring_store=self._lead_scoring_store,
+            kommo_client=getattr(self, "_kommo_client", None),
+        )
 
         agent = create_bot_agent(
             model=self.config.supervisor_model,
@@ -4567,9 +4095,7 @@ class PropertyBot:
         Reuses _ainvoke_supervisor_with_recovery for consistency with handle_query.
         """
         from .agents.agent import LOCALE_TO_LANGUAGE
-        from .agents.apartment_tools import apartment_search
         from .agents.context import BotContext
-        from .agents.rag_tool import rag_search
 
         if callback.from_user is None or callback.message is None:
             return
@@ -4582,57 +4108,18 @@ class PropertyBot:
         language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
         session_id = make_session_id("chat", chat_id)
 
-        # Build tools list (mirrors _handle_query_supervisor tool assembly)
-        base_tools: list[Any] = [rag_search, apartment_search]
-        manager_tools: list[Any] = []
-        if role == "manager":
-            from .agents.manager_tools import (
-                build_tools_for_role,
-                create_crm_score_sync_tool,
-                create_manager_nurturing_tools,
-            )
+        # Build tools list via shared helper
+        from .agents.tool_assembly import build_agent_tools
 
-            if self._history_service is not None:
-                from .agents.history_tool import history_search
-
-                manager_tools.append(history_search)
-
-            manager_tools.extend(
-                create_manager_nurturing_tools(
-                    analytics_service=self._funnel_analytics_service,
-                    nurturing_service=self._nurturing_service,
-                )
-            )
-
-            if self._lead_scoring_store is not None:
-                manager_tools.append(
-                    create_crm_score_sync_tool(
-                        scoring_store=self._lead_scoring_store,
-                        kommo_client=getattr(self, "_kommo_client", None),
-                        score_field_id=self.config.kommo_lead_score_field_id,
-                        band_field_id=self.config.kommo_lead_band_field_id,
-                    )
-                )
-
-            if getattr(self.config, "kommo_enabled", False) and getattr(
-                self, "_kommo_client", None
-            ):
-                from .agents.crm_tools import get_crm_tools
-
-                manager_tools.extend(get_crm_tools())
-
-            tools = build_tools_for_role(
-                role=role,
-                base_tools=base_tools,
-                manager_tools=manager_tools,
-            )
-        else:
-            tools = base_tools
-
-        # Add utility tools for all roles (#445)
-        from .agents.utility_tools import get_utility_tools
-
-        tools.extend(get_utility_tools())
+        tools = build_agent_tools(
+            role=role,
+            config=self.config,
+            history_service=self._history_service,
+            funnel_analytics_service=self._funnel_analytics_service,
+            nurturing_service=self._nurturing_service,
+            lead_scoring_store=self._lead_scoring_store,
+            kommo_client=getattr(self, "_kommo_client", None),
+        )
 
         agent = create_bot_agent(
             model=self.config.supervisor_model,
