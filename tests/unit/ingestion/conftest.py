@@ -1,7 +1,6 @@
 """Conftest for ingestion unit tests.
 
-Mocks heavy ML dependencies (fastembed) before test collection
-so that gdrive_indexer.py can be imported without the actual package.
+Mocks heavy ML dependencies (fastembed) before test collection.
 """
 
 import sys
