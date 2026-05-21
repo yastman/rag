@@ -96,8 +96,11 @@ def rerank_results(
     # Get cross-encoder model
     model = get_cross_encoder()
 
-    # Prepare query-document pairs for top_k results
-    pairs = [(query, result["text"]) for result in results[:top_k]]
+    # Prepare query-document pairs for top_k results.
+    # Narrow result["text"] to str: the dicts are typed dict[str, Any], so
+    # CrossEncoder.predict (which expects concrete str/text inputs, not Any)
+    # would otherwise reject list[tuple[str, Any]] under strict mypy.
+    pairs: list[tuple[str, str]] = [(query, str(result["text"])) for result in results[:top_k]]
 
     # Score with cross-encoder (returns relevance scores)
     try:
