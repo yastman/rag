@@ -32,6 +32,19 @@ npm run build      # Production build → dist/
 npm run test       # Vitest unit tests
 ```
 
+## Configuration
+
+Vite exposes only variables prefixed with `VITE_` to the client bundle.
+Copy [`.env.example`](.env.example) to `.env.local` and adjust per
+deployment.
+
+| Variable            | Purpose                                                                 | Default fallback |
+| ------------------- | ----------------------------------------------------------------------- | ---------------- |
+| `VITE_API_URL`      | Backend API base URL (Vite dev server proxies `/api` to `:8090`).       | `/api`           |
+| `VITE_BOT_USERNAME` | Telegram bot handle (no `@`) used by `TelegramGate` to render the      | `your_bot`       |
+|                     | "Открыть в Telegram" CTA: `https://t.me/${VITE_BOT_USERNAME}`. Should   |                  |
+|                     | match the backend `BOT_USERNAME` env var.                              |                  |
+
 ## Tests & Checks
 
 ```bash
@@ -45,7 +58,7 @@ uv run pytest tests/unit/test_mini_app_dockerfile_build_deps.py -v
 
 ## Owner Boundaries
 
-- React component tree, state management (Zustand), routing
+- React component tree, state management (React hooks), routing
 - Telegram Mini App SDK integration (`@tma.js/sdk-react`)
 - Build artifact generation and nginx static serving
 
