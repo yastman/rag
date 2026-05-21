@@ -176,7 +176,7 @@ all-checks: lint type-check security ***REMOVED******REMOVED*** Run all code qua
 
 test: ***REMOVED******REMOVED*** Run fast deterministic PR/local gate (unit + critical graph paths)
 	@echo "$(BLUE)Running fast test gate (unit + graph_paths)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
 test-full: ***REMOVED******REMOVED*** Run full test suite with hybrid parallelism (all tiers)
@@ -221,14 +221,14 @@ test-contract: ***REMOVED******REMOVED*** Run trace contract tests (static analy
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
 	@echo "$(GREEN)Trace contract tests complete$(NC)"
 
-test-fast: ***REMOVED******REMOVED*** Run unit tests in parallel (xdist, loadscope)
+test-fast: ***REMOVED******REMOVED*** Run unit tests in parallel (xdist, worksteal, fast lane)
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto -q --timeout=30 -m "not legacy_api"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
 test-all-fast: ***REMOVED******REMOVED*** Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
 	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto -q --timeout=30 -m "not legacy_api"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
 test-lf: ***REMOVED******REMOVED*** Run only last failed tests (parallel)
@@ -241,9 +241,9 @@ test-ff: ***REMOVED******REMOVED*** Run failed first, then rest
 	uv run pytest tests/unit/ --ff -v
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
-test-profile: ***REMOVED******REMOVED*** Profile slowest tests (find bottlenecks)
+test-profile: ***REMOVED******REMOVED*** Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ --durations=20 --durations-min=0.5 -n auto -q
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --durations=20 --durations-min=0.5 -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
 test-integration: ***REMOVED******REMOVED*** Run graph path integration tests (no Docker, ~5s)
@@ -272,7 +272,7 @@ test-nightly: ***REMOVED******REMOVED*** Run heavy test suites (chaos, smoke, sl
 
 test-store-durations: ***REMOVED******REMOVED*** Update .test_durations for pytest-split CI sharding
 	@echo "$(BLUE)Generating test duration data...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ --store-durations -n auto --timeout=30 -m "not legacy_api" -q
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations -n auto --dist=worksteal --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
 	@echo "$(GREEN)✓ .test_durations updated — commit this file$(NC)"
 
 test-all: ***REMOVED******REMOVED*** Run all tests with coverage threshold (CI mode)
