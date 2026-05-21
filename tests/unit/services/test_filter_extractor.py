@@ -213,7 +213,13 @@ class TestFilterExtractorDistanceToSea:
 ***REMOVED*** Furniture
 ***REMOVED*** ---------------------------------------------------------------------------
 class TestFilterExtractorFurniture:
-    """Tests for furniture filter extraction."""
+    """Tests for furnished filter extraction.
+
+    Canonical key for the document/CSV pipeline (***REMOVED***1401) is
+    ``furnished: bool`` so that ``qdrant._build_filter`` produces a BOOL match
+    against ``metadata.furnished`` — what ``src/ingestion/chunker.py`` writes
+    and what ``src/ingestion/indexer.py`` indexes.
+    """
 
     @pytest.mark.parametrize(
         "query",
@@ -224,11 +230,22 @@ class TestFilterExtractorFurniture:
             "квартира С МЕБЕЛЬЮ",
         ],
     )
-    def test_furniture_present(self, query: str) -> None:
-        assert _ext.extract_filters(query)["furniture"] == "Есть"
+    def test_furnished_positive(self, query: str) -> None:
+        assert _ext.extract_filters(query)["furnished"] is True
 
-    def test_no_furniture_filter(self) -> None:
-        assert "furniture" not in _ext.extract_filters("квартира в Варне")
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "квартира без мебели",
+            "без мебели в Варне",
+            "немеблированная квартира",
+        ],
+    )
+    def test_furnished_negative(self, query: str) -> None:
+        assert _ext.extract_filters(query)["furnished"] is False
+
+    def test_no_furnished_filter(self) -> None:
+        assert "furnished" not in _ext.extract_filters("квартира в Варне")
 
 
 ***REMOVED*** ---------------------------------------------------------------------------
@@ -359,7 +376,7 @@ class TestFilterExtractorCombined:
         result = _ext.extract_filters("квартира в Варна до 100000 с мебелью")
         assert result["city"] == "Варна"
         assert result["price"] == {"lt": 100000}
-        assert result["furniture"] == "Есть"
+        assert result["furnished"] is True
 
     def test_combined_with_distance_meters(self) -> None:
         result = _ext.extract_filters("квартира в Варна до 500м до моря")
