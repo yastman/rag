@@ -62,7 +62,6 @@ def _make_state(data: dict) -> MagicMock:
     return state
 
 
-@pytest.mark.asyncio
 async def test_results_more_stale_compat_does_not_call_scroll_with_filters() -> None:
     bot = _create_bot()
     bot._apartments_service = MagicMock()

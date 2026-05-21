@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from scripts.e2e.config import E2EConfig
 from scripts.e2e.telegram_client import E2ETelegramClient
 
@@ -38,7 +36,6 @@ class _FakeClient:
         return _Conv()
 
 
-@pytest.mark.asyncio
 async def test_send_and_wait_targets_configured_e2e_bot_username() -> None:
     cfg = E2EConfig(
         telegram_api_id=1,

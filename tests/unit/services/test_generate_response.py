@@ -6,8 +6,6 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 import telegram_bot.services as services
 from telegram_bot.services.generate_response import generate_response
 
@@ -101,7 +99,6 @@ class _FailingAsyncStream(_AsyncStream):
         return await super().__anext__()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_non_streaming_returns_llm_answer() -> None:
     config, client = _make_non_streaming_config(answer="Найдено 3 варианта.")
     lf = MagicMock()
@@ -125,7 +122,6 @@ def test_services_package_exports_generate_response() -> None:
     assert services.generate_response is generate_response
 
 
-@pytest.mark.asyncio
 async def test_generate_response_retries_without_name_kwarg_non_streaming() -> None:
     """Fallback for plain OpenAI clients that reject Langfuse `name` kwarg."""
     config, client = _make_non_streaming_config(answer="Ответ plain-openai")
@@ -155,7 +151,6 @@ async def test_generate_response_retries_without_name_kwarg_non_streaming() -> N
     assert "name" not in second_call
 
 
-@pytest.mark.asyncio
 async def test_generate_response_fallback_on_llm_error() -> None:
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = RuntimeError("provider down")
@@ -176,7 +171,6 @@ async def test_generate_response_fallback_on_llm_error() -> None:
     assert result["llm_timeout"] is True
 
 
-@pytest.mark.asyncio
 async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak_context() -> None:
     config, client = _make_non_streaming_config()
     lf = MagicMock()
@@ -199,7 +193,6 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_weak
     client.chat.completions.create.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_returns_safe_fallback_when_strict_mode_has_low_confidence() -> (
     None
 ):
@@ -222,7 +215,6 @@ async def test_generate_response_returns_safe_fallback_when_strict_mode_has_low_
     client.chat.completions.create.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() -> None:
     from unittest.mock import ANY
 
@@ -252,7 +244,6 @@ async def test_generate_response_routes_coverage_query_to_exhaustive_prompt() ->
     )
 
 
-@pytest.mark.asyncio
 async def test_generate_response_coverage_mode_bypasses_style_prompt_builder() -> None:
     config, _client = _make_non_streaming_config(answer="Развернутый список.")
     config.response_style_enabled = True
@@ -272,7 +263,6 @@ async def test_generate_response_coverage_mode_bypasses_style_prompt_builder() -
     style_prompt_builder.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_logs_coverage_prompt_metadata() -> None:
     config, _client = _make_non_streaming_config(answer="Ответ.")
     lf = MagicMock()
@@ -295,7 +285,6 @@ async def test_generate_response_logs_coverage_prompt_metadata() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_generate_response_honors_explicit_coverage_override() -> None:
     from unittest.mock import ANY
 
@@ -323,7 +312,6 @@ async def test_generate_response_honors_explicit_coverage_override() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_prompt() -> None:
     config, client = _make_non_streaming_config(answer="Полный список.")
     lf = MagicMock()
@@ -350,7 +338,6 @@ async def test_generate_response_coverage_mode_includes_all_retrieved_docs_in_pr
     assert "Doc 7" in user_prompt
 
 
-@pytest.mark.asyncio
 async def test_generate_response_strict_mode_does_not_degrade_only_because_show_sources_disabled() -> (
     None
 ):
@@ -373,7 +360,6 @@ async def test_generate_response_strict_mode_does_not_degrade_only_because_show_
     client.chat.completions.create.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_strips_citation_artifacts_when_sources_disabled() -> None:
     config, client = _make_non_streaming_config(
         answer="Потребуется также счёт в болгарском банке 1.\nИ подтверждение дохода [2]."
@@ -395,7 +381,6 @@ async def test_generate_response_strips_citation_artifacts_when_sources_disabled
     client.chat.completions.create.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
     config, client = _make_non_streaming_config(
         answer="Потребуется также счёт в болгарском банке [1]."
@@ -415,7 +400,6 @@ async def test_generate_response_keeps_citations_when_sources_enabled() -> None:
     client.chat.completions.create.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_streaming_sets_response_sent_and_message_ref() -> None:
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True
@@ -452,7 +436,6 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     mock_record_output.assert_called_once_with("Часть 1 Часть 2", 1)
 
 
-@pytest.mark.asyncio
 async def test_generate_response_streaming_does_not_record_output_when_delivery_fails() -> None:
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True
@@ -484,7 +467,6 @@ async def test_generate_response_streaming_does_not_record_output_when_delivery_
     mock_record_output.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_generate_response_retries_without_name_kwarg_streaming() -> None:
     """Streaming path retries without Langfuse `name` for plain OpenAI clients."""
     config, client = _make_non_streaming_config()
@@ -527,7 +509,6 @@ async def test_generate_response_retries_without_name_kwarg_streaming() -> None:
     assert "name" not in second_call
 
 
-@pytest.mark.asyncio
 async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> None:
     """TTFT must include provider wait before stream object is returned."""
     config, client = _make_non_streaming_config()
@@ -569,7 +550,6 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
     assert result["llm_ttft_drift_ms"] >= 40.0
 
 
-@pytest.mark.asyncio
 async def test_generate_response_non_streaming_has_ttft_ms() -> None:
     """Non-streaming path must report ttft_ms > 0 from LLM call wall time (#571)."""
     config, _client = _make_non_streaming_config(answer="Ответ без стриминга")
@@ -590,7 +570,6 @@ async def test_generate_response_non_streaming_has_ttft_ms() -> None:
     assert result["streaming_enabled"] is False
 
 
-@pytest.mark.asyncio
 async def test_generate_response_non_streaming_computes_tps_from_usage() -> None:
     """Non-streaming path computes llm_tps when completion_tokens available (#571)."""
     mock_choice = MagicMock()
@@ -639,7 +618,6 @@ async def test_generate_response_non_streaming_computes_tps_from_usage() -> None
     )
 
 
-@pytest.mark.asyncio
 async def test_generate_response_streaming_updates_generation_usage_details() -> None:
     """Streaming path should persist usage_details to Langfuse generation."""
     config, client = _make_non_streaming_config()
@@ -679,7 +657,6 @@ async def test_generate_response_streaming_updates_generation_usage_details() ->
     )
 
 
-@pytest.mark.asyncio
 async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
     """Non-streaming path sets llm_tps=None when usage is not available (#571)."""
     config, _client = _make_non_streaming_config(answer="Ответ")
@@ -698,7 +675,6 @@ async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
     assert result["llm_decode_ms"] is None
 
 
-@pytest.mark.asyncio
 async def test_reasoning_effort_passed_to_llm_create() -> None:
     """reasoning_effort from config is forwarded to chat.completions.create()."""
     config, client = _make_non_streaming_config(answer="Краткий ответ")
@@ -716,7 +692,6 @@ async def test_reasoning_effort_passed_to_llm_create() -> None:
     assert call_kwargs["reasoning_effort"] == "low"
 
 
-@pytest.mark.asyncio
 async def test_disable_reasoning_passed_to_llm_create() -> None:
     """disable_reasoning from config is forwarded to chat.completions.create()."""
     config, client = _make_non_streaming_config(answer="Ответ без reasoning")
@@ -734,7 +709,6 @@ async def test_disable_reasoning_passed_to_llm_create() -> None:
     assert call_kwargs["disable_reasoning"] is True
 
 
-@pytest.mark.asyncio
 async def test_no_reasoning_kwargs_when_none() -> None:
     """When all reasoning fields are None, no extra kwargs are passed."""
     config, client = _make_non_streaming_config(answer="Обычный ответ")
@@ -754,7 +728,6 @@ async def test_no_reasoning_kwargs_when_none() -> None:
     assert "reasoning_format" not in call_kwargs
 
 
-@pytest.mark.asyncio
 async def test_streaming_reasoning_content_merged_into_response() -> None:
     """Streaming with delta.reasoning_content (LiteLLM standardized) produces response.
 
@@ -797,7 +770,6 @@ async def test_streaming_reasoning_content_merged_into_response() -> None:
     assert result["response_sent"] is True
 
 
-@pytest.mark.asyncio
 async def test_streaming_raw_reasoning_merged_into_response() -> None:
     """Streaming with delta.reasoning (raw Cerebras) produces response.
 
@@ -839,7 +811,6 @@ async def test_streaming_raw_reasoning_merged_into_response() -> None:
     assert result["response_sent"] is True
 
 
-@pytest.mark.asyncio
 async def test_service_streaming_mixed_content_and_reasoning() -> None:
     """Streaming with mixed delta.content and delta.reasoning_content works.
 
@@ -882,7 +853,6 @@ async def test_service_streaming_mixed_content_and_reasoning() -> None:
     assert result["response_sent"] is True
 
 
-@pytest.mark.asyncio
 async def test_streaming_answer_failure_degrades_gracefully() -> None:
     """When final message.answer fails, stream still completes but response_sent=False.
 
@@ -922,7 +892,6 @@ async def test_streaming_answer_failure_degrades_gracefully() -> None:
     assert client.chat.completions.create.await_count == 1
 
 
-@pytest.mark.asyncio
 async def test_stream_failure_raises_and_triggers_fallback() -> None:
     """LLM stream exception propagates from gather → triggers non-streaming fallback (#683)."""
     config, client = _make_non_streaming_config(answer="Нестриминговый fallback")
@@ -962,7 +931,6 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
     assert result["llm_stream_recovery"] is True
 
 
-@pytest.mark.asyncio
 async def test_stream_recovery_success_does_not_set_warning_level() -> None:
     """Successful stream recovery should record degradation metadata, not WARNING level."""
     config, client = _make_non_streaming_config(answer="Нестриминговый fallback")
@@ -1005,7 +973,6 @@ async def test_stream_recovery_success_does_not_set_warning_level() -> None:
     assert warning_calls == []
 
 
-@pytest.mark.asyncio
 async def test_partial_stream_recovery_edits_existing_message_instead_of_sending_duplicate() -> (
     None
 ):
@@ -1052,7 +1019,6 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
     )
 
 
-@pytest.mark.asyncio
 async def test_ttft_drift_warn_ms_config() -> None:
     """TTFT drift warning threshold is read from config.ttft_drift_warn_ms (#675)."""
     from telegram_bot.graph.config import GraphConfig
@@ -1108,7 +1074,6 @@ async def test_ttft_drift_warn_ms_config() -> None:
     assert len(warning_calls) >= 1
 
 
-@pytest.mark.asyncio
 async def test_text_streaming_uses_send_message_draft() -> None:
     """Streaming path uses bot.send_message_draft instead of edit_text."""
     config, client = _make_non_streaming_config()
@@ -1167,7 +1132,6 @@ class _FakePrompt:
         return self.compiled_text
 
 
-@pytest.mark.asyncio
 async def test_generate_response_forwards_langfuse_prompt_kwarg_when_prompt_object_available() -> (
     None
 ):
@@ -1193,7 +1157,6 @@ async def test_generate_response_forwards_langfuse_prompt_kwarg_when_prompt_obje
     assert call_kwargs.get("langfuse_prompt") is fake_prompt
 
 
-@pytest.mark.asyncio
 async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is_none() -> None:
     """No ``langfuse_prompt`` must be sent when prompt fell back to a hardcoded string (#1666)."""
     config, client = _make_non_streaming_config(answer="Ответ")
@@ -1216,7 +1179,6 @@ async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is
     assert "langfuse_prompt" not in call_kwargs
 
 
-@pytest.mark.asyncio
 async def test_generate_response_links_prompt_via_update_current_generation() -> None:
     """When a Prompt object is available, ``update_current_generation`` is called with it (#1666).
 
@@ -1246,7 +1208,6 @@ async def test_generate_response_links_prompt_via_update_current_generation() ->
     assert update_calls[0].kwargs["prompt"] is fake_prompt
 
 
-@pytest.mark.asyncio
 async def test_generate_response_does_not_link_prompt_via_update_when_object_is_none() -> None:
     """When prompt fell back to hardcoded string, no ``prompt=`` kwarg is sent (#1666)."""
     config, _ = _make_non_streaming_config(answer="Ответ")
@@ -1268,7 +1229,6 @@ async def test_generate_response_does_not_link_prompt_via_update_when_object_is_
         assert "prompt" not in (call.kwargs or {})
 
 
-@pytest.mark.asyncio
 async def test_generate_response_works_when_langfuse_client_unavailable() -> None:
     """Prompt linking must degrade gracefully when Langfuse client is unavailable."""
     config, client = _make_non_streaming_config(answer="Ответ без tracing")

@@ -8,7 +8,6 @@ import pytest
 from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 
 
-@pytest.mark.asyncio
 async def test_sync_pending_lead_scores_returns_zero_when_dependencies_missing() -> None:
     result = await sync_pending_lead_scores(
         scoring_store=None,
@@ -20,7 +19,6 @@ async def test_sync_pending_lead_scores_returns_zero_when_dependencies_missing()
     assert result == {"synced": 0, "failed": 0, "skipped": 0}
 
 
-@pytest.mark.asyncio
 async def test_sync_pending_lead_scores_skips_invalid_field_ids() -> None:
     scoring_store = AsyncMock()
     kommo_client = AsyncMock()
@@ -36,7 +34,6 @@ async def test_sync_pending_lead_scores_skips_invalid_field_ids() -> None:
     scoring_store.list_pending_sync.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_sync_pending_lead_scores_marks_synced_and_skipped() -> None:
     scoring_store = AsyncMock()
     kommo_client = AsyncMock()
@@ -76,7 +73,6 @@ async def test_sync_pending_lead_scores_marks_synced_and_skipped() -> None:
     scoring_store.mark_failed.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_sync_pending_lead_scores_marks_failed_on_kommo_error() -> None:
     scoring_store = AsyncMock()
     kommo_client = AsyncMock()
@@ -197,7 +193,6 @@ class TestLeadScoreSyncObserveInstrumentation:
         assert kwargs.get("capture_input") is False
         assert kwargs.get("capture_output") is False
 
-    @pytest.mark.asyncio
     async def test_propagate_attributes_called_with_lead_scoring_tags(self, monkeypatch):
         """propagate_attributes must be called with tags=['job', 'lead-scoring']."""
         import contextlib
@@ -239,7 +234,6 @@ class TestLeadScoreSyncObserveInstrumentation:
             f"Recorded: {recorded_kwargs}"
         )
 
-    @pytest.mark.asyncio
     async def test_sync_works_when_langfuse_client_unavailable(self, monkeypatch):
         """Lead-score sync must degrade gracefully when tracing is unavailable."""
         self._disable_observe_and_propagate(monkeypatch)
@@ -258,7 +252,6 @@ class TestLeadScoreSyncObserveInstrumentation:
 
         assert result == {"synced": 0, "failed": 0, "skipped": 0}
 
-    @pytest.mark.asyncio
     async def test_output_records_processed_failed_skipped_counts(self, monkeypatch):
         """Span output must record processed/failed/skipped after the batch."""
         self._disable_observe_and_propagate(monkeypatch)
@@ -305,7 +298,6 @@ class TestLeadScoreSyncObserveInstrumentation:
         assert captured_output["failed"] == 0
         assert captured_output["skipped"] == 1
 
-    @pytest.mark.asyncio
     async def test_lead_score_sync_exception_path_records_error_level_and_reraises(self, monkeypatch):
         """On exception, update_current_span(level='ERROR', ...) and re-raise."""
         self._disable_observe_and_propagate(monkeypatch)

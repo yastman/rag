@@ -3,8 +3,6 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from telegram_bot.dialogs.states import ViewingSG
 
 
@@ -19,7 +17,6 @@ def test_viewing_sg_has_date_state_only():
 # --- Date options ---
 
 
-@pytest.mark.asyncio
 async def test_get_date_options_returns_5_items():
     from telegram_bot.dialogs.viewing import get_date_options
 
@@ -80,7 +77,6 @@ def test_viewing_dialog_has_one_window():
 # --- Date handler → phone_collector ---
 
 
-@pytest.mark.asyncio
 async def test_on_date_selected_closes_dialog_and_starts_phone_collector():
     """After date selection, dialog should close and start phone_collector FSM."""
     from aiogram_dialog import ShowMode
@@ -118,7 +114,6 @@ async def test_on_date_selected_closes_dialog_and_starts_phone_collector():
     assert "осмотра" in call_kwargs.kwargs["prompt_text"]
 
 
-@pytest.mark.asyncio
 async def test_on_date_selected_deletes_inline_message():
     """Inline keyboard message should be deleted before phone_collector prompt."""
     from telegram_bot.dialogs.viewing import on_date_selected
@@ -142,7 +137,6 @@ async def test_on_date_selected_deletes_inline_message():
     msg.delete.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_on_date_selected_no_state_logs_warning():
     """If FSMContext is not in middleware_data, should log warning and return."""
     from telegram_bot.dialogs.viewing import on_date_selected
@@ -167,7 +161,6 @@ async def test_on_date_selected_no_state_logs_warning():
 # --- Cancel → HandoffSG ---
 
 
-@pytest.mark.asyncio
 async def test_cancel_starts_handoff_dialog():
     """Cancel button should start HandoffSG.goal dialog."""
     from aiogram_dialog import StartMode

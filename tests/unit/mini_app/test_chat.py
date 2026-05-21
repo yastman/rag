@@ -36,7 +36,6 @@ def _clear_redis_override() -> None:
     app.dependency_overrides.pop(get_validated_init_data, None)
 
 
-@pytest.mark.asyncio
 async def test_chat_health_endpoint():
     """Health check should return ok."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -45,7 +44,6 @@ async def test_chat_health_endpoint():
     assert resp.json()["status"] == "ok"
 
 
-@pytest.mark.asyncio
 async def test_start_expert_not_found():
     """Unknown expert_id should return 404."""
     mock_redis = AsyncMock()
@@ -64,7 +62,6 @@ async def test_start_expert_not_found():
     assert resp.status_code == 404
 
 
-@pytest.mark.asyncio
 async def test_start_expert_returns_start_link():
     """Valid expert should return start_link for deep linking."""
     mock_redis = AsyncMock()
@@ -95,7 +92,6 @@ async def test_start_expert_returns_start_link():
     assert data["status"] == "ok"
 
 
-@pytest.mark.asyncio
 async def test_start_expert_stores_payload_in_redis():
     """API should store payload in Redis with TTL 300s."""
     mock_redis = AsyncMock()
@@ -126,7 +122,6 @@ async def test_start_expert_stores_payload_in_redis():
     )
 
 
-@pytest.mark.asyncio
 async def test_start_expert_fails_without_bot_username():
     """Missing BOT_USERNAME should return 500."""
     mock_redis = AsyncMock()

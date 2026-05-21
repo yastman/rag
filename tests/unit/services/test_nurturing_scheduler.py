@@ -23,7 +23,6 @@ def fake_services():
     }
 
 
-@pytest.mark.asyncio
 async def test_scheduler_configures_single_instance_coalesced_jobs(fake_services):
     scheduler = NurturingScheduler(**fake_services)
     await scheduler.start()
@@ -34,7 +33,6 @@ async def test_scheduler_configures_single_instance_coalesced_jobs(fake_services
     await scheduler.stop()
 
 
-@pytest.mark.asyncio
 async def test_scheduler_has_no_jobs_before_start(fake_services):
     scheduler = NurturingScheduler(**fake_services)
 
@@ -42,7 +40,6 @@ async def test_scheduler_has_no_jobs_before_start(fake_services):
     assert not scheduler.has_job("funnel-analytics-rollup")
 
 
-@pytest.mark.asyncio
 async def test_scheduler_stop_is_idempotent(fake_services):
     scheduler = NurturingScheduler(**fake_services)
     await scheduler.start()
@@ -51,7 +48,6 @@ async def test_scheduler_stop_is_idempotent(fake_services):
     await scheduler.stop()
 
 
-@pytest.mark.asyncio
 async def test_scheduler_uses_funnel_rollup_cron_from_config(fake_services):
     fake_services["config"].funnel_rollup_cron = "7 * * * *"
     scheduler = NurturingScheduler(**fake_services)
@@ -163,7 +159,6 @@ class TestNurturingSchedulerObserveInstrumentation:
         tick_calls = [c for c in captured if c.get("name") == "nurturing-scheduler-tick"]
         assert len(tick_calls) == 1, "Existing run_nurturing_batch @observe must be preserved"
 
-    @pytest.mark.asyncio
     async def test_dispatch_propagates_nurturing_tags(self, monkeypatch, fake_services):
         """run_nurturing_dispatch must call propagate_attributes(tags=['job', 'nurturing'])."""
         import contextlib
@@ -200,7 +195,6 @@ class TestNurturingSchedulerObserveInstrumentation:
             f"Expected tags=['job', 'nurturing']. Recorded: {recorded_kwargs}"
         )
 
-    @pytest.mark.asyncio
     async def test_rollup_propagates_analytics_tags(self, monkeypatch, fake_services):
         """run_funnel_rollup must call propagate_attributes(tags=['job', 'analytics'])."""
         import contextlib
@@ -238,7 +232,6 @@ class TestNurturingSchedulerObserveInstrumentation:
             f"Expected tags=['job', 'analytics']. Recorded: {recorded_kwargs}"
         )
 
-    @pytest.mark.asyncio
     async def test_dispatch_error_preserves_original_exception_when_langfuse_unavailable(
         self, monkeypatch, fake_services
     ):
@@ -257,7 +250,6 @@ class TestNurturingSchedulerObserveInstrumentation:
         with pytest.raises(RuntimeError, match="Dispatch boom"):
             await scheduler.run_nurturing_dispatch()
 
-    @pytest.mark.asyncio
     async def test_dispatch_exception_records_error_and_reraises(self, monkeypatch, fake_services):
         """Dispatch must record ERROR level and re-raise so APScheduler logs failure."""
         self._disable_observe_and_propagate(monkeypatch)
@@ -282,7 +274,6 @@ class TestNurturingSchedulerObserveInstrumentation:
         assert "Dispatch boom" in error_calls[0].get("status_message", "")
         assert len(error_calls[0].get("status_message", "")) <= 220
 
-    @pytest.mark.asyncio
     async def test_rollup_exception_records_error_and_reraises(self, monkeypatch, fake_services):
         """Rollup must record ERROR level and re-raise so APScheduler logs failure."""
         self._disable_observe_and_propagate(monkeypatch)

@@ -4,8 +4,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 import telegram_bot.dialogs.funnel as funnel_module
 from telegram_bot.dialogs.funnel import funnel_dialog
 from telegram_bot.dialogs.states import FunnelSG
@@ -80,7 +78,6 @@ def test_funnel_has_all_windows():
 # --- City getter/handler ---
 
 
-@pytest.mark.asyncio
 async def test_city_options_has_3_cities_plus_any():
     result = await funnel_module.get_city_options()
     items = result["items"]
@@ -92,7 +89,6 @@ async def test_city_options_has_3_cities_plus_any():
     assert len(items) == 4
 
 
-@pytest.mark.asyncio
 async def test_city_selected_saves_and_switches_to_property_type():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Солнечный берег")
@@ -100,7 +96,6 @@ async def test_city_selected_saves_and_switches_to_property_type():
     manager.switch_to.assert_awaited_once_with(FunnelSG.property_type)
 
 
-@pytest.mark.asyncio
 async def test_city_return_to_summary_when_flag_set():
     manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
     await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Элените")
@@ -112,7 +107,6 @@ async def test_city_return_to_summary_when_flag_set():
 # --- pref_complex getter/handler ---
 
 
-@pytest.mark.asyncio
 async def test_pref_complex_options_has_10_complexes_plus_any():
     result = await funnel_module.get_pref_complex_options(
         middleware_data={},
@@ -125,7 +119,6 @@ async def test_pref_complex_options_has_10_complexes_plus_any():
     assert len(items) == 11  # 10 complexes + "Любой"
 
 
-@pytest.mark.asyncio
 async def test_pref_complex_selected_saves_and_returns_to_preferences():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_complex_selected(
@@ -135,7 +128,6 @@ async def test_pref_complex_selected_saves_and_returns_to_preferences():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_complex_any_clears_value():
     manager = SimpleNamespace(dialog_data={"complex": "Premier Fort Beach"}, switch_to=AsyncMock())
     await funnel_module.on_pref_complex_selected(MagicMock(), SimpleNamespace(), manager, "any")
@@ -146,7 +138,6 @@ async def test_pref_complex_any_clears_value():
 # --- Preferences menu ---
 
 
-@pytest.mark.asyncio
 async def test_preferences_options_has_7_categories():
     """Preferences getter returns 7 category items (6 original + section)."""
     result = await funnel_module.get_preferences_options(
@@ -167,7 +158,6 @@ async def test_preferences_options_has_7_categories():
     assert len(items) == 7
 
 
-@pytest.mark.asyncio
 async def test_preferences_options_uses_emoji_labels_for_all_categories():
     result = await funnel_module.get_preferences_options(
         middleware_data={},
@@ -184,7 +174,6 @@ async def test_preferences_options_uses_emoji_labels_for_all_categories():
     assert labels_by_id["section"] == "📍 Секция"
 
 
-@pytest.mark.asyncio
 async def test_preferences_options_syncs_widget_state_when_selected():
     """get_preferences_options syncs Multiselect widget_data from dialog_data."""
     widget_data: dict[str, Any] = {}
@@ -200,7 +189,6 @@ async def test_preferences_options_syncs_widget_state_when_selected():
     assert "area" not in checked
 
 
-@pytest.mark.asyncio
 async def test_preferences_complex_syncs_widget_state_when_selected():
     """get_preferences_options marks 'complex' as checked in widget_data when complex is set."""
     widget_data: dict[str, Any] = {}
@@ -214,7 +202,6 @@ async def test_preferences_complex_syncs_widget_state_when_selected():
     assert "complex" in checked
 
 
-@pytest.mark.asyncio
 async def test_pref_category_complex_switches_to_pref_complex():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(
@@ -226,7 +213,6 @@ async def test_pref_category_complex_switches_to_pref_complex():
 # --- pref_area getter/handler ---
 
 
-@pytest.mark.asyncio
 async def test_pref_area_options_has_5_buckets_plus_any():
     result = await funnel_module.get_pref_area_options(
         middleware_data={},
@@ -244,7 +230,6 @@ async def test_pref_area_options_has_5_buckets_plus_any():
     assert result["title"] == "Какую площадь предпочитаете?"
 
 
-@pytest.mark.asyncio
 async def test_pref_area_selected_saves_and_returns_to_preferences():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_area_selected(MagicMock(), SimpleNamespace(), manager, "large")
@@ -252,7 +237,6 @@ async def test_pref_area_selected_saves_and_returns_to_preferences():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_area_any_clears_value():
     manager = SimpleNamespace(dialog_data={"area": "large"}, switch_to=AsyncMock())
     await funnel_module.on_pref_area_selected(MagicMock(), SimpleNamespace(), manager, "any")
@@ -260,7 +244,6 @@ async def test_pref_area_any_clears_value():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_category_area_switches_to_pref_area():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(MagicMock(), SimpleNamespace(), manager, "area")
@@ -270,7 +253,6 @@ async def test_pref_category_area_switches_to_pref_area():
 # --- Other step handlers (unchanged) ---
 
 
-@pytest.mark.asyncio
 async def test_property_type_selected_saves_and_switches():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "studio")
@@ -278,7 +260,6 @@ async def test_property_type_selected_saves_and_switches():
     manager.switch_to.assert_awaited_once_with(FunnelSG.budget)
 
 
-@pytest.mark.asyncio
 async def test_budget_selected_switches_to_preferences():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_budget_selected(MagicMock(), SimpleNamespace(), manager, "mid")
@@ -286,14 +267,12 @@ async def test_budget_selected_switches_to_preferences():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_category_floor_switches_to_pref_floor():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(MagicMock(), SimpleNamespace(), manager, "floor")
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_floor)
 
 
-@pytest.mark.asyncio
 async def test_pref_done_switches_to_summary():
     """The dedicated 'done' button handler navigates to summary."""
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
@@ -301,7 +280,6 @@ async def test_pref_done_switches_to_summary():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_pref_floor_selected_saves_and_returns_to_preferences():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_floor_selected(MagicMock(), SimpleNamespace(), manager, "mid")
@@ -309,7 +287,6 @@ async def test_pref_floor_selected_saves_and_returns_to_preferences():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_furnished_selected_saves_and_returns():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_furnished_selected(MagicMock(), SimpleNamespace(), manager, "yes")
@@ -317,7 +294,6 @@ async def test_pref_furnished_selected_saves_and_returns():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_promotion_selected_saves_and_returns():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_promotion_selected(MagicMock(), SimpleNamespace(), manager, "yes")
@@ -328,7 +304,6 @@ async def test_pref_promotion_selected_saves_and_returns():
 # --- Summary ---
 
 
-@pytest.mark.asyncio
 async def test_summary_data_shows_city():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -340,7 +315,6 @@ async def test_summary_data_shows_city():
     assert result["can_search"] is True
 
 
-@pytest.mark.asyncio
 async def test_summary_city_any_not_shown():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -351,7 +325,6 @@ async def test_summary_city_any_not_shown():
     assert "Город: Любой" in result["summary_text"]
 
 
-@pytest.mark.asyncio
 async def test_summary_shows_complex_from_preferences():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -368,7 +341,6 @@ async def test_summary_shows_complex_from_preferences():
     assert "Солнечный берег" in result["summary_text"]
 
 
-@pytest.mark.asyncio
 async def test_summary_data_shows_selected_filters():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -391,7 +363,6 @@ async def test_summary_data_shows_selected_filters():
     assert result["can_search"] is True
 
 
-@pytest.mark.asyncio
 async def test_summary_shows_area():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -407,7 +378,6 @@ async def test_summary_shows_area():
     assert "60–80 m²" in result["summary_text"]
 
 
-@pytest.mark.asyncio
 async def test_summary_all_any_allows_search_and_shows_explicit_any_labels():
     """Summary always allows search and shows explicit 'Любой' core filters (#722)."""
     result = await funnel_module.get_summary_data(
@@ -450,14 +420,12 @@ def test_switchto_change_in_summary_targets_change_filter():
 # --- Change filter ---
 
 
-@pytest.mark.asyncio
 async def test_change_filter_includes_city():
     result = await funnel_module.get_change_filter_options()
     items_ids = [item_id for _, item_id in result["items"]]
     assert "city" in items_ids
 
 
-@pytest.mark.asyncio
 async def test_change_filter_city_jumps_to_city():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_change_filter_selected(MagicMock(), SimpleNamespace(), manager, "city")
@@ -465,7 +433,6 @@ async def test_change_filter_city_jumps_to_city():
     manager.switch_to.assert_awaited_once_with(FunnelSG.city)
 
 
-@pytest.mark.asyncio
 async def test_change_filter_sets_return_flag():
     """After selecting a filter to change, _return_to_summary flag should be set."""
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
@@ -477,7 +444,6 @@ async def test_change_filter_sets_return_flag():
 # --- Preference any clears ---
 
 
-@pytest.mark.asyncio
 async def test_pref_furnished_any_clears_value():
     """Selecting 'any' for furnished should set is_furnished to None."""
     manager = SimpleNamespace(dialog_data={"is_furnished": "yes"}, switch_to=AsyncMock())
@@ -486,7 +452,6 @@ async def test_pref_furnished_any_clears_value():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_promotion_any_clears_value():
     """Selecting 'any' for promotion should set is_promotion to None."""
     manager = SimpleNamespace(dialog_data={"is_promotion": "yes"}, switch_to=AsyncMock())
@@ -498,7 +463,6 @@ async def test_pref_promotion_any_clears_value():
 # --- Zero suggestions ---
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_removes_area_and_refreshes_summary():
     manager = SimpleNamespace(
         dialog_data={"area": "large", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
@@ -512,7 +476,6 @@ async def test_zero_suggestion_removes_area_and_refreshes_summary():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_removes_floor_and_refreshes_summary():
     manager = SimpleNamespace(
         dialog_data={"floor": "mid", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
@@ -530,7 +493,6 @@ async def test_zero_suggestion_removes_floor_and_refreshes_summary():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch):
     """on_summary_search should search, send cards via property_bot, then close dialog."""
     spawn_mock = MagicMock()
@@ -589,7 +551,6 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
     callback.message.delete.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
     manager = SimpleNamespace(
         dialog_data={
@@ -623,7 +584,6 @@ async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
 # ============================================================
 
 
-@pytest.mark.asyncio
 async def test_pref_view_selected_saves_and_returns():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_view_selected(MagicMock(), SimpleNamespace(), manager, "sea")
@@ -631,7 +591,6 @@ async def test_pref_view_selected_saves_and_returns():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_view_any_keeps_any_marker():
     manager = SimpleNamespace(dialog_data={"view": "sea"}, switch_to=AsyncMock())
     await funnel_module.on_pref_view_selected(MagicMock(), SimpleNamespace(), manager, "any")
@@ -639,14 +598,12 @@ async def test_pref_view_any_keeps_any_marker():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_category_view_switches_to_pref_view():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(MagicMock(), SimpleNamespace(), manager, "view")
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_view)
 
 
-@pytest.mark.asyncio
 async def test_pref_category_furnished_switches_to_pref_furnished():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(
@@ -655,7 +612,6 @@ async def test_pref_category_furnished_switches_to_pref_furnished():
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_furnished)
 
 
-@pytest.mark.asyncio
 async def test_pref_category_promotion_switches_to_pref_promotion():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(
@@ -678,7 +634,6 @@ def test_switchto_back_in_pref_floor_targets_preferences():
     assert found, "SwitchTo 'pref_floor_back' not found in pref_floor window"
 
 
-@pytest.mark.asyncio
 async def test_property_type_return_to_summary():
     manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
     await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "2bed")
@@ -692,7 +647,6 @@ async def test_property_type_return_to_summary():
 # ============================================================
 
 
-@pytest.mark.asyncio
 async def test_pref_floor_options_has_4_plus_any():
     result = await funnel_module.get_pref_floor_options(middleware_data={})
     items = result["items"]
@@ -701,7 +655,6 @@ async def test_pref_floor_options_has_4_plus_any():
     assert set(keys) == {"low", "mid", "high", "top", "any"}
 
 
-@pytest.mark.asyncio
 async def test_pref_view_options_has_4_plus_any():
     result = await funnel_module.get_pref_view_options(middleware_data={})
     items = result["items"]
@@ -710,7 +663,6 @@ async def test_pref_view_options_has_4_plus_any():
     assert set(keys) == {"sea", "pool", "garden", "forest", "any"}
 
 
-@pytest.mark.asyncio
 async def test_pref_furnished_options_has_3():
     result = await funnel_module.get_pref_furnished_options(middleware_data={})
     items = result["items"]
@@ -719,7 +671,6 @@ async def test_pref_furnished_options_has_3():
     assert set(keys) == {"yes", "no", "any"}
 
 
-@pytest.mark.asyncio
 async def test_pref_promotion_options_has_2():
     result = await funnel_module.get_pref_promotion_options(middleware_data={})
     items = result["items"]
@@ -728,7 +679,6 @@ async def test_pref_promotion_options_has_2():
     assert set(keys) == {"yes", "any"}
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_rm_view():
     manager = SimpleNamespace(
         dialog_data={"view": "sea", "scroll_start_from": 50000.0, "scroll_seen_ids": []},
@@ -742,7 +692,6 @@ async def test_zero_suggestion_rm_view():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_rm_furnished():
     manager = SimpleNamespace(
         dialog_data={"is_furnished": "yes", "scroll_start_from": 50000.0},
@@ -755,7 +704,6 @@ async def test_zero_suggestion_rm_furnished():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_rm_promotion():
     manager = SimpleNamespace(
         dialog_data={"is_promotion": "yes", "scroll_start_from": 50000.0},
@@ -768,7 +716,6 @@ async def test_zero_suggestion_rm_promotion():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_zero_suggestion_rm_budget():
     manager = SimpleNamespace(
         dialog_data={"budget": "high", "scroll_start_from": 50000.0},
@@ -781,7 +728,6 @@ async def test_zero_suggestion_rm_budget():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-@pytest.mark.asyncio
 async def test_summary_shows_furnished_yes():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -797,7 +743,6 @@ async def test_summary_shows_furnished_yes():
     assert "С мебелью" in result["summary_text"]
 
 
-@pytest.mark.asyncio
 async def test_summary_shows_furnished_no():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -813,7 +758,6 @@ async def test_summary_shows_furnished_no():
     assert "Без мебели" in result["summary_text"]
 
 
-@pytest.mark.asyncio
 async def test_summary_shows_promotion():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
@@ -834,7 +778,6 @@ async def test_summary_shows_promotion():
 # ============================================================
 
 
-@pytest.mark.asyncio
 async def test_pref_section_options_has_sections_plus_any():
     result = await funnel_module.get_pref_section_options(middleware_data={})
     items = result["items"]
@@ -845,7 +788,6 @@ async def test_pref_section_options_has_sections_plus_any():
     assert len(items) == 27  # 26 unique sections from CSV + "any"
 
 
-@pytest.mark.asyncio
 async def test_pref_section_selected_saves_and_returns():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_section_selected(MagicMock(), SimpleNamespace(), manager, "D-1")
@@ -853,7 +795,6 @@ async def test_pref_section_selected_saves_and_returns():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_section_any_clears_value():
     manager = SimpleNamespace(dialog_data={"section": "D-1"}, switch_to=AsyncMock())
     await funnel_module.on_pref_section_selected(MagicMock(), SimpleNamespace(), manager, "any")
@@ -861,7 +802,6 @@ async def test_pref_section_any_clears_value():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-@pytest.mark.asyncio
 async def test_pref_category_section_switches_to_pref_section():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await funnel_module.on_pref_category_selected(
@@ -870,7 +810,6 @@ async def test_pref_category_section_switches_to_pref_section():
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_section)
 
 
-@pytest.mark.asyncio
 async def test_preferences_section_syncs_widget_state():
     widget_data: dict[str, Any] = {}
     ctx = SimpleNamespace(widget_data=widget_data)
@@ -1175,7 +1114,6 @@ class TestFormatApartmentList:
 # ============================================================
 
 
-@pytest.mark.asyncio
 async def test_on_summary_search_list_mode_sends_text(monkeypatch):
     """When button.widget_id == 'search_list', sends HTML text instead of photo cards."""
     monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())

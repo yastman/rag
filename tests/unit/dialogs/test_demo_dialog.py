@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from telegram_bot.dialogs.states import DemoSG
 
 
@@ -35,7 +33,6 @@ def test_demo_dialog_has_intro_and_results_windows() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_intro_getter_returns_examples_from_service() -> None:
     from telegram_bot.dialogs.demo import intro_getter
 
@@ -57,7 +54,6 @@ async def test_intro_getter_returns_examples_from_service() -> None:
     assert "prompt" in result
 
 
-@pytest.mark.asyncio
 async def test_intro_getter_falls_back_on_service_error() -> None:
     from telegram_bot.dialogs.demo import intro_getter
     from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
@@ -72,7 +68,6 @@ async def test_intro_getter_falls_back_on_service_error() -> None:
     assert result["examples"] == DEFAULT_EXAMPLES
 
 
-@pytest.mark.asyncio
 async def test_intro_getter_no_service_uses_defaults() -> None:
     from telegram_bot.dialogs.demo import intro_getter
     from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
@@ -90,7 +85,6 @@ async def test_intro_getter_no_service_uses_defaults() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_results_getter_formats_found_results() -> None:
     from telegram_bot.dialogs.demo import results_getter
 
@@ -120,7 +114,6 @@ async def test_results_getter_formats_found_results() -> None:
     assert result["count"] == 1
 
 
-@pytest.mark.asyncio
 async def test_results_getter_shows_not_found_when_empty() -> None:
     from telegram_bot.dialogs.demo import results_getter
 
@@ -134,7 +127,6 @@ async def test_results_getter_shows_not_found_when_empty() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_results_getter_degraded_mode() -> None:
     from telegram_bot.dialogs.demo import results_getter
 
@@ -157,7 +149,6 @@ async def test_results_getter_degraded_mode() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_on_text_input_calls_pipeline_and_searches() -> None:
     from telegram_bot.dialogs.demo import on_text_input
     from telegram_bot.services.apartment_models import (
@@ -196,7 +187,6 @@ async def test_on_text_input_calls_pipeline_and_searches() -> None:
     apartments_service.scroll_with_filters.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_on_text_input_no_pipeline_shows_error() -> None:
     from telegram_bot.dialogs.demo import on_text_input
 
@@ -219,7 +209,6 @@ async def test_on_text_input_no_pipeline_shows_error() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_on_voice_input_transcribes_then_searches() -> None:
     from telegram_bot.dialogs.demo import on_voice_input
     from telegram_bot.services.apartment_models import (
@@ -262,7 +251,6 @@ async def test_on_voice_input_transcribes_then_searches() -> None:
     apartments_service.scroll_with_filters.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_on_voice_input_failed_stt_shows_error() -> None:
     from telegram_bot.dialogs.demo import on_voice_input
 
@@ -286,7 +274,6 @@ async def test_on_voice_input_failed_stt_shows_error() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_on_example_selected_runs_search() -> None:
     from telegram_bot.dialogs.demo import on_example_selected
     from telegram_bot.services.apartment_models import (

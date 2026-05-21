@@ -64,13 +64,11 @@ def _create_bot(config):
 class TestManagerRoleResolution:
     """Manager role is correctly resolved from config.manager_ids."""
 
-    @pytest.mark.asyncio
     async def test_resolve_manager_from_config(self, manager_config):
         bot = _create_bot(manager_config)
         role = await bot._resolve_user_role(12345)
         assert role == "manager"
 
-    @pytest.mark.asyncio
     async def test_resolve_client_for_unknown_user(self, manager_config):
         bot = _create_bot(manager_config)
         role = await bot._resolve_user_role(99999)

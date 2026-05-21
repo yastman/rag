@@ -74,7 +74,6 @@ async def _post_start_expert(mock_redis: AsyncMock) -> None:
         _clear_redis_override()
 
 
-@pytest.mark.asyncio
 async def test_start_expert_uses_xadd_to_canonical_stream() -> None:
     """The producer must call XADD on the ``miniapp:start:stream`` key."""
     mock_redis = AsyncMock()
@@ -87,7 +86,6 @@ async def test_start_expert_uses_xadd_to_canonical_stream() -> None:
     assert stream_key == "miniapp:start:stream", call
 
 
-@pytest.mark.asyncio
 async def test_start_expert_xadd_carries_uuid_user_id_query_id() -> None:
     """The XADD fields dict must carry the deep-link tuple the bot needs."""
     mock_redis = AsyncMock()
@@ -105,7 +103,6 @@ async def test_start_expert_xadd_carries_uuid_user_id_query_id() -> None:
     assert "query_id" in fields
 
 
-@pytest.mark.asyncio
 async def test_start_expert_xadd_bounds_stream_with_maxlen() -> None:
     """Stream length must be bounded so a stuck consumer cannot grow it forever."""
     mock_redis = AsyncMock()
@@ -119,7 +116,6 @@ async def test_start_expert_xadd_bounds_stream_with_maxlen() -> None:
     assert call.kwargs.get("approximate") is True, call.kwargs
 
 
-@pytest.mark.asyncio
 async def test_start_expert_does_not_call_legacy_publish() -> None:
     """Migration acceptance gate: the legacy ``PUBLISH`` call is gone."""
     mock_redis = AsyncMock()

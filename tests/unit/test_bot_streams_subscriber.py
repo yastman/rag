@@ -128,7 +128,6 @@ async def _run_loop_briefly(bot: PropertyBot, fake: fakeredis.aioredis.FakeRedis
 
 
 class TestSubscriberStreamsContract:
-    @pytest.mark.asyncio
     async def test_consumer_group_is_created_with_mkstream_on_startup(
         self, mock_config, fake_redis
     ):
@@ -143,7 +142,6 @@ class TestSubscriberStreamsContract:
         names = {g["name"] for g in groups}
         assert _GROUP in names, groups
 
-    @pytest.mark.asyncio
     async def test_busygroup_on_second_run_does_not_crash(self, mock_config, fake_redis):
         # Pre-create the group so the loop's xgroup_create raises BUSYGROUP.
         await fake_redis.xgroup_create(name=_STREAM, groupname=_GROUP, id="$", mkstream=True)
@@ -155,7 +153,6 @@ class TestSubscriberStreamsContract:
         # Should not raise even though xgroup_create returns BUSYGROUP.
         await _run_loop_briefly(bot, fake_redis)
 
-    @pytest.mark.asyncio
     async def test_entry_dispatches_to_process_miniapp_start(self, mock_config, fake_redis):
         # Pre-create group with cursor at 0 so the xadd below is visible to
         # the loop's ">"-cursor read. The loop's own xgroup_create returns
@@ -179,7 +176,6 @@ class TestSubscriberStreamsContract:
         assert kwargs.get("chat_id") == 456
         assert kwargs.get("uuid_str") == "abc-123"
 
-    @pytest.mark.asyncio
     async def test_processed_entries_are_acked(self, mock_config, fake_redis):
         await _prepare_stream(fake_redis)
         await fake_redis.xadd(
@@ -201,7 +197,6 @@ class TestSubscriberStreamsContract:
         pending = await fake_redis.xpending(_STREAM, _GROUP)
         assert pending["pending"] == 0, pending
 
-    @pytest.mark.asyncio
     async def test_poison_entry_is_skipped_and_acked(self, mock_config, fake_redis):
         await _prepare_stream(fake_redis)
         # A "poison" entry: missing required `user_id` field.
@@ -224,7 +219,6 @@ class TestSubscriberStreamsContract:
         pending = await fake_redis.xpending(_STREAM, _GROUP)
         assert pending["pending"] == 0, pending
 
-    @pytest.mark.asyncio
     async def test_processing_error_does_not_ack(self, mock_config, fake_redis):
         """A transient processing error leaves the entry in the PEL for retry."""
         await _prepare_stream(fake_redis)
@@ -249,7 +243,6 @@ class TestSubscriberStreamsContract:
         pending = await fake_redis.xpending(_STREAM, _GROUP)
         assert pending["pending"] >= 1, pending
 
-    @pytest.mark.asyncio
     async def test_pending_replay_drains_more_than_one_batch(self, mock_config, fake_redis):
         """Startup replay must drain all pending entries for this consumer."""
         await _prepare_stream(fake_redis)

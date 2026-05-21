@@ -58,7 +58,6 @@ def _tool_name(tool: object) -> str:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
 async def test_manager_service_chain_includes_history_and_crm_tools():
     """Manager routing chain should pass manager-only tools into create_bot_agent."""
     bot = _create_bot()
