@@ -49,9 +49,7 @@ def transition_worker(worker_path: Path, target_state: str) -> dict:
     current_state = data.get("state", "active")
 
     if not validate_transition(current_state, target_state):
-        raise ValueError(
-            f"invalid transition: {current_state} -> {target_state}"
-        )
+        raise ValueError(f"invalid transition: {current_state} -> {target_state}")
 
     data["state"] = target_state
     data["updated_at"] = datetime.now(tz=UTC).isoformat()

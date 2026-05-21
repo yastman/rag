@@ -153,9 +153,13 @@ def test_cli_exits_zero_on_no_overlap(tmp_path: Path) -> None:
     # Act
     result = subprocess.run(
         [
-            "python", "-m", "scripts.swarm_reserved_guard",
-            "--new-worker", str(new_worker_file),
-            "--registry", str(registry_file),
+            "python",
+            "-m",
+            "scripts.swarm_reserved_guard",
+            "--new-worker",
+            str(new_worker_file),
+            "--registry",
+            str(registry_file),
         ],
         capture_output=True,
         text=True,
@@ -184,9 +188,13 @@ def test_cli_exits_one_on_overlap(tmp_path: Path) -> None:
     # Act
     result = subprocess.run(
         [
-            "python", "-m", "scripts.swarm_reserved_guard",
-            "--new-worker", str(new_worker_file),
-            "--registry", str(registry_file),
+            "python",
+            "-m",
+            "scripts.swarm_reserved_guard",
+            "--new-worker",
+            str(new_worker_file),
+            "--registry",
+            str(registry_file),
         ],
         capture_output=True,
         text=True,

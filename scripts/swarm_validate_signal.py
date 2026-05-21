@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 class SignalStatus(Enum):
@@ -63,9 +63,15 @@ def validate_signal(data: dict) -> list[str]:
     # Check status enum
     valid_statuses = {s.value for s in SignalStatus}
     if data["status"] not in valid_statuses:
-        errors.append(
-            f"invalid status: {data['status']}; must be one of {sorted(valid_statuses)}"
-        )
+        errors.append(f"invalid status: {data['status']}; must be one of {sorted(valid_statuses)}")
+
+    if "next_action" in data:
+        valid_actions = {action.value for action in NextAction}
+        if data["next_action"] not in valid_actions:
+            errors.append(
+                f"invalid next_action: {data['next_action']}; "
+                f"must be one of {sorted(valid_actions)}"
+            )
 
     # Check branch is non-empty string
     if not isinstance(data["branch"], str) or not data["branch"]:
@@ -101,6 +107,19 @@ def validate_signal(data: dict) -> list[str]:
     return errors
 
 
+def _is_allowed_repo_path(raw_path: str) -> bool:
+    """Return True when raw_path is a safe relative repo path in an allowed area."""
+    if "\\" in raw_path:
+        return False
+    path = PurePosixPath(raw_path)
+    if path.is_absolute():
+        return False
+    if any(part in {"", ".", ".."} for part in path.parts):
+        return False
+    normalized = path.as_posix()
+    return any(normalized.startswith(prefix) for prefix in ALLOWED_PATH_PREFIXES)
+
+
 def check_policy(data: dict) -> list[str]:
     """Check signal data for policy violations (dangerous commands, disallowed paths)."""
     errors: list[str] = []
@@ -118,9 +137,7 @@ def check_policy(data: dict) -> list[str]:
     files = data.get("reserved_files", [])
     if isinstance(files, list):
         for f in files:
-            if isinstance(f, str) and not any(
-                f.startswith(prefix) for prefix in ALLOWED_PATH_PREFIXES
-            ):
+            if isinstance(f, str) and not _is_allowed_repo_path(f):
                 errors.append(f"path not in allowed prefixes: {f!r}")
 
     return errors

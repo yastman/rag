@@ -102,6 +102,30 @@ def test_branch_empty_string_returns_error() -> None:
     assert any("branch must be a non-empty string" in e for e in errors)
 
 
+def test_valid_next_action_returns_no_error() -> None:
+    # Arrange
+    data = _load_fixture("valid_signal.json")
+    data["next_action"] = "review"
+
+    # Act
+    errors = validate_signal(data)
+
+    # Assert
+    assert errors == []
+
+
+def test_invalid_next_action_returns_error() -> None:
+    # Arrange
+    data = _load_fixture("valid_signal.json")
+    data["next_action"] = "ship_it"
+
+    # Act
+    errors = validate_signal(data)
+
+    # Assert
+    assert any("invalid next_action" in e for e in errors)
+
+
 def test_multiple_missing_fields_returns_all_errors() -> None:
     # Arrange
     data = {}
@@ -111,8 +135,17 @@ def test_multiple_missing_fields_returns_all_errors() -> None:
 
     # Assert
     assert len(errors) == len(
-        ["status", "branch", "base", "prompt_hash", "agent", "model",
-         "reserved_files", "pr_files", "command_evidence"]
+        [
+            "status",
+            "branch",
+            "base",
+            "prompt_hash",
+            "agent",
+            "model",
+            "reserved_files",
+            "pr_files",
+            "command_evidence",
+        ]
     )
 
 
@@ -148,6 +181,30 @@ def test_check_policy_disallowed_path_returns_error() -> None:
     # Arrange
     data = _load_fixture("valid_signal.json")
     data["reserved_files"] = ["/etc/passwd"]
+
+    # Act
+    errors = check_policy(data)
+
+    # Assert
+    assert any("path not in allowed prefixes" in e for e in errors)
+
+
+def test_check_policy_rejects_path_traversal_inside_allowed_prefix() -> None:
+    # Arrange
+    data = _load_fixture("valid_signal.json")
+    data["reserved_files"] = ["scripts/../.env"]
+
+    # Act
+    errors = check_policy(data)
+
+    # Assert
+    assert any("path not in allowed prefixes" in e for e in errors)
+
+
+def test_check_policy_rejects_parent_relative_path() -> None:
+    # Arrange
+    data = _load_fixture("valid_signal.json")
+    data["reserved_files"] = ["../scripts/foo.py"]
 
     # Act
     errors = check_policy(data)
