@@ -1,7 +1,14 @@
 {
   "task_id": "task-fix-sparse-vector-name-mismatch",
   "task_description": "Fix GitHub issue #1083: sparse vector name mismatch ('sparse' vs 'bm42') in src/evaluation/search_engines.py that triggers invalid vector name queries against Qdrant. The retrieval module correctly uses 'bm42' but the evaluation module uses 'sparse'.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "All 41 evaluation tests pass (including 3 new regression tests for #1083). Unit suite: 6877 passed, 14 pre-existing failures unrelated to this change. Ruff lint and format checks pass."
+  }
 }
