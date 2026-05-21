@@ -36,7 +36,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`CONTEXTUALIZED_EMBEDDINGS.md`](CONTEXTUALIZED_EMBEDDINGS.md) — Embedding strategy and contextualization.
 - [`RAG_API.md`](RAG_API.md) — FastAPI RAG API contract.
 - [`API_REFERENCE.md`](API_REFERENCE.md) — API reference.
-- [`ADD_NEW_RAG_NODE.md`](ADD_NEW_RAG_NODE.md) — Guide for adding a new RAG graph node.
+- [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Guide for extending graph nodes, tools, query types, and ingestion sources.
 
 ## Operations & Runbooks
 
@@ -56,7 +56,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 ## Quality & Evaluation
 
 - [`RAG_QUALITY_SCORES.md`](RAG_QUALITY_SCORES.md) — Scoring taxonomy and trace expectations.
-- [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Development conventions and test guidance.
 - [`ADRS.md`](ADRS.md) — Architecture decision records.
 
 ## Migration & SDK
