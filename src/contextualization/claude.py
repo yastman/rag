@@ -58,29 +58,15 @@ class ClaudeContextualizer(ContextualizeProvider):
         query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
-        """
-        Contextualize multiple chunks using Claude.
+        """Contextualize multiple chunks using Claude.
 
-        Uses batch processing for efficiency.
+        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (***REMOVED***1533),
+        which provides the shared concurrent per-chunk dispatch (TaskGroup +
+        semaphore) with per-chunk fallback to ``context_method="none"``. The
+        ``@observe`` span name keeps provider-specific tracing intact.
         """
         _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                ***REMOVED*** Fallback: return chunk without context
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
+        return await self.contextualize_batch(chunks, query)
 
     @observe(name="claude-contextualize", capture_input=False, capture_output=False)
     @retry(
