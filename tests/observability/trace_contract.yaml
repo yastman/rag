@@ -143,7 +143,6 @@ spans:
     - qdrant-hybrid-search-rrf
     - qdrant-hybrid-search-rrf-colbert
     - qdrant-batch-search-rrf
-    - qdrant-search-score-boosting
 
   history_service:
     - history-save
@@ -284,9 +283,6 @@ spans:
     - job-hot-lead-notify
     - job-lead-score-sync
     - job-nurturing-dispatch
-    - llm-service-generate
-    - llm-service-generate-answer
-    - llm-service-stream-answer
     - query-analyzer
     - session-summary-llm
 
@@ -368,7 +364,6 @@ sensitive_spans:
   - qdrant-hybrid-search-rrf
   - qdrant-hybrid-search-rrf-colbert
   - qdrant-batch-search-rrf
-  - qdrant-search-score-boosting
   # history_service (conversation PII)
   - history-save
   - history-search
@@ -463,9 +458,6 @@ sensitive_spans:
   - job-hot-lead-notify
   - job-lead-score-sync
   - job-nurturing-dispatch
-  - llm-service-generate
-  - llm-service-generate-answer
-  - llm-service-stream-answer
   - query-analyzer
   - session-summary-llm
 
