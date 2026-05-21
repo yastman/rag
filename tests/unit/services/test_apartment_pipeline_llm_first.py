@@ -41,7 +41,7 @@ def pipeline(mock_llm):
     )
 
 
-class TestLlmFirstPipeline:
+class TestHybridPipeline:
     """Regex runs first; LLM fills gaps; results are merged into a hybrid source."""
 
     @pytest.mark.asyncio
