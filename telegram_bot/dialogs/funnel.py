@@ -114,14 +114,6 @@ _SECTION_OPTIONS: list[tuple[str, str]] = [
     ("Любая секция", "any"),
 ]
 
-_PROPERTY_TYPE_QUERY_TEXT: dict[str, str] = {
-    "studio": "студия",
-    "1bed": "1 спальня",
-    "2bed": "2 спальни",
-    "3bed": "3 спальни",
-}
-
-
 _PROPERTY_TYPE_DISPLAY: dict[str, str] = {
     "studio": "Студия",
     "1bed": "1-спальня",

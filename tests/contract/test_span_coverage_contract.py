@@ -83,7 +83,7 @@ SENSITIVE_SPANS = [
     "search-engine-encode-hybrid",
     "search-engine-encode-hybrid-colbert",
     "search-engine-encode-dbsf-colbert",
-    ***REMOVED*** Qdrant (all 8)
+    ***REMOVED*** Qdrant (all 7)
     "qdrant-ensure-collection",
     "qdrant-apply-strict-mode",
     "qdrant-ensure-alias",
@@ -91,7 +91,6 @@ SENSITIVE_SPANS = [
     "qdrant-hybrid-search-rrf-colbert",
     "qdrant-batch-search-rrf",
     "qdrant-search-score-boosting",
-    "qdrant-mmr-rerank",
     ***REMOVED*** History service (all 4)
     "history-save",
     "history-search",
@@ -339,7 +338,6 @@ RETRIEVER_SPANS = [
     "qdrant-hybrid-search-rrf-colbert",
     "qdrant-batch-search-rrf",
     "qdrant-search-score-boosting",
-    "qdrant-mmr-rerank",
 ]
 
 EVALUATOR_SPANS = [

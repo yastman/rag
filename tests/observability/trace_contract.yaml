@@ -144,7 +144,6 @@ spans:
     - qdrant-hybrid-search-rrf-colbert
     - qdrant-batch-search-rrf
     - qdrant-search-score-boosting
-    - qdrant-mmr-rerank
 
   history_service:
     - history-save
@@ -363,7 +362,6 @@ sensitive_spans:
   - qdrant-hybrid-search-rrf-colbert
   - qdrant-batch-search-rrf
   - qdrant-search-score-boosting
-  - qdrant-mmr-rerank
   ***REMOVED*** history_service (conversation PII)
   - history-save
   - history-search
