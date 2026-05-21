@@ -2,7 +2,7 @@
   "id": "FEAT-005",
   "type": "docs",
   "description": "Final consolidation pass on docs/README.md index to provide clear canonical entrypoints. Add a prominent 'New Contributors Start Here' section at the top of docs/README.md that gives a 3-step onboarding path (1. docs/ONBOARDING.md, 2. docs/LOCAL-DEVELOPMENT.md, 3. docs/DEVELOPER_GUIDE.md). Clean up the legacy ADRS.md pointer. Verify all links across the documentation tree are valid as a final gate.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Add a 'New Contributors Start Here' section to docs/README.md immediately after the title. Content: a brief 3-item numbered list pointing to (1) docs/ONBOARDING.md for first-time setup, (2) docs/LOCAL-DEVELOPMENT.md for day-to-day workflow, (3) docs/DEVELOPER_GUIDE.md for extending the platform (nodes, tools, query types, ingestion).",
     "In docs/README.md 'Quality & Evaluation' section, remove the ADRS.md entry since it is just a legacy pointer to docs/adr/README.md which is already linked in 'Understand the Project Fast'. The adr/ link in that section is sufficient.",
@@ -23,5 +23,5 @@
     "Visually confirm the new 'New Contributors Start Here' section in docs/README.md"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All relative links in epic-modified files verified OK. Pre-existing broken links found in docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy.md (references docs/engineering/repo-hygiene-runbook.md and docs/LOCAL-DEVELOPMENT.md with incorrect relative paths from that location). These are out of scope. git diff --check passed. ONBOARDING_CHECKLIST.md reference fixed in docs/engineering/docs-maintenance.md. ADD_NEW_RAG_NODE.md confirmed already removed from all docs."
 }
