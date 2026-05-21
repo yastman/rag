@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid as _uuid_lib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, field_validator
 
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.services.content_loader import load_mini_app_config
+
+
+logger = logging.getLogger(__name__)
 
 
 _DEEPLINK_TTL = 300  ***REMOVED*** seconds
@@ -167,13 +172,69 @@ async def start_expert(
         )
 
 
+_MAX_DATA_VALUE_LEN = 10_000  ***REMOVED*** max length for any single string value in data
+
+
+class LogRequest(BaseModel):
+    """Validated schema for frontend remote-log payloads.
+
+    Constraints prevent log-injection, large-payload DoS, and unknown log
+    levels that could confuse structured log aggregators.
+
+    Allowed levels mirror the TypeScript ``remoteLog`` helper in
+    ``mini_app/frontend/src/api.ts``:  debug | info | warn | error.
+    ``CRITICAL`` and other Python-native levels are intentionally excluded
+    so that frontend logs never get confused with backend-severity events.
+    """
+
+    level: Literal["debug", "info", "warn", "error"]
+    message: Annotated[str, Field(max_length=1000)]
+    ***REMOVED*** ``data`` is optional free-form context; values are already serialised to
+    ***REMOVED*** a string by the frontend (``JSON.stringify(data)``), so we cap each
+    ***REMOVED*** string value at _MAX_DATA_VALUE_LEN chars to prevent memory exhaustion.
+    data: Annotated[dict | None, Field(default=None)]
+
+    @field_validator("data")
+    @classmethod
+    def validate_data_value_sizes(cls, v: dict | None) -> dict | None:
+        """Reject data dicts whose string values exceed _MAX_DATA_VALUE_LEN."""
+        if v is None:
+            return v
+        for val in v.values():
+            if isinstance(val, str) and len(val) > _MAX_DATA_VALUE_LEN:
+                msg = f"data values must be at most {_MAX_DATA_VALUE_LEN} characters"
+                raise ValueError(msg)
+        return v
+
+
+***REMOVED*** Mapping from frontend level strings to Python logging levels.
+_LEVEL_MAP: dict[str, int] = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warn": logging.WARNING,
+    "error": logging.ERROR,
+}
+
+***REMOVED*** TODO(***REMOVED***1613): Add rate-limiting via slowapi (``@limiter.limit("30/minute")``)
+***REMOVED*** once ``slowapi`` is added to the ``mini-app`` optional-dependency group.
+***REMOVED*** Tracked as a follow-up because introducing a new dependency needs a separate
+***REMOVED*** pyproject / uv-lock change that is out of scope for this security patch.
+
+
 @app.post("/api/log")
-async def remote_log(request: dict) -> dict:
-    """Receive frontend remote logs (Eruda / remoteLog helper)."""
-    level = request.get("level", "info")
-    message = request.get("message", "")
-    data = request.get("data")
-    print(f"[REMOTE:{level}] {message} {data or ''}", flush=True)
+async def remote_log(request: LogRequest) -> dict:
+    """Receive bounded, validated frontend remote logs.
+
+    Accepts only the four levels declared in ``LogRequest.level`` and caps
+    ``message`` at 1 000 characters.  Unknown levels or oversized payloads
+    are rejected by Pydantic with HTTP 422 before this handler is entered.
+
+    Uses the standard Python ``logging`` module instead of ``print()`` so
+    that log aggregators (e.g. Loki, Cloud Logging) can parse level/message
+    as structured fields.
+    """
+    lvl = _LEVEL_MAP.get(request.level, logging.INFO)
+    logger.log(lvl, "[REMOTE:%s] %s %s", request.level, request.message, request.data or "")
     return {"status": "ok"}
 
 
