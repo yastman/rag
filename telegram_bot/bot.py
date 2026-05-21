@@ -369,31 +369,14 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
 
 
 ***REMOVED*** Re-export from shared module (avoid circular imports with middlewares)
+***REMOVED*** Re-export checkpointer helpers from shared utility module for backward compat
+from .services.checkpointer_utils import (  ***REMOVED*** noqa: E402
+    _delete_checkpointer_thread as _delete_checkpointer_thread,
+)
+from .services.checkpointer_utils import (  ***REMOVED*** noqa: E402
+    _supervisor_thread_id as _supervisor_thread_id,
+)
 from .tracing_context import make_session_id as make_session_id  ***REMOVED*** noqa: E402
-
-
-def _supervisor_thread_id(chat_id: int | str, thread_id: int | None = None) -> str:
-    """Build checkpointer thread id for text-agent conversations."""
-    if thread_id is not None:
-        return f"tg_{chat_id}:{thread_id}"
-    return f"tg_{chat_id}"
-
-
-async def _delete_checkpointer_thread(checkpointer: Any, thread_id: str) -> None:
-    """Delete checkpointer thread via async or sync SDK API."""
-    adelete_thread = getattr(checkpointer, "adelete_thread", None)
-    if callable(adelete_thread):
-        await adelete_thread(thread_id)
-        return
-
-    delete_thread = getattr(checkpointer, "delete_thread", None)
-    if callable(delete_thread):
-        result = delete_thread(thread_id)
-        if inspect.isawaitable(result):
-            await result
-        return
-
-    raise AttributeError("checkpointer does not expose delete_thread/adelete_thread")
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:

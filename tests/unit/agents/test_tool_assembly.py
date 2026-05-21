@@ -120,3 +120,16 @@ class TestBuildAgentTools:
         crm_tool_names = [getattr(t, "name", str(t)) for t in get_crm_tools()]
         for crm_name in crm_tool_names:
             assert crm_name not in tool_names
+
+    def test_invalid_role_raises_value_error(self, mock_config):
+        """Passing an unrecognized role raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown role 'managr'"):
+            build_agent_tools(
+                role="managr",
+                config=mock_config,
+                history_service=None,
+                funnel_analytics_service=None,
+                nurturing_service=None,
+                lead_scoring_store=None,
+                kommo_client=None,
+            )
