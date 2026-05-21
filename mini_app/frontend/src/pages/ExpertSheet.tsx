@@ -7,19 +7,72 @@ import { ChatInput } from "../components/ChatInput";
 import { PromptRow } from "../components/PromptRow";
 import type { Expert } from "../types";
 
+type ExpertSheetState =
+  | { status: "loading" }
+  | { status: "ready"; expert: Expert }
+  | { status: "not-found" }
+  | { status: "error" };
+
 export function ExpertSheet() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [expert, setExpert] = useState<Expert | null>(null);
+  const [state, setState] = useState<ExpertSheetState>({ status: "loading" });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchConfig().then((c) => {
-      setExpert(c.experts.find((e: Expert) => e.id === id) ?? null);
-    });
+    let active = true;
+    setState({ status: "loading" });
+
+    fetchConfig()
+      .then((c) => {
+        if (!active) return;
+        const expert = c.experts.find((e: Expert) => e.id === id);
+        setState(expert ? { status: "ready", expert } : { status: "not-found" });
+      })
+      .catch(() => {
+        if (active) setState({ status: "error" });
+      });
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
-  if (!expert) return null;
+  if (state.status === "loading") {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+        Загрузка...
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <BottomSheet
+        emoji="!"
+        title="Не удалось загрузить экспертов"
+        description="Проверьте подключение и попробуйте позже."
+        onClose={() => navigate("/")}
+      >
+        {null}
+      </BottomSheet>
+    );
+  }
+
+  if (state.status === "not-found") {
+    return (
+      <BottomSheet
+        emoji="?"
+        title="Эксперт не найден"
+        description="Вернитесь на главную и выберите другого эксперта."
+        onClose={() => navigate("/")}
+      >
+        {null}
+      </BottomSheet>
+    );
+  }
+
+  const { expert } = state;
 
   const user = initData.user();
   const userId = user?.id;

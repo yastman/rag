@@ -45,16 +45,3 @@ export async function startExpert(
   if (!resp.ok) throw new Error(`start-expert failed: ${resp.status}`);
   return resp.json();
 }
-
-export async function submitPhone(
-  phone: string,
-  source: string,
-  userId: number,
-) {
-  const resp = await fetch(`${API_BASE}/phone`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, source, user_id: userId }),
-  });
-  return resp.json();
-}

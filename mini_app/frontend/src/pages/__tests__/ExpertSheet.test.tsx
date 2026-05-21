@@ -35,9 +35,9 @@ describe('ExpertSheet', () => {
     vi.restoreAllMocks();
   });
 
-  const renderExpertSheet = () =>
+  const renderExpertSheet = (path = '/expert/consultant') =>
     render(
-      <MemoryRouter initialEntries={['/expert/consultant']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/expert/:id" element={<ExpertSheet />} />
         </Routes>
@@ -152,6 +152,24 @@ describe('ExpertSheet', () => {
         'startExpert failed',
         expect.objectContaining({ error: expect.stringContaining('Network error') }),
       );
+    });
+  });
+
+  it('renders not found state for unknown expert id', async () => {
+    renderExpertSheet('/expert/missing');
+
+    await waitFor(() => {
+      expect(screen.getByText('Эксперт не найден')).toBeInTheDocument();
+    });
+  });
+
+  it('renders error state when config fails to load', async () => {
+    vi.spyOn(api, 'fetchConfig').mockRejectedValue(new Error('network error'));
+
+    renderExpertSheet();
+
+    await waitFor(() => {
+      expect(screen.getByText('Не удалось загрузить экспертов')).toBeInTheDocument();
     });
   });
 });
