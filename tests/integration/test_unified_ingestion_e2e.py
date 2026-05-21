@@ -27,7 +27,7 @@ def temp_sync_dir(tmp_path):
 
 
 @pytest.fixture
-def test_collection_name():
+def e2e_collection_name():
     """Unique collection name for test isolation."""
     return "test_unified_e2e"
 
@@ -41,20 +41,25 @@ def qdrant_client():
 
 
 @pytest.fixture
-def cleanup_collection(qdrant_client, test_collection_name):
+def cleanup_collection(qdrant_client, e2e_collection_name):
     """Clean up test collection after test."""
     import contextlib
 
     yield
     with contextlib.suppress(Exception):
-        qdrant_client.delete_collection(test_collection_name)
+        qdrant_client.delete_collection(e2e_collection_name)
 
 
 class TestUnifiedPipelinePayload:
     """Tests for payload contract compliance."""
 
     async def test_payload_has_required_fields(
-        self, temp_sync_dir, test_collection_name, qdrant_client, cleanup_collection
+        self,
+        temp_sync_dir,
+        e2e_collection_name,
+        qdrant_client,
+        cleanup_collection,
+        monkeypatch,
     ):
         """File goes through pipeline with correct payload format."""
         import cocoindex
@@ -63,13 +68,13 @@ class TestUnifiedPipelinePayload:
         from src.ingestion.unified.config import UnifiedConfig
         from src.ingestion.unified.flow import build_flow
 
-        # Configure for test
-        os.environ["GDRIVE_SYNC_DIR"] = str(temp_sync_dir)
-        os.environ["GDRIVE_COLLECTION_NAME"] = test_collection_name
+        # Configure for test (auto-restored after teardown)
+        monkeypatch.setenv("GDRIVE_SYNC_DIR", str(temp_sync_dir))
+        monkeypatch.setenv("GDRIVE_COLLECTION_NAME", e2e_collection_name)
 
         # Create test collection with correct vector config
         qdrant_client.recreate_collection(
-            collection_name=test_collection_name,
+            collection_name=e2e_collection_name,
             vectors_config={"dense": VectorParams(size=1024, distance=Distance.COSINE)},
             sparse_vectors_config={"bm42": SparseVectorParams(modifier=Modifier.IDF)},
         )
@@ -77,7 +82,7 @@ class TestUnifiedPipelinePayload:
         # Run ingestion
         config = UnifiedConfig(
             sync_dir=temp_sync_dir,
-            collection_name=test_collection_name,
+            collection_name=e2e_collection_name,
         )
         _flow = build_flow(config)
         cocoindex.setup_all_flows()
@@ -90,7 +95,7 @@ class TestUnifiedPipelinePayload:
         ]
 
         results, _ = qdrant_client.scroll(
-            collection_name=test_collection_name,
+            collection_name=e2e_collection_name,
             scroll_filter={"must": [{"key": "metadata.file_id", "match": {"value": file_id}}]},
             limit=10,
             with_payload=True,
@@ -121,7 +126,12 @@ class TestUnifiedPipelineDeleteSemantics:
     """Tests for delete semantics."""
 
     async def test_delete_removes_points(
-        self, temp_sync_dir, test_collection_name, qdrant_client, cleanup_collection
+        self,
+        temp_sync_dir,
+        e2e_collection_name,
+        qdrant_client,
+        cleanup_collection,
+        monkeypatch,
     ):
         """Deleting file removes points from Qdrant."""
         import cocoindex
@@ -130,18 +140,18 @@ class TestUnifiedPipelineDeleteSemantics:
         from src.ingestion.unified.config import UnifiedConfig
         from src.ingestion.unified.flow import build_flow
 
-        os.environ["GDRIVE_SYNC_DIR"] = str(temp_sync_dir)
-        os.environ["GDRIVE_COLLECTION_NAME"] = test_collection_name
+        monkeypatch.setenv("GDRIVE_SYNC_DIR", str(temp_sync_dir))
+        monkeypatch.setenv("GDRIVE_COLLECTION_NAME", e2e_collection_name)
 
         qdrant_client.recreate_collection(
-            collection_name=test_collection_name,
+            collection_name=e2e_collection_name,
             vectors_config={"dense": VectorParams(size=1024, distance=Distance.COSINE)},
             sparse_vectors_config={"bm42": SparseVectorParams(modifier=Modifier.IDF)},
         )
 
         config = UnifiedConfig(
             sync_dir=temp_sync_dir,
-            collection_name=test_collection_name,
+            collection_name=e2e_collection_name,
         )
 
         # First pass - index file
@@ -161,7 +171,7 @@ class TestUnifiedPipelineDeleteSemantics:
 
         # Verify points removed
         count = qdrant_client.count(
-            collection_name=test_collection_name,
+            collection_name=e2e_collection_name,
             count_filter={"must": [{"key": "metadata.file_id", "match": {"value": file_id}}]},
         )
         assert count.count == 0, "Points should be deleted"
