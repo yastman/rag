@@ -12,6 +12,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     FieldCondition,
     Filter,
+    HasIdCondition,
     MatchValue,
     PointStruct,
     SparseVector,
@@ -550,6 +551,14 @@ class QdrantHybridWriter:
         """Sync version of upsert_chunks.
 
         Uses sync Voyage client and sync Qdrant operations.
+
+        # (#1602) build-then-delete: upsert new points first, delete stale old ones after.
+        # Previously delete_file_sync ran before embedding; any failure during
+        # embedding or upsert left retrieval with zero points for that document.
+        # New order:
+        #   1. Build + embed points
+        #   2. Upsert new points
+        #   3. Delete ONLY stale old points (file_id match AND id NOT IN new_ids)
         """
         stats = WriteStats()
 
@@ -557,13 +566,10 @@ class QdrantHybridWriter:
             return stats
 
         try:
-            # Step 1: Delete existing (replace semantics)
-            stats.points_deleted = self.delete_file_sync(file_id, collection_name)
-
-            # Step 2: Extract texts
+            # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            # Step 3: Generate embeddings — single hybrid call when local BGE-M3
+            # Step 2: Generate embeddings — single hybrid call when local BGE-M3
             all_dense_embeddings: list[list[float]]
             if self.use_local_embeddings:
                 hybrid_result = self._bge_client.encode_hybrid(texts)
@@ -589,13 +595,15 @@ class QdrantHybridWriter:
                 sparse_embeddings = self._embed_sparse(texts)
                 colbert_embeddings = []
 
-            # Step 4: Build points
+            # Step 3: Build points with deterministic IDs
             points = []
+            new_point_ids: list[str] = []
             for i, (chunk, dense_vec, sparse_emb) in enumerate(
                 zip(chunks, all_dense_embeddings, sparse_embeddings, strict=True)
             ):
                 chunk_location = self.get_chunk_location(chunk, i)
                 point_id = self.generate_point_id(file_id, chunk_location)
+                new_point_ids.append(point_id)
                 payload = self.build_payload(
                     chunk, file_id, source_path, chunk_location, file_metadata
                 )
@@ -614,16 +622,46 @@ class QdrantHybridWriter:
                 )
                 points.append(point)
 
-            # Step 5: Upsert in request-size-safe batches
+            # Step 4: Upsert new points FIRST (preserves last-good state on failure)
             stats.points_upserted = self._upsert_points_in_batches(
                 collection_name=collection_name,
                 points=points,
                 source_path=source_path,
             )
 
+            # Step 5: (#1602) Delete stale points ONLY after successful upsert.
+            # Stale = same file_id but point_id not in the new set.
+            # Uses HasIdCondition with must_not so only truly orphaned points are removed.
+            stale_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="metadata.file_id", match=MatchValue(value=file_id)
+                    )
+                ],
+                must_not=[
+                    HasIdCondition(has_id=new_point_ids),
+                ],
+            )
+            count_result = self.client.count(
+                collection_name=collection_name,
+                count_filter=stale_filter,
+            )
+            stale_count = count_result.count
+            if stale_count > 0:
+                self.client.delete(
+                    collection_name=collection_name,
+                    points_selector=stale_filter,
+                )
+                logger.info(
+                    "Deleted %d stale points for file_id=%s after successful upsert",
+                    stale_count,
+                    file_id,
+                )
+            stats.points_deleted = stale_count
+
             logger.info(
                 f"Upserted {stats.points_upserted} points for {source_path} "
-                f"(replaced {stats.points_deleted})"
+                f"(deleted {stats.points_deleted} stale)"
             )
 
         except Exception as e:
