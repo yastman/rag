@@ -44,6 +44,7 @@ set -euo pipefail
 if [[ -z "${OPENCODE_CONFIG_CONTENT:-}" && -z "${OPENCODE_CONFIG:-}" ]]; then
   # Single source of truth for the permissive payload. Kept minimal so
   # callers can see at a glance what the wrapper grants.
+  # shellcheck disable=SC2016 # literal JSON "$schema" key, not shell expansion
   export OPENCODE_CONFIG_CONTENT='{"$schema":"https://opencode.ai/config.json","permission":"allow"}'
 fi
 

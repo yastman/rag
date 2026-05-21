@@ -39,10 +39,6 @@
     "tests/unit/test_hyde.py",
     "tests/unit/test_ingestion_service.py"
   ],
-  "test_collection_name": [
-    "tests/integration/test_ingestion_e2e.py",
-    "tests/integration/test_unified_ingestion_e2e.py"
-  ],
   "test_combined_filters": [
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
