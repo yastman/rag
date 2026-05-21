@@ -1121,7 +1121,6 @@ class PropertyBot:
             return "manager"
         return db_role or "client"
 
-
     async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
         """Handle Mini App deep link: /start q_<uuid>.
 
@@ -1314,7 +1313,6 @@ class PropertyBot:
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
         return user_id in self.config.admin_ids
-
 
     @observe(name="menu-router", capture_input=False, capture_output=False)
     async def handle_menu_button(
