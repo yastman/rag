@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from pydantic import BaseModel, field_validator
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.phone_utils import normalize_phone
 
 
 logger = logging.getLogger(__name__)
-
-_PHONE_RE = re.compile(r"^\+?\d{7,15}$")
 
 
 class PhoneRequest(BaseModel):
@@ -24,11 +22,18 @@ class PhoneRequest(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
-        cleaned = re.sub(r"[\s\-\(\)]", "", v)
-        if not _PHONE_RE.match(cleaned):
+        """Normalize to E.164 via the shared phonenumbers-based helper.
+
+        Closes ***REMOVED***1614 — the previous local digit-count regex accepted
+        impossible numbers (e.g. eleven repeated ones) and never produced
+        E.164 output, so the same Mini App contact could be stored in a
+        different format than the bot-side phone collection.
+        """
+        normalized = normalize_phone(v)
+        if normalized is None:
             msg = "Invalid phone number"
             raise ValueError(msg)
-        return cleaned
+        return normalized
 
 
 def get_kommo_client():
