@@ -1,3 +1,8 @@
+# DEPRECATED: Promtail is past its Grafana-documented EOL date (2025).
+# New deployments should use Grafana Alloy (docker/monitoring/alloy.alloy).
+# This file is retained for short-lived backward compatibility only.
+# See: https://grafana.com/docs/loki/latest/send-data/promtail/
+#
 # Promtail Configuration for RAG Bot Dev Stack
 # Scrapes Docker container logs and sends to Loki
 

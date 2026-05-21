@@ -11,7 +11,7 @@ groups:
 
       - alert: DoclingDown
         expr: |
-          count_over_time({container="dev-docling"} [10m]) == 0
+          count_over_time({service="docling"} [10m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -22,7 +22,7 @@ groups:
 
       - alert: DoclingOOM
         expr: |
-          count_over_time({container="dev-docling"} |~ "(?i)killed|out of memory|oom|segmentation fault" [5m]) > 0
+          count_over_time({service="docling"} |~ "(?i)killed|out of memory|oom|segmentation fault" [5m]) > 0
         for: 0m
         labels:
           severity: critical
@@ -33,7 +33,7 @@ groups:
 
       - alert: DoclingConversionFailed
         expr: |
-          count_over_time({container="dev-docling"} |~ "(?i)failed to convert|conversion failed|pdf.*error|ocr.*error|timeout" [5m]) > 2
+          count_over_time({service="docling"} |~ "(?i)failed to convert|conversion failed|pdf.*error|ocr.*error|timeout" [5m]) > 2
         for: 3m
         labels:
           severity: warning
@@ -44,7 +44,7 @@ groups:
 
       - alert: DoclingError
         expr: |
-          count_over_time({container="dev-docling"} |~ "(?i)error|exception|traceback" [5m]) > 3
+          count_over_time({service="docling"} |~ "(?i)error|exception|traceback" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -59,7 +59,7 @@ groups:
 
       - alert: MinioDown
         expr: |
-          count_over_time({container="dev-minio"} [5m]) == 0
+          count_over_time({service="minio"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -70,7 +70,7 @@ groups:
 
       - alert: MinioDiskFull
         expr: |
-          count_over_time({container="dev-minio"} |~ "(?i)disk full|no space left|drive offline" [5m]) > 0
+          count_over_time({service="minio"} |~ "(?i)disk full|no space left|drive offline" [5m]) > 0
         for: 0m
         labels:
           severity: critical
@@ -81,7 +81,7 @@ groups:
 
       - alert: MinioCorruption
         expr: |
-          count_over_time({container="dev-minio"} |~ "(?i)corrupt|AccessDenied|signature mismatch" [5m]) > 0
+          count_over_time({service="minio"} |~ "(?i)corrupt|AccessDenied|signature mismatch" [5m]) > 0
         for: 1m
         labels:
           severity: critical
@@ -92,7 +92,7 @@ groups:
 
       - alert: MinioHealingFailed
         expr: |
-          count_over_time({container="dev-minio"} |~ "(?i)failed to initialize|unable to use drive|healing.*failed" [5m]) > 0
+          count_over_time({service="minio"} |~ "(?i)failed to initialize|unable to use drive|healing.*failed" [5m]) > 0
         for: 3m
         labels:
           severity: warning
@@ -103,7 +103,7 @@ groups:
 
       - alert: MinioError
         expr: |
-          count_over_time({container="dev-minio"} |~ "(?i)error|exception" [5m]) > 5
+          count_over_time({service="minio"} |~ "(?i)error|exception" [5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -118,7 +118,7 @@ groups:
 
       - alert: RedisLangfuseDown
         expr: |
-          count_over_time({container="dev-redis-langfuse"} [5m]) == 0
+          count_over_time({service="redis-langfuse"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -129,7 +129,7 @@ groups:
 
       - alert: RedisLangfuseConnectionError
         expr: |
-          count_over_time({container="dev-redis-langfuse"} |~ "(?i)connection.*refused|connection.*error|READONLY" [5m]) > 0
+          count_over_time({service="redis-langfuse"} |~ "(?i)connection.*refused|connection.*error|READONLY" [5m]) > 0
         for: 1m
         labels:
           severity: critical
@@ -140,7 +140,7 @@ groups:
 
       - alert: RedisLangfuseMemory
         expr: |
-          count_over_time({container="dev-redis-langfuse"} |~ "(?i)maxmemory|evict|oom" [5m]) > 0
+          count_over_time({service="redis-langfuse"} |~ "(?i)maxmemory|evict|oom" [5m]) > 0
         for: 1m
         labels:
           severity: warning
@@ -155,7 +155,7 @@ groups:
 
       - alert: LightRAGDown
         expr: |
-          count_over_time({container="dev-lightrag"} [10m]) == 0
+          count_over_time({service="lightrag"} [10m]) == 0
         for: 3m
         labels:
           severity: critical
@@ -166,7 +166,7 @@ groups:
 
       - alert: LightRAGError
         expr: |
-          count_over_time({container="dev-lightrag"} |~ "(?i)error|exception|failed|traceback" [5m]) > 3
+          count_over_time({service="lightrag"} |~ "(?i)error|exception|failed|traceback" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -177,7 +177,7 @@ groups:
 
       - alert: LightRAGAPIError
         expr: |
-          count_over_time({container="dev-lightrag"} |~ "(?i)openai.*error|api.*error|rate.*limit" [5m]) > 2
+          count_over_time({service="lightrag"} |~ "(?i)openai.*error|api.*error|rate.*limit" [5m]) > 2
         for: 3m
         labels:
           severity: warning

@@ -1,0 +1,85 @@
+// Grafana Alloy configuration for RAG Bot stack
+// Replaces deprecated Promtail for Docker container log collection.
+// Reference: https://grafana.com/docs/alloy/latest/
+
+logging {
+  level = "warn"
+}
+
+// Docker container discovery
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// Relabel: extract compose labels as Loki labels
+discovery.relabel "docker_labels" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+// Collect Docker container logs
+loki.source.docker "default" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_labels.output
+  forward_to = [loki.process.pipeline.receiver]
+
+  relabel_rules = discovery.relabel.docker_labels.rules
+}
+
+// Pipeline: parse JSON, extract level, add static labels
+loki.process "pipeline" {
+  forward_to = [loki.write.local.receiver]
+
+  // Try to parse JSON logs (Python structured logging)
+  stage.json {
+    expressions = {
+      level     = "level",
+      msg       = "message",
+      timestamp = "timestamp",
+      logger    = "logger",
+    }
+  }
+
+  // Promote extracted level to label
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  // Static labels for environment identification
+  stage.static_labels {
+    values = {
+      environment = "development",
+      stack       = "rag-dev",
+    }
+  }
+
+  // Rate limiting to prevent log floods
+  stage.limit {
+    rate  = 1000
+    burst = 2000
+    drop  = true
+  }
+}
+
+// Write to Loki
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

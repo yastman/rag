@@ -8,7 +8,7 @@ groups:
       # Bot container down
       - alert: BotContainerDown
         expr: |
-          count_over_time({container="dev-bot"} [5m]) == 0
+          count_over_time({service="bot"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -20,7 +20,7 @@ groups:
       # High error rate in bot
       - alert: BotHighErrorRate
         expr: |
-          sum(rate({container="dev-bot"} |~ "(?i)(error|exception|failed)" [5m])) > 0.1
+          sum(rate({service="bot"} |~ "(?i)(error|exception|failed)" [5m])) > 0.1
         for: 5m
         labels:
           severity: warning
@@ -32,7 +32,7 @@ groups:
       # Bot critical errors
       - alert: BotCriticalError
         expr: |
-          count_over_time({container="dev-bot"} |~ "(?i)(critical|fatal|panic)" [5m]) > 0
+          count_over_time({service="bot"} |~ "(?i)(critical|fatal|panic)" [5m]) > 0
         for: 1m
         labels:
           severity: critical
@@ -44,7 +44,7 @@ groups:
       # Telegram API errors
       - alert: TelegramAPIError
         expr: |
-          count_over_time({container="dev-bot"} |~ "(?i)telegram.*error|aiogram.*error" [5m]) > 5
+          count_over_time({service="bot"} |~ "(?i)telegram.*error|aiogram.*error" [5m]) > 5
         for: 3m
         labels:
           severity: warning
@@ -56,7 +56,7 @@ groups:
       # Bot restart detected
       - alert: BotRestarted
         expr: |
-          count_over_time({container="dev-bot"} |= "Starting bot" [5m]) > 1
+          count_over_time({service="bot"} |= "Starting bot" [5m]) > 1
         for: 0m
         labels:
           severity: info
@@ -68,7 +68,7 @@ groups:
       # Query processing errors
       - alert: QueryProcessingError
         expr: |
-          count_over_time({container="dev-bot"} |~ "(?i)query.*error|search.*failed|retrieval.*error" [5m]) > 3
+          count_over_time({service="bot"} |~ "(?i)query.*error|search.*failed|retrieval.*error" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -80,7 +80,7 @@ groups:
       # LLM errors in bot
       - alert: LLMGenerationError
         expr: |
-          count_over_time({container="dev-bot"} |~ "(?i)llm.*error|generation.*failed|litellm.*error" [5m]) > 2
+          count_over_time({service="bot"} |~ "(?i)llm.*error|generation.*failed|litellm.*error" [5m]) > 2
         for: 3m
         labels:
           severity: warning
@@ -92,7 +92,7 @@ groups:
       # Cache errors
       - alert: CacheError
         expr: |
-          count_over_time({container="dev-bot"} |~ "(?i)cache.*error|redis.*error|cache.*failed" [5m]) > 3
+          count_over_time({service="bot"} |~ "(?i)cache.*error|redis.*error|cache.*failed" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -104,7 +104,7 @@ groups:
       # Slow response warning
       - alert: SlowBotResponse
         expr: |
-          count_over_time({container="dev-bot"} |~ "response_time.*[5-9][0-9]{3,}|response_time.*[1-9][0-9]{4,}" [5m]) > 5
+          count_over_time({service="bot"} |~ "response_time.*[5-9][0-9]{3,}|response_time.*[1-9][0-9]{4,}" [5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -116,7 +116,7 @@ groups:
       # Memory warning (if logged)
       - alert: BotMemoryWarning
         expr: |
-          count_over_time({container="dev-bot"} |~ "(?i)memory.*warning|memory.*high|oom" [5m]) > 0
+          count_over_time({service="bot"} |~ "(?i)memory.*warning|memory.*high|oom" [5m]) > 0
         for: 1m
         labels:
           severity: warning

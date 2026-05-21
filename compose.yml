@@ -712,6 +712,32 @@ services:
         limits:
           memory: 256M
 
+  alloy:
+    <<: *security-defaults
+    image: grafana/alloy:v1.9.1
+    profiles: ["obs", "full"]
+    restart: unless-stopped
+    read_only: false
+    logging: *default-logging
+    volumes:
+      - ./docker/monitoring/alloy.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/tmp/alloy /etc/alloy/config.alloy
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:12345/-/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   alertmanager:
     <<: *security-defaults
     image: prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286

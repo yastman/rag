@@ -71,16 +71,17 @@ receivers:
 # Inhibition rules - prevent alert storms
 inhibit_rules:
   # If critical is firing, suppress warning for same alertname/service
-  - source_match:
-      severity: critical
-    target_match:
-      severity: warning
+  - source_matchers:
+      - 'severity="critical"'
+    target_matchers:
+      - 'severity="warning"'
     equal: ['alertname', 'service']
-  # If service is down, suppress all other alerts for that service
-  - source_match:
-      alertname: ServiceDown
-    target_match_re:
-      alertname: .+
+  # If a critical "Down" alert fires, suppress warnings for that service
+  - source_matchers:
+      - 'alertname=~".*Down$"'
+      - 'severity="critical"'
+    target_matchers:
+      - 'severity="warning"'
     equal: ['service']
 
 # Templates for custom message formatting

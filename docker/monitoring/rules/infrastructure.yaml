@@ -11,7 +11,7 @@ groups:
 
       - alert: QdrantDown
         expr: |
-          count_over_time({container="dev-qdrant"} [5m]) == 0
+          count_over_time({service="qdrant"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -22,7 +22,7 @@ groups:
 
       - alert: QdrantError
         expr: |
-          count_over_time({container="dev-qdrant"} |~ "(?i)error|failed" [5m]) > 3
+          count_over_time({service="qdrant"} |~ "(?i)error|failed" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -33,7 +33,7 @@ groups:
 
       - alert: QdrantSlowQuery
         expr: |
-          count_over_time({container="dev-qdrant"} |~ "(?i)slow.*query|timeout" [5m]) > 5
+          count_over_time({service="qdrant"} |~ "(?i)slow.*query|timeout" [5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -48,7 +48,7 @@ groups:
 
       - alert: RedisDown
         expr: |
-          count_over_time({container="dev-redis"} [5m]) == 0
+          count_over_time({service="redis"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -59,7 +59,7 @@ groups:
 
       - alert: RedisMemoryWarning
         expr: |
-          count_over_time({container="dev-redis"} |~ "(?i)maxmemory|evict|oom" [5m]) > 0
+          count_over_time({service="redis"} |~ "(?i)maxmemory|evict|oom" [5m]) > 0
         for: 1m
         labels:
           severity: warning
@@ -70,7 +70,7 @@ groups:
 
       - alert: RedisConnectionError
         expr: |
-          count_over_time({container="dev-redis"} |~ "(?i)connection.*refused|connection.*error" [5m]) > 3
+          count_over_time({service="redis"} |~ "(?i)connection.*refused|connection.*error" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -85,7 +85,7 @@ groups:
 
       - alert: LiteLLMDown
         expr: |
-          count_over_time({container="dev-litellm"} [5m]) == 0
+          count_over_time({service="litellm"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -96,7 +96,7 @@ groups:
 
       - alert: LiteLLMRateLimited
         expr: |
-          count_over_time({container="dev-litellm"} |~ "(?i)rate.*limit|429|too.*many.*requests" [5m]) > 3
+          count_over_time({service="litellm"} |~ "(?i)rate.*limit|429|too.*many.*requests" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -107,7 +107,7 @@ groups:
 
       - alert: LiteLLMProviderError
         expr: |
-          count_over_time({container="dev-litellm"} |~ "(?i)provider.*error|api.*error|500" [5m]) > 5
+          count_over_time({service="litellm"} |~ "(?i)provider.*error|api.*error|500" [5m]) > 5
         for: 3m
         labels:
           severity: warning
@@ -118,7 +118,7 @@ groups:
 
       - alert: LiteLLMFallbackTriggered
         expr: |
-          count_over_time({container="dev-litellm"} |~ "(?i)fallback|switching.*model" [5m]) > 3
+          count_over_time({service="litellm"} |~ "(?i)fallback|switching.*model" [5m]) > 3
         for: 5m
         labels:
           severity: info
@@ -133,7 +133,7 @@ groups:
 
       - alert: LangfuseDown
         expr: |
-          count_over_time({container="dev-langfuse"} [5m]) == 0
+          count_over_time({service="langfuse"} [5m]) == 0
         for: 3m
         labels:
           severity: warning
@@ -144,7 +144,7 @@ groups:
 
       - alert: LangfuseWorkerDown
         expr: |
-          count_over_time({container="dev-langfuse-worker"} [5m]) == 0
+          count_over_time({service="langfuse-worker"} [5m]) == 0
         for: 3m
         labels:
           severity: warning
@@ -155,7 +155,7 @@ groups:
 
       - alert: LangfuseError
         expr: |
-          count_over_time({container=~"dev-langfuse.*"} |~ "(?i)error|failed" [5m]) > 5
+          count_over_time({service=~"langfuse.*"} |~ "(?i)error|failed" [5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -170,7 +170,7 @@ groups:
 
       - alert: BGEServiceDown
         expr: |
-          count_over_time({container="dev-bge-m3"} [10m]) == 0
+          count_over_time({service="bge-m3"} [10m]) == 0
         for: 5m
         labels:
           severity: warning
@@ -181,7 +181,7 @@ groups:
 
       - alert: BM42ServiceDown
         expr: |
-          count_over_time({container="dev-bm42"} [10m]) == 0
+          count_over_time({service="bm42"} [10m]) == 0
         for: 5m
         labels:
           severity: warning
@@ -192,7 +192,7 @@ groups:
 
       - alert: EmbeddingServiceError
         expr: |
-          count_over_time({container=~"dev-bge-m3|dev-bm42|dev-user-base"} |~ "(?i)error|failed|exception" [5m]) > 3
+          count_over_time({service=~"bge-m3|bm42|user-base"} |~ "(?i)error|failed|exception" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -204,7 +204,7 @@ groups:
       # BGE-M3 embedding retries and failures (from bot logs, #210)
       - alert: BGEEmbedRetryFromBot
         expr: |
-          count_over_time({container="dev-bot"} |= "Retrying telegram_bot.integrations.embeddings" [5m]) > 3
+          count_over_time({service="bot"} |= "Retrying telegram_bot.integrations.embeddings" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -215,7 +215,7 @@ groups:
 
       - alert: BGEEmbedErrorFromBot
         expr: |
-          count_over_time({container="dev-bot"} |= "Embedding failed after retries" [5m]) > 0
+          count_over_time({service="bot"} |= "Embedding failed after retries" [5m]) > 0
         for: 1m
         labels:
           severity: critical
@@ -230,7 +230,7 @@ groups:
 
       - alert: PostgresDown
         expr: |
-          count_over_time({container="dev-postgres"} [5m]) == 0
+          count_over_time({service="postgres"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -241,7 +241,7 @@ groups:
 
       - alert: PostgresError
         expr: |
-          count_over_time({container="dev-postgres"} |~ "(?i)error|fatal|panic" [5m]) > 3
+          count_over_time({service="postgres"} |~ "(?i)error|fatal|panic" [5m]) > 3
         for: 3m
         labels:
           severity: warning
@@ -252,7 +252,7 @@ groups:
 
       - alert: ClickHouseDown
         expr: |
-          count_over_time({container="dev-clickhouse"} [5m]) == 0
+          count_over_time({service="clickhouse"} [5m]) == 0
         for: 3m
         labels:
           severity: warning
