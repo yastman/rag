@@ -13,6 +13,7 @@ from qdrant_client import AsyncQdrantClient, models
 
 from src.config.qdrant_policy import resolve_collection_name
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.metrics import record_counter_metric
 
 
 logger = logging.getLogger(__name__)
@@ -730,18 +731,12 @@ class QdrantService:
             )
             results = self._format_results(result.points)
             if not results:
-                logger.info(
-                    "metric",
-                    extra={"metric_name": "colbert_rerank_empty", "value": 1},
-                )
+                record_counter_metric("colbert_rerank_empty")
                 logger.warning(
                     "Qdrant ColBERT returned 0 docs for collection %s, falling back to RRF",
                     self._collection_name,
                 )
-                logger.info(
-                    "metric",
-                    extra={"metric_name": "colbert_fallback_to_rrf", "value": 1},
-                )
+                record_counter_metric("colbert_fallback_to_rrf")
                 fallback = await self.hybrid_search_rrf(
                     dense_vector=dense_vector,
                     sparse_vector=sparse_vector,
