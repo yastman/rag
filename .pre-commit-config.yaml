@@ -30,14 +30,14 @@ repos:
     hooks:
       - id: python-syntax-check
         name: Python syntax check (py_compile)
-        entry: python -m py_compile
+        entry: python3 -m py_compile
         language: system
         types: [python]
         stages: [pre-commit]
 
       - id: check-done-json
         name: Validate DONE JSON schema
-        entry: python scripts/validate_done_json.py
+        entry: python3 scripts/validate_done_json.py
         language: system
         files: '\.done\.json$'
         stages: [pre-push]
