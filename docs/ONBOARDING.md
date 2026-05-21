@@ -1,102 +1,125 @@
-***REMOVED*** Developer Onboarding Guide
+***REMOVED*** Developer Onboarding
 
-Welcome to the RAG Fresh project! This guide walks you through setting up a local development environment.
+The single new-contributor guide for the RAG Fresh project. Follow it top to bottom and you will have a working local environment, understand the pipeline, and know where to look next.
+
+---
 
 ***REMOVED******REMOVED*** Prerequisites
 
-Before you begin, ensure you have:
+- [ ] **Python 3.12** (recommended) or 3.11+
+- [ ] **[uv](https://docs.astral.sh/uv/)** package manager installed
+- [ ] **Docker & Docker Compose v2**
+- [ ] **Git**
+- [ ] **Telegram Bot Token** from [@BotFather](https://t.me/BotFather)
+- [ ] **At least one LLM provider key** (OpenAI, Cerebras, or Groq)
+- [ ] IDE with Python support (VS Code, PyCharm, etc.)
 
-- **Python 3.12** (recommended) or 3.11+
-- **Docker & Docker Compose v2** — for local services
-- **uv** package manager — `pip install uv`
-- **Git** — for version control
+---
 
-***REMOVED******REMOVED******REMOVED*** Required Accounts & API Keys
+***REMOVED******REMOVED*** Repository Setup
 
-| Service | Required | Purpose |
-|---------|----------|---------|
-| Telegram Bot Token | Yes | Bot functionality (`TELEGRAM_BOT_TOKEN`) |
-| LiteLLM Master Key | Yes | LLM proxy auth (`LITELLM_MASTER_KEY`) |
-| LLM Provider | Yes | At least one of `OPENAI_API_KEY`, `CEREBRAS_API_KEY`, or `GROQ_API_KEY` |
-| Langfuse | Recommended | Local observability (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`) |
-| BGE-M3 | Optional | Embeddings service started automatically by Compose |
-
-***REMOVED******REMOVED*** Step 1: Clone and Setup
+- [ ] Clone and install dependencies:
 
 ```bash
-***REMOVED*** Clone the repository
-git clone <repository-url>
+git clone https://github.com/yastman/rag.git
 cd rag
-
-***REMOVED*** Install dependencies
 uv sync
+```
 
-***REMOVED*** Copy environment template
+---
+
+***REMOVED******REMOVED*** Environment Configuration
+
+- [ ] Copy the environment template and fill in your keys:
+
+```bash
 cp .env.example .env
 ```
 
-***REMOVED******REMOVED*** Step 2: Configure Environment
+At minimum set:
 
-Edit `.env` with your API keys. The canonical reference is `.env.example`:
+| Variable | Purpose |
+|----------|---------|
+| `TELEGRAM_BOT_TOKEN` | Bot functionality |
+| `LITELLM_MASTER_KEY` | LLM proxy auth |
+| One of `OPENAI_API_KEY` / `CEREBRAS_API_KEY` / `GROQ_API_KEY` | LLM provider |
 
-```bash
-***REMOVED*** Required for bot to work
-TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN]
-LITELLM_MASTER_KEY=your_litellm_master_key
+`.env.example` is the canonical reference for all available variables. See [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for minimum env sets per Compose profile.
 
-***REMOVED*** At least one LLM provider key
-OPENAI_API_KEY=[REDACTED-OPENAI-KEY]
-***REMOVED*** CEREBRAS_API_KEY=...
-***REMOVED*** GROQ_API_KEY=[REDACTED-GROQ-KEY]
+---
 
-***REMOVED*** Langfuse (local observability — started by make docker-ml-up)
-LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY]
-LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY]
-LANGFUSE_HOST=http://localhost:3001
-```
+***REMOVED******REMOVED*** Start Services
 
-See `.env.example` for the full variable list and [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the minimum env sets per profile.
-
-***REMOVED******REMOVED*** Step 3: Start Services
-
-Start core services and verify health:
+- [ ] Start core services and confirm health:
 
 ```bash
 make local-up
 make test-bot-health
 ```
 
-For the full service map, profile stacks, and port list, see [`DOCKER.md`](../DOCKER.md).
+For the full service map, profile stacks, ports, and env requirements see [DOCKER.md](../DOCKER.md).
 
-***REMOVED******REMOVED*** Step 4: Run Preflight Checks
+---
 
-```bash
-make test-bot-health
-```
+***REMOVED******REMOVED*** Validate
 
-The authoritative startup preflight runs in `telegram_bot/preflight.py` when the bot starts. See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the full validation ladder.
-
-***REMOVED******REMOVED*** Step 5: Start the Bot
+- [ ] Start the bot:
 
 ```bash
-***REMOVED*** Run bot natively (fast iteration, services must be running)
 make run-bot
-
-***REMOVED*** Or run everything in Docker
-make docker-bot-up
 ```
 
-***REMOVED******REMOVED******REMOVED*** Verify Bot is Connected
+- [ ] In Telegram, send `/start` to your bot and confirm you receive a welcome message.
+- [ ] Send `/help` and confirm help text is returned.
 
-1. Open Telegram and search for your bot
-2. Send `/start` — you should receive a welcome message
-3. Send `/help` — you should receive help text
+The full startup preflight runs automatically in `telegram_bot/preflight.py`. See [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for the complete validation ladder and native vs Docker trade-offs.
 
-See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) for the day-to-day workflow and native vs Docker trade-offs.
+- [ ] Run linting and tests:
 
-***REMOVED******REMOVED*** Step 6: Run Ingestion (Optional)
+```bash
+make check
+make test-unit
+```
 
-To test with real data, see [`INGESTION.md`](INGESTION.md) for the full ingestion workflow:
+---
+
+***REMOVED******REMOVED*** Understand the Pipeline
+
+Work through these in order:
+
+1. Read [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) for the high-level runtime flows.
+2. Read [BOT_ARCHITECTURE.md](BOT_ARCHITECTURE.md) for the bot layer design.
+3. Open `telegram_bot/graph/graph.py` and trace the `build_graph` function.
+4. Follow a query through the nodes: classify, guard, cache_check, retrieve, grade, rerank/generate, respond.
+
+---
+
+***REMOVED******REMOVED*** Key Code Patterns
+
+- **State management** -- use `TypedDict` for graph state, not Pydantic.
+- **Dependency injection** -- use `GraphContext` for service dependencies.
+- **Tracing** -- always decorate node functions with `@observe`.
+- **Error handling** -- let exceptions propagate; middleware handles user messages.
+- **Testing** -- unit tests for nodes, integration tests for flows.
+
+---
+
+***REMOVED******REMOVED*** Common Tasks
+
+***REMOVED******REMOVED******REMOVED*** Run specific tests
+
+```bash
+uv run pytest tests/unit/telegram_bot/ -v -k "test_name"
+```
+
+***REMOVED******REMOVED******REMOVED*** Add a new dependency
+
+```bash
+uv add package_name
+***REMOVED*** Then update docs/engineering/sdk-registry.md
+```
+
+***REMOVED******REMOVED******REMOVED*** Run ingestion
 
 ```bash
 make ingest-unified-preflight
@@ -104,72 +127,41 @@ make ingest-unified-bootstrap
 make ingest-unified
 ```
 
-***REMOVED******REMOVED*** Common First-Day Issues
+See [INGESTION.md](INGESTION.md) for the full ingestion workflow.
 
-***REMOVED******REMOVED******REMOVED*** Redis Connection Refused
+***REMOVED******REMOVED******REMOVED*** Check Langfuse traces
 
-```bash
-***REMOVED*** Check Redis is running
-docker compose ps redis
+Local Langfuse runs at `http://localhost:3001` (see [DOCKER.md](../DOCKER.md) for ports and profiles).
 
-***REMOVED*** Restart Redis
-docker compose restart redis
-```
-
-***REMOVED******REMOVED******REMOVED*** Qdrant Collection Not Found
+***REMOVED******REMOVED******REMOVED*** Voice agent (optional)
 
 ```bash
-***REMOVED*** Check Qdrant status
-docker compose exec qdrant curl -s http://localhost:6333/collections
-
-***REMOVED*** Recreate collection
-make ingest-unified-bootstrap
+make docker-voice-up
 ```
 
-***REMOVED******REMOVED******REMOVED*** Token/Authentication Errors
+Requires additional env vars: `ELEVENLABS_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 
-1. Verify `TELEGRAM_BOT_TOKEN` is valid
-2. Check Langfuse keys are correct
-3. Ensure `LITELLM_MASTER_KEY` and at least one provider key (`OPENAI_API_KEY`, `CEREBRAS_API_KEY`, or `GROQ_API_KEY`) are set
+---
 
-***REMOVED******REMOVED*** Project Structure Overview
+***REMOVED******REMOVED*** Troubleshooting
 
-```
-rag/
-├── telegram_bot/         ***REMOVED*** Telegram bot implementation
-│   ├── bot.py           ***REMOVED*** Main bot class (PropertyBot)
-│   ├── graph/           ***REMOVED*** LangGraph pipeline (voice)
-│   ├── agents/          ***REMOVED*** SDK agent & tools
-│   ├── pipelines/       ***REMOVED*** Client fast-path pipeline
-│   └── integrations/    ***REMOVED*** Cache, embeddings, etc.
-├── src/
-│   ├── api/             ***REMOVED*** RAG API (FastAPI)
-│   ├── ingestion/       ***REMOVED*** Document ingestion
-│   └── voice/           ***REMOVED*** Voice bot (LiveKit)
-├── docs/                ***REMOVED*** Documentation
-│   ├── runbooks/       ***REMOVED*** Operational runbooks
-│   └── adr/            ***REMOVED*** Architecture decision records
-└── tests/               ***REMOVED*** Test suite
-```
+| Issue | Solution |
+|-------|----------|
+| Redis connection refused | `docker compose up -d redis` or `docker compose restart redis` |
+| Qdrant collection not found | Run `make ingest-unified-bootstrap` |
+| Qdrant timeout | Set `QDRANT_TIMEOUT=30` in `.env` |
+| Token/auth errors | Verify `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and at least one provider key are set |
+| MyPy errors | Run `make check` to identify issues |
+| Import errors | Run `uv sync` to ensure dependencies installed |
 
-***REMOVED******REMOVED*** Key Documentation Links
+For deeper operational investigations see [runbooks/README.md](runbooks/README.md).
 
-| Topic | Link |
-|-------|------|
-| Local development setup | [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) |
-| Pipeline architecture | [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) |
-| Troubleshooting | [runbooks/README.md](runbooks/README.md) |
-| Feature documentation | [BOT_ARCHITECTURE.md](BOT_ARCHITECTURE.md) |
+---
 
 ***REMOVED******REMOVED*** Next Steps
 
-1. Read [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for detailed setup
-2. Review [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) to understand the architecture
-3. Check [BOT_ARCHITECTURE.md](BOT_ARCHITECTURE.md) for bot internals
-4. Explore `tests/` to understand testing patterns
-
-***REMOVED******REMOVED*** Getting Help
-
-- **Issues**: Create a GitHub issue for bugs or feature requests
-- **Internal docs**: See [docs/engineering/](engineering/) for development guidelines
-- **Troubleshooting**: See [runbooks/README.md](runbooks/README.md) for common issues
+1. Read [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for the full day-to-day workflow.
+2. Read [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for development conventions.
+3. Explore `tests/` to understand testing patterns.
+4. Check [engineering/issue-triage.md](engineering/issue-triage.md) for the debugging workflow.
+5. Browse [docs/README.md](README.md) for the full documentation index.
