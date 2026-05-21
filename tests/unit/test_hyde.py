@@ -225,7 +225,7 @@ class TestHyDEObserveInstrumentation:
         sys.modules.pop("telegram_bot.services.query_preprocessor", None)
         importlib.import_module("telegram_bot.services.query_preprocessor")
 
-    def test_module_imports_observe_and_get_client(self):
+    def test_hyde_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (***REMOVED***1661 contract)."""
         from telegram_bot.services import query_preprocessor as qp_mod
 
@@ -239,7 +239,7 @@ class TestHyDEObserveInstrumentation:
             "from telegram_bot.observability for curated update_current_span calls"
         )
 
-    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_hyde_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """@observe must be applied with the trace-coverage audit's exact kwargs."""
         import importlib
         import sys
@@ -322,7 +322,7 @@ class TestHyDEObserveInstrumentation:
             "Full generated document must not appear in span output"
         )
 
-    async def test_generate_works_when_langfuse_client_unavailable(self, monkeypatch):
+    async def test_hyde_generate_works_when_langfuse_client_unavailable(self, monkeypatch):
         """HyDE generation must not require an initialized Langfuse client."""
         self._disable_observe(monkeypatch)
 

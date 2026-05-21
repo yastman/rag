@@ -69,7 +69,7 @@ def _argument_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     return {arg.arg for arg in args}
 
 
-def test_target_file_exists() -> None:
+def test_ingestion_e2e_assertions_target_file_exists() -> None:
     assert TARGET.exists(), f"missing target: {TARGET}"
 
 

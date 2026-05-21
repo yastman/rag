@@ -150,7 +150,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         sys.modules.pop("telegram_bot.services.lead_score_sync", None)
         importlib.import_module("telegram_bot.services.lead_score_sync")
 
-    def test_module_imports_observe_get_client_and_propagate_attributes(self):
+    def test_lead_score_sync_module_imports_observe_get_client_and_propagate_attributes(self):
         """Module wires the Langfuse decorator + helpers (***REMOVED***1663 contract)."""
         from telegram_bot.services import lead_score_sync as lss_mod
 
@@ -168,7 +168,7 @@ class TestLeadScoreSyncObserveInstrumentation:
             "for tags=['job', 'lead-scoring']"
         )
 
-    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_lead_score_sync_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """@observe must be applied with the trace-coverage audit's exact kwargs."""
         import importlib
         import sys
@@ -306,7 +306,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         assert captured_output["skipped"] == 1
 
     @pytest.mark.asyncio
-    async def test_exception_path_records_error_level_and_reraises(self, monkeypatch):
+    async def test_lead_score_sync_exception_path_records_error_level_and_reraises(self, monkeypatch):
         """On exception, update_current_span(level='ERROR', ...) and re-raise."""
         self._disable_observe_and_propagate(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
