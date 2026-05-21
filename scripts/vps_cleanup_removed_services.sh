@@ -18,17 +18,10 @@ fi
 
 # Service and volume allowlists
 
-removed_services=(
-  mini-app-api
-  mini-app-frontend
-  docling
-  ingestion
-  langfuse
-  langfuse-worker
-  clickhouse
-  minio
-  redis-langfuse
-)
+# Single source of truth: scripts/lib/vps_noncore_services.sh (#1611).
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# shellcheck source=lib/vps_noncore_services.sh
+. "${SCRIPT_DIR}/lib/vps_noncore_services.sh"
 
 removable_volumes=(
   vps_clickhouse_data
@@ -63,23 +56,14 @@ preflight_noncore_profiles() {
   config_json="$(mktemp)"
   trap 'rm -f "$config_json"' RETURN
   docker compose config --format json > "$config_json"
-  python3 - "$config_json" <<'PY'
+  python3 - "$config_json" "${VPS_NONCORE_SERVICES[@]}" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as fh:
+config_path = sys.argv[1]
+removed = set(sys.argv[2:])
+with open(config_path, encoding="utf-8") as fh:
     data = json.load(fh)
-removed = {
-    "mini-app-api",
-    "mini-app-frontend",
-    "docling",
-    "ingestion",
-    "langfuse",
-    "langfuse-worker",
-    "clickhouse",
-    "minio",
-    "redis-langfuse",
-}
 bad = []
 for name in sorted(removed):
     service = data.get("services", {}).get(name, {})
@@ -94,7 +78,7 @@ PY
 }
 
 echo "Removed services:"
-printf '  %s\n' "${removed_services[@]}"
+printf '  %s\n' "${VPS_NONCORE_SERVICES[@]}"
 echo "Removable volumes:"
 printf '  %s\n' "${removable_volumes[@]}"
 echo "Protected volumes:"
@@ -110,8 +94,8 @@ fi
 
 # Apply: stop, remove containers, then remove allowlisted volumes
 
-docker compose stop "${removed_services[@]}" || true
-docker compose rm -f "${removed_services[@]}" || true
+docker compose stop "${VPS_NONCORE_SERVICES[@]}" || true
+docker compose rm -f "${VPS_NONCORE_SERVICES[@]}" || true
 
 for volume in "${removable_volumes[@]}"; do
   if docker volume inspect "$volume" >/dev/null 2>&1; then
