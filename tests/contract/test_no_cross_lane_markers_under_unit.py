@@ -57,7 +57,7 @@ def _iter_test_definitions(tree: ast.AST):
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             name = node.name
-            if name.startswith("test_") or name.startswith("Test"):
+            if name.startswith(("test_", "Test")):
                 yield node
 
 
@@ -112,7 +112,7 @@ def test_foreign_lane_marker_set_is_synced_with_conftest() -> None:
     discovered = {marker for _path, marker in pairs}
     # `unit` is the home lane and must NOT be in the foreign set.
     expected_foreign = discovered - {"unit", "contract"}
-    assert FOREIGN_LANE_MARKERS == expected_foreign, (
+    assert expected_foreign == FOREIGN_LANE_MARKERS, (
         "FOREIGN_LANE_MARKERS in this contract must match every non-unit, "
         "non-contract lane declared in tests/conftest.py::path_to_marker. "
         f"Contract has {sorted(FOREIGN_LANE_MARKERS)}, conftest has "
