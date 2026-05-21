@@ -1,0 +1,7 @@
+{
+  "task_id": "task-1401-furniture-furnished-schema",
+  "task_description": "GitHub issue ***REMOVED***1401: reconcile the furniture/furnished/is_furnished payload schema across Qdrant setup paths and runtime filter producers. Two distinct collections coexist: (A) document/CSV pipeline (gdrive_documents_bge[_scalar|_binary]) where data lives under metadata.* and the writer (src/ingestion/chunker.py + src/ingestion/indexer.py) already emits metadata.furnished BOOL — but telegram_bot/setup_qdrant_indexes.py creates a dead metadata.furniture KEYWORD index, FilterExtractor produces a `furniture: \"Есть\"` string filter, and QueryAnalyzer's SYSTEM_PROMPT instructs the LLM to emit the same broken key — so any furniture-related filter against the document/CSV collection silently misses; (B) the standalone apartments collection where everything is already consistently top-level is_furnished BOOL and needs no changes. Decision: canonical metadata.furnished BOOL for collection (A), top-level is_furnished BOOL for collection (B). Implementation: realign collection (A) index creator + runtime filter producers + tests + docs/QDRANT_STACK.md, leave collection (B) untouched, document the migration path for deployments that already have a dead metadata.furniture keyword index.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
