@@ -39,6 +39,10 @@ dependencies = [
     ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
     "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
     "phonenumbers>=9.0.25",
+    ***REMOVED*** Observability (***REMOVED***1648 — SDK-native pipeline metrics, slice 2/4)
+    ***REMOVED*** prometheus_client provides Histogram for latency distributions, replacing
+    ***REMOVED*** the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
+    "prometheus-client>=0.20.0,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -266,8 +270,12 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "test_*.py" = ["E402", "T201", "SIM117"]  ***REMOVED*** Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  ***REMOVED*** Same for tests/ directory
 "legacy/*.py" = ["ASYNC210"]      ***REMOVED*** Allow blocking HTTP calls in async functions (legacy code)
-"src/ingestion/docling_client.py" = ["ASYNC240"]  ***REMOVED*** Legacy ingestion (replaced by unified pipeline)
-"src/ingestion/service.py" = ["ASYNC240"]          ***REMOVED*** Legacy ingestion (replaced by unified pipeline)
+***REMOVED*** Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
+***REMOVED*** src/ingestion/service.py removed in ***REMOVED***1532: ASYNC240 is already in the
+***REMOVED*** global ignore list above, so the per-file entries were redundant. The
+***REMOVED*** modules themselves cannot be deleted yet because there are live runtime
+***REMOVED*** callers; see tests/contract/test_legacy_ingestion_removed_contract.py
+***REMOVED*** for the full audit.
 
 "*.py" = ["ARG001"]               ***REMOVED*** Allow unused function arguments (common in callbacks)
 

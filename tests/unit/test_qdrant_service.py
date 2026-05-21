@@ -852,24 +852,25 @@ class TestQdrantServiceHybridSearchColbert:
         assert service._colbert_available is False
         service.hybrid_search_rrf.assert_awaited_once()
 
-    async def test_colbert_empty_results_logs_rerank_empty_metric(self, service, caplog):
-        """Empty ColBERT results log colbert_rerank_empty metric."""
+    async def test_colbert_empty_results_counts_rerank_empty_metric(self, service):
+        """Empty ColBERT results count rerank-empty and fallback metrics."""
+        from telegram_bot.services.metrics import PipelineMetrics
+
+        PipelineMetrics.reset()
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         service.hybrid_search_rrf = AsyncMock(
             return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
         )
 
-        with caplog.at_level(logging.INFO):
-            await service.hybrid_search_rrf_colbert(
-                dense_vector=[0.1] * 1024,
-                colbert_query=[[0.1] * 1024] * 3,
-                top_k=5,
-            )
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=[[0.1] * 1024] * 3,
+            top_k=5,
+        )
 
-        metric_records = [r for r in caplog.records if r.getMessage() == "metric"]
-        names = [getattr(r, "metric_name", None) for r in metric_records]
-        assert "colbert_rerank_empty" in names
-        assert "colbert_fallback_to_rrf" in names
+        stats = PipelineMetrics.get().get_stats()
+        assert stats["counters"]["colbert_rerank_empty"] == 1
+        assert stats["counters"]["colbert_fallback_to_rrf"] == 1
 
     async def test_colbert_search_with_filters(self, service, mock_point):
         """Filters are passed through to query_points."""
