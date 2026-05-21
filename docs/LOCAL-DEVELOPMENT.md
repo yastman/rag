@@ -213,6 +213,14 @@ make validate-traces-fast
 
 This target runs natively on the host and automatically points to local Docker service endpoints (`localhost:6333`, `localhost:8000`, `localhost:4000`, etc.). You can override individual endpoints if needed: `make validate-traces-fast QDRANT_URL=http://custom:6333`.
 
+Voice trace validation gate (after voice-agent wiring changes):
+
+```bash
+make validate-voice-traces
+```
+
+This gate validates voice-session traces are present in Langfuse with correct service attribution (`user_id=voice-agent`, `session_id=voice-*`, tags). Run after modifying voice observability code or compose service identity.
+
 When `.env` is absent, `validate-traces-fast` runs a preflight guard before `docker compose up`. If fallback uses `tests/fixtures/compose.ci.env` with the local default `POSTGRES_PASSWORD=postgres`, reusing `dev_postgres_data` is allowed. The guard fails fast only when fallback password and existing volume credentials can mismatch, preventing an unhealthy Langfuse/Postgres auth loop.
 
 If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
