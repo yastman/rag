@@ -49,11 +49,7 @@ def require_live_services(request):
         except Exception:
             pytest.skip("Redis not available")
 
-    try:
-        asyncio.run(check_redis())
-    except RuntimeError:
-        loop = asyncio.get_running_loop()
-        loop.run_until_complete(check_redis())
+    asyncio.run(check_redis())
 
 
 @pytest.fixture(scope="module")
