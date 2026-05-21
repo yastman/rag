@@ -15,7 +15,8 @@ Thank you for your interest in contributing.
 3. Run the local verification ladder before pushing:
 
 ```bash
-make check
+make pre-push          ***REMOVED*** lint + format-check
+make check             ***REMOVED*** alias: lint + type-check
 uv run pytest tests/unit -q
 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
 ```
