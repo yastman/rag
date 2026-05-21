@@ -44,6 +44,7 @@ export TMPDIR TMP TEMP
 ***REMOVED*** Override: PYTHON_VERSION=3.13 make test-unit
 PYTHON_VERSION ?= 3.12
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
+PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
 PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
@@ -187,7 +188,7 @@ test-full: ***REMOVED******REMOVED*** Run full test suite with hybrid parallelis
 	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv sync --all-extras --all-groups
 	@echo "$(BLUE)Phase 1/2: parallel-safe suites...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
+	PYTHONDONTWRITEBYTECODE=1 RUN_BENCHMARK_TESTS=1 uv run pytest $(PYTEST_FULL_PARALLEL_DIRS) $(PYTEST_FULL_PARALLEL_ARGS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(BLUE)Phase 2/2: stateful/live suites sequentially...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest $(PYTEST_FULL_SEQUENTIAL_DIRS) --timeout=30 $(PYTEST_ADDOPTS)
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
