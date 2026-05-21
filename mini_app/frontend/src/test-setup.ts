@@ -59,4 +59,5 @@ vi.mock("@tma.js/sdk-react", () => ({
 vi.mock("@tma.js/bridge", () => ({
   mockTelegramEnv: vi.fn(),
   isTMA: vi.fn(() => false),
+  retrieveRawInitData: vi.fn(() => "auth_date=1&user=%7B%22id%22%3A99999%7D&hash=test"),
 }));
