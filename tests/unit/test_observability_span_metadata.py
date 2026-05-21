@@ -98,7 +98,6 @@ class TestQdrantSpanMetadata:
             "qdrant-hybrid-search-rrf",
             "qdrant-hybrid-search-rrf-colbert",
             "qdrant-batch-search-rrf",
-            "qdrant-search-score-boosting",
         ],
     )
     def test_qdrant_retrieval_span_has_retriever_type_and_capture_disabled(
@@ -403,12 +402,4 @@ class TestQdrantSpanRuntimeMetadata:
         qdrant_service._client.query_batch_points = AsyncMock(return_value=[])
         with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
             await qdrant_service.batch_search_rrf(queries=[{"dense_vector": [0.1] * 1024}])
-        self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")
-
-    async def test_search_with_score_boosting_exposes_collection_metadata(
-        self, mock_lf, qdrant_service
-    ):
-        qdrant_service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
-        with patch("telegram_bot.services.qdrant.get_client", return_value=mock_lf):
-            await qdrant_service.search_with_score_boosting(dense_vector=[0.1] * 1024)
         self._assert_collection_metadata(mock_lf, "test_collection_scalar", "scalar")

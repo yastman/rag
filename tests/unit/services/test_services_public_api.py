@@ -1,10 +1,30 @@
 """Public API surface checks for telegram_bot.services."""
 
+import pytest
 
-def test_llmservice_not_in_recommended_public_api():
-    """LLMService remains compatibility-only and is excluded from __all__."""
+
+def test_llmservice_is_no_longer_exported():
+    """LLMService was removed in ***REMOVED***1541 (residual): neither __all__ nor lazy map."""
     import telegram_bot.services as services
 
     assert "LLMService" not in services.__all__
-    ***REMOVED*** Compatibility import path still available for legacy consumers.
-    assert services.LLMService is not None
+    with pytest.raises(AttributeError):
+        services.LLMService  ***REMOVED*** noqa: B018  — accessing must now fail loudly
+
+
+def test_low_confidence_threshold_is_no_longer_exported():
+    """LOW_CONFIDENCE_THRESHOLD was removed in ***REMOVED***1541 (residual)."""
+    import telegram_bot.services as services
+
+    assert "LOW_CONFIDENCE_THRESHOLD" not in services.__all__
+    with pytest.raises(AttributeError):
+        services.LOW_CONFIDENCE_THRESHOLD  ***REMOVED*** noqa: B018
+
+
+def test_confidence_result_is_no_longer_exported():
+    """ConfidenceResult was removed in ***REMOVED***1541 (residual)."""
+    import telegram_bot.services as services
+
+    assert "ConfidenceResult" not in services.__all__
+    with pytest.raises(AttributeError):
+        services.ConfidenceResult  ***REMOVED*** noqa: B018
