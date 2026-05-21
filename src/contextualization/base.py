@@ -74,6 +74,10 @@ class ContextualizeProvider(ABC):
     - Cost: Varies by provider (Claude: ~$0.01/chunk)
     """
 
+    def __init__(self, *, system_prompt: str | None = None) -> None:
+        """Initialize shared provider state."""
+        self.system_prompt = self.get_system_prompt(system_prompt)
+
     @abstractmethod
     async def contextualize(
         self,
