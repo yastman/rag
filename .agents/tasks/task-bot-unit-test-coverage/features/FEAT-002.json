@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Add comprehensive unit tests for PropertyBot class initialization, start() method, and dependency injection helpers (get_memory, get_llm, get_rag_pipeline equivalents). Also cover _build_agent_tools(), _register_handlers(), _setup_middlewares().",
+  "status": "completed",
+  "steps": [
+    "Create tests/unit/test_bot_initialization.py following the pattern in test_bot_hot_lead.py (same _make_config/_create_bot helpers, pytest.importorskip('aiogram') at top)",
+    "Add TestPropertyBotInit class testing: __init__ creates all expected attributes (bot, dp, _cache, _hybrid, _embeddings, _sparse, _qdrant, _apartments_service, _llm, _apartment_pipeline, _redis_monitor, _checkpointer=None before start, etc.)",
+    "Add TestPropertyBotStart class testing start() method with all external services mocked: (a) successful start initializes _cache, _checkpointer, _agent_checkpointer, _topic_service, _history_service; (b) Redis checkpointer failure degrades to in-memory fallback; (c) history service failure sets _history_service=None; (d) PostgreSQL pool failure produces degraded startup signal; (e) preflight failure raises PreflightError",
+    "Add TestBuildAgentTools class testing the tool assembly logic in _handle_query_supervisor and handle_hitl_callback: verify that client role gets base_tools=[rag_search, apartment_search] + utility_tools; verify that manager role adds history_search, nurturing tools, CRM tools when services available",
+    "Add TestRegisterHandlers class verifying _register_handlers() sets up expected handlers on dp (commands: start, help, clear, stats, metrics, call, history, clearcache; voice handler; menu button handler; callback handlers for feedback, hitl, service, cta, favorites, results, card, ask)",
+    "Add TestSetupMiddlewares class verifying _setup_middlewares() does not raise and sets up Langfuse context middleware, throttling, error handler, FSM cancel",
+    "Add TestResolveUserRole class testing _resolve_user_role: (a) user in manager_ids returns 'manager'; (b) user_service returns 'manager' from DB; (c) user_service returns 'client'; (d) user_service raises exception falls back to 'client'; (e) user_service=None falls back to 'client'",
+    "Add TestSpawnHistorySave class testing _spawn_history_save: (a) returns task when under concurrency limit; (b) returns None and logs when at max concurrency",
+    "Add TestExtractPreAgentFilters testing _extract_pre_agent_filters: returns dict from extractor on success, returns empty dict on exception"
+  ],
+  "acceptance_criteria": [
+    "New test file tests/unit/test_bot_initialization.py exists with all test classes listed above",
+    "All new tests pass: uv run pytest tests/unit/test_bot_initialization.py -q --timeout=30",
+    "Tests exercise real code paths (not just asserting mocks) - PropertyBot.__init__ actually runs, start() method logic is exercised with appropriate mocking",
+    "Tests are isolated - no network calls, no file system side effects"
+  ],
+  "verification": [
+    "uv run pytest tests/unit/test_bot_initialization.py -v --timeout=30",
+    "uv run pytest tests/unit/test_bot_initialization.py tests/unit/test_bot_handlers.py tests/unit/test_bot_hot_lead.py -q --timeout=30"
+  ],
+  "blocked_reason": null,
+  "findings": "start() method requires extensive mocking: (1) dp.include_router must be mocked because dialog routers are module-level singletons that can only attach once, (2) dp.start_polling must be mocked to prevent actual polling loop, (3) _cache.redis set to None to skip RedisPollingLock.acquire which needs async, (4) _warmup_bge, setup_i18n_middleware, and aiogram_dialog.setup_dialogs also need patching. The _start_patches() helper uses contextlib.ExitStack for clean patch management. PreflightError extends SystemExit so pytest.raises(SystemExit) is needed."
+}
