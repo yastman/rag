@@ -8,7 +8,7 @@ under ``mini_app/frontend/src/__tests__/`` are excluded from
    (with comments stripped — TypeScript JSONC is allowed).
 
 2. ``tsconfig.test.json`` includes the test glob patterns
-   ``src/**/__tests__/**`` and/or ``src/**/*.test.*`` so the test files
+   ``src/**/__tests__/**/*`` and/or ``src/**/*.test.*`` so the test files
    are actually covered by ``tsc``.
 
 3. ``mini_app/frontend/package.json`` declares a ``typecheck:test`` script
@@ -113,7 +113,7 @@ def test_tsconfig_test_json_includes_test_globs() -> None:
         )
     cfg = json.loads(_strip_jsonc(TSCONFIG_TEST.read_text()))
     include = cfg.get("include") or []
-    expected_any = {"src/**/__tests__/**", "src/**/*.test.*"}
+    expected_any = {"src/**/__tests__/**/*", "src/**/*.test.*"}
     assert any(glob in include for glob in expected_any), (
         f"tsconfig.test.json `include` must reference at least one of "
         f"{sorted(expected_any)} so test files are typechecked. Got: {include!r}"
