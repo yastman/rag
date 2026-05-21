@@ -131,7 +131,7 @@ class _FakeBgeClient:
         return SimpleNamespace(colbert_vecs=[[[0.1, 0.2]]] * len(texts))
 
 
-async def test_backfill_enables_server_side_colbert_search(tmp_path):
+async def test_backfill_integration_enables_server_side_colbert_search(tmp_path):
     from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
     from telegram_bot.services.qdrant import QdrantService
 

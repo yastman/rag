@@ -1490,7 +1490,7 @@ async def test_streaming_raw_cerebras_reasoning_merged(monkeypatch):
     assert result["response_sent"] is True
 
 
-async def test_streaming_mixed_content_and_reasoning(monkeypatch):
+async def test_graph_streaming_mixed_content_and_reasoning(monkeypatch):
     """Streaming with mixed delta.content and delta.reasoning_content works.
 
     Some chunks have delta.content (LiteLLM merge works), others have
