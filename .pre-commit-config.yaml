@@ -7,7 +7,7 @@
 ***REMOVED*** Documentation: https://pre-commit.com/
 
 default_language_version:
-  python: python3.14  ***REMOVED*** Updated to match installed Python version
+  python: python3.12  ***REMOVED*** Updated to match installed Python version
 
 ***REMOVED*** Install both pre-commit and pre-push hooks by default
 default_install_hook_types:
@@ -24,6 +24,23 @@ repos:
   ***REMOVED*** =============================================================================
   ***REMOVED*** PRE-COMMIT HOOKS (Run before every commit - must be fast)
   ***REMOVED*** =============================================================================
+
+  ***REMOVED*** Local hooks - syntax and schema validation
+  - repo: local
+    hooks:
+      - id: python-syntax-check
+        name: Python syntax check (py_compile)
+        entry: python -m py_compile
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: check-done-json
+        name: Validate DONE JSON schema
+        entry: python scripts/validate_done_json.py
+        language: system
+        files: '\.done\.json$'
+        stages: [pre-push]
 
   ***REMOVED*** Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
   ***REMOVED*** Best Practice 2025: Run linter BEFORE formatter (lint -> format order)

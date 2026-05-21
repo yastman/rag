@@ -130,22 +130,22 @@ local-pr-ready: ***REMOVED******REMOVED*** Full PR readiness gate (check + unit 
 
 lint: ***REMOVED******REMOVED*** Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
-	uv run ruff check src/
+	uv run ruff check src/ telegram_bot/
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
 
 lint-fix: ***REMOVED******REMOVED*** Run Ruff linter with auto-fix
 	@echo "$(BLUE)Running Ruff with auto-fix...$(NC)"
-	uv run ruff check src/ --fix
+	uv run ruff check src/ telegram_bot/ --fix
 	@echo "$(GREEN)✓ Ruff auto-fix complete$(NC)"
 
 format: ***REMOVED******REMOVED*** Format code with Ruff
 	@echo "$(BLUE)Formatting code with Ruff...$(NC)"
-	uv run ruff format src/
+	uv run ruff format src/ telegram_bot/
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 format-check: ***REMOVED******REMOVED*** Check if code is formatted
 	@echo "$(BLUE)Checking code format...$(NC)"
-	uv run ruff format src/ --check
+	uv run ruff format src/ telegram_bot/ --check
 	@echo "$(GREEN)✓ Format check complete$(NC)"
 
 type-check: ***REMOVED******REMOVED*** Run MyPy type checking
@@ -678,6 +678,9 @@ docs-check: ***REMOVED******REMOVED*** Check Markdown relative links for broken 
 
 check: lint type-check ***REMOVED******REMOVED*** Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
+
+pre-push: lint format-check type-check ***REMOVED******REMOVED*** Pre-push gate (lint + format-check + types)
+	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
 
 fix: lint-fix format ***REMOVED******REMOVED*** Fix all auto-fixable issues
 	@echo "$(GREEN)✓ Auto-fixes applied$(NC)"
