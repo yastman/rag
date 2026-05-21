@@ -153,6 +153,10 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-rag-api}"
 
+  uptime-kuma:
+    ports:
+      - "127.0.0.1:3002:3001"
+
   livekit-server:
     ports:
       - "127.0.0.1:7880:7880"

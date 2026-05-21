@@ -2,9 +2,39 @@
 
 import json
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from typing import Any
+
+
+# Read release version once at module load
+_RELEASE: str = os.environ.get("SENTRY_RELEASE", "")
+
+# Fields that must never appear in log output (PII / secrets)
+_PII_BLOCKED_KEYS: frozenset[str] = frozenset(
+    {"user_id", "query", "phone", "email", "token", "password", "secret"}
+)
+
+# Optional observability fields to propagate when non-None
+_OPTIONAL_FIELDS: tuple[str, ...] = (
+    "component",
+    "event",
+    "release",
+    "trace_id",
+    "langfuse_trace_id",
+    "request_id",
+    "telegram_user_id_hash",
+    "chat_id_hash",
+    "tenant_id",
+    "bot_instance_id",
+    "deployment_id",
+    "route",
+    "pipeline_mode",
+    "llm_model",
+    "dependency_status",
+    "error_type",
+)
 
 
 class JSONFormatter(logging.Formatter):
@@ -14,6 +44,8 @@ class JSONFormatter(logging.Formatter):
     Outputs logs in JSON format for easy parsing by log aggregation tools
     (ELK, Grafana Loki, CloudWatch, etc.).
     """
+
+    SERVICE_DEFAULT: str = "telegram-bot"
 
     def format(self, record: logging.LogRecord) -> str:
         """
@@ -35,21 +67,29 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
+        # Always include service and environment
+        log_data["service"] = getattr(record, "service", None) or self.SERVICE_DEFAULT
+        log_data["environment"] = os.environ.get("ENV", "development")
+
         # Add exception info if present
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
-        # Add extra fields from record
-        if hasattr(record, "user_id"):
-            log_data["user_id"] = record.user_id
-        if hasattr(record, "query"):
-            log_data["query"] = record.query
+        # Safe operational metrics
         if hasattr(record, "latency_ms"):
             log_data["latency_ms"] = record.latency_ms
         if hasattr(record, "cache_hit"):
             log_data["cache_hit"] = record.cache_hit
-        if hasattr(record, "service"):
-            log_data["service"] = record.service
+
+        # Optional observability fields (only when non-None)
+        for field in _OPTIONAL_FIELDS:
+            value = getattr(record, field, None)
+            if value is not None:
+                log_data[field] = value
+
+        # Inject release from module-level constant if not already set
+        if "release" not in log_data and _RELEASE:
+            log_data["release"] = _RELEASE
 
         return json.dumps(log_data, ensure_ascii=False)
 

@@ -767,6 +767,25 @@ services:
         limits:
           memory: 128M
 
+  uptime-kuma:
+    <<: *security-defaults
+    image: louislam/uptime-kuma:1
+    profiles: ["obs", "full"]
+    restart: unless-stopped
+    read_only: false
+    volumes:
+      - uptime_kuma_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3001/api/status-page/heartbeat || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
   # =============================================================================
   # VOICE (dev-only — LiveKit Agents + SIP)
   # =============================================================================
@@ -931,3 +950,4 @@ volumes:
   loki_data:
   alertmanager_data:
   langfuse_redis_data:
+  uptime_kuma_data:

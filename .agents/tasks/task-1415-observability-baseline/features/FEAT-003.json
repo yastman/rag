@@ -1,0 +1,34 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Phase 3+4: Structured JSON log contract standardization and health check/uptime surface definitions. Enhance the existing JSONFormatter in telegram_bot/logging_config.py to emit the full observability contract fields (service, component, event, environment, release, correlation IDs, tenant/deployment labels). Add Uptime Kuma service definition to compose and document health endpoints.",
+  "status": "in_progress",
+  "steps": [
+    "Enhance `telegram_bot/logging_config.py` JSONFormatter to include additional structured fields when present on the LogRecord: service, component, event, environment, release, trace_id, langfuse_trace_id, request_id, telegram_user_id_hash, chat_id_hash, tenant_id, bot_instance_id, deployment_id, route, pipeline_mode, llm_model, dependency_status, error_type. Only include fields that are non-None. Add class-level constants SERVICE_DEFAULT='telegram-bot' and populate 'service' from record or default. Populate 'environment' from os.environ.get('ENV', 'development'). Populate 'release' from the project version (read once at module load from pyproject.toml or env var).",
+    "Create `src/observability/log_context.py` with a helper function `inject_log_context(logger_or_record, context: dict[str, Any])` that attaches correlation context fields to log records via a logging.Filter or LoggerAdapter pattern. Also provide `ObservabilityLogFilter(logging.Filter)` that reads from a ContextVar and injects fields into every record.",
+    "Create `src/observability/health.py` documenting and collecting all health endpoints: a dict mapping service names to their health URLs: bot (pgrep process check), rag-api (:8080/health), mini-app-api (:8090/health), bge-m3 (:8000/health), user-base (:8000/health), docling (:5001/health), litellm (:4000/health/liveliness), qdrant (:6333/readyz), postgres (pg_isready), redis (PING), langfuse (:3000/api/public/health), loki (:3100/ready), alertmanager (:9093/-/healthy). Export as HEALTH_ENDPOINTS dict.",
+    "Add `uptime-kuma` service to `compose.yml` under the MONITORING section with profile 'obs'. Use image `louislam/uptime-kuma:1` with a named volume for data, port 3002, and a healthcheck.",
+    "Add uptime-kuma port mapping (127.0.0.1:3002:3001) in compose.dev.yml.",
+    "Create `docs/plans/observability-log-contract.md` documenting the structured log shape: mandatory fields (timestamp, level, logger, message, service, environment), optional correlation fields, PII rules (no raw text/tokens), and Loki label guidance (keep service/environment as labels, everything else in JSON payload).",
+    "Write tests in `tests/unit/observability/test_structured_logging.py`: (a) test_json_formatter_includes_service_field, (b) test_json_formatter_includes_environment_from_env, (c) test_json_formatter_includes_correlation_ids_when_set, (d) test_json_formatter_excludes_none_fields, (e) test_json_formatter_does_not_include_raw_pii_fields (verify that if 'query' or 'phone' are in extra, they are not propagated or are redacted).",
+    "Write tests in `tests/unit/observability/test_health_endpoints.py`: (a) test_health_endpoints_dict_has_all_services, (b) test_health_endpoint_urls_are_valid."
+  ],
+  "acceptance_criteria": [
+    "JSONFormatter output includes 'service', 'environment' on every log line",
+    "Correlation IDs (trace_id, langfuse_trace_id, request_id) appear in JSON logs when injected",
+    "PII keys are never propagated to log JSON output",
+    "HEALTH_ENDPOINTS dict covers all critical services listed in compose.yml",
+    "uptime-kuma service is defined in compose.yml under obs profile",
+    "docs/plans/observability-log-contract.md exists documenting the contract",
+    "All new tests pass",
+    "Compose config validates: docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet"
+  ],
+  "verification": [
+    "Run `uv run pytest tests/unit/observability/test_structured_logging.py tests/unit/observability/test_health_endpoints.py -v` and confirm pass",
+    "Run `make check` and confirm pass",
+    "Run `make test-unit` and confirm full unit suite green",
+    "Run `docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet` and confirm exit 0"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

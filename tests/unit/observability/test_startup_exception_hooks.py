@@ -6,8 +6,6 @@ import asyncio
 import inspect
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestSysExcepthookInstalled:
     """Verify sys.excepthook integration point exists in main."""
@@ -33,9 +31,7 @@ class TestLoopExceptionHandlerCallsSentry:
     """Verify _install_loop_exception_handler calls sentry_sdk.capture_exception."""
 
     @patch("telegram_bot.main.sentry_sdk.capture_exception")
-    def test_loop_exception_handler_calls_sentry(
-        self, mock_capture: MagicMock
-    ) -> None:
+    def test_loop_exception_handler_calls_sentry(self, mock_capture: MagicMock) -> None:
         """When an exception is in the loop context, sentry_sdk.capture_exception is called."""
         from telegram_bot.main import _install_loop_exception_handler
 

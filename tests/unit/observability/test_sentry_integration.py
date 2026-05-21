@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.observability.correlation import build_correlation_context
 from src.observability.sentry_integration import (
     _filter_pii,
@@ -148,9 +146,7 @@ class TestSetSentryUser:
             telegram_user_id_hash="hash-abc",
             chat_id_hash="hash-chat",
         )
-        mock_set_user.assert_called_once_with(
-            {"id": "hash-abc", "chat_id_hash": "hash-chat"}
-        )
+        mock_set_user.assert_called_once_with({"id": "hash-abc", "chat_id_hash": "hash-chat"})
 
 
 class TestBuildCorrelationContext:
