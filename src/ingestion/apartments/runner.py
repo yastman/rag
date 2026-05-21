@@ -33,7 +33,7 @@ from src.ingestion.apartments.source import read_apartments_csv
 
 
 if TYPE_CHECKING:
-    from telegram_bot.services.apartment_models import ApartmentRecord
+    from src.models.apartment import ApartmentRecord
 
 
 logger = logging.getLogger(__name__)
@@ -150,7 +150,7 @@ class IncrementalApartmentIngester:
         from qdrant_client import QdrantClient
         from qdrant_client.models import PointStruct
 
-        from telegram_bot.services.bge_m3_client import BGEM3SyncClient
+        from src.services.bge_m3_client import BGEM3SyncClient
 
         if not records:
             return

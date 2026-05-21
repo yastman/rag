@@ -88,7 +88,7 @@ class TestTracedPipeline:
 
 class TestLangfuseInitialization:
     def test_initialize_langfuse_returns_none_without_credentials(self, monkeypatch):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
         monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
@@ -97,13 +97,13 @@ class TestLangfuseInitialization:
         assert observability.initialize_langfuse(force=True) is None
 
     def test_initialize_langfuse_uses_explicit_config(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
-            patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls,
+            patch("src.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability.Langfuse", return_value=fake_client) as mock_cls,
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -120,7 +120,7 @@ class TestLangfuseInitialization:
         assert callable(kwargs["mask"])
 
     def test_get_langfuse_client_returns_cached_instance(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         fake_client = MagicMock()
         observability._langfuse_client = fake_client
@@ -128,15 +128,15 @@ class TestLangfuseInitialization:
         observability._reset_langfuse_client_for_tests()
 
     def test_initialize_langfuse_runs_model_sync(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
-            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability.Langfuse", return_value=fake_client),
             patch(
-                "telegram_bot.observability.sync_langfuse_model_definitions", return_value=2
+                "src.observability.sync_langfuse_model_definitions", return_value=2
             ) as sync,
         ):
             result = observability.initialize_langfuse(
@@ -151,13 +151,13 @@ class TestLangfuseInitialization:
 
     def test_initialize_langfuse_ignores_non_string_host_values(self):
         """Non-string host values should be treated as absent and not crash."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable") as mock_check,
-            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+            patch("src.observability._is_endpoint_reachable") as mock_check,
+            patch("src.observability.Langfuse", return_value=fake_client),
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -175,12 +175,12 @@ class TestLangfuseTracingEnvironment:
 
     def test_environment_passed_when_env_var_set(self, monkeypatch):
         """When LANGFUSE_TRACING_ENVIRONMENT is set, it is forwarded to Langfuse(**kwargs)."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.setenv("LANGFUSE_TRACING_ENVIRONMENT", "staging")
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with patch("src.observability.Langfuse", return_value=fake_client) as mock_cls:
             result = observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -193,12 +193,12 @@ class TestLangfuseTracingEnvironment:
 
     def test_environment_not_passed_when_env_var_absent(self, monkeypatch):
         """When LANGFUSE_TRACING_ENVIRONMENT is unset, environment key is not in kwargs."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_TRACING_ENVIRONMENT", raising=False)
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with patch("src.observability.Langfuse", return_value=fake_client) as mock_cls:
             result = observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -215,12 +215,12 @@ class TestLangfuseFlushConfig:
 
     def test_flush_at_from_env_var(self, monkeypatch):
         """LANGFUSE_FLUSH_AT env var is passed as flush_at to Langfuse SDK."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.setenv("LANGFUSE_FLUSH_AT", "25")
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with patch("src.observability.Langfuse", return_value=fake_client) as mock_cls:
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -232,12 +232,12 @@ class TestLangfuseFlushConfig:
 
     def test_flush_interval_from_env_var(self, monkeypatch):
         """LANGFUSE_FLUSH_INTERVAL env var is passed as flush_interval to Langfuse SDK."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.setenv("LANGFUSE_FLUSH_INTERVAL", "10.5")
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with patch("src.observability.Langfuse", return_value=fake_client) as mock_cls:
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -249,12 +249,12 @@ class TestLangfuseFlushConfig:
 
     def test_flush_at_default_is_sdk_default(self, monkeypatch):
         """When LANGFUSE_FLUSH_AT is not set, flush_at defaults to 512."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_FLUSH_AT", raising=False)
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with patch("src.observability.Langfuse", return_value=fake_client) as mock_cls:
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -266,12 +266,12 @@ class TestLangfuseFlushConfig:
 
     def test_flush_interval_default_is_5_seconds(self, monkeypatch):
         """When LANGFUSE_FLUSH_INTERVAL is not set, flush_interval defaults to 5.0."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_FLUSH_INTERVAL", raising=False)
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with patch("src.observability.Langfuse", return_value=fake_client) as mock_cls:
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -283,15 +283,15 @@ class TestLangfuseFlushConfig:
 
     def test_atexit_shutdown_registered_on_init(self, monkeypatch):
         """atexit.register(langfuse.shutdown) is called when Langfuse initializes."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_FLUSH_AT", raising=False)
         monkeypatch.delenv("LANGFUSE_FLUSH_INTERVAL", raising=False)
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
-            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
-            patch("telegram_bot.observability.atexit") as mock_atexit,
+            patch("src.observability.Langfuse", return_value=fake_client),
+            patch("src.observability.atexit") as mock_atexit,
         ):
             observability.initialize_langfuse(
                 public_key="pk-test",
@@ -303,14 +303,14 @@ class TestLangfuseFlushConfig:
 
     def test_atexit_not_registered_when_init_fails(self, monkeypatch):
         """atexit.register is NOT called when Langfuse init fails."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_FLUSH_AT", raising=False)
         monkeypatch.delenv("LANGFUSE_FLUSH_INTERVAL", raising=False)
         observability._reset_langfuse_client_for_tests()
         with (
-            patch("telegram_bot.observability.Langfuse", side_effect=RuntimeError("boom")),
-            patch("telegram_bot.observability.atexit") as mock_atexit,
+            patch("src.observability.Langfuse", side_effect=RuntimeError("boom")),
+            patch("src.observability.atexit") as mock_atexit,
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -327,7 +327,7 @@ class TestEndpointReachability:
 
     def test_is_endpoint_reachable_returns_false_for_refused_connection(self):
         """_is_endpoint_reachable returns False when connection is refused."""
-        from telegram_bot.observability import _is_endpoint_reachable
+        from src.observability import _is_endpoint_reachable
 
         # Port 1 is almost never open
         result = _is_endpoint_reachable("http://localhost:1", timeout=0.1)
@@ -337,7 +337,7 @@ class TestEndpointReachability:
         """_is_endpoint_reachable returns True when host:port accepts connections."""
         import socket
 
-        from telegram_bot.observability import _is_endpoint_reachable
+        from src.observability import _is_endpoint_reachable
 
         with socket.socket() as srv:
             srv.bind(("127.0.0.1", 0))
@@ -351,14 +351,14 @@ class TestEndpointReachability:
         """When Langfuse endpoint is unreachable, initialize_langfuse returns None."""
         from unittest.mock import patch
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         with (
             patch(
-                "telegram_bot.observability._is_endpoint_reachable", return_value=False
+                "src.observability._is_endpoint_reachable", return_value=False
             ) as mock_check,
-            patch("telegram_bot.observability.Langfuse") as mock_langfuse,
+            patch("src.observability.Langfuse") as mock_langfuse,
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -375,12 +375,12 @@ class TestEndpointReachability:
         """Unreachable local host disables tracing without provider shutdown noise."""
         from unittest.mock import patch
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=False),
-            patch("telegram_bot.observability._disable_otel_exporter") as disable,
+            patch("src.observability._is_endpoint_reachable", return_value=False),
+            patch("src.observability._disable_otel_exporter") as disable,
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -396,13 +396,13 @@ class TestEndpointReachability:
         """When Langfuse endpoint is reachable, initialize_langfuse creates the client."""
         from unittest.mock import MagicMock, patch
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
-            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability.Langfuse", return_value=fake_client),
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -418,13 +418,13 @@ class TestEndpointReachability:
         import logging
         from unittest.mock import patch
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=False),
-            patch("telegram_bot.observability.Langfuse"),
-            caplog.at_level(logging.WARNING, logger="telegram_bot.observability"),
+            patch("src.observability._is_endpoint_reachable", return_value=False),
+            patch("src.observability.Langfuse"),
+            caplog.at_level(logging.WARNING, logger="src.observability"),
         ):
             # First call — should log warning
             observability.initialize_langfuse(
@@ -451,13 +451,13 @@ class TestEndpointReachability:
         """Without explicit host, endpoint check is skipped (cloud default assumed reachable)."""
         from unittest.mock import MagicMock, patch
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable") as mock_check,
-            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+            patch("src.observability._is_endpoint_reachable") as mock_check,
+            patch("src.observability.Langfuse", return_value=fake_client),
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -472,7 +472,7 @@ class TestEndpointReachability:
 
 class TestLangfuseModelSync:
     def test_load_model_definitions_from_env_parses_valid_payload(self, monkeypatch):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.setenv(
             "LANGFUSE_MODEL_DEFINITIONS_JSON",
@@ -501,7 +501,7 @@ class TestLangfuseModelSync:
         assert definition["start_date"] == datetime(2026, 2, 24, 0, 0, tzinfo=UTC)
 
     def test_sync_langfuse_model_definitions_creates_missing_model(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         models_api = MagicMock()
         models_api.list.return_value = SimpleNamespace(data=[])
@@ -562,7 +562,7 @@ class TestObservabilityBootstrap:
         assert os.environ.get("OTEL_LOGS_EXPORTER") == "none"
 
     def test_sync_langfuse_model_definitions_updates_stale_custom_model(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         stale = SimpleNamespace(
             id="model-old",
@@ -609,7 +609,7 @@ class TestObservabilityBootstrap:
         models_api.create.assert_called_once()
 
     def test_sync_langfuse_model_definitions_skips_when_api_missing(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         client = MagicMock()
         client.api = None
@@ -636,7 +636,7 @@ class TestDisableOtelExporter:
         """_disable_otel_exporter explicitly disables OTel SDK export path."""
         import os
 
-        from telegram_bot.observability import _disable_otel_exporter
+        from src.observability import _disable_otel_exporter
 
         monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
         with patch("opentelemetry.trace.get_tracer_provider", return_value=MagicMock()):
@@ -648,7 +648,7 @@ class TestDisableOtelExporter:
         """_disable_otel_exporter calls shutdown() when provider is SdkTracerProvider."""
         from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
 
-        from telegram_bot.observability import _disable_otel_exporter
+        from src.observability import _disable_otel_exporter
 
         real_provider = SdkTracerProvider()
         real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
@@ -665,7 +665,7 @@ class TestDisableOtelExporter:
         """_disable_otel_exporter keeps SDK provider in place (Langfuse v3 needs add_span_processor)."""
         from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
 
-        from telegram_bot.observability import _disable_otel_exporter
+        from src.observability import _disable_otel_exporter
 
         real_provider = SdkTracerProvider()
         real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
@@ -683,7 +683,7 @@ class TestDisableOtelExporter:
         """_disable_otel_exporter silently passes when opentelemetry is not installed."""
         import sys
 
-        from telegram_bot.observability import _disable_otel_exporter
+        from src.observability import _disable_otel_exporter
 
         monkeypatch.setitem(sys.modules, "opentelemetry", None)
 
@@ -694,7 +694,7 @@ class TestDisableOtelExporter:
         """_disable_otel_exporter does not call shutdown() on non-SdkTracerProvider."""
         from opentelemetry.trace import NoOpTracerProvider
 
-        from telegram_bot.observability import _disable_otel_exporter
+        from src.observability import _disable_otel_exporter
 
         noop_provider = NoOpTracerProvider()
 
@@ -708,26 +708,26 @@ class TestInitializeLangfuseCallsDisableOtel:
 
     def test_called_when_credentials_missing(self, monkeypatch):
         """initialize_langfuse calls _disable_otel_exporter when public/secret key absent."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
         monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
         observability._reset_langfuse_client_for_tests()
 
-        with patch("telegram_bot.observability._disable_otel_exporter") as mock_disable:
+        with patch("src.observability._disable_otel_exporter") as mock_disable:
             observability.initialize_langfuse(force=True)
 
         mock_disable.assert_called_once()
 
     def test_called_when_endpoint_unreachable(self):
         """initialize_langfuse calls _disable_otel_exporter when host is unreachable."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
 
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=False),
-            patch("telegram_bot.observability._disable_otel_exporter") as mock_disable,
+            patch("src.observability._is_endpoint_reachable", return_value=False),
+            patch("src.observability._disable_otel_exporter") as mock_disable,
         ):
             observability.initialize_langfuse(
                 public_key="pk-test",
@@ -740,17 +740,17 @@ class TestInitializeLangfuseCallsDisableOtel:
 
     def test_called_when_constructor_fails(self):
         """initialize_langfuse calls _disable_otel_exporter when Langfuse() raises."""
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         observability._reset_langfuse_client_for_tests()
 
         with (
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
             patch(
-                "telegram_bot.observability.Langfuse",
+                "src.observability.Langfuse",
                 side_effect=RuntimeError("init failed"),
             ),
-            patch("telegram_bot.observability._disable_otel_exporter") as mock_disable,
+            patch("src.observability._disable_otel_exporter") as mock_disable,
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -767,7 +767,7 @@ class TestObservabilityBootstrapAliases:
     """Observability should expose bootstrap helpers without local proxy wrappers."""
 
     def test_bootstrap_helpers_are_direct_aliases(self):
-        import telegram_bot.observability as observability
+        import src.observability as observability
         import telegram_bot.observability_bootstrap as bootstrap
 
         assert observability._is_endpoint_reachable is bootstrap.is_endpoint_reachable
@@ -792,10 +792,12 @@ def observability_without_langfuse():
     )()
 
     sys.modules["langfuse"] = broken
+    if "src.observability" in sys.modules:
+        del sys.modules["src.observability"]
     if "telegram_bot.observability" in sys.modules:
         del sys.modules["telegram_bot.observability"]
 
-    obs = importlib.import_module("telegram_bot.observability")
+    obs = importlib.import_module("src.observability")
 
     yield obs
 
@@ -804,8 +806,11 @@ def observability_without_langfuse():
         sys.modules["langfuse"] = original_langfuse
     else:
         sys.modules.pop("langfuse", None)
+    if "src.observability" in sys.modules:
+        del sys.modules["src.observability"]
     if "telegram_bot.observability" in sys.modules:
         del sys.modules["telegram_bot.observability"]
+    importlib.import_module("src.observability")
     importlib.import_module("telegram_bot.observability")
 
 
@@ -854,7 +859,9 @@ class TestLangfuseImportFailure:
 
     def test_create_callback_handler_returns_none(self, observability_without_langfuse):
         """create_callback_handler should return None when langfuse import fails."""
-        assert observability_without_langfuse.create_callback_handler() is None
+        from telegram_bot.observability import create_callback_handler
+
+        assert create_callback_handler() is None
 
     def test_langfuse_placeholder_raises_on_init(self, observability_without_langfuse):
         """Langfuse fallback class should raise the original import error."""
@@ -874,12 +881,12 @@ class TestOtelServiceName:
         """When OTEL_SERVICE_NAME is unset, initialize_langfuse sets it to telegram-bot."""
         import os
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.delenv("OTEL_SERVICE_NAME", raising=False)
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client):
+        with patch("src.observability.Langfuse", return_value=fake_client):
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -892,12 +899,12 @@ class TestOtelServiceName:
         """When OTEL_SERVICE_NAME is already set, initialize_langfuse preserves it."""
         import os
 
-        import telegram_bot.observability as observability
+        import src.observability as observability
 
         monkeypatch.setenv("OTEL_SERVICE_NAME", "custom-service")
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client):
+        with patch("src.observability.Langfuse", return_value=fake_client):
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",

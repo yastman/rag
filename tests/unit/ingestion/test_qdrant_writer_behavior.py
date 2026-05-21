@@ -15,7 +15,7 @@ import pytest
 from qdrant_client.models import Filter, FilterSelector, PointStruct, SparseVector
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
-from telegram_bot.services.bge_m3_client import HybridResult
+from src.services.bge_m3_client import HybridResult
 
 
 # ---------------------------------------------------------------------------
@@ -89,11 +89,11 @@ def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
             return_value=mock_qdrant_client,
         ),
         patch(
-            "telegram_bot.services.bge_m3_client.BGEM3SyncClient",
+            "src.services.bge_m3_client.BGEM3SyncClient",
             return_value=mock_bge_client,
         ),
         patch(
-            "telegram_bot.services.VoyageService",
+            "src.services.voyage.VoyageService",
             return_value=mock_voyage,
         ),
     ):
@@ -118,7 +118,7 @@ def writer_local(mock_qdrant_client, mock_bge_client):
             return_value=mock_qdrant_client,
         ),
         patch(
-            "telegram_bot.services.bge_m3_client.BGEM3SyncClient",
+            "src.services.bge_m3_client.BGEM3SyncClient",
             return_value=mock_bge_client,
         ),
     ):
