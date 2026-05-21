@@ -1,12 +1,19 @@
 """Span coverage contract tests (AST-based, no Docker needed).
 
 Verifies that sensitive spans disable auto-capture and light spans use auto-capture.
+
+The canonical list of sensitive spans lives in
+``tests/observability/trace_contract.yaml`` under the ``sensitive_spans`` key.
+``SENSITIVE_SPANS`` below is loaded from that YAML at import time so the test
+suite has a single source of truth (#1810). Do NOT re-introduce a hardcoded
+list here — add or remove entries in the YAML contract instead.
 """
 
 import ast
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 # Root of the repo (two levels up from this file)
@@ -19,151 +26,33 @@ SCAN_DIRS = [
 ]
 EXCLUDE_DIRS = ["tests/", "src/evaluation/", ".venv/"]
 
-# Spans that carry large/sensitive payloads — must have capture_input=False, capture_output=False
-SENSITIVE_SPANS = [
-    # Graph nodes (heavy)
-    "node-cache-check",
-    "node-cache-store",
-    "node-retrieve",
-    "node-generate",
-    "node-respond",
-    "node-summarize",
-    "transcribe",
-    # Agent pipeline
-    "rag-pipeline",
-    "cache-check",
-    "hybrid-retrieve",
-    "retrieval.initial",
-    "retrieval.relax",
-    "cache-store",
-    # Agent tools
-    "tool-rag-search",
-    "tool-history-search",
-    "tool-apartment-search",
-    # History graph
-    "history-retrieve",
-    "history-summarize",
-    # Pipeline
-    "detect-agent-intent",
-    "client-direct-pipeline",
-    "core-pipeline-query-embedding",
-    # Classify
-    "classify-query",
-    # Graph node (sensitive)
-    "node-rewrite",
-    # Cache (all 12)
-    "cache-semantic-check",
-    "cache-semantic-store",
-    "cache-exact-get",
-    "cache-exact-store",
-    "cache-embedding-get",
-    "cache-embedding-store",
-    "cache-sparse-get",
-    "cache-sparse-store",
-    "cache-search-get",
-    "cache-search-store",
-    "cache-rerank-get",
-    "cache-rerank-store",
-    # BGE-M3 client (all 5)
-    "bge-m3-encode-dense",
-    "bge-m3-encode-sparse",
-    "bge-m3-encode-hybrid",
-    "bge-m3-rerank",
-    "bge-m3-encode-colbert",
-    # BGE-M3 service (all 5)
-    "bge-m3-service-encode-dense",
-    "bge-m3-service-encode-sparse",
-    "bge-m3-service-encode-hybrid",
-    "bge-m3-service-rerank",
-    "bge-m3-service-encode-colbert",
-    # USER-base service (all 2)
-    "user-base-service-embed",
-    "user-base-service-embed-batch",
-    # Search engines (all 3)
-    "search-engine-encode-hybrid",
-    "search-engine-encode-hybrid-colbert",
-    "search-engine-encode-dbsf-colbert",
-    # Qdrant (all 7)
-    "qdrant-ensure-collection",
-    "qdrant-apply-strict-mode",
-    "qdrant-ensure-alias",
-    "qdrant-hybrid-search-rrf",
-    "qdrant-hybrid-search-rrf-colbert",
-    "qdrant-batch-search-rrf",
-    "qdrant-search-score-boosting",
-    # History service (all 4)
-    "history-save",
-    "history-search",
-    "history-delete",
-    "history-get-session-turns",
-    # Services
-    "service-generate-response",
-    "detect-response-style",
-    "get-prompt",
-    "kommo-token-refresh",
-    "cross-encoder-rerank",
-    "apartments-hybrid-search",
-    "apartments-scroll",
-    "apartment-filter-parse",
-    "apartment-extraction-pipeline",
-    "apartment-llm-extract",
-    "advisor-llm-call",
-    "session-summary-generate",
-    "nurturing-llm-generate",
-    # Bot command/menu/callback flows
-    "cmd-start",
-    "cmd-clear",
-    "cmd-clearcache",
-    "cmd-call",
-    "menu-router",
-    "menu-search",
-    "menu-services",
-    "menu-viewing",
-    "menu-bookmarks",
-    "menu-ask",
-    "menu-manager",
-    "cb-ask",
-    "cb-service",
-    "cb-cta",
-    "cb-favorite",
-    "cb-results",
-    "cb-card",
-    "cb-feedback",
-    "cb-feedback-reason",
-    "cb-clearcache",
-    "telegram-rag-query",
-    "telegram-rag-supervisor",
-    # Dialog/handler spans with capture disabled
-    "dialog-crm-create-note",
-    "dialog-crm-create-contact",
-    "dialog-funnel-search",
-    "dialog-filter-hub-data",
-    "dialog-filter-start",
-    "dialog-crm-create-task",
-    "dialog-crm-create-lead",
-    "phone-lead-capture",
-    "demo-search",
-    "crm-quick-complete",
-    "crm-quick-note",
-    # Entry points
-    "voice-session",
-    "rag-api-query",
-    # Ingestion (all 7)
-    "ingestion-cli-run",
-    "ingestion-cli-preflight",
-    "ingestion-flow-run-once",
-    "ingestion-flow-watch",
-    "ingestion-qdrant-delete-file",
-    "ingestion-qdrant-upsert-chunks",
-    "ingestion-indexer-embed-texts",
-    # Contextualization (raw text chunks and queries)
-    "claude-contextualize",
-    "claude-contextualize-sync",
-    "openai-contextualize",
-    "openai-contextualize-sync",
-    "groq-contextualize",
-    "groq-contextualize-sync",
-]
+# Path to the canonical observability trace contract.
+_TRACE_CONTRACT_PATH = REPO_ROOT / "tests" / "observability" / "trace_contract.yaml"
+
+
+def _load_sensitive_spans() -> list[str]:
+    """Load the canonical ``sensitive_spans`` list from ``trace_contract.yaml``.
+
+    Single source of truth (#1810): any span that disables auto-capture in
+    production must be listed in the YAML contract. The previous hardcoded
+    Python list drifted whenever new ``@observe(capture_input=False, ...)``
+    spans were added (e.g. CRM observability wrappers, hyde-generate,
+    session-summary-llm, etc.).
+    """
+    with open(_TRACE_CONTRACT_PATH) as fh:
+        contract = yaml.safe_load(fh)
+    spans = contract.get("sensitive_spans", [])
+    if not isinstance(spans, list) or not spans:
+        raise RuntimeError(
+            f"trace_contract.yaml is missing a non-empty 'sensitive_spans' list "
+            f"(loaded from {_TRACE_CONTRACT_PATH})"
+        )
+    return list(spans)
+
+
+# Spans that carry large/sensitive payloads — must have capture_input=False, capture_output=False.
+# Loaded from tests/observability/trace_contract.yaml (single source of truth, #1810).
+SENSITIVE_SPANS = _load_sensitive_spans()
 
 # Light spans — use auto-capture (capture_input should NOT be explicitly set to False)
 LIGHT_SPANS = [

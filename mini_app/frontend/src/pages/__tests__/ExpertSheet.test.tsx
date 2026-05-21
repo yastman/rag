@@ -80,7 +80,7 @@ describe('ExpertSheet', () => {
   });
 
   it('closes Mini App after successful startExpert', async () => {
-    const closeMock = sdkReact.miniApp.close as ReturnType<typeof vi.fn> & {
+    const closeMock = sdkReact.miniApp.close as unknown as ReturnType<typeof vi.fn> & {
       ifAvailable: ReturnType<typeof vi.fn>;
     };
     vi.spyOn(api, 'startExpert').mockResolvedValue({
@@ -99,7 +99,7 @@ describe('ExpertSheet', () => {
   });
 
   it('shows error alert when userId is null', async () => {
-    vi.spyOn(sdkReact.initData, 'user').mockReturnValue(null);
+    vi.spyOn(sdkReact.initData, 'user').mockReturnValue(undefined);
     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     renderExpertSheet();

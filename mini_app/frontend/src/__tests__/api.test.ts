@@ -59,7 +59,11 @@ describe('startExpert', () => {
     const mockFetch = vi.mocked(fetch);
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ thread_id: 42, expert_name: 'Консультант', status: 'ok' }),
+      json: async () => ({
+        start_link: 'https://t.me/FortnoksBot?start=consultant_42',
+        expert_name: 'Консультант',
+        status: 'ok',
+      }),
     } as Response);
 
     const result = await startExpert(123, 'consultant', 'Подбери квартиру');
@@ -69,15 +73,20 @@ describe('startExpert', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: 123, expert_id: 'consultant', message: 'Подбери квартиру' }),
     });
-    expect(result.thread_id).toBe(42);
+    expect(result.start_link).toBe('https://t.me/FortnoksBot?start=consultant_42');
     expect(result.expert_name).toBe('Консультант');
+    expect(result.status).toBe('ok');
   });
 
   it('sends without message when not provided', async () => {
     const mockFetch = vi.mocked(fetch);
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ thread_id: 1, expert_name: 'Test', status: 'ok' }),
+      json: async () => ({
+        start_link: 'https://t.me/FortnoksBot?start=consultant_1',
+        expert_name: 'Test',
+        status: 'ok',
+      }),
     } as Response);
 
     await startExpert(123, 'consultant');
