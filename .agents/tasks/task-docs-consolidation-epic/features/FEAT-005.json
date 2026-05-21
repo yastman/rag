@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-005",
+  "type": "docs",
+  "description": "Final consolidation pass on docs/README.md index to provide clear canonical entrypoints. Add a prominent 'New Contributors Start Here' section at the top of docs/README.md that gives a 3-step onboarding path (1. docs/ONBOARDING.md, 2. docs/LOCAL-DEVELOPMENT.md, 3. docs/DEVELOPER_GUIDE.md). Clean up the legacy ADRS.md pointer. Verify all links across the documentation tree are valid as a final gate.",
+  "status": "in_progress",
+  "steps": [
+    "Add a 'New Contributors Start Here' section to docs/README.md immediately after the title. Content: a brief 3-item numbered list pointing to (1) docs/ONBOARDING.md for first-time setup, (2) docs/LOCAL-DEVELOPMENT.md for day-to-day workflow, (3) docs/DEVELOPER_GUIDE.md for extending the platform (nodes, tools, query types, ingestion).",
+    "In docs/README.md 'Quality & Evaluation' section, remove the ADRS.md entry since it is just a legacy pointer to docs/adr/README.md which is already linked in 'Understand the Project Fast'. The adr/ link in that section is sufficient.",
+    "In docs/README.md 'Architecture & Design' section, replace the ADD_NEW_RAG_NODE.md link with DEVELOPER_GUIDE.md (if not already done in FEAT-004 - verify and fix if needed).",
+    "Update docs/ADRS.md to add a clear deprecation notice at the top: 'This file is a legacy pointer. The canonical ADR entrypoint is docs/adr/README.md.' (it already says this but make sure it is prominent and up-to-date with the new ADR count).",
+    "Run the full relative-link verification across the entire docs/ tree, README.md, DOCKER.md, AGENTS.md, and CONTRIBUTING.md.",
+    "Run git diff --check to confirm no trailing whitespace or conflict markers."
+  ],
+  "acceptance_criteria": [
+    "docs/README.md has a clear 'New Contributors Start Here' section near the top with a 3-step linear path",
+    "docs/README.md no longer has redundant links to deleted files (ONBOARDING_CHECKLIST.md, ADD_NEW_RAG_NODE.md)",
+    "All relative links across the docs tree resolve correctly (verified by script)",
+    "The 3-step path covers: initial setup, daily workflow, extension/contribution"
+  ],
+  "verification": [
+    "Run: git diff --check",
+    "Run the Python relative-link checker script from docs/engineering/docs-maintenance.md section 7 (the full version scanning docs/, README.md, DOCKER.md, AGENTS.md, CONTRIBUTING.md)",
+    "Visually confirm the new 'New Contributors Start Here' section in docs/README.md"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

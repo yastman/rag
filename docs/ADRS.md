@@ -1,8 +1,8 @@
-***REMOVED*** Architecture Decision Records (Legacy Summary)
+***REMOVED*** Architecture Decision Records (Legacy Pointer)
 
-This page is a legacy summary. The canonical ADR entrypoint is [`adr/README.md`](adr/README.md), and individual ADRs live in [`adr/`](adr/).
+> **This file is a legacy pointer only.** The canonical ADR entrypoint is [`adr/README.md`](adr/README.md). New ADRs should be created there.
 
-Use the canonical ADR directory when changing retrieval architecture, embeddings, reranking, semantic cache behavior, CRM integration, or voice/text LangGraph boundaries. Verify every ADR against current code before treating it as active implementation truth.
+Individual ADRs live in [`adr/`](adr/). Use the canonical ADR directory when changing retrieval architecture, embeddings, reranking, semantic cache behavior, CRM integration, or voice/text LangGraph boundaries. Verify every ADR against current code before treating it as active implementation truth.
 
 ***REMOVED******REMOVED*** Current ADR Index
 
@@ -15,4 +15,4 @@ Use the canonical ADR directory when changing retrieval architecture, embeddings
 
 ***REMOVED******REMOVED*** Adding ADRs
 
-Create new ADRs under [`adr/`](adr/) and update [`adr/README.md`](adr/README.md). Keep this file as a compatibility pointer, not a second source of truth.
+Create new ADRs under [`adr/`](adr/) and update [`adr/README.md`](adr/README.md). Do not add entries here; this file exists only as a compatibility pointer.
