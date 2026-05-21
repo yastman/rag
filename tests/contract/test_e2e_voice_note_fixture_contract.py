@@ -3,7 +3,7 @@
 Verifies that:
   1. The fixture file exists at data/test/voice_note_sample.ogg
   2. Its size is >0 and <100 000 bytes (synthetic/non-secret)
-  3. The first 4 bytes are b"OggS" (valid OGG container)
+  3. It is a real OGG/Opus stream, not just header bytes
   4. .env.example documents E2E_VOICE_NOTE_PATH
   5. The e2e telegram_client reads E2E_VOICE_NOTE_PATH from the environment
 
@@ -12,8 +12,6 @@ Issue: #1486 — provide voice-note fixture for Telethon trace gate
 
 from __future__ import annotations
 
-import ast
-import os
 from pathlib import Path
 
 import pytest
@@ -55,25 +53,62 @@ def test_voice_note_fixture_size() -> None:
     size = _FIXTURE_PATH.stat().st_size
     assert size > 0, "Fixture file is empty."
     assert size < 100_000, (
-        f"Fixture is {size} bytes — exceeds 100 KB limit. "
-        "Replace with a shorter synthetic file."
+        f"Fixture is {size} bytes — exceeds 100 KB limit. Replace with a shorter synthetic file."
     )
 
 
 # ---------------------------------------------------------------------------
-# 3. Valid OGG container magic bytes
+# 3. Valid OGG/Opus stream, including audio packets
 # ---------------------------------------------------------------------------
 
 
-def test_voice_note_fixture_ogg_magic() -> None:
-    """First 4 bytes of the fixture must be b'OggS' (RFC 3533 OGG capture pattern)."""
+def _read_ogg_packets(data: bytes) -> list[bytes]:
+    """Return complete OGG packets reconstructed from page lacing values."""
+    packets: list[bytes] = []
+    partial = bytearray()
+    pos = 0
+    while pos < len(data):
+        assert data[pos : pos + 4] == b"OggS", f"Missing OggS capture pattern at byte {pos}"
+        assert pos + 27 <= len(data), f"Truncated OGG page header at byte {pos}"
+        segment_count = data[pos + 26]
+        lacing_start = pos + 27
+        lacing_end = lacing_start + segment_count
+        assert lacing_end <= len(data), f"Truncated OGG segment table at byte {pos}"
+        lacing_values = data[lacing_start:lacing_end]
+        payload_len = sum(lacing_values)
+        payload_start = lacing_end
+        payload_end = payload_start + payload_len
+        assert payload_end <= len(data), f"Truncated OGG page payload at byte {pos}"
+
+        cursor = payload_start
+        for lace in lacing_values:
+            partial.extend(data[cursor : cursor + lace])
+            cursor += lace
+            if lace < 255:
+                packets.append(bytes(partial))
+                partial.clear()
+        pos = payload_end
+
+    assert not partial, "Fixture ends in the middle of an OGG packet"
+    return packets
+
+
+def test_voice_note_fixture_is_decodable_ogg_opus_stream() -> None:
+    """Fixture must include Opus headers and at least one audio packet."""
     if not _FIXTURE_PATH.exists():
         pytest.skip("Fixture not present — covered by test_voice_note_fixture_exists")
-    magic = _FIXTURE_PATH.read_bytes()[:4]
-    assert magic == b"OggS", (
-        f"Fixture does not start with OggS (got {magic!r}). "
-        "Regenerate with a proper OGG/Opus encoder."
+    data = _FIXTURE_PATH.read_bytes()
+    packets = _read_ogg_packets(data)
+
+    assert len(packets) >= 3, (
+        "Fixture must contain OpusHead, OpusTags, and at least one audio packet. "
+        "Header-only OGG files are rejected by ffprobe/Telegram upload paths."
     )
+    assert packets[0].startswith(b"OpusHead"), "First OGG packet must be the OpusHead header"
+    assert packets[1].startswith(b"OpusTags"), "Second OGG packet must be the OpusTags header"
+    assert any(
+        packet and not packet.startswith((b"OpusHead", b"OpusTags")) for packet in packets[2:]
+    ), "Fixture must include at least one Opus audio packet"
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +162,7 @@ def test_e2e_config_voice_note_path_roundtrip(monkeypatch: pytest.MonkeyPatch) -
 
     # Import after patching env so dataclass field_factory picks it up
     import importlib
+
     import scripts.e2e.config as _cfg_mod
 
     importlib.reload(_cfg_mod)
