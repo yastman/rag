@@ -13,9 +13,11 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from langgraph.errors import GraphRecursionError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.schemas import QueryRequest, QueryResponse
 from telegram_bot.observability import observe
@@ -98,24 +100,119 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="RAG API", version="0.1.0", lifespan=lifespan)
 
 
-@app.exception_handler(Exception)
-async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
-    """Return structured error response for unhandled exceptions."""
-    trace_id = None
+def _resolve_trace_id() -> str:
+    """Best-effort lookup of the current Langfuse trace id, with uuid fallback.
+
+    Centralised here (***REMOVED***1236) so every exception handler emits the same
+    ``trace_id`` envelope without duplicating the lookup logic.
+    """
     try:
         from telegram_bot.observability import get_client
 
         lf = get_client()
         if lf is not None:
-            trace_id = lf.get_current_trace_id()
+            tid = lf.get_current_trace_id()
+            if tid:
+                return tid
     except Exception:
         logger.debug("Unable to resolve Langfuse trace id for RAG API error", exc_info=True)
+    return uuid.uuid4().hex
 
-    if not trace_id:
-        trace_id = uuid.uuid4().hex
 
+***REMOVED*** -----------------------------------------------------------------------------
+***REMOVED*** Exception handlers (***REMOVED***1236)
+***REMOVED***
+***REMOVED*** FastAPI's documented error-handling pattern (see fastapi.tiangolo docs,
+***REMOVED*** "Handling Errors > Override the default exception handlers") is to register
+***REMOVED*** specific handlers *in addition to* a fallback ``Exception`` handler. The
+***REMOVED*** specific handlers take precedence over the blanket one, so:
+***REMOVED***
+***REMOVED***   * ``StarletteHTTPException`` keeps the proper status code and detail
+***REMOVED***     message for ``HTTPException`` raised in code as well as Starlette's
+***REMOVED***     internal HTTP errors (e.g. 404 from routing) instead of being squashed
+***REMOVED***     to ``{"error": "internal_error"}`` 500.
+***REMOVED***   * ``RequestValidationError`` keeps the 422 response shape with field-level
+***REMOVED***     errors instead of being squashed to a generic 500.
+***REMOVED***   * ``Exception`` remains the last-resort 500 fallback for genuinely
+***REMOVED***     unhandled errors.
+***REMOVED***
+***REMOVED*** All three handlers emit the same envelope shape ``{error, message, trace_id,
+***REMOVED*** recoverable, ...}`` so API clients can rely on a single error contract.
+***REMOVED*** -----------------------------------------------------------------------------
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(
+    _request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    """Return the proper HTTP status code (401/403/404/...) instead of 500.
+
+    Catches both ``fastapi.HTTPException`` (subclass of
+    ``starlette.exceptions.HTTPException``) and Starlette-internal HTTP errors
+    raised by routing/middleware.
+    """
+    trace_id = _resolve_trace_id()
+    ***REMOVED*** 5xx are still errors; log them. 4xx are client problems; debug-level.
+    if exc.status_code >= 500:
+        logger.error(
+            "HTTPException %s in RAG API: %s",
+            exc.status_code,
+            exc.detail,
+            extra={"trace_id": trace_id},
+        )
+    else:
+        logger.debug(
+            "HTTPException %s in RAG API: %s",
+            exc.status_code,
+            exc.detail,
+            extra={"trace_id": trace_id},
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "http_error",
+            "message": str(exc.detail) if exc.detail is not None else "",
+            "status_code": exc.status_code,
+            "trace_id": trace_id,
+            "recoverable": exc.status_code < 500,
+        },
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    _request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Return 422 with field-level details instead of being swallowed by the 500 fallback."""
+    trace_id = _resolve_trace_id()
+    logger.debug(
+        "RequestValidationError in RAG API: %s",
+        exc.errors(),
+        extra={"trace_id": trace_id},
+    )
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "message": "Request validation failed",
+            "details": exc.errors(),
+            "trace_id": trace_id,
+            "recoverable": True,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
+    """Return structured error response for unhandled exceptions.
+
+    This is the *last-resort* fallback. ``HTTPException`` and
+    ``RequestValidationError`` are caught by their specific handlers above
+    and never reach this one (***REMOVED***1236).
+    """
+    trace_id = _resolve_trace_id()
     logger.exception("Unhandled error in RAG API", extra={"trace_id": trace_id})
-
     return JSONResponse(
         status_code=500,
         content={
@@ -128,9 +225,73 @@ async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    """Readiness probe."""
-    return {"status": "ok"}
+async def health(deep: bool = False) -> JSONResponse:
+    """Readiness probe.
+
+    Default: shallow check (``{"status": "ok"}``) for liveness probes — fast,
+    no external dependencies, always 200 once the process is up.
+
+    With ``?deep=true`` (***REMOVED***1236): probe every initialised dependency on
+    ``app.state`` (cache, qdrant) and report their individual status. Returns
+    HTTP 503 if any dependency is unhealthy so a Kubernetes readiness probe
+    treats the pod as Not Ready until backends recover.
+    """
+    if not deep:
+        return JSONResponse(status_code=200, content={"status": "ok"})
+
+    components: dict[str, dict[str, Any]] = {}
+    overall_ok = True
+
+    ***REMOVED*** Cache (Redis) — issue a no-op ping if available; otherwise just verify
+    ***REMOVED*** the layer was initialised. CacheLayerManager exposes .ping() in the
+    ***REMOVED*** current implementation; fall back to attribute presence if not.
+    cache = getattr(app.state, "cache", None)
+    if cache is None:
+        components["cache"] = {"status": "uninitialized"}
+        overall_ok = False
+    else:
+        try:
+            ping = getattr(cache, "ping", None)
+            if callable(ping):
+                pong = ping()
+                if hasattr(pong, "__await__"):
+                    pong = await pong
+                components["cache"] = {"status": "ok" if pong else "degraded"}
+                if not pong:
+                    overall_ok = False
+            else:
+                components["cache"] = {"status": "ok"}
+        except Exception as exc:
+            components["cache"] = {"status": "error", "detail": str(exc)}
+            overall_ok = False
+
+    ***REMOVED*** Qdrant — most clients expose .health() / .get_collections() async.
+    ***REMOVED*** We pick whichever method exists, prefer .health() if defined.
+    qdrant = getattr(app.state, "qdrant", None)
+    if qdrant is None:
+        components["qdrant"] = {"status": "uninitialized"}
+        overall_ok = False
+    else:
+        try:
+            probe = getattr(qdrant, "health", None) or getattr(qdrant, "get_collections", None)
+            if callable(probe):
+                result = probe()
+                if hasattr(result, "__await__"):
+                    await result
+                components["qdrant"] = {"status": "ok"}
+            else:
+                components["qdrant"] = {"status": "ok"}
+        except Exception as exc:
+            components["qdrant"] = {"status": "error", "detail": str(exc)}
+            overall_ok = False
+
+    return JSONResponse(
+        status_code=200 if overall_ok else 503,
+        content={
+            "status": "ok" if overall_ok else "degraded",
+            "components": components,
+        },
+    )
 
 
 def _normalize_langfuse_trace_id(trace_id: str | None) -> str | None:
