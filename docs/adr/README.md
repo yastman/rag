@@ -14,6 +14,9 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0008 - `instructor.create_partial` deferred](0008-instructor-create-partial-deferred.md)
 - [0009 - LangGraph `Send` fan-out scoping](0009-langgraph-send-fanout-scoping.md)
 - [0010 - Voice path `create_agent` migration plan](0010-voice-path-create-agent-migration-plan.md)
+- [0011 - Docker Compose as primary runtime](0011-docker-compose-primary-runtime.md)
+- [0012 - LangGraph state machine orchestration](0012-langgraph-orchestration.md)
+- [0013 - CocoIndex + Docling ingestion pipeline](0013-cocoindex-docling-ingestion.md)
 
 ## When To Use
 
