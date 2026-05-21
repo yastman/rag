@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Phase 1+2: Sentry SDK error tracking integration and startup/fatal logging hardening. Add sentry-sdk as optional dependency, create a configurable error tracking module with PII filtering, attach correlation IDs and safe metadata, wire into bot startup with sys.excepthook coverage.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Add `sentry-sdk>=2.0.0,<3.0` to pyproject.toml `[project.dependencies]` (it is a core observability dep, not optional).",
     "Add SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE, SENTRY_TRACES_SAMPLE_RATE to `.env.example` under a new OBSERVABILITY / ERROR TRACKING section with sensible defaults (empty DSN = disabled).",
@@ -31,5 +31,5 @@
     "Run `make test-unit` and confirm full unit suite remains green"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "sentry-sdk 2.58.0 installed. All 14 new tests pass. Full observability suite (165 tests) green. Ruff lint and format pass clean. Import sorting required ruff --fix for the src.observability import in main.py (third-party vs first-party). sentry_integration.py needed ruff format for trailing comma style."
 }
