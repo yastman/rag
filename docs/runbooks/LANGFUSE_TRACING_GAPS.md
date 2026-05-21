@@ -29,6 +29,8 @@ When traces appear missing, validate **app pipeline coverage** first:
 
 If direct families and nested Telegram families are present and root input is sanitized, flat `litellm-acompletion` traces do **not** indicate a defect.
 
+- Voice-agent trace gate: **`make validate-voice-traces`** (validates voice-session presence and attribution)
+
 ### Cache-smoke behavior check
 
 For cache regression checks:
@@ -292,6 +294,70 @@ docker compose restart bot
 - Monitor Langfuse ingestion rate
 - Alert on trace family gaps
 - Distinguish proxy-generated `litellm-acompletion` traces from app-instrumented `telegram-message` traces when triaging gaps
+
+## Voice-Agent Trace Validation Gate (#1517)
+
+A dedicated validation gate for voice-session traces that verifies trace
+presence and service attribution without requiring a running LiveKit/SIP stack.
+
+### Command
+
+```bash
+make validate-voice-traces
+```
+
+### What It Checks
+
+1. **Langfuse connectivity** - verifies API is reachable with configured credentials
+2. **OTEL_SERVICE_NAME** - static check that `voice-agent` is set in compose.yml
+3. **Trace production** - calls `update_voice_trace()` to produce a deterministic trace
+4. **Trace presence** - reads back `voice-session` traces via Langfuse API
+5. **Service attribution** - validates `user_id=voice-agent`, `session_id` matches `voice-*` pattern, tags include `voice` and `call-lifecycle`
+
+### How to Run Locally
+
+```bash
+# Start local Langfuse (part of ml profile)
+make docker-ml-up
+
+# Run the gate
+make validate-voice-traces
+
+# Or with custom credentials
+make validate-voice-traces LANGFUSE_HOST=http://localhost:3001
+```
+
+### Expected Output
+
+```
+Voice Trace Validation Gate
+[1/5] Checking Langfuse connectivity...
+OK: Langfuse connectivity verified (host=http://localhost:3001)
+[2/5] Checking OTEL_SERVICE_NAME in compose.yml...
+OK: OTEL_SERVICE_NAME=voice-agent found in compose.yml
+[3/5] Producing voice-session trace...
+OK: Produced voice-session trace (session_id=voice-validate-...)
+[4/5] Waiting for ingestion...
+[5/5] Validating voice-session traces...
+
+Evidence Summary (redacted):
+  trace_id:     <uuid>
+  session_id:   voice-validate-...
+  user_id:      voice-agent
+  tags:         ['voice', 'call-lifecycle']
+  traces_found: 1
+
+PASS: Voice trace validation gate passed
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Langfuse connectivity failed | Ensure local Langfuse is running (`make docker-ml-up`) |
+| No voice-session traces found | Check that `update_voice_trace` is not swallowing errors; verify Langfuse ingestion is working |
+| Wrong user_id | Check `src/voice/observability.py` sets `user_id="voice-agent"` in `propagate_attributes` |
+| Session ID pattern mismatch | Verify `voice_session_id()` prepends `voice-` prefix |
 
 ## See Also
 
