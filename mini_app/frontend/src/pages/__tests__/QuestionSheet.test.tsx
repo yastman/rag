@@ -57,7 +57,7 @@ describe('QuestionSheet', () => {
   });
 
   it('calls sendData.ifAvailable on prompt click', async () => {
-    const sendDataMock = sdkReact.sendData as ReturnType<typeof vi.fn> & {
+    const sendDataMock = sdkReact.sendData as unknown as ReturnType<typeof vi.fn> & {
       ifAvailable: ReturnType<typeof vi.fn>;
     };
 
@@ -69,7 +69,9 @@ describe('QuestionSheet', () => {
   });
 
   it('calls miniApp.close.ifAvailable on prompt click', async () => {
-    const miniAppMock = sdkReact.miniApp as { close: ReturnType<typeof vi.fn> & { ifAvailable: ReturnType<typeof vi.fn> } };
+    const miniAppMock = sdkReact.miniApp as unknown as {
+      close: ReturnType<typeof vi.fn> & { ifAvailable: ReturnType<typeof vi.fn> };
+    };
 
     renderQuestionSheet();
     await waitFor(() => screen.getByText('С чего начать поиск квартиры?'));

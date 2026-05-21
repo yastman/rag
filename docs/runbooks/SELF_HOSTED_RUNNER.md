@@ -1,0 +1,157 @@
+***REMOVED*** Runbook: Self-Hosted GitHub Actions Runner (nightly-heavy)
+
+> **Owner:** CI / Release Engineering
+> **Closes:** ***REMOVED***1531
+> **Last verified:** 2026-05-21
+> **Verification command:**
+> ```bash
+> scripts/check_self_hosted_runner.sh
+> ```
+
+Use this runbook when the nightly heavy-tier test job fails to start, queues
+forever, or the operator needs to bring a new self-hosted runner online.
+
+***REMOVED******REMOVED*** Symptoms
+
+- The `Nightly Heavy Tests` workflow run sits in **Queued** state past its
+  02:30 UTC schedule and never picks up a runner.
+- A manual `workflow_dispatch` of `nightly-heavy.yml` never starts.
+- `scripts/check_self_hosted_runner.sh` exits non-zero.
+- GitHub Settings → Actions → Runners shows zero runners or all runners
+  with status `Offline`.
+
+***REMOVED******REMOVED*** What Depends on the Self-Hosted Runner
+
+| Workflow file | Job | `runs-on` | What it runs |
+|---|---|---|---|
+| [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) | `heavy-tier` | `self-hosted` | `pytest -n auto -m "requires_extras or load or chaos or e2e or benchmark"` |
+
+The workflow uses **no labels** beyond `self-hosted`, so any registered
+self-hosted runner in the repo is eligible. Adding labels here without a
+matching runner update would also break the schedule (label drift, see
+**Common Failure Modes** below).
+
+***REMOVED******REMOVED*** Resource Requirements
+
+The `heavy-tier` job runs the full union of these pytest markers:
+`requires_extras`, `load`, `chaos`, `e2e`, `benchmark`. Sizing is anchored
+to what those suites actually load.
+
+| Resource | Minimum | Recommended | Why |
+|---|---|---|---|
+| vCPU | 2 | **4+** | Workflow uses `pytest -n auto --dist=loadscope` |
+| RAM | 4 GiB | **8 GiB+** | `e2e` and `benchmark` load BGE-M3 + ColBERT models |
+| Disk | 10 GiB free | **20 GiB+ free** | `uv` cache, model weights, pytest artifacts, Docker layers |
+| Network | Outbound HTTPS | Same | GitHub, PyPI, HuggingFace |
+| Tools | `git`, Python 3.12 (installed via `uv`), `docker`, `jq` | Same | `e2e` markers spin up Compose stacks; `uv sync --frozen --extra all` is heavy |
+| Service | Runner installed as a systemd unit (`actions.runner.*.service`) | Same | Survives host reboots without operator intervention |
+
+These numbers come directly from the workflow source — see the `Run heavy
+tier suites` step in [`nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml).
+
+***REMOVED******REMOVED*** Fast-Path Diagnosis
+
+Run from any checkout with `gh` authenticated against the repo:
+
+```bash
+scripts/check_self_hosted_runner.sh
+```
+
+The script:
+- Calls `gh api repos/$OWNER/$REPO/actions/runners` and prints
+  `{name, status, os, labels, busy}` per runner.
+- Exits non-zero if no runner is registered or every runner is offline.
+- Prints a checklist of resource requirements at the end.
+
+Direct API equivalent (read-only):
+
+```bash
+gh api repos/$OWNER/$REPO/actions/runners \
+  --jq '.runners[] | {name,status,os,labels:[.labels[].name],busy}'
+```
+
+If the script exits non-zero, follow **Common Failure Modes** below.
+
+***REMOVED******REMOVED*** How to Register a New Runner
+
+GitHub publishes the canonical, token-bearing instructions at
+**Settings → Actions → Runners → New self-hosted runner** for the
+repository. Follow that flow exactly; the registration token shown there
+is short-lived and must not be committed.
+
+Reference docs (paraphrased; ≤30 words each):
+
+- [About self-hosted runners](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners)
+  — Overview of when self-hosted runners are appropriate and security tradeoffs.
+- [Adding self-hosted runners](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners)
+  — Per-OS download/configure/install steps with a per-runner registration token.
+- [Configuring the self-hosted runner application as a service](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/configuring-the-self-hosted-runner-application-as-a-service)
+  — Install the runner as a systemd/launchd service so it auto-restarts.
+
+> Content was rephrased for compliance with licensing restrictions.
+
+After registration, **always** verify with `scripts/check_self_hosted_runner.sh`.
+Do not consider the runner "live" until that script exits 0.
+
+***REMOVED******REMOVED*** How to Verify the Runner
+
+1. Run the diagnostic:
+   ```bash
+   scripts/check_self_hosted_runner.sh
+   ```
+   Expect: exit 0 and at least one runner with `"status": "online"`.
+
+2. Trigger a manual workflow run as a smoke test (does not wait for the
+   2:30 UTC schedule):
+   ```bash
+   gh workflow run nightly-heavy.yml
+   gh run watch
+   ```
+
+3. Confirm the run is **In progress** within a minute. If it stays
+   `Queued`, the runner is not picking up jobs — see **Common Failure Modes**.
+
+***REMOVED******REMOVED*** Common Failure Modes
+
+| Symptom | Likely cause | Recovery |
+|---|---|---|
+| Runner shows `Offline` in API/UI | Host rebooted; runner service not enabled | `sudo systemctl enable --now actions.runner.<org-repo>.<name>.service` on the host |
+| Runner is `online` but jobs stay `Queued` | Label drift: workflow asked for a label the runner does not advertise | Re-check `runs-on:` in `nightly-heavy.yml` vs runner labels in the API output; bring them back in sync |
+| Workflow run fails with `No space left on device` | Disk full from accumulated `uv` cache, Docker images, pytest artifacts | Run `scripts/docker-cleanup.sh` on the runner host; consider a tmpfs/ephemeral cache mount |
+| `e2e` tests fail to start Compose stack | Docker daemon down or unprivileged user not in `docker` group | `sudo systemctl status docker`; verify the runner's user can run `docker ps` |
+| `gh api` call fails with 404 in the diagnostic script | Token lacks `actions:read` scope, or operator is not a repo admin | Re-auth `gh` with a scope-bearing token, or run the script as a maintainer |
+| Heavy-tier job OOM-killed | Runner host below the recommended 8 GiB RAM | Resize host to >= 8 GiB RAM; consider lowering `pytest -n auto` to `-n 2` |
+
+***REMOVED******REMOVED*** How to Mute / Disable nightly-heavy.yml During Maintenance
+
+If the runner must be down for maintenance, prefer one of the following so
+the schedule does not pile up failed/queued runs:
+
+1. **Disable the workflow** (preferred, reversible, surfaced in the UI):
+   ```bash
+   gh workflow disable nightly-heavy.yml
+   ***REMOVED*** ... maintenance ...
+   gh workflow enable nightly-heavy.yml
+   ```
+
+2. **Comment out the schedule** (if you want to keep `workflow_dispatch`
+   alive but stop scheduled runs). Edit
+   [`nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) and
+   remove the `schedule:` block in a short-lived PR.
+
+3. **Cancel any queued runs** while the runner is offline:
+   ```bash
+   gh run list --workflow nightly-heavy.yml --status queued --json databaseId \
+     | jq -r '.[].databaseId' \
+     | xargs -I{} gh run cancel {}
+   ```
+
+Re-verify with `scripts/check_self_hosted_runner.sh` after maintenance and
+re-enable the workflow only once the script exits 0.
+
+***REMOVED******REMOVED*** See Also
+
+- [`scripts/check_self_hosted_runner.sh`](../../scripts/check_self_hosted_runner.sh) — diagnostic this runbook is the operator-facing companion of.
+- [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) — the workflow this runner serves.
+- [`scripts/docker-cleanup.sh`](../../scripts/docker-cleanup.sh) — disk pressure remediation on the runner host.
+- [Runbooks index](README.md)
