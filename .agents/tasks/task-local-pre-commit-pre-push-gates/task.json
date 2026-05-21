@@ -1,0 +1,7 @@
+{
+  "task_id": "task-local-pre-commit-pre-push-gates",
+  "task_description": "Add local pre-commit/pre-push quality gates for Codex/OpenCode swarm work: expand Makefile lint/format scope to match CI, add py_compile syntax check hook, add make pre-push target, create DONE JSON validator for swarm workers, and update documentation.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
