@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from qdrant_client.models import Filter, PointStruct, SparseVector
+from qdrant_client.models import Filter, FilterSelector, PointStruct, SparseVector
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from telegram_bot.services.bge_m3_client import HybridResult
@@ -171,13 +171,17 @@ class TestDeleteFileSyncBehavior:
         assert condition.match.value == "my_file_id"
 
     def test_delete_uses_same_filter_as_count(self, writer_voyage, mock_qdrant_client):
-        """delete() uses the same metadata.file_id filter as count()."""
+        """delete() wraps the same metadata.file_id filter in FilterSelector (canonical SDK)."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
 
         writer_voyage.delete_file_sync("target_file", "col")
 
         delete_kwargs = mock_qdrant_client.delete.call_args.kwargs
-        filt = delete_kwargs["points_selector"]
+        selector = delete_kwargs["points_selector"]
+        # Canonical SDK shape per Qdrant Python client docs (Context7-verified):
+        # `points_selector=models.FilterSelector(filter=models.Filter(...))`.
+        assert isinstance(selector, FilterSelector)
+        filt = selector.filter
         assert isinstance(filt, Filter)
         condition = filt.must[0]
         assert condition.key == "metadata.file_id"
