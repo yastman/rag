@@ -80,9 +80,7 @@ def sum_checkpoint_overhead_ms(bucket: dict[str, float] | None) -> float:
     """Sum the per-method durations in *bucket* (ignoring the ``calls`` counter)."""
     if not bucket:
         return 0.0
-    return sum(
-        float(v) for k, v in bucket.items() if k.endswith("_ms")
-    )
+    return sum(float(v) for k, v in bucket.items() if k.endswith("_ms"))
 
 
 class InstrumentedCheckpointer:
