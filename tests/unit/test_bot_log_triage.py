@@ -257,7 +257,7 @@ class TestFatalTelegramErrorTraceback:
 
         with (
             patch.dict(sys.modules, sys_mocks),
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -287,7 +287,7 @@ class TestFatalTelegramErrorTraceback:
 
         with (
             patch.dict(sys.modules, sys_mocks),
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -309,7 +309,7 @@ class TestAsyncioLoopExceptionHandler:
 
         with (
             patch.dict(sys.modules, sys_mocks),
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -348,7 +348,7 @@ class TestAsyncioLoopExceptionHandler:
 
         with (
             patch.dict(sys.modules, sys_mocks),
-            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("src.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 

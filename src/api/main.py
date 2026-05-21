@@ -20,8 +20,8 @@ from langgraph.errors import GraphRecursionError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api.schemas import QueryRequest, QueryResponse
-from telegram_bot.observability import observe
-from telegram_bot.observability_payloads import (
+from src.observability import observe
+from src.observability_payloads import (
     build_safe_input_payload,
     build_safe_output_payload,
 )
@@ -107,7 +107,7 @@ def _resolve_trace_id() -> str:
     ``trace_id`` envelope without duplicating the lookup logic.
     """
     try:
-        from telegram_bot.observability import get_client
+        from src.observability import get_client
 
         lf = get_client()
         if lf is not None:
@@ -298,7 +298,7 @@ def _normalize_langfuse_trace_id(trace_id: str | None) -> str | None:
     if _LANGFUSE_TRACE_ID_RE.fullmatch(trace_id):
         return trace_id
 
-    from telegram_bot.observability import get_client
+    from src.observability import get_client
 
     lf = get_client()
     if lf is None:
@@ -325,7 +325,7 @@ async def _query_with_explicit_trace(
     *,
     langfuse_trace_id: str,
 ) -> QueryResponse:
-    from telegram_bot.observability import get_client
+    from src.observability import get_client
 
     lf = get_client()
     if lf is None:
@@ -341,8 +341,8 @@ async def _query_with_explicit_trace(
 
 async def _execute_query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
+    from src.observability import get_client, propagate_attributes
     from telegram_bot.graph.state import make_initial_state
-    from telegram_bot.observability import get_client, propagate_attributes
     from telegram_bot.scoring import write_langfuse_scores
 
     start = time.perf_counter()

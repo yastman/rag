@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any
 
-from telegram_bot.observability import get_client, observe, propagate_attributes
+from src.observability import get_client, observe, propagate_attributes
 
 
 INGESTION_TAGS = ["ingestion", "unified"]
