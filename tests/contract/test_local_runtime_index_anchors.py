@@ -30,8 +30,7 @@ def _github_slugify(heading_text: str) -> str:
     """
     text = heading_text.lower()
     text = re.sub(r"[^\w\s\-]", "", text)
-    text = re.sub(r"\s+", "-", text.strip())
-    return text
+    return re.sub(r"\s+", "-", text.strip())
 
 
 def _collect_anchors(md_text: str) -> set[str]:
