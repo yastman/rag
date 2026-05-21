@@ -159,7 +159,7 @@ class HybridSearchEngine(SearchEngine):
         # Build hybrid search with RRF using query API
         prefetch = [
             models.Prefetch(query=dense_vector, using="dense", limit=100),
-            models.Prefetch(query=sparse_vector, using="sparse", limit=100),
+            models.Prefetch(query=sparse_vector, using="bm42", limit=100),
         ]
 
         response = self.client.query_points(
@@ -230,7 +230,7 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
         dbsf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
-                models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
+                models.Prefetch(query=sparse_vector, using="bm42", limit=self.stage1_limit),
             ],
             query=models.FusionQuery(fusion=models.Fusion.DBSF),
         )
@@ -308,7 +308,7 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
         rrf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
-                models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
+                models.Prefetch(query=sparse_vector, using="bm42", limit=self.stage1_limit),
             ],
             query=models.RrfQuery(rrf=models.Rrf(k=self.rrf_k)),
         )

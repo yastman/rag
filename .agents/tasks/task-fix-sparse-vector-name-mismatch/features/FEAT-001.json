@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix sparse vector name mismatch in src/evaluation/search_engines.py: change 'sparse' to 'bm42' in all Prefetch queries, and add a regression test that asserts the correct vector name is used in query construction.",
+  "status": "in_progress",
+  "steps": [
+    "Create a dedicated branch named 'fix/1083-sparse-vector-name-mismatch' from dev.",
+    "Write a failing test in tests/unit/evaluation/test_search_engines_eval.py that asserts the sparse vector name passed to Qdrant Prefetch queries is 'bm42' (not 'sparse'). The test should cover all 3 engine classes that use sparse vectors: HybridSearchEngine, HybridDBSFColBERTSearchEngine, and HybridRRFColBERTSearchEngine. Follow the existing test patterns that mock QdrantClient and Settings. The test should inspect the prefetch argument of the call to client.query_points and verify the 'using' field of the sparse Prefetch is 'bm42'.",
+    "Run the new tests and confirm they FAIL (RED) because the code currently uses 'sparse'.",
+    "Fix src/evaluation/search_engines.py line 162: change using='sparse' to using='bm42' in HybridSearchEngine._search method.",
+    "Fix src/evaluation/search_engines.py line 233: change using='sparse' to using='bm42' in HybridDBSFColBERTSearchEngine.search method.",
+    "Fix src/evaluation/search_engines.py line 311: change using='sparse' to using='bm42' in HybridRRFColBERTSearchEngine.search method.",
+    "Run the new regression tests and confirm they PASS (GREEN).",
+    "Run the full unit test suite with `make test-unit` and confirm no regressions.",
+    "Run `make check` (ruff lint + format check) to confirm code quality."
+  ],
+  "acceptance_criteria": [
+    "All 3 occurrences of using='sparse' in src/evaluation/search_engines.py are replaced with using='bm42'.",
+    "New regression tests exist that verify the sparse vector name is 'bm42' for HybridSearchEngine, HybridDBSFColBERTSearchEngine, and HybridRRFColBERTSearchEngine.",
+    "Running `uv run pytest tests/unit/evaluation/test_search_engines_eval.py -q` passes all tests.",
+    "Running `make test-unit` passes with no regressions.",
+    "Running `make check` (lint + format) passes."
+  ],
+  "verification": [
+    "uv run pytest tests/unit/evaluation/test_search_engines_eval.py -q --timeout=30",
+    "make test-unit",
+    "make check"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

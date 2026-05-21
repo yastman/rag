@@ -1,0 +1,7 @@
+{
+  "task_id": "task-fix-sparse-vector-name-mismatch",
+  "task_description": "Fix GitHub issue #1083: sparse vector name mismatch ('sparse' vs 'bm42') in src/evaluation/search_engines.py that triggers invalid vector name queries against Qdrant. The retrieval module correctly uses 'bm42' but the evaluation module uses 'sparse'.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}

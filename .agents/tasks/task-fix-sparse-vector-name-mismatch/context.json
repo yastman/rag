@@ -1,0 +1,24 @@
+{
+  "project_type": "Python RAG pipeline with FastAPI, Telegram bot, Qdrant vector DB, and evaluation tools",
+  "language": "Python 3.12+",
+  "build_system": "uv (package manager), Makefile targets for common operations",
+  "test_framework": "pytest with pytest-asyncio, pytest-xdist for parallelism, pytest-httpx; tests in tests/unit/, tests/integration/, etc.",
+  "build_command": "uv sync",
+  "test_command": "uv run --python 3.12 pytest tests/unit/ --ignore=tests/unit/test_document_parser.py --ignore=tests/unit/test_evaluator.py --ignore=tests/unit/evaluation/test_ragas_evaluation.py --ignore=tests/unit/voice/test_sip_setup.py --ignore=tests/unit/voice/test_voice_agent.py --ignore=tests/unit/ingestion/test_cocoindex_init.py --ignore=tests/unit/ingestion/test_qdrant_hybrid_target.py --ignore=tests/unit/ingestion/test_qdrant_hybrid_target_helpers.py --ignore=tests/unit/ingestion/test_qdrant_hybrid_target_state_paths.py --ignore=tests/unit/ingestion/test_target_sync_execution.py --ignore=tests/unit/ingestion/test_unified_cli.py --ignore=tests/unit/ingestion/test_unified_flow.py --ignore=tests/unit/ingestion/test_unified_flow_wiring.py -n auto --dist=worksteal -q --timeout=30 -m 'not legacy_api and not requires_extras and not slow'",
+  "verification_instructions": "1. Run `make check` for linting/formatting. 2. Run `make test-unit` for unit tests.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "1. `uv sync` to install dependencies.",
+  "environment_constraints": "OPEN_INTERNET mode - full network access available. No Docker daemon needed for unit tests.",
+  "contribution_requirements": "Test-first workflow for bug fixes. Create work on a dedicated branch. Include fresh verification evidence before claiming completion.",
+  "key_patterns": "The Qdrant collection uses sparse vector name 'bm42' (configured in setup scripts and collection creation). The retrieval module (src/retrieval/search_engines.py) correctly uses 'bm42'. The telegram bot service uses a configurable _sparse_vector_name (default 'bm42'). The evaluation module (src/evaluation/search_engines.py) incorrectly uses 'sparse'.",
+  "relevant_files": [
+    "src/evaluation/search_engines.py",
+    "src/retrieval/search_engines.py",
+    "tests/unit/evaluation/test_search_engines_eval.py",
+    "telegram_bot/services/qdrant.py",
+    "scripts/setup_qdrant_collection.py",
+    "src/ingestion/indexer.py",
+    "src/config/constants.py"
+  ],
+  "directory_structure": "src/ - main source (retrieval, evaluation, ingestion, config, api). telegram_bot/ - Telegram bot service code. tests/ - test suites (unit, integration, smoke, etc). scripts/ - utility scripts. services/ - microservice containers."
+}

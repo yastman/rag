@@ -780,3 +780,115 @@ class TestLexicalWeightsToSparse:
         assert isinstance(sparse, models.SparseVector)
         assert sparse.indices == [100, 200]
         assert sparse.values == pytest.approx([0.5, 0.8])
+
+
+class TestSparseVectorNameInPrefetch:
+    """Regression tests for GitHub issue #1083: sparse vector name must be 'bm42'."""
+
+    @patch("src.evaluation.search_engines.QdrantClient")
+    @patch("src.evaluation.search_engines.Settings")
+    def test_hybrid_search_engine_uses_bm42_sparse_name(self, mock_settings_cls, mock_qdrant):
+        """HybridSearchEngine must use 'bm42' as the sparse vector name in Prefetch."""
+        from src.evaluation.search_engines import HybridSearchEngine
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2]),
+            "lexical_weights": {"100": 0.5, "200": 0.8},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
+
+        engine = HybridSearchEngine("test_collection", mock_model)
+        engine.search("test query", top_k=5)
+
+        call_kwargs = mock_client.query_points.call_args[1]
+        prefetch = call_kwargs["prefetch"]
+        sparse_prefetches = [p for p in prefetch if p.using == "bm42"]
+        assert len(sparse_prefetches) == 1, (
+            f"Expected exactly one Prefetch with using='bm42', got: {[p.using for p in prefetch]}"
+        )
+
+    @patch("src.evaluation.search_engines.QdrantClient")
+    @patch("src.evaluation.search_engines.Settings")
+    def test_hybrid_dbsf_colbert_uses_bm42_sparse_name(self, mock_settings_cls, mock_qdrant):
+        """HybridDBSFColBERTSearchEngine must use 'bm42' as the sparse vector name."""
+        from src.evaluation.search_engines import HybridDBSFColBERTSearchEngine
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2]),
+            "lexical_weights": {"100": 0.5, "200": 0.8},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
+
+        engine = HybridDBSFColBERTSearchEngine("test_collection", mock_model)
+        engine.search("test query", top_k=5)
+
+        call_kwargs = mock_client.query_points.call_args[1]
+        # The outer prefetch contains a DBSF fusion prefetch with nested dense+sparse
+        outer_prefetch = call_kwargs["prefetch"]
+        inner_prefetch_list = outer_prefetch[0].prefetch
+        sparse_prefetches = [p for p in inner_prefetch_list if p.using == "bm42"]
+        assert len(sparse_prefetches) == 1, (
+            f"Expected exactly one inner Prefetch with using='bm42', "
+            f"got: {[p.using for p in inner_prefetch_list]}"
+        )
+
+    @patch("src.evaluation.search_engines.QdrantClient")
+    @patch("src.evaluation.search_engines.Settings")
+    def test_hybrid_rrf_colbert_uses_bm42_sparse_name(self, mock_settings_cls, mock_qdrant):
+        """HybridRRFColBERTSearchEngine must use 'bm42' as the sparse vector name."""
+        from src.evaluation.search_engines import HybridRRFColBERTSearchEngine
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2]),
+            "lexical_weights": {"100": 0.5, "200": 0.8},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
+
+        engine = HybridRRFColBERTSearchEngine("test_collection", mock_model)
+        engine.search("test query", top_k=5)
+
+        call_kwargs = mock_client.query_points.call_args[1]
+        # The outer prefetch contains an RRF fusion prefetch with nested dense+sparse
+        outer_prefetch = call_kwargs["prefetch"]
+        inner_prefetch_list = outer_prefetch[0].prefetch
+        sparse_prefetches = [p for p in inner_prefetch_list if p.using == "bm42"]
+        assert len(sparse_prefetches) == 1, (
+            f"Expected exactly one inner Prefetch with using='bm42', "
+            f"got: {[p.using for p in inner_prefetch_list]}"
+        )
