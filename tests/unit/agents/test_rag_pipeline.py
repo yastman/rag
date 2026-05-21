@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -697,6 +696,19 @@ async def test_grade_documents_includes_score_gap_confident():
     result = await _grade_documents(docs, 0.0, latency_stages={})
 
     assert result["score_gap_confident"] is False
+
+
+async def test_grade_documents_records_score_gap_counter():
+    from telegram_bot.agents.rag_pipeline import _grade_documents
+    from telegram_bot.services.metrics import PipelineMetrics
+
+    PipelineMetrics.reset()
+    docs = [{"score": 0.020}, {"score": 0.010}, {"score": 0.005}]
+
+    await _grade_documents(docs, 0.0, latency_stages={})
+
+    stats = PipelineMetrics.get().get_stats()
+    assert stats["counters"]["score_gap_confident"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1951,9 +1963,12 @@ async def test_hybrid_retrieve_uses_pre_computed_sparse(mock_cache, mock_sparse,
     assert result["documents"]
 
 
-async def test_hybrid_retrieve_logs_colbert_rerank_attempted(mock_cache, mock_sparse, caplog):
-    """_hybrid_retrieve logs colbert_rerank_attempted metric when ColBERT path is taken."""
+async def test_hybrid_retrieve_counts_colbert_rerank_attempted(mock_cache, mock_sparse):
+    """_hybrid_retrieve counts colbert_rerank_attempted when ColBERT path is taken."""
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from telegram_bot.services.metrics import PipelineMetrics
+
+    PipelineMetrics.reset()
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -1963,25 +1978,26 @@ async def test_hybrid_retrieve_logs_colbert_rerank_attempted(mock_cache, mock_sp
         )
     )
 
-    with caplog.at_level(logging.INFO):
-        await _hybrid_retrieve(
-            "test",
-            [0.1] * 1024,
-            cache=mock_cache,
-            sparse_embeddings=mock_sparse,
-            qdrant=mock_qdrant,
-            colbert_query=[[0.2] * 1024] * 4,
-            latency_stages={},
-        )
+    await _hybrid_retrieve(
+        "test",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=[[0.2] * 1024] * 4,
+        latency_stages={},
+    )
 
-    metric_records = [r for r in caplog.records if r.getMessage() == "metric"]
-    names = [getattr(r, "metric_name", None) for r in metric_records]
-    assert "colbert_rerank_attempted" in names
+    stats = PipelineMetrics.get().get_stats()
+    assert stats["counters"]["colbert_rerank_attempted"] == 1
 
 
-async def test_hybrid_retrieve_logs_retrieval_zero_docs(mock_cache, mock_sparse, caplog):
-    """_hybrid_retrieve logs retrieval_zero_docs metric when search returns empty list."""
+async def test_hybrid_retrieve_counts_retrieval_zero_docs(mock_cache, mock_sparse):
+    """_hybrid_retrieve counts retrieval_zero_docs when search returns empty list."""
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+    from telegram_bot.services.metrics import PipelineMetrics
+
+    PipelineMetrics.reset()
 
     mock_qdrant_empty = AsyncMock()
     mock_qdrant_empty.hybrid_search_rrf = AsyncMock(
@@ -1991,20 +2007,18 @@ async def test_hybrid_retrieve_logs_retrieval_zero_docs(mock_cache, mock_sparse,
         )
     )
 
-    with caplog.at_level(logging.INFO):
-        await _hybrid_retrieve(
-            "test",
-            [0.1] * 1024,
-            cache=mock_cache,
-            sparse_embeddings=mock_sparse,
-            qdrant=mock_qdrant_empty,
-            colbert_query=None,
-            latency_stages={},
-        )
+    await _hybrid_retrieve(
+        "test",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant_empty,
+        colbert_query=None,
+        latency_stages={},
+    )
 
-    metric_records = [r for r in caplog.records if r.getMessage() == "metric"]
-    names = [getattr(r, "metric_name", None) for r in metric_records]
-    assert "retrieval_zero_docs" in names
+    stats = PipelineMetrics.get().get_stats()
+    assert stats["counters"]["retrieval_zero_docs"] == 1
 
 
 async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, mock_sparse):
