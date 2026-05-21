@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import ast
 import inspect
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -21,9 +20,13 @@ from httpx import ASGITransport, AsyncClient
 from mini_app.api import app
 
 
+_AUTH_HEADERS = {"X-Init-Data": "test-init-data"}
+
+
 ***REMOVED*** ---------------------------------------------------------------------------
 ***REMOVED*** Helpers
 ***REMOVED*** ---------------------------------------------------------------------------
+
 
 def _log_handler_source() -> str:
     """Return the source of the remote_log handler function."""
@@ -37,18 +40,52 @@ def _log_handler_source() -> str:
     raise RuntimeError("remote_log handler not found in mini_app.api")
 
 
+async def _post_log(json: dict, headers: dict[str, str] | None = None):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        return await client.post("/api/log", json=json, headers=headers)
+
+
 ***REMOVED*** ---------------------------------------------------------------------------
 ***REMOVED*** Schema validation tests
 ***REMOVED*** ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
+async def test_log_endpoint_requires_init_data_header():
+    """POST /api/log without X-Init-Data must fail closed with 401."""
+    with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
+        resp = await _post_log(json={"level": "info", "message": "test"})
+
+    assert resp.status_code == 401, (
+        f"Expected 401 when X-Init-Data is missing, got {resp.status_code}: {resp.text}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_log_endpoint_rejects_invalid_init_data():
+    """POST /api/log with invalid signed initData must fail with 401."""
+    with patch.dict(
+        "os.environ",
+        {"TELEGRAM_BOT_TOKEN": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"},
+        clear=False,
+    ):
+        resp = await _post_log(
+            json={"level": "info", "message": "test"},
+            headers={"X-Init-Data": "auth_date=1&hash=invalid"},
+        )
+
+    assert resp.status_code == 401, (
+        f"Expected 401 for invalid initData, got {resp.status_code}: {resp.text}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_log_endpoint_rejects_unknown_level():
     """POST with level='CRITICAL' (not in allowed set) must return 422."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post(
-            "/api/log",
+    with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
+        resp = await _post_log(
             json={"level": "CRITICAL", "message": "boom"},
+            headers=_AUTH_HEADERS,
         )
     assert resp.status_code == 422, (
         f"Expected 422 for unknown level, got {resp.status_code}: {resp.text}"
@@ -58,10 +95,10 @@ async def test_log_endpoint_rejects_unknown_level():
 @pytest.mark.asyncio
 async def test_log_endpoint_rejects_oversized_message():
     """POST with message longer than 1000 chars must return 422."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post(
-            "/api/log",
+    with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
+        resp = await _post_log(
             json={"level": "info", "message": "x" * 1001},
+            headers=_AUTH_HEADERS,
         )
     assert resp.status_code == 422, (
         f"Expected 422 for oversized message, got {resp.status_code}: {resp.text}"
@@ -71,10 +108,10 @@ async def test_log_endpoint_rejects_oversized_message():
 @pytest.mark.asyncio
 async def test_log_endpoint_rejects_oversized_data():
     """POST with data value longer than 10000 chars must return 422."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post(
-            "/api/log",
+    with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
+        resp = await _post_log(
             json={"level": "info", "message": "test", "data": {"k": "v" * 10001}},
+            headers=_AUTH_HEADERS,
         )
     assert resp.status_code == 422, (
         f"Expected 422 for oversized data, got {resp.status_code}: {resp.text}"
@@ -84,10 +121,10 @@ async def test_log_endpoint_rejects_oversized_data():
 @pytest.mark.asyncio
 async def test_log_endpoint_accepts_valid_request():
     """Valid payload must return 200 with status ok."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post(
-            "/api/log",
+    with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
+        resp = await _post_log(
             json={"level": "info", "message": "test"},
+            headers=_AUTH_HEADERS,
         )
     assert resp.status_code == 200, (
         f"Expected 200 for valid payload, got {resp.status_code}: {resp.text}"
@@ -98,15 +135,15 @@ async def test_log_endpoint_accepts_valid_request():
 @pytest.mark.asyncio
 async def test_log_endpoint_accepts_all_valid_levels():
     """All allowed levels (debug/info/warn/error) must return 200."""
-    for level in ("debug", "info", "warn", "error"):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
-                "/api/log",
+    with patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "TEST"}, clear=False):
+        for level in ("debug", "info", "warn", "error"):
+            resp = await _post_log(
                 json={"level": level, "message": f"test {level}"},
+                headers=_AUTH_HEADERS,
             )
-        assert resp.status_code == 200, (
-            f"Expected 200 for level={level!r}, got {resp.status_code}: {resp.text}"
-        )
+            assert resp.status_code == 200, (
+                f"Expected 200 for level={level!r}, got {resp.status_code}: {resp.text}"
+            )
 
 
 ***REMOVED*** ---------------------------------------------------------------------------
@@ -126,10 +163,6 @@ def test_log_endpoint_uses_structured_logging_not_print():
         if isinstance(node, ast.Call):
             func = node.func
             if isinstance(func, ast.Name) and func.id == "print":
-                pytest.fail(
-                    "remote_log handler still uses print() — replace with logger.log()"
-                )
+                pytest.fail("remote_log handler still uses print() — replace with logger.log()")
             if isinstance(func, ast.Attribute) and func.attr == "print":
-                pytest.fail(
-                    "remote_log handler still uses *.print() — replace with logger.log()"
-                )
+                pytest.fail("remote_log handler still uses *.print() — replace with logger.log()")
