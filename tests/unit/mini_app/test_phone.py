@@ -9,8 +9,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from httpx import ASGITransport, AsyncClient
 
-from mini_app.api import app
+from mini_app.api import app, get_validated_init_data
 from mini_app.phone import PhoneRequest, submit_phone
+
+
+# The endpoint enforces SDK-validated Telegram initData (#1595). Tests in
+# this file focus on the CRM/Kommo path, so we bypass the auth dependency
+# with a synthetic validated payload. Auth enforcement itself is covered
+# by tests/unit/mini_app/test_mini_app_auth_enforcement.py and
+# tests/contract/test_mini_app_auth_contract.py.
+def _stub_init_data(user_id: int = 123) -> dict:
+    return {"user": {"id": user_id, "first_name": "Test"}, "auth_date": "0"}
+
+
+@pytest.fixture(autouse=True)
+def _bypass_auth_for_phone_tests():
+    app.dependency_overrides[get_validated_init_data] = lambda: _stub_init_data()
+    yield
+    app.dependency_overrides.pop(get_validated_init_data, None)
 
 
 @pytest.mark.asyncio
