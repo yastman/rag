@@ -13,7 +13,7 @@ SCRIPT = Path("scripts/validate_done_json.py")
 
 # Import the validate function directly for unit tests.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from validate_done_json import validate
+from validate_done_json import extra_fields, validate
 
 
 def _valid_done() -> dict:
@@ -121,3 +121,43 @@ def test_cli_invalid_exits_nonzero() -> None:
     )
     assert result.returncode == 1
     assert "ERROR" in result.stderr
+
+
+def test_extra_fields_do_not_cause_validation_failure() -> None:
+    """Extra fields in valid JSON still pass validation (no errors)."""
+    data = _valid_done()
+    data["unexpected_field"] = "some value"
+    data["another_extra"] = 42
+    errors = validate(data)
+    assert errors == []
+
+
+def test_extra_fields_detected() -> None:
+    """extra_fields() returns the names of fields not in REQUIRED_FIELDS."""
+    data = _valid_done()
+    data["statux"] = "typo"
+    data["bonus"] = True
+    result = extra_fields(data)
+    assert "statux" in result
+    assert "bonus" in result
+    # Required fields should not appear in extra_fields output
+    assert "status" not in result
+
+
+def test_cli_extra_fields_warns_but_exits_zero() -> None:
+    """CLI outputs a warning for extra fields but still exits 0."""
+    import json
+
+    data = _valid_done()
+    data["extra_key"] = "oops"
+    payload = json.dumps(data)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "-"],
+        input=payload,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "OK" in result.stdout
+    assert "WARNING" in result.stderr
+    assert "extra_key" in result.stderr
