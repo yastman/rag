@@ -31,7 +31,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ***REMOVED*** default runtime/ingestion path; voyage usage inside them must be lazy.
 DEFAULT_RUNTIME_VOYAGE_CONSUMERS = [
     "src.ingestion.unified.qdrant_writer",
-    "src.ingestion.gdrive_indexer",
     "src.ingestion.cocoindex_flow",
     "src.models.contextualized_embedding",
 ]
