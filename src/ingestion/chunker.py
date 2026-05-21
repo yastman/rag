@@ -2,7 +2,6 @@
 
 import csv
 import re
-import warnings
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -12,13 +11,7 @@ from typing import Any
 class ChunkingStrategy(StrEnum):
     """Document chunking strategies."""
 
-    FIXED_SIZE = (
-        "fixed_size"  # Fixed chunk size with overlap (deprecated — use Docling HybridChunker)
-    )
     SEMANTIC = "semantic"  # Based on content structure (paragraphs, sections)
-    SLIDING_WINDOW = (
-        "sliding_window"  # Sliding window with overlap (deprecated — use Docling HybridChunker)
-    )
 
 
 @dataclass
@@ -40,10 +33,7 @@ class DocumentChunker:
     """
     Chunk documents into smaller units for processing.
 
-    Strategies:
-    1. Fixed size - Simple, consistent chunk sizes
-    2. Semantic - Respects document structure
-    3. Sliding window - Overlapping chunks for context
+    Uses semantic chunking that respects document structure.
     """
 
     def __init__(
@@ -81,51 +71,9 @@ class DocumentChunker:
         Returns:
             List of chunks
         """
-        if self.strategy == ChunkingStrategy.FIXED_SIZE:
-            warnings.warn(
-                "ChunkingStrategy.FIXED_SIZE is deprecated. Use CocoIndex + Docling "
-                "HybridChunker for production chunking.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return self._chunk_fixed_size(text, document_name, article_number)
         if self.strategy == ChunkingStrategy.SEMANTIC:
             return self._chunk_semantic(text, document_name, article_number)
-        if self.strategy == ChunkingStrategy.SLIDING_WINDOW:
-            warnings.warn(
-                "ChunkingStrategy.SLIDING_WINDOW is deprecated. Use CocoIndex + Docling "
-                "HybridChunker for production chunking.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return self._chunk_sliding_window(text, document_name, article_number)
         raise ValueError(f"Unknown strategy: {self.strategy}")
-
-    def _chunk_fixed_size(self, text: str, document_name: str, article_number: str) -> list[Chunk]:
-        """Chunk text into fixed-size pieces."""
-        chunks = []
-
-        # Calculate number of chunks needed
-        num_chunks = max(1, (len(text) - self.overlap) // (self.chunk_size - self.overlap))
-
-        for i in range(num_chunks):
-            start = i * (self.chunk_size - self.overlap)
-            end = start + self.chunk_size
-
-            chunk_text = text[start:end].strip()
-
-            if chunk_text:
-                chunks.append(
-                    Chunk(
-                        text=chunk_text,
-                        chunk_id=i,
-                        document_name=document_name,
-                        article_number=article_number,
-                        order=i,
-                    )
-                )
-
-        return chunks
 
     def _chunk_semantic(self, text: str, document_name: str, article_number: str) -> list[Chunk]:
         """
@@ -192,30 +140,6 @@ class DocumentChunker:
                     order=chunk_id,
                 )
             )
-
-        return chunks
-
-    def _chunk_sliding_window(
-        self, text: str, document_name: str, article_number: str
-    ) -> list[Chunk]:
-        """Chunk text with overlapping sliding window."""
-        chunks = []
-        step = self.chunk_size - self.overlap
-
-        for i, pos in enumerate(range(0, len(text), step)):
-            end = min(pos + self.chunk_size, len(text))
-            chunk_text = text[pos:end].strip()
-
-            if chunk_text:
-                chunks.append(
-                    Chunk(
-                        text=chunk_text,
-                        chunk_id=i,
-                        document_name=document_name,
-                        article_number=article_number,
-                        order=i,
-                    )
-                )
 
         return chunks
 
