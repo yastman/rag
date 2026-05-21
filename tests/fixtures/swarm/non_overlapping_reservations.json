@@ -1,0 +1,12 @@
+{
+  "new_worker": {
+    "worker_id": "w3",
+    "reserved_files": ["src/c.py", "src/d.py"]
+  },
+  "active_workers": [
+    {
+      "worker_id": "w1",
+      "reserved_files": ["src/a.py", "src/b.py"]
+    }
+  ]
+}

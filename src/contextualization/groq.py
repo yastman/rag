@@ -21,8 +21,9 @@ class GroqContextualizer(ContextualizeProvider):
     Note: Fast inference on LLaMA, trade-off with quality.
     """
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, system_prompt: str | None = None) -> None:
         """Initialize Groq contextualizer."""
+        super().__init__(system_prompt=system_prompt)
         self.settings = settings or Settings()
         self.client = AsyncGroq(api_key=self.settings.groq_api_key)
         self.sync_client = Groq(api_key=self.settings.groq_api_key)
@@ -57,7 +58,7 @@ class GroqContextualizer(ContextualizeProvider):
         query: str | None = None,
     ) -> ContextualizedChunk:
         """Contextualize a single chunk using Groq."""
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
 
         response = await self.client.chat.completions.create(
@@ -95,7 +96,7 @@ class GroqContextualizer(ContextualizeProvider):
         query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization using Groq."""
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
 
         response = self.sync_client.chat.completions.create(
