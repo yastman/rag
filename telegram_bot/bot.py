@@ -50,6 +50,11 @@ from .handlers.handoff import (
     HandoffStates,
     start_qualification,
 )
+from .integrations.memory import (
+    begin_checkpoint_overhead_capture,
+    end_checkpoint_overhead_capture,
+    sum_checkpoint_overhead_ms,
+)
 from .integrations.polling_lock import RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
@@ -57,11 +62,6 @@ from .keyboards.client_keyboard import (
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
-from .integrations.memory import (
-    begin_checkpoint_overhead_capture,
-    end_checkpoint_overhead_capture,
-    sum_checkpoint_overhead_ms,
-)
 from .observability import (
     create_callback_handler,
     get_client,
