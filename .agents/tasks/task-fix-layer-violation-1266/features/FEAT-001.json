@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "refactor",
   "description": "Extract shared observability, services, and models from telegram_bot/ into src/ to fix the domain-to-transport layer violation described in issue ***REMOVED***1266. This moves code that src/ depends on into src/ itself, then makes telegram_bot/ re-export from src/ to preserve backward compatibility.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Create `src/observability.py` - Extract the core observability primitives that src/ needs. This file should:\n  - Import from langfuse SDK directly (with the same graceful degradation pattern as telegram_bot/observability.py)\n  - Export: `observe`, `get_client`, `propagate_attributes`\n  - Import PIIRedactor from src.security.pii_redaction and provide `mask_pii`\n  - Include `initialize_langfuse`, `get_langfuse_client`, `traced_pipeline`, and `_reset_langfuse_client_for_tests` (these are used or could be used by src/ code)\n  - Include `sync_langfuse_model_definitions` function\n  - Include the warning filter `_install_langfuse_warning_filters`\n  - Include the helper functions: `_resolve_config_value`, `_ensure_otel_service_name`, `_to_float`, `_normalize_unit`, `_normalize_datetime`, `_load_model_definitions_from_env`, `_model_definitions_equal`\n  - Import `disable_otel_exporter` and `is_endpoint_reachable` from a new `src/observability_bootstrap.py`\n  NOTE: Essentially move the FULL content of telegram_bot/observability.py into src/observability.py, changing only the import of `observability_bootstrap` to point to `src.observability_bootstrap`.",
 
@@ -56,5 +56,5 @@
     "grep -rn 'from telegram_bot' src/ | grep -v 'src/api/main.py' | grep -v '__pycache__' should return empty (all layer violations fixed except the graph/cache/scoring ones in api/main.py that are out of scope)"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Tests that patched telegram_bot.observability internals (_is_endpoint_reachable, Langfuse, _disable_otel_exporter, etc.) needed updating to patch at src.observability since the real code now lives there. Similarly, tests patching telegram_bot.services.bge_m3_client.get_client needed updating to src.services.bge_m3_client.get_client. The observability_without_langfuse fixture was updated to reload src.observability. Pre-existing test failures (7 docker/markdown/cocoindex/fsm tests) remain unaffected."
 }
