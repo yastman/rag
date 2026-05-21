@@ -7,7 +7,7 @@ dependencies = [
     # Core ML/Embeddings
     "FlagEmbedding==1.4.0",
     "torch==2.12.0+cpu",
-    "transformers==4.57.6",
+    "transformers==5.9.0",
     "sentence-transformers==5.5.1",
     # FastAPI & Web Server
     "fastapi==0.136.1",
