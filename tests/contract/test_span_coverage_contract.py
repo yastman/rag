@@ -226,7 +226,7 @@ RETRIEVER_SPANS = [
     "qdrant-hybrid-search-rrf",
     "qdrant-hybrid-search-rrf-colbert",
     "qdrant-batch-search-rrf",
-    "qdrant-search-score-boosting",
+    # "qdrant-search-score-boosting" — removed in #1541 follow-up (no production callers)
 ]
 
 EVALUATOR_SPANS = [

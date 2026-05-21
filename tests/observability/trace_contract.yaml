@@ -143,7 +143,7 @@ spans:
     - qdrant-hybrid-search-rrf
     - qdrant-hybrid-search-rrf-colbert
     - qdrant-batch-search-rrf
-    - qdrant-search-score-boosting
+    # qdrant-search-score-boosting removed in #1541 follow-up (no production callers)
 
   history_service:
     - history-save
@@ -284,9 +284,7 @@ spans:
     - job-hot-lead-notify
     - job-lead-score-sync
     - job-nurturing-dispatch
-    - llm-service-generate
-    - llm-service-generate-answer
-    - llm-service-stream-answer
+    # llm-service-* spans removed in #1541 follow-up (llm.py deleted; no production callers)
     - query-analyzer
     - session-summary-llm
 
@@ -368,7 +366,7 @@ sensitive_spans:
   - qdrant-hybrid-search-rrf
   - qdrant-hybrid-search-rrf-colbert
   - qdrant-batch-search-rrf
-  - qdrant-search-score-boosting
+  # qdrant-search-score-boosting removed in #1541 follow-up (no production callers)
   # history_service (conversation PII)
   - history-save
   - history-search
@@ -463,9 +461,7 @@ sensitive_spans:
   - job-hot-lead-notify
   - job-lead-score-sync
   - job-nurturing-dispatch
-  - llm-service-generate
-  - llm-service-generate-answer
-  - llm-service-stream-answer
+  # llm-service-* spans removed in #1541 follow-up (llm.py deleted; no production callers)
   - query-analyzer
   - session-summary-llm
 
