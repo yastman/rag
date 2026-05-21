@@ -30,6 +30,7 @@ from pathlib import Path
 
 import yaml
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARED_LIB = REPO_ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
 COMPOSE_VPS = REPO_ROOT / "compose.vps.yml"
@@ -37,6 +38,15 @@ CONSUMERS = [
     REPO_ROOT / "scripts" / "test_release_health_vps.sh",
     REPO_ROOT / "scripts" / "vps_cleanup_removed_services.sh",
 ]
+DUPLICATE_SCAN_FILES = sorted(
+    {
+        *CONSUMERS,
+        *(REPO_ROOT / "scripts").glob("*.sh"),
+        *(REPO_ROOT / ".github" / "workflows").glob("*.yml"),
+        *(REPO_ROOT / ".github" / "workflows").glob("*.yaml"),
+    }
+    - {SHARED_LIB}
+)
 
 # Profile in compose.vps.yml that gates non-core (removable) services.
 NONCORE_PROFILE = "vps-noncore"
@@ -117,7 +127,7 @@ def test_consumers_have_no_inline_shell_array_duplicate() -> None:
     overlaps the canonical list. Catches the original drift hazard."""
     canonical = set(_parse_shared_lib_array())
     threshold = max(2, len(canonical) // 2)
-    for path in CONSUMERS:
+    for path in DUPLICATE_SCAN_FILES:
         text = path.read_text(encoding="utf-8")
         for match in re.finditer(
             r"^\s*(\w+)=\(\s*([^)]*)\)",
