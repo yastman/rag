@@ -1,0 +1,22 @@
+{
+  "project_type": "Python RAG pipeline with Telegram bot, LangGraph, Qdrant vector DB",
+  "language": "Python (primary), Bash (scripts)",
+  "build_system": "uv (Python package manager), Makefile targets, pyproject.toml",
+  "test_framework": "pytest with pytest-xdist for parallel execution, strict-markers, 30s timeout",
+  "build_command": "uv sync",
+  "test_command": "uv run pytest tests/unit/scripts/ -q --timeout=30",
+  "verification_instructions": "1. Run `bash -n scripts/swarm_opencode_run_unattended.sh` for syntax check. 2. Run `uv run pytest tests/unit/scripts/test_swarm_opencode_run_unattended.py -q --timeout=30` for unit tests. 3. Run `make test-unit` for full unit suite.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "uv sync (installs all dev dependencies)",
+  "environment_constraints": "No Docker daemon available for container tests. No external network for real opencode binary. Use shell stubs for testing.",
+  "contribution_requirements": "Branch from dev. Shell scripts must start with #!/usr/bin/env bash and set -euo pipefail. Scripts must be idempotent. Test-first workflow for behavior changes. Include fresh verification evidence.",
+  "key_patterns": "Shell script tests in tests/unit/scripts/ use Path().read_text() for contract checks on script content, or subprocess for behavioral tests. Scripts use #!/usr/bin/env bash + set -euo pipefail. Test files: test_<feature>.py. Test functions: test_<behavior>_<expected_outcome>(). pythonpath=['.'] in pytest config allows direct imports.",
+  "relevant_files": [
+    "scripts/AGENTS.override.md",
+    "tests/unit/scripts/test_bot_health_script.py",
+    "tests/unit/scripts/test_git_hygiene.py",
+    "docs/engineering/repo-hygiene-runbook.md",
+    "docs/engineering/README.md"
+  ],
+  "directory_structure": "scripts/ - operational shell/python scripts; tests/unit/scripts/ - unit tests for scripts; docs/engineering/ - engineering runbooks and guides"
+}

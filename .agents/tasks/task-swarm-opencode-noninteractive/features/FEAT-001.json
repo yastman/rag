@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Create the swarm_opencode_run_unattended.sh wrapper script, its pytest test file, and the engineering runbook documentation for non-interactive OpenCode worker launches.",
+  "status": "in_progress",
+  "steps": [
+    "Create `scripts/swarm_opencode_run_unattended.sh` with: shebang `#!/usr/bin/env bash`, `set -euo pipefail`, check if `opencode` is in PATH (exit 127 with friendly diagnostic if missing), conditionally export `OPENCODE_CONFIG_CONTENT='{\"permission\":\"allow\"}'` only when neither `OPENCODE_CONFIG` nor `OPENCODE_CONFIG_CONTENT` is already set, then `exec opencode \"$@\"`. Make executable (chmod +x).",
+    "Create `tests/unit/scripts/test_swarm_opencode_run_unattended.py` with 9 contract tests using subprocess to invoke the script with a stub opencode binary (a shell script in tmp_path that records env/args to stdout). Tests must cover: (1) default OPENCODE_CONFIG_CONTENT injection, (2) respects existing OPENCODE_CONFIG, (3) respects existing OPENCODE_CONFIG_CONTENT, (4) passes all arguments through, (5) exit 127 when opencode not in PATH, (6) friendly diagnostic message on missing opencode, (7) exits with opencode success code, (8) exits with opencode failure code, (9) injected config is valid JSON with permission=allow. Follow test naming pattern `test_<behavior>_<expected_outcome>()` and use Arrange/Act/Assert structure. Use tmp_path fixture to create the stub.",
+    "Create `docs/engineering/swarm-non-interactive-launch.md` with sections: Problem, Root Cause, Canonical Mechanism, Recommended Launcher Pattern, Verification Checklist, Per-Worker Policy Overrides, References. Document that OPENCODE_PERMISSION env var is silently ignored, the canonical mechanism is the opencode.json permission field loadable via OPENCODE_CONFIG or OPENCODE_CONFIG_CONTENT env vars, and recommend using the repo wrapper script.",
+    "Verify: run `bash -n scripts/swarm_opencode_run_unattended.sh` to confirm no syntax errors.",
+    "Verify: run `uv run pytest tests/unit/scripts/test_swarm_opencode_run_unattended.py -v --timeout=30` to confirm all 9 tests pass."
+  ],
+  "acceptance_criteria": [
+    "scripts/swarm_opencode_run_unattended.sh exists, is executable, and passes bash -n syntax check",
+    "Running `uv run pytest tests/unit/scripts/test_swarm_opencode_run_unattended.py -v --timeout=30` passes all 9 tests",
+    "docs/engineering/swarm-non-interactive-launch.md exists with all required sections",
+    "The script exits 127 with a diagnostic when opencode is not in PATH",
+    "The script injects OPENCODE_CONFIG_CONTENT only when neither OPENCODE_CONFIG nor OPENCODE_CONFIG_CONTENT is set",
+    "The script respects existing OPENCODE_CONFIG or OPENCODE_CONFIG_CONTENT without overriding"
+  ],
+  "verification": [
+    "bash -n scripts/swarm_opencode_run_unattended.sh",
+    "uv run pytest tests/unit/scripts/test_swarm_opencode_run_unattended.py -v --timeout=30",
+    "test -x scripts/swarm_opencode_run_unattended.sh && echo 'executable OK'",
+    "test -f docs/engineering/swarm-non-interactive-launch.md && echo 'doc exists OK'"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

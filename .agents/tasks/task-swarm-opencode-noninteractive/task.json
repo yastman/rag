@@ -1,0 +1,7 @@
+{
+  "task_id": "task-swarm-opencode-noninteractive",
+  "task_description": "Implement non-interactive OpenCode worker launches for the swarm orchestration system: a bash wrapper script that injects OPENCODE_CONFIG_CONTENT, 9 contract tests, and an operator runbook.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}
