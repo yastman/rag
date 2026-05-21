@@ -225,7 +225,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         sys.modules.pop("telegram_bot.services.session_summary_worker", None)
         importlib.import_module("telegram_bot.services.session_summary_worker")
 
-    def test_module_imports_observe_and_get_client(self):
+    def test_session_summary_worker_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1662 contract)."""
         from telegram_bot.services import session_summary_worker as ssw_mod
 
@@ -240,7 +240,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             "update_current_span calls"
         )
 
-    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_session_summary_worker_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """@observe must be applied with the trace-coverage audit's exact kwargs.
 
         Specifically the LLM-call wrapper must use:
@@ -398,7 +398,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
 
         assert result == "Краткая выжимка"
 
-    async def test_exception_path_records_error_level_and_reraises(self, monkeypatch):
+    async def test_session_summary_worker_exception_path_records_error_level_and_reraises(self, monkeypatch):
         """On LLM exception: span level=ERROR with status_message, then re-raise.
 
         Per issue #1662 Implementation Plan step 4: record ERROR span and

@@ -44,7 +44,7 @@ def _is_pytest_skip(call: ast.Call) -> bool:
     return list(reversed(chain)) == ["pytest", "skip"]
 
 
-def test_target_file_exists() -> None:
+def test_e2e_cache_regression_target_file_exists() -> None:
     assert TARGET.exists(), f"missing target: {TARGET}"
 
 

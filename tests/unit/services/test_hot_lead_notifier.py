@@ -102,7 +102,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         sys.modules.pop("telegram_bot.services.hot_lead_notifier", None)
         importlib.import_module("telegram_bot.services.hot_lead_notifier")
 
-    def test_module_imports_observe_and_get_client(self):
+    def test_hot_lead_notifier_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1663 contract)."""
         from telegram_bot.services import hot_lead_notifier as hln_mod
 
@@ -113,7 +113,7 @@ class TestHotLeadNotifierObserveInstrumentation:
             "telegram_bot.services.hot_lead_notifier must import `get_client`"
         )
 
-    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_hot_lead_notifier_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """@observe must be applied with the trace-coverage audit's exact kwargs."""
         import importlib
         import sys
@@ -251,7 +251,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         assert len(output_calls) >= 1
         assert output_calls[-1]["output"].get("notified") is False
 
-    async def test_exception_path_records_error_level_and_reraises(self, monkeypatch):
+    async def test_hot_lead_notifier_exception_path_records_error_level_and_reraises(self, monkeypatch):
         """On exception, update_current_span(level='ERROR', ...) and re-raise."""
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
