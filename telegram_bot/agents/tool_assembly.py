@@ -48,6 +48,9 @@ def build_agent_tools(
     from .rag_tool import rag_search
     from .utility_tools import get_utility_tools
 
+    if role not in ("client", "manager"):
+        raise ValueError(f"Unknown role {role!r}; expected 'client' or 'manager'")
+
     base_tools: list[Any] = [rag_search, apartment_search]
 
     if role == "manager":
