@@ -188,9 +188,7 @@ async def cmd_clear(
         try:
             history_cleared = bool(await bot._history_service.delete_user_history(user_id))
         except Exception:
-            logger.warning(
-                "Failed to clear Qdrant history for user_id=%s", user_id, exc_info=True
-            )
+            logger.warning("Failed to clear Qdrant history for user_id=%s", user_id, exc_info=True)
             history_cleared = False
 
     if checkpointer_cleared and history_cleared and not dialog_reset_failed:
@@ -352,9 +350,7 @@ async def cmd_history(bot: PropertyBot, message: Message) -> None:
     parts = text.split(maxsplit=1)
 
     if len(parts) < 2:
-        await message.answer(
-            "Использование: /history <запрос>\nПример: /history цены на квартиры"
-        )
+        await message.answer("Использование: /history <запрос>\nПример: /history цены на квартиры")
         return
 
     query = parts[1]
@@ -391,9 +387,7 @@ async def cmd_history(bot: PropertyBot, message: Message) -> None:
                 metadata={"user_id": user_id},
             )
             write_history_scores(lf, tid, count=0)
-            await message.answer(
-                "Произошла ошибка при поиске в истории. Попробуйте позже."
-            )
+            await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
             return
 
         search_ms = (time.perf_counter() - search_start) * 1000
@@ -421,9 +415,7 @@ async def cmd_history(bot: PropertyBot, message: Message) -> None:
         )
 
         if not valid:
-            await message.answer(
-                f"По запросу \u00ab{query}\u00bb ничего не найдено в истории."
-            )
+            await message.answer(f"По запросу \u00ab{query}\u00bb ничего не найдено в истории.")
             return
 
         lines = [f"\U0001f4cb Найдено {len(valid)} записей:\n"]
@@ -470,7 +462,9 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
         dialog_manager: Any = None,
         i18n: Any = None,
     ) -> None:
-        await cmd_start(bot_instance, message, command=command, dialog_manager=dialog_manager, i18n=i18n)
+        await cmd_start(
+            bot_instance, message, command=command, dialog_manager=dialog_manager, i18n=i18n
+        )
 
     async def _cmd_help(message: Message) -> None:
         await cmd_help(bot_instance, message)
