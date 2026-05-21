@@ -8,7 +8,6 @@ import logging
 from typing import Any
 from urllib.parse import urlparse
 
-import numpy as np
 from qdrant_client import AsyncQdrantClient, models
 
 from src.config.qdrant_policy import resolve_collection_name
@@ -1122,114 +1121,6 @@ class QdrantService:
                 },
             )
             return fallback_results
-
-    @observe(
-        name="qdrant-mmr-rerank", as_type="retriever", capture_input=False, capture_output=False
-    )
-    def mmr_rerank(
-        self,
-        points: list[dict],
-        embeddings: list[list[float]],
-        lambda_mult: float = 0.5,
-        top_k: int = 10,
-    ) -> list[dict]:
-        """Maximal Marginal Relevance reranking for diversity.
-
-        Balances relevance and diversity in results.
-
-        Args:
-            points: Search results (list of dicts with id, score, text, metadata)
-            embeddings: Corresponding embedding vectors
-            lambda_mult: Diversity parameter
-                - 0.0 = maximum diversity (only diversity matters)
-                - 0.5 = balanced (recommended)
-                - 1.0 = minimum diversity (only relevance)
-            top_k: Number of results to return
-
-        Returns:
-            Reranked points with improved diversity
-        """
-        lf = get_client()
-        lf.update_current_span(
-            input={
-                "points_count": len(points),
-                "embeddings_count": len(embeddings),
-                "top_k": top_k,
-                "lambda_mult": lambda_mult,
-            },
-            metadata={
-                "collection": self._collection_name,
-                "quantization_mode": self._quantization_mode,
-            },
-        )
-
-        if not points or len(points) <= top_k:
-            lf.update_current_span(
-                output={"results_count": len(points), "rerank_applied": False},
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
-            )
-            return points
-
-        embeddings_array = np.array(embeddings)
-
-        selected_indices = []
-        selected_embeddings = []
-
-        # Start with most relevant
-        scores = [p["score"] for p in points]
-        first_idx = int(np.argmax(scores))
-        selected_indices.append(first_idx)
-        selected_embeddings.append(embeddings_array[first_idx])
-
-        # Iteratively select by MMR
-        while len(selected_indices) < min(top_k, len(points)):
-            best_idx = None
-            best_mmr = float("-inf")
-
-            for i in range(len(points)):
-                if i in selected_indices:
-                    continue
-
-                # Relevance term (normalized score)
-                relevance = points[i]["score"]
-
-                # Max similarity to already selected
-                emb = embeddings_array[i]
-                similarities = []
-                for sel_emb in selected_embeddings:
-                    norm_emb = np.linalg.norm(emb)
-                    norm_sel = np.linalg.norm(sel_emb)
-                    if norm_emb > 0 and norm_sel > 0:
-                        sim = float(np.dot(emb, sel_emb) / (norm_emb * norm_sel))
-                    else:
-                        sim = 0.0
-                    similarities.append(sim)
-
-                max_sim = max(similarities) if similarities else 0.0
-
-                # MMR: lambda * relevance - (1-lambda) * max_similarity
-                mmr = lambda_mult * relevance - (1 - lambda_mult) * max_sim
-
-                if mmr > best_mmr:
-                    best_mmr = mmr
-                    best_idx = i
-
-            if best_idx is not None:
-                selected_indices.append(best_idx)
-                selected_embeddings.append(embeddings_array[best_idx])
-
-        reranked = [points[i] for i in selected_indices]
-        lf.update_current_span(
-            output={"results_count": len(reranked), "rerank_applied": True},
-            metadata={
-                "collection": self._collection_name,
-                "quantization_mode": self._quantization_mode,
-            },
-        )
-        return reranked
 
     def _build_filter(self, filters: dict | None) -> models.Filter | None:
         """Build Qdrant filter from dict.
