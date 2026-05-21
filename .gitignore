@@ -213,6 +213,7 @@ CLAUDE.md
 !services/user-base/AGENTS.override.md
 !services/docling/AGENTS.override.md
 !mini_app/frontend/src/AGENTS.override.md
+!scripts/lib/
 
 # Internal dev tools & AI agent configs
 .claude/rules/

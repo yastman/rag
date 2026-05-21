@@ -14,7 +14,7 @@
 - Do not import from `telegram_bot/` or `src/` Python paths; the frontend talks to the backend over HTTP only.
 
 ## Required Validation
-- Type check: `npm run typecheck` (in `mini_app/frontend/`).
+- Type check/build: `npm run build` (in `mini_app/frontend/`; runs `tsc && vite build`).
 - Unit tests (Vitest): `npm test` (in `mini_app/frontend/`).
 - For UI changes, also run the relevant `__tests__/` suites under `mini_app/frontend/src/`.
 
