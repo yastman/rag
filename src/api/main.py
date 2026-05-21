@@ -142,9 +142,7 @@ def _resolve_trace_id() -> str:
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(
-    _request: Request, exc: StarletteHTTPException
-) -> JSONResponse:
+async def http_exception_handler(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Return the proper HTTP status code (401/403/404/...) instead of 500.
 
     Catches both ``fastapi.HTTPException`` (subclass of
