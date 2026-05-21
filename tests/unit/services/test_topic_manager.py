@@ -43,7 +43,6 @@ def manager(mock_bot, mock_redis):
     return TopicManager(bot=mock_bot, redis=mock_redis)
 
 
-@pytest.mark.asyncio
 async def test_create_new_topic(manager, mock_bot):
     topic_id = await manager.get_or_create_topic(
         chat_id=111,
@@ -58,7 +57,6 @@ async def test_create_new_topic(manager, mock_bot):
     )
 
 
-@pytest.mark.asyncio
 async def test_reuse_existing_topic(manager, mock_bot, mock_redis):
     # Первый вызов — создаёт
     await manager.get_or_create_topic(
@@ -80,7 +78,6 @@ async def test_reuse_existing_topic(manager, mock_bot, mock_redis):
     mock_bot.create_forum_topic.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_reverse_lookup(manager):
     await manager.get_or_create_topic(
         chat_id=111,
@@ -92,13 +89,11 @@ async def test_reverse_lookup(manager):
     assert expert_id == "consultant"
 
 
-@pytest.mark.asyncio
 async def test_reverse_lookup_unknown(manager):
     result = await manager.get_expert_for_topic(chat_id=111, topic_id=999)
     assert result is None
 
 
-@pytest.mark.asyncio
 async def test_rename_topic(manager, mock_bot):
     await manager.rename_topic(chat_id=111, topic_id=42, new_name="🏠 Двушка в Бургасе")
     mock_bot.edit_forum_topic.assert_called_once_with(
@@ -108,7 +103,6 @@ async def test_rename_topic(manager, mock_bot):
     )
 
 
-@pytest.mark.asyncio
 async def test_rename_truncates_long_name(manager, mock_bot):
     long_name = "A" * 200
     await manager.rename_topic(chat_id=111, topic_id=42, new_name=long_name)
@@ -116,7 +110,6 @@ async def test_rename_truncates_long_name(manager, mock_bot):
     assert len(call_name) <= 128
 
 
-@pytest.mark.asyncio
 async def test_invalidate_topic(manager):
     await manager.get_or_create_topic(
         chat_id=111,

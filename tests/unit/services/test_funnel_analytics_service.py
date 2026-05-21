@@ -32,7 +32,6 @@ def fake_pool():
     return pool
 
 
-@pytest.mark.asyncio
 async def test_daily_snapshot_computes_conversion_and_dropoff(fake_pool):
     svc = FunnelAnalyticsService(pool=fake_pool)
     snapshots = await svc.build_daily_snapshot(metric_date=dt.date(2026, 2, 18))
@@ -46,7 +45,6 @@ async def test_daily_snapshot_computes_conversion_and_dropoff(fake_pool):
     assert 0 <= first["conversion_rate"] <= 1
 
 
-@pytest.mark.asyncio
 async def test_daily_snapshot_empty_returns_empty_list(fake_pool):
     fake_pool.fetch = AsyncMock(return_value=[])
     svc = FunnelAnalyticsService(pool=fake_pool)
@@ -55,7 +53,6 @@ async def test_daily_snapshot_empty_returns_empty_list(fake_pool):
     assert snapshots == []
 
 
-@pytest.mark.asyncio
 async def test_daily_snapshot_zero_entered_gives_zero_rate(fake_pool):
     fake_pool.fetch = AsyncMock(
         return_value=[_make_row(stage_name="demo", entered_count=0, converted_count=0)]
@@ -68,7 +65,6 @@ async def test_daily_snapshot_zero_entered_gives_zero_rate(fake_pool):
     assert snapshots[0]["dropoff_count"] == 0
 
 
-@pytest.mark.asyncio
 async def test_persist_snapshots_calls_executemany(fake_pool):
     svc = FunnelAnalyticsService(pool=fake_pool)
     snapshots = [
@@ -88,7 +84,6 @@ async def test_persist_snapshots_calls_executemany(fake_pool):
     assert "funnel_metrics_daily" in sql
 
 
-@pytest.mark.asyncio
 async def test_get_latest_summary_delegates_to_store(fake_pool):
     fake_pool.fetch = AsyncMock(
         return_value=[

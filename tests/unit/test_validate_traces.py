@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from scripts.validate_traces import FakeChat, FakeMessage
 
 
@@ -24,7 +22,6 @@ def test_fake_message_chat_id_customizable() -> None:
     assert msg.chat.id == 99
 
 
-@pytest.mark.asyncio
 async def test_fake_message_answer_returns_sent_message() -> None:
     msg = FakeMessage()
     sent = await msg.answer("hello")

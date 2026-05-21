@@ -26,7 +26,6 @@ def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
             return False
 
 
-@pytest.mark.asyncio
 async def test_postgres_connection():
     """Test PostgreSQL connectivity."""
     if not _check_tcp("localhost", 5432):
@@ -40,7 +39,6 @@ async def test_postgres_connection():
     assert "PostgreSQL" in version
 
 
-@pytest.mark.asyncio
 async def test_redis_connection():
     """Test Redis connectivity."""
     if not _check_tcp("localhost", 6379):
@@ -69,7 +67,6 @@ def test_qdrant_health():
     assert collections is not None
 
 
-@pytest.mark.asyncio
 async def test_bge_m3_health():
     """Test BGE-M3 embedding service health."""
     if not _check_tcp("localhost", 8000):
@@ -84,7 +81,6 @@ async def test_bge_m3_health():
             assert data["status"] == "ok"
 
 
-@pytest.mark.asyncio
 async def test_docling_health():
     """Test Docling document parsing service health."""
     if not _check_tcp("localhost", 5001):

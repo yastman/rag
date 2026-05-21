@@ -29,7 +29,6 @@ class TestFSMCancelMiddleware:
     def middleware(self):
         return FSMCancelMiddleware()
 
-    @pytest.mark.asyncio()
     @pytest.mark.parametrize("text", ["/cancel", "Отмена", "отмена", "cancel", "❌ Отмена"])
     async def test_cancel_clears_fsm_state(self, middleware, text):
         msg = _make_message(text)
@@ -44,7 +43,6 @@ class TestFSMCancelMiddleware:
         msg.answer.assert_awaited_once()
         handler.assert_not_awaited()
 
-    @pytest.mark.asyncio()
     async def test_no_fsm_state_passes_through(self, middleware):
         msg = _make_message("/cancel")
         state = _make_state(None)
@@ -55,7 +53,6 @@ class TestFSMCancelMiddleware:
         state.clear.assert_not_awaited()
         handler.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_non_cancel_text_passes_through(self, middleware):
         msg = _make_message("Привет")
         state = _make_state("PhoneCollectorStates:waiting_phone")
@@ -66,7 +63,6 @@ class TestFSMCancelMiddleware:
         state.clear.assert_not_awaited()
         handler.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_no_state_in_data_passes_through(self, middleware):
         msg = _make_message("/cancel")
         handler = AsyncMock()
@@ -75,7 +71,6 @@ class TestFSMCancelMiddleware:
 
         handler.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_non_message_event_passthrough(self, middleware):
         event = object()
         handler = AsyncMock()
@@ -84,7 +79,6 @@ class TestFSMCancelMiddleware:
 
         handler.assert_awaited_once_with(event, {})
 
-    @pytest.mark.asyncio()
     async def test_no_text_passes_through(self, middleware):
         msg = _make_message(None)
         state = _make_state("PhoneCollectorStates:waiting_phone")
@@ -94,7 +88,6 @@ class TestFSMCancelMiddleware:
 
         handler.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_cancel_response_text_and_keyboard(self, middleware):
         """Cancel sends exact response text and build_client_keyboard() markup."""
         msg = _make_message("❌ Отмена")

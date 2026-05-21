@@ -66,7 +66,6 @@ class TestCreateCommandsRouter:
 class TestCmdHelp:
     """Test cmd_help handler."""
 
-    @pytest.mark.asyncio
     async def test_sends_expected_text(self, mock_bot):
         """cmd_help sends response with example queries and commands."""
         message = _make_message()
@@ -84,7 +83,6 @@ class TestCmdHelp:
 class TestCmdStats:
     """Test cmd_stats handler."""
 
-    @pytest.mark.asyncio
     async def test_formats_cache_metrics(self, mock_bot):
         """cmd_stats formats and sends cache metrics."""
         mock_bot._cache.get_metrics.return_value = {
@@ -102,7 +100,6 @@ class TestCmdStats:
 class TestCmdClear:
     """Test cmd_clear handler."""
 
-    @pytest.mark.asyncio
     async def test_clears_cache_conversation(self, mock_bot):
         """cmd_clear calls cache.clear_conversation with user_id."""
         message = _make_message(user_id=777)
@@ -116,7 +113,6 @@ class TestCmdClear:
 class TestCmdMetrics:
     """Test cmd_metrics handler."""
 
-    @pytest.mark.asyncio
     async def test_calls_pipeline_metrics(self, mock_bot):
         """cmd_metrics calls PipelineMetrics.get() and sends formatted text."""
         message = _make_message()
@@ -135,7 +131,6 @@ class TestCmdMetrics:
 class TestCmdStart:
     """Test cmd_start handler."""
 
-    @pytest.mark.asyncio
     async def test_client_shows_main_menu(self, mock_bot):
         """cmd_start for client role shows client main menu."""
         message = _make_message()

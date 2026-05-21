@@ -35,7 +35,6 @@ def mock_qdrant_client():
 class TestHybridSearchRRFQuantization:
     """Tests for per-call quantization parameters in hybrid_search_rrf."""
 
-    @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_true(self):
         """Test quantization_ignore=True skips quantization."""
         from telegram_bot.services.qdrant import QdrantService
@@ -63,7 +62,6 @@ class TestHybridSearchRRFQuantization:
             assert call_kwargs["search_params"] is not None
             assert call_kwargs["search_params"].quantization.ignore is True
 
-    @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_false(self):
         """Test quantization_ignore=False forces quantization."""
         from telegram_bot.services.qdrant import QdrantService
@@ -95,7 +93,6 @@ class TestHybridSearchRRFQuantization:
             assert call_kwargs["search_params"].quantization.rescore is True
             assert call_kwargs["search_params"].quantization.oversampling == 2.0
 
-    @pytest.mark.asyncio
     async def test_search_without_quantization_override(self):
         """Test quantization_ignore=None means no search_params quantization."""
         from telegram_bot.services.qdrant import QdrantService
@@ -151,7 +148,6 @@ class TestQdrantServiceUnit:
             )
             assert service._collection_name == "test_collection"
 
-    @pytest.mark.asyncio
     async def test_hybrid_search_rrf_builds_prefetch(self):
         """Test hybrid_search_rrf builds correct prefetch queries."""
         from telegram_bot.services.qdrant import QdrantService
@@ -186,7 +182,6 @@ class TestQdrantServiceUnit:
             assert "prefetch" in call_kwargs
             assert len(call_kwargs["prefetch"]) == 2
 
-    @pytest.mark.asyncio
     async def test_hybrid_search_rrf_without_sparse(self):
         """Test hybrid_search_rrf works with only dense vector."""
         from telegram_bot.services.qdrant import QdrantService
@@ -214,7 +209,6 @@ class TestQdrantServiceUnit:
             # Should have only dense prefetch
             assert len(call_kwargs["prefetch"]) == 1
 
-    @pytest.mark.asyncio
     async def test_search_returns_formatted_results(self):
         """Test search returns properly formatted results."""
         from telegram_bot.services.qdrant import QdrantService

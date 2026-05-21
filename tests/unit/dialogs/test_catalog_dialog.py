@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from telegram_bot.dialogs.states import CatalogSG, FilterSG
 
 
@@ -34,7 +32,6 @@ def test_catalog_results_window_keeps_message_input() -> None:
     assert any(isinstance(widget, MessageInput) for widget in window.on_message.inputs)
 
 
-@pytest.mark.asyncio
 async def test_catalog_home_restores_client_reply_keyboard() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_home
 
@@ -56,7 +53,6 @@ async def test_catalog_home_restores_client_reply_keyboard() -> None:
     callback.message.answer.assert_awaited()
 
 
-@pytest.mark.asyncio
 async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> None:
     from aiogram_dialog import ShowMode, StartMode
 
@@ -83,7 +79,6 @@ async def test_catalog_filters_starts_filter_dialog_with_current_filters() -> No
     )
 
 
-@pytest.mark.asyncio
 async def test_show_catalog_controls_skips_status_message_for_list_mode() -> None:
     from telegram_bot.dialogs.catalog import show_catalog_controls
 

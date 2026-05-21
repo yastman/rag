@@ -48,7 +48,6 @@ def fake_pool_with_384_columns():
     return pool
 
 
-@pytest.mark.asyncio
 async def test_nurturing_service_fails_fast_when_384_columns_missing(
     fake_pool_without_384_columns,
 ):
@@ -58,7 +57,6 @@ async def test_nurturing_service_fails_fast_when_384_columns_missing(
         await svc.select_candidates(limit=10)
 
 
-@pytest.mark.asyncio
 async def test_nurturing_service_succeeds_when_384_columns_present(
     fake_pool_with_384_columns,
 ):

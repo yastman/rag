@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
@@ -18,7 +17,6 @@ from telegram_bot.handlers.demo_handler import (
 
 
 class TestDemoFlow:
-    @pytest.mark.asyncio
     async def test_demo_button_sends_inline_menu(self) -> None:
         message = AsyncMock()
         await handle_demo_button(message)
@@ -27,7 +25,6 @@ class TestDemoFlow:
         assert "Демонстрация" in call_kwargs.args[0]
         assert call_kwargs.kwargs.get("reply_markup") is not None
 
-    @pytest.mark.asyncio
     async def test_demo_apartments_sets_fsm_state(self) -> None:
         callback = AsyncMock(spec=CallbackQuery)
         callback.answer = AsyncMock()
@@ -36,7 +33,6 @@ class TestDemoFlow:
         await handle_demo_apartments(callback, state)
         state.set_state.assert_awaited_once_with(DemoStates.waiting_query)
 
-    @pytest.mark.asyncio
     async def test_demo_apartments_shows_examples(self) -> None:
         callback = AsyncMock(spec=CallbackQuery)
         callback.answer = AsyncMock()
@@ -47,7 +43,6 @@ class TestDemoFlow:
         assert "Напишите текстом" in sent.args[0]
         assert sent.kwargs.get("reply_markup") is not None
 
-    @pytest.mark.asyncio
     async def test_demo_apartments_without_message_returns_cleanly(self) -> None:
         callback = AsyncMock(spec=CallbackQuery)
         callback.answer = AsyncMock()
@@ -58,7 +53,6 @@ class TestDemoFlow:
 
         state.set_state.assert_awaited_once_with(DemoStates.waiting_query)
 
-    @pytest.mark.asyncio
     async def test_demo_search_calls_pipeline(self) -> None:
         message = AsyncMock()
         message.text = "двушка до 100к"
@@ -79,7 +73,6 @@ class TestDemoFlow:
 
 
 class TestDemoExampleClick:
-    @pytest.mark.asyncio
     async def test_example_click_triggers_search(self) -> None:
         from telegram_bot.callback_data import DemoCB
         from telegram_bot.handlers.demo_handler import handle_demo_example
@@ -263,7 +256,6 @@ class TestDemoVoiceFlow:
 
 
 class TestDemoStateClear:
-    @pytest.mark.asyncio
     async def test_demo_search_text_clears_state_when_no_dialog_manager(self) -> None:
         """Legacy demo text handler must clear FSM state after search completes."""
         message = AsyncMock()

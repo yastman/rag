@@ -90,7 +90,6 @@ def bot_context_no_managers():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_mortgage_basic(bot_context):
     """Basic annuity calculation: 100k EUR at 3.5% for 20 years."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -103,7 +102,6 @@ async def test_mortgage_basic(bot_context):
     assert "579" in result  # ~579.96 EUR
 
 
-@pytest.mark.asyncio
 async def test_mortgage_zero_rate(bot_context):
     """Zero interest rate: simple division P/n."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -116,7 +114,6 @@ async def test_mortgage_zero_rate(bot_context):
     assert "1 000" in result or "1000" in result
 
 
-@pytest.mark.asyncio
 async def test_mortgage_with_down_payment(bot_context):
     """With down payment: LTV should be shown."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -128,7 +125,6 @@ async def test_mortgage_with_down_payment(bot_context):
     assert "LTV" in result or "80" in result
 
 
-@pytest.mark.asyncio
 async def test_mortgage_invalid_amount(bot_context):
     """Negative loan amount returns validation error."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -140,7 +136,6 @@ async def test_mortgage_invalid_amount(bot_context):
     assert "ошибка" in result.lower() or "некорректн" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_mortgage_invalid_term(bot_context):
     """Zero term returns validation error."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -152,7 +147,6 @@ async def test_mortgage_invalid_term(bot_context):
     assert "ошибка" in result.lower() or "некорректн" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_mortgage_down_payment_exceeds_loan(bot_context):
     """Down payment >= loan amount returns error."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -164,7 +158,6 @@ async def test_mortgage_down_payment_exceeds_loan(bot_context):
     assert "взнос" in result.lower() or "превышает" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_mortgage_negative_rate(bot_context):
     """Negative annual_rate returns validation error (M1)."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -176,7 +169,6 @@ async def test_mortgage_negative_rate(bot_context):
     assert "ставка" in result.lower() or "некорректн" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_mortgage_rate_over_100_warning(bot_context):
     """annual_rate > 100 returns percentage-format warning (M1)."""
     from telegram_bot.agents.utility_tools import mortgage_calculator
@@ -193,7 +185,6 @@ async def test_mortgage_rate_over_100_warning(bot_context):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_daily_summary_no_kommo(bot_context_no_kommo):
     """Returns CRM unavailable message when kommo_client is None."""
     from telegram_bot.agents.utility_tools import daily_summary
@@ -205,7 +196,6 @@ async def test_daily_summary_no_kommo(bot_context_no_kommo):
     assert "CRM недоступен" in result
 
 
-@pytest.mark.asyncio
 async def test_daily_summary_invalid_date(bot_context_with_kommo):
     """Returns error for invalid date format."""
     from telegram_bot.agents.utility_tools import daily_summary
@@ -217,7 +207,6 @@ async def test_daily_summary_invalid_date(bot_context_with_kommo):
     assert "формат" in result.lower() or "некорректн" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_daily_summary_success(bot_context_with_kommo):
     """Returns LLM summary when CRM is available."""
     from unittest.mock import patch
@@ -233,7 +222,6 @@ async def test_daily_summary_success(bot_context_with_kommo):
     assert "Summary" in result or "deal" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_daily_summary_yesterday(bot_context_with_kommo):
     """Accepts 'yesterday' as a date string."""
     from unittest.mock import patch
@@ -249,7 +237,6 @@ async def test_daily_summary_yesterday(bot_context_with_kommo):
     assert "summary" in result.lower() or "yesterday" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_daily_summary_explicit_date(bot_context_with_kommo):
     """Accepts explicit YYYY-MM-DD date."""
     from unittest.mock import patch
@@ -270,7 +257,6 @@ async def test_daily_summary_explicit_date(bot_context_with_kommo):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_handoff_sends_to_managers(bot_context_with_bot, mock_bot):
     """Sends notification to each manager and returns confirmation."""
     from telegram_bot.agents.utility_tools import handoff
@@ -283,7 +269,6 @@ async def test_handoff_sends_to_managers(bot_context_with_bot, mock_bot):
     assert mock_bot.send_message.called
 
 
-@pytest.mark.asyncio
 async def test_handoff_no_managers(bot_context_no_managers):
     """Returns unavailable message when no managers configured."""
     from telegram_bot.agents.utility_tools import handoff
@@ -295,7 +280,6 @@ async def test_handoff_no_managers(bot_context_no_managers):
     assert "менеджер" in result.lower() or "недоступн" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_handoff_no_bot(bot_context):
     """Returns unavailable message when bot is not in context."""
     from telegram_bot.agents.utility_tools import handoff
@@ -307,7 +291,6 @@ async def test_handoff_no_bot(bot_context):
     assert "менеджер" in result.lower() or "недоступн" in result.lower()
 
 
-@pytest.mark.asyncio
 async def test_handoff_high_urgency(bot_context_with_bot, mock_bot):
     """High urgency includes 'СРОЧНО' in manager notification."""
     from telegram_bot.agents.utility_tools import handoff
@@ -322,7 +305,6 @@ async def test_handoff_high_urgency(bot_context_with_bot, mock_bot):
     assert "СРОЧНО" in sent_text
 
 
-@pytest.mark.asyncio
 async def test_handoff_with_context_summary(bot_context_with_bot, mock_bot):
     """Context summary is included in the notification."""
     from telegram_bot.agents.utility_tools import handoff

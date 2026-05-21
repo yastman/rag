@@ -22,7 +22,6 @@ def bridge(mock_bot):
     return ForumBridge(bot=mock_bot, managers_group_id=-100123)
 
 
-@pytest.mark.asyncio
 async def test_create_topic(bridge, mock_bot):
     topic_id = await bridge.create_topic(client_name="Иван", goal="Покупка")
     assert topic_id == 42
@@ -32,7 +31,6 @@ async def test_create_topic(bridge, mock_bot):
     )
 
 
-@pytest.mark.asyncio
 async def test_create_topic_truncates_long_name(bridge, mock_bot):
     long_name = "А" * 200
     await bridge.create_topic(client_name=long_name, goal="Покупка")
@@ -41,7 +39,6 @@ async def test_create_topic_truncates_long_name(bridge, mock_bot):
     assert len(name) <= 128
 
 
-@pytest.mark.asyncio
 async def test_post_context_pack(bridge, mock_bot):
     await bridge.post_context_pack(
         topic_id=42,
@@ -60,7 +57,6 @@ async def test_post_context_pack(bridge, mock_bot):
     assert "/close" in text
 
 
-@pytest.mark.asyncio
 async def test_post_context_pack_no_summary(bridge, mock_bot):
     await bridge.post_context_pack(
         topic_id=42,
@@ -76,7 +72,6 @@ async def test_post_context_pack_no_summary(bridge, mock_bot):
     assert "/close" in text
 
 
-@pytest.mark.asyncio
 async def test_relay_to_topic(bridge, mock_bot):
     await bridge.relay_to_topic(from_chat_id=999, message_id=55, topic_id=42)
     mock_bot.copy_message.assert_called_once_with(
@@ -87,7 +82,6 @@ async def test_relay_to_topic(bridge, mock_bot):
     )
 
 
-@pytest.mark.asyncio
 async def test_relay_to_client(bridge, mock_bot):
     await bridge.relay_to_client(topic_id=42, message_id=77, client_chat_id=999)
     mock_bot.copy_message.assert_called_once_with(
@@ -97,7 +91,6 @@ async def test_relay_to_client(bridge, mock_bot):
     )
 
 
-@pytest.mark.asyncio
 async def test_close_topic(bridge, mock_bot):
     await bridge.close_topic(topic_id=42)
     mock_bot.close_forum_topic.assert_called_once_with(

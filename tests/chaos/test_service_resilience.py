@@ -6,7 +6,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-import pytest
 from tenacity import wait_none
 
 from telegram_bot.integrations.cache import CacheLayerManager
@@ -14,7 +13,6 @@ from telegram_bot.services.bge_m3_client import BGEM3Client
 from telegram_bot.services.kommo_client import KommoClient
 
 
-@pytest.mark.asyncio
 async def test_semantic_cache_timeout_gracefully_bypasses():
     """Redis semantic cache timeout should return miss, not crash pipeline."""
     cache = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -35,7 +33,6 @@ async def test_semantic_cache_timeout_gracefully_bypasses():
     assert cached is None
 
 
-@pytest.mark.asyncio
 async def test_semantic_cache_exception_gracefully_bypasses():
     """Redis semantic cache backend error should degrade to cache miss."""
     cache = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -50,7 +47,6 @@ async def test_semantic_cache_exception_gracefully_bypasses():
     assert cached is None
 
 
-@pytest.mark.asyncio
 async def test_bge_timeout_retries_and_recovers():
     """BGE-M3 timeout should retry and recover when backend becomes available."""
     client = BGEM3Client(base_url="http://localhost:8000")
@@ -78,7 +74,6 @@ async def test_bge_timeout_retries_and_recovers():
     assert mock_http.post.await_count == 3
 
 
-@pytest.mark.asyncio
 async def test_kommo_429_retries_then_succeeds():
     """Kommo 429 should retry with backoff and eventually succeed."""
     token_store = AsyncMock()
@@ -104,7 +99,6 @@ async def test_kommo_429_retries_then_succeeds():
     assert leads[0].id == 1
 
 
-@pytest.mark.asyncio
 async def test_kommo_401_refreshes_token_and_recovers():
     """Kommo 401 should force token refresh and retry request."""
     token_store = AsyncMock()

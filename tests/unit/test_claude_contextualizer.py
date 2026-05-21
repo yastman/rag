@@ -39,7 +39,6 @@ def contextualizer_no_cache(monkeypatch):
         return ClaudeContextualizer(use_cache=False)
 
 
-@pytest.mark.asyncio
 async def test_async_uses_system_param_not_messages(contextualizer):
     """Async method must pass system prompt via system= param, not inside messages."""
     response = _make_response("Test context")
@@ -58,7 +57,6 @@ async def test_async_uses_system_param_not_messages(contextualizer):
     assert "legal text" in user_content
 
 
-@pytest.mark.asyncio
 async def test_async_system_param_with_cache(contextualizer):
     """With use_cache=True, system= must be a list with cache_control."""
     response = _make_response()
@@ -72,7 +70,6 @@ async def test_async_system_param_with_cache(contextualizer):
     assert system[0]["cache_control"] == {"type": "ephemeral"}
 
 
-@pytest.mark.asyncio
 async def test_async_system_param_without_cache(contextualizer_no_cache):
     """With use_cache=False, system= must be a plain string."""
     response = _make_response()
@@ -84,7 +81,6 @@ async def test_async_system_param_without_cache(contextualizer_no_cache):
     assert isinstance(system, str), "system must be string when caching disabled"
 
 
-@pytest.mark.asyncio
 async def test_async_returns_contextualized_chunk(contextualizer):
     """Async method must return ContextualizedChunk with correct fields."""
     response = _make_response("Generated summary")

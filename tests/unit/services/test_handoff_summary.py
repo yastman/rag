@@ -1,24 +1,19 @@
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from telegram_bot.services.handoff_summary import generate_handoff_summary
 
 
-@pytest.mark.asyncio
 async def test_summary_returns_none_for_short_history():
     history = [{"role": "user", "content": "привет"}]
     result = await generate_handoff_summary(history, min_messages=3)
     assert result is None
 
 
-@pytest.mark.asyncio
 async def test_summary_returns_none_for_empty_history():
     result = await generate_handoff_summary([], min_messages=3)
     assert result is None
 
 
-@pytest.mark.asyncio
 async def test_summary_calls_llm_for_sufficient_history():
     history = [
         {"role": "user", "content": "Ищу квартиру в Варне"},

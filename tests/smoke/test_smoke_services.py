@@ -38,7 +38,6 @@ def _redis_url_candidates() -> list[str]:
 class TestSmokeServices:
     """Verify all services are alive and responding."""
 
-    @pytest.mark.asyncio
     @pytest.mark.skipif(not _is_port_open("localhost", 6333), reason="Qdrant not running (6333)")
     async def test_qdrant_health(self):
         """Qdrant responds to health check."""
@@ -47,7 +46,6 @@ class TestSmokeServices:
             response = await client.get(f"{url}/healthz")
             assert response.status_code == 200
 
-    @pytest.mark.asyncio
     @pytest.mark.skipif(not _is_port_open("localhost", 6379), reason="Redis not running (6379)")
     async def test_redis_health(self):
         """Redis responds to PING."""
@@ -73,7 +71,6 @@ class TestSmokeServices:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 3001), reason="Langfuse not running (port 3001)"
     )
-    @pytest.mark.asyncio
     async def test_langfuse_health(self):
         """Langfuse responds to health check."""
         url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
@@ -84,7 +81,6 @@ class TestSmokeServices:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 5001), reason="Docling not running (port 5001)"
     )
-    @pytest.mark.asyncio
     async def test_docling_health(self):
         """Docling responds to health check."""
         url = os.getenv("DOCLING_URL", "http://localhost:5001")
@@ -95,7 +91,6 @@ class TestSmokeServices:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 9621), reason="LightRAG not running (port 9621)"
     )
-    @pytest.mark.asyncio
     async def test_lightrag_health(self):
         """LightRAG responds to health check."""
         url = os.getenv("LIGHTRAG_URL", "http://localhost:9621")
@@ -103,7 +98,6 @@ class TestSmokeServices:
             response = await client.get(f"{url}/health")
             assert response.status_code == 200
 
-    @pytest.mark.asyncio
     async def test_voyage_api_health(self):
         """Voyage API responds (minimal embed call)."""
         api_key = os.getenv("VOYAGE_API_KEY", "")
@@ -118,7 +112,6 @@ class TestSmokeServices:
             )
             assert response.status_code == 200
 
-    @pytest.mark.asyncio
     async def test_llm_api_health(self):
         """LiteLLM/OpenAI-compatible API responds (minimal completion call)."""
         api_key = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))

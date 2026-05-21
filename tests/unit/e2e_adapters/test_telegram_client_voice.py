@@ -56,7 +56,6 @@ def _cfg_with_voice(voice_path: str) -> E2EConfig:
         return E2EConfig()
 
 
-@pytest.mark.asyncio
 async def test_send_voice_and_wait_uses_conversation_send_file(tmp_path: Path) -> None:
     fixture = tmp_path / "voice.mp3"
     fixture.write_text("fake audio")
@@ -77,7 +76,6 @@ async def test_send_voice_and_wait_uses_conversation_send_file(tmp_path: Path) -
     assert conv.last_path == str(fixture)
 
 
-@pytest.mark.asyncio
 async def test_send_voice_and_wait_raises_when_path_not_configured() -> None:
     cfg = _cfg_with_voice("")
     client = E2ETelegramClient(cfg)
@@ -87,7 +85,6 @@ async def test_send_voice_and_wait_raises_when_path_not_configured() -> None:
         await client.send_voice_and_wait()
 
 
-@pytest.mark.asyncio
 async def test_send_voice_and_wait_raises_when_fixture_missing() -> None:
     cfg = _cfg_with_voice("/nonexistent/path/to/voice.mp3")
     client = E2ETelegramClient(cfg)

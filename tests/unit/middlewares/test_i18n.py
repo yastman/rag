@@ -63,7 +63,6 @@ def test_translator_menu_keys(hub):
             assert result, f"Missing key '{key}' in locale '{locale}'"
 
 
-@pytest.mark.asyncio
 async def test_i18n_middleware_injects_only_i18n(hub):
     """After H5 refactor: middleware injects only i18n + locale, not services."""
     middleware = I18nMiddleware(hub=hub)

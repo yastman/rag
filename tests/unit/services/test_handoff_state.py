@@ -61,7 +61,6 @@ def test_handoff_data_from_redis_dict():
     assert data.qualification == {"goal": "buy"}
 
 
-@pytest.mark.asyncio
 async def test_handoff_state_set_and_get(mock_redis):
     state = HandoffState(mock_redis, ttl_hours=24)
     data = HandoffData(client_id=100, topic_id=200, mode="human_waiting")
@@ -74,7 +73,6 @@ async def test_handoff_state_set_and_get(mock_redis):
     assert result.mode == "human_waiting"
 
 
-@pytest.mark.asyncio
 async def test_handoff_state_get_by_topic(mock_redis):
     state = HandoffState(mock_redis, ttl_hours=24)
     data = HandoffData(client_id=100, topic_id=200, mode="human_waiting")
@@ -85,7 +83,6 @@ async def test_handoff_state_get_by_topic(mock_redis):
     assert result.client_id == 100
 
 
-@pytest.mark.asyncio
 async def test_handoff_state_update_mode(mock_redis):
     state = HandoffState(mock_redis, ttl_hours=24)
     data = HandoffData(client_id=100, topic_id=200, mode="human_waiting")
@@ -96,7 +93,6 @@ async def test_handoff_state_update_mode(mock_redis):
     assert result.mode == "human"
 
 
-@pytest.mark.asyncio
 async def test_handoff_state_delete(mock_redis):
     state = HandoffState(mock_redis, ttl_hours=24)
     data = HandoffData(client_id=100, topic_id=200, mode="human_waiting")

@@ -228,7 +228,6 @@ def test_render_installment_note():
     assert "1250" in result  # (50000-5000)/36
 
 
-@pytest.mark.asyncio
 async def test_seed_dry_run(capsys):
     """Dry-run prints plan without API calls."""
     from scripts.kommo_seed import seed_crm
@@ -278,7 +277,6 @@ async def test_seed_dry_run(capsys):
     assert stats["api_calls"] == 0  # dry-run = 0 API calls
 
 
-@pytest.mark.asyncio
 async def test_seed_dry_run_rejects_leads_without_contacts():
     """When leads are requested, zero contacts should fail fast with a clear error."""
     from scripts.kommo_seed import seed_crm
@@ -309,7 +307,6 @@ async def test_seed_dry_run_rejects_leads_without_contacts():
         )
 
 
-@pytest.mark.asyncio
 async def test_seed_dry_run_full_flow():
     """Full dry-run: generates contacts, leads with notes and tasks."""
     from scripts.kommo_seed import seed_crm

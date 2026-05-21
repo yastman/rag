@@ -231,7 +231,6 @@ def _settings() -> SimpleNamespace:
     )
 
 
-@pytest.mark.asyncio
 async def test_openai_contextualizer_uses_constructor_system_prompt_override() -> None:
     """OpenAI provider must send the configured prompt to the SDK request."""
     from src.contextualization.openai import OpenAIContextualizer
@@ -256,7 +255,6 @@ async def test_openai_contextualizer_uses_constructor_system_prompt_override() -
     assert kwargs["messages"][0]["content"] == custom_prompt
 
 
-@pytest.mark.asyncio
 async def test_claude_contextualizer_uses_constructor_system_prompt_override() -> None:
     """Claude provider must send the configured prompt to the SDK request."""
     from src.contextualization.claude import ClaudeContextualizer
@@ -285,7 +283,6 @@ async def test_claude_contextualizer_uses_constructor_system_prompt_override() -
     assert kwargs["system"] == custom_prompt
 
 
-@pytest.mark.asyncio
 async def test_groq_contextualizer_uses_constructor_system_prompt_override() -> None:
     """Groq provider must send the configured prompt to the SDK request."""
     from src.contextualization.groq import GroqContextualizer
