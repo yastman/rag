@@ -81,6 +81,9 @@ services:
     logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
+      ***REMOVED*** Storage optimisation config — fixes ***REMOVED***1545 (3.1 GB unbounded growth).
+      ***REMOVED*** Qdrant loads /qdrant/config/production.yaml on start when present.
+      - ./docker/qdrant/config.yaml:/qdrant/config/production.yaml:ro
     environment:
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
