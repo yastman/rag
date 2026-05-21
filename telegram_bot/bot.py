@@ -1360,8 +1360,8 @@ class PropertyBot:
 
         1. Idempotent ``XGROUP CREATE`` with ``MKSTREAM=True`` (BUSYGROUP
            is swallowed — group already exists from a previous run).
-        2. Pending replay: read ``id="0"`` once to drain any entries
-           claimed by this consumer that were never ack'd.
+        2. Pending replay: scan the PEL with ``XAUTOCLAIM`` to drain entries
+           that were delivered but never ack'd.
         3. Steady state: block on ``XREADGROUP`` with cursor ``">"``,
            dispatch each entry to ``_process_miniapp_start``, ``XACK``
            on success or on poison (missing/non-int ``user_id`` etc.).
@@ -1424,17 +1424,25 @@ class PropertyBot:
             await sub_redis.xack(STREAM, GROUP, entry_id)
 
         try:
-            # 2) Pending replay: drain entries this consumer never ack'd.
-            pending = await sub_redis.xreadgroup(
-                groupname=GROUP,
-                consumername=CONSUMER,
-                streams={STREAM: "0"},
-                count=BATCH,
-            )
-            if pending:
-                for _stream, entries in pending:
-                    for entry_id, fields in entries:
-                        await _process_one(entry_id, fields)
+            # 2) Pending replay: drain entries this group never ack'd. XAUTOCLAIM
+            # has SCAN-like cursor semantics, so loop until Redis reports the
+            # cursor has wrapped. Failed processing is intentionally left in the
+            # PEL, but the cursor still advances so startup cannot spin forever.
+            pending_cursor = "0-0"
+            while True:
+                claimed = await sub_redis.xautoclaim(
+                    name=STREAM,
+                    groupname=GROUP,
+                    consumername=CONSUMER,
+                    min_idle_time=0,
+                    start_id=pending_cursor,
+                    count=BATCH,
+                )
+                pending_cursor, entries, *_deleted = claimed
+                for entry_id, fields in entries:
+                    await _process_one(entry_id, fields)
+                if not entries or pending_cursor in {"0", "0-0"}:
+                    break
 
             # 3) Steady state.
             while True:
