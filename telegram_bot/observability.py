@@ -13,6 +13,7 @@ import contextlib
 import json
 import logging
 import os
+import warnings
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +27,37 @@ from telegram_bot.observability_bootstrap import (
 
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Issue #1381 — suppress the Langfuse SDK Pydantic V1 UserWarning
+# ---------------------------------------------------------------------------
+
+
+def _install_langfuse_warning_filters() -> None:
+    """Suppress the Langfuse Pydantic V1 ``UserWarning`` on Python 3.14+.
+
+    Langfuse SDK 4.3.x's internal compat shim imports ``pydantic.v1`` which
+    Pydantic 2 deliberately deprecates on Python 3.14 with::
+
+        UserWarning: Core Pydantic V1 functionality isn't compatible with
+        Python 3.14 or greater.
+
+    The warning is harmless today — Langfuse only touches a tiny v1 surface —
+    but it pollutes every bot run, test, and validation script. We install a
+    *narrowly scoped* filter that drops only this specific message, so any
+    unrelated ``UserWarning`` (e.g. from our own code) still surfaces.
+    """
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Core Pydantic V1 functionality isn't compatible with Python 3\.14.*",
+        category=UserWarning,
+    )
+
+
+# Apply the filter as early as possible — before the guarded Langfuse import
+# below — so the warning never reaches stderr / Loki / pytest captures.
+_install_langfuse_warning_filters()
 
 _MAX_PII_TEXT_LENGTH = 4000
 _MODEL_DEFINITIONS_ENV = "LANGFUSE_MODEL_DEFINITIONS_JSON"
