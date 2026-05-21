@@ -5,7 +5,7 @@
   },
   "include": [
     "src",
-    "src/**/__tests__/**",
+    "src/**/__tests__/**/*",
     "src/**/*.test.*"
   ],
   "exclude": []
