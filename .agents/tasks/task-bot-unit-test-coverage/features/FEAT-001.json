@@ -1,0 +1,20 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Verify environment baseline: install dependencies, run existing bot unit tests, confirm they pass.",
+  "status": "completed",
+  "steps": [
+    "Run uv sync to ensure all dev dependencies are installed",
+    "Run focused bot test files to confirm baseline: uv run pytest tests/unit/test_bot_handlers.py tests/unit/test_bot_handlers_query.py tests/unit/test_bot_menu_handlers.py tests/unit/test_card_callbacks.py tests/unit/test_callback_fsm_regression.py tests/unit/test_feedback_handler.py tests/unit/test_bot_hot_lead.py -q --timeout=30",
+    "Run make check to confirm lint/type checks pass"
+  ],
+  "acceptance_criteria": [
+    "All existing bot-related unit tests pass",
+    "make check passes without errors"
+  ],
+  "verification": [
+    "uv run pytest tests/unit/test_bot_handlers.py tests/unit/test_bot_handlers_query.py tests/unit/test_bot_menu_handlers.py tests/unit/test_card_callbacks.py tests/unit/test_callback_fsm_regression.py tests/unit/test_feedback_handler.py tests/unit/test_bot_hot_lead.py -q --timeout=30"
+  ],
+  "blocked_reason": null,
+  "findings": "All 275 bot-related unit tests pass (58s). uv sync resolves 372 packages successfully. Ruff lint passes. PRE-EXISTING ISSUE: mypy fails with 1 error at telegram_bot/bot.py:4059 - 'Incompatible types in assignment (expression has type dict[str, float] | None, variable has type dict[str, float])' in end_checkpoint_overhead_capture(). This is a pre-existing type error on the dev branch (no code changes made). Subsequent features should be aware that make check will fail on type-check due to this existing issue."
+}
