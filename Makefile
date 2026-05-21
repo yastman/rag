@@ -39,6 +39,10 @@ TMPDIR ?= /tmp
 TMP ?= $(TMPDIR)
 TEMP ?= $(TMPDIR)
 export TMPDIR TMP TEMP
+***REMOVED*** Python runtime for local pytest targets.
+***REMOVED*** Pin to 3.12 to avoid CPython 3.14 breaking voyageai (pydantic.v1 compat).
+***REMOVED*** Override: PYTHON_VERSION=3.13 make test-unit
+PYTHON_VERSION ?= 3.12
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
 PYTEST_FULL_SEQUENTIAL_DIRS ?= tests/e2e/ tests/integration/ tests/load/ tests/smoke/
@@ -176,7 +180,7 @@ all-checks: lint type-check security ***REMOVED******REMOVED*** Run all code qua
 
 test: ***REMOVED******REMOVED*** Run fast deterministic PR/local gate (unit + critical graph paths)
 	@echo "$(BLUE)Running fast test gate (unit + graph_paths)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
 test-full: ***REMOVED******REMOVED*** Run full test suite with hybrid parallelism (all tiers)
@@ -196,12 +200,12 @@ test-cov: ***REMOVED******REMOVED*** Run tests with coverage
 
 test-unit: ***REMOVED******REMOVED*** Run core unit tests locally in parallel (fast default gate)
 	@echo "$(BLUE)Running core unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-loadscope: ***REMOVED******REMOVED*** Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
 
 test-unit-full: ***REMOVED******REMOVED*** Run all unit tests including optional-dep tests (nightly/main)
@@ -228,12 +232,12 @@ test-benchmark: ***REMOVED******REMOVED*** Run benchmark suite with the live Col
 
 test-fast: ***REMOVED******REMOVED*** Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
 test-all-fast: ***REMOVED******REMOVED*** Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
 	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
 test-lf: ***REMOVED******REMOVED*** Run only last failed tests (parallel)
@@ -248,7 +252,7 @@ test-ff: ***REMOVED******REMOVED*** Run failed first, then rest
 
 test-profile: ***REMOVED******REMOVED*** Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --durations=20 --durations-min=0.5 $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
 test-integration: ***REMOVED******REMOVED*** Run graph path integration tests (no Docker, ~5s)
@@ -277,7 +281,7 @@ test-nightly: ***REMOVED******REMOVED*** Run heavy test suites (chaos, smoke, sl
 
 test-store-durations: ***REMOVED******REMOVED*** Update .test_durations for pytest-split CI sharding
 	@echo "$(BLUE)Generating test duration data...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
+	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
 	@echo "$(GREEN)✓ .test_durations updated — commit this file$(NC)"
 
 test-all: ***REMOVED******REMOVED*** Run all tests with coverage threshold (CI mode)
