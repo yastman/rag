@@ -10,7 +10,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentState, before_model
-from langchain_core.messages import RemoveMessage
+from langchain_core.messages import BaseMessage, RemoveMessage
 from langchain_core.messages.utils import trim_messages
 from langchain_openai import ChatOpenAI
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
@@ -29,6 +29,27 @@ LOCALE_TO_LANGUAGE: dict[str, str] = {
 }
 
 
+def _count_message_count(messages: list[BaseMessage]) -> int:
+    """Token-counter adapter that returns the message count rather than tokens.
+
+    Used as ``token_counter`` for :func:`trim_messages` to switch its behaviour
+    from token-budget trimming to message-count trimming. This is the
+    documented ``trim_messages`` pattern in langchain-core: when
+    ``token_counter=len`` is supplied, ``max_tokens`` is interpreted as the
+    maximum number of messages allowed in the window.
+
+    See: ``langchain_core.messages.utils.trim_messages`` reference docs,
+    "Token Counting Strategies" / "Using Message Count" sections.
+
+    The bare ``len`` works equally well, but a named adapter makes the intent
+    explicit at the call site and prevents an accidental future swap to a real
+    token counter without re-calibrating ``max_tokens`` from a message budget
+    to a token budget.
+    """
+
+    return len(messages)
+
+
 def _create_history_trimmer(max_messages: int) -> Any:
     """Return a before_model middleware that enforces a sliding-window history.
 
@@ -37,6 +58,13 @@ def _create_history_trimmer(max_messages: int) -> Any:
     actually deletes them (not just hides them).  trim_messages with
     start_on="human" ensures the remaining window starts on a clean turn
     boundary (no orphaned ToolMessages).
+
+    Implementation note (#1257): we use the documented langchain-core pattern
+    where ``token_counter`` returns a message count instead of tokens, so
+    ``max_tokens`` is interpreted as a message-count limit. The named adapter
+    :func:`_count_message_count` makes this intent explicit and prevents a
+    silent future regression where someone replaces the counter with a real
+    token counter without also rescaling ``max_tokens``.
 
     Args:
         max_messages: Maximum number of messages kept in state.
@@ -54,8 +82,11 @@ def _create_history_trimmer(max_messages: int) -> Any:
         to_keep = trim_messages(
             messages,
             strategy="last",
+            # Documented pattern: with token_counter=_count_message_count
+            # (i.e. message count), max_tokens is interpreted as the
+            # max number of messages, not tokens. See _count_message_count.
             max_tokens=max_messages,
-            token_counter=len,
+            token_counter=_count_message_count,
             start_on="human",
         )
 
