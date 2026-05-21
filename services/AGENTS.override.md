@@ -5,7 +5,7 @@
 - Extends root `AGENTS.md` with cross-service constraints.
 
 ***REMOVED******REMOVED*** Local Rules
-- Each subservice (`bge-m3-api/`, `docling/`, `user-base/`, ...) owns its own `pyproject.toml` / `Dockerfile`.
+- Each subservice (`bge-m3-api/`, `docling/`, `user-base/`, ...) owns its own Dockerfile and, where applicable, service-local dependency manifest.
 - Do not share Python imports across subservices — communication must go through HTTP contracts.
 - Keep healthcheck path and exposed port stable; downstream consumers in `compose.yml` and `src/retrieval/` depend on them.
 - See per-subservice `AGENTS.override.md` for inner rules; this file covers `services/` as a whole.
