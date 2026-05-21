@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -64,6 +65,15 @@ def test_deprecated_gdrive_flow_test_deleted() -> None:
     )
 
 
+def test_deprecated_gdrive_integration_test_deleted() -> None:
+    """``tests/integration/test_gdrive_ingestion.py`` imported the deleted API."""
+    path = REPO_ROOT / "tests" / "integration" / "test_gdrive_ingestion.py"
+    assert not path.exists(), (
+        f"{path.relative_to(REPO_ROOT)} still exists; it imports the now-deleted "
+        "gdrive_flow API and must be removed or rewritten against unified ingestion."
+    )
+
+
 def test_no_runtime_import_of_deprecated_gdrive_modules() -> None:
     """No non-test module under ``src/`` or ``telegram_bot/`` may import the
     deleted deprecated GDrive modules.
@@ -90,6 +100,37 @@ def test_no_runtime_import_of_deprecated_gdrive_modules() -> None:
     assert not violations, (
         "The following runtime modules import deleted deprecated GDrive "
         "ingestion modules:\n" + "\n".join(f"  {v}" for v in violations)
+    )
+
+
+def test_no_stale_metadata_references_to_deleted_gdrive_modules() -> None:
+    """Repository metadata must not keep config/fixture references to deleted modules."""
+    checked_files = [
+        REPO_ROOT / "pyproject.toml",
+        REPO_ROOT / "src" / "ingestion" / "README.md",
+        REPO_ROOT / "docs" / "engineering" / "sdk-registry.md",
+        REPO_ROOT / "tests" / "data" / "known_duplicate_test_names.json",
+    ]
+    needles = (
+        "src/ingestion/gdrive_indexer.py",
+        "src/ingestion/gdrive_flow.py",
+        "tests/unit/ingestion/test_gdrive_indexer.py",
+        "tests/unit/ingestion/test_gdrive_flow.py",
+        "tests/integration/test_gdrive_ingestion.py",
+        "src.ingestion.gdrive_indexer",
+        "src.ingestion.gdrive_flow",
+    )
+
+    violations: list[str] = []
+    for path in checked_files:
+        text = path.read_text(encoding="utf-8")
+        for needle in needles:
+            if needle in text:
+                violations.append(f"{path.relative_to(REPO_ROOT)} contains {needle!r}")
+
+    assert not violations, (
+        "Deleted GDrive ingestion modules/tests still appear in repository "
+        "metadata:\n" + "\n".join(f"  {v}" for v in violations)
     )
 
 
