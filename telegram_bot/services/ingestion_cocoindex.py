@@ -64,21 +64,28 @@ async def get_ingestion_status(collection_name: str = "documents") -> dict[str, 
     return await _get_ingestion_status(collection_name)
 
 
-def main():
-    """CLI entry point for Makefile integration."""
+def main() -> int:
+    """CLI entry point for Makefile integration.
+
+    Returns the process exit code (0 on success, 1 on usage error or unknown
+    command) rather than calling ``sys.exit`` from inside the function body
+    (#1072). Single ``sys.exit(main())`` lives at the ``__main__`` guard so
+    the function is testable in-process and any caller that imports
+    :func:`main` cannot accidentally terminate its host interpreter.
+    """
     if len(sys.argv) < 2:
         print("Usage:")
         print("  python -m telegram_bot.services.ingestion_cocoindex ingest-dir <path>")
         print("  python -m telegram_bot.services.ingestion_cocoindex ingest-gdrive <folder_id>")
         print("  python -m telegram_bot.services.ingestion_cocoindex status")
-        sys.exit(1)
+        return 1
 
     command = sys.argv[1]
 
     if command == "ingest-dir":
         if len(sys.argv) < 3:
             print("Error: Directory path required")
-            sys.exit(1)
+            return 1
         directory = sys.argv[2]
         stats = asyncio.run(ingest_from_directory(directory))
         print("\nIngestion complete:")
@@ -87,11 +94,12 @@ def main():
         print(f"  Duration: {stats.duration_seconds:.2f}s")
         if stats.errors:
             print(f"  Errors: {stats.errors}")
+        return 0
 
-    elif command == "ingest-gdrive":
+    if command == "ingest-gdrive":
         if len(sys.argv) < 3:
             print("Error: Folder ID required")
-            sys.exit(1)
+            return 1
         folder_id = sys.argv[2]
         stats = asyncio.run(ingest_from_gdrive(folder_id))
         print("\nIngestion complete:")
@@ -100,17 +108,18 @@ def main():
         print(f"  Duration: {stats.duration_seconds:.2f}s")
         if stats.errors:
             print(f"  Errors: {stats.errors}")
+        return 0
 
-    elif command == "status":
+    if command == "status":
         status = asyncio.run(get_ingestion_status())
         print("\nCollection status:")
         for key, value in status.items():
             print(f"  {key}: {value}")
+        return 0
 
-    else:
-        print(f"Unknown command: {command}")
-        sys.exit(1)
+    print(f"Unknown command: {command}")
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
