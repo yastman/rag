@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Add unit tests for handle_menu_button routing, handle_service_callback, handle_cta_callback, and the apartment fast path (_handle_apartment_fast_path). These are high-traffic handler methods that route user interactions.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create tests/unit/test_bot_menu_routing.py following the existing pattern (pytest.importorskip, _make_config, _create_bot, mock message/callback/state helpers)",
     "Add TestHandleMenuButton class testing handle_menu_button routing: (a) 'search' action_id dispatches to _handle_search; (b) 'services' action_id dispatches to _handle_services; (c) 'viewing' action_id dispatches to _handle_viewing; (d) 'bookmarks' action_id dispatches to _handle_bookmarks; (e) 'ask' action_id dispatches to _handle_ask; (f) 'manager' action_id dispatches to _handle_manager; (g) unknown/None action_id returns early without calling any handler; (h) clears PhoneCollectorStates FSM state before dispatching; (i) does not clear non-phone-collection FSM states",
@@ -21,5 +21,5 @@
     "uv run pytest tests/unit/test_bot_menu_routing.py tests/unit/test_bot_menu_handlers.py -q --timeout=30"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 21 tests pass covering handle_menu_button (9 tests: dispatch routing for search/services/viewing/bookmarks/ask/manager, None returns early, clears PhoneCollectorStates, does not clear other states), handle_service_callback (5 tests: back/menu/service/unparseable/unknown), handle_cta_callback (4 tests: get_offer/manager+forum_bridge/manager-forum_bridge/unparseable), and _handle_apartment_fast_path (3 tests: LOW confidence, escalation triggered, successful response). parse_service_callback needed to be patched at the module level (telegram_bot.keyboards.services_keyboard.parse_service_callback) since handle_service_callback uses a local import."
 }
