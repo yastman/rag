@@ -6,7 +6,7 @@ import logging
 from contextlib import suppress
 from typing import Any, cast
 
-from telegram_bot.observability import get_client, observe, propagate_attributes
+from src.observability import get_client, observe, propagate_attributes
 
 
 logger = logging.getLogger(__name__)

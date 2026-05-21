@@ -1,0 +1,7 @@
+{
+  "task_id": "task-fix-layer-violation-1266",
+  "task_description": "Fix the src/ to telegram_bot/ layer violation by extracting shared code (observability, BGE-M3 client, VoyageService, ApartmentRecord models) from telegram_bot/ into src/, then making telegram_bot/ re-export from src/ for backward compatibility.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null
+}
