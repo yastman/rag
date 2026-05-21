@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 _WINDOW_SIZE = 1000
 
 
+def record_counter_metric(name: str, value: int = 1) -> None:
+    """Record a named counter metric through the bot metrics registry."""
+    if value <= 0:
+        return
+    PipelineMetrics.get().inc(name, value)
+
+
 class PipelineMetrics:
     """Singleton pipeline metrics with rolling-window p50/p95 tracking.
 

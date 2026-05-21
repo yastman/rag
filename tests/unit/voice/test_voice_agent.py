@@ -87,6 +87,39 @@ def test_voice_bot_stores_trace_session_id():
     assert agent._session_id == "voice-call-xyz"
 
 
+def test_setup_langfuse_configures_langfuse_otel_headers(monkeypatch):
+    """Voice OTEL exporter uses Langfuse's current OTLP ingestion headers."""
+    import src.voice.agent as mod
+
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    monkeypatch.setenv("LANGFUSE_HOST", "https://cloud.langfuse.com/")
+
+    with (
+        patch("src.voice.agent.logger"),
+        patch(
+            "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter"
+        ) as exporter_cls,
+        patch("opentelemetry.sdk.trace.TracerProvider") as provider_cls,
+        patch("opentelemetry.sdk.trace.export.BatchSpanProcessor") as processor_cls,
+        patch("livekit.agents.telemetry.set_tracer_provider") as set_provider,
+    ):
+        provider = provider_cls.return_value
+
+        mod._setup_langfuse()
+
+    exporter_cls.assert_called_once_with(
+        endpoint="https://cloud.langfuse.com/api/public/otel",
+        headers={
+            "Authorization": "Basic cGstdGVzdDpzay10ZXN0",
+            "x-langfuse-ingestion-version": "4",
+        },
+    )
+    processor_cls.assert_called_once_with(exporter_cls.return_value)
+    provider.add_span_processor.assert_called_once_with(processor_cls.return_value)
+    set_provider.assert_called_once_with(provider)
+
+
 async def test_voice_tool_propagates_langfuse_trace_id_to_api_payload():
     """Voice tool should pass langfuse_trace_id to RAG API payload (#609)."""
     from src.voice.agent import VoiceBot
