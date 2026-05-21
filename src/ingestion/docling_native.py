@@ -13,6 +13,7 @@ from src.ingestion.docling_client import DoclingChunk, DoclingClient, DoclingCon
 logger = logging.getLogger(__name__)
 
 DocumentConverterType = Any
+HybridChunkerType = Any
 
 
 def _load_runtime_document_converter() -> Any | None:
@@ -23,7 +24,23 @@ def _load_runtime_document_converter() -> Any | None:
     return getattr(module, "DocumentConverter", None)
 
 
+def _load_hybrid_chunker() -> Any | None:
+    """Load HybridChunker from docling_core (optional ingest dependency)."""
+    try:
+        module = import_module("docling_core.transforms.chunker")
+        return getattr(module, "HybridChunker", None)
+    except Exception:
+        pass
+    try:
+        module = import_module("docling.chunking")
+        return getattr(module, "HybridChunker", None)
+    except Exception:
+        pass
+    return None
+
+
 RuntimeDocumentConverter: Any | None = _load_runtime_document_converter()
+RuntimeHybridChunker: Any | None = _load_hybrid_chunker()
 
 
 class NativeDoclingAdapter(DoclingClient):
@@ -49,6 +66,15 @@ class NativeDoclingAdapter(DoclingClient):
             self._converter = RuntimeDocumentConverter()
         return self._converter
 
+    def _get_chunker(self) -> HybridChunkerType:
+        """Return a HybridChunker instance configured with max_tokens."""
+        if RuntimeHybridChunker is None:
+            raise RuntimeError(
+                "docling_core is not installed; docling_native backend requires the optional "
+                "docling-core dependency for HybridChunker"
+            )
+        return RuntimeHybridChunker(max_tokens=self._max_tokens)
+
     def chunk_file_sync(
         self,
         file_path: Path,
@@ -65,67 +91,36 @@ class NativeDoclingAdapter(DoclingClient):
             raise ValueError(f"Unsupported format: {suffix}")
 
         result = self._get_converter().convert(file_path)
-        markdown = result.document.export_to_markdown()
-        chunks = self._chunk_markdown(markdown)
-        logger.info("Chunked (native) %s: %d chunks", file_path.name, len(chunks))
-        return chunks
+        chunker = self._get_chunker()
+        raw_chunks = list(chunker.chunk(result.document))
 
-    def _chunk_markdown(self, markdown: str) -> list[DoclingChunk]:
-        sections: list[tuple[list[str], str]] = []
-        current_heading: list[str] = []
-        current_lines: list[str] = []
+        chunks: list[DoclingChunk] = []
+        for idx, chunk in enumerate(raw_chunks):
+            headings: list[str] = []
+            page_range: tuple[int, int] | None = None
 
-        def flush() -> None:
-            text = "\n".join(current_lines).strip()
-            if not text:
-                return
-            for chunk_text in self._split_text(text):
-                sections.append((current_heading.copy(), chunk_text))
+            meta = getattr(chunk, "meta", None)
+            if meta is not None:
+                headings = getattr(meta, "headings", None) or []
+                doc_items = getattr(meta, "doc_items", None) or []
+                page_numbers: list[int] = []
+                for item in doc_items:
+                    for prov in getattr(item, "prov", []):
+                        page_no = getattr(prov, "page_no", None)
+                        if page_no is not None:
+                            page_numbers.append(int(page_no))
+                if page_numbers:
+                    page_range = (min(page_numbers), max(page_numbers))
 
-        for raw_line in markdown.splitlines():
-            line = raw_line.rstrip()
-            if line.startswith("#"):
-                flush()
-                current_lines = []
-                heading = line.lstrip("#").strip()
-                current_heading = [heading] if heading else []
-                continue
-
-            current_lines.append(line)
-
-        flush()
-
-        if not sections and markdown.strip():
-            sections.append(([], markdown.strip()))
-
-        normalized: list[DoclingChunk] = []
-        for idx, (headings, text) in enumerate(sections):
-            normalized.append(
+            chunks.append(
                 DoclingChunk(
-                    text=text,
+                    text=chunk.text,
                     seq_no=idx,
                     headings=headings,
-                    page_range=None,
+                    page_range=page_range,
                     metadata={"parser": "docling_native"},
                 )
             )
-        return normalized
 
-    def _split_text(self, text: str) -> list[str]:
-        if len(text) <= self._max_tokens:
-            return [text]
-
-        chunks: list[str] = []
-        current = ""
-        for paragraph in [part.strip() for part in text.split("\n\n") if part.strip()]:
-            candidate = f"{current}\n\n{paragraph}".strip() if current else paragraph
-            if current and len(candidate) > self._max_tokens:
-                chunks.append(current)
-                current = paragraph
-            else:
-                current = candidate
-
-        if current:
-            chunks.append(current)
-
-        return chunks or [text]
+        logger.info("Chunked (native) %s: %d chunks", file_path.name, len(chunks))
+        return chunks

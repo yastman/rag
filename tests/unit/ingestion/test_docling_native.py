@@ -5,14 +5,32 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+from unittest.mock import patch
 
 
 def test_native_docling_adapter_preserves_ingestion_contract(tmp_path: Path) -> None:
     from src.ingestion.docling_native import NativeDoclingAdapter
 
+    class _FakeProv:
+        def __init__(self, page_no: int) -> None:
+            self.page_no = page_no
+
+    class _FakeDocItem:
+        def __init__(self, page_no: int) -> None:
+            self.prov = [_FakeProv(page_no)]
+
+    class _FakeMeta:
+        def __init__(self, headings: list[str], doc_items: list[_FakeDocItem]) -> None:
+            self.headings = headings
+            self.doc_items = doc_items
+
+    class _FakeChunk:
+        def __init__(self, text: str, headings: list[str], page_no: int) -> None:
+            self.text = text
+            self.meta = _FakeMeta(headings=headings, doc_items=[_FakeDocItem(page_no)])
+
     class _FakeDocument:
-        def export_to_markdown(self) -> str:
-            return "# Overview\n\nIntro block.\n\n## Details\n\nSecond block.\n"
+        """Stub DoclingDocument for HybridChunker."""
 
     class _FakeResult:
         document = _FakeDocument()
@@ -22,11 +40,25 @@ def test_native_docling_adapter_preserves_ingestion_contract(tmp_path: Path) -> 
             assert Path(source).name == "sample.md"
             return _FakeResult()
 
+    fake_chunks = [
+        _FakeChunk(text="Intro block.", headings=["Overview"], page_no=1),
+        _FakeChunk(text="Second block.", headings=["Details"], page_no=2),
+    ]
+
+    class _FakeChunker:
+        def __init__(self, **kwargs: object) -> None:
+            self._kwargs = kwargs
+
+        def chunk(self, doc: object) -> list[_FakeChunk]:
+            return fake_chunks
+
     file_path = tmp_path / "sample.md"
     file_path.write_text("# Placeholder\n", encoding="utf-8")
 
-    adapter = NativeDoclingAdapter(max_tokens=80, converter=_FakeConverter())
-    docling_chunks = adapter.chunk_file_sync(file_path)
+    with patch("src.ingestion.docling_native.RuntimeHybridChunker", _FakeChunker):
+        adapter = NativeDoclingAdapter(max_tokens=80, converter=_FakeConverter())
+        docling_chunks = adapter.chunk_file_sync(file_path)
+
     ingestion_chunks = adapter.to_ingestion_chunks(
         docling_chunks,
         source="docs/sample.md",
@@ -36,6 +68,8 @@ def test_native_docling_adapter_preserves_ingestion_contract(tmp_path: Path) -> 
     assert len(docling_chunks) == 2
     assert docling_chunks[0].headings == ["Overview"]
     assert docling_chunks[1].headings == ["Details"]
+    assert docling_chunks[0].page_range == (1, 1)
+    assert docling_chunks[1].page_range == (2, 2)
 
     first_meta = ingestion_chunks[0].extra_metadata or {}
     second_meta = ingestion_chunks[1].extra_metadata or {}
