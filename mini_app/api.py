@@ -30,7 +30,7 @@ _DEEPLINK_TTL = 300  # seconds
 # set to this exact value we bypass HMAC validation and inject a synthetic
 # user so CI / smoke tests can exercise the mutation paths without a live
 # Telegram bot. The sentinel is intentionally non-secret and obvious.
-_TEST_TOKEN_SENTINEL = "TEST"
+_TEST_TOKEN_SENTINEL = "TEST"  # nosec B105 - explicit non-secret CI sentinel
 
 
 @asynccontextmanager
@@ -303,7 +303,10 @@ _LEVEL_MAP: dict[str, int] = {
 
 
 @app.post("/api/log")
-async def remote_log(request: LogRequest) -> dict:
+async def remote_log(
+    request: LogRequest,
+    _init_data: dict = Depends(get_validated_init_data),
+) -> dict:
     """Receive bounded, validated frontend remote logs.
 
     Accepts only the four levels declared in ``LogRequest.level`` and caps
