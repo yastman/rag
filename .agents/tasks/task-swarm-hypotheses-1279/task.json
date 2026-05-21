@@ -1,0 +1,7 @@
+{
+  "task_id": "task-swarm-hypotheses-1279",
+  "task_description": "Implement GitHub issue #1279: test 2026 agent-system hypotheses for safer multi-worker orchestration. Create swarm scripts (signal validator, reserved-file guard, lifecycle state machine) with JSON fixtures and comprehensive unit tests.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

@@ -1,0 +1,33 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Implement swarm_validate_signal.py (H1), swarm_reserved_guard.py (H2), swarm_lifecycle.py (H3) with JSON fixtures and comprehensive unit tests",
+  "status": "pending",
+  "steps": [
+    "Step 1 - Create test fixtures in tests/fixtures/swarm/: Create JSON fixture files for testing. Include valid_signal.json (a fully correct worker signal with all required fields), malformed_signal_missing_status.json (missing status field), malformed_signal_bad_enum.json (invalid status enum value), overlapping_reservations.json (two workers claiming same files), non_overlapping_reservations.json (two workers with disjoint files), active_workers.jsonl (sample active worker registry with 2-3 entries), lifecycle_transitions.json (valid and invalid state transitions). Signal schema fields per issue: active_registry entry, signal_path, status (enum: DONE/FAILED/BLOCKED), branch, base, prompt_hash, agent, model, reserved_files (list), pr_files (list), command_evidence (list of strings).",
+    "Step 2 - Create scripts/swarm_validate_signal.py: Implement a validator script that checks worker signal JSON for: (a) presence of all required fields (status, branch, base, prompt_hash, agent, model, reserved_files, pr_files, command_evidence), (b) status is one of the valid enum values (DONE, FAILED, BLOCKED), (c) reserved_files and pr_files are lists of strings, (d) command_evidence is a non-empty list, (e) branch is non-empty string, (f) pr_files is subset of reserved_files (scope drift check). Use a dataclass or pydantic model for the schema. Provide a validate_signal(data: dict) -> list[str] function returning a list of error strings (empty = valid). CLI entry point: accept a JSON file path as argument, print errors or 'OK', exit 0 on valid / 1 on invalid. Follow the pattern in scripts/check_test_tracking.py for structure.",
+    "Step 3 - Create scripts/swarm_reserved_guard.py: Implement a reserved-file guard that prevents overlapping file reservations across active workers. Core function: check_overlaps(new_worker: dict, active_workers: list[dict]) -> list[dict] returning overlap details (which worker, which files). Each worker dict has at minimum: worker_id, reserved_files (list of str). CLI entry point: `swarm_reserved_guard.py --new-worker <json_path> --registry <jsonl_path>`. Exit 0 if no overlap, exit 1 with details if overlap found. Support --allow-sequential flag that permits overlaps when workers are marked sequential.",
+    "Step 4 - Create scripts/swarm_lifecycle.py: Implement a lifecycle state machine helper. Valid states: active, done, reviewing, fix_needed, merged, closed, failed, blocked. Define allowed transitions (e.g., active->done, active->failed, active->blocked, done->reviewing, reviewing->fix_needed, reviewing->merged, fix_needed->active, blocked->active, etc.). Core functions: (a) validate_transition(current: str, target: str) -> bool, (b) transition_worker(worker_file: Path, target_state: str) -> dict that reads JSON, validates transition, updates state+timestamp, writes back. CLI entry point: `swarm_lifecycle.py <worker_signal_path> <target_state>`. Exit 0 on success, 1 on invalid transition.",
+    "Step 5 - Create tests/unit/scripts/test_swarm_validate_signal.py: Write unit tests covering: valid signal passes with no errors, missing required fields produce specific error messages, invalid status enum produces error, pr_files not subset of reserved_files produces scope drift error, empty command_evidence produces error, non-list reserved_files produces error. Load fixtures from tests/fixtures/swarm/. Follow Arrange/Act/Assert pattern.",
+    "Step 6 - Create tests/unit/scripts/test_swarm_reserved_guard.py: Write unit tests covering: no overlap returns empty list, overlapping files returns correct details (which worker + which files), multiple overlaps across multiple workers, --allow-sequential with sequential markers permits overlap, CLI exits 0 on clean / 1 on overlap. Use fixtures from tests/fixtures/swarm/.",
+    "Step 7 - Create tests/unit/scripts/test_swarm_lifecycle.py: Write unit tests covering: all valid transitions succeed, invalid transitions are rejected (e.g., done->active is invalid), transition updates timestamp, transition writes to file correctly, CLI exits 0 on valid transition / 1 on invalid. Use tmp_path for file operations.",
+    "Step 8 - Run focused tests and lint: Run `uv run pytest tests/unit/scripts/test_swarm_validate_signal.py tests/unit/scripts/test_swarm_reserved_guard.py tests/unit/scripts/test_swarm_lifecycle.py -v --timeout=30` to confirm all pass. Run `make check` to verify lint and types pass. Fix any issues."
+  ],
+  "acceptance_criteria": [
+    "scripts/swarm_validate_signal.py exists and validate_signal() returns errors for malformed JSON, empty list for valid JSON",
+    "scripts/swarm_reserved_guard.py exists and check_overlaps() detects file reservation conflicts",
+    "scripts/swarm_lifecycle.py exists and validate_transition() enforces state machine rules",
+    "All 3 test files pass: `uv run pytest tests/unit/scripts/test_swarm_validate_signal.py tests/unit/scripts/test_swarm_reserved_guard.py tests/unit/scripts/test_swarm_lifecycle.py -v`",
+    "tests/fixtures/swarm/ contains at least 5 JSON fixture files used by the tests",
+    "`make check` passes with no lint or type errors in the new files",
+    "Scripts do not import from telegram_bot/ or mini_app/ (per scripts/AGENTS.override.md)",
+    "Each script has a CLI entry point with if __name__ == '__main__' and returns appropriate exit codes"
+  ],
+  "verification": [
+    "Run `uv run pytest tests/unit/scripts/test_swarm_validate_signal.py tests/unit/scripts/test_swarm_reserved_guard.py tests/unit/scripts/test_swarm_lifecycle.py -v --timeout=30`",
+    "Run `make check`",
+    "Run `make test-unit` to confirm no regressions in the full unit suite"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

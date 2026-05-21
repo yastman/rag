@@ -1,0 +1,24 @@
+{
+  "project_type": "Python RAG pipeline with Telegram bot, LangGraph, and multi-worker orchestration scripts",
+  "language": "Python 3.11+",
+  "build_system": "uv (PEP 735 dependency groups), Makefile for targets",
+  "test_framework": "pytest with pytest-xdist (parallel), pytest-asyncio, strict markers, pythonpath=['.']",
+  "build_command": "make check",
+  "test_command": "uv run pytest tests/unit/scripts/ -q --timeout=30",
+  "verification_instructions": "1. Run `make check` (ruff lint + mypy type-check). 2. Run `uv run pytest tests/unit/scripts/test_swarm_validate_signal.py tests/unit/scripts/test_swarm_reserved_guard.py tests/unit/scripts/test_swarm_lifecycle.py -q --timeout=30` to validate new tests. 3. Run full unit suite `make test-unit` for regression.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "1. `uv sync` to install dev dependencies. 2. Confirm pytest works: `uv run pytest tests/unit/ -q --timeout=30 -x --co` (collect only).",
+  "environment_constraints": "OPEN_INTERNET network mode. No Docker daemon needed for unit tests. Scripts must not import from telegram_bot/ or mini_app/ runtime modules (per scripts/AGENTS.override.md). Use only stdlib + pydantic for script validation logic.",
+  "contribution_requirements": "Branch from `dev`. Test-first workflow (TDD). Include verification evidence. Run `make check` + `uv run pytest tests/unit -q` before completion. PR targets `dev`.",
+  "key_patterns": "Scripts in scripts/ are standalone CLI tools with if __name__=='__main__' entry points. Tests in tests/unit/scripts/ import from scripts module directly (pythonpath=['.']). Tests use pathlib, tmp_path fixtures, monkeypatch. No external service dependencies in unit tests. Scripts use argparse or simple main() returning int exit codes. Fixtures go in tests/fixtures/. Empty __init__.py in scripts/ and tests/unit/scripts/.",
+  "relevant_files": [
+    "scripts/check_test_tracking.py",
+    "tests/unit/scripts/test_check_test_tracking.py",
+    "tests/unit/scripts/test_git_hygiene.py",
+    "scripts/AGENTS.override.md",
+    "docs/engineering/test-writing-guide.md",
+    "pyproject.toml",
+    "Makefile"
+  ],
+  "directory_structure": "scripts/ - standalone Python/bash tools; tests/unit/scripts/ - unit tests for scripts; tests/fixtures/ - test fixture data (compose.ci.env, config.py, data.py, retrieval/); .signals/ - session-local worker signals (gitignored, not committed)"
+}
