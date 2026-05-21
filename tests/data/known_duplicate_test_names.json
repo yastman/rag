@@ -11,10 +11,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_backfill_enables_server_side_colbert_search": [
-    "tests/integration/test_colbert_backfill.py",
-    "tests/unit/test_colbert_backfill.py"
-  ],
   "test_baseline_search_returns_results": [
     "tests/unit/evaluation/test_search_engines_eval.py",
     "tests/unit/test_search_engines.py"
@@ -256,10 +252,6 @@
     "tests/unit/services/test_kommo_token_store.py",
     "tests/unit/services/test_kommo_tokens.py"
   ],
-  "test_health_endpoint": [
-    "tests/unit/mini_app/test_api_config.py",
-    "tests/unit/mini_app/test_chat.py"
-  ],
   "test_hybrid_search_returns_results": [
     "tests/smoke/test_ingestion_health.py",
     "tests/unit/evaluation/test_search_engines_eval.py"
@@ -325,10 +317,6 @@
   "test_is_dataclass": [
     "tests/unit/config/test_constants.py",
     "tests/unit/services/test_types.py"
-  ],
-  "test_keyboard_has_7_buttons": [
-    "tests/unit/keyboards/test_client_keyboard.py",
-    "tests/unit/keyboards/test_demo_button.py"
   ],
   "test_latency_stages_set": [
     "tests/unit/graph/nodes/test_rerank.py",
@@ -465,14 +453,6 @@
   "test_starts_catalog_dialog_results": [
     "tests/unit/dialogs/test_filter_dialog.py",
     "tests/unit/dialogs/test_funnel.py"
-  ],
-  "test_streaming_mixed_content_and_reasoning": [
-    "tests/unit/graph/test_generate_node.py",
-    "tests/unit/services/test_generate_response.py"
-  ],
-  "test_streaming_uses_send_message_draft": [
-    "tests/unit/graph/nodes/test_generate.py",
-    "tests/unit/services/test_generate_response.py"
   ],
   "test_supported_dimensions": [
     "tests/unit/models/test_contextualized_pipeline.py",
