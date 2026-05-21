@@ -4,16 +4,10 @@
 Проверяет поиск и получение точек из существующей коллекции.
 """
 
+import os
 import socket
 import sys
-from pathlib import Path
 from urllib.parse import urlparse
-
-
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
-
-import os
 
 import pytest
 from dotenv import load_dotenv

@@ -1,5 +1,6 @@
 """Collect metrics from Langfuse v3 API, Qdrant, and Redis."""
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -8,6 +9,9 @@ from typing import Any
 import httpx
 import redis
 from langfuse import Langfuse
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -314,7 +318,8 @@ class LangfuseMetricsCollector:
                 "points_total": extract("app_info_points_total"),
                 "available": True,
             }
-        except Exception:
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            logger.debug("Qdrant metrics scrape failed: %s", exc)
             return {"available": False}
 
     @staticmethod
@@ -344,5 +349,6 @@ class LangfuseMetricsCollector:
                 "keyspace_misses": info_stats.get("keyspace_misses", 0),
                 "available": True,
             }
-        except Exception:
+        except (redis.RedisError, OSError) as exc:
+            logger.debug("Redis metrics scrape failed: %s", exc)
             return {"available": False}

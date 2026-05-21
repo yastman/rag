@@ -1,6 +1,5 @@
 """Tests for bot deep link handler — /start q_<uuid> flow."""
 
-import asyncio
 import json
 
 import pytest
@@ -343,58 +342,12 @@ async def test_subscriber_not_started_without_topic_manager(mock_config):
     assert bot._miniapp_subscriber_task is None
 
 
-def _make_mock_pubsub(listen_fn):
-    """Create a mock pubsub with sync pubsub() and async subscribe/unsubscribe."""
-    mock_pubsub = MagicMock()
-    mock_pubsub.listen = listen_fn
-    mock_pubsub.subscribe = AsyncMock()
-    mock_pubsub.unsubscribe = AsyncMock()
-
-    mock_redis = MagicMock()
-    mock_redis.pubsub.return_value = mock_pubsub
-    mock_redis.aclose = AsyncMock()
-    return mock_redis, mock_pubsub
-
-
-async def test_subscriber_loop_invalid_message(mock_config):
-    """Subscriber loop skips invalid JSON messages without crashing."""
-    bot = _create_bot(mock_config)
-    bot._deeplink_redis = AsyncMock()
-    bot._topic_manager = AsyncMock()
-    bot._process_miniapp_start = AsyncMock()
-
-    async def mock_listen():
-        yield {"type": "subscribe", "data": None}  # subscription confirmation
-        yield {"type": "message", "data": "not-valid-json{{{"}  # invalid
-        yield {"type": "message", "data": json.dumps({"uuid": "abc", "user_id": 123})}
-        raise asyncio.CancelledError  # stop loop
-
-    mock_redis, _mock_pubsub = _make_mock_pubsub(mock_listen)
-
-    with patch("redis.asyncio.from_url", return_value=mock_redis):
-        await bot._miniapp_subscriber_loop()
-
-    # Only valid message processed
-    bot._process_miniapp_start.assert_called_once_with(chat_id=123, uuid_str="abc")
-
-
-async def test_subscriber_loop_crash_logged(mock_config):
-    """Subscriber loop logs exception on unexpected crash and cleans up."""
-    bot = _create_bot(mock_config)
-
-    async def mock_listen():
-        raise ConnectionError("Redis gone")
-        yield  # make it a generator
-
-    mock_redis, mock_pubsub = _make_mock_pubsub(mock_listen)
-
-    with patch("redis.asyncio.from_url", return_value=mock_redis):
-        # Should not raise — exception caught and logged
-        await bot._miniapp_subscriber_loop()
-
-    # Cleanup called
-    mock_pubsub.unsubscribe.assert_called_once_with("miniapp:start")
-    mock_redis.aclose.assert_called_once()
+# Note: invalid-message-skipping and subscriber-crash-logging used to live
+# here as `test_subscriber_loop_invalid_message` and
+# `test_subscriber_loop_crash_logged` against the legacy Redis pub/sub loop.
+# After #1239 (`miniapp:start:stream` Redis Streams migration) those
+# behaviours are pinned by `tests/unit/test_bot_streams_subscriber.py`
+# (poison-entry skip+ack, processing-error leaves entry in PEL) instead.
 
 
 async def test_deeplink_create_topic_error(mock_config):

@@ -20,7 +20,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture
-def test_markdown_content() -> bytes:
+def sample_markdown_content() -> bytes:
     """Sample markdown content for testing."""
     return b"""# Test Document
 
@@ -46,7 +46,7 @@ This concludes the test document.
 
 
 @pytest.fixture
-def test_collection_name() -> str:
+def e2e_collection_name() -> str:
     """Use a separate collection for tests."""
     return f"test_ingestion_e2e_{uuid.uuid4().hex[:8]}"
 
@@ -88,18 +88,18 @@ async def _seed_ingestion_collection(tmp_path: Path, collection_name: str) -> st
 
 
 @pytest.fixture
-async def seeded_ingestion_collection(tmp_path: Path, test_collection_name: str) -> str:
+async def seeded_ingestion_collection(tmp_path: Path, e2e_collection_name: str) -> str:
     """Yield a collection that has known ingestion data."""
     try:
-        yield await _seed_ingestion_collection(tmp_path, test_collection_name)
+        yield await _seed_ingestion_collection(tmp_path, e2e_collection_name)
     finally:
-        await _delete_test_collection(test_collection_name)
+        await _delete_test_collection(e2e_collection_name)
 
 
 class TestIngestionServiceE2E:
     """E2E tests for CocoIndexIngestionService."""
 
-    async def test_ingest_directory_creates_nodes(self, tmp_path: Path, test_collection_name: str):
+    async def test_ingest_directory_creates_nodes(self, tmp_path: Path, e2e_collection_name: str):
         """Test that directory ingestion creates nodes in Qdrant."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
 
@@ -107,7 +107,7 @@ class TestIngestionServiceE2E:
         test_file = tmp_path / "test_doc.md"
         test_file.write_text("# Test\n\nThis is test content for ingestion.")
 
-        service = CocoIndexIngestionService(collection_name=test_collection_name)
+        service = CocoIndexIngestionService(collection_name=e2e_collection_name)
 
         try:
             # Ingest directory
@@ -123,7 +123,7 @@ class TestIngestionServiceE2E:
             assert collection_stats.get("points_count", 0) > 0
 
         finally:
-            await _delete_test_collection(test_collection_name)
+            await _delete_test_collection(e2e_collection_name)
             await service.close()
 
     async def test_get_collection_stats(self, seeded_ingestion_collection: str):
