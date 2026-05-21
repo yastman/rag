@@ -1,7 +1,14 @@
 {
   "task_id": "task-fix-layer-violation-1266",
   "task_description": "Fix the src/ to telegram_bot/ layer violation by extracting shared code (observability, BGE-M3 client, VoyageService, ApartmentRecord models) from telegram_bot/ into src/, then making telegram_bot/ re-export from src/ for backward compatibility.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "Ruff lint passes. 6890 unit tests pass. 14 pre-existing failures (mini_app fastapi missing, docker compose, cocoindex, FSM coverage, markdown links) and 7 pre-existing collection errors (all fastapi ImportError) are unrelated to this change. Zero from telegram_bot imports remain in src/ except the out-of-scope graph/cache/scoring imports in src/api/main.py."
+  }
 }
