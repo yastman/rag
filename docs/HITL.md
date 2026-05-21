@@ -47,7 +47,7 @@ When HITL triggers, the user sees:
 
 2. **Preview text** showing what will happen:
    ```
-   Создать сделку:
+   Создать сделку:           ***REMOVED*** "Create deal:"
      name: Test Deal
      budget: 50000
    ```
@@ -79,7 +79,7 @@ preview = format_hitl_preview("crm_create_lead", args)
 result = hitl_guard("crm_create_lead", preview, args)
 
 if result["action"] == "cancel":
-    return "Операция отменена"
+    return "Операция отменена"  ***REMOVED*** "Operation cancelled"
 
 ***REMOVED*** Proceed with CRM call
 ...

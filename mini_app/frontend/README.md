@@ -42,7 +42,7 @@ deployment.
 | ------------------- | ----------------------------------------------------------------------- | ---------------- |
 | `VITE_API_URL`      | Backend API base URL (Vite dev server proxies `/api` to `:8090`).       | `/api`           |
 | `VITE_BOT_USERNAME` | Telegram bot handle (no `@`) used by `TelegramGate` to render the      | `your_bot`       |
-|                     | "Открыть в Telegram" CTA: `https://t.me/${VITE_BOT_USERNAME}`. Should   |                  |
+|                     | "Открыть в Telegram" ("Open in Telegram") CTA: `https://t.me/${VITE_BOT_USERNAME}`. Should   |                  |
 |                     | match the backend `BOT_USERNAME` env var.                              |                  |
 
 ***REMOVED******REMOVED*** Tests & Checks
