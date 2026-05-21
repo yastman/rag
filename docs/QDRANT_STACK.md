@@ -122,13 +122,22 @@ Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`
 | `metadata.distance_to_sea` | `integer` | ✓ | ✓ | `filter_extractor._extract_distance_to_sea`; `query_analyzer` |
 | `metadata.maintenance` | `float` | ✓ | — | `filter_extractor._extract_maintenance`; `query_analyzer` |
 | `metadata.bathrooms` | `integer` | ✓ | ✓ | `filter_extractor._extract_bathrooms`; `query_analyzer` |
-| `metadata.furniture` | `keyword` | ✓ | — | `filter_extractor._extract_furniture`; `query_analyzer` |
+| `metadata.furnished` | `bool` | ✓ | `bool` | `filter_extractor._extract_furnished`; `query_analyzer` |
 | `metadata.year_round` | `keyword` | ✓ | `bool` | `filter_extractor._extract_year_round`; `query_analyzer` |
 
 **Important discrepancies:**
 - `metadata.area` is `float` in `setup_qdrant_indexes.py` but `integer` in `indexer.py`, `setup_scalar_collection.py`, and `setup_binary_collection.py`.
-- `metadata.furniture` (keyword, "Есть") is created by `setup_qdrant_indexes.py`, while `indexer.py` and `setup_binary_collection.py` create `metadata.furnished` (bool). The runtime apartment pipeline uses `is_furnished` (bool) in dialog filters and `furniture` (string) in the heuristic extractor.
 - `metadata.maintenance` (float) is only created by `setup_qdrant_indexes.py`; none of the scalar/binary/indexer scripts index it.
+
+***REMOVED******REMOVED******REMOVED*** Furnished status (issue ***REMOVED***1401)
+
+The `furnished`/`furniture`/`is_furnished` schema is split deliberately by collection. There is no single canonical name across the system, but each lane is internally consistent end-to-end:
+
+- **Document/CSV pipeline** (`gdrive_documents_bge[_scalar|_binary]`): canonical `metadata.furnished` BOOL. `src/ingestion/chunker.py` parses the CSV "Мебель" column to a Python `bool`, `src/ingestion/indexer.py` and `scripts/setup_binary_collection.py` index it as BOOL, and `telegram_bot/setup_qdrant_indexes.py` creates the matching BOOL payload index.
+- **Standalone apartments collection** (`apartments`): canonical top-level `is_furnished` BOOL. See `scripts/apartments/setup_collection.py`, `telegram_bot/services/apartments_service.py`, and the `apartment_models`/dialog/tool code that consumes it.
+- **Runtime filter producers** that target the document/CSV pipeline emit `furnished: bool`: `FilterExtractor._extract_furnished` (bool, supports both positive and negative phrasing), `QueryAnalyzer.SYSTEM_PROMPT` (instructs the LLM to emit a `furnished` bool), and `query_filter_signal.detect_filter_sensitive_query` (returns the reason `furnished`). The downstream `qdrant._build_filter` adds the `metadata.` prefix and produces a BOOL match against `metadata.furnished`.
+
+**Migration note for existing deployments.** The legacy `metadata.furniture` KEYWORD index that older deployments may have created has zero data hits, because the chunker has always written `metadata.furnished` BOOL. It is safe to leave in place or to remove via `client.delete_payload_index(collection_name, 'metadata.furniture')` at any time. Re-running `telegram_bot/setup_qdrant_indexes.py` against an existing collection is idempotent: it logs "Index already exists, skipping" for pre-existing fields and creates `metadata.furnished` BOOL only if absent. No payload backfill is required.
 
 ***REMOVED******REMOVED*** Other Qdrant Collections
 
@@ -174,7 +183,7 @@ Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collect
 - `metadata.source` — citation resolution
 
 **Legacy / CSV / apartment-only** (not used by unified document ingestion):
-- `metadata.city`, `metadata.price`, `metadata.rooms`, `metadata.area`, `metadata.floor`, `metadata.distance_to_sea`, `metadata.bathrooms`, `metadata.furniture`/`furnished`, `metadata.year_round`, `metadata.maintenance`
+- `metadata.city`, `metadata.price`, `metadata.rooms`, `metadata.area`, `metadata.floor`, `metadata.distance_to_sea`, `metadata.bathrooms`, `metadata.furnished`, `metadata.year_round`, `metadata.maintenance`
 - `metadata.article_number`, `metadata.document_name`
 
 **Best-effort / classifier-populated** (unified ingestion writes these, but bot does not filter on them today):
