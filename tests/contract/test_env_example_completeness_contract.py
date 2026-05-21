@@ -107,6 +107,12 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "RUN_E2E_TESTS": "E2E suite gate; test-only flag",
     "RUN_LOAD_TESTS": "Load suite gate; test-only flag",
     "PYTEST_INTEGRATION": "Integration-suite gate; test-only flag",
+    # --- Legacy aliases (kept for back-compat, not promoted) -----------------
+    "BOT_TOKEN": (
+        "Legacy alias read in mini_app/api.py as fallback after "
+        "TELEGRAM_BOT_TOKEN; not promoted to .env.example to avoid "
+        "encouraging dual-config of the same secret."
+    ),
     # --- E2E test fixtures (read by tests/e2e harnesses, never by bot) -----
     "E2E_COLLECTION_NAME": "E2E harness fixture (tests/e2e); never an operator var",
     "E2E_JUDGE_API_KEY": "E2E LLM-judge harness fixture",
