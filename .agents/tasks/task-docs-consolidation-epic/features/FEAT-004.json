@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "docs",
   "description": "Consolidate the extension/developer guide into a single canonical doc. Currently docs/DEVELOPER_GUIDE.md and docs/ADD_NEW_RAG_NODE.md cover overlapping territory (both explain adding nodes, with slightly different code patterns). Merge them into one authoritative docs/DEVELOPER_GUIDE.md that covers: adding a new graph node, adding a new agent tool, adding a new query type, and adding a new ingestion source. Remove docs/ADD_NEW_RAG_NODE.md. Update all inbound links (docs/README.md, AGENTS.md references if any).",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Read docs/DEVELOPER_GUIDE.md and docs/ADD_NEW_RAG_NODE.md to identify the differences. ADD_NEW_RAG_NODE.md has a more detailed checklist and uses the newer Runtime[GraphContext] pattern, while DEVELOPER_GUIDE.md uses older **deps pattern. The merged doc should use the current pattern from ADD_NEW_RAG_NODE.md.",
     "Rewrite docs/DEVELOPER_GUIDE.md as the single canonical extension guide. Structure: (1) Adding a New LangGraph Node (use the Runtime[GraphContext] pattern from ADD_NEW_RAG_NODE.md with the full checklist), (2) Adding a New Agent Tool (from current DEVELOPER_GUIDE.md), (3) Adding a New Query Type (from current DEVELOPER_GUIDE.md), (4) Adding a New Ingestion Source (brief section explaining how src/ingestion/unified/ can be extended, referencing the CocoIndex flow pattern), (5) Dependencies and DI (from current DEVELOPER_GUIDE.md, updated to mention GraphContext), (6) Testing (combine testing guidance from both files). Include the Code Locations table from ADD_NEW_RAG_NODE.md.",
@@ -25,5 +25,5 @@
     "Run the Python relative-link checker script from docs/engineering/docs-maintenance.md section 7"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Successfully merged ADD_NEW_RAG_NODE.md into DEVELOPER_GUIDE.md. The merged doc uses the current Runtime[GraphContext] pattern throughout. Removed duplicate DEVELOPER_GUIDE.md listing from the Quality & Evaluation section in docs/README.md. Pre-existing broken links in docs/superpowers/plans/ are unrelated and noted in FEAT-003 findings."
 }
