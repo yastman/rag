@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "docs",
   "description": "English-first treatment for developer-facing docs that currently have Russian-primary content or mixed-language triggers. The main target is docs/engineering/sdk-registry.md (intro block entirely in Russian) and docs/runbooks/README.md (Russian trigger phrases in the Quick Access table). Also add English translation/context for Russian UI strings in docs/HITL.md, docs/CLIENT_PIPELINE.md, and docs/TROUBLESHOOTING_CACHE.md. Keep Russian content where appropriate (e.g., portfolio resume-case-study.md bilingual summary is intentional, domain-specific examples in src/ READMEs are test data). The goal is that developer process docs are readable English-first while preserving Russian where it serves the domain or localized UI.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Rewrite docs/engineering/sdk-registry.md intro block (the blockquote after the title) to English-first. Keep the same information but write it in English. Optionally add a one-line note that the original was in Russian if helpful for context. Leave the per-SDK sections (aiogram, aiogram-dialog, etc.) as-is since those contain Russian field names that match code patterns.",
     "In docs/runbooks/README.md Quick Access table, add English equivalents for the Russian trigger phrases. Format: 'English description (Russian: original phrase)' - e.g., 'Recent Langfuse traces (Russian: izuchi poslednie treysy)' or simply replace with English-only descriptions since the runbook links already have English titles.",
@@ -25,5 +25,5 @@
     "Visually confirm that docs/engineering/sdk-registry.md intro reads naturally in English"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All changes verified. git diff --check passed. Relative link checker passed for all modified files. Pre-existing broken links exist in docs/API_REFERENCE.md, docs/LOCAL-DEVELOPMENT.md, docs/indexes/fast-search.md, docs/indexes/local-runtime.md, and docs/superpowers/ but are unrelated to this feature."
 }
