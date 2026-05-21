@@ -527,7 +527,7 @@ class TestQueryAnalyzerObserveInstrumentation:
     # Module-level wiring
     # ------------------------------------------------------------------
 
-    def test_module_imports_observe_and_get_client(self):
+    def test_query_analyzer_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1659 contract)."""
         from telegram_bot.services import query_analyzer as qa_mod
 
@@ -545,7 +545,7 @@ class TestQueryAnalyzerObserveInstrumentation:
     # Decorator kwargs
     # ------------------------------------------------------------------
 
-    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_query_analyzer_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """``analyze`` is decorated with the audit's exact kwargs.
 
         CRITICAL: ``as_type`` MUST NOT be present — preflight confirmed

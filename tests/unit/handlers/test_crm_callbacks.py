@@ -540,7 +540,7 @@ class TestCrmCallbacksObserveInstrumentation:
 
     # ---- Decorator-application contract ------------------------------------
 
-    def test_module_imports_observe_and_get_client(self):
+    def test_crm_callbacks_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (#1664 contract)."""
         from telegram_bot.handlers import crm_callbacks as cb_mod
 
@@ -554,7 +554,7 @@ class TestCrmCallbacksObserveInstrumentation:
             "from telegram_bot.observability for curated update_current_span calls"
         )
 
-    def test_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
+    def test_crm_callbacks_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """All 11 expected handlers must be wrapped with @observe(...) and the
         right kwargs (capture_input=False, capture_output=False)."""
         import importlib
