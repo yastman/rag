@@ -26,12 +26,14 @@ Every other fast/profile/duration target must:
 These checks are intentionally byte-level on the Makefile recipe so that
 silent drift surfaces immediately.
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
 import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
