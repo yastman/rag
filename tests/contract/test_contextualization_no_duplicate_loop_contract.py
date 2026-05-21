@@ -56,18 +56,12 @@ def _calls_contextualize_batch(method: ast.AsyncFunctionDef) -> bool:
 
 def _has_chunk_loop(method: ast.AsyncFunctionDef) -> bool:
     """Return True if the method body contains a (Async)For loop."""
-    for node in ast.walk(method):
-        if isinstance(node, (ast.For, ast.AsyncFor)):
-            return True
-    return False
+    return any(isinstance(node, (ast.For, ast.AsyncFor)) for node in ast.walk(method))
 
 
 def _has_try_except(method: ast.AsyncFunctionDef) -> bool:
     """Return True if the method body contains a try/except block."""
-    for node in ast.walk(method):
-        if isinstance(node, ast.Try):
-            return True
-    return False
+    return any(isinstance(node, ast.Try) for node in ast.walk(method))
 
 
 @pytest.mark.parametrize("relpath", PROVIDER_FILES)
