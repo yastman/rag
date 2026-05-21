@@ -44,13 +44,20 @@ class ClaudeContextualizer(ContextualizeProvider):
     - Quality: Highest among available providers
     """
 
-    def __init__(self, settings: Settings | None = None, use_cache: bool = True) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        use_cache: bool = True,
+        system_prompt: str | None = None,
+    ) -> None:
         """Initialize Claude contextualizer.
 
         Args:
             settings: Configuration settings (uses global if None)
             use_cache: Enable prompt caching for cost reduction
+            system_prompt: Optional custom contextualization system prompt
         """
+        super().__init__(system_prompt=system_prompt)
         self.settings = settings or Settings()
         self.use_cache = use_cache
         self.client = AsyncAnthropic(api_key=self.settings.anthropic_api_key)
@@ -95,7 +102,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         ``Total input tokens = input_tokens + cache_creation_input_tokens
         + cache_read_input_tokens`` (issue #1234).
         """
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "claude-3-5-haiku-latest"
 
@@ -162,7 +169,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization (blocking)."""
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "claude-3-5-haiku-latest"
 

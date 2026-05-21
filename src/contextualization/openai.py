@@ -35,8 +35,9 @@ class OpenAIContextualizer(ContextualizeProvider):
     client parameter (#1651). No Tenacity decorator wraps the per-call path.
     """
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, system_prompt: str | None = None) -> None:
         """Initialize OpenAI contextualizer."""
+        super().__init__(system_prompt=system_prompt)
         self.settings = settings or Settings()
         self.client = AsyncOpenAI(
             api_key=self.settings.openai_api_key,
@@ -78,7 +79,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         cover RateLimitError, APIStatusError (>=500), connection errors,
         408 and 409. No additional retry layer is required.
         """
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "gpt-4o-mini"
 
@@ -123,7 +124,7 @@ class OpenAIContextualizer(ContextualizeProvider):
 
         SDK-native retries via ``max_retries`` on the sync OpenAI client.
         """
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "gpt-4o-mini"
 

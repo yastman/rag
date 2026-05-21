@@ -34,6 +34,7 @@ the helpers directly with simple objects.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -213,3 +214,97 @@ def test_get_system_prompt_treats_empty_string_as_no_override() -> None:
 
     prompt = ContextualizeProvider.get_system_prompt("   \n\n  ")
     assert "Ukrainian law" in prompt
+
+
+# ---------------------------------------------------------------------------
+# 4. Provider wiring for configurable prompts
+# ---------------------------------------------------------------------------
+
+
+def _settings() -> SimpleNamespace:
+    return SimpleNamespace(
+        anthropic_api_key="anthropic-key",
+        openai_api_key="openai-key",
+        groq_api_key="groq-key",
+        model_name=None,
+        temperature=0.2,
+    )
+
+
+@pytest.mark.asyncio
+async def test_openai_contextualizer_uses_constructor_system_prompt_override() -> None:
+    """OpenAI provider must send the configured prompt to the SDK request."""
+    from src.contextualization.openai import OpenAIContextualizer
+
+    custom_prompt = "You summarize real-estate listing fragments."
+    async_client = MagicMock()
+    async_client.chat.completions.create = AsyncMock(
+        return_value=SimpleNamespace(
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+            choices=[SimpleNamespace(message=SimpleNamespace(content="summary"))],
+        )
+    )
+
+    with (
+        patch("src.contextualization.openai.AsyncOpenAI", return_value=async_client),
+        patch("src.contextualization.openai.OpenAI", return_value=MagicMock()),
+    ):
+        contextualizer = OpenAIContextualizer(settings=_settings(), system_prompt=custom_prompt)
+        await contextualizer.contextualize_single("text", "article-1")
+
+    kwargs = async_client.chat.completions.create.call_args.kwargs
+    assert kwargs["messages"][0]["content"] == custom_prompt
+
+
+@pytest.mark.asyncio
+async def test_claude_contextualizer_uses_constructor_system_prompt_override() -> None:
+    """Claude provider must send the configured prompt to the SDK request."""
+    from src.contextualization.claude import ClaudeContextualizer
+
+    custom_prompt = "You summarize product support documents."
+    async_client = MagicMock()
+    async_client.messages.create = AsyncMock(
+        return_value=SimpleNamespace(
+            usage=SimpleNamespace(input_tokens=10, output_tokens=5),
+            content=[SimpleNamespace(text="summary")],
+        )
+    )
+
+    with (
+        patch("src.contextualization.claude.AsyncAnthropic", return_value=async_client),
+        patch("src.contextualization.claude.Anthropic", return_value=MagicMock()),
+    ):
+        contextualizer = ClaudeContextualizer(
+            settings=_settings(),
+            use_cache=False,
+            system_prompt=custom_prompt,
+        )
+        await contextualizer.contextualize_single("text", "article-1")
+
+    kwargs = async_client.messages.create.call_args.kwargs
+    assert kwargs["system"] == custom_prompt
+
+
+@pytest.mark.asyncio
+async def test_groq_contextualizer_uses_constructor_system_prompt_override() -> None:
+    """Groq provider must send the configured prompt to the SDK request."""
+    from src.contextualization.groq import GroqContextualizer
+
+    custom_prompt = "You summarize engineering runbooks."
+    async_client = MagicMock()
+    async_client.chat.completions.create = AsyncMock(
+        return_value=SimpleNamespace(
+            usage=SimpleNamespace(total_tokens=15),
+            choices=[SimpleNamespace(message=SimpleNamespace(content="summary"))],
+        )
+    )
+
+    with (
+        patch("src.contextualization.groq.AsyncGroq", return_value=async_client),
+        patch("src.contextualization.groq.Groq", return_value=MagicMock()),
+    ):
+        contextualizer = GroqContextualizer(settings=_settings(), system_prompt=custom_prompt)
+        await contextualizer.contextualize_single("text", "article-1")
+
+    kwargs = async_client.chat.completions.create.call_args.kwargs
+    assert kwargs["messages"][0]["content"] == custom_prompt
