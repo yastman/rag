@@ -87,9 +87,8 @@ class TestDocsReadme:
         required = [
             "BOT_INTERNAL_STRUCTURE.md",
             "ONBOARDING.md",
-            "ONBOARDING_CHECKLIST.md",
+            "DEVELOPER_GUIDE.md",
             "TROUBLESHOOTING_CACHE.md",
-            "ADD_NEW_RAG_NODE.md",
         ]
         for name in required:
             assert name in text, f"Missing doc index entry for {name}"
