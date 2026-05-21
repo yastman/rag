@@ -198,6 +198,10 @@ class UniversalDocumentParser:
         if self.profile == "quality":
             return self._parse_pdf_with_docling(filepath)
 
+        return self._parse_pdf_pymupdf(filepath)
+
+    def _parse_pdf_pymupdf(self, filepath: Path) -> ParsedDocument:
+        """Parse PDF using PyMuPDF (fast, local)."""
         logger.info(f"Parsing PDF with PyMuPDF: {filepath.name}")
 
         doc = pymupdf.open(filepath)
@@ -244,17 +248,46 @@ class UniversalDocumentParser:
         Uses DoclingClient.chunk_file_sync() to get HybridChunker chunks,
         then joins their text to produce the document content.
 
-        Requires a running docling-serve instance.
+        Requires a running docling-serve instance. Falls back to PyMuPDF
+        if the service is unreachable.
         """
+        import httpx
+
         from src.ingestion.docling_client import DoclingClient, DoclingConfig
 
         logger.info(f"Parsing PDF with Docling (quality profile): {filepath.name}")
 
-        config = DoclingConfig(profile="quality")
-        client = DoclingClient(config)
-        chunks = client.chunk_file_sync(filepath)
+        try:
+            config = DoclingConfig(profile="quality")
+            client = DoclingClient(config)
+            chunks = client.chunk_file_sync(filepath)
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            logger.warning(
+                "docling-serve unreachable for %s (%s), falling back to PyMuPDF",
+                filepath.name,
+                exc,
+            )
+            return self._parse_pdf_pymupdf(filepath)
+        except Exception as exc:
+            logger.warning(
+                "Docling quality parsing failed for %s (%s), falling back to PyMuPDF",
+                filepath.name,
+                exc,
+            )
+            return self._parse_pdf_pymupdf(filepath)
 
         content = "\n\n".join(chunk.text for chunk in chunks)
+
+        # Attempt to extract num_pages from the page_range of the last chunk
+        num_pages: int | None = None
+        for chunk in reversed(chunks):
+            if chunk.page_range is not None:
+                num_pages = chunk.page_range[1]
+                break
+        if num_pages is None and chunks:
+            logger.info(
+                "Page count unavailable from Docling chunks for %s", filepath.name
+            )
 
         metadata = {
             "format": "pdf",
@@ -267,6 +300,7 @@ class UniversalDocumentParser:
             filename=filepath.name,
             title=filepath.stem,
             content=content,
+            num_pages=num_pages,
             metadata=metadata,
         )
 

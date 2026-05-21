@@ -29,13 +29,19 @@ def _load_hybrid_chunker() -> Any | None:
     try:
         module = import_module("docling_core.transforms.chunker")
         return getattr(module, "HybridChunker", None)
-    except Exception:
+    except ImportError:
         pass
+    except Exception as exc:
+        logger.warning("Failed to load HybridChunker from docling_core.transforms.chunker: %s", exc)
+        return None
     try:
         module = import_module("docling.chunking")
         return getattr(module, "HybridChunker", None)
-    except Exception:
+    except ImportError:
         pass
+    except Exception as exc:
+        logger.warning("Failed to load HybridChunker from docling.chunking: %s", exc)
+        return None
     return None
 
 

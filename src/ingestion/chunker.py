@@ -1,11 +1,15 @@
 """Document chunking strategies."""
 
 import csv
+import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 class ChunkingStrategy(StrEnum):
@@ -189,9 +193,14 @@ def chunk_csv_by_rows(csv_path: Path, document_name: str) -> list[Chunk]:
     """
     try:
         return _chunk_csv_with_docling(csv_path, document_name)
-    except Exception as exc:
+    except (ImportError, RuntimeError, ConnectionError, OSError) as exc:
+        import traceback
         import warnings
 
+        logger.warning(
+            "Docling-based CSV chunking failed, falling back to legacy csv.DictReader:\n%s",
+            traceback.format_exc(),
+        )
         warnings.warn(
             f"Docling-based CSV chunking unavailable ({exc}), "
             "falling back to legacy csv.DictReader. "
@@ -209,6 +218,12 @@ def _chunk_csv_with_docling(csv_path: Path, document_name: str) -> list[Chunk]:
     CSV file, then converts DoclingChunks to standard Chunk objects via
     DoclingClient.to_ingestion_chunks().
 
+    Note: The Docling path provides document-level chunking and does NOT
+    produce per-row typed metadata (price, rooms, area, etc.). Per-row
+    structured metadata is only available in the legacy csv.DictReader path.
+    Chunks are marked with source_type="csv_row" so downstream consumers
+    can identify CSV-sourced data.
+
     Args:
         csv_path: Path to CSV file
         document_name: Name for the document
@@ -223,11 +238,19 @@ def _chunk_csv_with_docling(csv_path: Path, document_name: str) -> list[Chunk]:
 
     adapter = NativeDoclingAdapter()
     docling_chunks = adapter.chunk_file_sync(csv_path)
-    return adapter.to_ingestion_chunks(
+    chunks = adapter.to_ingestion_chunks(
         docling_chunks,
         source=document_name,
         source_type="csv",
     )
+
+    # Mark chunks with csv_row source_type so downstream knows they came from a CSV
+    for chunk in chunks:
+        if chunk.extra_metadata is None:
+            chunk.extra_metadata = {}
+        chunk.extra_metadata["source_type"] = "csv_row"
+
+    return chunks
 
 
 def _chunk_csv_legacy(csv_path: Path, document_name: str) -> list[Chunk]:

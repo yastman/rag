@@ -202,8 +202,8 @@ class TestChunkCSVByRows:
 
         assert len(chunks) >= 1
         assert chunks[0].extra_metadata is not None
-        # Docling path uses unified metadata schema
-        assert chunks[0].extra_metadata.get("source_type") == "csv"
+        # Docling path marks chunks with csv_row source_type for downstream identification
+        assert chunks[0].extra_metadata.get("source_type") == "csv_row"
         assert chunks[0].document_name == "test.csv"
         # Row content should be in the chunk text
         assert "Несебър" in chunks[0].text
