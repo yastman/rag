@@ -178,29 +178,49 @@ def _validate_texts(texts: list[str]) -> tuple[list[int], list[int], list[str]]:
     return valid_indices, invalid_indices, error_messages
 
 
-def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray]) -> list[float]:
-    """Compute MaxSim scores between query and documents.
+def _lexical_weights_to_qdrant_sparse(
+    lexical_weights: list[dict[Any, Any]],
+) -> list[dict[str, list]]:
+    """Convert FlagEmbedding ``lexical_weights`` rows to Qdrant sparse format (***REMOVED***1237).
 
-    MaxSim: for each query token, find max similarity with any doc token,
-    then sum across all query tokens.
+    Extracted from ``encode_sparse`` and ``encode_hybrid``; previously each
+    site rebuilt the same ``{indices, values}`` shape with a hand-rolled
+    loop. Centralising the conversion eliminates the duplication called out
+    in ***REMOVED***1237 and provides a single place to evolve the format if Qdrant
+    changes its API.
+    """
+    converted: list[dict[str, list]] = []
+    for row in lexical_weights:
+        indices: list[int] = []
+        values: list[float] = []
+        for idx, val in row.items():
+            indices.append(int(idx))
+            values.append(float(val))
+        converted.append({"indices": indices, "values": values})
+    return converted
+
+
+def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray]) -> list[float]:
+    """Compute MaxSim (ColBERT late-interaction) scores via FlagEmbedding (***REMOVED***1237).
+
+    Delegates to :meth:`BGEM3FlagModel.colbert_score`, the SDK-native MaxSim
+    implementation that ships with FlagEmbedding 1.2+. Replaces the previous
+    from-scratch ``query_vecs @ doc_vecs.T`` / ``max(axis=1).sum()`` numpy
+    implementation. Behaviour is identical (same MaxSim formula on the same
+    BGE-M3 normalised vectors), but the SDK path is the upstream-maintained
+    one and removes ~10 lines of hand-rolled linear algebra.
 
     Args:
-        query_vecs: Query ColBERT vectors (num_query_tokens, dim)
-        doc_vecs_list: List of document ColBERT vectors
+        query_vecs: Query ColBERT vectors (num_query_tokens, dim).
+        doc_vecs_list: List of document ColBERT vectors.
 
     Returns:
-        List of MaxSim scores for each document
+        List of MaxSim scores, one per document, in input order.
     """
-    scores = []
-    for doc_vecs in doc_vecs_list:
-        ***REMOVED*** Cosine similarity matrix: (num_query_tokens, num_doc_tokens)
-        ***REMOVED*** Vectors are already normalized by BGE-M3
-        sim_matrix = query_vecs @ doc_vecs.T
-        ***REMOVED*** MaxSim: max over doc tokens for each query token, then sum
-        max_sims = sim_matrix.max(axis=1)
-        score = float(max_sims.sum())
-        scores.append(score)
-    return scores
+    model = get_model()
+    ***REMOVED*** ``BGEM3FlagModel.colbert_score`` accepts a single (query, doc) pair and
+    ***REMOVED*** returns a torch scalar; cast to float for JSON-serialisable output.
+    return [float(model.colbert_score(query_vecs, doc_vecs)) for doc_vecs in doc_vecs_list]
 
 
 ***REMOVED*** Endpoints
@@ -316,14 +336,7 @@ async def encode_sparse(request: EncodeRequest):
                 return_colbert_vecs=False,
             )
             ***REMOVED*** Convert sparse vectors to Qdrant format
-            valid_weights = []
-            for row in embeddings["lexical_weights"]:
-                indices = []
-                values = []
-                for idx, val in row.items():
-                    indices.append(int(idx))
-                    values.append(float(val))
-                valid_weights.append({"indices": indices, "values": values})
+            valid_weights = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
         else:
             valid_weights = []
 
@@ -457,14 +470,7 @@ async def encode_hybrid(request: EncodeRequest):
                 return_colbert_vecs=True,
             )
             valid_dense = embeddings["dense_vecs"].tolist()
-            valid_sparse = []
-            for row in embeddings["lexical_weights"]:
-                indices = []
-                values = []
-                for idx, val in row.items():
-                    indices.append(int(idx))
-                    values.append(float(val))
-                valid_sparse.append({"indices": indices, "values": values})
+            valid_sparse = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
             valid_colbert = [vec.tolist() for vec in embeddings["colbert_vecs"]]
         else:
             valid_dense = []
