@@ -90,7 +90,7 @@ def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
             return_value=mock_bge_client,
         ),
         patch(
-            "src.ingestion.unified.qdrant_writer.VoyageService",
+            "telegram_bot.services.VoyageService",
             return_value=mock_voyage,
         ),
     ):
