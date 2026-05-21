@@ -31,9 +31,9 @@ describe('QuestionSheet', () => {
     vi.restoreAllMocks();
   });
 
-  const renderQuestionSheet = () =>
+  const renderQuestionSheet = (path = '/question/purchase') =>
     render(
-      <MemoryRouter initialEntries={['/question/purchase']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/question/:id" element={<QuestionSheet />} />
         </Routes>
@@ -76,5 +76,23 @@ describe('QuestionSheet', () => {
     fireEvent.click(screen.getByText('С чего начать поиск квартиры?'));
 
     expect(miniAppMock.close.ifAvailable).toHaveBeenCalled();
+  });
+
+  it('renders not found state for unknown question id', async () => {
+    renderQuestionSheet('/question/missing');
+
+    await waitFor(() => {
+      expect(screen.getByText('Вопрос не найден')).toBeInTheDocument();
+    });
+  });
+
+  it('renders error state when config fails to load', async () => {
+    vi.spyOn(api, 'fetchConfig').mockRejectedValue(new Error('network error'));
+
+    renderQuestionSheet();
+
+    await waitFor(() => {
+      expect(screen.getByText('Не удалось загрузить вопросы')).toBeInTheDocument();
+    });
   });
 });
