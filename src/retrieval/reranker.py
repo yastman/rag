@@ -17,6 +17,7 @@ from telegram_bot.observability import get_client, observe
 
 if TYPE_CHECKING:
     from sentence_transformers import CrossEncoder
+    from sentence_transformers.cross_encoder.model import PairInput
 
 
 logger = logging.getLogger(__name__)
@@ -96,11 +97,8 @@ def rerank_results(
     ***REMOVED*** Get cross-encoder model
     model = get_cross_encoder()
 
-    ***REMOVED*** Prepare query-document pairs for top_k results.
-    ***REMOVED*** Narrow result["text"] to str: the dicts are typed dict[str, Any], so
-    ***REMOVED*** CrossEncoder.predict (which expects concrete str/text inputs, not Any)
-    ***REMOVED*** would otherwise reject list[tuple[str, Any]] under strict mypy.
-    pairs: list[tuple[str, str]] = [(query, str(result["text"])) for result in results[:top_k]]
+    ***REMOVED*** Prepare query-document pairs for top_k results using the SDK input alias.
+    pairs: list[PairInput] = [(query, str(result["text"])) for result in results[:top_k]]
 
     ***REMOVED*** Score with cross-encoder (returns relevance scores)
     try:
