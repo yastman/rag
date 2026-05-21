@@ -8,6 +8,11 @@ These tests guard the structural invariants of the remote-log endpoint:
 They are intentionally separate from the unit tests so that the RED/GREEN TDD
 cycle is visible in CI history and so the contract remains enforceable
 independently of the ASGI test client.
+
+Tests 2-4 introspect Pydantic v2 model metadata which is only computed at
+class instantiation time, so they need the real ``mini_app.api`` module.
+``mini_app.api`` imports ``fastapi`` (in the ``voice`` extra), so when that
+extra is not installed the whole file skips cleanly via ``importorskip``.
 """
 
 from __future__ import annotations
@@ -16,6 +21,11 @@ import ast
 import inspect
 from pathlib import Path
 from typing import get_type_hints
+
+import pytest
+
+
+pytest.importorskip("fastapi", reason="mini_app.api requires fastapi (voice extra)")
 
 
 def _get_remote_log_function():
