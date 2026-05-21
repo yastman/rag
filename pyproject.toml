@@ -39,6 +39,10 @@ dependencies = [
     ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
     "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
     "phonenumbers>=9.0.25",
+    ***REMOVED*** Observability (***REMOVED***1648 — SDK-native pipeline metrics, slice 2/4)
+    ***REMOVED*** prometheus_client provides Histogram for latency distributions, replacing
+    ***REMOVED*** the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
+    "prometheus-client>=0.20.0,<1.0",
 ]
 
 [project.optional-dependencies]
