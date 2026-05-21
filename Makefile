@@ -176,7 +176,7 @@ all-checks: lint type-check security ## Run all code quality checks
 
 test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 	@echo "$(BLUE)Running fast test gate (unit + graph_paths)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
@@ -223,12 +223,12 @@ test-contract: ## Run trace contract tests (static analysis, no Docker)
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
 test-all-fast: ## Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
 	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
 test-lf: ## Run only last failed tests (parallel)
@@ -241,9 +241,9 @@ test-ff: ## Run failed first, then rest
 	uv run pytest tests/unit/ --ff -v
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
-test-profile: ## Profile slowest tests (find bottlenecks)
+test-profile: ## Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ --durations=20 --durations-min=0.5 $(PYTEST_PARALLEL_ARGS) -q
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --durations=20 --durations-min=0.5 $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
 test-integration: ## Run graph path integration tests (no Docker, ~5s)
@@ -272,7 +272,7 @@ test-nightly: ## Run heavy test suites (chaos, smoke, slow unit) — schedule ov
 
 test-store-durations: ## Update .test_durations for pytest-split CI sharding
 	@echo "$(BLUE)Generating test duration data...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api" -q
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
 	@echo "$(GREEN)✓ .test_durations updated — commit this file$(NC)"
 
 test-all: ## Run all tests with coverage threshold (CI mode)
