@@ -347,15 +347,6 @@ class BGEM3Client:
         )
         return result
 
-    async def health(self) -> bool:
-        """Check BGE-M3 service health."""
-        try:
-            client = await self._get_client()
-            resp = await client.get(f"{self.base_url}/health")
-            return resp.status_code == 200
-        except httpx.HTTPError:
-            return False
-
     async def aclose(self) -> None:
         """Close the underlying httpx client.
 

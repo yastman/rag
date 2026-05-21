@@ -165,25 +165,6 @@ class TestBGEM3Client:
         result = await client.rerank("query", [])
         assert result.results == []
 
-    async def test_health_returns_true(self, client):
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-
-        mock_http = AsyncMock()
-        mock_http.get = AsyncMock(return_value=mock_resp)
-        mock_http.is_closed = False
-        client._client = mock_http
-
-        assert await client.health() is True
-
-    async def test_health_returns_false_on_error(self, client):
-        mock_http = AsyncMock()
-        mock_http.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
-        mock_http.is_closed = False
-        client._client = mock_http
-
-        assert await client.health() is False
-
     async def test_aclose(self, client):
         mock_http = AsyncMock()
         mock_http.is_closed = False
