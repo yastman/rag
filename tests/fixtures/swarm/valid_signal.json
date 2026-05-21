@@ -1,0 +1,11 @@
+{
+  "status": "DONE",
+  "branch": "feat/x",
+  "base": "dev",
+  "prompt_hash": "abc123",
+  "agent": "worker-1",
+  "model": "gpt-4",
+  "reserved_files": ["scripts/foo.py", "tests/test_foo.py"],
+  "pr_files": ["scripts/foo.py"],
+  "command_evidence": ["pytest tests/"]
+}
