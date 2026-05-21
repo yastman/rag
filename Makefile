@@ -5,7 +5,7 @@
 	ingest-dir ingest-status ingest-services \
 	ingest-unified-preflight ingest-unified-bootstrap ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
-	qdrant-backup \
+	qdrant-backup qdrant-cleanup \
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
@@ -1068,12 +1068,49 @@ ingest-unified-logs: ***REMOVED******REMOVED*** Show ingestion service logs
 ***REMOVED*** QDRANT BACKUP
 ***REMOVED*** =============================================================================
 
-.PHONY: qdrant-backup
+.PHONY: qdrant-backup qdrant-cleanup
 
 qdrant-backup: ***REMOVED******REMOVED*** Create Qdrant collection snapshots (all collections)
 	@echo "$(BLUE)Creating Qdrant snapshots...$(NC)"
 	uv run python scripts/qdrant_snapshot.py
 	@echo "$(GREEN)✓ Qdrant backup complete$(NC)"
+
+qdrant-cleanup: ***REMOVED******REMOVED*** Prune Qdrant storage: snapshot then trigger optimiser (***REMOVED***1545)
+	@echo "$(YELLOW)Qdrant storage cleanup — issue ***REMOVED***1545$(NC)"
+	@echo "$(BLUE)Step 1/3: taking collection snapshot before cleanup...$(NC)"
+	@QDRANT_URL=$${QDRANT_URL:-http://localhost:6333}; \
+	COLLECTION=$${QDRANT_COLLECTION:-gdrive_documents_bge}; \
+	result=$$(curl -sf -X POST "$$QDRANT_URL/collections/$$COLLECTION/snapshots" 2>&1); \
+	if [ $$? -eq 0 ]; then \
+		echo "$(GREEN)  ✓ Snapshot created for $$COLLECTION$(NC)"; \
+	else \
+		echo "$(YELLOW)  ⚠ Snapshot skipped (Qdrant may not be running): $$result$(NC)"; \
+	fi
+	@echo "$(BLUE)Step 2/3: requesting optimiser run on all segments...$(NC)"
+	@QDRANT_URL=$${QDRANT_URL:-http://localhost:6333}; \
+	COLLECTION=$${QDRANT_COLLECTION:-gdrive_documents_bge}; \
+	result=$$(curl -sf -X PATCH "$$QDRANT_URL/collections/$$COLLECTION" \
+		-H 'Content-Type: application/json' \
+		-d '{"optimizers_config": {"indexing_threshold": 0}}' 2>&1); \
+	if [ $$? -eq 0 ]; then \
+		echo "$(GREEN)  ✓ Indexing threshold set to 0 — segments will be merged$(NC)"; \
+		echo "$(BLUE)  Restoring indexing_threshold to 20000 kB...$(NC)"; \
+		curl -sf -X PATCH "$$QDRANT_URL/collections/$$COLLECTION" \
+			-H 'Content-Type: application/json' \
+			-d '{"optimizers_config": {"indexing_threshold": 20000}}' > /dev/null && \
+		echo "$(GREEN)  ✓ Indexing threshold restored to 20000 kB$(NC)"; \
+	else \
+		echo "$(YELLOW)  ⚠ Optimiser trigger skipped (Qdrant may not be running): $$result$(NC)"; \
+	fi
+	@echo "$(BLUE)Step 3/3: operator checklist$(NC)"
+	@echo "  • Restart Qdrant to apply docker/qdrant/config.yaml changes:"
+	@echo "      docker compose restart qdrant"
+	@echo "  • To enable on_disk_payload on existing collection, patch via REST:"
+	@echo "      curl -X PATCH http://localhost:6333/collections/gdrive_documents_bge \\"
+	@echo "           -H 'Content-Type: application/json' \\"
+	@echo "           -d '{\"on_disk_payload\": true}'"
+	@echo "  • Monitor volume size: docker system df -v | grep qdrant"
+	@echo "$(GREEN)✓ Qdrant cleanup complete$(NC)"
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** TRACE VALIDATION (***REMOVED***110)
