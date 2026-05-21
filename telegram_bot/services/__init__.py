@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
     from .lead_scoring_store import LeadScoringStore
-    from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
@@ -32,11 +31,9 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "LOW_CONFIDENCE_THRESHOLD",
     "BGEM3Client",
     "BGEM3SyncClient",
     "ColbertRerankerService",
-    "ConfidenceResult",
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
@@ -60,16 +57,12 @@ _IMPORT_MAP = {
     "BGEM3Client": ".bge_m3_client",
     "BGEM3SyncClient": ".bge_m3_client",
     "ColbertRerankerService": ".colbert_reranker",
-    "ConfidenceResult": ".llm",
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
     "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
-    # Compatibility-only export: deprecated, intentionally not in __all__.
-    "LLMService": ".llm",
-    "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "PipelineMetrics": ".metrics",
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",

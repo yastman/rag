@@ -51,10 +51,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
     "telegram_bot/services/lead_score_sync.py": ["ERROR"],
     "telegram_bot/services/nurturing_scheduler.py": ["ERROR"],
-    # LLM service — generate / generate-answer / stream-answer wrappers
-    # record ERROR on OpenAI/LiteLLM failures and on unavailable Langfuse
-    # generation observation handles (#1659/#1662, #1810).
-    "telegram_bot/services/llm.py": ["ERROR"],
     # Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
     # rate-limit / timeout exceptions before falling back to the user's raw
     # query (#1659, #1810).
