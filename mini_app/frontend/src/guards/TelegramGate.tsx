@@ -11,6 +11,9 @@ export function TelegramGate({ isTelegram, children }: Props) {
     return <>{children}</>;
   }
 
+  const botUsername = import.meta.env.VITE_BOT_USERNAME ?? "your_bot";
+  const botUrl = `https://t.me/${botUsername}`;
+
   return (
     <div
       style={{
@@ -31,7 +34,7 @@ export function TelegramGate({ isTelegram, children }: Props) {
         Это приложение работает только внутри Telegram.
       </p>
       <a
-        href="https://t.me/FortnoksBot"
+        href={botUrl}
         style={{
           display: "inline-block",
           padding: "12px 24px",
