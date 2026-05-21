@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from telegram_bot.config import BotConfig
+from telegram_bot.handlers.command_handlers import cmd_call
 
 
 @pytest.fixture
@@ -41,7 +42,6 @@ def _make_bot(bot_config: BotConfig) -> MagicMock:
     bot = MagicMock(spec=PropertyBot)
     bot.config = bot_config
     bot._is_admin = PropertyBot._is_admin.__get__(bot, PropertyBot)
-    bot.cmd_call = PropertyBot.cmd_call.__get__(bot, PropertyBot)
     return bot
 
 
@@ -49,7 +49,7 @@ def test_call_requires_admin(bot_config, message):
     """Non-admin users should be rejected."""
     bot = _make_bot(bot_config)
     message.from_user.id = 999  ***REMOVED*** not admin
-    asyncio.run(bot.cmd_call(message))
+    asyncio.run(cmd_call(bot, message))
     message.answer.assert_called_once()
     assert "администратор" in message.answer.call_args[0][0].lower()
 
@@ -58,7 +58,7 @@ def test_call_requires_phone(bot_config, message):
     """Command without phone should show usage."""
     bot = _make_bot(bot_config)
     message.text = "/call"
-    asyncio.run(bot.cmd_call(message))
+    asyncio.run(cmd_call(bot, message))
     message.answer.assert_called_once()
     assert "380" in message.answer.call_args[0][0]
 
@@ -69,7 +69,7 @@ def test_call_requires_livekit_config(bot_config, message):
     bot_config.sip_trunk_id = ""
     bot = _make_bot(bot_config)
     message.text = "/call +380501234567"
-    asyncio.run(bot.cmd_call(message))
+    asyncio.run(cmd_call(bot, message))
     message.answer.assert_called_once()
     assert "Voice service" in message.answer.call_args[0][0]
 
@@ -78,6 +78,6 @@ def test_call_rejects_invalid_phone(bot_config, message):
     """Invalid phone number should be rejected."""
     bot = _make_bot(bot_config)
     message.text = "/call not-a-phone"
-    asyncio.run(bot.cmd_call(message))
+    asyncio.run(cmd_call(bot, message))
     message.answer.assert_called_once()
     assert "формат" in message.answer.call_args[0][0].lower()
