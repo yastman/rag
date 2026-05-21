@@ -32,6 +32,34 @@ _START_WAIT_MIN = float(os.getenv("BOT_START_RETRY_DELAY_SEC", "2"))
 _START_WAIT_MAX = float(os.getenv("BOT_START_RETRY_MAX_SEC", "60"))
 
 
+def _install_loop_exception_handler(
+    loop: asyncio.AbstractEventLoop, logger: logging.Logger
+) -> None:
+    """Install a loop-level exception handler that logs unhandled task errors with traceback.
+
+    Without this hook, exceptions raised inside background asyncio tasks are
+    surfaced via the default ``call_exception_handler`` and may not include a
+    full stacktrace in operator log files. The custom handler re-raises the
+    captured exception so ``logger.exception(...)`` records the traceback into
+    ``logs/bot-run.log``, satisfying the issue ***REMOVED***1418 triage workflow.
+    """
+
+    def _handle_loop_exception(
+        _loop: asyncio.AbstractEventLoop, context: dict[str, object]
+    ) -> None:
+        message = str(context.get("message", "Unhandled exception in event loop"))
+        exception = context.get("exception")
+        if isinstance(exception, BaseException):
+            try:
+                raise exception
+            except BaseException:
+                logger.exception("asyncio loop error: %s", message)
+        else:
+            logger.error("asyncio loop error: %s | context=%r", message, context)
+
+    loop.set_exception_handler(_handle_loop_exception)
+
+
 async def main():
     """Run bot."""
     ***REMOVED*** Setup structured logging
@@ -41,6 +69,14 @@ async def main():
 
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
+
+    ***REMOVED*** Install asyncio loop exception handler so background-task crashes are
+    ***REMOVED*** logged with full traceback (issue ***REMOVED***1418).
+    try:
+        _install_loop_exception_handler(asyncio.get_running_loop(), logger)
+    except RuntimeError:
+        ***REMOVED*** No running loop (synchronous test caller) — skip silently.
+        logger.debug("Skipping loop exception handler install: no running loop")
 
     ***REMOVED*** Load config
     config = BotConfig()
@@ -82,7 +118,9 @@ async def main():
         logger.error("Polling lock is busy; another bot instance is active: %s", exc)
         raise SystemExit(2) from None
     except (TelegramUnauthorizedError, TelegramConflictError):
-        logger.error("Fatal Telegram error — check bot token or stop other instances")
+        ***REMOVED*** Use logger.exception so the full traceback lands in logs/bot-run.log
+        ***REMOVED*** for the `make bot-logs-errors` triage workflow (issue ***REMOVED***1418).
+        logger.exception("Fatal Telegram error — check bot token or stop other instances")
         raise
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
