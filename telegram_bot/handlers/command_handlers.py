@@ -125,7 +125,10 @@ async def cmd_clear(
     resets the FSM state so subsequent free-text questions are routed back to
     the supervisor / RAG path. See #1454.
     """
-    from telegram_bot.bot import _delete_checkpointer_thread, _supervisor_thread_id
+    from telegram_bot.services.checkpointer_utils import (
+        _delete_checkpointer_thread,
+        _supervisor_thread_id,
+    )
 
     assert message.from_user is not None
     user_id = message.from_user.id
