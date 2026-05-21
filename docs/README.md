@@ -2,6 +2,12 @@
 
 Project documentation index for humans and agents. Use this page to understand the system, find subsystem docs, and search the doc tree quickly.
 
+## New Contributors Start Here
+
+1. **[ONBOARDING.md](ONBOARDING.md)** -- first-time setup: prerequisites, clone, env, services, validation.
+2. **[LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md)** -- day-to-day workflow: commands, profiles, validation ladder.
+3. **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** -- extending the platform: add graph nodes, tools, query types, ingestion sources.
+
 ## Task-Oriented Indexes
 
 For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/):
@@ -56,7 +62,6 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 ## Quality & Evaluation
 
 - [`RAG_QUALITY_SCORES.md`](RAG_QUALITY_SCORES.md) — Scoring taxonomy and trace expectations.
-- [`ADRS.md`](ADRS.md) — Architecture decision records.
 
 ## Migration & SDK
 
