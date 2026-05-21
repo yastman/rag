@@ -6,11 +6,12 @@ Covers:
 - #810: qdrant_ensure_indexes.py exists and creates correct indexes
 """
 
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import yaml
+
+from scripts import qdrant_ensure_indexes as _qdrant_ensure_indexes_module
 
 
 REPO_ROOT = Path(__file__).parent.parent.parent
@@ -113,11 +114,7 @@ def test_qdrant_ensure_indexes_script_exists():
 
 def test_qdrant_ensure_indexes_creates_keyword_indexes():
     """ensure_indexes() must create keyword payload indexes for filter fields."""
-    script_dir = str(REPO_ROOT / "scripts")
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-
-    import qdrant_ensure_indexes as m
+    m = _qdrant_ensure_indexes_module
 
     mock_client = MagicMock()
     mock_client.create_payload_index = MagicMock()
@@ -144,11 +141,7 @@ def test_qdrant_ensure_indexes_creates_keyword_indexes():
 
 def test_qdrant_ensure_indexes_creates_integer_indexes():
     """ensure_indexes() must create integer payload indexes for order/chunk_id."""
-    script_dir = str(REPO_ROOT / "scripts")
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-
-    import qdrant_ensure_indexes as m
+    m = _qdrant_ensure_indexes_module
 
     mock_client = MagicMock()
 
