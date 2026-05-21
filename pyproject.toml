@@ -381,7 +381,7 @@ addopts = """
     --strict-markers
     --strict-config
     --capture=sys
-    --dist=loadscope
+    --dist=worksteal
 """
 testpaths = ["tests"]
 pythonpath = ["."]
