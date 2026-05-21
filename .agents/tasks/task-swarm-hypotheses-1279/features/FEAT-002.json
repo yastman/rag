@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Implement swarm_validate_signal.py (H1), swarm_reserved_guard.py (H2), swarm_lifecycle.py (H3) with JSON fixtures and comprehensive unit tests",
-  "status": "pending",
+  "status": "completed",
   "steps": [
     "Step 1 - Create test fixtures in tests/fixtures/swarm/: Create JSON fixture files for testing. Include valid_signal.json (a fully correct worker signal with all required fields), malformed_signal_missing_status.json (missing status field), malformed_signal_bad_enum.json (invalid status enum value), overlapping_reservations.json (two workers claiming same files), non_overlapping_reservations.json (two workers with disjoint files), active_workers.jsonl (sample active worker registry with 2-3 entries), lifecycle_transitions.json (valid and invalid state transitions). Signal schema fields per issue: active_registry entry, signal_path, status (enum: DONE/FAILED/BLOCKED), branch, base, prompt_hash, agent, model, reserved_files (list), pr_files (list), command_evidence (list of strings).",
     "Step 2 - Create scripts/swarm_validate_signal.py: Implement a validator script that checks worker signal JSON for: (a) presence of all required fields (status, branch, base, prompt_hash, agent, model, reserved_files, pr_files, command_evidence), (b) status is one of the valid enum values (DONE, FAILED, BLOCKED), (c) reserved_files and pr_files are lists of strings, (d) command_evidence is a non-empty list, (e) branch is non-empty string, (f) pr_files is subset of reserved_files (scope drift check). Use a dataclass or pydantic model for the schema. Provide a validate_signal(data: dict) -> list[str] function returning a list of error strings (empty = valid). CLI entry point: accept a JSON file path as argument, print errors or 'OK', exit 0 on valid / 1 on invalid. Follow the pattern in scripts/check_test_tracking.py for structure.",
@@ -29,5 +29,5 @@
     "Run `make test-unit` to confirm no regressions in the full unit suite"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 33 new tests pass. Ruff lint clean on all new files. Pre-existing mypy error in telegram_bot/bot.py:4059 and pre-existing test failure in test_check_markdown_links.py (both documented in FEAT-001) remain. Used datetime.UTC instead of timezone.utc per ruff UP017 rule. Python 3.12.13 runtime (target py313 in ruff config)."
 }
