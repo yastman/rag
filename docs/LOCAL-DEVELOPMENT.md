@@ -142,6 +142,35 @@ make test
 make test-full
 ```
 
+***REMOVED******REMOVED******REMOVED*** Heavy test gate (`make test-full`)
+
+`make test-full` runs the entire test suite (all tiers) and is intended as a
+**manual** pre-merge validation step, not a routine development loop command.
+
+It defaults to bounded parallelism (`-n 2 --dist=worksteal`) via
+`PYTEST_FULL_PARALLEL_ARGS` to prevent memory saturation on WSL/Docker
+environments where RAM is limited (8-10 GiB typical).
+
+Fast gates (`make test`, `make test-unit`) keep `-n auto` via
+`PYTEST_PARALLEL_ARGS` for quick local feedback since they exercise a smaller
+test surface that fits comfortably in memory.
+
+To override parallelism for a specific run:
+
+```bash
+PYTEST_FULL_PARALLEL_ARGS='-n 4 --dist=worksteal' make test-full
+```
+
+**WSL considerations:** On WSL with constrained memory, unbounded `-n auto`
+during heavy test runs can exhaust RAM + swap, cause unkillable `D`-state
+processes, and destabilize Docker Desktop integration. Keep parallelism low
+(`-n 2` or `-n 4` max) and ensure no stale pytest-xdist workers are running
+before starting a heavy session:
+
+```bash
+pgrep -af 'pytest|docker compose'
+```
+
 Trace coverage gate:
 
 ```bash
