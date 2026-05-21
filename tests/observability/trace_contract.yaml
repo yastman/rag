@@ -340,7 +340,14 @@ sensitive_spans:
   - bge-m3-rerank
   - bge-m3-encode-colbert
   # bge_m3_embeddings (raw vectors)
+  - bge-m3-dense-embed
+  - bge-m3-sparse-embed
+  - bge-m3-sparse-embed-batch
+  - bge-m3-hybrid-embed
+  - bge-m3-hybrid-colbert-embed
   - bge-m3-dense-query-embed
+  - bge-m3-colbert-query-embed
+  - bge-m3-hybrid-embed-batch
   # bge_m3_service (raw vectors)
   - bge-m3-service-encode-dense
   - bge-m3-service-encode-sparse
