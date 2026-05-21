@@ -50,6 +50,11 @@ from .handlers.handoff import (
     HandoffStates,
     start_qualification,
 )
+from .integrations.memory import (
+    begin_checkpoint_overhead_capture,
+    end_checkpoint_overhead_capture,
+    sum_checkpoint_overhead_ms,
+)
 from .integrations.polling_lock import RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
@@ -4042,8 +4047,22 @@ class PropertyBot:
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     invoke_start = time.perf_counter()
-                    result = await graph.ainvoke(state, config=invoke_config)
+                    # Direct checkpoint overhead measurement (#1258): the
+                    # checkpointer wrapper accumulates per-method I/O times
+                    # into a ContextVar bucket while this capture is active.
+                    # Falls back to the proxy when the checkpointer is not
+                    # instrumented (e.g. MemorySaver in tests).
+                    overhead_bucket = begin_checkpoint_overhead_capture()
+                    try:
+                        result = await graph.ainvoke(state, config=invoke_config)
+                    finally:
+                        overhead_bucket = end_checkpoint_overhead_capture()
                     ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                    if overhead_bucket and overhead_bucket.get("calls", 0):
+                        result["checkpointer_overhead_ms"] = sum_checkpoint_overhead_ms(
+                            overhead_bucket
+                        )
+                        result["checkpointer_op_count"] = int(overhead_bucket.get("calls", 0))
                     result["checkpointer_overhead_proxy_ms"] = (
                         compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
                     )
