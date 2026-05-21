@@ -53,7 +53,7 @@ class BotContext:
 def get_bot_context(
     runtime: Any | None,
     config: RunnableConfig | dict[str, Any] | None,
-) -> BotContext | None:
+) -> Any | None:
     """Resolve the runtime :class:`BotContext` from a tool runtime or RunnableConfig.
 
     SDK-native pattern (langchain v1.0+ / langgraph v1.0+ ``context_schema``):
@@ -62,9 +62,10 @@ def get_bot_context(
     then the canonical place to read the context from.
 
     Back-compat pattern (#1252 transitional): pre-migration callers wire the
-    context via ``config={"configurable": {"bot_context": ctx}}``. This helper
-    transparently handles both, preferring the runtime path when available so
-    no site reads stale ``configurable`` data after the invoker is migrated.
+    context via ``config={"configurable": {"bot_context": ctx}}``. Existing
+    tests and some tool harnesses use context-like mocks rather than a concrete
+    ``BotContext`` instance, so the fallback intentionally preserves the old
+    duck-typed behavior while preferring the runtime path when available.
 
     Removal plan: once :class:`telegram_bot.bot.PropertyBot` invokes the agent
     with ``context=BotContext(...)`` instead of ``configurable={"bot_context"}``,
@@ -74,7 +75,7 @@ def get_bot_context(
     # 1) Prefer runtime.context — SDK-native path.
     if runtime is not None:
         ctx = getattr(runtime, "context", None)
-        if isinstance(ctx, BotContext):
+        if ctx is not None:
             return ctx
 
     # 2) Fall back to RunnableConfig["configurable"]["bot_context"] for
@@ -85,6 +86,6 @@ def get_bot_context(
         configurable = config.get("configurable") or {}
         if isinstance(configurable, dict):
             ctx = configurable.get("bot_context")
-            if isinstance(ctx, BotContext):
+            if ctx is not None:
                 return ctx
     return None
