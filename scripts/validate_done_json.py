@@ -72,6 +72,16 @@ def validate(data: Any) -> list[str]:
     return errors
 
 
+def extra_fields(data: Any) -> list[str]:
+    """Return a list of field names in *data* that are not in REQUIRED_FIELDS.
+
+    Only meaningful when *data* is a dict; returns empty list otherwise.
+    """
+    if not isinstance(data, dict):
+        return []
+    return [key for key in data if key not in REQUIRED_FIELDS]
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for CLI invocation."""
     parser = argparse.ArgumentParser(
@@ -104,6 +114,11 @@ def main(argv: list[str] | None = None) -> int:
         for err in errors:
             print(f"ERROR: {err}", file=sys.stderr)
         return 1
+
+    extra = extra_fields(data)
+    if extra:
+        for field in extra:
+            print(f"WARNING: unexpected field: {field!r}", file=sys.stderr)
 
     print("OK")
     return 0
