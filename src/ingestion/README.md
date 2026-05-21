@@ -6,8 +6,8 @@ Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 
 Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
 
-1. **Legacy path** (`chunker.py`, `indexer.py`, `gdrive_flow.py`) — standalone scripts, being phased out.
-2. **Current path** (`unified/`) — CocoIndex-based incremental pipeline with deterministic file identity and replace semantics.
+1. **Current path** (`unified/`) — CocoIndex-based incremental pipeline with deterministic file identity and replace semantics.
+2. **Legacy local wrappers** (`chunker.py`, `indexer.py`, `service.py`) — standalone helpers retained for compatibility; deprecated GDrive-specific modules were retired in favor of `unified/`.
 
 ## Entrypoints
 
