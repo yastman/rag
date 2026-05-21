@@ -1,0 +1,36 @@
+{
+  "id": "FEAT-001",
+  "type": "refactor",
+  "description": "Create shared _build_agent_tools() helper and extract command handlers into a Router module",
+  "status": "in_progress",
+  "steps": [
+    "Step 1: Create telegram_bot/agents/tool_assembly.py with a _build_agent_tools() function. This function accepts the PropertyBot instance (or the specific attributes it needs: config, _history_service, _funnel_analytics_service, _nurturing_service, _lead_scoring_store, _kommo_client) and a role string, and returns the assembled tools list. The logic is currently duplicated in 3 places (lines ~3320-3375 in _handle_query_supervisor, lines ~4273-4315 in handle_hitl_callback, and lines ~4605-4650 in handle_menu_action). All three follow the same pattern: (1) base_tools = [rag_search, apartment_search], (2) if role=='manager': import and append history_search, nurturing tools, CRM score sync tool, CRM tools, then call build_tools_for_role, (3) append get_utility_tools(). The new function signature should be: def build_agent_tools(*, role: str, config: BotConfig, history_service: Any | None, funnel_analytics_service: Any | None, nurturing_service: Any | None, lead_scoring_store: Any | None, kommo_client: Any | None) -> list[Any].",
+    "Step 2: Replace the duplicated tool assembly block in _handle_query_supervisor (around line 3320) with a call to the new build_agent_tools() helper. Keep the lazy imports in the function for the non-tool items (BotContext, LOCALE_TO_LANGUAGE, etc.).",
+    "Step 3: Replace the duplicated tool assembly block in handle_hitl_callback (around line 4273) with a call to build_agent_tools().",
+    "Step 4: Replace the duplicated tool assembly block in handle_menu_action (around line 4605) with a call to build_agent_tools().",
+    "Step 5: Create telegram_bot/handlers/command_handlers.py as an aiogram Router module. Follow the existing pattern from crm_callbacks.py and demo_handler.py: define handler functions as standalone async functions (not class methods), and provide a create_commands_router(bot: 'PropertyBot') -> Router factory. The handlers to extract are: cmd_start, cmd_start_deeplink, cmd_help, cmd_clear, cmd_stats, cmd_metrics, cmd_call, cmd_history, cmd_clearcache. Each handler currently accesses self (the PropertyBot instance) - the extracted versions should accept the bot instance through a closure (the factory function receives the bot and handlers reference it). The handlers also need access to: bot.config, bot._cache, bot._history_service, bot._checkpointer, bot._agent_checkpointer, bot._is_admin(), bot._resolve_user_role(), bot._topic_manager, bot._deeplink_redis, bot.bot, bot._i18n_hub. Keep the @observe decorators. Keep the same handler signatures (message: Message, state: FSMContext | None = None, dialog_manager: Any = None, etc.).",
+    "Step 6: In the factory function create_commands_router(), register all command handlers on the router using the same registration pattern currently in _register_handlers() (lines 1081-1091): router.message(CommandStart(deep_link=True, magic=F.args.startswith('q_')))(cmd_start_deeplink), router.message(Command('start'))(cmd_start), router.message(Command('help'))(cmd_help), router.message(Command('clear'))(cmd_clear), router.message(Command('stats'))(cmd_stats), router.message(Command('metrics'))(cmd_metrics), router.message(Command('call'))(cmd_call), router.message(Command('history'))(cmd_history), router.message(Command('clearcache'))(cmd_clearcache).",
+    "Step 7: In telegram_bot/bot.py _register_handlers(), replace the inline command handler registrations (lines 1081-1091) with: from .handlers.command_handlers import create_commands_router; self.dp.include_router(create_commands_router(self)). Remove the now-dead cmd_* method definitions from the PropertyBot class. Keep _resolve_user_role, _is_admin, _handle_deeplink_start, _process_miniapp_start, _run_miniapp_rag, and _miniapp_subscriber_loop as they are heavily intertwined with other bot state. For Phase 1, the command_handlers module only extracts the simple/self-contained commands: cmd_help, cmd_stats, cmd_metrics, cmd_clearcache, cmd_clear, cmd_call, cmd_history, cmd_start, cmd_start_deeplink.",
+    "Step 8: Write unit tests in tests/unit/handlers/test_command_handlers.py. Test that: (a) create_commands_router returns a Router with all expected command registrations, (b) cmd_help sends expected text, (c) cmd_stats formats cache metrics, (d) cmd_clear calls cache.clear_conversation, (e) cmd_metrics calls PipelineMetrics.get(). Follow the test patterns from tests/unit/handlers/test_demo_handler.py: test functions directly with mocked dependencies.",
+    "Step 9: Write unit tests for the new build_agent_tools() helper in tests/unit/agents/test_tool_assembly.py. Test that: (a) client role returns [rag_search, apartment_search] + utility tools, (b) manager role returns base + history_search + nurturing + CRM tools + utility, (c) manager without history_service omits history_search, (d) manager without kommo_enabled omits CRM tools.",
+    "Step 10: Run make check (lint + type-check) and fix any issues. Then run make test-unit to verify all existing tests still pass."
+  ],
+  "acceptance_criteria": [
+    "telegram_bot/agents/tool_assembly.py exists with a build_agent_tools() function",
+    "The tool assembly duplication in _handle_query_supervisor, handle_hitl_callback, and handle_menu_action is replaced by calls to build_agent_tools()",
+    "telegram_bot/handlers/command_handlers.py exists with a create_commands_router() factory",
+    "All command handlers (start, help, clear, stats, metrics, call, history, clearcache) are registered via the new Router",
+    "bot.py no longer defines cmd_help, cmd_stats, cmd_metrics, cmd_clearcache, cmd_clear, cmd_call, cmd_history, cmd_start, cmd_start_deeplink as class methods",
+    "dp.include_router(create_commands_router(self)) is called in _register_handlers()",
+    "make check passes (lint + type-check)",
+    "make test-unit passes with all existing tests still green",
+    "New tests in tests/unit/handlers/test_command_handlers.py and tests/unit/agents/test_tool_assembly.py pass"
+  ],
+  "verification": [
+    "uv run ruff check src/ telegram_bot/ --output-format=github",
+    "uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary",
+    "PYTHONDONTWRITEBYTECODE=1 uv run --python 3.12 pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m 'not legacy_api and not requires_extras and not slow'"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
