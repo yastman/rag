@@ -152,8 +152,12 @@ def test_bge_m3_client_health_method_is_gone() -> None:
     The preflight check uses a raw ``client._client.get(...)`` against the
     ``/health`` endpoint, not this convenience wrapper, so removing the
     method does not regress runtime behaviour.
+
+    Note: the class lives in ``src/services/bge_m3_client.py`` after the
+    services consolidation; ``telegram_bot/services/bge_m3_client.py`` is
+    a thin re-export shim and no longer contains the class definition.
     """
-    tree = _parse("telegram_bot/services/bge_m3_client.py")
+    tree = _parse("src/services/bge_m3_client.py")
     bge_class: ast.ClassDef | None = None
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == "BGEM3Client":
