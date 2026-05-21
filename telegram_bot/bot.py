@@ -1349,34 +1349,117 @@ class PropertyBot:
             )
 
     async def _miniapp_subscriber_loop(self) -> None:
-        """Subscribe to Redis miniapp:start channel and process requests."""
+        """Consume Redis Streams entries from miniapp:start:stream (#1239).
+
+        Replaces the legacy fire-and-forget pub/sub subscriber. Uses a
+        Redis Streams consumer group so messages are acknowledged after
+        processing, pending entries can be replayed on restart, and
+        poison entries are skipped without redelivery storms.
+
+        Lifecycle:
+
+        1. Idempotent ``XGROUP CREATE`` with ``MKSTREAM=True`` (BUSYGROUP
+           is swallowed — group already exists from a previous run).
+        2. Pending replay: read ``id="0"`` once to drain any entries
+           claimed by this consumer that were never ack'd.
+        3. Steady state: block on ``XREADGROUP`` with cursor ``">"``,
+           dispatch each entry to ``_process_miniapp_start``, ``XACK``
+           on success or on poison (missing/non-int ``user_id`` etc.).
+           Transient processing errors leave the entry in the PEL for
+           future redelivery.
+        """
         import redis.asyncio as aioredis
+        from redis.exceptions import ResponseError
+
+        STREAM = "miniapp:start:stream"
+        GROUP = "miniapp-bot"
+        CONSUMER = "bot-default"
+        BLOCK_MS = 5000
+        BATCH = 10
 
         sub_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
-        pubsub = sub_redis.pubsub()
-        await pubsub.subscribe("miniapp:start")
-        logger.info("Mini App pub/sub subscriber started")
+
+        # 1) Idempotent group + stream creation.
+        try:
+            await sub_redis.xgroup_create(name=STREAM, groupname=GROUP, id="$", mkstream=True)
+        except ResponseError as exc:
+            if "BUSYGROUP" not in str(exc):
+                logger.exception("xgroup_create failed for %s/%s", STREAM, GROUP)
+                await sub_redis.aclose()
+                return
+
+        logger.info(
+            "Mini App stream subscriber started: stream=%s group=%s consumer=%s",
+            STREAM,
+            GROUP,
+            CONSUMER,
+        )
+
+        async def _process_one(entry_id: str, fields: dict) -> None:
+            try:
+                uuid_str = fields["uuid"]
+                user_id = int(fields["user_id"])
+            except (KeyError, ValueError, TypeError):
+                logger.warning(
+                    "Skipping poison miniapp:start:stream entry %s: %s",
+                    entry_id,
+                    fields,
+                )
+                await sub_redis.xack(STREAM, GROUP, entry_id)
+                return
+            logger.info(
+                "miniapp:start:stream entry=%s user=%s uuid=%s",
+                entry_id,
+                user_id,
+                uuid_str,
+            )
+            try:
+                await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
+            except Exception:
+                logger.exception(
+                    "Processing failed for entry %s; leaving in PEL for redelivery",
+                    entry_id,
+                )
+                return  # NOT acked — Redis will redeliver via XPENDING/XCLAIM
+            await sub_redis.xack(STREAM, GROUP, entry_id)
 
         try:
-            async for raw_msg in pubsub.listen():
-                if raw_msg["type"] != "message":
-                    continue
-                try:
-                    data = json.loads(raw_msg["data"])
-                    uuid_str = data["uuid"]
-                    user_id = int(data["user_id"])
-                except (ValueError, TypeError, KeyError):
-                    logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
-                    continue
+            # 2) Pending replay: drain entries this consumer never ack'd.
+            pending = await sub_redis.xreadgroup(
+                groupname=GROUP,
+                consumername=CONSUMER,
+                streams={STREAM: "0"},
+                count=BATCH,
+            )
+            if pending:
+                for _stream, entries in pending:
+                    for entry_id, fields in entries:
+                        await _process_one(entry_id, fields)
 
-                logger.info("Mini App pub/sub: user=%s uuid=%s", user_id, uuid_str)
-                await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
+            # 3) Steady state.
+            while True:
+                msgs = await sub_redis.xreadgroup(
+                    groupname=GROUP,
+                    consumername=CONSUMER,
+                    streams={STREAM: ">"},
+                    count=BATCH,
+                    block=BLOCK_MS,
+                )
+                if not msgs:
+                    # Real Redis honours ``block=BLOCK_MS`` and waits; some
+                    # in-process test stubs (e.g. fakeredis) return
+                    # immediately, so yield explicitly to keep the loop
+                    # cancellable in those environments.
+                    await asyncio.sleep(0)
+                    continue
+                for _stream, entries in msgs:
+                    for entry_id, fields in entries:
+                        await _process_one(entry_id, fields)
         except asyncio.CancelledError:
-            logger.info("Mini App pub/sub subscriber stopped")
+            logger.info("Mini App stream subscriber stopped")
         except Exception:
-            logger.exception("Mini App pub/sub subscriber crashed")
+            logger.exception("Mini App stream subscriber crashed")
         finally:
-            await pubsub.unsubscribe("miniapp:start")
             await sub_redis.aclose()
 
     async def cmd_help(self, message: Message):
@@ -5231,7 +5314,7 @@ class PropertyBot:
         # Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
         if self._topic_manager is not None:
             self._miniapp_subscriber_task = asyncio.create_task(
-                self._miniapp_subscriber_loop(), name="miniapp-pubsub"
+                self._miniapp_subscriber_loop(), name="miniapp-stream-subscriber"
             )
 
         if startup_report.final_severity is StartupSeverity.FAILED:

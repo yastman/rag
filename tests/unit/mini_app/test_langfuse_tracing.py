@@ -126,7 +126,11 @@ class TestPropagateAttributesContract:
         """`/api/start-expert` propagates session_id=miniapp-{user_id} + user_id + tags."""
         mock_redis = MagicMock()
         mock_redis.set = AsyncMock()
-        mock_redis.publish = AsyncMock()
+        # Migration to Redis Streams (#1239): the producer calls xadd
+        # instead of publish. AsyncMock keeps this test focused on
+        # propagate_attributes wiring; the streams-payload contract is
+        # exercised in tests/unit/mini_app/test_deeplink_streams.py.
+        mock_redis.xadd = AsyncMock()
 
         async def _override_redis():
             return mock_redis
