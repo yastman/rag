@@ -10,17 +10,30 @@ pytest.importorskip("fastapi")
 
 from httpx import ASGITransport, AsyncClient
 
-from mini_app.api import app, get_redis
+from mini_app.api import app, get_redis, get_validated_init_data
+
+
+***REMOVED*** Default override returns a synthetic SDK-validated init_data dict so
+***REMOVED*** tests focused on /api/start-expert business logic don't have to forge
+***REMOVED*** Telegram HMAC signatures (auth enforcement is covered separately by
+***REMOVED*** tests/unit/mini_app/test_mini_app_auth_enforcement.py and
+***REMOVED*** tests/contract/test_mini_app_auth_contract.py — ***REMOVED***1595).
+def _stub_init_data() -> dict:
+    return {"user": {"id": 123, "first_name": "Test"}, "auth_date": "0"}
 
 
 def _override_redis(mock_redis: AsyncMock) -> None:
     """Install ``mock_redis`` as the FastAPI Depends(get_redis) override."""
     app.dependency_overrides[get_redis] = lambda: mock_redis
+    ***REMOVED*** Bypass real HMAC validation so non-auth tests don't need to forge
+    ***REMOVED*** initData; the auth contract is exercised in the dedicated suites.
+    app.dependency_overrides[get_validated_init_data] = _stub_init_data
 
 
 def _clear_redis_override() -> None:
     """Remove the dependency override after the test."""
     app.dependency_overrides.pop(get_redis, None)
+    app.dependency_overrides.pop(get_validated_init_data, None)
 
 
 @pytest.mark.asyncio
