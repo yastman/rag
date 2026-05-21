@@ -27,12 +27,14 @@ experiment lane — it must keep ``--dist=loadscope`` explicit and is
 therefore exempt from the ``$(PYTEST_PARALLEL_ARGS)`` rule but is still
 required to use ``-n auto`` (or an override).
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
 import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
