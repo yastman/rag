@@ -1,46 +1,90 @@
-"""Telegram Mini App initData HMAC-SHA256 validation."""
+"""Telegram Mini App initData validation.
+
+SDK-audited (#1595, Context7 ``/aiogram/aiogram``): aiogram 3.x ships a
+vetted WebApp validator at :mod:`aiogram.utils.web_app` that uses
+``hmac.compare_digest`` for timing-attack protection. We delegate the
+HMAC-SHA256 signature check + URL-encoded payload parsing to the SDK and
+keep just the bits that aiogram does not own:
+
+* a configurable ``auth_date`` freshness check (the SDK only validates
+  the signature, not the payload age);
+* a stable ``dict``-shaped public return so the existing
+  :mod:`mini_app.api` callers and the unit tests remain wire-compatible.
+
+Content was rephrased for compliance with licensing restrictions.
+"""
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import time
-from urllib.parse import parse_qs
+from typing import Any
+
+from aiogram.utils.web_app import safe_parse_webapp_init_data
 
 
 def validate_init_data(
     raw: str,
     bot_token: str,
     max_age: int = 86400,
-) -> dict:
-    """Validate Telegram WebApp initData and return parsed user data.
+) -> dict[str, Any]:
+    """Validate Telegram WebApp initData and return parsed payload as a dict.
 
-    Raises ValueError on invalid hash or expired data.
+    Parameters
+    ----------
+    raw:
+        Raw URL-encoded initData query string from
+        ``Telegram.WebApp.initData``.
+    bot_token:
+        Telegram bot token (the same secret the bot uses to talk to the
+        Bot API).  The SDK derives the WebApp HMAC secret from it.
+    max_age:
+        Maximum permissible age of the ``auth_date`` field, in seconds.
+        Defaults to 24 h, matching the previous custom validator's
+        envelope. Pass ``0`` to disable the freshness check.
+
+    Returns
+    -------
+    dict
+        Parsed initData with the same shape the previous custom
+        validator emitted: ``{"user": {"id": ..., ...}, "auth_date":
+        "<unix-seconds-as-str>", ...}``.
+
+    Raises
+    ------
+    ValueError
+        On any validation failure — missing/invalid signature, malformed
+        payload, or expired ``auth_date``. The message stays conservative
+        ("Invalid initData", "initData expired") so handlers can surface
+        a 401 without leaking specifics.
     """
-    parsed = parse_qs(raw, keep_blank_values=True)
-    params = {k: v[0] for k, v in parsed.items()}
+    try:
+        webapp_data = safe_parse_webapp_init_data(token=bot_token, init_data=raw)
+    except ValueError as exc:
+        # SDK raises ValueError for both bad signature and malformed
+        # payloads; treat both as "invalid" without leaking details.
+        msg = "Invalid initData"
+        raise ValueError(msg) from exc
 
-    received_hash = params.pop("hash", None)
-    if not received_hash:
-        msg = "Invalid initData: missing hash"
-        raise ValueError(msg)
-
-    auth_date = int(params.get("auth_date", "0"))
-    if max_age and (time.time() - auth_date) > max_age:
+    auth_dt = webapp_data.auth_date
+    auth_ts = int(auth_dt.timestamp()) if hasattr(auth_dt, "timestamp") else int(auth_dt)
+    if max_age and (time.time() - auth_ts) > max_age:
         msg = "initData expired"
         raise ValueError(msg)
 
-    data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
-
-    secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    computed = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(computed, received_hash):
-        msg = "Invalid initData: hash mismatch"
-        raise ValueError(msg)
-
-    result = dict(params)
-    if "user" in result:
-        result["user"] = json.loads(result["user"])
+    # Mirror the previous public shape so the existing callers and the
+    # ``test_auth.py`` regression suite stay byte-compatible.
+    result: dict[str, Any] = {"auth_date": str(auth_ts)}
+    if webapp_data.user is not None:
+        # ``WebAppUser`` is a Pydantic v2 model with optional fields;
+        # ``model_dump(exclude_none=True)`` drops anything Telegram did
+        # not send so the dict stays compact.
+        result["user"] = webapp_data.user.model_dump(exclude_none=True)
+    if webapp_data.query_id is not None:
+        result["query_id"] = webapp_data.query_id
+    if webapp_data.chat_instance is not None:
+        result["chat_instance"] = webapp_data.chat_instance
+    if webapp_data.chat_type is not None:
+        result["chat_type"] = webapp_data.chat_type
+    if webapp_data.start_param is not None:
+        result["start_param"] = webapp_data.start_param
     return result

@@ -56,12 +56,22 @@ def test_validate_missing_hash():
 
 
 def test_validate_missing_auth_date():
-    # Build valid initData without auth_date — auth_date defaults to 0 -> expired
+    """SDK rejects payloads missing the required ``auth_date`` field.
+
+    The ``WebAppInitData`` Pydantic model treats ``auth_date`` as required,
+    so a payload that lacks it raises a validation error before the freshness
+    check runs. Both the parse-error and the freshness-error paths surface
+    the same conservative ``"Invalid initData"`` / ``"initData expired"``
+    message to callers (#1595).
+    """
+    # Build valid initData without auth_date — the SDK refuses to construct
+    # the WebAppInitData model and our wrapper translates that into "Invalid
+    # initData" so 401s look the same regardless of which branch fired.
     params = {"user": '{"id":123,"first_name":"Test"}'}
     data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
     secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
     hash_val = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
     params["hash"] = hash_val
     raw = "&".join(f"{k}={quote(v)}" for k, v in params.items())
-    with pytest.raises(ValueError, match="expired"):
+    with pytest.raises(ValueError, match="Invalid"):
         validate_init_data(raw, BOT_TOKEN, max_age=60)
