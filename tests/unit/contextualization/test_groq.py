@@ -151,8 +151,15 @@ class TestGroqContextualizerContextualize:
         assert results == []
         contextualizer.client.chat.completions.create.assert_not_called()
 
-    async def test_contextualize_handles_error_gracefully(self, contextualizer, capsys):
-        """Test that errors in individual chunks are handled gracefully."""
+    async def test_contextualize_handles_error_gracefully(self, contextualizer, caplog):
+        """Test that errors in individual chunks are handled gracefully.
+
+        After #1533 the per-chunk fallback lives in ``base.contextualize_batch``
+        which logs via ``logger.warning`` rather than ``print``; assert against
+        ``caplog`` accordingly.
+        """
+        import logging
+
         call_count = 0
 
         async def mock_create(*args, **kwargs):
@@ -168,7 +175,8 @@ class TestGroqContextualizerContextualize:
         contextualizer.client.chat.completions.create = mock_create
 
         chunks = ["Chunk 1", "Chunk 2 (will fail)", "Chunk 3"]
-        results = await contextualizer.contextualize(chunks)
+        with caplog.at_level(logging.WARNING, logger="src.contextualization.base"):
+            results = await contextualizer.contextualize(chunks)
 
         assert len(results) == 3
         assert results[0].contextual_summary == "Success summary"
@@ -177,9 +185,13 @@ class TestGroqContextualizerContextualize:
         assert results[1].context_method == "none"
         assert results[2].contextual_summary == "Success summary"
 
-        # Check warning was printed
-        captured = capsys.readouterr()
-        assert "Warning: Failed to contextualize chunk 1" in captured.out
+        # Base contextualize_batch logs a warning for the failed chunk
+        warning_messages = [
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any(
+            "contextualize_batch chunk 1 failed" in msg for msg in warning_messages
+        ), f"Expected warning for chunk 1, got: {warning_messages}"
 
 
 class TestGroqContextualizerContextualizeSingle:
@@ -498,8 +510,15 @@ class TestGroqContextualizerErrorHandling:
         with pytest.raises(ConnectionError, match="Network unreachable"):
             await contextualizer.contextualize_single("Text", "art_1")
 
-    async def test_batch_continues_after_single_failure(self, contextualizer, capsys):
-        """Test that batch processing continues after individual failures."""
+    async def test_batch_continues_after_single_failure(self, contextualizer, caplog):
+        """Test that batch processing continues after individual failures.
+
+        After #1533 the per-chunk fallback lives in ``base.contextualize_batch``
+        which logs via ``logger.warning`` rather than ``print``; assert against
+        ``caplog`` accordingly.
+        """
+        import logging
+
         call_count = 0
 
         async def mock_create(*args, **kwargs):
@@ -517,7 +536,8 @@ class TestGroqContextualizerErrorHandling:
         contextualizer.client.chat.completions.create = mock_create
 
         chunks = ["Chunk 1", "Chunk 2", "Chunk 3", "Chunk 4"]
-        results = await contextualizer.contextualize(chunks)
+        with caplog.at_level(logging.WARNING, logger="src.contextualization.base"):
+            results = await contextualizer.contextualize(chunks)
 
         assert len(results) == 4
         # Chunk 0 failed
@@ -533,9 +553,15 @@ class TestGroqContextualizerErrorHandling:
         assert results[3].contextual_summary == "Success"
         assert results[3].context_method == "groq"
 
-        captured = capsys.readouterr()
-        assert "chunk 0" in captured.out
-        assert "chunk 2" in captured.out
+        warning_messages = [
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any(
+            "contextualize_batch chunk 0 failed" in msg for msg in warning_messages
+        ), f"Expected warning for chunk 0, got: {warning_messages}"
+        assert any(
+            "contextualize_batch chunk 2 failed" in msg for msg in warning_messages
+        ), f"Expected warning for chunk 2, got: {warning_messages}"
 
 
 class TestGroqContextualizerPrompts:
