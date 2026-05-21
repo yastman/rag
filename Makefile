@@ -1152,7 +1152,7 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 # TRACE VALIDATION (#110)
 # =============================================================================
 
-.PHONY: validate-traces validate-traces-fast
+.PHONY: validate-traces validate-traces-fast validate-voice-traces
 
 # Local host defaults for native trace validation (issue #1380).
 # Callers can override per-variable: make validate-traces-fast QDRANT_URL=http://custom:6333 REDIS_URL=redis://:x@custom:6379
@@ -1179,6 +1179,14 @@ validate-traces-fast: ## No rebuild; trace validation fails if required trace fa
 	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk-lf-dev)" \
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
+
+validate-voice-traces: ## Voice trace validation gate (reads Langfuse, validates presence + attribution)
+	@echo "$(BLUE)Voice trace validation gate...$(NC)"
+	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
+	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk-lf-dev)" \
+	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk-lf-dev)" \
+	uv run python scripts/validate_voice_traces.py
+	@echo "$(GREEN)Voice trace validation complete$(NC)"
 
 # =============================================================================
 # K3S DEPLOYMENT
