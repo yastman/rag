@@ -1,0 +1,25 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Install dev dependencies and verify the existing build/test/hook baseline is green before making changes.",
+  "status": "completed",
+  "steps": [
+    "Run `uv sync` to install all dev dependencies.",
+    "Run `make check` (lint + type-check) and confirm it passes with current src/ scope.",
+    "Run `make test-unit` and confirm unit tests pass.",
+    "Run `uv run pre-commit run --all-files` to confirm current hook configuration works (note any issues with python version mismatch in default_language_version)."
+  ],
+  "acceptance_criteria": [
+    "`uv sync` succeeds",
+    "`make check` passes (or document pre-existing failures)",
+    "Unit tests pass (or document pre-existing failures)",
+    "pre-commit hooks run (or document issues like python version mismatch)"
+  ],
+  "verification": [
+    "uv sync",
+    "make check",
+    "make test-unit"
+  ],
+  "blocked_reason": null,
+  "findings": "1) uv sync: PASSES (372 packages resolved, 152 checked). 2) make check: Ruff lint PASSES (src/ only). MyPy FAILS with 1 pre-existing error: telegram_bot/bot.py:4059 - Incompatible types in assignment (expression has type 'dict[str, float] | None', variable has type 'dict[str, float]'). This is NOT caused by our changes. 3) make test-unit: 6874 passed, 14 failed, 7 errors, 3 skipped. All failures are pre-existing (no changes made). Failing tests: test_ingestion_cocoindex (3), test_api_lifespan (7), test_docker_static_validation (2), test_check_markdown_links (1), test_dialogs_fsm_coverage (1). 7 import errors in mini_app/ and api/ modules. 4) pre-commit run --all-files: FAILS because default_language_version is set to python3.14 which is not installed (only python3.12 and python3.9 available). The hook framework cannot create virtualenvs with python3.14. This must be fixed in FEAT-002 or later by changing default_language_version to python3.12. 5) Makefile lint target only covers src/, but CI covers src/ + telegram_bot/. The .pre-commit-config.yaml ruff hooks already cover all Python files via types_or: [python, pyi]."
+}
