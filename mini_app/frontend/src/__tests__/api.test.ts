@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchConfig, startExpert } from '../api';
+import { remoteLog, fetchConfig, startExpert } from '../api';
+import { retrieveRawInitData } from '@tma.js/bridge';
 
 describe('fetchConfig', () => {
   beforeEach(() => {
@@ -46,6 +47,47 @@ describe('fetchConfig', () => {
   });
 });
 
+describe('remoteLog', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(retrieveRawInitData).mockReturnValue('auth_date=1&user=%7B%22id%22%3A99999%7D&hash=test');
+  });
+
+  it('sends signed initData header with remote logs', () => {
+    const mockFetch = vi.mocked(fetch);
+    mockFetch.mockResolvedValue({ ok: true } as Response);
+
+    remoteLog('debug', 'client event', { ok: true });
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/log', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Init-Data': 'auth_date=1&user=%7B%22id%22%3A99999%7D&hash=test',
+      },
+      body: JSON.stringify({ level: 'debug', message: 'client event', data: JSON.stringify({ ok: true }) }),
+    });
+  });
+
+  it('omits signed initData header when Telegram did not provide raw initData', () => {
+    vi.mocked(retrieveRawInitData).mockReturnValue(undefined);
+    const mockFetch = vi.mocked(fetch);
+    mockFetch.mockResolvedValue({ ok: true } as Response);
+
+    remoteLog('info', 'outside telegram');
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: 'info', message: 'outside telegram', data: undefined }),
+    });
+  });
+});
+
 describe('startExpert', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -70,7 +112,10 @@ describe('startExpert', () => {
 
     expect(mockFetch).toHaveBeenCalledWith('/api/start-expert', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Init-Data': 'auth_date=1&user=%7B%22id%22%3A99999%7D&hash=test',
+      },
       body: JSON.stringify({ user_id: 123, expert_id: 'consultant', message: 'Подбери квартиру' }),
     });
     expect(result.start_link).toBe('https://t.me/FortnoksBot?start=consultant_42');
