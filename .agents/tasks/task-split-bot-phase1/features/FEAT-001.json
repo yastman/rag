@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "refactor",
   "description": "Create shared _build_agent_tools() helper and extract command handlers into a Router module",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Create telegram_bot/agents/tool_assembly.py with a _build_agent_tools() function. This function accepts the PropertyBot instance (or the specific attributes it needs: config, _history_service, _funnel_analytics_service, _nurturing_service, _lead_scoring_store, _kommo_client) and a role string, and returns the assembled tools list. The logic is currently duplicated in 3 places (lines ~3320-3375 in _handle_query_supervisor, lines ~4273-4315 in handle_hitl_callback, and lines ~4605-4650 in handle_menu_action). All three follow the same pattern: (1) base_tools = [rag_search, apartment_search], (2) if role=='manager': import and append history_search, nurturing tools, CRM score sync tool, CRM tools, then call build_tools_for_role, (3) append get_utility_tools(). The new function signature should be: def build_agent_tools(*, role: str, config: BotConfig, history_service: Any | None, funnel_analytics_service: Any | None, nurturing_service: Any | None, lead_scoring_store: Any | None, kommo_client: Any | None) -> list[Any].",
     "Step 2: Replace the duplicated tool assembly block in _handle_query_supervisor (around line 3320) with a call to the new build_agent_tools() helper. Keep the lazy imports in the function for the non-tool items (BotContext, LOCALE_TO_LANGUAGE, etc.).",
@@ -32,5 +32,5 @@
     "PYTHONDONTWRITEBYTECODE=1 uv run --python 3.12 pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m 'not legacy_api and not requires_extras and not slow'"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Pre-existing mypy error at bot.py:3625 (dict[str, float] | None vs dict[str, float]). Pre-existing test failures in docker_static_validation, ingestion_cocoindex, mini_app (import errors), and markdown links - all unrelated. The cmd_call test and dialog/test_menu_routing tests also reference bot.cmd_* methods directly and needed updates. The unused imports (uuid, InlineKeyboardButton, InlineKeyboardMarkup, write_history_scores, PipelineMetrics, apartment_search, history_search, rag_search) were cleaned from bot.py. The F import from aiogram needed to stay in command_handlers since its used in the factory."
 }
