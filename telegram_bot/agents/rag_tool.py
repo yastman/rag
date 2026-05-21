@@ -3,7 +3,9 @@
 Pipeline returns CONTEXT (documents, scores, latency_stages).
 Agent generates ANSWER from the returned context string.
 
-Dependencies injected via config["configurable"]["bot_context"].
+Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+(SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
+— see #1252).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.runtime import Runtime
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.classify import classify_query
 from telegram_bot.graph.nodes.guard import guard_node
@@ -72,7 +75,7 @@ async def rag_search(
         budget_range: Optional filter by budget range.
     """
     configurable = config.get("configurable", {})
-    ctx = configurable.get("bot_context")
+    ctx = get_bot_context(None, config)
 
     lf = get_client()
     lf.update_current_span(

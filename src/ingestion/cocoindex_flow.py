@@ -91,7 +91,7 @@ class VoyageEmbedFunction:
     def service(self) -> Any:
         """Lazy-load VoyageService."""
         if self._service is None:
-            from telegram_bot.services import VoyageService
+            from src.services.voyage import VoyageService
 
             self._service = VoyageService(
                 api_key=self.api_key,

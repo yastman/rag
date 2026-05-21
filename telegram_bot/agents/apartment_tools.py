@@ -7,6 +7,7 @@ import logging
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.apartment_formatter import format_apartment_text
 
@@ -48,7 +49,7 @@ async def apartment_search(
         view: View type (sea, pool, garden, forest, panorama).
         is_furnished: Whether apartment is furnished.
     """
-    ctx = (config.get("configurable") or {}).get("bot_context")
+    ctx = get_bot_context(None, config)
     if not ctx or not ctx.apartments_service:
         return "Сервис поиска апартаментов недоступен."
 

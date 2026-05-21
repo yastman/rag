@@ -13,7 +13,7 @@ from typing import Any, cast
 from qdrant_client import QdrantClient, models
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from telegram_bot.services.bge_m3_client import BGEM3SyncClient
+from src.services.bge_m3_client import BGEM3SyncClient
 
 
 logger = logging.getLogger(__name__)

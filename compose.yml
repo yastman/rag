@@ -47,7 +47,7 @@ services:
 
   redis:
     <<: *security-defaults
-    image: redis:8.6.3@sha256:e628485c98f8cfe942d8b6f34d461dabf069884bf18932ccbdd9dd9af20b1acc
+    image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
@@ -81,6 +81,9 @@ services:
     logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
+      # Storage optimisation config — fixes #1545 (3.1 GB unbounded growth).
+      # Qdrant loads /qdrant/config/production.yaml on start when present.
+      - ./docker/qdrant/config.yaml:/qdrant/config/production.yaml:ro
     environment:
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
@@ -527,7 +530,7 @@ services:
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
     <<: *security-defaults
-    image: redis:8.6.3@sha256:e628485c98f8cfe942d8b6f34d461dabf069884bf18932ccbdd9dd9af20b1acc
+    image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
@@ -561,7 +564,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.174.1@sha256:acd2bfe3ce3d730927c055656e620f48777b3c4638063cd0125b0dc90cc97246
+    image: langfuse/langfuse-worker:3.175.0@sha256:cf7ac3d5d29bce3d2f4626d5b3231665c5585a81599b5f54fd8e30f648874403
     restart: always
     depends_on:
       postgres:
@@ -626,7 +629,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.174.1@sha256:e54883f4535a08505e20169d51ed7cd5f8f0505294a6ba982dfa64c78edc5c0a
+    image: langfuse/langfuse:3.175.0@sha256:45c0fb329106da48ebffcfc17a5a7f585bb5bfb94c44125add7bdd19a440ed9b
     restart: always
     depends_on:
       postgres:

@@ -5,7 +5,8 @@ Thank you for your interest in contributing.
 ## Getting Started
 
 - Read [`README.md`](README.md) for project overview.
-- Follow [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for setup instructions.
+- Follow [`docs/ONBOARDING.md`](docs/ONBOARDING.md) for the full onboarding guide.
+- See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for day-to-day development workflow.
 
 ## Development Workflow
 
@@ -14,7 +15,8 @@ Thank you for your interest in contributing.
 3. Run the local verification ladder before pushing:
 
 ```bash
-make check
+make pre-push          # lint + format-check
+make check             # alias: lint + type-check
 uv run pytest tests/unit -q
 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
 ```

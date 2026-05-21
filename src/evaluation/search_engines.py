@@ -157,9 +157,13 @@ class HybridSearchEngine(SearchEngine):
         sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
 
         # Build hybrid search with RRF using query API
+        # ``using="bm42"`` matches the sparse vector registered by the
+        # unified ingestion pipeline (src/ingestion/unified/cli.py). Querying
+        # with ``using="sparse"`` produces "Not existing vector name" gRPC
+        # errors against the canonical collection — see issue #1083.
         prefetch = [
             models.Prefetch(query=dense_vector, using="dense", limit=100),
-            models.Prefetch(query=sparse_vector, using="sparse", limit=100),
+            models.Prefetch(query=sparse_vector, using="bm42", limit=100),
         ]
 
         response = self.client.query_points(
@@ -230,7 +234,9 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
         dbsf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
-                models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
+                # See issue #1083: sparse vector name must match the
+                # ingestion schema (``bm42``).
+                models.Prefetch(query=sparse_vector, using="bm42", limit=self.stage1_limit),
             ],
             query=models.FusionQuery(fusion=models.Fusion.DBSF),
         )
@@ -308,7 +314,9 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
         rrf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
-                models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
+                # See issue #1083: sparse vector name must match the
+                # ingestion schema (``bm42``).
+                models.Prefetch(query=sparse_vector, using="bm42", limit=self.stage1_limit),
             ],
             query=models.RrfQuery(rrf=models.Rrf(k=self.rrf_k)),
         )
