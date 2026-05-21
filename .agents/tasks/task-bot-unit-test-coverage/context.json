@@ -1,0 +1,33 @@
+{
+  "project_type": "Python Telegram bot (aiogram + LangGraph RAG pipeline)",
+  "language": "Python 3.12",
+  "build_system": "uv (package manager), Makefile targets for common commands",
+  "test_framework": "pytest with pytest-asyncio (asyncio_mode=auto), pytest-xdist for parallel, pytest-timeout=30s",
+  "build_command": "make check",
+  "test_command": "PYTHONDONTWRITEBYTECODE=1 uv run --python 3.12 pytest tests/unit/ --ignore=tests/unit/test_document_parser.py --ignore=tests/unit/test_evaluator.py --ignore=tests/unit/evaluation/test_ragas_evaluation.py --ignore=tests/unit/voice/test_sip_setup.py --ignore=tests/unit/voice/test_voice_agent.py --ignore=tests/unit/ingestion/test_cocoindex_init.py --ignore=tests/unit/ingestion/test_qdrant_hybrid_target.py --ignore=tests/unit/ingestion/test_qdrant_hybrid_target_helpers.py --ignore=tests/unit/ingestion/test_qdrant_hybrid_target_state_paths.py --ignore=tests/unit/ingestion/test_target_sync_execution.py --ignore=tests/unit/ingestion/test_unified_cli.py --ignore=tests/unit/ingestion/test_unified_flow.py --ignore=tests/unit/ingestion/test_unified_flow_wiring.py -n auto --dist=worksteal -q --timeout=30 -m 'not legacy_api and not requires_extras and not slow'",
+  "verification_instructions": "1. Run focused test file: uv run pytest <path/to/test_file.py> -q\n2. Run make check (lint/format/types)\n3. Run make test-unit (full unit suite parallel)",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "uv sync (already done)",
+  "environment_constraints": "OPEN_INTERNET mode. Python 3.12 recommended. No Docker needed for unit tests. No live services needed (all mocked).",
+  "contribution_requirements": "Test-first workflow from skills/superpowers. Use Arrange/Act/Assert. Mock external APIs. Tests in tests/unit/. File naming: test_<feature>.py. Test naming: test_<behavior>_<expected_outcome>(). Anti-duplication: search existing tests before adding. Verification: focused run then make check + make test-unit.",
+  "key_patterns": "PropertyBot instantiation pattern: _create_bot() helper patches Bot, CacheLayerManager, BGEM3HybridEmbeddings, BGEM3SparseEmbeddings, QdrantService, GraphConfig.create_llm, GraphConfig.create_supervisor_llm. BotConfig with _env_file=None for test isolation. Callback mocks: MagicMock with AsyncMock for answer/get_data/update_data. State mock: MagicMock with get_data=AsyncMock returning dict, update_data=AsyncMock. pytest.importorskip('aiogram') at top of test files. conftest.py provides mock_get_client and isolate_otel_langfuse autouse fixtures.",
+  "relevant_files": [
+    "telegram_bot/bot.py",
+    "telegram_bot/config.py",
+    "telegram_bot/handlers/",
+    "telegram_bot/feedback.py",
+    "telegram_bot/keyboards/client_keyboard.py",
+    "telegram_bot/keyboards/services_keyboard.py",
+    "telegram_bot/services/content_loader.py",
+    "telegram_bot/services/apartments_service.py",
+    "tests/unit/test_bot_handlers.py",
+    "tests/unit/test_bot_handlers_query.py",
+    "tests/unit/test_bot_menu_handlers.py",
+    "tests/unit/test_card_callbacks.py",
+    "tests/unit/test_callback_fsm_regression.py",
+    "tests/unit/test_feedback_handler.py",
+    "tests/unit/test_bot_hot_lead.py",
+    "tests/unit/conftest.py"
+  ],
+  "directory_structure": "telegram_bot/ - main bot code (bot.py is 5395 lines, PropertyBot class). tests/unit/ - unit tests (200+ existing). tests/unit/handlers/ - handler-specific tests. telegram_bot/handlers/ - extracted router handlers. telegram_bot/services/ - business logic. telegram_bot/integrations/ - wrappers/adapters. telegram_bot/graph/ - LangGraph pipeline."
+}
