@@ -2,7 +2,7 @@
   "id": "FEAT-003",
   "type": "feat",
   "description": "Phase 3+4: Structured JSON log contract standardization and health check/uptime surface definitions. Enhance the existing JSONFormatter in telegram_bot/logging_config.py to emit the full observability contract fields (service, component, event, environment, release, correlation IDs, tenant/deployment labels). Add Uptime Kuma service definition to compose and document health endpoints.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Enhance `telegram_bot/logging_config.py` JSONFormatter to include additional structured fields when present on the LogRecord: service, component, event, environment, release, trace_id, langfuse_trace_id, request_id, telegram_user_id_hash, chat_id_hash, tenant_id, bot_instance_id, deployment_id, route, pipeline_mode, llm_model, dependency_status, error_type. Only include fields that are non-None. Add class-level constants SERVICE_DEFAULT='telegram-bot' and populate 'service' from record or default. Populate 'environment' from os.environ.get('ENV', 'development'). Populate 'release' from the project version (read once at module load from pyproject.toml or env var).",
     "Create `src/observability/log_context.py` with a helper function `inject_log_context(logger_or_record, context: dict[str, Any])` that attaches correlation context fields to log records via a logging.Filter or LoggerAdapter pattern. Also provide `ObservabilityLogFilter(logging.Filter)` that reads from a ContextVar and injects fields into every record.",
@@ -30,5 +30,5 @@
     "Run `docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet` and confirm exit 0"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All 15 new tests pass. Full observability suite (180 tests) green. Broader test suite (6903 passed) clean - pre-existing failures in test_main.py, test_bot_log_triage.py, mini_app/test_api_lifespan.py, and test_dialogs_fsm_coverage.py are unrelated. Ruff lint required --fix for import sorting. B039 lint rule required ContextVar without mutable default (use .get({}) fallback pattern). docker-compose plugin needed manual install for config validation. Compose config validates cleanly with uptime-kuma service added."
 }
