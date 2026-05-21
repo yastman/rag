@@ -46,6 +46,7 @@ dependencies = [
     # prometheus_client provides Histogram for latency distributions, replacing
     # the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
     "prometheus-client>=0.20.0,<1.0",
+    "sentry-sdk>=2.0.0,<3.0",
 ]
 
 [project.optional-dependencies]

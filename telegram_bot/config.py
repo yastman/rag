@@ -112,6 +112,24 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("langfuse_host", "LANGFUSE_HOST"),
     )
 
+    # Sentry error tracking
+    sentry_dsn: str = Field(
+        default="",
+        validation_alias=AliasChoices("sentry_dsn", "SENTRY_DSN"),
+    )
+    sentry_environment: str = Field(
+        default="development",
+        validation_alias=AliasChoices("sentry_environment", "SENTRY_ENVIRONMENT", "ENV"),
+    )
+    sentry_release: str = Field(
+        default="",
+        validation_alias=AliasChoices("sentry_release", "SENTRY_RELEASE"),
+    )
+    sentry_traces_sample_rate: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices("sentry_traces_sample_rate", "SENTRY_TRACES_SAMPLE_RATE"),
+    )
+
     # RAG settings
     top_k: int = 5
     min_score: float = 0.3

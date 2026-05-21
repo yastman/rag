@@ -1,0 +1,35 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Phase 1+2: Sentry SDK error tracking integration and startup/fatal logging hardening. Add sentry-sdk as optional dependency, create a configurable error tracking module with PII filtering, attach correlation IDs and safe metadata, wire into bot startup with sys.excepthook coverage.",
+  "status": "in_progress",
+  "steps": [
+    "Add `sentry-sdk>=2.0.0,<3.0` to pyproject.toml `[project.dependencies]` (it is a core observability dep, not optional).",
+    "Add SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE, SENTRY_TRACES_SAMPLE_RATE to `.env.example` under a new OBSERVABILITY / ERROR TRACKING section with sensible defaults (empty DSN = disabled).",
+    "Add Sentry config fields to `telegram_bot/config.py` BotConfig: sentry_dsn (str, default empty), sentry_environment (str, from ENV or 'development'), sentry_release (str, from project version), sentry_traces_sample_rate (float, 0.0).",
+    "Create `src/observability/__init__.py` (empty).",
+    "Create `src/observability/sentry_integration.py` with: (a) `initialize_sentry(config)` that calls `sentry_sdk.init(dsn=..., environment=..., release=..., traces_sample_rate=..., before_send=_filter_pii, before_breadcrumb=_filter_breadcrumb_pii)` only when DSN is non-empty. (b) `_filter_pii(event, hint)` using the existing PIIRedactor to strip PII from event message, breadcrumbs, and extras. Block keys: 'text', 'query', 'raw_query', 'answer_text', 'phone', 'email', 'token', 'password', 'secret'. (c) `_filter_breadcrumb_pii(breadcrumb, hint)` similar PII filtering for breadcrumbs. (d) `set_sentry_context(*, trace_id, langfuse_trace_id, request_id, tenant_id, bot_instance_id, deployment_id, service, component, environment, release)` that calls `sentry_sdk.set_context('observability', {...})` and `sentry_sdk.set_tag(...)` for each non-None value. (e) `set_sentry_user(*, telegram_user_id_hash, chat_id_hash)` that calls `sentry_sdk.set_user({'id': telegram_user_id_hash, ...})`. All parameters optional/keyword-only with None defaults.",
+    "Create `src/observability/correlation.py` with: (a) A dataclass or TypedDict `CorrelationContext` holding fields: environment, release, service, component, event, trace_id, langfuse_trace_id, request_id, telegram_user_id_hash, chat_id_hash, tenant_id, bot_instance_id, deployment_id, route, pipeline_mode, llm_model, dependency_status, error_type. All optional/None. (b) `build_correlation_context(**kwargs) -> dict[str, Any]` that returns only non-None values.",
+    "Wire Sentry initialization into `telegram_bot/main.py`: after BotConfig loads, call `initialize_sentry(config)`. Add `sys.excepthook` override that calls `sentry_sdk.capture_exception()` and logs with `logger.exception(...)`. Existing asyncio loop exception handler in main.py already captures loop errors - add a `sentry_sdk.capture_exception(exception)` call inside `_handle_loop_exception` when exception is not None.",
+    "In `telegram_bot/main.py`, wrap the startup fatal errors (PollingLockBusy, TelegramUnauthorizedError, TelegramConflictError) with `sentry_sdk.capture_exception()` before re-raise.",
+    "Write tests in `tests/unit/observability/test_sentry_integration.py`: (a) test_initialize_sentry_noop_when_dsn_empty (mock sentry_sdk.init, verify not called), (b) test_initialize_sentry_calls_init_with_dsn (mock sentry_sdk.init, verify called with correct params), (c) test_filter_pii_strips_phone_and_email (call _filter_pii with event containing PII, verify redacted), (d) test_filter_pii_does_not_modify_safe_data, (e) test_set_sentry_context_sets_tags (mock sentry_sdk, verify set_context called), (f) test_set_sentry_user_uses_hash (verify user dict uses hashed values). (g) test_build_correlation_context_excludes_none.",
+    "Write tests in `tests/unit/observability/test_startup_exception_hooks.py`: (a) test_sys_excepthook_calls_sentry_capture (mock sys.excepthook replacement, simulate exception, verify sentry called), (b) test_loop_exception_handler_calls_sentry (invoke the _install_loop_exception_handler path with a mock loop, simulate exception context, verify sentry capture)."
+  ],
+  "acceptance_criteria": [
+    "sentry-sdk is in pyproject.toml dependencies",
+    "SENTRY_DSN='' results in no Sentry initialization (no external calls)",
+    "SENTRY_DSN='https://key@sentry.io/123' results in sentry_sdk.init being called",
+    "PII (phone, email, raw queries) is never sent to Sentry via before_send filter",
+    "sys.excepthook and asyncio loop exception handler both call sentry_sdk.capture_exception",
+    "CorrelationContext includes all required fields from the issue spec",
+    "All new tests pass: `uv run pytest tests/unit/observability/test_sentry_integration.py tests/unit/observability/test_startup_exception_hooks.py -v`",
+    "Existing unit tests still pass"
+  ],
+  "verification": [
+    "Run `uv run pytest tests/unit/observability/test_sentry_integration.py tests/unit/observability/test_startup_exception_hooks.py -v` and confirm all pass",
+    "Run `make check` and confirm lint/type/format passes",
+    "Run `make test-unit` and confirm full unit suite remains green"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

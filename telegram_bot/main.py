@@ -4,7 +4,9 @@
 import asyncio
 import logging
 import os
+import sys
 
+import sentry_sdk
 from aiogram.exceptions import (
     TelegramConflictError,
     TelegramNetworkError,
@@ -18,6 +20,8 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from src.observability.sentry_integration import initialize_sentry
 
 from .bot import PropertyBot
 from .config import BotConfig
@@ -50,6 +54,7 @@ def _install_loop_exception_handler(
         message = str(context.get("message", "Unhandled exception in event loop"))
         exception = context.get("exception")
         if isinstance(exception, BaseException):
+            sentry_sdk.capture_exception(exception)
             try:
                 raise exception
             except BaseException:
@@ -69,6 +74,15 @@ async def main():
 
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
+
+    # Install sys.excepthook for unhandled exceptions (before any async work).
+    def _sentry_excepthook(
+        exc_type: type[BaseException], exc_value: BaseException, exc_tb: object
+    ) -> None:
+        sentry_sdk.capture_exception(exc_value)
+        logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_tb))
+
+    sys.excepthook = _sentry_excepthook
 
     # Install asyncio loop exception handler so background-task crashes are
     # logged with full traceback (issue #1418).
@@ -91,6 +105,14 @@ async def main():
         logger.info("Langfuse client initialized with PII masking")
     else:
         logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
+
+    # Initialize Sentry error tracking
+    initialize_sentry(
+        dsn=config.sentry_dsn,
+        environment=config.sentry_environment,
+        release=config.sentry_release,
+        traces_sample_rate=config.sentry_traces_sample_rate,
+    )
 
     if not config.telegram_token:
         logger.error("TELEGRAM_BOT_TOKEN not set in .env")
@@ -116,10 +138,12 @@ async def main():
         await _start_with_retry()
     except PollingLockBusy as exc:
         logger.error("Polling lock is busy; another bot instance is active: %s", exc)
+        sentry_sdk.capture_exception(exc)
         raise SystemExit(2) from None
-    except (TelegramUnauthorizedError, TelegramConflictError):
+    except (TelegramUnauthorizedError, TelegramConflictError) as exc:
         # Use logger.exception so the full traceback lands in logs/bot-run.log
         # for the `make bot-logs-errors` triage workflow (issue #1418).
+        sentry_sdk.capture_exception(exc)
         logger.exception("Fatal Telegram error — check bot token or stop other instances")
         raise
     except KeyboardInterrupt:
