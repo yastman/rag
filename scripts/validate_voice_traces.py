@@ -87,6 +87,7 @@ def produce_voice_trace() -> str:
     Returns the expected session_id.
     """
     from src.voice.observability import update_voice_trace
+    from telegram_bot.observability import get_client
 
     call_id = f"validate-{int(time.time())}"
     session_id = f"voice-{call_id}"
@@ -97,6 +98,9 @@ def produce_voice_trace() -> str:
         duration_sec=10,
         session_id=session_id,
     )
+    lf = get_client()
+    if lf is not None:
+        lf.flush()
     print(f"OK: Produced voice-session trace (session_id={session_id})")
     return session_id
 
@@ -145,10 +149,7 @@ def validate_traces(lookback_minutes: int, expected_session_id: str | None = Non
 
     # Filter by expected session_id if provided
     if expected_session_id:
-        matching = [
-            t for t in traces_data
-            if getattr(t, "session_id", "") == expected_session_id
-        ]
+        matching = [t for t in traces_data if getattr(t, "session_id", "") == expected_session_id]
         if not matching:
             return {
                 "ok": False,
@@ -241,8 +242,10 @@ def main() -> None:
         try:
             produced_session_id = produce_voice_trace()
         except Exception as e:
-            print(f"WARNING: Could not produce trace: {e}")
-            print("    Continuing with validation of existing traces...")
+            print(f"ERROR: Could not produce trace: {e}")
+            print("    Refusing to validate existing traces in default mode.")
+            print("    Re-run with --skip-produce to explicitly validate existing traces.")
+            sys.exit(1)
         print()
 
         # Step 4: Wait for ingestion
