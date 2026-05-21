@@ -103,14 +103,21 @@ class UniversalDocumentParser:
     PDF_FORMATS = {".pdf"}
     DOCLING_FORMATS = {".docx", ".csv", ".xlsx", ".xls"}
 
-    def __init__(self, use_cache: bool = True):
+    def __init__(self, use_cache: bool = True, profile: str = "speed"):
         """
         Initialize parser.
 
         Args:
             use_cache: Enable MD5-based caching (default: True)
+            profile: Parsing profile - "speed" (PyMuPDF, default) or
+                "quality" (Docling via docling-serve for PDFs)
         """
+        if profile not in ("speed", "quality"):
+            raise ValueError(
+                f"Invalid profile {profile!r}. Must be 'speed' or 'quality'."
+            )
         self.use_cache = use_cache
+        self.profile = profile
         self.cache = ParserCache() if use_cache else None
         self.docling_converter = None  # Lazy init
 
@@ -183,11 +190,14 @@ class UniversalDocumentParser:
 
     def _parse_pdf(self, filepath: Path) -> ParsedDocument:
         """
-        Parse PDF with PyMuPDF.
+        Parse PDF with PyMuPDF (speed) or Docling (quality).
 
         PyMuPDF 1.26+ uses 'import pymupdf' (NOT fitz).
         377x faster than Docling for large PDFs.
         """
+        if self.profile == "quality":
+            return self._parse_pdf_with_docling(filepath)
+
         logger.info(f"Parsing PDF with PyMuPDF: {filepath.name}")
 
         doc = pymupdf.open(filepath)
@@ -228,6 +238,38 @@ class UniversalDocumentParser:
             metadata=metadata,
         )
 
+    def _parse_pdf_with_docling(self, filepath: Path) -> ParsedDocument:
+        """Parse PDF using Docling via docling-serve for higher quality extraction.
+
+        Uses DoclingClient.chunk_file_sync() to get HybridChunker chunks,
+        then joins their text to produce the document content.
+
+        Requires a running docling-serve instance.
+        """
+        from src.ingestion.docling_client import DoclingClient, DoclingConfig
+
+        logger.info(f"Parsing PDF with Docling (quality profile): {filepath.name}")
+
+        config = DoclingConfig(profile="quality")
+        client = DoclingClient(config)
+        chunks = client.chunk_file_sync(filepath)
+
+        content = "\n\n".join(chunk.text for chunk in chunks)
+
+        metadata = {
+            "format": "pdf",
+            "parser": "docling",
+            "profile": "quality",
+            "num_chunks": len(chunks),
+        }
+
+        return ParsedDocument(
+            filename=filepath.name,
+            title=filepath.stem,
+            content=content,
+            metadata=metadata,
+        )
+
     def _parse_with_docling(self, filepath: Path) -> ParsedDocument:
         """
         Parse DOCX, CSV, XLSX with Docling.
@@ -256,16 +298,19 @@ class UniversalDocumentParser:
 
 
 # Convenience function
-def parse_document(filepath: str | Path, use_cache: bool = True) -> ParsedDocument:
+def parse_document(
+    filepath: str | Path, use_cache: bool = True, profile: str = "speed"
+) -> ParsedDocument:
     """
     Parse document with auto-format detection.
 
     Args:
         filepath: Path to document
         use_cache: Enable MD5-based caching
+        profile: Parsing profile - "speed" (default) or "quality"
 
     Returns:
         ParsedDocument with content and metadata
     """
-    parser = UniversalDocumentParser(use_cache=use_cache)
+    parser = UniversalDocumentParser(use_cache=use_cache, profile=profile)
     return parser.parse_file(filepath)

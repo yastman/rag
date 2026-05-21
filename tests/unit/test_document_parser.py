@@ -342,3 +342,144 @@ class TestConvenienceFunction:
 
             assert isinstance(result, ParsedDocument)
             assert result.content == "Content"
+
+
+class TestProfileParameter:
+    """Test profile parameter for UniversalDocumentParser."""
+
+    def test_default_profile_is_speed(self):
+        """Test that default profile is 'speed'."""
+        parser = UniversalDocumentParser(use_cache=False)
+        assert parser.profile == "speed"
+
+    def test_quality_profile_accepted(self):
+        """Test that 'quality' profile is accepted."""
+        parser = UniversalDocumentParser(use_cache=False, profile="quality")
+        assert parser.profile == "quality"
+
+    def test_invalid_profile_raises(self):
+        """Test that invalid profile raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid profile"):
+            UniversalDocumentParser(use_cache=False, profile="invalid")
+
+    @patch.object(document_parser, "pymupdf")
+    def test_speed_profile_uses_pymupdf(self, mock_pymupdf):
+        """Test that speed profile uses PyMuPDF for PDFs."""
+        mock_page = MagicMock()
+        mock_page.get_text.return_value = "PyMuPDF content"
+
+        mock_doc = MagicMock()
+        mock_doc.page_count = 1
+        mock_doc.load_page.return_value = mock_page
+        mock_doc.metadata = {"title": "Speed PDF"}
+
+        mock_pymupdf.open.return_value = mock_doc
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "test.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            parser = UniversalDocumentParser(use_cache=False, profile="speed")
+            result = parser._parse_pdf(pdf_file)
+
+            assert result.metadata["parser"] == "pymupdf"
+            mock_pymupdf.open.assert_called_once()
+
+    @patch("src.ingestion.document_parser.DoclingClient", create=True)
+    @patch("src.ingestion.document_parser.DoclingConfig", create=True)
+    def test_quality_profile_delegates_to_docling(self, mock_config_cls, mock_client_cls):
+        """Test that quality profile delegates PDF parsing to Docling."""
+        from src.ingestion.docling_client import DoclingChunk
+
+        mock_chunks = [
+            DoclingChunk(text="First chunk", seq_no=0),
+            DoclingChunk(text="Second chunk", seq_no=1),
+        ]
+
+        mock_client = MagicMock()
+        mock_client.chunk_file_sync.return_value = mock_chunks
+        mock_client_cls.return_value = mock_client
+
+        mock_config = MagicMock()
+        mock_config_cls.return_value = mock_config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "test.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            # Patch at the import location inside _parse_pdf_with_docling
+            with patch(
+                "src.ingestion.document_parser.DoclingClient", mock_client_cls
+            ), patch("src.ingestion.document_parser.DoclingConfig", mock_config_cls):
+                # We need to patch where it's imported in the method
+                with patch(
+                    "src.ingestion.docling_client.DoclingClient", mock_client_cls
+                ), patch("src.ingestion.docling_client.DoclingConfig", mock_config_cls):
+                    parser = UniversalDocumentParser(use_cache=False, profile="quality")
+                    result = parser._parse_pdf_with_docling(pdf_file)
+
+            assert result.filename == "test.pdf"
+            assert result.content == "First chunk\n\nSecond chunk"
+            assert result.metadata["parser"] == "docling"
+            assert result.metadata["profile"] == "quality"
+            assert result.metadata["num_chunks"] == 2
+
+
+class TestQualityProfileIntegration:
+    """Test quality profile with mocked DoclingClient."""
+
+    def test_parse_pdf_with_docling_method(self):
+        """Test _parse_pdf_with_docling with mocked client."""
+        from src.ingestion.docling_client import DoclingChunk
+
+        mock_chunks = [
+            DoclingChunk(text="Introduction paragraph", seq_no=0, headings=["Intro"]),
+            DoclingChunk(text="Main content here", seq_no=1, headings=["Body"]),
+            DoclingChunk(text="Conclusion text", seq_no=2, headings=["Conclusion"]),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "report.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            with patch(
+                "src.ingestion.docling_client.DoclingClient.chunk_file_sync",
+                return_value=mock_chunks,
+            ), patch(
+                "src.ingestion.docling_client.DoclingClient.__init__",
+                return_value=None,
+            ):
+                parser = UniversalDocumentParser(use_cache=False, profile="quality")
+                result = parser._parse_pdf_with_docling(pdf_file)
+
+            assert result.filename == "report.pdf"
+            assert result.title == "report"
+            assert "Introduction paragraph" in result.content
+            assert "Main content here" in result.content
+            assert "Conclusion text" in result.content
+            assert result.metadata["format"] == "pdf"
+            assert result.metadata["parser"] == "docling"
+
+    def test_parse_document_convenience_with_profile(self):
+        """Test parse_document convenience function accepts profile."""
+        from src.ingestion.docling_client import DoclingChunk
+
+        mock_chunks = [
+            DoclingChunk(text="Quality content", seq_no=0),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_file = Path(tmpdir) / "test.pdf"
+            pdf_file.write_bytes(b"%PDF-1.4")
+
+            with patch(
+                "src.ingestion.docling_client.DoclingClient.chunk_file_sync",
+                return_value=mock_chunks,
+            ), patch(
+                "src.ingestion.docling_client.DoclingClient.__init__",
+                return_value=None,
+            ):
+                result = parse_document(pdf_file, use_cache=False, profile="quality")
+
+            assert result.content == "Quality content"
+            assert result.metadata["parser"] == "docling"

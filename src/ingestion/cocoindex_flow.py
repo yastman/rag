@@ -178,7 +178,12 @@ def create_document_flow(
 
         # Process each document
         with data_scope["documents"].row() as doc:
-            # Split document into chunks
+            # NOTE: The unified pipeline (QdrantHybridTargetConnector) is the
+            # production chunking path and uses Docling HybridChunker via
+            # DoclingClient.chunk_file_sync().  This legacy CocoIndex flow
+            # retains CocoIndex-native SplitRecursively() because CocoIndex
+            # transforms operate on in-memory text content, not file paths,
+            # and cannot directly leverage DoclingClient which requires file I/O.
             doc["chunks"] = doc["content"].transform(
                 cocoindex.functions.SplitRecursively(),
                 language="markdown",
