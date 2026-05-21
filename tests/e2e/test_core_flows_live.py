@@ -39,7 +39,7 @@ async def _require_live_stack() -> None:
     redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
     try:
         await redis_client.ping()
-    except Exception:
+    except (aioredis.RedisError, OSError):
         pytest.skip("Redis not running or inaccessible")
     finally:
         await redis_client.aclose()
