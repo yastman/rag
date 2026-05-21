@@ -548,7 +548,7 @@ class TestLLMServiceGenerate:
 
         assert result == "Generated text"
 
-    async def test_generate_works_when_langfuse_client_unavailable(
+    async def test_llm_service_generate_works_when_langfuse_client_unavailable(
         self, monkeypatch: pytest.MonkeyPatch
     ):
         """Simple generation must not require an initialized Langfuse client."""
@@ -744,7 +744,7 @@ class TestLLMServiceObserveInstrumentation:
     ***REMOVED*** Module-level wiring
     ***REMOVED*** ------------------------------------------------------------------
 
-    def test_module_imports_observe_and_get_client(self):
+    def test_llm_service_module_imports_observe_and_get_client(self):
         """Module wires the Langfuse decorator + client accessor (***REMOVED***1660 contract)."""
         from telegram_bot.services import llm as llm_mod
 

@@ -104,7 +104,7 @@ class TestNurturingSchedulerObserveInstrumentation:
         sys.modules.pop("telegram_bot.services.nurturing_scheduler", None)
         importlib.import_module("telegram_bot.services.nurturing_scheduler")
 
-    def test_module_imports_observe_get_client_and_propagate_attributes(self):
+    def test_nurturing_scheduler_module_imports_observe_get_client_and_propagate_attributes(self):
         """Module wires the Langfuse decorator + helpers (***REMOVED***1663 contract)."""
         from telegram_bot.services import nurturing_scheduler as ns_mod
 
