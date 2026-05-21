@@ -1,0 +1,21 @@
+{
+  "valid": [
+    ["active", "done"],
+    ["active", "failed"],
+    ["active", "blocked"],
+    ["done", "reviewing"],
+    ["reviewing", "fix_needed"],
+    ["reviewing", "merged"],
+    ["reviewing", "closed"],
+    ["fix_needed", "active"],
+    ["blocked", "active"],
+    ["blocked", "failed"],
+    ["failed", "active"]
+  ],
+  "invalid": [
+    ["done", "active"],
+    ["merged", "active"],
+    ["closed", "done"],
+    ["failed", "merged"]
+  ]
+}

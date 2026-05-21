@@ -1,0 +1,3 @@
+{"worker_id": "w1", "reserved_files": ["src/a.py", "src/b.py"]}
+{"worker_id": "w2", "reserved_files": ["src/c.py", "tests/test_c.py"]}
+{"worker_id": "w4", "reserved_files": ["docs/README.md"]}
