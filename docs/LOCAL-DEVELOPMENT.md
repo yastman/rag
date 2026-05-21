@@ -121,7 +121,41 @@ Git hooks and push gates are static guardrails only: lint, formatting, type
 checks, and repository policy checks. They should not run pytest suites. Run
 tests explicitly as local validation on the development machine.
 
-Local release gate:
+### Pre-push gate
+
+The `make pre-push` target is the recommended gate before pushing:
+
+```bash
+make pre-push          # lint + format-check
+```
+
+This runs expanded lint (covering `src/` and `telegram_bot/` to match CI),
+and format verification. Run `make check` when you also need the current
+lint + MyPy gate; it may surface known baseline type drift until that is fixed.
+
+### Hooks and uv environments
+
+Pre-commit hooks use their own isolated virtualenvs managed by the pre-commit
+framework. They do NOT use the project `.venv` created by `uv sync`. This means
+hooks can run even if your project venv is in an inconsistent state.
+
+### Hooks in OpenCode worker worktrees
+
+Each worktree needs its own hook installation. After creating a new worktree,
+run:
+
+```bash
+make setup-hooks
+```
+
+This installs both pre-commit and pre-push hooks for that worktree.
+
+### fail_fast behavior
+
+The hook configuration sets `fail_fast: true`. This ensures hooks stop on the
+first failure and do not mutate unrelated files in a dirty checkout.
+
+### Local release gate
 
 ```bash
 make check

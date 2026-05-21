@@ -46,3 +46,18 @@ def test_ruff_lint_runs() -> None:
     """Linting runs as part of CI."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "ruff check src/ telegram_bot/" in text
+
+
+def test_makefile_lint_covers_telegram_bot() -> None:
+    """Makefile lint target must cover telegram_bot/ to match CI."""
+    text = Path("Makefile").read_text(encoding="utf-8")
+    assert "ruff check src/ telegram_bot/" in text
+
+
+def test_pre_push_gate_excludes_baseline_type_check() -> None:
+    """pre-push must stay runnable even while the repo has baseline MyPy drift."""
+    text = Path("Makefile").read_text(encoding="utf-8")
+    line = next(line for line in text.splitlines() if line.startswith("pre-push:"))
+    assert "lint" in line
+    assert "format-check" in line
+    assert "type-check" not in line
