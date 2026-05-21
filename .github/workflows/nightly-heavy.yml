@@ -12,6 +12,11 @@ concurrency:
 jobs:
   heavy-tier:
     name: Heavy Tier (requires_extras/load/chaos/e2e/benchmark)
+    # Requires self-hosted Actions Runner v2.329.0+ (see issue #1338).
+    # `actions/checkout@v6` and `astral-sh/setup-uv@v8` use Node 24 runtimes,
+    # which fail on older runner versions before they reach the test step.
+    # If you upgrade the runner, keep this version floor in sync with
+    # tests/unit/test_github_workflow_action_versions.py.
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
