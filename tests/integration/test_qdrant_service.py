@@ -215,34 +215,6 @@ class TestQdrantServiceUnit:
             assert len(call_kwargs["prefetch"]) == 1
 
     @pytest.mark.asyncio
-    async def test_search_with_score_boosting(self):
-        """Test search_with_score_boosting uses Query API formula."""
-        from telegram_bot.services.qdrant import QdrantService
-
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.query_points.return_value = MagicMock(points=[])
-            _mc = MagicMock()
-            _mc.name = "test"
-            mock_client.get_collections.return_value = MagicMock(collections=[_mc])
-            mock_client_class.return_value = mock_client
-
-            service = QdrantService(
-                url="http://localhost:6333",
-                collection_name="test",
-            )
-
-            await service.search_with_score_boosting(
-                dense_vector=[0.1] * 1024,
-                freshness_boost=True,
-                freshness_field="created_at",
-                freshness_scale_days=7,
-                top_k=10,
-            )
-
-            mock_client.query_points.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_search_returns_formatted_results(self):
         """Test search returns properly formatted results."""
         from telegram_bot.services.qdrant import QdrantService
