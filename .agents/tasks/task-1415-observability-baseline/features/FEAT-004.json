@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "feat",
   "description": "Phase 5+6: Grafana Alloy migration (replace Promtail) and Loki/Alertmanager rules cleanup. Replace the deprecated Promtail service with Grafana Alloy for log collection. Fix all alert rules to use stable {service=...} selectors instead of brittle {container=\"dev-*\"} patterns. Fix Alertmanager inhibition rule referencing nonexistent ServiceDown alert.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Create `docker/monitoring/alloy.alloy` configuration file: (a) Use `loki.source.docker` component to discover Docker containers via socket. (b) Extract compose labels: com.docker.compose.service -> service, com.docker.compose.project -> compose_project. (c) Add static labels: environment='development', stack='rag-dev'. (d) Forward to loki.write endpoint at http://loki:3100/loki/api/v1/push. (e) Include pipeline stages for JSON parsing (matching the existing promtail.yaml logic) and rate limiting.",
     "In `compose.yml`, replace the `promtail` service with `alloy`: image `grafana/alloy:v1.9.1`, profile 'obs', mount docker/monitoring/alloy.alloy as config, mount /var/run/docker.sock and /var/lib/docker/containers read-only, depends_on loki healthy, healthcheck on port 12345 (Alloy default HTTP port), similar resource limits.",
@@ -33,5 +33,5 @@
     "Run `docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet` and confirm exit 0"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All alert rules updated to use {service=...} selectors. Test regex needed adjustment to avoid matching regex quantifiers like {3,} as LogQL stream selectors. Docker compose config validates successfully with the new alloy service."
 }
