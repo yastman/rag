@@ -8,6 +8,7 @@ if ! command -v opencode >/dev/null 2>&1; then
 fi
 
 if [[ -z "${OPENCODE_CONFIG:-}" && -z "${OPENCODE_CONFIG_CONTENT:-}" ]]; then
+    # NOTE: permission=allow grants full tool access; intended for trusted automation only.
     export OPENCODE_CONFIG_CONTENT='{"permission":"allow"}'
 fi
 
