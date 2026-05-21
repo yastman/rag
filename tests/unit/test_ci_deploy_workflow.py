@@ -46,3 +46,9 @@ def test_ruff_lint_runs() -> None:
     """Linting runs as part of CI."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "ruff check src/ telegram_bot/" in text
+
+
+def test_makefile_lint_covers_telegram_bot() -> None:
+    """Makefile lint target must cover telegram_bot/ to match CI."""
+    text = Path("Makefile").read_text(encoding="utf-8")
+    assert "ruff check src/ telegram_bot/" in text
