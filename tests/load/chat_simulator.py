@@ -2,11 +2,15 @@
 """Realistic chat conversation simulator for load tests."""
 
 import asyncio
+import logging
 import random
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from tests.smoke.queries import ExpectedQueryType
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -81,6 +85,14 @@ async def simulate_chat(
             latency = await process_message(msg.text, chat_id)
             total_latency += latency
         except Exception:
+            # Load-test counter — every error is part of the SLO measurement, so
+            # we cannot narrow the type without dropping signal. Log the full
+            # traceback so per-chat failures are debuggable.
+            logger.exception(
+                "chat %d: process_message failed for query_type=%s",
+                chat_id,
+                msg.query_type.value,
+            )
             errors += 1
 
         if i < len(conversation) - 1:
