@@ -32,7 +32,7 @@ When answering questions or writing documentation, use this order. Do not skip l
 | Fact | Canonical Doc | Do Not Duplicate In |
 |---|---|---|
 | Docker Compose files, profiles, services, ports, env, local project name | `DOCKER.md` | Folder READMEs, `ONBOARDING.md`, root `README.md` |
-| Local developer flow, commands, validation ladder | `docs/LOCAL-DEVELOPMENT.md` | `ONBOARDING_CHECKLIST.md`, root `README.md` |
+| Local developer flow, commands, validation ladder | `docs/LOCAL-DEVELOPMENT.md` | `ONBOARDING.md`, root `README.md` |
 | Repo overview, primary entrypoints, high-level architecture | `README.md` (root) | `docs/PROJECT_STACK.md` (keep boundary: root = elevator pitch; `PROJECT_STACK` = subsystem map) |
 | Folder ownership, entrypoints, boundaries, local checks | Nearest `README.md` | Parent READMEs, `AGENTS.md` |
 | Test-writing rules | `docs/engineering/test-writing-guide.md` | `DEVELOPER_GUIDE.md` |
