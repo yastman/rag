@@ -709,6 +709,42 @@ bot:  ***REMOVED******REMOVED*** Alias: run bot and tee output to logs/bot-run.l
 	@mkdir -p logs
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
 
+***REMOVED*** =============================================================================
+***REMOVED*** BOT LOG TRIAGE (issue ***REMOVED***1418)
+***REMOVED*** Operator workflow:
+***REMOVED***   make bot                  ***REMOVED*** produce logs/bot-run.log
+***REMOVED***   make bot-logs-tail        ***REMOVED*** follow live log
+***REMOVED***   make bot-logs-errors      ***REMOVED*** show ERROR/CRITICAL lines + tracebacks
+***REMOVED***   make bot-logs-startup     ***REMOVED*** show preflight + Startup verdict events
+***REMOVED*** =============================================================================
+
+.PHONY: bot-logs-tail bot-logs-errors bot-logs-startup
+
+bot-logs-tail:  ***REMOVED******REMOVED*** Follow logs/bot-run.log (live stream of bot output)
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@tail -F logs/bot-run.log
+
+bot-logs-errors:  ***REMOVED******REMOVED*** Show recent ERROR/CRITICAL lines and Tracebacks from logs/bot-run.log
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Recent errors in logs/bot-run.log:$(NC)"
+	@grep -nE 'ERROR|CRITICAL|Traceback|exception' logs/bot-run.log | tail -n $${BOT_LOG_LINES:-200} || \
+		echo "$(GREEN)No error/critical lines found$(NC)"
+
+bot-logs-startup:  ***REMOVED******REMOVED*** Show recent startup/preflight events from logs/bot-run.log
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Recent startup events in logs/bot-run.log:$(NC)"
+	@grep -nE 'Startup verdict|Preflight|Logging configured' logs/bot-run.log | tail -n $${BOT_LOG_LINES:-100} || \
+		echo "$(YELLOW)No startup events found$(NC)"
+
 local-down:  ***REMOVED******REMOVED*** Stop local Docker services
 	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_ALL_SERVICES) || true
 	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_ALL_SERVICES) || true
