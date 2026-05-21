@@ -19,11 +19,10 @@ module (``telegram_bot/phone_utils.py``) and points both consumers there.
 This contract pins the result.
 """
 
-from __future__ import annotations
-
 import ast
 import importlib
 from pathlib import Path
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MINI_APP_PHONE_PATH = REPO_ROOT / "mini_app" / "phone.py"
@@ -86,10 +85,13 @@ def test_mini_app_phone_imports_shared_normalizer() -> None:
     tree = ast.parse(MINI_APP_PHONE_PATH.read_text(encoding="utf-8"))
     imported_normalize = False
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "telegram_bot.phone_utils":
-            if any(alias.name == "normalize_phone" for alias in node.names):
-                imported_normalize = True
-                break
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "telegram_bot.phone_utils"
+            and any(alias.name == "normalize_phone" for alias in node.names)
+        ):
+            imported_normalize = True
+            break
     assert imported_normalize, (
         "mini_app/phone.py must import normalize_phone from "
         "telegram_bot.phone_utils."
