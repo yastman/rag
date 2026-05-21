@@ -50,6 +50,7 @@ from telegram_bot.config import BotConfig
 
 _STREAM = "miniapp:start:stream"
 _GROUP = "miniapp-bot"
+_CONSUMER = "bot-default"
 
 
 # ---------------------------------------------------------------------------
@@ -247,3 +248,35 @@ class TestSubscriberStreamsContract:
         # ...so the message stays pending for redelivery.
         pending = await fake_redis.xpending(_STREAM, _GROUP)
         assert pending["pending"] >= 1, pending
+
+    @pytest.mark.asyncio
+    async def test_pending_replay_drains_more_than_one_batch(self, mock_config, fake_redis):
+        """Startup replay must drain all pending entries for this consumer."""
+        await _prepare_stream(fake_redis)
+        for idx in range(12):
+            await fake_redis.xadd(
+                _STREAM,
+                {"uuid": f"abc-{idx}", "user_id": str(idx + 1)},
+                maxlen=1000,
+                approximate=True,
+            )
+
+        # Simulate a previous bot run that read the messages but crashed
+        # before acking them. The next run must replay more than one BATCH.
+        delivered = await fake_redis.xreadgroup(
+            groupname=_GROUP,
+            consumername=_CONSUMER,
+            streams={_STREAM: ">"},
+            count=12,
+        )
+        assert sum(len(entries) for _stream, entries in delivered) == 12
+
+        bot = _create_bot(mock_config)
+        bot._topic_manager = MagicMock()
+        bot._process_miniapp_start = AsyncMock()
+
+        await _run_loop_briefly(bot, fake_redis)
+
+        assert bot._process_miniapp_start.await_count == 12
+        pending = await fake_redis.xpending(_STREAM, _GROUP)
+        assert pending["pending"] == 0, pending
