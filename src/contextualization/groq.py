@@ -35,24 +35,14 @@ class GroqContextualizer(ContextualizeProvider):
         query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
-        """Contextualize multiple chunks using Groq."""
+        """Contextualize multiple chunks using Groq.
+
+        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (#1533),
+        which provides the shared concurrent per-chunk dispatch with per-chunk
+        fallback to ``context_method="none"``.
+        """
         _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
+        return await self.contextualize_batch(chunks, query)
 
     @observe(name="groq-contextualize", capture_input=False, capture_output=False)
     @retry(
