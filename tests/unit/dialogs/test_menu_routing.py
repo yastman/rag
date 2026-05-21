@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.handlers.command_handlers import cmd_start
+
 
 @pytest.fixture
 def mock_config():
@@ -42,7 +44,7 @@ async def test_cmd_start_client_shows_reply_keyboard_even_with_dialog_manager(mo
 
         bot._resolve_user_role = fake_resolve_role
 
-        await bot.cmd_start(message, dialog_manager=dialog_manager)
+        await cmd_start(bot, message, dialog_manager=dialog_manager)
 
     dialog_manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
     message.answer.assert_called_once()
@@ -72,7 +74,7 @@ async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
 
         bot._resolve_user_role = fake_resolve_role
 
-        await bot.cmd_start(message, dialog_manager=dialog_manager)
+        await cmd_start(bot, message, dialog_manager=dialog_manager)
 
     dialog_manager.start.assert_called_once()
     call_args = dialog_manager.start.call_args
@@ -102,7 +104,7 @@ async def test_cmd_start_manager_without_kommo_shows_client_reply_keyboard(mock_
 
         bot._resolve_user_role = fake_resolve_role
 
-        await bot.cmd_start(message, dialog_manager=dialog_manager)
+        await cmd_start(bot, message, dialog_manager=dialog_manager)
 
     dialog_manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
     message.answer.assert_called_once()
@@ -131,7 +133,7 @@ async def test_cmd_start_fallback_without_dialog_manager(mock_config):
 
         bot._resolve_user_role = fake_resolve_role
 
-        await bot.cmd_start(message, dialog_manager=None)
+        await cmd_start(bot, message, dialog_manager=None)
 
     message.answer.assert_called_once()
     _, kwargs = message.answer.call_args
