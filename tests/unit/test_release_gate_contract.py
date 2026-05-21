@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "test_release_health_vps.sh"
+VPS_NONCORE_SERVICES_LIB = ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
 
 
 def test_release_smoke_script_does_not_allow_profile_mode() -> None:
@@ -21,6 +22,7 @@ def test_release_smoke_script_does_not_allow_profile_mode() -> None:
 
 def test_release_smoke_asserts_removed_services_absent() -> None:
     script = RELEASE_SMOKE_SCRIPT.read_text()
+    noncore_services = VPS_NONCORE_SERVICES_LIB.read_text()
     for service in [
         "mini-app-api",
         "mini-app-frontend",
@@ -32,8 +34,9 @@ def test_release_smoke_asserts_removed_services_absent() -> None:
         "minio",
         "redis-langfuse",
     ]:
-        assert service in script
-    assert "removed_services" in script
+        assert service in noncore_services
+    assert "VPS_NONCORE_SERVICES" in script
+    assert "removed_service" in script
 
 
 def test_public_ci_does_not_run_release_smoke() -> None:
