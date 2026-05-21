@@ -371,7 +371,6 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `telegram_bot/services/voyage.py` — reranking service (legacy/optional)
   - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings (`USE_CONTEXTUALIZED_EMBEDDINGS=true` only)
   - `src/ingestion/unified/qdrant_writer.py` — optional dense provider when `use_local_embeddings=False`
-  - `src/ingestion/gdrive_indexer.py` — legacy GDrive ingestion (deprecated)
 - **паттерны:**
   - `voyageai.Client()` для sync, lazy import (тяжёлые deps: pandas, scipy)
   - Rerank: `client.rerank(query, documents, model="rerank-2")`
