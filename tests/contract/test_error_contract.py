@@ -51,10 +51,6 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
     "telegram_bot/services/lead_score_sync.py": ["ERROR"],
     "telegram_bot/services/nurturing_scheduler.py": ["ERROR"],
-    ***REMOVED*** LLM service — generate / generate-answer / stream-answer wrappers
-    ***REMOVED*** record ERROR on OpenAI/LiteLLM failures and on unavailable Langfuse
-    ***REMOVED*** generation observation handles (***REMOVED***1659/***REMOVED***1662, ***REMOVED***1810).
-    "telegram_bot/services/llm.py": ["ERROR"],
     ***REMOVED*** Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
     ***REMOVED*** rate-limit / timeout exceptions before falling back to the user's raw
     ***REMOVED*** query (***REMOVED***1659, ***REMOVED***1810).
