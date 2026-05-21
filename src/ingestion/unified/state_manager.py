@@ -80,6 +80,44 @@ class FileState:
         return cls(**{k: v for k, v in dict(row).items() if k in cls.__dataclass_fields__})
 
 
+def _should_reprocess(
+    state: FileState | None,
+    content_hash: str,
+    embedding_model: str | None,
+    pipeline_version: str | None,
+) -> bool:
+    """Pure helper: should a file be reprocessed given its stored state?
+
+    A file is considered up-to-date only when:
+      - it has been previously indexed,
+      - the stored content_hash matches the new content_hash, AND
+      - the processing fingerprint (embedding_model, pipeline_version) also
+        matches.
+
+    The fingerprint pieces are optional: callers that don't yet pass them get
+    legacy hash-only behavior (backward compatibility — see issue ***REMOVED***1604).
+
+    This helper does NOT encode DLQ / backoff gating; that lives in the parent
+    `should_process` method.
+    """
+    if state is None:
+        return True
+    if state.status != "indexed":
+        ***REMOVED*** The fingerprint comparison is meaningful only for an already-indexed
+        ***REMOVED*** state. Anything else (pending, processing, error, deleted) is not
+        ***REMOVED*** "up-to-date", so the file needs reprocessing as far as fingerprint
+        ***REMOVED*** logic is concerned.
+        return True
+
+    if state.content_hash != content_hash:
+        return True
+
+    if embedding_model is not None and state.embedding_model != embedding_model:
+        return True
+
+    return pipeline_version is not None and state.pipeline_version != pipeline_version
+
+
 class UnifiedStateManager:
     """Manages ingestion state in Postgres."""
 
@@ -220,13 +258,34 @@ class UnifiedStateManager:
             file_id,
         )
 
-    async def should_process(self, file_id: str, content_hash: str) -> bool:
-        """Check if file needs processing (new or changed)."""
+    async def should_process(
+        self,
+        file_id: str,
+        content_hash: str,
+        embedding_model: str | None = None,
+        pipeline_version: str | None = None,
+    ) -> bool:
+        """Check if file needs processing (new, changed, or fingerprint-stale).
+
+        Args:
+            file_id: Unique file identifier.
+            content_hash: Current content hash of the file's bytes.
+            embedding_model: Current embedding model name. When provided,
+                a mismatch with the stored model triggers reprocessing.
+            pipeline_version: Current pipeline version string. When provided,
+                a mismatch with the stored version triggers reprocessing.
+
+        When `embedding_model` / `pipeline_version` are None (legacy callers),
+        only `content_hash` is compared — preserving the previous behavior.
+        See issue ***REMOVED***1604.
+        """
         state = await self.get_state(file_id)
         if state is None:
             return True  ***REMOVED*** New file
-        if state.status == "indexed" and state.content_hash == content_hash:
-            return False  ***REMOVED*** Unchanged
+        if state.status == "indexed" and not _should_reprocess(
+            state, content_hash, embedding_model, pipeline_version
+        ):
+            return False  ***REMOVED*** Unchanged content AND matching processing fingerprint
         if state.status == "error" and state.retry_after and state.retry_after > datetime.now(UTC):
             return False  ***REMOVED*** Still in backoff
         ***REMOVED*** Exceeded retries means file is in DLQ
@@ -327,9 +386,22 @@ class UnifiedStateManager:
         """Sync version of get_state()."""
         return self._run_sync(self.get_state(file_id))
 
-    def should_process_sync(self, file_id: str, content_hash: str) -> bool:
-        """Sync version of should_process()."""
-        return self._run_sync(self.should_process(file_id, content_hash))
+    def should_process_sync(
+        self,
+        file_id: str,
+        content_hash: str,
+        embedding_model: str | None = None,
+        pipeline_version: str | None = None,
+    ) -> bool:
+        """Sync version of should_process().
+
+        Accepts optional `embedding_model` / `pipeline_version` to detect
+        fingerprint-stale state (issue ***REMOVED***1604). Passing None preserves the
+        legacy hash-only comparison for backward compatibility.
+        """
+        return self._run_sync(
+            self.should_process(file_id, content_hash, embedding_model, pipeline_version)
+        )
 
     def upsert_state_sync(self, state: FileState) -> None:
         """Sync version of upsert_state()."""

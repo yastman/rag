@@ -75,10 +75,47 @@ def test_handle_upsert_skips_unchanged_file_before_parsing(tmp_path: Path) -> No
             spec, "file-1", mutation, state_manager
         )
 
-    state_manager.should_process_sync.assert_called_once_with("file-1", "hash-1")
+    state_manager.should_process_sync.assert_called_once_with(
+        "file-1",
+        "hash-1",
+        embedding_model="voyage-4-large",
+        pipeline_version="v3.2.1",
+    )
     state_manager.upsert_state_sync.assert_not_called()
     docling.chunk_file_sync.assert_not_called()
     writer.upsert_chunks_sync.assert_not_called()
+
+
+def test_handle_upsert_skip_uses_local_embedding_fingerprint(tmp_path: Path) -> None:
+    from src.ingestion.unified.targets.qdrant_hybrid_target import (
+        QdrantHybridTargetConnector,
+        QdrantHybridTargetSpec,
+    )
+
+    state_manager = MagicMock()
+    state_manager.should_process_sync.return_value = False
+    mutation = _mutation(tmp_path)
+    spec = QdrantHybridTargetSpec(use_local_embeddings=True, pipeline_version="v-test")
+
+    with (
+        patch.object(QdrantHybridTargetConnector, "_get_writer", return_value=MagicMock()),
+        patch.object(QdrantHybridTargetConnector, "_get_docling", return_value=MagicMock()),
+        patch(
+            "src.ingestion.unified.targets.qdrant_hybrid_target.compute_content_hash",
+            return_value="hash-1",
+        ),
+    ):
+        QdrantHybridTargetConnector._handle_upsert_with_state(
+            spec, "file-1", mutation, state_manager
+        )
+
+    state_manager.should_process_sync.assert_called_once_with(
+        "file-1",
+        "hash-1",
+        embedding_model="bge-m3-api",
+        pipeline_version="v-test",
+    )
+    state_manager.upsert_state_sync.assert_not_called()
 
 
 def test_handle_upsert_empty_chunks_marks_indexed_zero(tmp_path: Path) -> None:
