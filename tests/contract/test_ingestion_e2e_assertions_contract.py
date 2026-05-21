@@ -19,6 +19,7 @@ and a positive point count, while negative tests are exempt.
 from __future__ import annotations
 
 import ast
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -47,11 +48,25 @@ def _assert_sources(func: ast.AST) -> list[str]:
     out: list[str] = []
     for node in ast.walk(func):
         if isinstance(node, ast.Assert):
-            try:
+            with suppress(Exception):
                 out.append(ast.unparse(node.test))
-            except Exception:  ***REMOVED*** pragma: no cover
-                pass
     return out
+
+
+def _test_function(tree: ast.AST, name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    for func in _iter_test_methods(tree):
+        if func.name == name:
+            return func
+    raise AssertionError(f"test function {name!r} not found")
+
+
+def _argument_names(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    args = [
+        *func.args.posonlyargs,
+        *func.args.args,
+        *func.args.kwonlyargs,
+    ]
+    return {arg.arg for arg in args}
 
 
 def test_target_file_exists() -> None:
@@ -91,9 +106,12 @@ def test_success_path_assertions_forbid_error_key_acceptance() -> None:
             continue
         for src in _assert_sources(func):
             ***REMOVED*** Bug pattern: "name" in X or "error" in X — accepts error as success.
-            if "'error' in" in src.replace('"', "'") and "'name' in" in src.replace('"', "'"):
-                if " or " in src:
-                    violations.append(f"{func.name}: {src}")
+            if (
+                "'error' in" in src.replace('"', "'")
+                and "'name' in" in src.replace('"', "'")
+                and " or " in src
+            ):
+                violations.append(f"{func.name}: {src}")
     assert not violations, (
         "Success-path E2E tests must NOT accept an 'error' key as success. "
         "Move graceful-failure shape checks into a dedicated negative test "
@@ -124,6 +142,50 @@ def test_success_path_assertions_require_no_error_key() -> None:
     assert not missing, (
         "Success-path tests must assert 'error' not in <stats>. Missing in:\n"
         "  - " + "\n  - ".join(missing)
+    )
+
+
+def test_success_path_status_tests_arrange_seed_data_before_asserting() -> None:
+    """Stats/status success-path tests must create or depend on seeded Qdrant data."""
+    tree = ast.parse(TARGET.read_text(encoding="utf-8"))
+    expected_to_seed = {
+        "test_get_collection_stats",
+        "test_get_ingestion_status",
+    }
+    missing: list[str] = []
+    for name in expected_to_seed:
+        func = _test_function(tree, name)
+        args = _argument_names(func)
+        body = ast.unparse(func)
+        has_seed_fixture = "seeded_ingestion_collection" in args
+        seeds_inline = "_seed_ingestion_collection" in body or ".ingest_directory(" in body
+        if not has_seed_fixture and not seeds_inline:
+            missing.append(name)
+
+    assert not missing, (
+        "Success-path stats/status tests must arrange a populated test "
+        "collection before asserting 'error' not in stats. Otherwise they "
+        "only pass when another test happened to run first. Missing seed "
+        "setup in: " + ", ".join(missing)
+    )
+
+
+def test_get_ingestion_status_uses_seeded_test_collection() -> None:
+    """The status E2E must not assert success against the default collection."""
+    tree = ast.parse(TARGET.read_text(encoding="utf-8"))
+    func = _test_function(tree, "test_get_ingestion_status")
+    calls = [
+        node
+        for node in ast.walk(func)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "get_ingestion_status"
+    ]
+    assert calls, "test_get_ingestion_status must call get_ingestion_status"
+    assert all(call.args or call.keywords for call in calls), (
+        "test_get_ingestion_status must pass the seeded test collection name "
+        "to get_ingestion_status(...). Calling it without arguments checks "
+        "the default 'documents' collection and makes the test environment-dependent."
     )
 
 
