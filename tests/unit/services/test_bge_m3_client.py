@@ -425,7 +425,7 @@ class TestBGEM3ClientReconnectRace:
         """N concurrent first-time _get_client() callers => 1 AsyncClient construction."""
         import asyncio
 
-        from telegram_bot.services import bge_m3_client as mod
+        from src.services import bge_m3_client as mod
 
         instances: list[MagicMock] = []
 
@@ -458,7 +458,7 @@ class TestBGEM3ClientReconnectRace:
         """When existing client is closed, concurrent reconnects produce 1 replacement."""
         import asyncio
 
-        from telegram_bot.services import bge_m3_client as mod
+        from src.services import bge_m3_client as mod
 
         instances: list[MagicMock] = []
 
@@ -495,7 +495,7 @@ class TestBGEM3ClientReconnectRace:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """If self._client is open, _get_client must return it as-is (no new instance)."""
-        from telegram_bot.services import bge_m3_client as mod
+        from src.services import bge_m3_client as mod
 
         instances: list[MagicMock] = []
 
@@ -521,7 +521,7 @@ class TestBGEM3ClientReconnectRace:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """aclose() racing with _get_client() must not aclose() the same client twice."""
-        from telegram_bot.services import bge_m3_client as mod
+        from src.services import bge_m3_client as mod
 
         instances: list[MagicMock] = []
 
