@@ -118,8 +118,14 @@ class TestGDriveManifest:
         assert id1 == id2
 
     def test_renamed_file_reuses_id(self, manifest: GDriveManifest):
-        """Same content hash at different path → reuses original file_id (rename-stable)."""
+        """Same content hash: old path removed, new path appears → reuses file_id (rename-stable).
+
+        Updated for #1603 copy-detection: a rename is only detected when the
+        original path is *no longer active* (i.e., ``remove()`` was called).
+        """
         id_original = manifest.get_or_create_id("old/path.pdf", "hash_content")
+        # Simulate the file being removed from its original location (rename/move)
+        manifest.remove("old/path.pdf")
         id_renamed = manifest.get_or_create_id("new/path.pdf", "hash_content")
         assert id_original == id_renamed
 
@@ -189,9 +195,15 @@ class TestGDriveManifest:
         assert m._hash_to_id["hash_aaa"] == "id_current"
 
     def test_rename_after_reload_still_stable(self, manifest_dir: Path):
-        """File identity survives manifest reload + rename."""
+        """File identity survives manifest reload + rename.
+
+        Updated for #1603 copy-detection: ``remove()`` must be called for the
+        original path before the new path is registered, to signal a rename.
+        """
         m1 = GDriveManifest(manifest_dir)
         original_id = m1.get_or_create_id("old/name.pdf", "hash_x")
+        # Simulate removal of old path before rename appears
+        m1.remove("old/name.pdf")
 
         # Reload from disk (simulates restart)
         m2 = GDriveManifest(manifest_dir)

@@ -12,6 +12,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     FieldCondition,
     Filter,
+    FilterSelector,
+    HasIdCondition,
     MatchValue,
     PointStruct,
     SparseVector,
@@ -392,11 +394,18 @@ class QdrantHybridWriter:
         count = count_result.count
 
         if count > 0:
-            # Delete by metadata.file_id
+            # Delete by metadata.file_id (canonical SDK shape: wrap Filter in FilterSelector)
             self.client.delete(
                 collection_name=collection_name,
-                points_selector=Filter(
-                    must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="metadata.file_id",
+                                match=MatchValue(value=file_id),
+                            )
+                        ]
+                    )
                 ),
             )
             logger.info(f"Deleted {count} points for file_id={file_id}")
@@ -417,12 +426,17 @@ class QdrantHybridWriter:
         file_metadata: dict[str, Any],
         collection_name: str,
     ) -> WriteStats:
-        """Upsert chunks with replace semantics.
+        """Upsert chunks with atomic replace semantics (#1602).
 
-        1. Delete existing points for file_id
-        2. Generate embeddings
-        3. Build points with payload contract
-        4. Upsert to Qdrant
+        1. Generate embeddings and build replacement points first.
+        2. Upsert replacement points with deterministic IDs (overwrites the
+           same chunk_locations in place).
+        3. Only after a successful upsert, delete points whose IDs belong to
+           ``file_id`` but are not part of the new batch (stale orphans).
+
+        If any step before the stale-id sweep fails, no destructive delete is
+        executed, so the previous good version of the document remains
+        searchable.
         """
         stats = WriteStats()
         try_update_ingestion_trace(
@@ -440,13 +454,11 @@ class QdrantHybridWriter:
             return stats
 
         try:
-            # Step 1: Delete existing (replace semantics)
-            stats.points_deleted = await self.delete_file(file_id, collection_name)
-
-            # Step 2: Extract texts
+            # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            # Step 3: Generate embeddings (local BGE-M3 or Voyage API)
+            # Step 2: Generate embeddings (local BGE-M3 or Voyage API).
+            # Any failure here exits via `except` BEFORE any destructive call.
             if self.use_local_embeddings:
                 dense_embeddings = self._embed_documents_local(texts)
             else:
@@ -456,8 +468,9 @@ class QdrantHybridWriter:
             sparse_embeddings = self._embed_sparse(texts)
             colbert_embeddings = self._embed_colbert(texts) if self.use_local_embeddings else []
 
-            # Step 4: Build points
-            points = []
+            # Step 3: Build points
+            points: list[PointStruct] = []
+            new_ids: list[str] = []
             for i, (chunk, dense_vec, sparse_emb) in enumerate(
                 zip(chunks, dense_embeddings, sparse_embeddings, strict=True)
             ):
@@ -480,17 +493,28 @@ class QdrantHybridWriter:
                     payload=payload,
                 )
                 points.append(point)
+                new_ids.append(point_id)
 
-            # Step 5: Upsert in request-size-safe batches
+            # Step 4: Upsert replacement points first (deterministic IDs
+            # overwrite same-location points, so readers always see a valid
+            # version of the document during the swap).
             stats.points_upserted = self._upsert_points_in_batches(
                 collection_name=collection_name,
                 points=points,
                 source_path=source_path,
             )
 
+            # Step 5: Sweep stale orphans (old points for this file_id that
+            # are not part of the new batch). Safe because Step 4 succeeded.
+            stats.points_deleted = self._delete_stale_points_sync(
+                file_id=file_id,
+                collection_name=collection_name,
+                new_ids=set(new_ids),
+            )
+
             logger.info(
                 f"Upserted {stats.points_upserted} points for {source_path} "
-                f"(replaced {stats.points_deleted})"
+                f"(swept {stats.points_deleted} stale points)"
             )
 
         except Exception as e:
@@ -531,8 +555,15 @@ class QdrantHybridWriter:
         if count > 0:
             self.client.delete(
                 collection_name=collection_name,
-                points_selector=Filter(
-                    must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="metadata.file_id",
+                                match=MatchValue(value=file_id),
+                            )
+                        ]
+                    )
                 ),
             )
             logger.info(f"Deleted {count} points for file_id={file_id}")
@@ -547,9 +578,11 @@ class QdrantHybridWriter:
         file_metadata: dict[str, Any],
         collection_name: str,
     ) -> WriteStats:
-        """Sync version of upsert_chunks.
+        """Sync atomic-replace counterpart of ``upsert_chunks`` (#1602).
 
-        Uses sync Voyage client and sync Qdrant operations.
+        Build replacement points first, upsert them with deterministic IDs,
+        and only delete stale orphan IDs after the upsert succeeds. If any
+        step before the stale-id sweep fails, no destructive delete runs.
         """
         stats = WriteStats()
 
@@ -557,13 +590,11 @@ class QdrantHybridWriter:
             return stats
 
         try:
-            # Step 1: Delete existing (replace semantics)
-            stats.points_deleted = self.delete_file_sync(file_id, collection_name)
-
-            # Step 2: Extract texts
+            # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            # Step 3: Generate embeddings — single hybrid call when local BGE-M3
+            # Step 2: Generate embeddings — single hybrid call when local BGE-M3.
+            # Any failure here exits via `except` BEFORE any destructive call.
             all_dense_embeddings: list[list[float]]
             if self.use_local_embeddings:
                 hybrid_result = self._bge_client.encode_hybrid(texts)
@@ -589,8 +620,9 @@ class QdrantHybridWriter:
                 sparse_embeddings = self._embed_sparse(texts)
                 colbert_embeddings = []
 
-            # Step 4: Build points
-            points = []
+            # Step 3: Build points
+            points: list[PointStruct] = []
+            new_ids: list[str] = []
             for i, (chunk, dense_vec, sparse_emb) in enumerate(
                 zip(chunks, all_dense_embeddings, sparse_embeddings, strict=True)
             ):
@@ -613,17 +645,25 @@ class QdrantHybridWriter:
                     payload=payload,
                 )
                 points.append(point)
+                new_ids.append(point_id)
 
-            # Step 5: Upsert in request-size-safe batches
+            # Step 4: Upsert replacement points first.
             stats.points_upserted = self._upsert_points_in_batches(
                 collection_name=collection_name,
                 points=points,
                 source_path=source_path,
             )
 
+            # Step 5: Now safe to sweep stale orphan IDs.
+            stats.points_deleted = self._delete_stale_points_sync(
+                file_id=file_id,
+                collection_name=collection_name,
+                new_ids=set(new_ids),
+            )
+
             logger.info(
                 f"Upserted {stats.points_upserted} points for {source_path} "
-                f"(replaced {stats.points_deleted})"
+                f"(swept {stats.points_deleted} stale points)"
             )
 
         except Exception as e:
@@ -631,3 +671,54 @@ class QdrantHybridWriter:
             logger.error(f"Error upserting chunks: {e}", exc_info=True)
 
         return stats
+
+    def _delete_stale_points_sync(
+        self,
+        *,
+        file_id: str,
+        collection_name: str,
+        new_ids: set[str],
+    ) -> int:
+        """Delete points that belong to ``file_id`` but are not in ``new_ids``.
+
+        This is the post-upsert sweep half of the atomic-replace pattern from
+        #1602: by the time we run, replacement points are already live in the
+        collection (Step 4 of ``upsert_chunks_sync``), so we only need to drop
+        whichever historical chunk IDs no longer participate in the file.
+
+        Returns the number of stale point IDs that were deleted.
+        """
+        stale_ids: list[int | str | uuid.UUID] = []
+        next_offset: Any = None
+        while True:
+            records, next_offset = self.client.scroll(
+                collection_name=collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="metadata.file_id",
+                            match=MatchValue(value=file_id),
+                        )
+                    ]
+                ),
+                limit=512,
+                offset=next_offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            for record in records or []:
+                rid = record.id
+                if rid not in new_ids:
+                    stale_ids.append(rid)
+            if not next_offset:
+                break
+
+        if not stale_ids:
+            return 0
+
+        self.client.delete(
+            collection_name=collection_name,
+            points_selector=Filter(must=[HasIdCondition(has_id=stale_ids)]),
+        )
+        logger.info("Swept %d stale points for file_id=%s (post-upsert)", len(stale_ids), file_id)
+        return len(stale_ids)
