@@ -255,7 +255,7 @@ requires-dist = [
     { name = "scipy", specifier = "==1.17.1" },
     { name = "sentence-transformers", specifier = "==5.5.1" },
     { name = "torch", specifier = "==2.12.0+cpu", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers", specifier = ">=4.57.6" },
+    { name = "transformers", specifier = "==5.9.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.47.0" },
 ]
 
