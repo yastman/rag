@@ -1,7 +1,9 @@
 """CRM tools for Kommo API — 8 tools with config-based context DI (#413).
 
 All tools check ctx.kommo_client is not None before proceeding.
-Dependencies injected via config["configurable"]["bot_context"].
+Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+(SDK-native ``runtime.context`` with ``configurable["bot_context"]``
+back-compat — see #1252).
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import logging
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.hitl import format_hitl_preview, hitl_guard
 from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import (
@@ -28,16 +31,16 @@ _CRM_UNAVAILABLE = "CRM недоступен. Обратитесь к админ
 
 
 def _get_kommo(config: RunnableConfig):
-    """Get KommoClient from config context."""
-    ctx = config.get("configurable", {}).get("bot_context")
+    """Get KommoClient from the resolved BotContext."""
+    ctx = get_bot_context(None, config)
     if ctx and ctx.kommo_client:
         return ctx.kommo_client
     return None
 
 
 def _get_ctx(config: RunnableConfig):
-    """Get BotContext from config."""
-    return config.get("configurable", {}).get("bot_context")
+    """Get BotContext via the SDK-native helper (runtime.context preferred)."""
+    return get_bot_context(None, config)
 
 
 # --- READ tools ---
