@@ -1,7 +1,9 @@
 """Utility tools: mortgage_calculator, daily_summary, handoff (#445).
 
 All tools follow the @tool + @observe + RunnableConfig DI pattern from crm_tools.py.
-Dependencies injected via config["configurable"]["bot_context"].
+Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+(SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
+— see #1252).
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.observability import get_client, observe
 
 
@@ -22,8 +25,8 @@ _DEFAULT_SUMMARY_MODEL = "claude-haiku-4-5"
 
 
 def _get_ctx(config: RunnableConfig) -> Any | None:
-    """Get BotContext from config."""
-    return config.get("configurable", {}).get("bot_context")
+    """Get BotContext via the SDK-native helper (runtime.context preferred)."""
+    return get_bot_context(None, config)
 
 
 def _fmt(value: float) -> str:
