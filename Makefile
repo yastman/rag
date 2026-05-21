@@ -679,7 +679,7 @@ docs-check: ## Check Markdown relative links for broken targets
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
 
-pre-push: lint format-check type-check ## Pre-push gate (lint + format-check + types)
+pre-push: lint format-check ## Pre-push gate (lint + format-check)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
 
 fix: lint-fix format ## Fix all auto-fixable issues
