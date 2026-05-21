@@ -7,18 +7,71 @@ import { PromptRow } from "../components/PromptRow";
 import { ChatInput } from "../components/ChatInput";
 import type { Question } from "../types";
 
+type QuestionSheetState =
+  | { status: "loading" }
+  | { status: "ready"; question: Question }
+  | { status: "not-found" }
+  | { status: "error" };
+
 export function QuestionSheet() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [question, setQuestion] = useState<Question | null>(null);
+  const [state, setState] = useState<QuestionSheetState>({ status: "loading" });
 
   useEffect(() => {
-    fetchConfig().then((c) => {
-      setQuestion(c.questions.find((q: Question) => q.id === id) ?? null);
-    });
+    let active = true;
+    setState({ status: "loading" });
+
+    fetchConfig()
+      .then((c) => {
+        if (!active) return;
+        const question = c.questions.find((q: Question) => q.id === id);
+        setState(question ? { status: "ready", question } : { status: "not-found" });
+      })
+      .catch(() => {
+        if (active) setState({ status: "error" });
+      });
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
-  if (!question) return null;
+  if (state.status === "loading") {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+        Загрузка...
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <BottomSheet
+        emoji="!"
+        title="Не удалось загрузить вопросы"
+        description="Проверьте подключение и попробуйте позже."
+        onClose={() => navigate("/")}
+      >
+        {null}
+      </BottomSheet>
+    );
+  }
+
+  if (state.status === "not-found") {
+    return (
+      <BottomSheet
+        emoji="?"
+        title="Вопрос не найден"
+        description="Вернитесь на главную и выберите другой вопрос."
+        onClose={() => navigate("/")}
+      >
+        {null}
+      </BottomSheet>
+    );
+  }
+
+  const { question } = state;
 
   const handlePrompt = (text: string) => {
     sendData.ifAvailable(text);
