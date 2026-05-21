@@ -1,17 +1,31 @@
 """Shared phone keyboard and validation utilities.
 
 Used by phone_collector FSM and viewing dialog to avoid duplication.
+
+Phone normalization itself lives in ``telegram_bot.phone_utils`` (UI-free) so
+that ``mini_app/phone.py`` can reuse it without dragging in aiogram. This
+module re-exports ``normalize_phone`` / ``validate_phone`` for backward
+compatibility with existing callers.
 """
 
 from __future__ import annotations
 
 import re
 
-import phonenumbers
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
+from telegram_bot.phone_utils import normalize_phone, validate_phone
 
-_PHONE_PATTERN = re.compile(r"^\+?\d{7,15}$")
+
+__all__ = [
+    "build_phone_keyboard",
+    "is_phone_attempt",
+    "is_phone_cancel",
+    "normalize_phone",
+    "validate_phone",
+]
+
+
 _DIGITS_RE = re.compile(r"\D")
 _CANCEL_TEXTS = frozenset({"❌ отмена", "отмена"})
 
@@ -37,22 +51,3 @@ def is_phone_attempt(text: str) -> bool:
     """Check if text looks like a phone number attempt (5+ digits)."""
     digits = _DIGITS_RE.sub("", text)
     return len(digits) >= 5
-
-
-def validate_phone(text: str) -> bool:
-    """Validate phone number format (7-15 digits, optional +)."""
-    cleaned = re.sub(r"[\s\-\(\)]", "", text)
-    return bool(_PHONE_PATTERN.match(cleaned))
-
-
-def normalize_phone(raw: str, default_region: str = "BG") -> str | None:
-    """Parse and normalize phone to E164 format. Returns None if invalid."""
-    cleaned = re.sub(r"[\s\-\(\)]", "", raw)
-    for region in (default_region, None):
-        try:
-            parsed = phonenumbers.parse(cleaned, region)
-            if phonenumbers.is_valid_number(parsed):
-                return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.NumberParseException:
-            continue
-    return None
