@@ -11,6 +11,13 @@ from src.config import Settings
 from .base import ContextualizedChunk, ContextualizeProvider
 
 
+# Claude pricing — USD per 1M tokens. Per-model rates are application-level
+# concerns (the SDK does not surface pricing); centralized here so the shared
+# cost helper in base.py drives the math (issue #1234).
+_CLAUDE_INPUT_PRICE_PER_MTOK = 5.0
+_CLAUDE_OUTPUT_PRICE_PER_MTOK = 15.0
+
+
 def _extract_claude_text(content_blocks: Any) -> str:
     """Extract plain text from Anthropic content blocks."""
     parts: list[str] = []
@@ -27,7 +34,7 @@ class ClaudeContextualizer(ContextualizeProvider):
 
     Features:
     - Prompt caching for 90% cost reduction
-    - Token tracking for cost estimation
+    - Token tracking for cost estimation (cache-aware after #1234)
     - Async/sync support
     - Automatic fallback on failures
 
@@ -83,7 +90,10 @@ class ClaudeContextualizer(ContextualizeProvider):
         """
         Contextualize a single chunk using Claude.
 
-        Implements prompt caching for cost efficiency.
+        Implements prompt caching for cost efficiency. Token + cost
+        accounting honours Anthropic's SDK contract that
+        ``Total input tokens = input_tokens + cache_creation_input_tokens
+        + cache_read_input_tokens`` (issue #1234).
         """
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
@@ -105,12 +115,28 @@ class ClaudeContextualizer(ContextualizeProvider):
             messages=[{"role": "user", "content": user_prompt}],
         )
 
-        # Track tokens and cost
-        self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
-        # Rough cost estimation: $5/MTok input, $15/MTok output
-        self.total_cost += (
-            response.usage.input_tokens * 5 + response.usage.output_tokens * 15
-        ) / 1_000_000
+        # SDK-correct accounting (issue #1234):
+        #   Total input = input + cache_creation_input + cache_read_input
+        # The previous code summed only input_tokens + output_tokens which
+        # silently undercounted whenever prompt caching was active.
+        usage = response.usage
+        total_input_tokens = self._total_input_tokens_from_anthropic_usage(usage)
+        output_tokens = self._coerce_token_count(getattr(usage, "output_tokens", 0))
+        cache_creation_tokens = self._coerce_token_count(
+            getattr(usage, "cache_creation_input_tokens", 0)
+        )
+        cache_read_tokens = self._coerce_token_count(getattr(usage, "cache_read_input_tokens", 0))
+        regular_input_tokens = self._coerce_token_count(getattr(usage, "input_tokens", 0))
+
+        self.total_tokens += total_input_tokens + output_tokens
+        self.total_cost += self._calculate_token_cost(
+            input_tokens=regular_input_tokens,
+            output_tokens=output_tokens,
+            input_price_per_mtok=_CLAUDE_INPUT_PRICE_PER_MTOK,
+            output_price_per_mtok=_CLAUDE_OUTPUT_PRICE_PER_MTOK,
+            cache_creation_tokens=cache_creation_tokens,
+            cache_read_tokens=cache_read_tokens,
+        )
 
         summary = _extract_claude_text(response.content)
         if not summary.strip():
@@ -147,8 +173,11 @@ class ClaudeContextualizer(ContextualizeProvider):
             messages=[{"role": "user", "content": user_prompt}],
         )
 
-        # Track tokens
-        self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
+        # SDK-correct accounting (issue #1234) — also covers the sync path.
+        usage = response.usage
+        total_input_tokens = self._total_input_tokens_from_anthropic_usage(usage)
+        output_tokens = self._coerce_token_count(getattr(usage, "output_tokens", 0))
+        self.total_tokens += total_input_tokens + output_tokens
 
         return ContextualizedChunk(
             original_text=text,
