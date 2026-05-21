@@ -102,11 +102,12 @@ class TestRunSmokeTestEngineSelection:
                 self.payload = {"article_number": article}
 
         class _FakeEngine:
-            def __init__(self, collection_name: str) -> None:
+            def __init__(self, collection_name: str, embedding_model: object) -> None:
                 captured["collection_name"] = collection_name
+                captured["embedding_model"] = embedding_model
                 captured["query_count"] = 0
 
-            def search(self, query: str, limit: int = 10):  ***REMOVED*** noqa: D401, ARG002
+            def search(self, query: str, top_k: int = 10):  ***REMOVED*** noqa: D401, ARG002
                 captured["query_count"] = int(captured.get("query_count", 0)) + 1
                 ***REMOVED*** Always return an empty list — we only care about wiring here.
                 return []
@@ -114,6 +115,7 @@ class TestRunSmokeTestEngineSelection:
         ***REMOVED*** Patch the symbol in the smoke_test module's namespace.
         smoke_module = sys.modules["src.evaluation.smoke_test"]
         monkeypatch.setattr(smoke_module, "BaselineSearchEngine", _FakeEngine)
+        monkeypatch.setattr(smoke_module, "_load_embedding_model", lambda: "fake-bge-m3")
 
         result = run_smoke_test(
             engine_name="baseline",
@@ -122,6 +124,7 @@ class TestRunSmokeTestEngineSelection:
         )
 
         assert captured["collection_name"] == "unit-test-collection"
+        assert captured["embedding_model"] == "fake-bge-m3"
         ***REMOVED*** quick=True selects the first 10 queries.
         assert captured["query_count"] == 10
         assert result["engine"] == "baseline"
@@ -141,10 +144,11 @@ class TestRunSmokeTestSloEvaluation:
                 self.payload = {"article_number": article}
 
         class _PerfectEngine:
-            def __init__(self, collection_name: str) -> None:
+            def __init__(self, collection_name: str, embedding_model: object) -> None:
                 self.collection_name = collection_name
+                self.embedding_model = embedding_model
 
-            def search(self, query: str, limit: int = 10):  ***REMOVED*** noqa: ARG002
+            def search(self, query: str, top_k: int = 10):  ***REMOVED*** noqa: ARG002
                 ***REMOVED*** Inverse-lookup the expected article from the query string is
                 ***REMOVED*** heavy — instead, return all 30 expected articles in order so
                 ***REMOVED*** the first hit matches whichever query came in. ``run_smoke_test``
@@ -164,6 +168,7 @@ class TestRunSmokeTestSloEvaluation:
         _PerfectEngine.next_expected = [int(q["expected_article"]) for q in SMOKE_QUERIES[:10]]
 
         monkeypatch.setattr(smoke_module, "BaselineSearchEngine", _PerfectEngine)
+        monkeypatch.setattr(smoke_module, "_load_embedding_model", lambda: object())
 
         result = run_smoke_test(
             engine_name="baseline",
@@ -187,14 +192,15 @@ class TestSmokeTestResultStructure:
 
     def test_result_dict_keys(self, monkeypatch) -> None:
         class _FakeEngine:
-            def __init__(self, collection_name: str) -> None:
+            def __init__(self, collection_name: str, embedding_model: object) -> None:
                 pass
 
-            def search(self, query: str, limit: int = 10):  ***REMOVED*** noqa: ARG002
+            def search(self, query: str, top_k: int = 10):  ***REMOVED*** noqa: ARG002
                 return []
 
         smoke_module = sys.modules["src.evaluation.smoke_test"]
         monkeypatch.setattr(smoke_module, "BaselineSearchEngine", _FakeEngine)
+        monkeypatch.setattr(smoke_module, "_load_embedding_model", lambda: object())
 
         result = run_smoke_test(engine_name="baseline", quick=True)
 

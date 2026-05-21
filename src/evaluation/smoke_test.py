@@ -277,6 +277,32 @@ SLO_THRESHOLDS = {
 }
 
 
+def _load_embedding_model() -> Any:
+    """Load the BGE-M3 model required by evaluation search engines."""
+    try:
+        from FlagEmbedding import BGEM3FlagModel
+    except ImportError as e:
+        raise ImportError(
+            "FlagEmbedding is not installed. Install ml-local extra: uv sync --extra ml-local"
+        ) from e
+
+    return BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+
+
+def _article_number(result: Any) -> int:
+    """Extract article_number from either evaluation dicts or Qdrant-like points."""
+    if isinstance(result, dict):
+        raw = result.get("article_number", 0)
+    else:
+        payload = getattr(result, "payload", {}) or {}
+        raw = payload.get("article_number", 0) if isinstance(payload, dict) else 0
+
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
 def run_smoke_test(
     engine_name: str = "dbsf_colbert",
     collection: str = "uk_civil_code_v2",
@@ -307,12 +333,17 @@ def run_smoke_test(
 
     ***REMOVED*** Initialize engine
     print(f"\n🔧 Initializing {engine_name} engine...")
+    embedding_model = _load_embedding_model()
+    engine: Any
     if engine_name == "baseline":
-        engine = BaselineSearchEngine(collection_name=collection)
+        engine = BaselineSearchEngine(collection_name=collection, embedding_model=embedding_model)
     elif engine_name == "hybrid":
-        engine = HybridSearchEngine(collection_name=collection)
+        engine = HybridSearchEngine(collection_name=collection, embedding_model=embedding_model)
     elif engine_name == "dbsf_colbert":
-        engine = HybridDBSFColBERTSearchEngine(collection_name=collection)
+        engine = HybridDBSFColBERTSearchEngine(
+            collection_name=collection,
+            embedding_model=embedding_model,
+        )
     else:
         raise ValueError(f"Unknown engine: {engine_name}")
 
@@ -323,16 +354,16 @@ def run_smoke_test(
 
     print(f"\n🏃 Running {len(queries)} smoke queries...")
     for i, query_data in enumerate(queries, 1):
-        query = query_data["query"]
-        expected = int(query_data["expected_article"])  ***REMOVED*** type: ignore[call-overload]
+        query = str(query_data["query"])
+        expected = int(str(query_data["expected_article"]))
 
         start_time = time.time()
-        search_results = engine.search(query, limit=10)
+        search_results = engine.search(query, top_k=10)
         latency_ms = (time.time() - start_time) * 1000
         latencies.append(latency_ms)
 
         ***REMOVED*** Check if expected article in results
-        retrieved_articles = [int(r.payload.get("article_number", 0)) for r in search_results]
+        retrieved_articles = [_article_number(result) for result in search_results]
         precision_at_1 = 1.0 if retrieved_articles and retrieved_articles[0] == expected else 0.0
         recall_at_10 = 1.0 if expected in retrieved_articles else 0.0
 
