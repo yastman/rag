@@ -17,7 +17,6 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | [`query_analyzer.py`](./query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
 | [`generate_response.py`](./generate_response.py) | Canonical response generation with Langfuse prompt management |
 | [`rag_core.py`](./rag_core.py) | Shared RAG core functions (no Langfuse spans, no metrics) |
-| [`llm.py`](./llm.py) | LLM answer generation with streaming and fallback |
 | [`filter_extractor.py`](./filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
 | [`apartment_llm_extractor.py`](./apartment_llm_extractor.py) | LLM-based apartment data extraction |
 | [`ingestion_cocoindex.py`](./ingestion_cocoindex.py) | Thin wrapper around `src.ingestion.service` for bot-side ingestion commands |
