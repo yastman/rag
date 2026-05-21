@@ -126,12 +126,15 @@ async def test_start_expert_with_valid_init_data_succeeds_and_derives_user_id() 
 
     mock_redis = MagicMock()
     mock_redis.set = AsyncMock()
-    published_payloads: list[str] = []
+    # After the Redis Streams migration (#1239) the producer issues xadd
+    # instead of publish; capture the fields dict so the same assertion
+    # (user_id sourced from initData, not the request body) still holds.
+    xadded_fields: list[dict] = []
 
-    async def _capture_publish(_channel: str, payload: str) -> None:
-        published_payloads.append(payload)
+    async def _capture_xadd(_stream: str, fields: dict, **_kwargs) -> None:
+        xadded_fields.append(fields)
 
-    mock_redis.publish = _capture_publish
+    mock_redis.xadd = _capture_xadd
 
     async def _override_redis():
         return mock_redis
@@ -163,10 +166,14 @@ async def test_start_expert_with_valid_init_data_succeeds_and_derives_user_id() 
     assert resp.status_code == 200, (
         f"Expected 200 for valid initData, got {resp.status_code}: {resp.text}"
     )
-    assert published_payloads, "Redis publish must have been called"
-    payload = json.loads(published_payloads[0])
-    assert payload["user_id"] == 99, (
-        f"user_id in published Redis payload must be 99 (from initData), got {payload['user_id']}"
+    assert xadded_fields, "Redis xadd must have been called"
+    fields = xadded_fields[0]
+    # Field values from xadd come back as strings (Redis stream wire format
+    # serialises everything to bytes/str); the security-relevant assertion
+    # is that the value matches the SDK-validated user_id, not the omitted
+    # request body.
+    assert int(fields["user_id"]) == 99, (
+        f"user_id in xadded Redis fields must be 99 (from initData), got {fields['user_id']!r}"
     )
 
 
