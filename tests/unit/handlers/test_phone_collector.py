@@ -18,7 +18,11 @@ from telegram_bot.keyboards.phone_keyboard import normalize_phone, validate_phon
 def test_validate_phone_valid():
     assert validate_phone("+380501234567") is True
     assert validate_phone("+359896759292") is True
-    assert validate_phone("0501234567") is True
+    # "0501234567" was accepted by the old digit-count regex (^\\+?\\d{7,15}$)
+    # but is ambiguous without a country code: phonenumbers.is_valid_number
+    # rejects it because national-only numbers are not E.164-resolvable for
+    # the default BG region. Callers must supply an international format.
+    assert validate_phone("0501234567") is False  # national-only, no country code
 
 
 def test_validate_phone_invalid():
