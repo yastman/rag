@@ -54,13 +54,6 @@ loki.process "pipeline" {
     }
   }
 
-  // Promote extracted level to label
-  stage.labels {
-    values = {
-      level = "",
-    }
-  }
-
   // Static labels for environment identification
   stage.static_labels {
     values = {

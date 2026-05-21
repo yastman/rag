@@ -130,6 +130,11 @@ def setup_logging(
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
+    # Attach observability context filter so contextvar fields propagate to logs
+    from src.observability.log_context import ObservabilityLogFilter
+
+    root_logger.addFilter(ObservabilityLogFilter())
+
     # Add file handler if specified
     if log_file:
         file_handler = logging.FileHandler(log_file, encoding="utf-8")

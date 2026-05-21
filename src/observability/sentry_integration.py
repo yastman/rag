@@ -43,7 +43,7 @@ def initialize_sentry(
 
     When *dsn* is empty the call is a no-op and no network requests are made.
     """
-    if not dsn:
+    if not dsn or not isinstance(dsn, str) or not dsn.strip():
         logger.info("Sentry disabled (SENTRY_DSN is empty)")
         return
 

@@ -83,8 +83,8 @@ class TestJSONFormatter:
         assert "exception" in data
         assert "ValueError: Test error" in data["exception"]
 
-    def test_format_record_with_user_id(self):
-        """Test formatting record with user_id extra field."""
+    def test_format_record_does_not_propagate_user_id(self):
+        """Test that user_id (PII) is NOT included in formatted output."""
         formatter = JSONFormatter()
 
         record = logging.LogRecord(
@@ -101,10 +101,10 @@ class TestJSONFormatter:
         result = formatter.format(record)
         data = json.loads(result)
 
-        assert data["user_id"] == 12345
+        assert "user_id" not in data
 
-    def test_format_record_with_query(self):
-        """Test formatting record with query extra field."""
+    def test_format_record_does_not_propagate_query(self):
+        """Test that query (PII) is NOT included in formatted output."""
         formatter = JSONFormatter()
 
         record = logging.LogRecord(
@@ -121,7 +121,7 @@ class TestJSONFormatter:
         result = formatter.format(record)
         data = json.loads(result)
 
-        assert data["query"] == "apartments in Varna"
+        assert "query" not in data
 
     def test_format_record_with_latency_ms(self):
         """Test formatting record with latency_ms extra field."""
@@ -184,7 +184,7 @@ class TestJSONFormatter:
         assert data["service"] == "voyage"
 
     def test_format_record_with_all_extra_fields(self):
-        """Test formatting record with all extra fields."""
+        """Test formatting record with extra fields (safe metrics only, no PII)."""
         formatter = JSONFormatter()
 
         record = logging.LogRecord(
@@ -205,8 +205,10 @@ class TestJSONFormatter:
         result = formatter.format(record)
         data = json.loads(result)
 
-        assert data["user_id"] == 99
-        assert data["query"] == "test"
+        # PII fields must NOT be propagated
+        assert "user_id" not in data
+        assert "query" not in data
+        # Safe operational metrics are propagated
         assert data["latency_ms"] == 50.0
         assert data["cache_hit"] is False
         assert data["service"] == "qdrant"
