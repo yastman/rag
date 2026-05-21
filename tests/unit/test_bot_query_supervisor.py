@@ -16,17 +16,17 @@ from telegram_bot.config import BotConfig
 
 
 def _make_config(**overrides) -> BotConfig:
-    defaults = dict(
-        telegram_token="test-token",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        redis_url="redis://localhost:6379",
-        rerank_provider="none",
-        content_filter_enabled=True,
-        guard_mode="hard",
-    )
+    defaults = {
+        "telegram_token": "test-token",
+        "llm_api_key": "llm-key",
+        "llm_base_url": "https://api.example.com/v1",
+        "llm_model": "gpt-4o-mini",
+        "qdrant_url": "http://localhost:6333",
+        "redis_url": "redis://localhost:6379",
+        "rerank_provider": "none",
+        "content_filter_enabled": True,
+        "guard_mode": "hard",
+    }
     defaults.update(overrides)
     return BotConfig(_env_file=None, **defaults)
 
@@ -491,7 +491,7 @@ class TestQuerySupervisorSemanticCache:
                 "telegram_bot.bot._get_or_compute_pre_agent_dense",
                 new_callable=AsyncMock,
                 return_value=[0.1] * 768,
-            ) as mock_dense,
+            ),
             patch("telegram_bot.bot.create_bot_agent") as mock_agent_factory,
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
