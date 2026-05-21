@@ -16,6 +16,11 @@ from .base import ContextualizedChunk, ContextualizeProvider
 # that retry budget without duplicating the policy.
 _OPENAI_MAX_RETRIES = 3
 
+# OpenAI gpt-4 pricing — USD per 1M tokens. Centralized so issue #1234's
+# shared cost helper in base.py can drive the math.
+_OPENAI_INPUT_PRICE_PER_MTOK = 5.0
+_OPENAI_OUTPUT_PRICE_PER_MTOK = 15.0
+
 
 class OpenAIContextualizer(ContextualizeProvider):
     """
@@ -30,8 +35,9 @@ class OpenAIContextualizer(ContextualizeProvider):
     client parameter (#1651). No Tenacity decorator wraps the per-call path.
     """
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, system_prompt: str | None = None) -> None:
         """Initialize OpenAI contextualizer."""
+        super().__init__(system_prompt=system_prompt)
         self.settings = settings or Settings()
         self.client = AsyncOpenAI(
             api_key=self.settings.openai_api_key,
@@ -73,7 +79,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         cover RateLimitError, APIStatusError (>=500), connection errors,
         408 and 409. No additional retry layer is required.
         """
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "gpt-4o-mini"
 
@@ -87,15 +93,18 @@ class OpenAIContextualizer(ContextualizeProvider):
             ],
         )
 
-        # Track tokens and cost
+        # Track tokens and cost via the shared helper (issue #1234).
         usage = response.usage
         if usage is not None:
-            total_tokens = int(usage.total_tokens or 0)
             prompt_tokens = int(usage.prompt_tokens or 0)
             completion_tokens = int(usage.completion_tokens or 0)
-            self.total_tokens += total_tokens
-            # OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
-            self.total_cost += (prompt_tokens * 5 + completion_tokens * 15) / 1_000_000
+            self.total_tokens += int(usage.total_tokens or 0)
+            self.total_cost += self._calculate_token_cost(
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                input_price_per_mtok=_OPENAI_INPUT_PRICE_PER_MTOK,
+                output_price_per_mtok=_OPENAI_OUTPUT_PRICE_PER_MTOK,
+            )
 
         return ContextualizedChunk(
             original_text=text,
@@ -115,7 +124,7 @@ class OpenAIContextualizer(ContextualizeProvider):
 
         SDK-native retries via ``max_retries`` on the sync OpenAI client.
         """
-        system_prompt = self.get_system_prompt()
+        system_prompt = self.system_prompt
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "gpt-4o-mini"
 

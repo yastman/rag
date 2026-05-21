@@ -37,7 +37,7 @@ def require_live_services(request):
         resp = httpx.get(f"{qdrant_url}/collections", timeout=2)
         if resp.status_code != 200:
             pytest.skip("Qdrant not available")
-    except Exception:
+    except (httpx.HTTPError, OSError):
         pytest.skip("Qdrant not available")
 
     # Check Redis
@@ -46,7 +46,7 @@ def require_live_services(request):
             client = redis.from_url(redis_url, socket_connect_timeout=2)
             await client.ping()
             await client.aclose()
-        except Exception:
+        except (redis.RedisError, OSError):
             pytest.skip("Redis not available")
 
     asyncio.run(check_redis())

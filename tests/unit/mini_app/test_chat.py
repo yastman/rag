@@ -36,7 +36,7 @@ def _clear_redis_override() -> None:
     app.dependency_overrides.pop(get_validated_init_data, None)
 
 
-async def test_health_endpoint():
+async def test_chat_health_endpoint():
     """Health check should return ok."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/health")

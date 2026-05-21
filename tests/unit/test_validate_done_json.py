@@ -8,12 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from scripts.validate_done_json import extra_fields, validate
+
 
 SCRIPT = Path("scripts/validate_done_json.py")
-
-# Import the validate function directly for unit tests.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from validate_done_json import extra_fields, validate
 
 
 def _valid_done() -> dict:

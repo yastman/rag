@@ -38,9 +38,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Open the Redis client on startup and close it on shutdown.
 
     The Mini App backend uses Redis for short-lived deeplink payloads
-    (``miniapp:q:<uuid>``) and pub/sub notifications to the bot. Owning
-    the connection lifecycle here (instead of a module-level lazy
-    global) ensures graceful close on process shutdown and matches the
+    (``miniapp:q:<uuid>``) and a ``miniapp:start:stream`` consumer-group
+    Stream that the bot reads to react to deep-link launches (#1239 —
+    replaces the legacy ``miniapp:start`` pub/sub channel). Owning the
+    connection lifecycle here (instead of a module-level lazy global)
+    ensures graceful close on process shutdown and matches the
     FastAPI-native pattern (#1645).
     """
     import redis.asyncio as aioredis
@@ -225,17 +227,21 @@ async def start_expert(
             raise HTTPException(status_code=500, detail="BOT_USERNAME not configured")
         start_link = f"https://t.me/{bot_username}?start=q_{uid}"
 
-        # Notify bot via Redis pub/sub — bot calls answerWebAppQuery + creates
-        # topic + RAG.
-        await redis.publish(
-            "miniapp:start",
-            json.dumps(
-                {
-                    "uuid": uid,
-                    "user_id": user_id,
-                    "query_id": request.query_id,
-                }
-            ),
+        # Notify bot via Redis Streams (#1239) — bot consumer group acks the
+        # entry after creating the topic and triggering RAG. Streams replace
+        # the legacy fire-and-forget ``redis.publish`` so messages survive a
+        # bot restart and poison entries don't redeliver forever. ``maxlen``
+        # bounds the stream so a stuck consumer can't grow it without limit;
+        # ``approximate=True`` is the canonical pattern for cheap trimming.
+        await redis.xadd(
+            "miniapp:start:stream",
+            {
+                "uuid": uid,
+                "user_id": str(user_id),
+                "query_id": str(request.query_id or ""),
+            },
+            maxlen=1000,
+            approximate=True,
         )
 
         # Curated success metadata — no raw UUID, no full URL.

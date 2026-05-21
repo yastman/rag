@@ -114,7 +114,7 @@ async def test_qdrant_hybrid_search_execution(require_live_services, qdrant_serv
             dense_size = int(getattr(first, "size", 1024))
         else:
             dense_size = int(getattr(dense_cfg, "size", 1024))
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         dense_size = 1024
 
     results = await qdrant_service.hybrid_search_rrf(

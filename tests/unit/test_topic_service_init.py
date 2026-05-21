@@ -12,7 +12,7 @@ async def test_bot_has_topic_service_attr(monkeypatch):
 
     config = BotConfig(
         _env_file=None,
-        telegram_token="123456789:AABBCCDDEEFFaabbccddeeff-1234567890",
+        telegram_token="MOCKED_TELEGRAM_TOKEN_FOR_UNIT_TEST",
         llm_api_key="test",
         voyage_api_key="test",
     )
