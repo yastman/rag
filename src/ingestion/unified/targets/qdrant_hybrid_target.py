@@ -168,10 +168,11 @@ class QdrantHybridTargetConnector:
         qdrant_url, qdrant_api_key, voyage_api_key, voyage_model,
         use_local_embeddings, bge_m3_url, bge_m3_timeout, bge_m3_concurrency.
         """
+        voyage_api_key = spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", "")
         writer_key = (
             spec.qdrant_url,
             spec.qdrant_api_key,
-            spec.voyage_api_key or "",
+            voyage_api_key,
             spec.voyage_model,
             spec.use_local_embeddings,
             spec.bge_m3_url,
@@ -184,7 +185,7 @@ class QdrantHybridTargetConnector:
                     cls._writer = QdrantHybridWriter(
                         qdrant_url=spec.qdrant_url,
                         qdrant_api_key=spec.qdrant_api_key,
-                        voyage_api_key=spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", ""),
+                        voyage_api_key=voyage_api_key,
                         voyage_model=spec.voyage_model,
                         use_local_embeddings=spec.use_local_embeddings,
                         bge_m3_url=spec.bge_m3_url,

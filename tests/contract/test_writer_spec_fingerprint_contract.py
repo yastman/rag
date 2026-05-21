@@ -23,10 +23,12 @@ Tests are split into two sections:
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TARGET_MODULE_PATH = (
@@ -83,9 +85,8 @@ def test_get_writer_contains_key_comparison() -> None:
 ***REMOVED*** (requires cocoindex ingest extra)
 ***REMOVED*** ---------------------------------------------------------------------------
 
-_cocoindex = pytest.importorskip.__module__  ***REMOVED*** marker to keep import visible
 requires_cocoindex = pytest.mark.skipif(
-    not __import__("importlib.util", fromlist=["find_spec"]).find_spec("cocoindex"),
+    importlib.util.find_spec("cocoindex") is None,
     reason="cocoindex not installed (ingest extra)",
 )
 
@@ -135,6 +136,7 @@ def _call_get_writer(spec, writer_instance):
         return QdrantHybridTargetConnector._get_writer(spec)
 
 
+@requires_cocoindex
 def test_same_spec_returns_cached_writer() -> None:
     """Calling _get_writer twice with identical spec must return the same
     writer instance (cache hit)."""
@@ -152,6 +154,7 @@ def test_same_spec_returns_cached_writer() -> None:
     assert result1 is writer_a
 
 
+@requires_cocoindex
 def test_different_embedding_mode_produces_new_writer() -> None:
     """Calling _get_writer with a spec that differs only in
     ``use_local_embeddings`` must produce a fresh writer instance."""
@@ -171,6 +174,7 @@ def test_different_embedding_mode_produces_new_writer() -> None:
     )
 
 
+@requires_cocoindex
 def test_different_voyage_model_produces_new_writer() -> None:
     """Calling _get_writer with a different ``voyage_model`` must produce a
     fresh writer instance."""
@@ -187,4 +191,31 @@ def test_different_voyage_model_produces_new_writer() -> None:
     assert result_lite is writer_v3_lite
     assert result_v3 is not result_lite, (
         "_get_writer must not reuse a cached writer when voyage_model changes."
+    )
+
+
+@requires_cocoindex
+def test_env_voyage_api_key_change_produces_new_writer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When spec omits voyage_api_key, the cache key must include the env fallback.
+
+    QdrantHybridWriter receives ``spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", "")``.
+    The fingerprint must use that same effective value, otherwise a process that
+    changes the env key between runs can silently reuse the old Voyage client.
+    """
+    spec = _make_spec(use_local_embeddings=False)
+
+    writer_old_key = MagicMock(name="writer_old_key")
+    writer_new_key = MagicMock(name="writer_new_key")
+
+    monkeypatch.setenv("VOYAGE_API_KEY", "old-key")
+    result_old = _call_get_writer(spec, writer_old_key)
+
+    monkeypatch.setenv("VOYAGE_API_KEY", "new-key")
+    result_new = _call_get_writer(spec, writer_new_key)
+
+    assert result_old is writer_old_key
+    assert result_new is writer_new_key
+    assert result_old is not result_new, (
+        "_get_writer must not reuse a cached writer when the effective "
+        "VOYAGE_API_KEY fallback changes."
     )
