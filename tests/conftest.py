@@ -3,9 +3,7 @@
 import logging
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 from dotenv import load_dotenv
 
@@ -60,36 +58,3 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         for directory, marker in path_to_marker.items():
             if directory in item_path.parents:
                 item.add_marker(getattr(pytest.mark, marker))
-
-
-# =============================================================================
-# HTTP MOCKING FIXTURES
-# =============================================================================
-
-
-@pytest.fixture
-def mock_httpx_client():
-    """Mock httpx.AsyncClient for HTTP tests."""
-    with patch("httpx.AsyncClient") as mock_class:
-        mock_client = AsyncMock()
-        mock_class.return_value = mock_client
-        yield mock_client
-
-
-@pytest.fixture
-def mock_httpx_response():
-    """Factory for creating mock httpx.Response."""
-
-    def _create(status_code=200, json_data=None, text=""):
-        response = MagicMock(spec=httpx.Response)
-        response.status_code = status_code
-        response.json.return_value = json_data or {}
-        response.text = text
-        response.raise_for_status = MagicMock()
-        if status_code >= 400:
-            response.raise_for_status.side_effect = httpx.HTTPStatusError(
-                "Error", request=MagicMock(), response=response
-            )
-        return response
-
-    return _create
