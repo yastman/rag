@@ -261,7 +261,10 @@ def _setup_langfuse() -> None:
         auth = base64.b64encode(f"{public_key}:{secret_key}".encode()).decode()
         exporter = OTLPSpanExporter(
             endpoint=f"{host.rstrip('/')}/api/public/otel",
-            headers={"Authorization": f"Basic {auth}"},
+            headers={
+                "Authorization": f"Basic {auth}",
+                "x-langfuse-ingestion-version": "4",
+            },
         )
         provider = TracerProvider()
         provider.add_span_processor(BatchSpanProcessor(exporter))
