@@ -263,13 +263,32 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         data_type="BOOLEAN",
     )
 
-    ***REMOVED*** Checkpointer overhead proxy (***REMOVED***159)
+    ***REMOVED*** Checkpointer overhead proxy (***REMOVED***159) — derived metric, kept for backwards
+    ***REMOVED*** compatibility. Direct checkpointer_overhead_ms (***REMOVED***1258) is preferred when
+    ***REMOVED*** available and emitted alongside.
     if "checkpointer_overhead_proxy_ms" in result:
         score(
             lf,
             trace_id,
             name="checkpointer_overhead_proxy_ms",
             value=float(result["checkpointer_overhead_proxy_ms"]),
+        )
+    ***REMOVED*** Direct checkpointer overhead (***REMOVED***1258) — sum of timed aput/aget/aput_writes/aget_tuple
+    ***REMOVED*** durations from InstrumentedCheckpointer. Includes only Redis I/O time, not
+    ***REMOVED*** Pregel framework or @observe decorator overhead like the proxy does.
+    if "checkpointer_overhead_ms" in result:
+        score(
+            lf,
+            trace_id,
+            name="checkpointer_overhead_ms",
+            value=float(result["checkpointer_overhead_ms"]),
+        )
+    if "checkpointer_op_count" in result:
+        score(
+            lf,
+            trace_id,
+            name="checkpointer_op_count",
+            value=float(result["checkpointer_op_count"]),
         )
 
     ***REMOVED*** --- Nurturing + funnel analytics (***REMOVED***390) ---
