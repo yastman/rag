@@ -3,12 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
-
 from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_lead_score
 
 
-@pytest.mark.asyncio
 async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
     user_service = AsyncMock()
     user_service.get_or_create = AsyncMock(return_value=SimpleNamespace(id=7))
@@ -72,7 +69,6 @@ async def test_persist_and_sync_calls_hot_lead_notifier_for_hot_score():
     hot_lead_notifier.notify_if_hot.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_persist_and_sync_skips_if_runtime_services_missing():
     result = await persist_and_sync_funnel_lead_score(
         telegram_user_id=1,

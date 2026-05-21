@@ -1,7 +1,6 @@
 # tests/unit/keyboards/test_property_card.py
 """Tests for property card rendering."""
 
-import pytest
 
 from telegram_bot.keyboards.property_card import (
     build_card_buttons,
@@ -191,7 +190,6 @@ def test_format_property_card_zero_price():
 # --- send_property_card (Task 14 DRY) ---
 
 
-@pytest.mark.asyncio
 async def test_send_property_card_sends_card_text() -> None:
     """send_property_card sends formatted card text to message."""
     from unittest.mock import AsyncMock, patch
@@ -213,7 +211,6 @@ async def test_send_property_card_sends_card_text() -> None:
     assert card_msg is not None
 
 
-@pytest.mark.asyncio
 async def test_send_property_card_checks_favorites_when_service_provided() -> None:
     """send_property_card checks favorites status when service is available."""
     from unittest.mock import AsyncMock, patch

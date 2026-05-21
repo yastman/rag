@@ -5,8 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
@@ -76,7 +74,6 @@ def _make_message() -> MagicMock:
     return message
 
 
-@pytest.mark.asyncio
 async def test_apartment_fast_path_bootstraps_catalog_runtime_and_dialog() -> None:
     bot = _create_bot()
     bot._cache.store_embedding = AsyncMock()
@@ -123,7 +120,6 @@ async def test_apartment_fast_path_bootstraps_catalog_runtime_and_dialog() -> No
     dialog_manager.start.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_fast_path_deletes_legacy_footer_before_catalog_controls() -> None:
     bot = _create_bot()
     bot._cache.store_embedding = AsyncMock()

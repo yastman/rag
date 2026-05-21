@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, Mock, patch
 
 import langgraph.checkpoint.redis.aio  # noqa: F401 — ensure submodule for patch()
-import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 
@@ -94,7 +93,6 @@ class TestInstrumentedCheckpointer:
 
         assert wrapped.asetup is saver.asetup
 
-    @pytest.mark.asyncio
     async def test_does_not_record_when_capture_inactive(self):
         """Instrumented methods pass through without timing when capture is off."""
         from telegram_bot.integrations.memory import (
@@ -111,7 +109,6 @@ class TestInstrumentedCheckpointer:
         saver.aput.assert_awaited_once_with("config", "checkpoint", {}, {})
         assert end_checkpoint_overhead_capture() is None
 
-    @pytest.mark.asyncio
     async def test_records_instrumented_method_duration_when_capture_active(self):
         """Capture bucket records direct checkpoint call count and duration."""
         from telegram_bot.integrations.memory import (

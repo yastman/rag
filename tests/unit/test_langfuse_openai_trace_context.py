@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from telegram_bot.graph.config import GraphConfig
 from telegram_bot.services.generate_response import (
     _chat_create_with_optional_name as _svc_chat_create,
@@ -61,7 +59,6 @@ class TestGraphConfigAutoTrace:
 class TestChatCreateWithOptionalName:
     """Unit tests for _chat_create_with_optional_name wrapper."""
 
-    @pytest.mark.asyncio
     async def test_skips_name_when_auto_trace_disabled(self) -> None:
         """Plain client must not receive the Langfuse ``name`` kwarg."""
         mock_response = MagicMock()
@@ -83,7 +80,6 @@ class TestChatCreateWithOptionalName:
         call_kwargs = mock_client.chat.completions.create.await_args.kwargs
         assert "name" not in call_kwargs
 
-    @pytest.mark.asyncio
     async def test_retries_without_name_for_plain_openai_fallback(self) -> None:
         """When a plain client lacks the marker, the TypeError fallback still works."""
         mock_response = MagicMock()
@@ -111,7 +107,6 @@ class TestChatCreateWithOptionalName:
         assert first_call.get("name") == "generate-answer"
         assert "name" not in second_call
 
-    @pytest.mark.asyncio
     async def test_passes_name_for_langfuse_wrapped_client(self) -> None:
         """Wrapped client (default) receives ``name`` on the first attempt."""
         mock_response = MagicMock()
@@ -136,7 +131,6 @@ class TestChatCreateWithOptionalName:
 class TestGenerateResponseObservability:
     """Integration tests verifying explicit generation stays the single source of truth."""
 
-    @pytest.mark.asyncio
     async def test_uses_plain_client_and_updates_generation(self) -> None:
         """When auto_trace=False, generate_response still records usage explicitly."""
         mock_choice = MagicMock()
@@ -186,7 +180,6 @@ class TestGenerateResponseObservability:
             usage_details={"input": 12, "output": 5, "total": 17},
         )
 
-    @pytest.mark.asyncio
     async def test_streaming_plain_client_updates_generation(self) -> None:
         """Streaming path with plain client still records usage via update_current_generation."""
 

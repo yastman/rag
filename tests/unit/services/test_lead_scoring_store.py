@@ -43,7 +43,6 @@ def fake_pool():
     return pool
 
 
-@pytest.mark.asyncio
 async def test_upsert_score_calls_execute(fake_pool):
     store = LeadScoringStore(pool=fake_pool)
 
@@ -65,7 +64,6 @@ async def test_upsert_score_calls_execute(fake_pool):
     assert "ON CONFLICT" in sql
 
 
-@pytest.mark.asyncio
 async def test_list_pending_sync_returns_records(fake_pool):
     store = LeadScoringStore(pool=fake_pool)
 
@@ -79,7 +77,6 @@ async def test_list_pending_sync_returns_records(fake_pool):
     assert "sync_status = 'pending'" in sql
 
 
-@pytest.mark.asyncio
 async def test_mark_synced_updates_status(fake_pool):
     store = LeadScoringStore(pool=fake_pool)
 
@@ -91,7 +88,6 @@ async def test_mark_synced_updates_status(fake_pool):
     assert "'synced'" in sql
 
 
-@pytest.mark.asyncio
 async def test_mark_failed_updates_status(fake_pool):
     store = LeadScoringStore(pool=fake_pool)
 

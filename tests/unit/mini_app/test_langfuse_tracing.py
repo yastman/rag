@@ -121,7 +121,6 @@ class TestMiniAppObserveCoverage:
 class TestPropagateAttributesContract:
     """Funnel must be reconstructable in Langfuse Sessions UI (#1658)."""
 
-    @pytest.mark.asyncio
     async def test_start_expert_propagates_session_user_tags(self):
         """`/api/start-expert` propagates session_id=miniapp-{user_id} + user_id + tags."""
         mock_redis = MagicMock()
@@ -174,7 +173,6 @@ class TestPropagateAttributesContract:
         assert "start-expert" in tags
         assert "consultant" in tags, "expert_id must appear as a tag for funnel filtering"
 
-    @pytest.mark.asyncio
     async def test_phone_propagates_session_user_tags(self):
         mock_kommo = MagicMock()
         mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
@@ -220,7 +218,6 @@ class TestPropagateAttributesContract:
 class TestKommoFailureSpan:
     """CRM outages must be visible in Langfuse, not just as logs (#1658)."""
 
-    @pytest.mark.asyncio
     async def test_kommo_failure_marks_span_error(self):
         mock_lf = MagicMock()
         mock_lf.update_current_span = MagicMock()
@@ -249,7 +246,6 @@ class TestKommoFailureSpan:
             "status_message must be bounded (<=200 chars) to avoid payload bloat in Langfuse."
         )
 
-    @pytest.mark.asyncio
     async def test_kommo_success_does_not_emit_error_span(self):
         mock_kommo = MagicMock()
         mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
@@ -273,7 +269,6 @@ class TestKommoFailureSpan:
         ]
         assert not error_calls, "Kommo success must not emit ERROR-level span"
 
-    @pytest.mark.asyncio
     async def test_no_phone_or_name_in_curated_output(self):
         """Curated `update_current_span(output=...)` MUST NOT contain PII (#1658)."""
         mock_kommo = MagicMock()

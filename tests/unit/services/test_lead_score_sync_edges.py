@@ -5,12 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
-
 from telegram_bot.services.lead_score_sync import sync_pending_lead_scores
 
 
-@pytest.mark.asyncio
 async def test_sync_pending_lead_scores_continues_after_failed_record() -> None:
     """sync_pending_lead_scores continues after one failed record and syncs a later record."""
     scoring_store = AsyncMock()

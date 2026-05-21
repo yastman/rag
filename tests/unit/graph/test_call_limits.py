@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import get_type_hints
 from unittest.mock import MagicMock, patch
 
-import pytest
 from langgraph.runtime import Runtime
 
 
@@ -138,7 +137,6 @@ class TestRouteGradeLLMCallLimit:
 class TestNodeLLMCallCountIncrement:
     """Nodes must increment llm_call_count in their state updates."""
 
-    @pytest.mark.asyncio
     async def test_classify_node_increments_llm_call_count(self):
         from langgraph.runtime import Runtime
 
@@ -149,7 +147,6 @@ class TestNodeLLMCallCountIncrement:
         result = await classify_node(state, Runtime(context={}))
         assert result["llm_call_count"] == 1
 
-    @pytest.mark.asyncio
     async def test_rewrite_node_increments_llm_call_count(self):
         from unittest.mock import AsyncMock
 
@@ -181,7 +178,6 @@ class TestNodeLLMCallCountIncrement:
 
         assert result["llm_call_count"] == 3
 
-    @pytest.mark.asyncio
     async def test_rerank_node_increments_llm_call_count(self):
         from telegram_bot.graph.nodes.rerank import rerank_node
 

@@ -44,7 +44,6 @@ def pipeline(mock_llm):
 class TestHybridPipeline:
     """Regex runs first; LLM fills gaps; results are merged into a hybrid source."""
 
-    @pytest.mark.asyncio
     async def test_llm_participates_in_hybrid_merge(self, pipeline, mock_llm) -> None:
         """LLM is invoked for gap-fill and the merged result reports source=hybrid.
 
@@ -65,14 +64,12 @@ class TestHybridPipeline:
         # must override the LLM's rooms=2 in the merged result.
         assert result.hard.rooms == 3
 
-    @pytest.mark.asyncio
     async def test_regex_fallback_on_llm_error(self, pipeline, mock_llm) -> None:
         mock_llm.extract.side_effect = RuntimeError("LLM unavailable")
         result = await pipeline.extract("двушка до 100000")
         assert result.meta.source == "regex"
         assert result.hard.rooms == 3
 
-    @pytest.mark.asyncio
     async def test_cache_hit_skips_llm(self, mock_llm) -> None:
         redis = AsyncMock()
         cached = ApartmentSearchFilters(
@@ -89,7 +86,6 @@ class TestHybridPipeline:
         mock_llm.extract.assert_not_awaited()
         assert result.hard.rooms == 3
 
-    @pytest.mark.asyncio
     async def test_no_llm_uses_regex(self) -> None:
         pipe = ApartmentExtractionPipeline(
             regex_extractor=ApartmentFilterExtractor(),
@@ -98,7 +94,6 @@ class TestHybridPipeline:
         assert result.meta.source == "regex"
         assert result.hard.rooms == 3
 
-    @pytest.mark.asyncio
     async def test_llm_result_cached(self, mock_llm) -> None:
         redis = AsyncMock()
         redis.get.return_value = None

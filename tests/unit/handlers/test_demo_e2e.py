@@ -1,6 +1,5 @@
 """E2E test for full demo flow: button → examples → search."""
 
-import pytest
 
 from telegram_bot.callback_data import DemoCB
 from telegram_bot.handlers.demo_handler import DemoStates
@@ -33,7 +32,6 @@ def test_demo_states_defined():
     assert DemoStates.waiting_query is not None
 
 
-@pytest.mark.asyncio
 async def test_pipeline_regex_fallback_works():
     """Without LLM, pipeline falls back to regex."""
     pipe = ApartmentExtractionPipeline(regex_extractor=ApartmentFilterExtractor())

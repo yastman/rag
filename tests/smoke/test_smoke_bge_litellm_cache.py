@@ -27,7 +27,6 @@ def _bge_payload_or_skip(resp: httpx.Response, endpoint: str) -> dict:
     return payload
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not _is_port_open("localhost", 8000), reason="BGE-M3 not running (8000)")
 async def test_bge_dense_health_contract():
     """BGE-M3 /encode/dense returns dense_vecs."""
@@ -39,7 +38,6 @@ async def test_bge_dense_health_contract():
     assert isinstance(payload["dense_vecs"], list)
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not _is_port_open("localhost", 8000), reason="BGE-M3 not running (8000)")
 async def test_bge_sparse_health_contract():
     """BGE-M3 /encode/sparse returns lexical_weights."""
@@ -51,7 +49,6 @@ async def test_bge_sparse_health_contract():
     assert isinstance(payload["lexical_weights"], list)
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not _is_port_open("localhost", 8000), reason="BGE-M3 not running (8000)")
 async def test_bge_hybrid_health_contract():
     """BGE-M3 /encode/hybrid returns both dense and sparse outputs."""
@@ -63,7 +60,6 @@ async def test_bge_hybrid_health_contract():
     assert "lexical_weights" in payload
 
 
-@pytest.mark.asyncio
 @pytest.mark.skipif(not _is_port_open("localhost", 4000), reason="LiteLLM not running (4000)")
 async def test_litellm_models_health():
     """LiteLLM proxy endpoint is reachable (200 or auth-required 401)."""
@@ -77,7 +73,6 @@ async def test_litellm_models_health():
         assert isinstance(payload["data"], list)
 
 
-@pytest.mark.asyncio
 async def test_semantic_cache_read_write_cycle(cache_service):
     """Semantic cache store+check roundtrip."""
     if cache_service.semantic_cache is None:
@@ -105,7 +100,6 @@ async def test_semantic_cache_read_write_cycle(cache_service):
     assert cached == "smoke pong response"
 
 
-@pytest.mark.asyncio
 async def test_qdrant_hybrid_search_execution(require_live_services, qdrant_service):
     """Qdrant hybrid search path executes without transport/shape errors."""
     try:

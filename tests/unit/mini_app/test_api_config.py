@@ -16,7 +16,6 @@ def _stub_init_data() -> dict:
     return {"user": {"id": 123, "first_name": "Test"}, "auth_date": "0"}
 
 
-@pytest.mark.asyncio
 async def test_get_config_returns_questions_and_experts():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/api/config")
@@ -28,7 +27,6 @@ async def test_get_config_returns_questions_and_experts():
     assert len(data["experts"]) == 5
 
 
-@pytest.mark.asyncio
 async def test_health_endpoint():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/health")
@@ -36,7 +34,6 @@ async def test_health_endpoint():
     assert resp.json()["status"] == "ok"
 
 
-@pytest.mark.asyncio
 async def test_phone_endpoint_returns_json():
     mock_kommo = MagicMock()
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
@@ -57,7 +54,6 @@ async def test_phone_endpoint_returns_json():
     assert resp.json()["success"] is True
 
 
-@pytest.mark.asyncio
 async def test_cors_headers_present():
     """CORS middleware must respond to the configured allowed origin (#1595).
 

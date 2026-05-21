@@ -2,7 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.retrieve import retrieve_node
@@ -335,7 +334,6 @@ class TestRetrieveNode:
         # sparse_embeddings should NOT be called — hybrid provided both
         sparse_embeddings.aembed_query.assert_not_awaited()
 
-    @pytest.mark.asyncio
     async def test_outputs_retrieved_context_for_judge(self):
         """retrieve_node should include curated context snippets for LLM judge."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
@@ -382,7 +380,6 @@ class TestRetrieveNode:
         assert result["retrieved_context"][0]["score"] == 0.9
         assert "Document one content" in result["retrieved_context"][0]["content"]
 
-    @pytest.mark.asyncio
     async def test_cache_hit_includes_retrieved_context(self):
         """Cache hit path should also include retrieved_context."""
         state = make_initial_state(user_id=1, session_id="s1", query="cached query")

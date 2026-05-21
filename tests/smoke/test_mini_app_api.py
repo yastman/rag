@@ -43,7 +43,6 @@ _skip_if_unavailable = pytest.mark.skipif(
 class TestMiniAppApi:
     """End-to-end smoke tests for Mini App FastAPI backend."""
 
-    @pytest.mark.asyncio
     @_skip_if_unavailable
     async def test_health(self) -> None:
         """GET /health returns 200 with status ok."""
@@ -56,7 +55,6 @@ class TestMiniAppApi:
         else:
             assert response.text.strip() == "ok"
 
-    @pytest.mark.asyncio
     @_skip_if_unavailable
     async def test_config_endpoint(self) -> None:
         """GET /api/config returns questions and experts lists."""
@@ -70,7 +68,6 @@ class TestMiniAppApi:
             f"Expected 'questions' or 'experts' in config, got keys: {list(data.keys())}"
         )
 
-    @pytest.mark.asyncio
     @_skip_if_unavailable
     async def test_start_expert_endpoint_exists(self) -> None:
         """POST /api/start-expert is reachable and returns domain-level 404 for unknown expert."""
@@ -82,7 +79,6 @@ class TestMiniAppApi:
         detail = response.json().get("detail")
         assert detail == "Expert not found"
 
-    @pytest.mark.asyncio
     @_skip_if_unavailable
     async def test_phone_endpoint_validation(self) -> None:
         """POST /api/phone with invalid phone returns 422 or error payload."""

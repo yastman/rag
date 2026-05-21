@@ -71,7 +71,6 @@ async def _query(
     return data
 
 
-@pytest.mark.asyncio
 async def test_text_rag_flow_query_to_response() -> None:
     await _require_live_stack()
     session_id = f"e2e-text-{uuid.uuid4().hex[:10]}"
@@ -87,7 +86,6 @@ async def test_text_rag_flow_query_to_response() -> None:
     assert "rerank_applied" in data
 
 
-@pytest.mark.asyncio
 async def test_voice_channel_flow_post_transcription_contract() -> None:
     await _require_live_stack()
     session_id = f"e2e-voice-{uuid.uuid4().hex[:10]}"
@@ -103,7 +101,6 @@ async def test_voice_channel_flow_post_transcription_contract() -> None:
     assert data["query_type"] != ""
 
 
-@pytest.mark.asyncio
 async def test_cache_miss_then_hit_on_repeated_query() -> None:
     await _require_live_stack()
     session_id = f"e2e-cache-{uuid.uuid4().hex[:10]}"
@@ -134,7 +131,6 @@ async def test_cache_miss_then_hit_on_repeated_query() -> None:
         "repeated queries — cache is not promoting recent answers."
     )
 
-@pytest.mark.asyncio
 async def test_multi_turn_conversation_same_session() -> None:
     await _require_live_stack()
     session_id = f"e2e-history-{uuid.uuid4().hex[:10]}"
@@ -157,7 +153,6 @@ async def test_multi_turn_conversation_same_session() -> None:
     assert first["response"] != second["response"]
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "query",
     [s.query for s in SCENARIOS if s.group in {_ScenarioGroup.SEARCH, _ScenarioGroup.EDGE_CASES}][

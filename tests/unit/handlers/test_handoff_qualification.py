@@ -3,8 +3,6 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from telegram_bot.dialogs.handoff import (
     _GOAL_OPTIONS,
     _contact_getter,
@@ -115,7 +113,6 @@ def test_start_qualification_accepts_dialog_manager():
     assert "dialog_manager" in sig.parameters
 
 
-@pytest.mark.asyncio
 async def test_goal_getter_prefers_current_middleware_context():
     hub = create_translator_hub()
     ru_i18n = hub.get_translator_by_locale("ru")
@@ -133,7 +130,6 @@ async def test_goal_getter_prefers_current_middleware_context():
     assert result["goals"][2][0] == "💬 Consultation"
 
 
-@pytest.mark.asyncio
 async def test_contact_getter_prefers_current_middleware_context():
     hub = create_translator_hub()
     ru_i18n = hub.get_translator_by_locale("ru")
@@ -152,7 +148,6 @@ async def test_contact_getter_prefers_current_middleware_context():
     assert result["btn_back"] == "Back"
 
 
-@pytest.mark.asyncio
 async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
     property_bot = MagicMock()
     property_bot._complete_handoff = AsyncMock()
@@ -179,7 +174,6 @@ async def test_on_contact_chat_uses_middleware_locale_for_handoff_completion():
     assert kwargs["locale"] == "en"
 
 
-@pytest.mark.asyncio
 async def test_on_contact_chat_localizes_connecting_message():
     hub = create_translator_hub()
     property_bot = MagicMock()

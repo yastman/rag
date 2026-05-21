@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from telegram_bot.handlers.demo_handler import handle_demo_search_text
 from telegram_bot.services.apartment_models import (
     ApartmentSearchFilters,
@@ -15,7 +13,6 @@ from telegram_bot.services.apartment_models import (
 
 
 class TestDemoSearchText:
-    @pytest.mark.asyncio
     async def test_extracts_and_searches(self) -> None:
         message = AsyncMock()
         message.text = "двушка до 100к"
@@ -57,7 +54,6 @@ class TestDemoSearchText:
         kwargs = state.update_data.await_args.kwargs
         assert kwargs["catalog_runtime"]["total"] == 1
 
-    @pytest.mark.asyncio
     async def test_low_confidence_still_searches(self) -> None:
         message = AsyncMock()
         message.text = "что-нибудь красивое"
@@ -79,7 +75,6 @@ class TestDemoSearchText:
         )
         apartments_service.scroll_with_filters.assert_awaited_once()
 
-    @pytest.mark.asyncio
     async def test_no_pipeline_returns_error(self) -> None:
         message = AsyncMock()
         message.text = "двушка"
@@ -92,7 +87,6 @@ class TestDemoSearchText:
 
 
 class TestDemoSearchEdgeCases:
-    @pytest.mark.asyncio
     async def test_no_text_returns_prompt(self) -> None:
         """Empty text message shows guidance."""
         message = AsyncMock()
@@ -102,7 +96,6 @@ class TestDemoSearchEdgeCases:
         args = message.answer.await_args.args[0]
         assert "текстовое" in args
 
-    @pytest.mark.asyncio
     async def test_no_service_shows_extraction(self) -> None:
         """Pipeline works but no apartments_service — shows extracted filters."""
         message = AsyncMock()
@@ -122,7 +115,6 @@ class TestDemoSearchEdgeCases:
         calls = [c.args[0] for c in message.answer.await_args_list]
         assert any("Распознано" in c or "тестовом" in c for c in calls)
 
-    @pytest.mark.asyncio
     async def test_empty_results_shows_not_found(self) -> None:
         """Search returns 0 results — shows 'not found' message."""
         message = AsyncMock()
@@ -145,7 +137,6 @@ class TestDemoSearchEdgeCases:
         calls = [c.args[0] for c in message.answer.await_args_list]
         assert any("не найдено" in c for c in calls)
 
-    @pytest.mark.asyncio
     async def test_results_formatted_with_details(self) -> None:
         """Search results include complex name, price, area (HTML format)."""
         message = AsyncMock()
@@ -214,7 +205,6 @@ class TestDemoResultsFormatting:
         )
         return [c.args[0] for c in message.answer.await_args_list]
 
-    @pytest.mark.asyncio
     async def test_partial_payload_uses_defaults(self) -> None:
         """Missing payload fields — name shown, format doesn't crash."""
         results = [self._make_result({"complex_name": "Beach"})]
@@ -223,7 +213,6 @@ class TestDemoResultsFormatting:
         assert len(result_msg) == 1
         assert "€" in result_msg[0]
 
-    @pytest.mark.asyncio
     async def test_empty_payload_all_defaults(self) -> None:
         """Result with empty payload renders without crash."""
         results = [self._make_result({})]
@@ -231,14 +220,12 @@ class TestDemoResultsFormatting:
         # format_apartment_list handles empty payload gracefully
         assert len(calls) >= 2  # "Ищу..." + results
 
-    @pytest.mark.asyncio
     async def test_missing_payload_key_graceful(self) -> None:
         """Result dict without 'payload' key doesn't crash."""
         results = [{"score": 0.5, "id": "x"}]
         calls = await self._run(results, 1)
         assert len(calls) >= 2  # "Ищу..." + results
 
-    @pytest.mark.asyncio
     async def test_multiple_results_numbered(self) -> None:
         """Multiple results are numbered 1-N with correct data (HTML bold)."""
         results = [
@@ -262,7 +249,6 @@ class TestDemoResultsFormatting:
         assert "Beta" in text
         assert "Gamma" in text
 
-    @pytest.mark.asyncio
     async def test_large_price_formatted(self) -> None:
         """Price >= 1000 is formatted with space separator in HTML."""
         results = [self._make_result({"complex_name": "X", "price_eur": 250000})]
@@ -271,7 +257,6 @@ class TestDemoResultsFormatting:
         assert "250" in result_msg[0]
         assert "€" in result_msg[0]
 
-    @pytest.mark.asyncio
     async def test_count_header_reflects_total(self) -> None:
         """Header shows total count, not just returned results."""
         results = [self._make_result({"complex_name": "Solo"})]
@@ -279,7 +264,6 @@ class TestDemoResultsFormatting:
         header = [c for c in calls if "42" in c]
         assert len(header) == 1
 
-    @pytest.mark.asyncio
     async def test_max_results_capped(self) -> None:
         """format_apartment_list caps displayed results."""
         results = [self._make_result({"complex_name": f"R{i}"}, rid=str(i)) for i in range(7)]
@@ -290,7 +274,6 @@ class TestDemoResultsFormatting:
 
 
 class TestDemoVoice:
-    @pytest.mark.asyncio
     async def test_voice_transcribed_and_searched(self) -> None:
         from telegram_bot.handlers.demo_handler import handle_demo_search_voice
 
@@ -318,7 +301,6 @@ class TestDemoVoice:
             mock_stt.assert_awaited_once()
             pipeline.extract.assert_awaited_once_with("двушка до 100к")
 
-    @pytest.mark.asyncio
     async def test_voice_stt_fails_shows_error(self) -> None:
         from telegram_bot.handlers.demo_handler import handle_demo_search_voice
 
@@ -334,7 +316,6 @@ class TestDemoVoice:
 
 
 class TestDemoApartmentsWithDynamicExamples:
-    @pytest.mark.asyncio
     async def test_dynamic_examples_from_service(self) -> None:
         from telegram_bot.handlers.demo_handler import handle_demo_apartments
 
@@ -358,7 +339,6 @@ class TestDemoApartmentsWithDynamicExamples:
         assert len(saved) == 4
         assert any("Солнечный берег" in e or "Premier Fort" in e for e in saved)
 
-    @pytest.mark.asyncio
     async def test_dynamic_examples_fallback_on_error(self) -> None:
         from telegram_bot.handlers.demo_handler import handle_demo_apartments
         from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
@@ -378,7 +358,6 @@ class TestDemoApartmentsWithDynamicExamples:
 class TestKwargsPassthrough:
     """Handlers must accept extra kwargs from aiogram DI (user_service, etc.)."""
 
-    @pytest.mark.asyncio
     async def test_demo_search_text_accepts_extra_kwargs(self) -> None:
         """handle_demo_search_text forwards unknown DI kwargs to _run_demo_search."""
         message = AsyncMock()
@@ -403,7 +382,6 @@ class TestKwargsPassthrough:
         )
         pipeline.extract.assert_awaited_once()
 
-    @pytest.mark.asyncio
     async def test_demo_voice_accepts_extra_kwargs(self) -> None:
         """handle_demo_search_voice forwards unknown DI kwargs without error."""
         from telegram_bot.handlers.demo_handler import handle_demo_search_voice
@@ -433,7 +411,6 @@ class TestKwargsPassthrough:
 
 
 class TestDemoStateClear:
-    @pytest.mark.asyncio
     async def test_run_demo_search_clears_fsm_without_dialog_manager(self) -> None:
         """Legacy path (dialog_manager=None) must clear DemoStates.waiting_query."""
         from telegram_bot.handlers.demo_handler import _run_demo_search
@@ -475,7 +452,6 @@ class TestDemoStateClear:
         )
         state.set_state.assert_awaited_once_with(None)
 
-    @pytest.mark.asyncio
     async def test_run_demo_search_clears_fsm_without_dialog_manager_empty_results(self) -> None:
         """Legacy path must clear state even when search returns 0 results."""
         from telegram_bot.handlers.demo_handler import _run_demo_search
@@ -501,7 +477,6 @@ class TestDemoStateClear:
         )
         state.set_state.assert_awaited_once_with(None)
 
-    @pytest.mark.asyncio
     async def test_run_demo_search_preserves_fsm_with_dialog_manager(self) -> None:
         """Dialog-managed path must NOT clear state; dialog handles its own lifecycle."""
         from telegram_bot.handlers.demo_handler import _run_demo_search

@@ -29,7 +29,6 @@ def _bypass_auth_for_phone_tests():
     app.dependency_overrides.pop(get_validated_init_data, None)
 
 
-@pytest.mark.asyncio
 async def test_submit_phone_success():
     mock_kommo = MagicMock()
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
@@ -49,7 +48,6 @@ async def test_submit_phone_success():
     assert resp.json()["success"] is True
 
 
-@pytest.mark.asyncio
 async def test_submit_phone_invalid():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post(
@@ -59,7 +57,6 @@ async def test_submit_phone_invalid():
     assert resp.status_code == 422
 
 
-@pytest.mark.asyncio
 async def test_submit_phone_crm_failure_returns_error_payload():
     """CRM failures must surface as success=False so clients can react.
     Previously every exception was swallowed into success=True, leaving
@@ -72,7 +69,6 @@ async def test_submit_phone_crm_failure_returns_error_payload():
     assert result.get("error") == "crm_submission_failed"
 
 
-@pytest.mark.asyncio
 async def test_phone_endpoint_returns_502_on_crm_failure():
     """The /api/phone endpoint must return a non-2xx status (502 Bad Gateway)
     when the CRM submission fails so the frontend can show a retry/error
@@ -94,7 +90,6 @@ async def test_phone_endpoint_returns_502_on_crm_failure():
     assert body.get("error") == "crm_submission_failed"
 
 
-@pytest.mark.asyncio
 async def test_submit_phone_formats_name():
     mock_kommo = MagicMock()
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
@@ -106,7 +101,6 @@ async def test_submit_phone_formats_name():
     )
 
 
-@pytest.mark.asyncio
 async def test_submit_phone_source_in_lead():
     mock_kommo = MagicMock()
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 7})

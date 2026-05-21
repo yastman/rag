@@ -49,7 +49,6 @@ def fake_pool():
     return pool
 
 
-@pytest.mark.asyncio
 async def test_select_candidates_uses_warm_and_cold_synced_scores(fake_pool):
     svc = NurturingService(pool=fake_pool)
     candidates = await svc.select_candidates(limit=25)
@@ -63,7 +62,6 @@ async def test_select_candidates_uses_warm_and_cold_synced_scores(fake_pool):
     assert "sync_status = 'synced'" in sql
 
 
-@pytest.mark.asyncio
 async def test_enqueue_updates_uses_executemany(fake_pool):
     svc = NurturingService(pool=fake_pool)
     candidates = await svc.select_candidates(limit=25)
@@ -80,7 +78,6 @@ async def test_enqueue_updates_uses_executemany(fake_pool):
     assert len(records) == 2
 
 
-@pytest.mark.asyncio
 async def test_run_once_selects_and_enqueues(fake_pool):
     svc = NurturingService(pool=fake_pool)
     count = await svc.run_once(limit=25)

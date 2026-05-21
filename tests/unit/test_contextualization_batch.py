@@ -47,33 +47,28 @@ class _SimpleContextualizer(ContextualizeProvider):
 class TestContextualizeBatch:
     """contextualize_batch() behaviour via base class."""
 
-    @pytest.mark.asyncio
     async def test_all_chunks_processed(self) -> None:
         ctx = _SimpleContextualizer()
         results = await ctx.contextualize_batch(["a", "b", "c"])
         assert len(results) == 3
         assert all(isinstance(r, ContextualizedChunk) for r in results)
 
-    @pytest.mark.asyncio
     async def test_order_preserved(self) -> None:
         ctx = _SimpleContextualizer()
         chunks = ["first", "second", "third"]
         results = await ctx.contextualize_batch(chunks)
         assert [r.original_text for r in results] == chunks
 
-    @pytest.mark.asyncio
     async def test_empty_input(self) -> None:
         ctx = _SimpleContextualizer()
         assert await ctx.contextualize_batch([]) == []
 
-    @pytest.mark.asyncio
     async def test_article_numbers_generated(self) -> None:
         ctx = _SimpleContextualizer()
         results = await ctx.contextualize_batch(["x", "y"])
         assert results[0].article_number == "chunk_0"
         assert results[1].article_number == "chunk_1"
 
-    @pytest.mark.asyncio
     async def test_query_forwarded(self) -> None:
         received: list[str | None] = []
 
@@ -85,7 +80,6 @@ class TestContextualizeBatch:
         await _Tracker().contextualize_batch(["a", "b"], query="find X")
         assert received == ["find X", "find X"]
 
-    @pytest.mark.asyncio
     async def test_semaphore_limits_concurrency(self) -> None:
         active = 0
         peak = 0
@@ -111,7 +105,6 @@ class TestContextualizeBatch:
         await _TrackingContextualizer().contextualize_batch(chunks, max_concurrency=3)
         assert peak <= 3
 
-    @pytest.mark.asyncio
     async def test_default_max_concurrency_is_five(self) -> None:
         """Smoke-check: 5 chunks with default concurrency = 5 all complete."""
         ctx = _SimpleContextualizer()
@@ -144,7 +137,6 @@ def claude_ctx(mock_settings: MagicMock) -> ClaudeContextualizer:
 class TestClaudeContextualizerBatch:
     """contextualize_batch() on ClaudeContextualizer."""
 
-    @pytest.mark.asyncio
     async def test_all_chunks_processed(self, claude_ctx: ClaudeContextualizer) -> None:
         call_count = 0
 
@@ -163,7 +155,6 @@ class TestClaudeContextualizerBatch:
         assert len(results) == 5
         assert call_count == 5
 
-    @pytest.mark.asyncio
     async def test_order_preserved_with_variable_latency(
         self, claude_ctx: ClaudeContextualizer
     ) -> None:
@@ -183,7 +174,6 @@ class TestClaudeContextualizerBatch:
         results = await claude_ctx.contextualize_batch(chunks)
         assert [r.original_text for r in results] == chunks
 
-    @pytest.mark.asyncio
     async def test_semaphore_limits_concurrency(self, claude_ctx: ClaudeContextualizer) -> None:
         active = 0
         peak = 0
@@ -226,7 +216,6 @@ class TestContextualizeBatchFailureSurfacing:
     failure outcomes.
     """
 
-    @pytest.mark.asyncio
     async def test_failed_chunks_produce_fallback_record_at_correct_index(self) -> None:
         class _FlakyContextualizer(ContextualizeProvider):
             async def contextualize(self, chunks, query=None, context_window=3):
@@ -256,7 +245,6 @@ class TestContextualizeBatchFailureSurfacing:
         assert results[1].contextual_summary == ""
         assert results[3].contextual_summary == ""
 
-    @pytest.mark.asyncio
     async def test_all_failed_returns_fallbacks_not_empty_list(self) -> None:
         class _AlwaysFails(ContextualizeProvider):
             async def contextualize(self, chunks, query=None, context_window=3):

@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from telegram_bot.agents.apartment_tools import apartment_search
 
 
 class TestApartmentSearchTool:
-    @pytest.mark.asyncio
     async def test_returns_formatted_results(self) -> None:
         mock_service = AsyncMock()
         mock_service.search_with_filters.return_value = (
@@ -53,7 +50,6 @@ class TestApartmentSearchTool:
         call_kwargs = mock_service.search_with_filters.await_args
         assert call_kwargs.kwargs["top_k"] == 20
 
-    @pytest.mark.asyncio
     async def test_no_results(self) -> None:
         mock_service = AsyncMock()
         mock_service.search_with_filters.return_value = ([], 0)
@@ -74,7 +70,6 @@ class TestApartmentSearchTool:
 
         assert "нет" in result.lower() or "не найден" in result.lower()
 
-    @pytest.mark.asyncio
     async def test_caches_embeddings_after_compute(self) -> None:
         """Verify cache.store_embedding and store_sparse_embedding are called (#635)."""
         dense = [0.1] * 1024
@@ -99,7 +94,6 @@ class TestApartmentSearchTool:
         ctx.cache.store_embedding.assert_awaited_once_with("студия у моря", dense)
         ctx.cache.store_sparse_embedding.assert_awaited_once_with("студия у моря", sparse)
 
-    @pytest.mark.asyncio
     async def test_cache_store_failure_returns_error_message(self) -> None:
         """If cache store raises, the outer try/except catches and returns error."""
         ctx = MagicMock()
@@ -288,7 +282,6 @@ class TestPipelineFallback:
         extraction.meta.semantic_remainder = semantic_remainder
         return extraction
 
-    @pytest.mark.asyncio
     async def test_pipeline_fallback_extracts_filters(self) -> None:
         """Pipeline extracts rooms/price from query when no explicit filters provided."""
         pipeline = AsyncMock()
@@ -305,7 +298,6 @@ class TestPipelineFallback:
         assert filters["rooms"] == 2
         assert filters["price_eur"]["lte"] == 200000
 
-    @pytest.mark.asyncio
     async def test_pipeline_fallback_skipped_with_explicit_filters(self) -> None:
         """Pipeline is NOT called when rooms is already provided as explicit arg."""
         pipeline = AsyncMock()
@@ -316,7 +308,6 @@ class TestPipelineFallback:
 
         pipeline.extract.assert_not_awaited()
 
-    @pytest.mark.asyncio
     async def test_pipeline_fallback_uses_semantic_remainder(self) -> None:
         """semantic_remainder from extraction replaces original query for embedding."""
         pipeline = AsyncMock()
@@ -329,7 +320,6 @@ class TestPipelineFallback:
 
         ctx.embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("у моря")
 
-    @pytest.mark.asyncio
     async def test_pipeline_fallback_error_continues_without_filters(self) -> None:
         """When pipeline raises, search continues with original query and no extracted filters."""
         pipeline = AsyncMock()
@@ -347,7 +337,6 @@ class TestPipelineFallback:
         assert call_kwargs.kwargs.get("filters") is None
         assert "ошибка" not in result.lower()
 
-    @pytest.mark.asyncio
     async def test_pipeline_fallback_none_when_no_pipeline(self) -> None:
         """When ctx.apartment_pipeline is None, search runs without any extraction."""
         ctx = self._make_ctx(pipeline=None)
