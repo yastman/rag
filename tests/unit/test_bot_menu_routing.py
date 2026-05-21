@@ -15,15 +15,15 @@ from telegram_bot.config import BotConfig
 
 
 def _make_config(**overrides) -> BotConfig:
-    defaults = dict(
-        telegram_token="test-token",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        redis_url="redis://localhost:6379",
-        rerank_provider="none",
-    )
+    defaults = {
+        "telegram_token": "test-token",
+        "llm_api_key": "llm-key",
+        "llm_base_url": "https://api.example.com/v1",
+        "llm_model": "gpt-4o-mini",
+        "qdrant_url": "http://localhost:6333",
+        "redis_url": "redis://localhost:6379",
+        "rerank_provider": "none",
+    }
     defaults.update(overrides)
     return BotConfig(_env_file=None, **defaults)
 
@@ -87,7 +87,6 @@ def _make_state(current_state=None, data=None):
 class TestHandleMenuButton:
     """Test handle_menu_button dispatch routing."""
 
-    @pytest.mark.asyncio()
     async def test_search_dispatches_to_handle_search(self):
         bot = _create_bot()
         message = _make_message("search")
@@ -101,7 +100,6 @@ class TestHandleMenuButton:
 
         bot._handle_search.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_services_dispatches_to_handle_services(self):
         bot = _create_bot()
         message = _make_message("services")
@@ -115,7 +113,6 @@ class TestHandleMenuButton:
 
         bot._handle_services.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_viewing_dispatches_to_handle_viewing(self):
         bot = _create_bot()
         message = _make_message("viewing")
@@ -129,7 +126,6 @@ class TestHandleMenuButton:
 
         bot._handle_viewing.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_bookmarks_dispatches_to_handle_bookmarks(self):
         bot = _create_bot()
         message = _make_message("bookmarks")
@@ -143,7 +139,6 @@ class TestHandleMenuButton:
 
         bot._handle_bookmarks.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_ask_dispatches_to_handle_ask(self):
         bot = _create_bot()
         message = _make_message("ask")
@@ -157,7 +152,6 @@ class TestHandleMenuButton:
 
         bot._handle_ask.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_manager_dispatches_to_handle_manager(self):
         bot = _create_bot()
         message = _make_message("manager")
@@ -171,7 +165,6 @@ class TestHandleMenuButton:
 
         bot._handle_manager.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_none_action_returns_early(self):
         bot = _create_bot()
         message = _make_message("unknown")
@@ -195,7 +188,6 @@ class TestHandleMenuButton:
         bot._handle_ask.assert_not_awaited()
         bot._handle_manager.assert_not_awaited()
 
-    @pytest.mark.asyncio()
     async def test_clears_phone_collector_state(self):
         bot = _create_bot()
         message = _make_message("search")
@@ -209,7 +201,6 @@ class TestHandleMenuButton:
 
         state.clear.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_does_not_clear_non_phone_collection_state(self):
         bot = _create_bot()
         message = _make_message("search")
@@ -232,7 +223,6 @@ class TestHandleMenuButton:
 class TestHandleServiceCallback:
     """Test handle_service_callback actions."""
 
-    @pytest.mark.asyncio()
     async def test_action_back_deletes_message(self):
         bot = _create_bot()
         callback = _make_callback("svc:back")
@@ -246,7 +236,6 @@ class TestHandleServiceCallback:
         callback.message.delete.assert_awaited_once()
         callback.answer.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_action_menu_edits_message(self):
         bot = _create_bot()
         callback = _make_callback("svc:menu")
@@ -266,7 +255,6 @@ class TestHandleServiceCallback:
         callback.message.edit_text.assert_awaited_once()
         callback.answer.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_action_service_with_valid_param(self):
         bot = _create_bot()
         callback = _make_callback("svc:service:insurance")
@@ -290,7 +278,6 @@ class TestHandleServiceCallback:
         callback.message.edit_text.assert_awaited_once()
         callback.answer.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_unparseable_data_answers_callback(self):
         bot = _create_bot()
         callback = _make_callback("garbage")
@@ -305,7 +292,6 @@ class TestHandleServiceCallback:
         callback.message.edit_text.assert_not_awaited()
         callback.message.delete.assert_not_awaited()
 
-    @pytest.mark.asyncio()
     async def test_unknown_action_answers_callback(self):
         bot = _create_bot()
         callback = _make_callback("svc:unknown")
@@ -329,7 +315,6 @@ class TestHandleServiceCallback:
 class TestHandleCtaCallback:
     """Test handle_cta_callback actions."""
 
-    @pytest.mark.asyncio()
     async def test_get_offer_starts_phone_collection(self):
         bot = _create_bot()
         callback = _make_callback("cta:get_offer:insurance")
@@ -351,7 +336,6 @@ class TestHandleCtaCallback:
         call_kwargs = mock_phone.call_args
         assert call_kwargs.kwargs.get("service_key") == "insurance"
 
-    @pytest.mark.asyncio()
     async def test_manager_with_forum_bridge_starts_qualification(self):
         bot = _create_bot()
         bot._forum_bridge = MagicMock()
@@ -372,7 +356,6 @@ class TestHandleCtaCallback:
 
         mock_qual.assert_awaited_once()
 
-    @pytest.mark.asyncio()
     async def test_manager_without_forum_bridge_starts_phone_collection(self):
         bot = _create_bot()
         bot._forum_bridge = None
@@ -395,7 +378,6 @@ class TestHandleCtaCallback:
         call_kwargs = mock_phone.call_args
         assert call_kwargs.kwargs.get("service_key") == "manager"
 
-    @pytest.mark.asyncio()
     async def test_none_unparseable_answers_callback(self):
         bot = _create_bot()
         callback = _make_callback("garbage")
@@ -418,7 +400,6 @@ class TestHandleCtaCallback:
 class TestHandleApartmentFastPath:
     """Test _handle_apartment_fast_path logic."""
 
-    @pytest.mark.asyncio()
     async def test_low_confidence_returns_none(self):
         bot = _create_bot()
         message = _make_message("find apartment")
@@ -433,7 +414,6 @@ class TestHandleApartmentFastPath:
 
         assert result is None
 
-    @pytest.mark.asyncio()
     async def test_escalation_triggered_returns_none(self):
         bot = _create_bot()
         message = _make_message("find apartment")
@@ -470,7 +450,6 @@ class TestHandleApartmentFastPath:
 
         assert result is None
 
-    @pytest.mark.asyncio()
     async def test_successful_path_sends_response(self):
         bot = _create_bot()
         message = _make_message("find apartment")

@@ -14,16 +14,16 @@ from telegram_bot.config import BotConfig
 
 
 def _make_config(**overrides) -> BotConfig:
-    defaults = dict(
-        telegram_token="test-token",
-        llm_api_key="llm-key",
-        llm_base_url="https://api.example.com/v1",
-        llm_model="gpt-4o-mini",
-        qdrant_url="http://localhost:6333",
-        redis_url="redis://localhost:6379",
-        rerank_provider="none",
-        manager_ids=[123],
-    )
+    defaults = {
+        "telegram_token": "test-token",
+        "llm_api_key": "llm-key",
+        "llm_base_url": "https://api.example.com/v1",
+        "llm_model": "gpt-4o-mini",
+        "qdrant_url": "http://localhost:6333",
+        "redis_url": "redis://localhost:6379",
+        "rerank_provider": "none",
+        "manager_ids": [123],
+    }
     defaults.update(overrides)
     return BotConfig(_env_file=None, **defaults)
 
