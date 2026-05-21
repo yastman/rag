@@ -76,7 +76,7 @@ class QdrantHybridWriter:
         )
 
         ***REMOVED*** BGE-M3 HTTP client (unified SDK layer)
-        from telegram_bot.services.bge_m3_client import BGEM3SyncClient
+        from src.services.bge_m3_client import BGEM3SyncClient
 
         self.bge_m3_url = bge_m3_url or "http://localhost:8000"
         self._bge_client = BGEM3SyncClient(
@@ -101,7 +101,7 @@ class QdrantHybridWriter:
                 raise ValueError("voyage_api_key is required when use_local_embeddings=False")
             ***REMOVED*** Lazy import (***REMOVED***1773): voyageai is an optional extra and must not
             ***REMOVED*** be imported by the default ingestion path.
-            from telegram_bot.services import VoyageService
+            from src.services.voyage import VoyageService
 
             self.voyage = VoyageService(
                 api_key=voyage_api_key,

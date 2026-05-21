@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from telegram_bot.observability import get_client, observe
+from src.observability import get_client, observe
 
 
 if TYPE_CHECKING:
