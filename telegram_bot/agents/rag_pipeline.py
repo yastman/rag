@@ -32,6 +32,7 @@ from telegram_bot.services.cache_policy import (
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
+from telegram_bot.services.metrics import record_counter_metric
 from telegram_bot.services.query_filter_signal import detect_filter_sensitive_query
 from telegram_bot.services.query_preprocessor import QueryPreprocessor, expand_short_query
 from telegram_bot.services.rag_core import (
@@ -557,7 +558,7 @@ async def _hybrid_retrieve(
 
     # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
-        logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
+        record_counter_metric("colbert_rerank_attempted")
     results, search_meta, colbert_used = await _run_initial_retrieval(
         qdrant=qdrant,
         dense_vector=dense_vector,
@@ -573,10 +574,7 @@ async def _hybrid_retrieve(
     initial_results_count = len(results)
 
     if active_filters and len(results) < 3 and active_filters != relaxed_filters:
-        logger.info(
-            "metric",
-            extra={"metric_name": "topic_filter_fallback", "value": 1},
-        )
+        record_counter_metric("topic_filter_fallback")
         retrieval_relaxed_from_topic_filter = True
         fallback_filters = relaxed_filters if relaxed_filters is not None else None
         if prefer_faq_doc_type:
@@ -620,7 +618,7 @@ async def _hybrid_retrieve(
         final_filters = dict(base_filters) if isinstance(base_filters, dict) else None
 
     if not results:
-        logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
+        record_counter_metric("retrieval_zero_docs")
 
     # Step 5: Cache results
     if results and not search_meta.get("backend_error", False):
@@ -748,10 +746,7 @@ async def _grade_documents(
         len(documents),
         elapsed,
     )
-    logger.info(
-        "metric",
-        extra={"metric_name": "score_gap_confident", "value": 1 if score_gap["confident"] else 0},
-    )
+    record_counter_metric("score_gap_confident", 1 if score_gap["confident"] else 0)
 
     return {
         "documents_relevant": relevant,

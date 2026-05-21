@@ -104,6 +104,13 @@ def record_pipeline_latency(stage: str, seconds: float) -> None:
 # ---------------------------------------------------------------------------
 
 
+def record_counter_metric(name: str, value: int = 1) -> None:
+    """Record a named counter metric through the bot metrics registry."""
+    if value <= 0:
+        return
+    PipelineMetrics.get().inc(name, value)
+
+
 class PipelineMetrics:
     """Singleton pipeline metrics — backward-compat facade.
 
