@@ -4,19 +4,19 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 
 # SDK Registry — rag-fresh
 
-> Реестр SDK- и framework-решений проекта для scoped product code.
-> Читай этот файл вместе с `AGENTS.md` и ближайшим `AGENTS.override.md` перед написанием кода.
-> SDK-first: если задача покрывается готовым SDK или нативной возможностью фреймворка — используй её.
+> SDK and framework registry for scoped product code in this project.
+> Read this file together with `AGENTS.md` and the nearest `AGENTS.override.md` before writing code.
+> SDK-first: if a task is covered by an existing SDK or native framework capability, use it.
 >
-> **Обновление:** при добавлении/удалении зависимости — обнови этот файл.
-> Формат расширяемый: добавляй новые секции по шаблону внизу.
+> **Updating:** when adding or removing a dependency, update this file.
+> The format is extensible: add new sections using the template at the bottom.
 >
-> **Роль в репозитории:** это обычный repo document, на который ссылается `AGENTS.md`.
-> Это не special path и не отдельный механизм discovery.
+> **Role in the repository:** this is a normal repo document referenced by `AGENTS.md`.
+> It is not a special path or a separate discovery mechanism.
 >
-> **Границы:** этот реестр обязателен для путей из `paths:` выше. Для `scripts/`, `tests/`,
-> CI/ops и одноразовых локальных утилит используй его как сильную подсказку, но проверяй
-> фактический код и текущий workflow отдельно.
+> **Scope:** this registry is mandatory for paths listed in the `paths:` frontmatter above.
+> For `scripts/`, `tests/`, CI/ops, and one-off local utilities, treat it as a strong hint
+> but verify actual code and current workflows separately.
 
 ## aiogram (core)
 - **triggers:** bot, handler, router, middleware, filter, dispatcher, FSM, message, callback, command
