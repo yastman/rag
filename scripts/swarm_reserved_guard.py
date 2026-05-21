@@ -27,10 +27,12 @@ def check_overlaps(
         existing_files = set(worker.get("reserved_files", []))
         common = new_files & existing_files
         if common:
-            overlaps.append({
-                "worker_id": worker["worker_id"],
-                "overlapping_files": sorted(common),
-            })
+            overlaps.append(
+                {
+                    "worker_id": worker["worker_id"],
+                    "overlapping_files": sorted(common),
+                }
+            )
 
     return overlaps
 
