@@ -12,6 +12,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     FieldCondition,
     Filter,
+    FilterSelector,
     HasIdCondition,
     MatchValue,
     PointStruct,
@@ -393,11 +394,18 @@ class QdrantHybridWriter:
         count = count_result.count
 
         if count > 0:
-            ***REMOVED*** Delete by metadata.file_id
+            ***REMOVED*** Delete by metadata.file_id (canonical SDK shape: wrap Filter in FilterSelector)
             self.client.delete(
                 collection_name=collection_name,
-                points_selector=Filter(
-                    must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="metadata.file_id",
+                                match=MatchValue(value=file_id),
+                            )
+                        ]
+                    )
                 ),
             )
             logger.info(f"Deleted {count} points for file_id={file_id}")
@@ -547,8 +555,15 @@ class QdrantHybridWriter:
         if count > 0:
             self.client.delete(
                 collection_name=collection_name,
-                points_selector=Filter(
-                    must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="metadata.file_id",
+                                match=MatchValue(value=file_id),
+                            )
+                        ]
+                    )
                 ),
             )
             logger.info(f"Deleted {count} points for file_id={file_id}")
