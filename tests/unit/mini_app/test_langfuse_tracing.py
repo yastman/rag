@@ -128,6 +128,11 @@ class TestPropagateAttributesContract:
 
         # FastAPI dependency override avoids the real Redis connection.
         app.dependency_overrides[api_mod.get_redis] = _override_redis
+        # Override auth — user_id=42 matches the session_id assertion below.
+        app.dependency_overrides[api_mod.get_validated_init_data] = lambda: {
+            "user": {"id": 42, "first_name": "Test"},
+            "auth_date": "0",
+        }
 
         _, mock_propagate = _make_propagate_recorder()
 
@@ -142,7 +147,6 @@ class TestPropagateAttributesContract:
                     resp = await client.post(
                         "/api/start-expert",
                         json={
-                            "user_id": 42,
                             "expert_id": "consultant",
                             "message": "ignored-secret-content",
                             "query_id": "q-1",
@@ -152,6 +156,7 @@ class TestPropagateAttributesContract:
             assert resp.status_code == 200, resp.text
         finally:
             app.dependency_overrides.pop(api_mod.get_redis, None)
+            app.dependency_overrides.pop(api_mod.get_validated_init_data, None)
 
         assert mock_propagate.call_count >= 1, (
             "start_expert must enter `propagate_attributes(...)` exactly once."
@@ -173,23 +178,33 @@ class TestPropagateAttributesContract:
         mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
         mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
 
+        # Override auth — user_id=7 matches the session_id assertion below.
+        app.dependency_overrides[api_mod.get_validated_init_data] = lambda: {
+            "user": {"id": 7, "first_name": "Test"},
+            "auth_date": "0",
+        }
+
         _, mock_propagate = _make_propagate_recorder()
 
-        with (
-            patch.object(api_mod, "propagate_attributes", mock_propagate),
-            patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
-        ):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                resp = await client.post(
-                    "/api/phone",
-                    json={
-                        "phone": "+359888123456",
-                        "source": "viewing_consultant",
-                        "user_id": 7,
-                    },
-                )
+        try:
+            with (
+                patch.object(api_mod, "propagate_attributes", mock_propagate),
+                patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
+            ):
+                async with AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as client:
+                    resp = await client.post(
+                        "/api/phone",
+                        json={
+                            "phone": "+359888123456",
+                            "source": "viewing_consultant",
+                            "user_id": 7,
+                        },
+                    )
+        finally:
+            app.dependency_overrides.pop(api_mod.get_validated_init_data, None)
+
         assert resp.status_code == 200, resp.text
         assert mock_propagate.call_count >= 1
         kwargs = mock_propagate.call_args.kwargs

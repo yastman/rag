@@ -9,9 +9,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from mini_app.auth import validate_init_data
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
 from telegram_bot.observability import get_client, observe, propagate_attributes
@@ -58,13 +59,73 @@ async def get_redis(request: Request) -> Any:
     return request.app.state.redis
 
 
+def _get_bot_token() -> str:
+    """Return the Telegram bot token from environment.
+
+    Reads ``TELEGRAM_BOT_TOKEN`` (the canonical env var shared with
+    telegram_bot) with ``BOT_TOKEN`` as a legacy alias.  Raises
+    ``RuntimeError`` only if neither is set — callers translate this to
+    a 500 so operators see a clear misconfiguration message.
+    """
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN", "")
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN not configured")
+    return token
+
+
+async def get_validated_init_data(
+    x_init_data: str | None = Header(
+        default=None,
+        alias="X-Init-Data",
+        description="Telegram WebApp signed initData string",
+    ),
+) -> dict:
+    """FastAPI dependency: validate Telegram initData and return parsed user dict.
+
+    Returns the parsed initData dict (including ``user`` sub-dict) on
+    success.  Raises ``HTTP 401`` for missing header, missing token config,
+    invalid hash, or expired ``auth_date``.
+
+    Debug / test mode: when ``BOT_TOKEN`` equals the known test sentinel
+    ``"TEST"`` (set in CI) validation is bypassed and a synthetic user
+    dict is returned so the rest of the stack is exercised without a
+    real bot token.
+    """
+    if x_init_data is None:
+        raise HTTPException(status_code=401, detail="X-Init-Data header is required")
+
+    try:
+        bot_token = _get_bot_token()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    # Allow bypass in debug/test mode with the test sentinel token.
+    if bot_token == "TEST":
+        return {"user": {"id": 0, "first_name": "TestUser"}, "auth_date": "0"}
+
+    try:
+        return validate_init_data(x_init_data, bot_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# CORS — restrict to configured origin (not wildcard)
+#
+# Operators MUST set MINI_APP_ALLOWED_ORIGIN in production.
+# Dev default falls back to https://t.me so the app still boots locally
+# without any env configuration. An empty string is treated as missing.
+# ---------------------------------------------------------------------------
+
+_CORS_ORIGIN = os.environ.get("MINI_APP_ALLOWED_ORIGIN", "").strip() or "https://t.me"
+
 app = FastAPI(title="FortNoks Mini App API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[_CORS_ORIGIN],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Init-Data"],
 )
 
 
@@ -86,8 +147,15 @@ def _update_current_span(**kwargs: Any) -> None:
 async def start_expert(
     request: StartExpertRequest,
     redis: Any = Depends(get_redis),
+    init_data: dict = Depends(get_validated_init_data),
 ) -> StartExpertResponse:
     """Store deep-link payload in Redis and return start_link for openTelegramLink.
+
+    ``init_data`` is the validated Telegram initData dict injected by
+    ``get_validated_init_data``.  ``user_id`` is derived from
+    ``init_data["user"]["id"]`` — the JSON body value is accepted for
+    optional fields (expert_id, message, query_id) but the user identity
+    is **always** taken from the server-verified initData (#1595).
 
     Wrapped in ``@observe`` (#1658) so the Mini App entry point lands as a
     named Langfuse span. ``propagate_attributes(session_id="miniapp-{user_id}")``
@@ -99,11 +167,12 @@ async def start_expert(
     ``update_current_span(input=...)`` records only ``expert_id`` plus
     payload-shape booleans — never the message body or raw deep-link UUID.
     """
-    from fastapi import HTTPException
+    # Derive user_id from validated initData — never trust the request body.
+    user_id: int = init_data["user"]["id"]
 
     with propagate_attributes(
-        session_id=f"miniapp-{request.user_id}",
-        user_id=str(request.user_id),
+        session_id=f"miniapp-{user_id}",
+        user_id=str(user_id),
         tags=["miniapp", "start-expert", request.expert_id],
         metadata={"surface": "miniapp"},
     ):
@@ -127,7 +196,7 @@ async def start_expert(
             {
                 "expert_id": request.expert_id,
                 "message": request.message,
-                "user_id": request.user_id,
+                "user_id": user_id,
                 "query_id": request.query_id,
             }
         )
@@ -146,7 +215,7 @@ async def start_expert(
             json.dumps(
                 {
                     "uuid": uid,
-                    "user_id": request.user_id,
+                    "user_id": user_id,
                     "query_id": request.query_id,
                 }
             ),
@@ -179,8 +248,14 @@ async def remote_log(request: dict) -> dict:
 
 @app.post("/api/phone")
 @observe(name="miniapp-submit-phone", capture_input=False, capture_output=False)
-async def phone(request: PhoneRequest) -> Any:
+async def phone(
+    request: PhoneRequest,
+    init_data: dict = Depends(get_validated_init_data),
+) -> Any:
     """Collect phone and create CRM lead.
+
+    ``user_id`` is derived from the validated Telegram initData so callers
+    cannot spoof another user's identity (#1595).
 
     Wrapped in ``@observe`` (#1658) with the same ``miniapp-{user_id}`` session
     grouping as ``start_expert`` so the funnel reconstructs in Langfuse
@@ -191,14 +266,20 @@ async def phone(request: PhoneRequest) -> Any:
     """
     from fastapi.responses import JSONResponse
 
+    # Override user_id with the server-verified value from initData (#1595).
+    user_id: int = init_data["user"]["id"]
+    # Re-create the request with the verified user_id to keep the rest of
+    # the stack unchanged (submit_phone, propagate_attributes).
+    verified_request = request.model_copy(update={"user_id": user_id})
+
     with propagate_attributes(
-        session_id=f"miniapp-{request.user_id}",
-        user_id=str(request.user_id),
+        session_id=f"miniapp-{user_id}",
+        user_id=str(user_id),
         tags=["miniapp", "submit-phone", request.source],
         metadata={"surface": "miniapp"},
     ):
         _update_current_span(input={"source": request.source, "has_name": request.name is not None})
-        result = await submit_phone(request)
+        result = await submit_phone(verified_request)
         if not result.get("success"):
             _update_current_span(level="ERROR", status_message="crm_submission_failed")
             return JSONResponse(status_code=502, content=result)

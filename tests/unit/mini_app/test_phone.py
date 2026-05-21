@@ -1,5 +1,7 @@
 """Tests for Mini App phone collection endpoint."""
 
+import time
+
 import pytest
 
 
@@ -9,8 +11,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from httpx import ASGITransport, AsyncClient
 
-from mini_app.api import app
+from mini_app.api import app, get_validated_init_data
 from mini_app.phone import PhoneRequest, submit_phone
+
+
+def _override_init_data(user_id: int = 123) -> None:
+    """Override auth dependency for phone tests that focus on CRM logic."""
+    app.dependency_overrides[get_validated_init_data] = lambda: {
+        "user": {"id": user_id, "first_name": "Test"},
+        "auth_date": str(int(time.time())),
+    }
+
+
+def _clear_init_data_override() -> None:
+    app.dependency_overrides.pop(get_validated_init_data, None)
 
 
 @pytest.mark.asyncio
@@ -19,27 +33,35 @@ async def test_submit_phone_success():
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
     mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
 
-    with patch("mini_app.phone.get_kommo_client", return_value=mock_kommo):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
-                "/api/phone",
-                json={
-                    "phone": "+359888123456",
-                    "source": "viewing_consultant",
-                    "user_id": 123,
-                },
-            )
+    _override_init_data(user_id=123)
+    try:
+        with patch("mini_app.phone.get_kommo_client", return_value=mock_kommo):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/api/phone",
+                    json={
+                        "phone": "+359888123456",
+                        "source": "viewing_consultant",
+                        "user_id": 123,
+                    },
+                )
+    finally:
+        _clear_init_data_override()
     assert resp.status_code == 200
     assert resp.json()["success"] is True
 
 
 @pytest.mark.asyncio
 async def test_submit_phone_invalid():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post(
-            "/api/phone",
-            json={"phone": "abc", "source": "test", "user_id": 123},
-        )
+    _override_init_data(user_id=123)
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/phone",
+                json={"phone": "abc", "source": "test", "user_id": 123},
+            )
+    finally:
+        _clear_init_data_override()
     assert resp.status_code == 422
 
 
@@ -61,16 +83,20 @@ async def test_phone_endpoint_returns_502_on_crm_failure():
     """The /api/phone endpoint must return a non-2xx status (502 Bad Gateway)
     when the CRM submission fails so the frontend can show a retry/error
     UI instead of treating the lead as captured (#1596)."""
-    with patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
-                "/api/phone",
-                json={
-                    "phone": "+359888123456",
-                    "source": "viewing_consultant",
-                    "user_id": 123,
-                },
-            )
+    _override_init_data(user_id=123)
+    try:
+        with patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                resp = await client.post(
+                    "/api/phone",
+                    json={
+                        "phone": "+359888123456",
+                        "source": "viewing_consultant",
+                        "user_id": 123,
+                    },
+                )
+    finally:
+        _clear_init_data_override()
     assert resp.status_code == 502
     body = resp.json()
     assert body["success"] is False

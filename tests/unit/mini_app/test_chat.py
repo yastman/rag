@@ -1,6 +1,10 @@
 """Tests for Mini App API — /api/start-expert deep link endpoint."""
 
+import hashlib
+import hmac
 import os
+import time
+from urllib.parse import quote
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,7 +14,27 @@ pytest.importorskip("fastapi")
 
 from httpx import ASGITransport, AsyncClient
 
-from mini_app.api import app, get_redis
+from mini_app.api import app, get_redis, get_validated_init_data
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_TEST_BOT_TOKEN = "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+
+
+def _make_init_data(user_id: int = 123) -> str:
+    """Build a valid Telegram initData string with correct HMAC-SHA256 hash."""
+    params: dict[str, str] = {
+        "auth_date": str(int(time.time())),
+        "user": f'{{"id":{user_id},"first_name":"Test"}}',
+    }
+    data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
+    secret = hmac.new(b"WebAppData", _TEST_BOT_TOKEN.encode(), hashlib.sha256).digest()
+    hash_val = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+    params["hash"] = hash_val
+    return "&".join(f"{k}={quote(v, safe='')}" for k, v in params.items())
 
 
 def _override_redis(mock_redis: AsyncMock) -> None:
@@ -21,6 +45,18 @@ def _override_redis(mock_redis: AsyncMock) -> None:
 def _clear_redis_override() -> None:
     """Remove the dependency override after the test."""
     app.dependency_overrides.pop(get_redis, None)
+
+
+def _override_init_data(user_id: int = 123) -> None:
+    """Override get_validated_init_data to return a synthetic user dict for testing."""
+    app.dependency_overrides[get_validated_init_data] = lambda: {
+        "user": {"id": user_id, "first_name": "Test"},
+        "auth_date": str(int(time.time())),
+    }
+
+
+def _clear_init_data_override() -> None:
+    app.dependency_overrides.pop(get_validated_init_data, None)
 
 
 @pytest.mark.asyncio
@@ -37,6 +73,7 @@ async def test_start_expert_not_found():
     """Unknown expert_id should return 404."""
     mock_redis = AsyncMock()
     _override_redis(mock_redis)
+    _override_init_data(user_id=123)
     try:
         with patch("mini_app.api.load_mini_app_config", return_value={"experts": []}):
             async with AsyncClient(
@@ -44,10 +81,11 @@ async def test_start_expert_not_found():
             ) as client:
                 resp = await client.post(
                     "/api/start-expert",
-                    json={"user_id": 123, "expert_id": "nonexistent"},
+                    json={"expert_id": "nonexistent"},
                 )
     finally:
         _clear_redis_override()
+        _clear_init_data_override()
     assert resp.status_code == 404
 
 
@@ -57,6 +95,7 @@ async def test_start_expert_returns_start_link():
     mock_redis = AsyncMock()
     experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
     _override_redis(mock_redis)
+    _override_init_data(user_id=123)
     try:
         with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
             with patch.dict(os.environ, {"BOT_USERNAME": "testbot"}):
@@ -66,13 +105,13 @@ async def test_start_expert_returns_start_link():
                     resp = await client.post(
                         "/api/start-expert",
                         json={
-                            "user_id": 123,
                             "expert_id": "consultant",
                             "message": "Подбери квартиру",
                         },
                     )
     finally:
         _clear_redis_override()
+        _clear_init_data_override()
     assert resp.status_code == 200
     data = resp.json()
     assert "start_link" in data
@@ -88,6 +127,7 @@ async def test_start_expert_stores_payload_in_redis():
     mock_redis = AsyncMock()
     experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
     _override_redis(mock_redis)
+    _override_init_data(user_id=123)
     try:
         with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
             with patch.dict(os.environ, {"BOT_USERNAME": "testbot"}):
@@ -96,10 +136,11 @@ async def test_start_expert_stores_payload_in_redis():
                 ) as client:
                     resp = await client.post(
                         "/api/start-expert",
-                        json={"user_id": 123, "expert_id": "consultant", "message": "Тест"},
+                        json={"expert_id": "consultant", "message": "Тест"},
                     )
     finally:
         _clear_redis_override()
+        _clear_init_data_override()
     assert resp.status_code == 200
     # Redis.set should have been called with TTL=300
     mock_redis.set.assert_called_once()
@@ -119,6 +160,7 @@ async def test_start_expert_fails_without_bot_username():
     mock_redis = AsyncMock()
     experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
     _override_redis(mock_redis)
+    _override_init_data(user_id=123)
     try:
         with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
             with patch.dict(os.environ, {"BOT_USERNAME": ""}, clear=False):
@@ -127,8 +169,9 @@ async def test_start_expert_fails_without_bot_username():
                 ) as client:
                     resp = await client.post(
                         "/api/start-expert",
-                        json={"user_id": 123, "expert_id": "consultant"},
+                        json={"expert_id": "consultant"},
                     )
     finally:
         _clear_redis_override()
+        _clear_init_data_override()
     assert resp.status_code == 500
