@@ -1,0 +1,38 @@
+# Qdrant storage optimisation config — loaded as /qdrant/config/production.yaml
+# Addresses issue #1545: gdrive_documents_bge vectors accumulated 3.1 GB
+# unbounded because Qdrant shipped with all-default (RAM-heavy) settings.
+#
+# Context7 / Qdrant documentation baseline (content rephrased for compliance
+# with licensing restrictions):
+#   on_disk_payload – when true, point payloads that are NOT required for
+#     active filters are persisted to disk rather than kept in RAM.  Indexed
+#     payload fields still reside in memory.  This trades a small read-latency
+#     cost for a significant reduction in resident-set size, which is the
+#     primary driver of the 3.1 GB volume seen on dev (#1545).
+#   optimizers.indexing_threshold_kb – maximum total size (in kB) of
+#     unindexed vectors that Qdrant will hold in a plain segment before it
+#     triggers HNSW graph construction.  The default of 20 000 kB (≈ 20 MB)
+#     is a good balance: ingestion remains fast while segments are rebuilt
+#     opportunistically, avoiding the "deferred-forever" scenario caused by
+#     setting this to 0.
+#
+# Operator notes:
+#   • After deploying this config, restart the Qdrant container so it picks up
+#     the file:
+#       docker compose restart qdrant
+#   • Existing collection on_disk_payload is stored per-collection in the WAL.
+#     For the change to take effect on gdrive_documents_bge, recreate the
+#     collection OR patch it via the REST API:
+#       PATCH http://qdrant:6333/collections/gdrive_documents_bge
+#       {"on_disk_payload": true}
+#   • Use `make qdrant-cleanup` to take a snapshot and prune old segments.
+
+storage:
+  # Move non-filtered payloads from RAM to disk (primary fix for #1545).
+  on_disk_payload: true
+
+  optimizers:
+    # Trigger HNSW index construction once an unindexed segment exceeds
+    # 20 MB.  Set to 0 only during bulk-ingest to defer indexing overhead,
+    # then restore this value so the graph is eventually built.
+    indexing_threshold_kb: 20000
