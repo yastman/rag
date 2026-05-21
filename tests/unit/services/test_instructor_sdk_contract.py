@@ -108,16 +108,18 @@ def test_no_instructor_streaming_primitives_in_production(path: Path) -> None:
 
 
 def test_known_instructor_call_sites_use_from_openai() -> None:
-    """The three known instructor consumers must use ``instructor.from_openai(...)``.
+    """The two known instructor consumers must use ``instructor.from_openai(...)``.
 
     Drift here means a service reverted to a non-langfuse-aware construction
     path. This is a positive lock complementing
     :func:`test_no_instructor_from_provider_in_production`.
+
+    NOTE: ``telegram_bot/services/llm.py`` was removed in ***REMOVED***1541 (residual
+    slice). The remaining two consumers are still on this list.
     """
     expected = [
         REPO_ROOT / "telegram_bot" / "services" / "apartment_llm_extractor.py",
         REPO_ROOT / "telegram_bot" / "services" / "query_analyzer.py",
-        REPO_ROOT / "telegram_bot" / "services" / "llm.py",
     ]
     for path in expected:
         assert path.exists(), f"expected instructor consumer missing: {path}"
