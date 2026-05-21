@@ -6,6 +6,8 @@ Run with: RUN_INTEGRATION_TESTS=1 pytest tests/integration/test_ingestion_e2e.py
 """
 
 import os
+import uuid
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -46,7 +48,52 @@ This concludes the test document.
 @pytest.fixture
 def test_collection_name() -> str:
     """Use a separate collection for tests."""
-    return "test_ingestion_e2e"
+    return f"test_ingestion_e2e_{uuid.uuid4().hex[:8]}"
+
+
+async def _delete_test_collection(collection_name: str) -> None:
+    """Best-effort cleanup for Qdrant collections created by these tests."""
+    from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
+
+    service = CocoIndexIngestionService(collection_name=collection_name)
+    try:
+        with suppress(Exception):
+            client = service.qdrant_client
+            if client.collection_exists(collection_name):
+                client.delete_collection(collection_name)
+    finally:
+        await service.close()
+
+
+async def _seed_ingestion_collection(tmp_path: Path, collection_name: str) -> str:
+    """Create a populated test collection before asserting success-path stats."""
+    from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
+
+    seed_dir = tmp_path / "seed"
+    seed_dir.mkdir()
+    (seed_dir / "seed_doc.md").write_text("# Seed\n\nContent for ingestion status checks.")
+
+    service = CocoIndexIngestionService(collection_name=collection_name)
+    try:
+        stats = await service.ingest_directory(seed_dir)
+        assert stats.total_documents >= 1
+        assert stats.errors == []
+
+        collection_stats = await service.get_collection_stats()
+        assert "error" not in collection_stats
+        assert collection_stats.get("points_count", 0) > 0
+        return collection_name
+    finally:
+        await service.close()
+
+
+@pytest.fixture
+async def seeded_ingestion_collection(tmp_path: Path, test_collection_name: str) -> str:
+    """Yield a collection that has known ingestion data."""
+    try:
+        yield await _seed_ingestion_collection(tmp_path, test_collection_name)
+    finally:
+        await _delete_test_collection(test_collection_name)
 
 
 class TestIngestionServiceE2E:
@@ -76,13 +123,14 @@ class TestIngestionServiceE2E:
             assert collection_stats.get("points_count", 0) > 0
 
         finally:
+            await _delete_test_collection(test_collection_name)
             await service.close()
 
-    async def test_get_collection_stats(self, test_collection_name: str):
+    async def test_get_collection_stats(self, seeded_ingestion_collection: str):
         """Test getting collection statistics."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
 
-        service = CocoIndexIngestionService(collection_name=test_collection_name)
+        service = CocoIndexIngestionService(collection_name=seeded_ingestion_collection)
 
         try:
             stats = await service.get_collection_stats()
@@ -145,11 +193,11 @@ class TestQdrantSetupScript:
 class TestConvenienceFunctionsE2E:
     """E2E tests for convenience functions."""
 
-    async def test_get_ingestion_status(self):
+    async def test_get_ingestion_status(self, seeded_ingestion_collection: str):
         """Test get_ingestion_status convenience function."""
         from telegram_bot.services.ingestion_cocoindex import get_ingestion_status
 
-        status = await get_ingestion_status()
+        status = await get_ingestion_status(seeded_ingestion_collection)
 
         # Success path: status must describe a healthy collection (#1629).
         assert isinstance(status, dict)
