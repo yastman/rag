@@ -709,6 +709,42 @@ bot:  ## Alias: run bot and tee output to logs/bot-run.log
 	@mkdir -p logs
 	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
 
+# =============================================================================
+# BOT LOG TRIAGE (issue #1418)
+# Operator workflow:
+#   make bot                  # produce logs/bot-run.log
+#   make bot-logs-tail        # follow live log
+#   make bot-logs-errors      # show ERROR/CRITICAL lines + tracebacks
+#   make bot-logs-startup     # show preflight + Startup verdict events
+# =============================================================================
+
+.PHONY: bot-logs-tail bot-logs-errors bot-logs-startup
+
+bot-logs-tail:  ## Follow logs/bot-run.log (live stream of bot output)
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@tail -F logs/bot-run.log
+
+bot-logs-errors:  ## Show recent ERROR/CRITICAL lines and Tracebacks from logs/bot-run.log
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Recent errors in logs/bot-run.log:$(NC)"
+	@grep -nE 'ERROR|CRITICAL|Traceback|exception' logs/bot-run.log | tail -n $${BOT_LOG_LINES:-200} || \
+		echo "$(GREEN)No error/critical lines found$(NC)"
+
+bot-logs-startup:  ## Show recent startup/preflight events from logs/bot-run.log
+	@if [ ! -f logs/bot-run.log ]; then \
+		echo "$(YELLOW)logs/bot-run.log not found — run \`make bot\` first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Recent startup events in logs/bot-run.log:$(NC)"
+	@grep -nE 'Startup verdict|Preflight|Logging configured' logs/bot-run.log | tail -n $${BOT_LOG_LINES:-100} || \
+		echo "$(YELLOW)No startup events found$(NC)"
+
 local-down:  ## Stop local Docker services
 	$(LOCAL_COMPOSE_CMD) stop $(LOCAL_ALL_SERVICES) || true
 	$(LOCAL_COMPOSE_CMD) rm -f $(LOCAL_ALL_SERVICES) || true
