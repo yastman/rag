@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-004",
+  "type": "docs",
+  "description": "Consolidate the extension/developer guide into a single canonical doc. Currently docs/DEVELOPER_GUIDE.md and docs/ADD_NEW_RAG_NODE.md cover overlapping territory (both explain adding nodes, with slightly different code patterns). Merge them into one authoritative docs/DEVELOPER_GUIDE.md that covers: adding a new graph node, adding a new agent tool, adding a new query type, and adding a new ingestion source. Remove docs/ADD_NEW_RAG_NODE.md. Update all inbound links (docs/README.md, AGENTS.md references if any).",
+  "status": "in_progress",
+  "steps": [
+    "Read docs/DEVELOPER_GUIDE.md and docs/ADD_NEW_RAG_NODE.md to identify the differences. ADD_NEW_RAG_NODE.md has a more detailed checklist and uses the newer Runtime[GraphContext] pattern, while DEVELOPER_GUIDE.md uses older **deps pattern. The merged doc should use the current pattern from ADD_NEW_RAG_NODE.md.",
+    "Rewrite docs/DEVELOPER_GUIDE.md as the single canonical extension guide. Structure: (1) Adding a New LangGraph Node (use the Runtime[GraphContext] pattern from ADD_NEW_RAG_NODE.md with the full checklist), (2) Adding a New Agent Tool (from current DEVELOPER_GUIDE.md), (3) Adding a New Query Type (from current DEVELOPER_GUIDE.md), (4) Adding a New Ingestion Source (brief section explaining how src/ingestion/unified/ can be extended, referencing the CocoIndex flow pattern), (5) Dependencies and DI (from current DEVELOPER_GUIDE.md, updated to mention GraphContext), (6) Testing (combine testing guidance from both files). Include the Code Locations table from ADD_NEW_RAG_NODE.md.",
+    "Delete docs/ADD_NEW_RAG_NODE.md.",
+    "Update docs/README.md: change the 'ADD_NEW_RAG_NODE.md' link in the Architecture & Design section to point to docs/DEVELOPER_GUIDE.md with an appropriate description like 'Guide for extending graph nodes, tools, query types, and ingestion'.",
+    "Search for any other inbound links to ADD_NEW_RAG_NODE.md (grep the repo) and update them to point to DEVELOPER_GUIDE.md.",
+    "Run the relative-link verification script."
+  ],
+  "acceptance_criteria": [
+    "docs/ADD_NEW_RAG_NODE.md no longer exists",
+    "docs/DEVELOPER_GUIDE.md covers: adding graph nodes (with Runtime[GraphContext] pattern), adding agent tools, adding query types, adding ingestion sources, DI/dependencies, and testing",
+    "docs/DEVELOPER_GUIDE.md uses the current Runtime[GraphContext] node signature pattern (not the old **deps pattern)",
+    "docs/README.md no longer references ADD_NEW_RAG_NODE.md; it references DEVELOPER_GUIDE.md for extension guidance",
+    "No broken links to ADD_NEW_RAG_NODE.md remain in the repo",
+    "All relative links resolve"
+  ],
+  "verification": [
+    "Run: git diff --check",
+    "Run: grep -r 'ADD_NEW_RAG_NODE' /projects/sandbox/rag/ --include='*.md' (expect zero results)",
+    "Run the Python relative-link checker script from docs/engineering/docs-maintenance.md section 7"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
