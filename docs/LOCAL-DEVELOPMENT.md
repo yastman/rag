@@ -126,11 +126,12 @@ tests explicitly as local validation on the development machine.
 The `make pre-push` target is the recommended gate before pushing:
 
 ```bash
-make pre-push          # lint + format-check + type-check
+make pre-push          # lint + format-check
 ```
 
 This runs expanded lint (covering `src/` and `telegram_bot/` to match CI),
-format verification, and MyPy type checking.
+and format verification. Run `make check` when you also need the current
+lint + MyPy gate; it may surface known baseline type drift until that is fixed.
 
 ### Hooks and uv environments
 
