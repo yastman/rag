@@ -7,7 +7,10 @@ and evidence summary generation.
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from tests.observability.gate_logic import (
     FakeObservation,
@@ -275,3 +278,66 @@ class TestUpdateVoiceTraceIntegration:
 
         kwargs = mock_prop.call_args[1]
         assert kwargs["session_id"].startswith("voice-")
+
+
+class TestValidateVoiceTracesCli:
+    """CLI behavior tests for the live validation gate."""
+
+    def test_fails_when_fresh_trace_production_fails(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default mode must fail instead of validating stale traces."""
+        from scripts import validate_voice_traces as gate
+
+        validate_called = False
+
+        def _raise_production_error() -> str:
+            raise RuntimeError("trace producer unavailable")
+
+        def _validate_existing_traces(
+            lookback_minutes: int,
+            expected_session_id: str | None = None,
+        ) -> dict:
+            nonlocal validate_called
+            validate_called = True
+            return {
+                "ok": True,
+                "evidence": {
+                    "trace_id": "old-trace",
+                    "session_id": "voice-old",
+                    "user_id": "voice-agent",
+                    "tags": ["voice", "call-lifecycle"],
+                    "traces_found": 1,
+                },
+                "errors": [],
+            }
+
+        monkeypatch.setattr(sys, "argv", ["validate_voice_traces.py"])
+        monkeypatch.setattr(gate, "check_langfuse_connectivity", lambda *_: True)
+        monkeypatch.setattr(gate, "check_compose_service_name", lambda: True)
+        monkeypatch.setattr(gate, "produce_voice_trace", _raise_production_error)
+        monkeypatch.setattr(gate, "wait_for_ingestion", lambda _: None)
+        monkeypatch.setattr(gate, "validate_traces", _validate_existing_traces)
+
+        with pytest.raises(SystemExit) as exc_info:
+            gate.main()
+
+        assert exc_info.value.code == 1
+        assert validate_called is False
+
+    def test_produce_voice_trace_flushes_before_readback(self) -> None:
+        """Short-lived CLI must flush the produced trace before polling."""
+        from scripts import validate_voice_traces as gate
+
+        mock_lf = MagicMock()
+
+        with (
+            patch("src.voice.observability.update_voice_trace") as mock_update,
+            patch("telegram_bot.observability.get_client", return_value=mock_lf),
+        ):
+            session_id = gate.produce_voice_trace()
+
+        assert session_id.startswith("voice-validate-")
+        mock_update.assert_called_once()
+        mock_lf.flush.assert_called_once_with()
