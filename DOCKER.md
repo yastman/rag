@@ -264,6 +264,72 @@ make verify-compose-images
 make validate-traces-fast
 ```
 
+***REMOVED******REMOVED*** Qdrant Storage Management
+
+***REMOVED******REMOVED******REMOVED*** Background — issue ***REMOVED***1545
+
+The `gdrive_documents_bge` collection grew to 3.1 GB on dev and continued
+to expand unbounded in production because Qdrant's default settings keep all
+payload data in RAM and write-amplify every ingestion cycle.
+
+***REMOVED******REMOVED******REMOVED*** Storage optimisation config (`docker/qdrant/config.yaml`)
+
+`docker/qdrant/config.yaml` is mounted read-only into the Qdrant container as
+`/qdrant/config/production.yaml` (Qdrant's well-known override path).  The
+file enables two settings based on Qdrant documentation:
+
+| Setting | Value | Effect |
+| --- | --- | --- |
+| `storage.on_disk_payload` | `true` | Moves payload data that is **not** actively indexed to disk, reducing resident RAM at the cost of a small read-latency increase. Indexed payload fields remain in RAM. |
+| `storage.optimizers.indexing_threshold_kb` | `20000` | Triggers HNSW graph construction once an unindexed segment exceeds 20 MB, balancing ingestion speed against timely index availability. |
+
+***REMOVED******REMOVED******REMOVED*** Applying the config to an existing collection
+
+The config file controls **defaults for new collections**.  For the existing
+`gdrive_documents_bge` collection, patch via the REST API after restarting
+Qdrant:
+
+```bash
+***REMOVED*** Restart Qdrant to pick up the new config file
+docker compose restart qdrant
+
+***REMOVED*** Patch the existing collection to move payloads to disk
+curl -X PATCH http://localhost:6333/collections/gdrive_documents_bge \
+     -H 'Content-Type: application/json' \
+     -d '{"on_disk_payload": true}'
+```
+
+***REMOVED******REMOVED******REMOVED*** Manual cleanup / pruning (`make qdrant-cleanup`)
+
+```bash
+make qdrant-cleanup
+```
+
+This Makefile target:
+1. **Snapshot** — POSTs to `/collections/gdrive_documents_bge/snapshots` to
+   create a recovery point before any segment merging.
+2. **Optimise** — temporarily sets `indexing_threshold` to 0 to force a
+   segment merge pass, then restores the value to 20 000 kB.
+3. **Checklist** — prints the manual curl command to enable `on_disk_payload`
+   on the live collection.
+
+> **TTL strategy note:** Qdrant does not have native per-vector TTL.  The
+> recommended approach for this repo is to reindex from source (re-run the
+> ingestion pipeline) whenever the collection must be rebuilt, or to delete
+> individual points by their document `source_id` payload field when source
+> documents are removed from Google Drive.  `make qdrant-cleanup` handles
+> storage *compaction*, not logical TTL.
+
+***REMOVED******REMOVED******REMOVED*** Volume size monitoring
+
+```bash
+***REMOVED*** Show Docker volume disk usage
+docker system df -v | grep qdrant
+
+***REMOVED*** Check collection point count and segment stats
+curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json.tool
+```
+
 ***REMOVED******REMOVED*** Notes
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.

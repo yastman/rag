@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from qdrant_client.models import Filter, PointStruct, SparseVector
+from qdrant_client.models import Filter, FilterSelector, PointStruct, SparseVector
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from telegram_bot.services.bge_m3_client import HybridResult
@@ -53,6 +53,9 @@ def mock_qdrant_client():
     client.count.return_value = MagicMock(count=0)
     client.delete = MagicMock()
     client.upsert = MagicMock()
+    ***REMOVED*** Default: no orphan points exist for the file_id, so the post-upsert
+    ***REMOVED*** stale-id sweep finds nothing to delete (***REMOVED***1602 atomic-replace).
+    client.scroll.return_value = ([], None)
     return client
 
 
@@ -168,13 +171,17 @@ class TestDeleteFileSyncBehavior:
         assert condition.match.value == "my_file_id"
 
     def test_delete_uses_same_filter_as_count(self, writer_voyage, mock_qdrant_client):
-        """delete() uses the same metadata.file_id filter as count()."""
+        """delete() wraps the same metadata.file_id filter in FilterSelector (canonical SDK)."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
 
         writer_voyage.delete_file_sync("target_file", "col")
 
         delete_kwargs = mock_qdrant_client.delete.call_args.kwargs
-        filt = delete_kwargs["points_selector"]
+        selector = delete_kwargs["points_selector"]
+        ***REMOVED*** Canonical SDK shape per Qdrant Python client docs (Context7-verified):
+        ***REMOVED*** `points_selector=models.FilterSelector(filter=models.Filter(...))`.
+        assert isinstance(selector, FilterSelector)
+        filt = selector.filter
         assert isinstance(filt, Filter)
         condition = filt.must[0]
         assert condition.key == "metadata.file_id"
@@ -294,12 +301,17 @@ class TestUpsertChunksSyncBehavior:
         points = mock_qdrant_client.upsert.call_args.kwargs["points"]
         assert points[0].payload["file_id"] == "flat_fid"
 
-    def test_delete_called_before_upsert_replace_semantics(
+    def test_upsert_called_before_stale_delete_atomic_swap(
         self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
     ):
-        """delete_file_sync must run before upsert (replace semantics)."""
+        """Upsert must run BEFORE the post-upsert stale-id sweep (***REMOVED***1602)."""
         call_order: list[str] = []
-        mock_qdrant_client.count.return_value = MagicMock(count=2)
+        ***REMOVED*** Pretend there's a stale orphan so a delete sweep is required after upsert
+        mock_qdrant_client.count.return_value = MagicMock(count=1)
+        mock_qdrant_client.scroll.return_value = (
+            [MagicMock(id="00000000-0000-0000-0000-stalexxxxxxx")],
+            None,
+        )
         mock_qdrant_client.delete.side_effect = lambda **_: call_order.append("delete")
         mock_qdrant_client.upsert.side_effect = lambda **_: call_order.append("upsert")
         mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
@@ -310,7 +322,8 @@ class TestUpsertChunksSyncBehavior:
         chunk = _make_chunk()
         writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
-        assert call_order == ["delete", "upsert"]
+        ***REMOVED*** Replacement points become live first; stale ids are swept after.
+        assert call_order == ["upsert", "delete"]
 
     def test_stats_points_upserted_matches_chunk_count(
         self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client

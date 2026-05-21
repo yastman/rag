@@ -1,10 +1,20 @@
 ***REMOVED*** src/ingestion/unified/manifest.py
-"""Manifest-based file identity with rename/move stability.
+"""Manifest-based file identity with copy-vs-rename detection.
 
-Uses content_hash as the primary identity key so that a renamed or moved
-file keeps its original file_id.  Falls back to the legacy composite key
-``relative_path:content_hash`` for backward-compatibility with existing
-manifests.
+Identity strategy (Option B — copy detection, fixes ***REMOVED***1603):
+
+  A file_id is tied to *both* content_hash and original path.  When the same
+  content_hash appears at a new path we decide whether it is a rename/move or
+  a copy by checking whether the original path is still active:
+
+  - **Rename/move** (original path no longer active): reuse the original
+    file_id so downstream Qdrant records are not orphaned.
+  - **Copy** (original path still active): the new path is a distinct source
+    record and must receive its own file_id.
+
+Before this fix the manifest only checked ``hash_to_id[content_hash]``,
+meaning every second file with identical bytes silently collapsed to the same
+file_id regardless of whether the first path was still active (***REMOVED***1603).
 
 The manifest is persisted as `.gdrive_manifest.json` in the drive-sync
 root directory.
@@ -22,18 +32,23 @@ logger = logging.getLogger(__name__)
 
 
 class GDriveManifest:
-    """Manages stable file identity with rename/move stability.
+    """Manages stable file identity with copy-vs-rename detection (***REMOVED***1603).
 
     Identity strategy (in priority order):
     1. Exact composite key ``path:content_hash`` — same file, same content.
-    2. Content hash lookup ``hash_to_id[content_hash]`` — file renamed/moved
-       but content unchanged.  Reuses the original file_id.
-    3. New file — generate fresh UUID.
+       Returns the existing file_id immediately.
+    2. Content-hash seen before AND original path is **no longer active**
+       (``path_to_hash`` does not contain the original path) — this is a
+       rename/move.  Reuses the original file_id for downstream stability.
+    3. Content-hash seen before BUT original path is **still active** — this
+       is a copy.  Generates a fresh file_id so both source records remain
+       distinct.  Prevents copy-collapse (***REMOVED***1603).
+    4. Genuinely new file — generate fresh UUID.
 
     Stores three mappings:
-    - key_to_id: ``path:content_hash`` → file_id (legacy, kept for compat)
-    - hash_to_id: content_hash → file_id (primary identity, rename-stable)
-    - path_to_hash: relative_path → content_hash (tracks current locations)
+    - key_to_id: ``path:content_hash`` → file_id (includes copy entries)
+    - hash_to_id: content_hash → file_id  (first-seen / rename-stable anchor)
+    - path_to_hash: relative_path → content_hash (tracks currently active paths)
     """
 
     def __init__(self, manifest_dir: Path) -> None:
@@ -94,32 +109,58 @@ class GDriveManifest:
     def get_or_create_id(self, path: str, content_hash: str) -> str:
         """Return a stable file_id for the given path and content hash.
 
-        Rename/move stable: if content_hash was seen before (at any path),
-        the original file_id is reused.
+        Copy-vs-rename detection (Option B, fixes ***REMOVED***1603):
+        - If the same content_hash was seen before at a path that is *no
+          longer active* in ``_path_to_hash``, this is a rename/move → reuse
+          the original file_id.
+        - If the same content_hash was seen before at a path that is *still
+          active*, this is a copy → generate a new file_id so both source
+          records remain distinct.
         """
         composite_key = f"{path}:{content_hash}"
         with self._lock:
-            ***REMOVED*** 1. Exact match: same path + same content (most common)
+            ***REMOVED*** 1. Exact match: same path + same content (most common / idempotent)
             if composite_key in self._key_to_id:
                 file_id = self._key_to_id[composite_key]
-            ***REMOVED*** 2. Content seen before at different path (rename/move)
+
             elif content_hash in self._hash_to_id:
-                file_id = self._hash_to_id[content_hash]
-                self._key_to_id[composite_key] = file_id
-                logger.info(
-                    "Manifest: reused file_id=%s for renamed path=%s (content_hash=%s)",
-                    file_id,
-                    path,
-                    content_hash,
-                )
-            ***REMOVED*** 3. Genuinely new file
+                ***REMOVED*** Hash was seen before — determine rename vs copy.
+                ***REMOVED*** Find which paths currently hold this hash.
+                active_paths_for_hash = {
+                    p for p, h in self._path_to_hash.items() if h == content_hash
+                }
+                if not active_paths_for_hash:
+                    ***REMOVED*** 2. Rename/move: original path no longer active → reuse id.
+                    file_id = self._hash_to_id[content_hash]
+                    self._key_to_id[composite_key] = file_id
+                    logger.info(
+                        "Manifest: reused file_id=%s for renamed path=%s (content_hash=%s)",
+                        file_id,
+                        path,
+                        content_hash,
+                    )
+                else:
+                    ***REMOVED*** 3. Copy: at least one path with this hash is still active
+                    ***REMOVED***    → generate a distinct file_id to prevent copy-collapse (***REMOVED***1603).
+                    file_id = uuid.uuid4().hex[:16]
+                    self._key_to_id[composite_key] = file_id
+                    logger.info(
+                        "Manifest: new copy file_id=%s for path=%s "
+                        "(content_hash=%s, original paths still active: %s)",
+                        file_id,
+                        path,
+                        content_hash,
+                        active_paths_for_hash,
+                    )
+
             else:
+                ***REMOVED*** 4. Genuinely new file
                 file_id = uuid.uuid4().hex[:16]
                 self._key_to_id[composite_key] = file_id
+                self._hash_to_id[content_hash] = file_id
                 logger.info("Manifest: new file_id=%s for path=%s", file_id, path)
 
             ***REMOVED*** Always update reverse mappings
-            self._hash_to_id[content_hash] = file_id
             self._path_to_hash[path] = content_hash
             self.save()
             return file_id
