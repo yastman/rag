@@ -1,7 +1,9 @@
 """History search tool — wraps existing history sub-graph (***REMOVED***413).
 
 Phase 1: Delegates to build_history_graph() (existing 4-node pipeline).
-Dependencies injected via config["configurable"]["bot_context"].
+Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
+(SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
+— see ***REMOVED***1252).
 
 Semantic caching added in ***REMOVED***431/***REMOVED***464:
   1. Embedding cache — get_embedding / store_embedding (7d TTL)
@@ -17,6 +19,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import get_bot_context
 from telegram_bot.agents.history_graph.graph import build_history_graph
 from telegram_bot.observability import get_client, observe
 
@@ -42,7 +45,7 @@ async def history_search(
         deal_id: Optional CRM deal ID to scope results.
         scope: 'all' | 'deal' | 'chat' — filter scope.
     """
-    ctx = config.get("configurable", {}).get("bot_context")
+    ctx = get_bot_context(None, config)
 
     lf = get_client()
     lf.update_current_span(input={"query_preview": query[:120], "deal_id": deal_id})
