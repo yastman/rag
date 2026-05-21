@@ -91,9 +91,12 @@ def setup_indexes():
             "description": "Number of bathrooms",
         },
         {
-            "field_name": "metadata.furniture",
-            "field_schema": models.PayloadSchemaType.KEYWORD,
-            "description": "Furniture availability (Есть)",
+            "field_name": "metadata.furnished",
+            "field_schema": models.PayloadSchemaType.BOOL,
+            "description": (
+                "Furnished status (bool, canonical for document/CSV pipeline; "
+                "see docs/QDRANT_STACK.md)"
+            ),
         },
         {
             "field_name": "metadata.year_round",
@@ -140,7 +143,7 @@ def setup_indexes():
     print("  • Distance to sea (range filter)")
     print("  • Maintenance cost (range filter)")
     print("  • Bathrooms (exact match)")
-    print("  • Furniture, year-round (keyword match)")
+    print("  • Furnished (bool match), year-round (keyword match)")
     print("\nYour RAG bot will now filter only CSV rows (real apartments)!")
 
 

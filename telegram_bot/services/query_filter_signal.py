@@ -97,7 +97,7 @@ def detect_filter_sensitive_query(query: str) -> QueryFilterSignal:
     if _BATHROOMS_RE.search(query):
         reasons.append("bathrooms")
     if _FURNITURE_RE.search(query):
-        reasons.append("furniture")
+        reasons.append("furnished")
     if _YEAR_ROUND_RE.search(query):
         reasons.append("year_round")
     return QueryFilterSignal(is_filter_sensitive=bool(reasons), reasons=tuple(reasons))

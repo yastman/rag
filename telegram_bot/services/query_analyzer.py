@@ -30,7 +30,7 @@ SYSTEM_PROMPT = """Ты QueryAnalyzer для системы поиска нед�
 - distance_to_sea (integer): расстояние до моря в метрах, операторы: lt, lte, gt, gte
 - maintenance (float): стоимость поддержки в евро, операторы: lt, lte, gt, gte
 - bathrooms (integer): количество санузлов
-- furniture (string): "Есть" (если упомянута мебель)
+- furnished (bool): true (если упомянута мебель), false (если явно указано "без мебели")
 - year_round (string): "Да" (если упомянута круглогодичность)
 
 ФОРМАТ ОТВЕТА (строгий JSON):

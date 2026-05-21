@@ -66,10 +66,10 @@ class FilterExtractor(BaseFilterExtractor):
         if bathrooms:
             filters["bathrooms"] = bathrooms
 
-        # Furniture filter
-        furniture = self._extract_furniture(query)
-        if furniture:
-            filters["furniture"] = furniture
+        # Furnished filter (canonical key for document/CSV pipeline; #1401)
+        furnished = self._extract_furnished(query)
+        if furnished is not None:
+            filters["furnished"] = furnished
 
         # Year-round filter
         year_round = self._extract_year_round(query)
@@ -301,21 +301,39 @@ class FilterExtractor(BaseFilterExtractor):
 
         return None
 
-    def _extract_furniture(self, query: str) -> str | None:
-        """Extract furniture requirement from query."""
+    def _extract_furnished(self, query: str) -> bool | None:
+        """Extract furnished requirement from query.
+
+        Returns ``True`` for positive phrasing ("с мебелью", "меблирован",
+        "обставлен"), ``False`` for explicit negative phrasing ("без мебели",
+        "немеблирован"), and ``None`` when furniture is not mentioned. The
+        returned bool maps directly to ``metadata.furnished`` BOOL on the
+        document/CSV Qdrant collection (see docs/QDRANT_STACK.md, #1401).
+
+        Negative patterns are checked first so "без мебели" is not also
+        matched by the substring "мебель".
+        """
         query_lower = query.lower()
 
-        # "s mebelyu", "meblirovannaya"
-        patterns = [
+        # Negative phrasing must be checked before positive (the substring
+        # "мебел" overlaps with "без мебели").
+        negative_patterns = [
+            r"без\s+мебели",
+            r"немеблирован",
+        ]
+        for pattern in negative_patterns:
+            if re.search(pattern, query_lower):
+                return False
+
+        positive_patterns = [
             r"с\s+мебелью",
             r"меблирован",
             r"с\s+мебель",
             r"обставлен",
         ]
-
-        for pattern in patterns:
+        for pattern in positive_patterns:
             if re.search(pattern, query_lower):
-                return "Есть"
+                return True
 
         return None
 
