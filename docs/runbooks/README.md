@@ -8,10 +8,10 @@ Operator entrypoint for container/service investigations and incident response. 
 |---|---|
 | Remote Docker workflow (SSH, Colima, env sync, bot container) | See Docker runbook below |
 | Native Git/GitHub hygiene | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
-| Recent Langfuse traces (`изучи последние трейсы`) | `make validate-traces-fast` → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
-| Qdrant health / query / index issues (`изучи последние qdrant запросы`) | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
-| Redis / cache degradation (`сломался redis`) | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
-| LiteLLM / provider failure (`сломался litellm`) | `curl -s http://localhost:4000/health` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
+| Recent Langfuse traces (Russian: "изучи последние трейсы") | `make validate-traces-fast` → [`LANGFUSE_TRACING_GAPS.md`](LANGFUSE_TRACING_GAPS.md) |
+| Qdrant health / query / index issues (Russian: "изучи последние qdrant запросы") | `curl -fsS http://localhost:6333/readyz` → [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
+| Redis / cache degradation (Russian: "сломался redis") | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
+| LiteLLM / provider failure (Russian: "сломался litellm") | `curl -s http://localhost:4000/health` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Compose service health | `make docker-ps` → [`DOCKER.md`](../../DOCKER.md) |
 | Self-hosted runner offline / nightly-heavy queued | `scripts/check_self_hosted_runner.sh` → [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
 

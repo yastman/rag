@@ -55,7 +55,7 @@ PropertyBot.handle_query()
 
 Client pipeline uses store guards:
 - Only stores for `FAQ`, `GENERAL`, `ENTITY`, `STRUCTURED` types
-- Skips contextual follow-ups ("подробнее", "первый")
+- Skips contextual follow-ups ("подробнее"/"more details", "первый"/"the first one")
 - Requires `grade_confidence >= 0.005` (RRF scale)
 
 ***REMOVED******REMOVED*** Path 2: SDK Agent Pipeline
