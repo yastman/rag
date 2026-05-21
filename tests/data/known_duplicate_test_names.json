@@ -174,17 +174,12 @@
     "tests/integration/test_voyage_integration.py",
     "tests/unit/services/test_voyage_integration.py"
   ],
-  "test_default_collection_name": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
-    "tests/unit/ingestion/test_qdrant_hybrid_target.py"
-  ],
   "test_default_search_engine": [
     "tests/unit/config/test_constants.py",
     "tests/unit/test_settings.py"
   ],
   "test_default_values": [
     "tests/unit/graph/test_config.py",
-    "tests/unit/ingestion/test_gdrive_indexer.py",
     "tests/unit/test_cocoindex_flow.py",
     "tests/unit/test_ingestion_service.py"
   ],
@@ -194,8 +189,6 @@
     "tests/unit/services/test_apartment_search_filters.py"
   ],
   "test_deterministic": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
-    "tests/unit/ingestion/test_gdrive_indexer.py",
     "tests/unit/ingestion/test_qdrant_hybrid_target.py",
     "tests/unit/ingestion/test_unified_flow.py",
     "tests/unit/ingestion/test_unified_manifest.py",
@@ -208,10 +201,6 @@
   "test_docling_health": [
     "tests/integration/test_docker_services.py",
     "tests/smoke/test_smoke_services.py"
-  ],
-  "test_docx": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
-    "tests/unit/ingestion/test_unified_flow.py"
   ],
   "test_embed_documents_sync": [
     "tests/integration/test_contextualized_pipeline.py",
@@ -551,10 +540,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_nested_path": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
-    "tests/unit/ingestion/test_unified_flow.py"
-  ],
   "test_no_results": [
     "tests/unit/agents/test_apartment_tools.py",
     "tests/unit/test_export_traces_to_dataset.py"
@@ -570,10 +555,6 @@
   "test_payload_has_required_fields": [
     "tests/integration/test_unified_ingestion_e2e.py",
     "tests/unit/ingestion/test_payload_contract.py"
-  ],
-  "test_pdf": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
-    "tests/unit/ingestion/test_unified_flow.py"
   ],
   "test_pipeline_mode_defaults_to_client_direct": [
     "tests/unit/pipelines/test_client_pipeline.py",
@@ -654,7 +635,6 @@
     "tests/unit/test_search_engines.py"
   ],
   "test_returns_16_char_hex": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
     "tests/unit/ingestion/test_qdrant_hybrid_target.py",
     "tests/unit/ingestion/test_unified_manifest.py"
   ],
@@ -744,10 +724,6 @@
   "test_translit_improves_sparse_search": [
     "tests/integration/test_voyage_integration.py",
     "tests/unit/services/test_voyage_integration.py"
-  ],
-  "test_txt": [
-    "tests/unit/ingestion/test_gdrive_flow.py",
-    "tests/unit/ingestion/test_unified_flow.py"
   ],
   "test_unknown_event": [
     "tests/unit/observability/test_tracing_context.py",
