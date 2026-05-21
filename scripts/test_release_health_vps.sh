@@ -60,20 +60,13 @@ if printf '%s\n' "$container_statuses" | grep -Eq '\(unhealthy\)'; then
   fail "compose project has unhealthy containers"
 fi
 
-removed_services=(
-  "mini-app-api"
-  "mini-app-frontend"
-  "docling"
-  "ingestion"
-  "langfuse"
-  "langfuse-worker"
-  "clickhouse"
-  "minio"
-  "redis-langfuse"
-)
+# Single source of truth: scripts/lib/vps_noncore_services.sh (#1611).
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# shellcheck source=lib/vps_noncore_services.sh
+. "${SCRIPT_DIR}/lib/vps_noncore_services.sh"
 
 running_services="$(docker compose ps --status running --services 2>/dev/null || true)"
-for removed_service in "${removed_services[@]}"; do
+for removed_service in "${VPS_NONCORE_SERVICES[@]}"; do
   if printf '%s\n' "$running_services" | grep -Eq "^${removed_service}$"; then
     fail "removed service is running in minimal VPS runtime: ${removed_service}"
   fi

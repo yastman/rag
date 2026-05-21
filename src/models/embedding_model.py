@@ -10,7 +10,7 @@ pulling torch at import time. Install with: uv sync --extra ml-local
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 
 if TYPE_CHECKING:
@@ -62,7 +62,7 @@ def get_bge_m3_model(use_fp16: bool = True, device: str | None = None) -> BGEM3F
     else:
         logger.debug("Using existing BGE-M3 model instance (singleton)")
 
-    return _bge_m3_model
+    return cast("BGEM3FlagModel", _bge_m3_model)
 
 
 def get_sentence_transformer(model_name: str = "BAAI/bge-m3") -> SentenceTransformer:
@@ -95,7 +95,7 @@ def get_sentence_transformer(model_name: str = "BAAI/bge-m3") -> SentenceTransfo
     else:
         logger.debug("Using existing SentenceTransformer instance (singleton)")
 
-    return _sentence_transformer
+    return cast("SentenceTransformer", _sentence_transformer)
 
 
 def clear_models():

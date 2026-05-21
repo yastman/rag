@@ -1,4 +1,4 @@
-"""Apartment extraction pipeline: LLM first, regex fallback."""
+"""Apartment extraction pipeline: regex-first hybrid extraction."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ _CACHE_TTL = 86400  # 24h
 
 
 class ApartmentExtractionPipeline:
-    """Orchestrates LLM first, regex fallback."""
+    """Orchestrates cache, regex parsing, optional LLM gap-fill, and merge."""
 
     def __init__(
         self,
