@@ -40,8 +40,8 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) — Ingestion, query, and voice runtime flows.
 - [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) — Query routing and state machine design.
 - [`CONTEXTUALIZED_EMBEDDINGS.md`](CONTEXTUALIZED_EMBEDDINGS.md) — Embedding strategy and contextualization.
-- [`RAG_API.md`](RAG_API.md) — FastAPI RAG API contract.
-- [`API_REFERENCE.md`](API_REFERENCE.md) — API reference.
+- [`RAG_API.md`](RAG_API.md) — RAG API contract: endpoints, schemas, error model, architecture.
+- [`API_REFERENCE.md`](API_REFERENCE.md) — RAG API quick-start: curl/httpx examples and integration recipes.
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Guide for extending graph nodes, tools, query types, and ingestion sources.
 
 ## Operations & Runbooks
