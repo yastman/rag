@@ -77,7 +77,7 @@ not a semantic response-cache type.
 ```
 # Semantic cache (RedisVL vector index)
 Index: sem:v8:bge1024
-Fields: query_text, query_type, language, user_id, cache_scope,
+Fields: prompt (stored query text), query_type, language, user_id, cache_scope,
         agent_role, grounding_mode, filter_signature, response,
         semantic_cache_safe_reuse, response_state, cache_eligible,
         schema_version

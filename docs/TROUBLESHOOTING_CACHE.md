@@ -157,6 +157,9 @@ _SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 
 ### Cache Thresholds by Query Type
 
+> Canonical values are in [CACHE_DEGRADATION.md](CACHE_DEGRADATION.md#per-query-type-thresholds).
+> This table is duplicated here for quick reference during debugging.
+
 | Query Type | Distance Threshold | TTL |
 |------------|-------------------|-----|
 | `FAQ` | 0.12 | 24h |
