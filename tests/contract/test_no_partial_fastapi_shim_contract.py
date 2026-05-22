@@ -37,18 +37,6 @@ SCAN_ROOTS = (
     REPO_ROOT / "tests" / "contract",
 )
 
-# Patterns that indicate a partial fake-module install. The literal
-# ``sys.modules["fastapi"] =`` assignment is the smoking gun; ``_FakeFastAPI``
-# / ``_FakeJSONResponse`` were the specific class names from the regression.
-FORBIDDEN_PATTERNS = (
-    'sys.modules["fastapi"] =',
-    "sys.modules['fastapi'] =",
-    'sys.modules["fastapi.responses"] =',
-    "sys.modules['fastapi.responses'] =",
-    "_FakeFastAPI",
-    "_FakeJSONResponse",
-)
-
 
 def _python_test_files() -> list[Path]:
     files: list[Path] = []
@@ -64,8 +52,28 @@ def _python_test_files() -> list[Path]:
 
 @pytest.mark.parametrize("test_path", _python_test_files(), ids=lambda p: p.name)
 def test_no_partial_fastapi_shim_in_sys_modules(test_path: Path) -> None:
+    # Patterns that indicate a partial fake-module install. The literal
+    # ``sys.modules["fastapi"] =`` assignment is the smoking gun; the
+    # ``_FakeFastAPI`` / ``_FakeJSONResponse`` class names came from the
+    # regression in tests/unit/api/test_rag_api_runtime.py before #2009.
+    #
+    # NOTE: keep this tuple inside the test function body. The sibling
+    # ``tests/unit/test_module_pollution.py::test_no_module_level_sys_modules_assignment``
+    # AST guard scans only top-level statements for the literal
+    # ``sys.modules[`` + ``=`` substring, so a module-level constant here
+    # would self-trip that guard. Building the tuple inside the function
+    # keeps both contracts honest without a guard exemption.
+    forbidden_patterns = (
+        'sys.modules["fastapi"] =',
+        "sys.modules['fastapi'] =",
+        'sys.modules["fastapi.responses"] =',
+        "sys.modules['fastapi.responses'] =",
+        "_FakeFastAPI",
+        "_FakeJSONResponse",
+    )
+
     text = test_path.read_text(encoding="utf-8")
-    found = [pat for pat in FORBIDDEN_PATTERNS if pat in text]
+    found = [pat for pat in forbidden_patterns if pat in text]
     assert not found, (
         f"#2009: {test_path.relative_to(REPO_ROOT)} installs a partial fake fastapi module "
         f"({found}). Use pytest.importorskip('fastapi', reason=...) at module top instead so "
