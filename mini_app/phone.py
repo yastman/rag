@@ -6,8 +6,8 @@ import logging
 
 from pydantic import BaseModel, field_validator
 
-from telegram_bot.observability import get_client, observe
-from telegram_bot.phone_utils import normalize_phone
+from src.observability import get_client, observe
+from src.phone_utils import normalize_phone
 
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class PhoneRequest(BaseModel):
 
 def get_kommo_client():
     """Get Kommo client (lazy import)."""
-    from telegram_bot.services.kommo_client import KommoClient  # type: ignore[import-untyped]
+    from src.services.kommo_client import KommoClient  # type: ignore[import-untyped]
 
     return KommoClient()
 
