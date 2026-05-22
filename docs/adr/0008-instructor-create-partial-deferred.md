@@ -15,11 +15,12 @@
 
 These are stable in `instructor>=1.0` (we are pinned to `>=1.7.0`).
 
-The repo uses `instructor` for structured extraction in three places, all **non-streaming** today:
+The repo uses `instructor` for structured extraction in two places, both **non-streaming** today:
 
 - `telegram_bot/services/apartment_llm_extractor.py` — `instructor.from_openai(llm)` → `chat.completions.create(response_model=ApartmentFilters, ...)` (apartment filter extraction).
 - `telegram_bot/services/query_analyzer.py` — `instructor.from_openai(self.client)` → query intent / language classification.
-- `telegram_bot/services/llm.py` — `instructor.from_openai(self.client)` → confidence scoring.
+
+> Historical note (#2000): a third site, `telegram_bot/services/llm.py`, used `instructor.from_openai` for confidence scoring; that module was removed when scoring moved to `telegram_bot/scoring.py`, which derives confidence from existing graph state instead of an instructor call.
 
 A repo-wide grep confirms zero `create_partial` / `create_iterable` usage:
 
