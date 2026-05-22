@@ -1,5 +1,12 @@
 # tests/smoke/conftest.py
-"""Smoke test fixtures - require live Qdrant and Redis."""
+"""Smoke test fixtures - require live Qdrant and Redis.
+
+URL/credential fixtures (``redis_url``, ``qdrant_url``, ``qdrant_api_key``,
+``qdrant_collection``) are owned by ``tests/fixtures/config.py`` and
+registered globally in ``tests/conftest.py`` (issue #2066). This module
+only declares smoke-tier-specific fixtures (live-service guard, service
+clients).
+"""
 
 import asyncio
 import os
@@ -10,20 +17,6 @@ import redis.asyncio as redis
 
 from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.qdrant import QdrantService
-
-
-@pytest.fixture(scope="module")
-def redis_url() -> str:
-    """Redis URL for smoke tests, with REDIS_PASSWORD injected if not embedded.
-
-    Mirrors `scripts/validate_traces.py::_build_redis_url` so smoke tests work
-    against Compose dev defaults (auth-required Redis) without per-test plumbing.
-    """
-    base = os.getenv("REDIS_URL", "redis://localhost:6379")
-    password = os.getenv("REDIS_PASSWORD", "")
-    if password and "@" not in base:
-        base = base.replace("redis://", f"redis://:{password}@", 1)
-    return base
 
 
 @pytest.fixture(scope="module")
