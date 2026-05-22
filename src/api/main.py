@@ -342,8 +342,8 @@ async def _query_with_explicit_trace(
 async def _execute_query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
     from src.observability import get_client, propagate_attributes
+    from src.scoring import write_langfuse_scores
     from telegram_bot.graph.state import make_initial_state
-    from telegram_bot.scoring import write_langfuse_scores
 
     start = time.perf_counter()
 
