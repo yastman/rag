@@ -56,7 +56,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
 - [`ALERTING.md`](ALERTING.md) — Loki/Alertmanager setup.
-- [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
+- [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache debugging guide (diagnose misses, inspect keys, metrics).
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 
 ## Quality & Evaluation
@@ -73,7 +73,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`ERROR_RESPONSES.md`](ERROR_RESPONSES.md) — Error response taxonomy.
 - [`HITL.md`](HITL.md) — Human-in-the-loop design.
 - [`HITL_CRM_FLOW.md`](HITL_CRM_FLOW.md) — CRM-specific HITL flow.
-- [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
+- [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache tier design and degradation behaviour.
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
 
 ## Fast Doc Search

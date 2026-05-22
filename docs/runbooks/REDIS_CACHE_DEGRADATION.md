@@ -1,5 +1,12 @@
 # Runbook: Redis Cache Degradation
 
+> **Role:** Incident runbook -- operator response when Redis cache service fails or degrades.
+>
+> | Related doc | Role |
+> |---|---|
+> | [CACHE_DEGRADATION.md](../CACHE_DEGRADATION.md) | Design behaviour -- tier architecture, degradation modes, thresholds |
+> | [TROUBLESHOOTING_CACHE.md](../TROUBLESHOOTING_CACHE.md) | Debugging guide -- diagnose misses, inspect keys, read metrics |
+
 > **Owner:** Retrieval & Cache subsystems
 > **Last verified:** 2026-05-12
 > **Verification command:**
@@ -34,11 +41,19 @@ Use this runbook when Redis cache issues affect RAG performance.
 
 ## Cache Tiers in the App
 
-- RedisVL **SemanticCache**: `sem:v8:bge1024`
-- RedisVL **EmbeddingsCache**: `embeddings:v5` (dense vectors and BGE-M3 query-bundle payload)
-- Exact async Redis caches (redis-py): `embeddings`, `sparse`, `search`, `rerank`, and `conversation`/state keys (`conversation:<user_id>`)
+For full tier design and degradation modes, see
+[CACHE_DEGRADATION.md](../CACHE_DEGRADATION.md#cache-tiers).
 
-BGE-M3 query-bundle optimization uses **RedisVL EmbeddingsCache** for dense vectors and stores sparse/ColBERT parts as metadata in the same payload. It is still an app-level cache optimization; retrieval remains in Qdrant.
+Key patterns for operator inspection:
+
+| Tier | Key pattern | Backend |
+|------|-------------|---------|
+| Semantic | `sem:v8:bge1024` | RedisVL SemanticCache |
+| Embeddings | `embeddings:v5` | RedisVL EmbeddingsCache |
+| Sparse | `sparse:v5:{hash}` | Redis exact |
+| Search | `search:v5:{hash}` | Redis exact |
+| Rerank | `rerank:v5:{hash}` | Redis exact |
+| Conversation | `conversation:{user_id}` | Redis LIST |
 
 ## Fast-Path Diagnosis (read-only)
 
@@ -99,9 +114,9 @@ Check for:
 | `redis-cli ping` works, but bot logs show `Connection refused` | App bug | Verify `REDIS_URL` in bot env; check password encoding |
 | Bot preflight shows `invalid username-password pair` / `WRONGPASS` / `NOAUTH` after local `.env` edit | Local auth drift | Run `make local-redis-recreate`, then `make test-bot-health` |
 | Redis memory is near limit and `evicted_keys` is rising | Service failure / capacity | Scale `maxmemory` or reduce TTL; see Remediation |
-| Cache hit rate is 0% but Redis is healthy and has keys | App bug | Check semantic cache threshold, query_type mapping, or `CACHE_VERSION` drift in `telegram_bot/integrations/cache.py` |
-| High latency **with** cache hits | App bug | Profile embedding or rerank tiers; latency may be upstream of Redis |
-| Only specific tiers miss (e.g. `search` hits, `semantic` misses) | App bug | Inspect tier-specific TTLs and `distance_threshold` in source |
+| Cache hit rate is 0% but Redis is healthy and has keys | App bug | See [TROUBLESHOOTING_CACHE.md](../TROUBLESHOOTING_CACHE.md) for threshold, query_type, and `CACHE_VERSION` debugging |
+| High latency **with** cache hits | App bug | Profile embedding or rerank tiers; see [TROUBLESHOOTING_CACHE.md](../TROUBLESHOOTING_CACHE.md) |
+| Only specific tiers miss (e.g. `search` hits, `semantic` misses) | App bug | Inspect tier-specific TTLs and `distance_threshold`; see [TROUBLESHOOTING_CACHE.md](../TROUBLESHOOTING_CACHE.md) |
 
 ### Cache Smoke Validation (for cache-hit health)
 
@@ -219,6 +234,8 @@ The system degrades gracefully — users still get responses, just without cache
 
 ## See Also
 
+- [Cache Degradation Behavior (design)](../CACHE_DEGRADATION.md)
+- [Troubleshooting: Semantic Cache (debugging)](../TROUBLESHOOTING_CACHE.md)
 - [Qdrant Troubleshooting](QDRANT_TROUBLESHOOTING.md)
 - [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md)
 - [Docker Services Reference](../../DOCKER.md)
