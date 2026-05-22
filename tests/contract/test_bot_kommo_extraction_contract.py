@@ -87,7 +87,7 @@ def test_bot_kommo_module_imports_are_clean() -> None:
 
 
 @pytest.mark.parametrize("helper", HELPERS)
-def test_helper_exposed(helper: str) -> None:
+def test_bot_kommo_helper_exposed(helper: str) -> None:
     """The helper must be defined at module top-level."""
     tree = ast.parse(NEW_MODULE.read_text())
     names = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -172,7 +172,7 @@ async def test_seed_uses_canonical_redis_key_constant() -> None:
 
 
 @pytest.mark.parametrize("helper", HELPERS)
-def test_bot_py_defines_helper_at_most_once(helper: str) -> None:
+def test_bot_py_defines_kommo_helper_at_most_once(helper: str) -> None:
     """``bot.py`` keeps the wrapper exactly once.
 
     Existing tests at ``tests/unit/test_kommo_token_seed.py`` import via
@@ -188,7 +188,7 @@ def test_bot_py_defines_helper_at_most_once(helper: str) -> None:
     )
 
 
-def test_bot_py_line_count_below_ratchet() -> None:
+def test_bot_py_kommo_line_count_below_ratchet() -> None:
     line_count = sum(1 for _ in BOT_PY.read_text().splitlines())
     assert line_count < BOT_PY_LINE_COUNT_CEILING, (
         f"bot.py line count is {line_count}; #1265 Slice 1 PR-6 ratchet "
