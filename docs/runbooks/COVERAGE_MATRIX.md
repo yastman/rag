@@ -64,11 +64,11 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 
 | Alert Name | Severity | Service | Runbook | Status | Notes |
 |------------|----------|---------|---------|--------|-------|
-| BGEServiceDown | warning | bge-m3 | EMBEDDING_SERVICE_FAILURE.md | gap-to-fill | New runbook needed |
-| BM42ServiceDown | warning | bm42 | EMBEDDING_SERVICE_FAILURE.md | gap-to-fill | New runbook needed |
-| EmbeddingServiceError | warning | embeddings | EMBEDDING_SERVICE_FAILURE.md | gap-to-fill | New runbook needed |
-| BGEEmbedRetryFromBot | warning | bge-m3 | EMBEDDING_SERVICE_FAILURE.md | gap-to-fill | New runbook needed |
-| BGEEmbedErrorFromBot | critical | bge-m3 | EMBEDDING_SERVICE_FAILURE.md | gap-to-fill | New runbook needed |
+| BGEServiceDown | warning | bge-m3 | [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | covered | |
+| BM42ServiceDown | warning | bm42 | [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | covered | |
+| EmbeddingServiceError | warning | embeddings | [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | covered | |
+| BGEEmbedRetryFromBot | warning | bge-m3 | [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | covered | |
+| BGEEmbedErrorFromBot | critical | bge-m3 | [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | covered | |
 
 ## infrastructure.yaml - Service: postgres
 
@@ -126,7 +126,7 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 | IngestionHighFailureRate | warning | ingestion | [vps-gdrive-ingestion-recovery.md](vps-gdrive-ingestion-recovery.md) | covered | |
 | IngestionDLQGrowing | warning | ingestion | [vps-gdrive-ingestion-recovery.md](vps-gdrive-ingestion-recovery.md) | covered | |
 | DoclingErrors | warning | ingestion | [vps-gdrive-ingestion-recovery.md](vps-gdrive-ingestion-recovery.md) | covered | Also gap-to-fill for service-level in DOCLING_FAILURE.md |
-| VoyageRateLimited | warning | ingestion | EMBEDDING_SERVICE_FAILURE.md | gap-to-fill | New embedding service runbook will cover Voyage rate limiting |
+| VoyageRateLimited | warning | ingestion | [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | covered | |
 | IngestionContainerDown | critical | ingestion | [vps-gdrive-ingestion-recovery.md](vps-gdrive-ingestion-recovery.md) | covered | |
 
 ---
@@ -136,16 +136,15 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 | Metric | Count |
 |--------|-------|
 | **Total alerts** | 52 |
-| **Covered** | 22 |
+| **Covered** | 28 |
 | **Gap-accepted** | 4 |
-| **Gap-to-fill** | 26 |
+| **Gap-to-fill** | 20 |
 
 ### New runbooks needed
 
 | Runbook | Alerts covered |
 |---------|---------------|
 | `TELEGRAM_BOT_FAILURE.md` | BotContainerDown, BotHighErrorRate, BotCriticalError, TelegramAPIError, BotRestarted, QueryProcessingError, SlowBotResponse, BotMemoryWarning |
-| `EMBEDDING_SERVICE_FAILURE.md` | BGEServiceDown, BM42ServiceDown, EmbeddingServiceError, BGEEmbedRetryFromBot, BGEEmbedErrorFromBot, VoyageRateLimited |
 | `DOCLING_FAILURE.md` | DoclingDown, DoclingOOM, DoclingConversionFailed, DoclingError |
 | `MINIO_FAILURE.md` | MinioDown, MinioDiskFull, MinioCorruption, MinioHealingFailed, MinioError |
 | `LIGHTRAG_FAILURE.md` | LightRAGDown, LightRAGError, LightRAGAPIError |
