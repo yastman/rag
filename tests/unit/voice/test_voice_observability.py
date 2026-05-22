@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from src.voice.observability import (
     build_voice_trace_metadata,
@@ -26,34 +26,17 @@ def test_build_voice_trace_metadata_omits_optional_fields_when_empty() -> None:
 
 
 def test_update_voice_trace_sets_trace_context() -> None:
-    mock_lf = MagicMock()
-    mock_observation = MagicMock()
-    mock_observation_ctx = MagicMock()
-    mock_observation_ctx.__enter__ = MagicMock(return_value=mock_observation)
-    mock_observation_ctx.__exit__ = MagicMock(return_value=None)
-    mock_lf.start_as_current_observation.return_value = mock_observation_ctx
-    mock_lf.create_trace_id.return_value = "trace-voice-42"
-    mock_context = MagicMock()
-    mock_context.__enter__ = MagicMock(return_value=None)
-    mock_context.__exit__ = MagicMock(return_value=None)
-
-    with (
-        patch("src.observability.get_langfuse_client", return_value=mock_lf),
-        patch(
-            "src.observability.propagate_attributes", return_value=mock_context
-        ) as mock_prop,
-    ):
+    with patch("src.voice.observability.update_lifecycle_trace") as update_trace:
         update_voice_trace(call_id="call-42", status="completed", duration_sec=9)
 
-    mock_prop.assert_called_once()
-    mock_lf.create_trace_id.assert_called_once_with(seed="voice-call-42")
-    mock_lf.start_as_current_observation.assert_called_once_with(
-        as_type="span",
-        name="voice-session",
-        trace_context={"trace_id": "trace-voice-42"},
-    )
-    mock_observation.update.assert_called_once_with(
-        metadata={"call_id": "call-42", "status": "completed", "duration_sec": 9}
+    update_trace.assert_called_once_with(
+        family="voice",
+        span_name="voice-session",
+        session_id="voice-call-42",
+        user_id="voice-agent",
+        tags=["voice", "call-lifecycle"],
+        metadata={"call_id": "call-42", "status": "completed", "duration_sec": 9},
+        trace_id=None,
     )
 
 

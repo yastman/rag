@@ -10,7 +10,6 @@ Contracts tested:
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -468,28 +467,17 @@ class TestVoiceLifecycleTraceContract:
     def test_update_voice_trace_writes_answered_status(self):
         from src.voice.observability import update_voice_trace
 
-        lf = MagicMock()
-        lf.create_trace_id.return_value = "trace-voice-contract"
-        observation = MagicMock()
-        observation_ctx = MagicMock()
-        observation_ctx.__enter__ = MagicMock(return_value=observation)
-        observation_ctx.__exit__ = MagicMock(return_value=False)
-        lf.start_as_current_observation.return_value = observation_ctx
-        with (
-            pytest.MonkeyPatch().context() as mp,
-        ):
-            mp.setattr("src.observability.get_langfuse_client", lambda: lf)
-            mp.setattr("src.observability.propagate_attributes", lambda **_: nullcontext())
+        with patch("src.voice.observability.update_lifecycle_trace") as update_trace:
             update_voice_trace(call_id="call-123", status="answered")
 
-        lf.create_trace_id.assert_called_once_with(seed="voice-call-123")
-        lf.start_as_current_observation.assert_called_once_with(
-            as_type="span",
-            name="voice-session",
-            trace_context={"trace_id": "trace-voice-contract"},
-        )
-        observation.update.assert_called_once_with(
-            metadata={"call_id": "call-123", "status": "answered"}
+        update_trace.assert_called_once_with(
+            family="voice",
+            span_name="voice-session",
+            session_id="voice-call-123",
+            user_id="voice-agent",
+            tags=["voice", "call-lifecycle"],
+            metadata={"call_id": "call-123", "status": "answered"},
+            trace_id=None,
         )
 
 
