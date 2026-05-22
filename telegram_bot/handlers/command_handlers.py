@@ -29,7 +29,6 @@ from aiogram.types import (
 
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.scoring import write_history_scores
-from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.tracing_context import make_session_id
 
 
@@ -219,9 +218,23 @@ async def cmd_stats(bot: PropertyBot, message: Message) -> None:
 
 
 async def cmd_metrics(bot: PropertyBot, message: Message) -> None:
-    """Handle /metrics command - show pipeline p50/p95 timing stats."""
-    metrics = PipelineMetrics.get()
-    text = f"```\n{metrics.format_text()}\n```"
+    """Handle /metrics command — emit current Prometheus metrics text format.
+
+    Slice 1/2 of #2058: replaces the deprecated `PipelineMetrics.format_text()`
+    rolling-window dump with the SDK-native
+    :func:`prometheus_client.generate_latest` output. Admin behaviour is
+    preserved (Telegram message in a Markdown code block); the content is
+    now the canonical Prometheus exposition format.
+    """
+    from prometheus_client import REGISTRY, generate_latest
+
+    payload = generate_latest(REGISTRY).decode("utf-8")
+    # Telegram's Markdown code-block has practical length limits; truncate
+    # at 3500 chars (admin command, debugging only) so the message always
+    # delivers even when the registry is large.
+    if len(payload) > 3500:
+        payload = payload[:3500] + "\n# ...truncated"
+    text = f"```\n{payload}\n```"
     await message.answer(text, parse_mode="Markdown")
 
 

@@ -117,19 +117,29 @@ class TestCmdMetrics:
     """Test cmd_metrics handler."""
 
     @pytest.mark.asyncio
-    async def test_calls_pipeline_metrics(self, mock_bot):
-        """cmd_metrics calls PipelineMetrics.get() and sends formatted text."""
-        message = _make_message()
-        with patch("telegram_bot.handlers.command_handlers.PipelineMetrics") as mock_pm:
-            mock_metrics = MagicMock()
-            mock_metrics.format_text.return_value = "p50=100ms p95=200ms"
-            mock_pm.get.return_value = mock_metrics
+    async def test_calls_prometheus_generate_latest(self, mock_bot):
+        """cmd_metrics emits the Prometheus default-REGISTRY text format (#2058)."""
+        from prometheus_client import Counter
 
-            await cmd_metrics(mock_bot, message)
+        # Increment a known counter so generate_latest output is non-trivial.
+        sentinel = Counter(
+            "cmd_metrics_test_sentinel_total",
+            "test sentinel for cmd_metrics rewrite (#2058)",
+        )
+        sentinel.inc(7)
+
+        message = _make_message()
+        await cmd_metrics(mock_bot, message)
 
         message.answer.assert_called_once()
         text = message.answer.call_args[0][0]
-        assert "p50" in text
+        # Markdown code-block envelope preserved
+        assert text.startswith("```\n")
+        assert text.endswith("\n```")
+        # Prometheus exposition format markers + our sentinel
+        assert "# HELP" in text
+        assert "# TYPE" in text
+        assert "cmd_metrics_test_sentinel_total" in text
 
 
 class TestCmdStart:
