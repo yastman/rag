@@ -14,6 +14,22 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 
 The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which is the fallback env file used by local `make` targets when `.env` is absent. There is only one local stack; do not create worktree-named Docker projects.
 
+## Worktree Volume Cleanup
+
+`git worktree remove` does **not** tear down Docker Compose stacks created from inside that worktree. Named volumes (HuggingFace caches, Postgres data, Qdrant data, Redis data) survive the worktree deletion and silently consume disk. See [#1546](https://github.com/yastman/rag/issues/1546).
+
+To detect and remove orphan volumes from removed worktrees on this host:
+
+```bash
+# Dry-run report (default; prints orphans, makes no changes)
+make docker-clean-orphan-worktree-volumes
+
+# Apply: actually delete the orphan volumes
+make docker-clean-orphan-worktree-volumes-apply
+```
+
+The script enumerates active worktrees via `git worktree list`, infers their Docker Compose project prefixes, and lists `rag-fresh` worktree-like volumes whose prefix does not match any active worktree. Active worktrees, unrelated Compose project prefixes, and the protected prefixes (`dev`, `rag`, `rag-fresh`, `vps`) are always preserved. The default mode is dry-run; deletion requires the `-apply` target. See [`scripts/cleanup_orphaned_worktree_volumes.sh`](scripts/cleanup_orphaned_worktree_volumes.sh) and the operator runbook [`docs/engineering/repo-hygiene-runbook.md`](docs/engineering/repo-hygiene-runbook.md).
+
 ## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:

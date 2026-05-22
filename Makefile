@@ -420,6 +420,12 @@ docker-clean-aggressive: ## Prune ALL unused Docker resources (images, volumes, 
 	docker system prune -f --volumes 2>/dev/null || true
 	@echo "$(GREEN)✓ Docker aggressively cleaned$(NC)"
 
+docker-clean-orphan-worktree-volumes: ## Report Docker volumes from removed git worktrees (dry-run, see #1546)
+	@bash scripts/cleanup_orphaned_worktree_volumes.sh
+
+docker-clean-orphan-worktree-volumes-apply: ## Delete Docker volumes from removed git worktrees (destructive, see #1546)
+	@bash scripts/cleanup_orphaned_worktree_volumes.sh --apply
+
 # =============================================================================
 # DOCKER PROFILES
 # =============================================================================
