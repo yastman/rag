@@ -114,9 +114,9 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 
 | Alert Name | Severity | Service | Runbook | Status | Notes |
 |------------|----------|---------|---------|--------|-------|
-| LightRAGDown | critical | lightrag | LIGHTRAG_FAILURE.md | gap-to-fill | New runbook needed |
-| LightRAGError | warning | lightrag | LIGHTRAG_FAILURE.md | gap-to-fill | New runbook needed |
-| LightRAGAPIError | warning | lightrag | LIGHTRAG_FAILURE.md | gap-to-fill | New runbook needed |
+| LightRAGDown | critical | lightrag | [LIGHTRAG_FAILURE.md](LIGHTRAG_FAILURE.md) | covered | |
+| LightRAGError | warning | lightrag | [LIGHTRAG_FAILURE.md](LIGHTRAG_FAILURE.md) | covered | |
+| LightRAGAPIError | warning | lightrag | [LIGHTRAG_FAILURE.md](LIGHTRAG_FAILURE.md) | covered | |
 
 ## ingestion.yaml - Service: ingestion
 
@@ -136,9 +136,9 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 | Metric | Count |
 |--------|-------|
 | **Total alerts** | 52 |
-| **Covered** | 22 |
+| **Covered** | 25 |
 | **Gap-accepted** | 4 |
-| **Gap-to-fill** | 26 |
+| **Gap-to-fill** | 23 |
 
 ### New runbooks needed
 
@@ -148,4 +148,3 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 | `EMBEDDING_SERVICE_FAILURE.md` | BGEServiceDown, BM42ServiceDown, EmbeddingServiceError, BGEEmbedRetryFromBot, BGEEmbedErrorFromBot, VoyageRateLimited |
 | `DOCLING_FAILURE.md` | DoclingDown, DoclingOOM, DoclingConversionFailed, DoclingError |
 | `MINIO_FAILURE.md` | MinioDown, MinioDiskFull, MinioCorruption, MinioHealingFailed, MinioError |
-| `LIGHTRAG_FAILURE.md` | LightRAGDown, LightRAGError, LightRAGAPIError |
