@@ -11,10 +11,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_api_limits": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
   "test_backfill_enables_server_side_colbert_search": [
     "tests/integration/test_colbert_backfill.py",
     "tests/unit/test_colbert_backfill.py"
@@ -22,10 +18,6 @@
   "test_baseline_search_returns_results": [
     "tests/unit/evaluation/test_search_engines_eval.py",
     "tests/unit/test_search_engines.py"
-  ],
-  "test_binary_dtype": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_cache_check_computes_colbert_when_embedding_cached": [
     "tests/unit/agents/test_rag_pipeline.py",
@@ -62,14 +54,6 @@
   "test_combined_filters": [
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
-  ],
-  "test_config_bool_fields_parse_env_strings": [
-    "tests/unit/config/test_bot_config_settings.py",
-    "tests/unit/test_settings.py"
-  ],
-  "test_config_get_collection_name": [
-    "tests/unit/config/test_bot_config_settings.py",
-    "tests/unit/test_settings.py"
   ],
   "test_contextualize_empty_chunks": [
     "tests/unit/contextualization/test_claude.py",
@@ -203,38 +187,12 @@
     "tests/smoke/test_smoke_services.py"
   ],
   "test_embed_documents_sync": [
-    "tests/integration/test_contextualized_pipeline.py",
     "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_contextualized_embeddings.py"
-  ],
-  "test_embed_empty_list": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_embed_empty_queries": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_embed_multiple_documents": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_embed_multiple_queries": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_embed_query_sync": [
-    "tests/integration/test_contextualized_pipeline.py",
     "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_contextualized_embeddings.py"
-  ],
-  "test_embed_single_document": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_embed_single_query": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_empty_query": [
     "tests/integration/test_voyage_integration.py",
@@ -273,92 +231,9 @@
     "tests/unit/services/test_apartment_extraction_pipeline.py",
     "tests/unit/services/test_apartment_llm_extractor.py"
   ],
-  "test_fallback_limits_to_three": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_fallback_no_chunks": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_fallback_with_chunks": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_float_dtype": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
   "test_format": [
     "tests/unit/observability/test_tracing_context.py",
     "tests/unit/test_bot_handlers.py"
-  ],
-  "test_format_context_empty_chunks": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_format_context_multiple_chunks": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm.py",
-    "tests/unit/services/test_llm_generate.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_format_context_no_raw_score": [
-    "tests/unit/graph/test_generate_node.py",
-    "tests/unit/services/test_llm.py"
-  ],
-  "test_format_context_single_chunk": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm.py",
-    "tests/unit/services/test_llm_generate.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_format_context_with_metadata": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_generate_answer_custom_system_prompt": [
-    "tests/unit/services/test_llm.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_generate_answer_fallback_on_http_error": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_generate_answer_fallback_on_timeout": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_generate_answer_success": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_generate_answer_uses_system_prompt": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_generate_custom_max_tokens": [
-    "tests/unit/services/test_llm.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_generate_raises_on_error": [
-    "tests/unit/services/test_llm.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_generate_returns_text": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
-  "test_generate_uses_low_temperature": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm.py",
-    "tests/unit/services/test_llm_generate.py",
-    "tests/unit/test_llm_service.py"
   ],
   "test_get_collection_stats": [
     "tests/integration/test_ingestion_e2e.py",
@@ -416,10 +291,8 @@
     "tests/unit/test_indexer.py"
   ],
   "test_init_creates_openai_client": [
-    "tests/unit/services/test_llm.py",
     "tests/unit/services/test_query_analyzer.py",
-    "tests/unit/test_hyde.py",
-    "tests/unit/test_llm_service.py"
+    "tests/unit/test_hyde.py"
   ],
   "test_init_creates_sync_client": [
     "tests/unit/contextualization/test_claude.py",
@@ -433,23 +306,10 @@
     "tests/unit/test_hyde.py",
     "tests/unit/test_ingestion_service.py"
   ],
-  "test_init_custom_values": [
-    "tests/unit/services/test_llm.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_init_default_values": [
-    "tests/unit/config/test_settings.py",
-    "tests/unit/services/test_llm.py"
-  ],
   "test_init_defaults": [
     "tests/unit/test_cocoindex_flow.py",
     "tests/unit/test_hyde.py",
-    "tests/unit/test_ingestion_service.py",
-    "tests/unit/test_llm_service.py"
-  ],
-  "test_init_strips_trailing_slash": [
-    "tests/unit/services/test_llm.py",
-    "tests/unit/services/test_query_analyzer.py"
+    "tests/unit/test_ingestion_service.py"
   ],
   "test_init_with_default_settings": [
     "tests/unit/contextualization/test_groq.py",
@@ -462,10 +322,6 @@
   "test_init_without_settings_uses_default": [
     "tests/unit/contextualization/test_claude.py",
     "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_int8_dtype": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_invalid_prefix_returns_none": [
     "tests/unit/test_feedback.py",
@@ -496,21 +352,9 @@
     "tests/unit/graph/nodes/test_rewrite.py",
     "tests/unit/graph/test_guard_node.py"
   ],
-  "test_lightrag_health": [
-    "tests/integration/test_docker_services.py",
-    "tests/smoke/test_smoke_services.py"
-  ],
-  "test_llm_service_has_generate_method": [
-    "tests/integration/test_llm_generate.py",
-    "tests/unit/services/test_llm_generate.py"
-  ],
   "test_main_dispatches_schema_check": [
     "tests/unit/ingestion/test_colbert_backfill.py",
     "tests/unit/ingestion/test_unified_cli.py"
-  ],
-  "test_manager_service_chain_includes_history_and_crm_tools": [
-    "tests/integration/test_service_chain_agent_tools.py",
-    "tests/unit/agents/test_service_chain_agent_tools.py"
   ],
   "test_message_text": [
     "tests/unit/observability/test_tracing_context.py",
@@ -614,22 +458,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_result_dataclass_creation": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_result_multiple_documents": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_results_dictionary_structure": [
-    "tests/unit/evaluation/test_evaluate_with_ragas.py",
-    "tests/unit/evaluation/test_smoke_test.py"
-  ],
-  "test_results_viewing_is_stale_compat_only": [
-    "tests/unit/test_bot_entry_points_crm.py",
-    "tests/unit/test_results_callbacks.py"
-  ],
   "test_retrieval_module_reexports_shared_helper": [
     "tests/unit/retrieval/test_search_engines.py",
     "tests/unit/test_search_engines.py"
@@ -658,23 +486,10 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_service_initialization": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_service_rejects_invalid_dimension": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
   "test_settings_defaults": [
-    "tests/integration/test_contextualized_pipeline.py",
     "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_bge_m3_endpoints.py",
     "tests/unit/test_small_to_big.py"
-  ],
-  "test_settings_has_contextualized_flag": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_setup_registers_middleware": [
     "tests/unit/test_middlewares.py",
@@ -697,29 +512,12 @@
     "tests/unit/services/test_generate_response.py"
   ],
   "test_supported_dimensions": [
-    "tests/integration/test_contextualized_pipeline.py",
     "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_contextualized_embeddings.py"
-  ],
-  "test_supported_dims": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_text_for_embedding_format": [
     "tests/integration/test_contextual_integration.py",
     "tests/unit/ingestion/test_contextual_integration.py"
-  ],
-  "test_to_dict_includes_contextualized": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_too_many_chunks": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
-  ],
-  "test_too_many_documents": [
-    "tests/integration/test_contextualized_pipeline.py",
-    "tests/unit/models/test_contextualized_pipeline.py"
   ],
   "test_translit_improves_sparse_search": [
     "tests/integration/test_voyage_integration.py",
