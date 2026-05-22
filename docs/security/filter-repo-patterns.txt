@@ -1,0 +1,55 @@
+# git-filter-repo --replace-text pattern template for P0 history scrub (#1580)
+#
+# This committed file is intentionally a template, not a directly runnable
+# replace-text file. Do not commit exact sensitive prefixes here, because the
+# public-release verification checks require those byte sequences to be absent
+# from reachable history.
+#
+# WARNING:
+#   - All 8 API keys MUST be rotated at providers BEFORE running filter-repo.
+#   - Run ONLY in an isolated clone, never on the primary workspace.
+#   - Force-push requires explicit user sign-off.
+
+***REMOVED***
+#    Broad match catches real keys, "..." placeholders, and "your-key-here".
+regex:<OPENAI_PROJECT_KEY_PREFIX>\S+==>[REDACTED-OPENAI-KEY]
+
+***REMOVED***
+#    Broad match catches real keys, "..." placeholders, and short placeholders.
+regex:<ANTHROPIC_API_KEY_PREFIX>\S+==>[REDACTED-ANTHROPIC-KEY]
+
+***REMOVED***
+#    Broad match catches real keys, "..." placeholders, and short placeholders.
+regex:<GROQ_API_KEY_PREFIX>\S+==>[REDACTED-GROQ-KEY]
+
+***REMOVED***
+regex:<VPS_IP_REGEX>==>[REDACTED-VPS-IP]
+
+***REMOVED***
+regex:<VPS_ADMIN_PATH_REGEX>==>[REDACTED-VPS-PATH]
+
+***REMOVED***
+#    Keep tighter pattern (20+ chars) to avoid over-matching filenames.
+regex:<ZAI_API_KEY_PREFIX>[A-Za-z0-9]{20,}==>[REDACTED-ZAI-KEY]
+
+# 7. Telegram Bot Tokens
+regex:<TELEGRAM_TOKEN_REGEX>==>[REDACTED-TELEGRAM-TOKEN]
+
+# 8. Telegram Bot Token in env/config assignment (bot_token=[REDACTED-TELEGRAM-TOKEN]
+regex:<BOT_TOKEN_ASSIGNMENT_REGEX>==>bot_token=[REDACTED-TELEGRAM-TOKEN]
+
+# 8b. Telegram Bot Token in env/config assignment (telegram_bot_token=[REDACTED-TELEGRAM-TOKEN]
+regex:<TELEGRAM_BOT_TOKEN_ASSIGNMENT_REGEX>==>telegram_bot_token=[REDACTED-TELEGRAM-TOKEN]
+
+# 9. Langfuse keys found by post-rewrite scanner
+regex:<LANGFUSE_SECRET_KEY_PREFIX>\S+==>[REDACTED-LANGFUSE-KEY]
+regex:<LANGFUSE_PUBLIC_KEY_PREFIX>\S+==>[REDACTED-LANGFUSE-KEY]
+
+***REMOVED***
+regex:ANTHROPIC_API_KEY=[REDACTED-ANTHROPIC-KEY]
+regex:OPENAI_API_KEY=[REDACTED-OPENAI-KEY]
+regex:GROQ_API_KEY=[REDACTED-GROQ-KEY]
+regex:ZAI_API_KEY=[REDACTED-ZAI-KEY]
+regex:LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY]
+regex:LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY]
+regex:BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN]

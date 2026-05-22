@@ -1,0 +1,18 @@
+# Optional local noise-reduction paths for trufflehog --exclude-paths.
+# These suppress accepted false positives only. Do not use as the only
+# public-release proof.
+
+(^|.*/)uv\.lock$
+(^|.*/)\.env\.example$
+(^|.*/)docker-compose\.dev\.yml$
+(^|.*/)docker-compose\.vps\.yml$
+(^|.*/)k8s/base/bot/deployment\.yaml$
+(^|.*/)k8s/base/ingestion/deployment\.yaml$
+(^|.*/)tests/unit/ingestion/test_unified_config\.py$
+(^|.*/)tests/unit/ingestion/test_unified_flow\.py$
+(^|.*/)tests/unit/test_k8s_secret_templates\.py$
+(^|.*/)docs/continuous-claude-v3-readme\.md$
+(^|.*/)VPS_QUICKSTART\.md$
+(^|.*/)\.planning/codebase/INTEGRATIONS\.md$
+(^|.*/)telegram_bot/config\.py$
+(^|.*/)logs/.*
