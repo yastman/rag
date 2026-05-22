@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARED_LIB = REPO_ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
 COMPOSE_VPS = REPO_ROOT / "compose.vps.yml"
 CONSUMERS = [
-    REPO_ROOT / "scripts" / "test_release_health_vps.sh",
+    REPO_ROOT / "scripts" / "probe" / "release_health_vps.sh",
     REPO_ROOT / "scripts" / "vps_cleanup_removed_services.sh",
 ]
 DUPLICATE_SCAN_FILES = sorted(
@@ -61,8 +61,7 @@ def _parse_shared_lib_array() -> list[str]:
         re.DOTALL,
     )
     assert match, (
-        f"VPS_NONCORE_SERVICES=( ... ) array not found in "
-        f"{SHARED_LIB.relative_to(REPO_ROOT)}"
+        f"VPS_NONCORE_SERVICES=( ... ) array not found in {SHARED_LIB.relative_to(REPO_ROOT)}"
     )
     body = match.group("body")
     items: list[str] = []
@@ -91,15 +90,12 @@ def _services_with_noncore_profile() -> list[str]:
 
 def test_shared_lib_exists_and_is_parseable() -> None:
     assert SHARED_LIB.exists(), (
-        f"single source-of-truth file is missing: "
-        f"{SHARED_LIB.relative_to(REPO_ROOT)}"
+        f"single source-of-truth file is missing: {SHARED_LIB.relative_to(REPO_ROOT)}"
     )
     items = _parse_shared_lib_array()
     assert items, "VPS_NONCORE_SERVICES is empty in shared lib"
     # No duplicates inside the canonical list itself.
-    assert len(items) == len(set(items)), (
-        f"VPS_NONCORE_SERVICES contains duplicates: {items}"
-    )
+    assert len(items) == len(set(items)), f"VPS_NONCORE_SERVICES contains duplicates: {items}"
 
 
 def test_shared_lib_matches_compose_vps_noncore_profile() -> None:
@@ -117,8 +113,21 @@ def test_consumers_reference_shared_lib() -> None:
     for path in CONSUMERS:
         text = path.read_text(encoding="utf-8")
         assert "scripts/lib/vps_noncore_services.sh" in text, (
-            f"{path.relative_to(REPO_ROOT)} does not source "
-            f"scripts/lib/vps_noncore_services.sh"
+            f"{path.relative_to(REPO_ROOT)} does not source scripts/lib/vps_noncore_services.sh"
+        )
+
+
+def test_consumers_source_shared_lib_with_resolvable_relative_path() -> None:
+    """The shell source path must still resolve after moving consumer scripts."""
+    for path in CONSUMERS:
+        text = path.read_text(encoding="utf-8")
+        match = re.search(r'\.\s+"\$\{SCRIPT_DIR\}/([^"]+)"', text)
+        assert match, f"{path.relative_to(REPO_ROOT)} does not source via SCRIPT_DIR"
+        resolved = (path.parent / match.group(1)).resolve()
+        assert resolved == SHARED_LIB.resolve(), (
+            f"{path.relative_to(REPO_ROOT)} sources {match.group(1)!r}, "
+            f"which resolves to {resolved.relative_to(REPO_ROOT)} instead of "
+            f"{SHARED_LIB.relative_to(REPO_ROOT)}"
         )
 
 

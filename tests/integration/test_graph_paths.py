@@ -741,6 +741,104 @@ async def test_path_voice_transcribe_full_rag():
 
 
 # ---------------------------------------------------------------------------
+# Voice path error propagation (#1089)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_voice_transcribe_api_error_propagates():
+    """STT API exception bubbles out of graph.ainvoke; downstream nodes skipped.
+
+    Issue #1089 calls for "Error propagation through subgraph" coverage. The
+    voice path's first node is `transcribe`, and Whisper API failures are
+    re-raised by `make_transcribe_node` (after Langfuse status update). This
+    test pins that the exception leaves the graph as-is and that no
+    downstream node (classify / retrieve / generate) was invoked.
+    """
+    api_error = RuntimeError("Whisper API 503 Service Unavailable")
+
+    mocks = _make_graph_mocks()
+    mocks["llm"].audio.transcriptions.create = AsyncMock(side_effect=api_error)
+
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+            show_transcription=True,
+            voice_language="ru",
+            stt_model="whisper",
+        )
+
+    state = make_initial_state(user_id=81, session_id="test-voice-error-1", query="")
+    state["voice_audio"] = b"fake-ogg-data"
+    state["voice_duration_s"] = 5.0
+    state["input_type"] = "voice"
+
+    with traced_pipeline(session_id="test-voice-error-api", user_id="integration"):
+        with _patch_graph_configs(mock_gc), pytest.raises(RuntimeError, match="503"):
+            await graph.ainvoke(state)
+
+    # transcribe was attempted exactly once — no retry layer in the graph
+    mocks["llm"].audio.transcriptions.create.assert_awaited_once()
+    # Downstream nodes must NOT have been called
+    mocks["qdrant"].hybrid_search_rrf.assert_not_awaited()
+    mocks["reranker"].rerank.assert_not_awaited()
+    mocks["llm"].chat.completions.create.assert_not_awaited()
+
+
+@pytest.mark.integration
+async def test_voice_transcribe_empty_text_raises_value_error():
+    """Empty Whisper output raises ValueError; downstream nodes skipped.
+
+    Issue #1089 — pins the contract that ``transcribe_node`` rejects empty
+    transcripts (whitespace-only counts as empty after ``.strip()``).
+    Empty audio / silent recordings must surface as a clear error rather
+    than feeding an empty string into ``classify`` / ``retrieve``.
+    """
+    transcript_mock = MagicMock(text="   ")  # whitespace only -> empty after strip()
+
+    mocks = _make_graph_mocks()
+    mocks["llm"].audio.transcriptions.create = AsyncMock(return_value=transcript_mock)
+
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+            show_transcription=True,
+            voice_language="ru",
+            stt_model="whisper",
+        )
+
+    state = make_initial_state(user_id=82, session_id="test-voice-error-2", query="")
+    state["voice_audio"] = b"fake-ogg-data"
+    state["voice_duration_s"] = 5.0
+    state["input_type"] = "voice"
+
+    with traced_pipeline(session_id="test-voice-error-empty", user_id="integration"):
+        with _patch_graph_configs(mock_gc), pytest.raises(ValueError, match="Empty transcription"):
+            await graph.ainvoke(state)
+
+    mocks["llm"].audio.transcriptions.create.assert_awaited_once()
+    mocks["qdrant"].hybrid_search_rrf.assert_not_awaited()
+    mocks["reranker"].rerank.assert_not_awaited()
+    mocks["llm"].chat.completions.create.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Conversation Memory: checkpointer persists messages across invocations
 # ---------------------------------------------------------------------------
 

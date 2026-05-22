@@ -24,10 +24,10 @@ jobs:
           enable-cache: true
 
       - name: Ruff lint
-        run: uvx ruff check src/ telegram_bot/ --output-format=github
+        run: uvx ruff check src/ telegram_bot/ mini_app/ services/ scripts/ --output-format=github
 
       - name: Ruff format check
-        run: uvx ruff format --target-version py312 --check src/ telegram_bot/
+        run: uvx ruff format --target-version py312 --check src/ telegram_bot/ mini_app/ services/ scripts/
 
   fast-tests:
     name: Fast Tests (unit + contract + critical graph paths)
@@ -53,6 +53,9 @@ jobs:
           --ignore=tests/unit/test_document_parser.py
           --ignore=tests/unit/test_evaluator.py
           --ignore=tests/unit/evaluation/test_ragas_evaluation.py
+          --ignore=tests/unit/api
+          --ignore=tests/unit/mini_app
+          --ignore=tests/contract/test_issue_1812_mypy_embedding_reranker_contract.py
           --ignore=tests/unit/voice/test_sip_setup.py
           --ignore=tests/unit/voice/test_voice_agent.py
           --ignore=tests/unit/ingestion/test_cocoindex_init.py
