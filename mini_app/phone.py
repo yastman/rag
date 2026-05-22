@@ -38,7 +38,7 @@ class PhoneRequest(BaseModel):
 
 def get_kommo_client():
     """Get Kommo client (lazy import)."""
-    from telegram_bot.services.kommo_client import KommoClient  # type: ignore[import-untyped]
+    from src.services.kommo_client import KommoClient  # type: ignore[import-untyped]
 
     return KommoClient()
 
