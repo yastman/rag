@@ -155,16 +155,18 @@ docker compose up -d --force-recreate docling
 
 ### Clear Corrupted Cache
 
-> **Caution:** This forces a full model re-download on next startup (may take several minutes).
+> **Caution:** This forces a full model re-download on next startup and can
+> hide the evidence needed to diagnose repeated model-load failures. Treat cache
+> deletion as a separate maintenance action after preserving logs.
 
 ```bash
 # Stop Docling
 docker compose stop docling
 
-# Remove the cache volume
-docker volume rm "$(docker volume ls -q | grep docling_cache)"
+# Verify the cache volume name; do not delete it from this runbook
+docker volume ls | grep docling_cache
 
-# Restart (will re-download models)
+# Restart after inspection
 docker compose up -d docling
 ```
 

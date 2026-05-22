@@ -7,13 +7,17 @@ Operator entrypoint for incident response and service investigations. Start here
 | Runbook | Scope | Description |
 |---------|-------|-------------|
 | [DOCLING_FAILURE.md](DOCLING_FAILURE.md) | Document Conversion | Docling outages, OOM, conversion failures, and errors |
+| [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | Embeddings | BGE-M3, BM42, embedding retries, and Voyage rate limits |
 | [GIT_PR_ISSUE_NATIVE.md](GIT_PR_ISSUE_NATIVE.md) | Git / GitHub | Branch, PR, issue, and worktree hygiene |
 | [LANGFUSE_TRACING_GAPS.md](LANGFUSE_TRACING_GAPS.md) | Observability | Langfuse missing traces, spans, and scores |
+| [LIGHTRAG_FAILURE.md](LIGHTRAG_FAILURE.md) | Graph Retrieval | LightRAG outages, API errors, and rate limits |
 | [LITEllm_FAILURE.md](LITEllm_FAILURE.md) | LLM Proxy | LiteLLM proxy outages, provider errors, fallback routing |
+| [MINIO_FAILURE.md](MINIO_FAILURE.md) | Object Storage | MinIO S3 outages, disk full, corruption, and healing failures |
 | [POSTGRESQL_WAL_RECOVERY.md](POSTGRESQL_WAL_RECOVERY.md) | Database | PostgreSQL WAL corruption and recovery procedures |
 | [QDRANT_TROUBLESHOOTING.md](QDRANT_TROUBLESHOOTING.md) | Vector DB | Qdrant health, collections, and query issues |
 | [REDIS_CACHE_DEGRADATION.md](REDIS_CACHE_DEGRADATION.md) | Cache | Redis cache misses, eviction, and connection failures |
 | [SELF_HOSTED_RUNNER.md](SELF_HOSTED_RUNNER.md) | CI/CD | GitHub Actions self-hosted runner for nightly-heavy CI |
+| [TELEGRAM_BOT_FAILURE.md](TELEGRAM_BOT_FAILURE.md) | Telegram Bot | Bot container, error rates, API failures, query failures, and memory |
 | [vps-gdrive-ingestion-recovery.md](vps-gdrive-ingestion-recovery.md) | Ingestion | VPS ingestion pipeline and Google Drive sync recovery |
 
 ## Coverage & Gaps
