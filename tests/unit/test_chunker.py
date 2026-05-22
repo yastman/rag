@@ -59,70 +59,11 @@ class TestChunkingStrategy:
 
     def test_strategy_values(self):
         """Test enum values."""
-        assert ChunkingStrategy.FIXED_SIZE.value == "fixed_size"
         assert ChunkingStrategy.SEMANTIC.value == "semantic"
-        assert ChunkingStrategy.SLIDING_WINDOW.value == "sliding_window"
-
-
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
-class TestDocumentChunkerFixedSize:
-    """Test fixed-size chunking strategy (deprecated — see #780)."""
-
-    def test_fixed_size_basic(self):
-        """Test basic fixed-size chunking."""
-        chunker = DocumentChunker(
-            chunk_size=100,
-            overlap=20,
-            strategy=ChunkingStrategy.FIXED_SIZE,
-        )
-
-        text = "A" * 200  # 200 characters
-        chunks = chunker.chunk_text(text, "test.pdf", "1")
-
-        assert len(chunks) >= 2
-        assert all(isinstance(c, Chunk) for c in chunks)
-        assert chunks[0].document_name == "test.pdf"
-
-    def test_fixed_size_overlap(self):
-        """Test that chunks have correct overlap."""
-        chunker = DocumentChunker(
-            chunk_size=100,
-            overlap=50,
-            strategy=ChunkingStrategy.FIXED_SIZE,
-        )
-
-        text = "A" * 150
-        chunks = chunker.chunk_text(text, "test.pdf", "1")
-
-        # With 100 chunk size and 50 overlap, step is 50
-        # For 150 chars, we should get multiple chunks
-        assert len(chunks) >= 2
-
-    def test_fixed_size_small_text(self):
-        """Test chunking text smaller than chunk_size."""
-        chunker = DocumentChunker(
-            chunk_size=1000,
-            overlap=100,
-            strategy=ChunkingStrategy.FIXED_SIZE,
-        )
-
-        text = "Short text"
-        chunks = chunker.chunk_text(text, "test.pdf", "1")
-
-        assert len(chunks) == 1
-        assert chunks[0].text == "Short text"
-
-    def test_fixed_size_empty_text(self):
-        """Test chunking empty text."""
-        chunker = DocumentChunker(
-            chunk_size=100,
-            overlap=20,
-            strategy=ChunkingStrategy.FIXED_SIZE,
-        )
-
-        chunks = chunker.chunk_text("", "test.pdf", "1")
-
-        assert len(chunks) == 0
+        # FIXED_SIZE and SLIDING_WINDOW were removed in #1235 (no production
+        # callers; emitted DeprecationWarning since #780).
+        assert not hasattr(ChunkingStrategy, "FIXED_SIZE")
+        assert not hasattr(ChunkingStrategy, "SLIDING_WINDOW")
 
 
 class TestDocumentChunkerSemantic:
@@ -189,42 +130,6 @@ class TestDocumentChunkerSemantic:
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-class TestDocumentChunkerSlidingWindow:
-    """Test sliding window chunking strategy (deprecated — see #780)."""
-
-    def test_sliding_window_basic(self):
-        """Test basic sliding window chunking."""
-        chunker = DocumentChunker(
-            chunk_size=100,
-            overlap=50,
-            strategy=ChunkingStrategy.SLIDING_WINDOW,
-        )
-
-        text = "A" * 200
-        chunks = chunker.chunk_text(text, "test.pdf", "1")
-
-        assert len(chunks) >= 3  # 200 chars, step=50, should get 4 windows
-
-    def test_sliding_window_overlap_content(self):
-        """Test that sliding windows actually overlap."""
-        chunker = DocumentChunker(
-            chunk_size=10,
-            overlap=5,
-            strategy=ChunkingStrategy.SLIDING_WINDOW,
-        )
-
-        text = "0123456789ABCDEFGHIJ"  # 20 chars
-        chunks = chunker.chunk_text(text, "test.pdf", "1")
-
-        # First chunk: 0-9, Second chunk: 5-14, etc.
-        assert len(chunks) >= 3
-        # Check overlap exists
-        if len(chunks) >= 2:
-            # Characters 5-9 should be in both first and second chunk
-            assert "56789" in chunks[0].text
-            assert "56789" in chunks[1].text
-
-
 class TestExtractMetadata:
     """Test metadata extraction from chunk text."""
 
