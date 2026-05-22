@@ -247,7 +247,7 @@ optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
 
 ## 6. Python Runtime Note
 
-Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
+Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` should use Python 3.12+.
 
 ## 7. Running Components Without Docker Wrapper
 

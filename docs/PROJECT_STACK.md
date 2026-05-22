@@ -6,7 +6,7 @@ Current stack snapshot for this repository as of 2026-05-07.
 
 | Area | Stack |
 | --- | --- |
-| Language | Python `>=3.11` (recommended `3.12`) |
+| Language | Python `>=3.12` |
 | Package/deps | `uv`, `pyproject.toml`, `uv.lock` |
 | Lint/type/tests | Ruff, MyPy, pytest + xdist |
 | Primary orchestration | Docker Compose v2 (`compose.yml` + `compose.dev.yml`) |
