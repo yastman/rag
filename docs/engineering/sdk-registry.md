@@ -52,6 +52,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ писать кастомные InlineKeyboard для навигации — использовать Select/Button/SwitchTo
   - States определяются ТОЛЬКО в states.py (централизованно)
   - setup_dialogs(dp) вызывается ПОСЛЕДНИМ после всех include_router
+  - **Документированное исключение (#1232 / #2055):** `telegram_bot/handlers/phone_collector.py` остаётся на raw aiogram Router + FSMContext. Причина: lead capture использует `KeyboardButton(request_contact=True)` через `ReplyKeyboardMarkup`, а aiogram-dialog не предоставляет эквивалентного widget'а для one-tap contact share. Принудительный переход на inline `Select`/`Button` ухудшит UX (ручной ввод вместо одного тапа) и снизит opt-in rate. CRM quick actions и demo handler мигрируют (см. #2053, #2054), phone collector остаётся exception'ом до тех пор, пока продукт не примет более слабый UX или aiogram-dialog не добавит contact-share widget.
 
 ## langgraph
 - **triggers:** graph, pipeline, node, edge, state, checkpoint, memory, agent, tool, RAG pipeline, voice
