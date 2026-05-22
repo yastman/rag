@@ -11,9 +11,9 @@ Measures:
 4. Recall@k: % of relevant docs retrieved (coverage metric)
 
 Usage:
-    python scripts/test_contextualized_ab.py
-    python scripts/test_contextualized_ab.py --k 5 --runs 3
-    python scripts/test_contextualized_ab.py --ground-truth tests/eval/ground_truth.json
+    python scripts/benchmark/contextualized_ab.py
+    python scripts/benchmark/contextualized_ab.py --k 5 --runs 3
+    python scripts/benchmark/contextualized_ab.py --ground-truth tests/eval/ground_truth.json
 """
 
 import argparse

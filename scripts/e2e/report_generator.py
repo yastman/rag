@@ -8,7 +8,7 @@ from pathlib import Path
 from jinja2 import Environment
 
 from .claude_judge import JudgeResult
-from .test_scenarios import TestScenario
+from .scenarios import TestScenario
 
 
 @dataclass
