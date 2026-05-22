@@ -121,16 +121,16 @@ Run the A/B test to compare baseline vs contextualized embeddings:
 
 ```bash
 # Basic test
-python scripts/test_contextualized_ab.py
+python scripts/benchmark/contextualized_ab.py
 
 # With ground truth evaluation
-python scripts/test_contextualized_ab.py \
+python scripts/benchmark/contextualized_ab.py \
     --ground-truth tests/eval/ground_truth.json \
     --k 5 \
     --runs 3
 
 # Different dimension
-python scripts/test_contextualized_ab.py --dim 2048
+python scripts/benchmark/contextualized_ab.py --dim 2048
 ```
 
 ### Metrics Evaluated
@@ -273,7 +273,7 @@ logging.getLogger("src.models.contextualized_embedding").setLevel(logging.DEBUG)
 
 ## See Also
 
-- `scripts/test_contextualized_ab.py` - A/B testing script
+- `scripts/benchmark/contextualized_ab.py` - A/B testing script
 - `tests/unit/models/test_contextualized_pipeline.py` - Service pipeline tests
 - `docs/PIPELINE_OVERVIEW.md` - Overall architecture
 - [Voyage AI Documentation](https://docs.voyageai.com/docs/contextualized-chunk-embeddings)
