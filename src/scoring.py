@@ -1,0 +1,402 @@
+"""Langfuse score-writing utilities shared by bot handler and RAG agent tool (#310).
+
+Extracted from bot.py to avoid circular imports between bot.py and agents/rag_agent.py.
+
+All scores use create_score(trace_id=...) for explicit trace scoping (#435).
+"""
+
+from __future__ import annotations
+
+from numbers import Real
+from typing import Any
+
+
+# --- Query type mapping for scores ---
+_QUERY_TYPE_SCORE = {
+    "CHITCHAT": 0.0,
+    "OFF_TOPIC": 0.0,
+    "SIMPLE": 1.0,
+    "GENERAL": 1.0,
+    "FAQ": 1.0,
+    "ENTITY": 1.0,
+    "STRUCTURED": 2.0,
+    "COMPLEX": 2.0,
+}
+
+
+def compute_checkpointer_overhead_proxy_ms(result: dict[str, Any], ainvoke_wall_ms: float) -> float:
+    """Compute proxy for checkpointer overhead: ainvoke wall-time minus sum of stage latencies.
+
+    Returns max(0, delta) to clamp negative values from timing jitter.
+    """
+    stages_ms = sum(float(v) * 1000 for v in result.get("latency_stages", {}).values())
+    return max(0.0, ainvoke_wall_ms - stages_ms)
+
+
+def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> None:
+    """Write a single score with explicit trace_id and idempotency key (#435)."""
+    lf.create_score(
+        trace_id=trace_id,
+        name=name,
+        value=value,
+        score_id=f"{trace_id}-{name}",
+        **kwargs,
+    )
+
+
+def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
+    """Write Langfuse scores from graph result state.
+
+    All scores use create_score(trace_id=...) for explicit trace scoping (#435).
+
+    Args:
+        lf: Langfuse client (from get_client(), may be SDK disabled client).
+        result: State dict returned by graph.ainvoke().
+        trace_id: Explicit trace ID for score isolation. Falls back to
+            lf.get_current_trace_id() if empty.
+    """
+    if not trace_id:
+        trace_id = lf.get_current_trace_id()
+    if not trace_id:
+        return  # No trace context — skip scoring
+
+    latency_stages = result.get("latency_stages", {})
+    total_ms = result.get("pipeline_wall_ms", 0.0)
+    e2e_ms = result.get("e2e_latency_ms")
+    if e2e_ms is None:
+        e2e_ms = result.get("user_perceived_wall_ms", total_ms)
+
+    cache_hit = result.get("cache_hit", False)
+    scores = {
+        "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
+        "latency_total_ms": e2e_ms,
+        "semantic_cache_hit": 1.0 if cache_hit else 0.0,
+        "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
+        "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
+        "rerank_applied": 1.0 if result.get("rerank_applied") else 0.0,
+        "rerank_cache_hit": 1.0 if result.get("rerank_cache_hit") else 0.0,
+        "llm_used": 1.0 if "generate" in latency_stages else 0.0,
+        "confidence_score": float(result.get("grade_confidence", 0.0)),
+        "llm_ttft_ms": float(result.get("llm_ttft_ms", 0.0)),
+        "llm_response_duration_ms": float(result.get("llm_response_duration_ms", 0.0)),
+    }
+    if not cache_hit:
+        scores["results_count"] = float(result.get("search_results_count", 0))
+        scores["no_results"] = 1.0 if result.get("search_results_count", 0) == 0 else 0.0
+
+    for name, value in scores.items():
+        score(lf, trace_id, name=name, value=value)
+
+    # --- Latency breakdown (#147) ---
+    # Always-written BOOLEAN flags
+    score(
+        lf,
+        trace_id,
+        name="streaming_enabled",
+        value=1 if result.get("streaming_enabled") else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="llm_timeout",
+        value=1 if result.get("llm_timeout") else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="llm_stream_recovery",
+        value=1 if result.get("llm_stream_recovery") else 0,
+        data_type="BOOLEAN",
+    )
+
+    # Conditional NUMERIC + paired unavailable BOOLEAN flags
+    decode_ms = result.get("llm_decode_ms")
+    if decode_ms is not None:
+        score(lf, trace_id, name="llm_decode_ms", value=float(decode_ms))
+    else:
+        score(lf, trace_id, name="llm_decode_unavailable", value=1, data_type="BOOLEAN")
+
+    tps = result.get("llm_tps")
+    if tps is not None:
+        score(lf, trace_id, name="llm_tps", value=float(tps))
+    else:
+        score(lf, trace_id, name="llm_tps_unavailable", value=1, data_type="BOOLEAN")
+
+    queue_ms = result.get("llm_queue_ms")
+    if queue_ms is not None:
+        score(lf, trace_id, name="llm_queue_ms", value=float(queue_ms))
+    else:
+        score(lf, trace_id, name="llm_queue_unavailable", value=1, data_type="BOOLEAN")
+
+    # --- Response length control (#129) ---
+    if "answer_words" in result:
+        score(lf, trace_id, name="answer_words", value=float(result["answer_words"]))
+    if "answer_chars" in result:
+        score(lf, trace_id, name="answer_chars", value=float(result["answer_chars"]))
+    if "answer_to_question_ratio" in result:
+        score(
+            lf,
+            trace_id,
+            name="answer_to_question_ratio",
+            value=float(result["answer_to_question_ratio"]),
+        )
+    policy_mode = str(result.get("response_policy_mode", "disabled"))
+    response_style = str(result.get("response_style", "")).strip()
+    if response_style and policy_mode == "enforced":
+        style_map = {"short": 0, "balanced": 1, "detailed": 2}
+        score(
+            lf,
+            trace_id,
+            name="response_style_applied",
+            value=float(style_map.get(response_style, 1)),
+        )
+
+    # --- Voice transcription scores (#151) ---
+    input_type = result.get("input_type", "text")
+    score(lf, trace_id, name="input_type", value=input_type, data_type="CATEGORICAL")
+
+    stt_ms = result.get("stt_duration_ms")
+    if stt_ms is not None:
+        score(lf, trace_id, name="stt_duration_ms", value=float(stt_ms))
+
+    voice_dur = result.get("voice_duration_s")
+    if voice_dur is not None:
+        score(lf, trace_id, name="voice_duration_s", value=float(voice_dur))
+
+    # --- Embedding resilience (#210) ---
+    score(
+        lf,
+        trace_id,
+        name="bge_embed_error",
+        value=1 if result.get("embedding_error") else 0,
+        data_type="BOOLEAN",
+    )
+    embed_latency_ms = result.get("pre_agent_embed_ms")
+    if embed_latency_ms is None:
+        cache_check_s = result.get("latency_stages", {}).get("cache_check")
+        if cache_check_s is not None:
+            embed_latency_ms = round(cache_check_s * 1000, 1)
+    if embed_latency_ms is not None:
+        score(
+            lf,
+            trace_id,
+            name="bge_embed_latency_ms",
+            value=float(embed_latency_ms),
+        )
+    bge_model_processing_ms = result.get("bge_model_processing_ms")
+    if isinstance(bge_model_processing_ms, Real) and not isinstance(bge_model_processing_ms, bool):
+        score(
+            lf,
+            trace_id,
+            name="bge_model_processing_ms",
+            value=float(bge_model_processing_ms),
+        )
+
+    # --- Prompt injection defense (#226) ---
+    score(
+        lf,
+        trace_id,
+        name="security_alert",
+        value=1 if result.get("injection_detected") else 0,
+        data_type="BOOLEAN",
+    )
+    injection_risk = float(result.get("injection_risk_score", 0.0) or 0.0)
+    if injection_risk > 0:
+        score(lf, trace_id, name="injection_risk_score", value=injection_risk)
+    injection_pattern = result.get("injection_pattern")
+    if injection_pattern:
+        score(
+            lf,
+            trace_id,
+            name="injection_pattern",
+            value=str(injection_pattern),
+            data_type="CATEGORICAL",
+        )
+    # --- Call limits (#374) ---
+    llm_calls = result.get("llm_call_count", 0)
+    if llm_calls > 0:
+        score(lf, trace_id, name="llm_calls_total", value=float(llm_calls))
+
+    # --- Conversation memory (#154, #159) ---
+    summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
+    if summarize_ms > 0:
+        score(lf, trace_id, name="summarize_ms", value=summarize_ms)
+
+    # Memory scores (#159)
+    messages = result.get("messages", [])
+    score(lf, trace_id, name="memory_messages_count", value=float(len(messages)))
+    score(
+        lf,
+        trace_id,
+        name="summarization_triggered",
+        value=1 if summarize_ms > 0 else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="grounded",
+        value=1 if result.get("grounded", True) else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="legal_answer_safe",
+        value=1 if result.get("legal_answer_safe", True) else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="semantic_cache_safe_reuse",
+        value=1 if result.get("semantic_cache_safe_reuse", True) else 0,
+        data_type="BOOLEAN",
+    )
+    score(
+        lf,
+        trace_id,
+        name="safe_fallback_used",
+        value=1 if result.get("safe_fallback_used") else 0,
+        data_type="BOOLEAN",
+    )
+
+    # Checkpointer overhead proxy (#159) — derived metric, kept for backwards
+    # compatibility. Direct checkpointer_overhead_ms (#1258) is preferred when
+    # available and emitted alongside.
+    if "checkpointer_overhead_proxy_ms" in result:
+        score(
+            lf,
+            trace_id,
+            name="checkpointer_overhead_proxy_ms",
+            value=float(result["checkpointer_overhead_proxy_ms"]),
+        )
+    # Direct checkpointer overhead (#1258) — sum of timed aput/aget/aput_writes/aget_tuple
+    # durations from InstrumentedCheckpointer. Includes only Redis I/O time, not
+    # Pregel framework or @observe decorator overhead like the proxy does.
+    if "checkpointer_overhead_ms" in result:
+        score(
+            lf,
+            trace_id,
+            name="checkpointer_overhead_ms",
+            value=float(result["checkpointer_overhead_ms"]),
+        )
+    if "checkpointer_op_count" in result:
+        score(
+            lf,
+            trace_id,
+            name="checkpointer_op_count",
+            value=float(result["checkpointer_op_count"]),
+        )
+
+    # --- Nurturing + funnel analytics (#390) ---
+    if "nurturing_batch_size" in result:
+        score(
+            lf, trace_id, name="nurturing_batch_size", value=float(result["nurturing_batch_size"])
+        )
+    if "nurturing_sent_count" in result:
+        score(
+            lf, trace_id, name="nurturing_sent_count", value=float(result["nurturing_sent_count"])
+        )
+    if "funnel_conversion_rate" in result:
+        score(
+            lf,
+            trace_id,
+            name="funnel_conversion_rate",
+            value=float(result["funnel_conversion_rate"]),
+        )
+    if "funnel_dropoff_rate" in result:
+        score(lf, trace_id, name="funnel_dropoff_rate", value=float(result["funnel_dropoff_rate"]))
+
+    # --- Source attribution (#225) ---
+    sources_count = int(result.get("sources_count", 0) or 0)
+    score(
+        lf,
+        trace_id,
+        name="sources_shown",
+        value=1 if sources_count > 0 else 0,
+        data_type="BOOLEAN",
+    )
+    if sources_count > 0:
+        score(lf, trace_id, name="sources_count", value=float(sources_count))
+
+
+def write_history_scores(
+    lf: Any,
+    trace_id: str,
+    *,
+    count: int = 0,
+    latency_ms: float = 0.0,
+    backend: str = "qdrant",
+) -> None:
+    """Write Langfuse scores for /history search results (#451).
+
+    Args:
+        lf: Langfuse client.
+        trace_id: Explicit trace ID for score isolation.
+        count: Number of valid history results returned.
+        latency_ms: Search latency in milliseconds (0 for error/unavailable paths).
+        backend: History search backend identifier.
+    """
+    if not trace_id:
+        return
+    score(lf, trace_id, name="history_search_count", value=count, data_type="NUMERIC")
+    if latency_ms > 0:
+        score(lf, trace_id, name="history_search_latency_ms", value=latency_ms, data_type="NUMERIC")
+    empty = 1.0 if count == 0 else 0.0
+    score(lf, trace_id, name="history_search_empty", value=empty, data_type="NUMERIC")
+    score(lf, trace_id, name="history_backend", value=backend, data_type="CATEGORICAL")
+
+
+def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
+    """Write CRM tool usage scores from agent result messages (#440).
+
+    Inspects ToolMessage objects for CRM tool calls (name starts with ``crm_``),
+    counts successes vs errors, and writes 4 Langfuse scores.
+
+    Args:
+        lf: Langfuse client.
+        messages: Agent result message list (HumanMessage, AIMessage, ToolMessage, ...).
+        trace_id: Explicit trace ID for score isolation.
+    """
+    if not trace_id:
+        return
+
+    crm_total = 0
+    crm_success = 0
+    crm_error = 0
+
+    for msg in messages:
+        if getattr(msg, "type", None) != "tool":
+            continue
+        name = getattr(msg, "name", "") or ""
+        if not name.startswith("crm_"):
+            continue
+
+        crm_total += 1
+        status = str(getattr(msg, "status", "") or "").lower()
+        if status == "error":
+            crm_error += 1
+            continue
+        if status == "success":
+            crm_success += 1
+            continue
+
+        # Fallback for legacy/adapter messages where status is absent.
+        content = getattr(msg, "content", "") or ""
+        content_text = content if isinstance(content, str) else str(content)
+        if (
+            content_text.startswith("Ошибка")
+            or "Ошибка при" in content_text
+            or content_text == "CRM недоступен. Обратитесь к администратору."
+        ):
+            crm_error += 1
+        else:
+            crm_success += 1
+
+    score(lf, trace_id, name="crm_tool_used", value=1 if crm_total > 0 else 0, data_type="BOOLEAN")
+    score(lf, trace_id, name="crm_tools_count", value=float(crm_total))
+    score(lf, trace_id, name="crm_tools_success", value=float(crm_success))
+    score(lf, trace_id, name="crm_tools_error", value=float(crm_error))

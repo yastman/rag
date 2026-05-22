@@ -1105,7 +1105,7 @@ class TestRunSingleQuery:
         query = types.SimpleNamespace(text="q", source="faq", difficulty="easy")
         run_meta = {"run_id": "run-1", "git_sha": "abc123", "collection": "test-col"}
 
-        with patch("telegram_bot.scoring.write_langfuse_scores"):
+        with patch("src.scoring.write_langfuse_scores"):
             await run_single_query(
                 query,
                 services,
