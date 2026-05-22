@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from jinja2 import Template
+from jinja2 import Environment
 
 from .claude_judge import JudgeResult
 from .test_scenarios import TestScenario
@@ -67,6 +67,12 @@ class TestReport:
     @property
     def pass_rate(self) -> float:
         return (self.passed_tests / self.total_tests * 100) if self.total_tests else 0.0
+
+
+def build_html_template():
+    """Build the E2E HTML report template with autoescape enabled."""
+    environment = Environment(autoescape=True)
+    return environment.from_string(HTML_TEMPLATE)
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -335,7 +341,7 @@ class ReportGenerator:
 
         # HTML report
         html_path = self.reports_dir / f"e2e_{timestamp}.html"
-        template = Template(HTML_TEMPLATE)
+        template = build_html_template()
         html_content = template.render(report=report)
 
         with open(html_path, "w", encoding="utf-8") as f:

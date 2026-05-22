@@ -28,7 +28,7 @@ def _run_qdrant_connection_checks() -> bool:
 
     print("\n📋 Конфигурация:")
     print(f"   URL: {QDRANT_URL}")
-    print(f"   API Key: ***{QDRANT_API_KEY[-10:]}")
+    print(f"   API Key: {'configured' if QDRANT_API_KEY else 'Не установлен'}")
 
     # Тест 1: Проверка версии Qdrant
     print("\n🔌 Тест 1: Проверка доступности Qdrant...")

@@ -36,7 +36,7 @@ def _run_qdrant_read_checks() -> bool:
 
     print("\n📋 Конфигурация:")
     print(f"   URL: {QDRANT_URL}")
-    print(f"   API Key: {'***' + QDRANT_API_KEY[-10:] if QDRANT_API_KEY else 'Не установлен'}")
+    print(f"   API Key: {'configured' if QDRANT_API_KEY else 'Не установлен'}")
 
     try:
         # Подключение
