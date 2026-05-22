@@ -108,7 +108,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **как_у_нас:**
   - `telegram_bot/services/apartment_llm_extractor.py` — apartment filter extraction (single non-streaming call)
   - `telegram_bot/services/query_analyzer.py` — query intent / language classification (single non-streaming call)
-  - `telegram_bot/services/llm.py` — confidence scoring (single non-streaming call)
+  - (historical: `telegram_bot/services/llm.py` was the third instructor site for confidence scoring; removed in favour of `telegram_bot/scoring.py` which derives confidence from graph state, see ADR 0008)
 - **паттерны:**
   - REQUIRED shape: `instructor.from_openai(langfuse.openai.AsyncOpenAI(...))` — это сохраняет langfuse auto-trace wrap. Preflight: `tests/unit/services/test_query_analyzer.py::TestQueryAnalyzerInstructorLangfuseCompat`.
   - `chat.completions.create(response_model=PydanticModel, max_retries=2)` для retry на validation error.
@@ -333,7 +333,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **triggers:** LLM, генерация, completion, chat, AsyncOpenAI, OpenAI, модель, generate, structured output
 - **context7_id:** /openai/openai-python
 - **как_у_нас:**
-  - `telegram_bot/services/llm.py` — основной LLM-клиент через `langfuse.openai.AsyncOpenAI`
+  - `telegram_bot/graph/config.py::GraphConfig.create_llm()` — canonical async LLM-client factory through `langfuse.openai.AsyncOpenAI` (auto-trace) or plain `openai.AsyncOpenAI`
   - `telegram_bot/services/query_preprocessor.py` — query classification
   - `telegram_bot/services/query_analyzer.py` — intent analysis
   - `telegram_bot/services/apartment_llm_extractor.py` — structured extraction (OpenAI direct)
