@@ -13,8 +13,8 @@ import httpx
 import pytest
 import redis.asyncio as aioredis
 
-from scripts.e2e.test_scenarios import SCENARIOS
-from scripts.e2e.test_scenarios import TestGroup as _ScenarioGroup
+from scripts.e2e.scenarios import SCENARIOS
+from scripts.e2e.scenarios import TestGroup as _ScenarioGroup
 
 
 pytestmark = [pytest.mark.e2e, pytest.mark.integration]
