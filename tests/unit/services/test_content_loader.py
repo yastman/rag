@@ -31,7 +31,10 @@ def test_services_menu_text_exists():
 
 def test_load_services_config_file_not_found(monkeypatch, tmp_path):
     """FileNotFoundError when services.yaml is missing."""
-    import telegram_bot.services.content_loader as mod
+    # #1948 slice 3: canonical home is src.services.content_loader. The
+    # _CONFIG_DIR module-level constant lives there; the telegram_bot/
+    # module is a thin re-export shim and does not own its own copy.
+    import src.services.content_loader as mod
 
     # Clear lru_cache so the patched path is used
     mod.load_services_config.cache_clear()
