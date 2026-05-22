@@ -36,11 +36,14 @@ See also: [`observability-and-storage.md`](observability-and-storage.md#qdrant)
 ### "Inspect Redis/cache issues"
 
 ```bash
-# Runbook
+# Incident runbook
 cat docs/runbooks/REDIS_CACHE_DEGRADATION.md
 
-# Cache architecture and thresholds
+# Cache debugging guide
 cat docs/TROUBLESHOOTING_CACHE.md
+
+# Cache design behavior (architecture, tiers, thresholds)
+cat docs/CACHE_DEGRADATION.md
 
 # Redis integration and cache tiers
 rg -n "Redis|cache|redis-cli" telegram_bot/integrations/ telegram_bot/services/ src/

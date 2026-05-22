@@ -40,8 +40,8 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) — Ingestion, query, and voice runtime flows.
 - [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) — Query routing and state machine design.
 - [`CONTEXTUALIZED_EMBEDDINGS.md`](CONTEXTUALIZED_EMBEDDINGS.md) — Embedding strategy and contextualization.
-- [`RAG_API.md`](RAG_API.md) — FastAPI RAG API contract.
-- [`API_REFERENCE.md`](API_REFERENCE.md) — API reference.
+- [`RAG_API.md`](RAG_API.md) — RAG API contract: endpoints, schemas, error model, architecture.
+- [`API_REFERENCE.md`](API_REFERENCE.md) — RAG API quick-start: curl/httpx examples and integration recipes.
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Guide for extending graph nodes, tools, query types, and ingestion sources.
 
 ## Operations & Runbooks
@@ -56,7 +56,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`GDRIVE_INGESTION.md`](GDRIVE_INGESTION.md) — Google Drive sync runbook.
 - [`QDRANT_STACK.md`](QDRANT_STACK.md) — Vector collections, schema, and operations.
 - [`ALERTING.md`](ALERTING.md) — Loki/Alertmanager setup.
-- [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
+- [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache debugging guide (common issues, inspection, monitoring).
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 
 ## Quality & Evaluation
@@ -72,7 +72,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 
 - [`ERROR_RESPONSES.md`](ERROR_RESPONSES.md) — Error response taxonomy.
 - [`HITL.md`](HITL.md) — Human-in-the-loop design and CRM approval flow.
-- [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
+- [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache design behavior (architecture, tiers, thresholds, degradation modes).
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
 
 ## Fast Doc Search
