@@ -62,8 +62,8 @@ fi
 
 # Single source of truth: scripts/lib/vps_noncore_services.sh (#1611).
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# shellcheck source=lib/vps_noncore_services.sh
-. "${SCRIPT_DIR}/lib/vps_noncore_services.sh"
+# shellcheck source=scripts/lib/vps_noncore_services.sh
+. "${SCRIPT_DIR}/../lib/vps_noncore_services.sh"
 
 running_services="$(docker compose ps --status running --services 2>/dev/null || true)"
 for removed_service in "${VPS_NONCORE_SERVICES[@]}"; do

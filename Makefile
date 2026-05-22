@@ -21,6 +21,7 @@ EXPECTED_MAXMEMORY_SAMPLES ?= 10
 PROJECT_VERSION := $(shell sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
 K3S_IMAGE_REGISTRY ?= ghcr.io/yastman
 K3S_IMAGE_TAG ?= v$(PROJECT_VERSION)
+LINT_PATHS := src/ telegram_bot/ mini_app/ services/ scripts/
 
 # Default target
 .DEFAULT_GOAL := help
@@ -131,45 +132,45 @@ local-pr-ready: ## Full PR readiness gate (check + unit tests) - run manually
 
 lint: ## Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
-	uv run ruff check src/ telegram_bot/
+	uv run ruff check $(LINT_PATHS)
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
 
 lint-fix: ## Run Ruff linter with auto-fix
 	@echo "$(BLUE)Running Ruff with auto-fix...$(NC)"
-	uv run ruff check src/ telegram_bot/ --fix
+	uv run ruff check $(LINT_PATHS) --fix
 	@echo "$(GREEN)✓ Ruff auto-fix complete$(NC)"
 
 format: ## Format code with Ruff
 	@echo "$(BLUE)Formatting code with Ruff...$(NC)"
-	uv run ruff format src/ telegram_bot/
+	uv run ruff format $(LINT_PATHS)
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 format-check: ## Check if code is formatted
 	@echo "$(BLUE)Checking code format...$(NC)"
-	uv run ruff format src/ telegram_bot/ --check
+	uv run ruff format $(LINT_PATHS) --check
 	@echo "$(GREEN)✓ Format check complete$(NC)"
 
 type-check: ## Run MyPy type checking
 	@echo "$(BLUE)Running MyPy type checking...$(NC)"
-	uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
+	uv run mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Type check complete$(NC)"
 
 pylint: ## Run Pylint (comprehensive linting)
 	@echo "$(BLUE)Running Pylint...$(NC)"
-	uv run pylint src/ --rcfile=pyproject.toml || true
+	uv run pylint $(LINT_PATHS) --rcfile=pyproject.toml || true
 	@echo "$(GREEN)✓ Pylint check complete$(NC)"
 
 security: ## Run Bandit security scan + Vulture dead-code check
 	@echo "$(BLUE)Running Bandit security checks...$(NC)"
-	uv run bandit -r src/ telegram_bot/ -c pyproject.toml
+	uv run bandit -r $(LINT_PATHS) -c pyproject.toml
 	@echo "$(GREEN)✓ Bandit security check complete$(NC)"
 	@echo "$(BLUE)Checking for dead code with Vulture...$(NC)"
-	uv run vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
+	uv run vulture $(LINT_PATHS) --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Vulture dead-code check complete$(NC)"
 
 dead-code: ## Find dead code with Vulture (alias for security)
 	@echo "$(BLUE)Checking for dead code...$(NC)"
-	uv run vulture src/ telegram_bot/ --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
+	uv run vulture $(LINT_PATHS) --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
 
 all-checks: lint type-check security ## Run all code quality checks
