@@ -12,7 +12,7 @@ fully replacing custom chunking with the SDK.
 
 This contract test forbids reintroducing custom-strategy enum members
 without an explicit decision to revert SDK-native chunking. Verified via
-Context7 (`/docling/docling`): ``HybridChunker`` is the documented
+Context7 (`/docling-project/docling-core`): ``HybridChunker`` is the documented
 replacement that respects token budgets and document structure (page
 boundaries, headings, table cells).
 
