@@ -46,6 +46,9 @@ dependencies = [
     # prometheus_client provides Histogram for latency distributions, replacing
     # the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
     "prometheus-client>=0.20.0,<1.0",
+    # Direct root constraints to fix Dependabot alerts #50, #52-#55, #60, #66-#69
+    "pillow>=12.2.0",
+    "gradio>=6.7.0",
 ]
 
 [project.optional-dependencies]
@@ -152,6 +155,17 @@ dev = [
 # UV: CPU-only PyTorch (no CUDA — VPS has no GPU)
 # SDK pattern from Context7: https://github.com/astral-sh/uv/blob/main/docs/guides/integration/pytorch.md
 # =============================================================================
+
+# =============================================================================
+# UV: Dependency Overrides
+# =============================================================================
+# Override docling-serve's <0.58 constraint on opentelemetry-instrumentation-fastapi
+# to resolve three-way conflict between docling-serve, livekit-agents, and otel-api.
+# See: ROOT-PILLOW-GRADIO-COMPAT.baseline.md for full resolution analysis.
+[tool.uv]
+override-dependencies = [
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
