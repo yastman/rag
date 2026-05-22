@@ -1,10 +1,6 @@
 # Pipeline Routing
 
-> This doc covers query routing logic through the voice-path LangGraph StateGraph; see [Client Pipeline](CLIENT_PIPELINE.md) for the dual-path architecture and text-path agent routing.
-
-Query routing logic through the LangGraph pipeline.
-
-> **Scope:** These routing details apply to the **voice path** (`telegram_bot/graph/graph.py`, `build_graph()`). The text path uses a different orchestration model based on the SDK-native `create_agent` in `telegram_bot/agents/agent.py`. See [Client Pipeline](CLIENT_PIPELINE.md) for the full dual-path description.
+> This doc covers query routing logic through the **voice-path** LangGraph StateGraph (`telegram_bot/graph/graph.py`, `build_graph()`). The text path uses the SDK-native `create_agent` in `telegram_bot/agents/agent.py` -- see [Client Pipeline](CLIENT_PIPELINE.md) for the dual-path architecture and [Pipeline Overview](PIPELINE_OVERVIEW.md) for operational flows.
 
 ## Routing Flow
 
