@@ -72,3 +72,47 @@ async def test_remote_log_does_not_emit_raw_user_payload(caplog: pytest.LogCaptu
     rendered_logs = "\n".join(record.getMessage() for record in caplog.records)
     assert raw_message not in rendered_logs
     assert "+380501234567" not in rendered_logs
+
+
+def test_remote_log_handler_level_is_not_raw_user_controlled() -> None:
+    """CodeQL #17: request.level must not be passed as a log format argument.
+
+    The remote_log handler maps ``request.level`` through a validated
+    constant lookup (_LEVEL_MAP).  The mapped integer level (e.g. ``lvl``)
+    is safe, but CodeQL still flags the raw ``request.level`` string when
+    it appears as a positional argument inside the ``logger.log`` call.
+    This regression guard asserts that the ``logger.log`` call-site does
+    not contain ``request.level``.
+    """
+    source = _read("mini_app/api.py")
+
+    # Locate the logger call that contains the [REMOTE:] format tag
+    fmt_idx = source.find("[REMOTE:")
+    assert fmt_idx != -1, "Format string [REMOTE:] not found"
+
+    # Find the enclosing logger.log(...) call
+    log_start = source.rfind("logger.log", 0, fmt_idx)
+    assert log_start != -1, "logger.log call before [REMOTE:] not found"
+
+    paren_start = source.find("(", log_start)
+    assert paren_start != -1, "Opening paren after logger.log not found"
+
+    # Match the closing paren of logger.log(...)
+    depth = 0
+    paren_end = paren_start
+    for j in range(paren_start, len(source)):
+        if source[j] == "(":
+            depth += 1
+        elif source[j] == ")":
+            depth -= 1
+            if depth == 0:
+                paren_end = j
+                break
+
+    # Arguments of the logger.log call
+    log_call_body = source[paren_start + 1 : paren_end]
+
+    assert "request.level" not in log_call_body, (
+        "request.level must not be a log format argument inside logger.log (CodeQL #17). "
+        "Use a constant-mapped level name derived from _LEVEL_MAP instead."
+    )
