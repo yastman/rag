@@ -103,7 +103,7 @@ def run_guard(
         "Postgres auth mismatch risk: validate-traces-fast is using "
         f"{CI_ENV_FILE}, but Docker volume '{volume_name}' already exists.\n"
         "This commonly means the volume was initialized with a different password "
-        f"than fallback POSTGRES_PASSWORD='{fallback_password or '<missing>'}', and Langfuse will fail with Prisma P1000.\n"
+        "than the fallback POSTGRES_PASSWORD from the CI env fixture, and Langfuse will fail with Prisma P1000.\n"
         "Remediation:\n"
         "1) Create/update .env with POSTGRES_PASSWORD matching the existing dev volume.\n"
         "2) Or remove the old dev Postgres volume before re-running:\n"
@@ -129,13 +129,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    ok, message = run_guard(
+    ok, guard_output = run_guard(
         repo_root=Path.cwd(),
         env_file=args.env_file,
         compose_project_name=args.compose_project_name,
     )
     stream = sys.stdout if ok else sys.stderr
-    print(message, file=stream)
+    print(guard_output, file=stream)
     return 0 if ok else 2
 
 

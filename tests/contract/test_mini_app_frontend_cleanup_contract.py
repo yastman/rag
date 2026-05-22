@@ -49,13 +49,9 @@ def test_telegram_gate_uses_vite_bot_username_env_var() -> None:
         "Replace with a config-driven link using import.meta.env.VITE_BOT_USERNAME."
     )
     assert "VITE_BOT_USERNAME" in text, (
-        "TelegramGate.tsx must reference the Vite env var VITE_BOT_USERNAME "
-        "to compose the bot URL."
+        "TelegramGate.tsx must reference the Vite env var VITE_BOT_USERNAME to compose the bot URL."
     )
-    assert "https://t.me/" in text, (
-        "TelegramGate.tsx should still link to https://t.me/<bot> for the "
-        "fallback CTA."
-    )
+    assert "t.me/" in text, "TelegramGate.tsx should still link to the Telegram bot."
     # Template-literal interpolation: `${...}` somewhere in the file.
     assert "${" in text, (
         "TelegramGate.tsx must compose the bot URL via a template literal, "

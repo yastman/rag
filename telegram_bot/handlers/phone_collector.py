@@ -40,6 +40,11 @@ class PhoneCollectorStates(StatesGroup):
     waiting_phone = State()
 
 
+def _phone_log_state(phone: str | None) -> str:
+    """Return a non-PII phone presence marker for application logs."""
+    return "provided" if phone else "missing"
+
+
 def build_display_name(user: Any | None, phone: str) -> str:
     """Build human-readable display name with fallback chain."""
     if user and getattr(user, "first_name", None):
@@ -191,8 +196,8 @@ async def _process_valid_phone(
     username = getattr(user, "username", None) if user else None
 
     logger.info(
-        "Lead captured: phone=%s service_key=%s crm_title=%s user=%s",
-        phone,
+        "Lead captured: phone_state=%s service_key=%s crm_title=%s user=%s",
+        _phone_log_state(phone),
         service_key,
         crm_title,
         user_id,
@@ -280,14 +285,20 @@ async def _process_valid_phone(
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 logger.warning(
-                    "CRM degraded: Kommo 401 Unauthorized for phone=%s "
+                    "CRM degraded: Kommo 401 Unauthorized for phone_state=%s "
                     "(local/test credentials expected)",
-                    phone,
+                    _phone_log_state(phone),
                 )
             else:
-                logger.exception("CRM lead creation failed for phone=%s", phone)
+                logger.exception(
+                    "CRM lead creation failed for phone_state=%s",
+                    _phone_log_state(phone),
+                )
         except Exception:
-            logger.exception("CRM lead creation failed for phone=%s", phone)
+            logger.exception(
+                "CRM lead creation failed for phone_state=%s",
+                _phone_log_state(phone),
+            )
 
 
 async def on_phone_received(
