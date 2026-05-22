@@ -278,6 +278,9 @@ def _new_draft_id() -> int:
     return _bot_streaming._new_draft_id()
 
 
+_AGENT_DRAFT_INTERVAL = _bot_streaming._AGENT_DRAFT_INTERVAL
+
+
 async def _stream_agent_to_draft(
     agent: Any,
     payload: dict[str, Any],
@@ -294,6 +297,7 @@ async def _stream_agent_to_draft(
         bot=bot,
         chat_id=chat_id,
         thread_id=thread_id,
+        draft_interval=_AGENT_DRAFT_INTERVAL,
     )
 
 
