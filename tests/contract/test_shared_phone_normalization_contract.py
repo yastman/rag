@@ -27,7 +27,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MINI_APP_PHONE_PATH = REPO_ROOT / "mini_app" / "phone.py"
 PHONE_KEYBOARD_PATH = REPO_ROOT / "telegram_bot" / "keyboards" / "phone_keyboard.py"
-PHONE_UTILS_PATH = REPO_ROOT / "telegram_bot" / "phone_utils.py"
+# Canonical home moved to src/phone_utils.py in #1948 to break the reverse
+# layering between mini_app and telegram_bot. telegram_bot/phone_utils.py is
+# kept as a thin re-export shim for bot internal callers.
+PHONE_UTILS_PATH = REPO_ROOT / "src" / "phone_utils.py"
+PHONE_UTILS_SHIM_PATH = REPO_ROOT / "telegram_bot" / "phone_utils.py"
 
 
 def test_shared_phone_utils_module_exists() -> None:
@@ -37,13 +41,22 @@ def test_shared_phone_utils_module_exists() -> None:
         "non-UI module so Mini App and bot can share it without dragging in "
         "aiogram keyboard imports."
     )
+    assert PHONE_UTILS_SHIM_PATH.exists(), (
+        f"missing {PHONE_UTILS_SHIM_PATH} — the re-export shim under "
+        "telegram_bot/ keeps existing bot internal callers working after the "
+        "canonical home moved to src/phone_utils.py (#1948)."
+    )
 
 
 def test_shared_phone_utils_exports_normalize_and_validate() -> None:
     """The shared module must expose both ``normalize_phone`` and ``validate_phone``."""
-    module = importlib.import_module("telegram_bot.phone_utils")
-    assert hasattr(module, "normalize_phone")
-    assert hasattr(module, "validate_phone")
+    canonical = importlib.import_module("src.phone_utils")
+    assert hasattr(canonical, "normalize_phone")
+    assert hasattr(canonical, "validate_phone")
+    # Back-compat shim must re-export the same callables.
+    shim = importlib.import_module("telegram_bot.phone_utils")
+    assert shim.normalize_phone is canonical.normalize_phone
+    assert shim.validate_phone is canonical.validate_phone
 
 
 def test_shared_phone_utils_does_not_import_aiogram() -> None:
@@ -55,13 +68,13 @@ def test_shared_phone_utils_does_not_import_aiogram() -> None:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 assert not alias.name.startswith("aiogram"), (
-                    f"telegram_bot/phone_utils.py imports {alias.name}; "
+                    f"src/phone_utils.py imports {alias.name}; "
                     "shared phone normalization must stay UI-free."
                 )
         elif isinstance(node, ast.ImportFrom):
             mod = node.module or ""
             assert not mod.startswith("aiogram"), (
-                f"telegram_bot/phone_utils.py imports from {mod}; "
+                f"src/phone_utils.py imports from {mod}; "
                 "shared phone normalization must stay UI-free."
             )
 
@@ -81,20 +94,22 @@ def test_mini_app_phone_no_local_regex_validator() -> None:
 
 
 def test_mini_app_phone_imports_shared_normalizer() -> None:
-    """``mini_app/phone.py`` must import the shared ``normalize_phone``."""
+    """``mini_app/phone.py`` must import the shared ``normalize_phone`` from the
+    canonical ``src.phone_utils`` home (#1948 forbids ``mini_app -> telegram_bot``)."""
     tree = ast.parse(MINI_APP_PHONE_PATH.read_text(encoding="utf-8"))
     imported_normalize = False
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.ImportFrom)
-            and node.module == "telegram_bot.phone_utils"
+            and node.module == "src.phone_utils"
             and any(alias.name == "normalize_phone" for alias in node.names)
         ):
             imported_normalize = True
             break
     assert imported_normalize, (
-        "mini_app/phone.py must import normalize_phone from "
-        "telegram_bot.phone_utils."
+        "mini_app/phone.py must import normalize_phone from src.phone_utils "
+        "(#1948 layering fix). Importing from telegram_bot.phone_utils now "
+        "triggers the layering ratchet test."
     )
 
 
