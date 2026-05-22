@@ -13,18 +13,18 @@ HITL enables the bot to:
 ## How HITL Works
 
 ```
-User Request → Agent decides to call CRM tool
-                        ↓
+User Request --> Agent decides to call CRM tool
+                        |
               hitl_guard() called with tool preview
-                        ↓
+                        |
               interrupt() pauses graph
-                        ↓
+                        |
               Bot sends confirmation keyboard to user
-                        ↓
+                        |
          User clicks "Approve" or "Cancel"
-                        ↓
+                        |
               Command(resume={"action": "approve"|"cancel"})
-                        ↓
+                        |
               Graph resumes, tool executes or is skipped
 ```
 
@@ -100,6 +100,39 @@ elif callback_data == "hitl_cancel":
 await graph.ainvoke(None, config={"command": agent_command})
 ```
 
+## Handoff State Management
+
+The handoff state is managed by `telegram_bot/services/handoff_state.py` using a Pydantic model backed by Redis:
+
+```python
+class HandoffData(BaseModel):
+    """State for an active handoff session."""
+    client_id: int
+    topic_id: int
+    mode: str = "human_waiting"  # bot | human_waiting | human
+    lead_id: int | None = None
+    created_at: float
+    manager_joined_at: float | None = None
+    qualification: dict[str, str]
+```
+
+### Redis Keys
+
+| Key Pattern | TTL | Content |
+|-------------|-----|---------|
+| `handoff:{client_id}` | session-scoped | Serialized HandoffData |
+| `topic_map:{topic_id}` | session-scoped | Reverse lookup to client_id |
+
+## Code Locations
+
+| File | Purpose |
+|------|---------|
+| `telegram_bot/agents/hitl.py` | `interrupt()` wrapper and `format_hitl_preview` |
+| `telegram_bot/services/handoff_state.py` | Handoff state (Pydantic model + Redis) |
+| `telegram_bot/handlers/handoff.py` | Handoff FSM states and callback helpers |
+| `telegram_bot/dialogs/handoff.py` | Qualification dialog (aiogram-dialog) |
+| `telegram_bot/graph/nodes/` | Graph nodes that may trigger HITL |
+
 ## Troubleshooting
 
 ### Interrupt State Lost (Bot Restart)
@@ -114,7 +147,7 @@ If the bot restarts while awaiting HITL confirmation:
 
 If a user is stuck waiting for confirmation:
 
-1. **For the user:** Start a new query — the previous operation will be abandoned
+1. **For the user:** Start a new query -- the previous operation will be abandoned
 2. **For operators:** Check Redis for interrupt state keys:
    ```bash
    redis-cli -p 6379 KEYS "*interrupt*"
@@ -128,12 +161,19 @@ To trace HITL flow in Langfuse:
 2. Check input fields: `tool`, `preview`, `args`
 3. Check for `__interrupt__` in state
 
+## Testing
+
+```bash
+# Unit tests for handoff flow
+uv run pytest tests/unit/telegram_bot/test_handoff.py -v
+```
+
 ## Configuration
 
 HITL is enabled by default for all CRM write tools. No configuration required.
 
 ## Related Documentation
 
-- [HITL CRM Flow](HITL_CRM_FLOW.md)
 - [LangGraph Interrupt](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/#interrupt)
+- [ADR-0009: LangGraph Send Fan-Out](adr/0009-langgraph-send-fanout-scoping.md) (related LangGraph patterns)
 - Bot source: `telegram_bot/agents/hitl.py`
