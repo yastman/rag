@@ -1,6 +1,6 @@
 """Contract: Single source of truth for Dockerfile base-image runtime policy.
 
-Closes ***REMOVED***1814. Related: ***REMOVED***1307, ***REMOVED***1346–***REMOVED***1348, ***REMOVED***1381 (Langfuse+Pydantic v1 vs Python 3.14).
+Closes #1814. Related: #1307, #1346–#1348, #1381 (Langfuse+Pydantic v1 vs Python 3.14).
 
 Why this file exists
 --------------------
@@ -12,7 +12,7 @@ different angles:
 * ``tests/unit/mini_app/test_frontend_runtime_contract.py`` — checked the
   Mini App frontend Node builder pins ``node:20.20.2-slim``.
 
-When Renovate updates (***REMOVED***1776, ***REMOVED***1783) bumped Python and Node base images
+When Renovate updates (#1776, #1783) bumped Python and Node base images
 without updating either test, the two contracts silently drifted out of
 agreement with reality. This contract consolidates **the policy itself** in
 a single place so that any future drift surfaces immediately and a single
@@ -23,19 +23,19 @@ Policy
 ``LANGFUSE_PY_FLOOR = "3.13"``
     Langfuse 4.x imports ``pydantic.v1.datetime_parse`` for SDK back-compat.
     Pydantic v1 emits ``UserWarning: Core Pydantic V1 functionality isn't
-    compatible with Python 3.14 or greater`` on import (***REMOVED***1381) and crashes
-    with ``pydantic.v1.errors.ConfigError`` at runtime under 3.14 (***REMOVED***1307).
+    compatible with Python 3.14 or greater`` on import (#1381) and crashes
+    with ``pydantic.v1.errors.ConfigError`` at runtime under 3.14 (#1307).
     All Langfuse-importing Docker runtimes therefore pin Python 3.13.
 
 ``MINI_APP_NODE_FLOOR = "20.20.2"``
     Aligns with ``mini_app/frontend/package.json`` ``engines.node`` upper
     floor of ``^20.19.0`` (and lock file). Renovate bumped to Node 24
-    without revalidating the React 19 / Vite 8 toolchain matrix (***REMOVED***1783),
+    without revalidating the React 19 / Vite 8 toolchain matrix (#1783),
     so we stay on the supported floor until that revalidation lands.
 
 Digest pinning
 --------------
-The acceptance criteria for ***REMOVED***1814 explicitly require digest pinning to be
+The acceptance criteria for #1814 explicitly require digest pinning to be
 preserved. The contract therefore asserts both the tag and that an
 ``@sha256:<64 hex>`` digest is present.
 """
@@ -48,7 +48,7 @@ from pathlib import Path
 import pytest
 
 
-***REMOVED*** ── Policy: single source of truth ───────────────────────────────────────────
+# ── Policy: single source of truth ───────────────────────────────────────────
 
 LANGFUSE_PY_FLOOR: str = "3.13"
 """Required Python minor version for Langfuse-importing app runtimes."""
@@ -60,7 +60,7 @@ MINI_APP_NODE_FLOOR: str = "20.20.2"
 """Required Node version for the Mini App frontend builder stage."""
 
 
-***REMOVED*** ── Subjects under contract ──────────────────────────────────────────────────
+# ── Subjects under contract ──────────────────────────────────────────────────
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 
@@ -75,7 +75,7 @@ LANGFUSE_RUNTIME_DOCKERFILES: tuple[str, ...] = (
 MINI_APP_FRONTEND_DOCKERFILE: str = "mini_app/frontend/Dockerfile"
 
 
-***REMOVED*** ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 _DIGEST_RE = re.compile(r"@sha256:[a-f0-9]{64}")
 
@@ -90,7 +90,7 @@ def _from_lines(text: str) -> list[str]:
     return [line for line in text.splitlines() if line.lstrip().startswith("FROM ")]
 
 
-***REMOVED*** ── Langfuse Python runtime contract ─────────────────────────────────────────
+# ── Langfuse Python runtime contract ─────────────────────────────────────────
 
 
 @pytest.mark.parametrize("dockerfile", LANGFUSE_RUNTIME_DOCKERFILES)
@@ -98,10 +98,10 @@ def test_langfuse_runtime_uses_floor_python(dockerfile: str) -> None:
     """Langfuse-importing runtimes must use the policy-defined Python floor."""
     text = _read(dockerfile)
     floor = LANGFUSE_PY_FLOOR
-    ***REMOVED*** Accept ``python:3.13-...`` (runtime image) OR ``python3.13-...`` (uv image).
+    # Accept ``python:3.13-...`` (runtime image) OR ``python3.13-...`` (uv image).
     assert (f"python:{floor}" in text) or (f"python{floor}" in text), (
         f"{dockerfile} must pin Python {floor} runtime per the runtime policy "
-        f"(see ***REMOVED***1307, ***REMOVED***1381). Found FROM lines: {_from_lines(text)}"
+        f"(see #1307, #1381). Found FROM lines: {_from_lines(text)}"
     )
 
 
@@ -113,33 +113,33 @@ def test_langfuse_runtime_does_not_use_forbidden_python(dockerfile: str) -> None
         assert f"python:{forbidden}" not in text, (
             f"{dockerfile} pins forbidden runtime python:{forbidden} "
             f"(Langfuse SDK uses pydantic.v1 incompatible with Python {forbidden}; "
-            f"see ***REMOVED***1307, ***REMOVED***1381)."
+            f"see #1307, #1381)."
         )
         assert f"python{forbidden}" not in text, (
             f"{dockerfile} pins forbidden uv image python{forbidden} "
-            f"(see ***REMOVED***1307, ***REMOVED***1381)."
+            f"(see #1307, #1381)."
         )
 
 
 @pytest.mark.parametrize("dockerfile", LANGFUSE_RUNTIME_DOCKERFILES)
 def test_langfuse_runtime_preserves_digest_pinning(dockerfile: str) -> None:
-    """Every base image FROM line must keep an ``@sha256:<digest>`` pin (***REMOVED***1814)."""
+    """Every base image FROM line must keep an ``@sha256:<digest>`` pin (#1814)."""
     text = _read(dockerfile)
     base_image_lines = [
         line
         for line in _from_lines(text)
-        ***REMOVED*** Skip multi-stage refs of the form ``FROM <stage> AS ...`` where
-        ***REMOVED*** ``<stage>`` is a previously declared stage name (no ``/`` or ``:``).
+        # Skip multi-stage refs of the form ``FROM <stage> AS ...`` where
+        # ``<stage>`` is a previously declared stage name (no ``/`` or ``:``).
         if (":" in line.split(" AS ")[0] or "/" in line.split(" AS ")[0])
     ]
     assert base_image_lines, f"{dockerfile} has no external FROM lines"
     for line in base_image_lines:
         assert _DIGEST_RE.search(line), (
-            f"{dockerfile}: FROM line missing @sha256 digest pin (policy ***REMOVED***1814): {line!r}"
+            f"{dockerfile}: FROM line missing @sha256 digest pin (policy #1814): {line!r}"
         )
 
 
-***REMOVED*** ── Mini App frontend Node policy ────────────────────────────────────────────
+# ── Mini App frontend Node policy ────────────────────────────────────────────
 
 
 def test_mini_app_frontend_builder_uses_node_floor() -> None:
@@ -151,7 +151,7 @@ def test_mini_app_frontend_builder_uses_node_floor() -> None:
     assert pattern.search(text), (
         f"{MINI_APP_FRONTEND_DOCKERFILE} must pin "
         f"node:{MINI_APP_NODE_FLOOR}-slim AS builder per Mini App Node policy "
-        f"(***REMOVED***1814). Found FROM lines: {_from_lines(text)}"
+        f"(#1814). Found FROM lines: {_from_lines(text)}"
     )
 
 
@@ -165,11 +165,11 @@ def test_mini_app_frontend_builder_preserves_digest_pinning() -> None:
     for line in builder_lines:
         assert _DIGEST_RE.search(line), (
             f"{MINI_APP_FRONTEND_DOCKERFILE}: Node FROM line missing "
-            f"@sha256 digest pin (policy ***REMOVED***1814): {line!r}"
+            f"@sha256 digest pin (policy #1814): {line!r}"
         )
 
 
-***REMOVED*** ── Cross-suite consistency: this contract drives the existing unit tests ────
+# ── Cross-suite consistency: this contract drives the existing unit tests ────
 
 
 def test_policy_matches_legacy_unit_test_constants() -> None:
@@ -182,7 +182,7 @@ def test_policy_matches_legacy_unit_test_constants() -> None:
     docker_static = _read("tests/unit/test_docker_static_validation.py")
     frontend_unit = _read("tests/unit/mini_app/test_frontend_runtime_contract.py")
 
-    ***REMOVED*** Legacy suite must enforce the same Python floor.
+    # Legacy suite must enforce the same Python floor.
     assert f'"python3.{LANGFUSE_PY_FLOOR.split(".")[1]}"' in docker_static or (
         f'python:{LANGFUSE_PY_FLOOR}' in docker_static
     ), (
@@ -190,14 +190,14 @@ def test_policy_matches_legacy_unit_test_constants() -> None:
         f"{LANGFUSE_PY_FLOOR}; if the policy changes, update both files."
     )
 
-    ***REMOVED*** Legacy suite must list the same Langfuse Dockerfiles.
+    # Legacy suite must list the same Langfuse Dockerfiles.
     for dockerfile in LANGFUSE_RUNTIME_DOCKERFILES:
         assert f'"{dockerfile}"' in docker_static, (
             f"tests/unit/test_docker_static_validation.py "
             f"_LANGFUSE_RUNTIME_DOCKERFILES must include {dockerfile}"
         )
 
-    ***REMOVED*** Frontend unit test must reference the same Node floor.
+    # Frontend unit test must reference the same Node floor.
     assert MINI_APP_NODE_FLOOR.replace(".", r"\.") in frontend_unit, (
         "tests/unit/mini_app/test_frontend_runtime_contract.py must reference "
         f"Node floor {MINI_APP_NODE_FLOOR}; if the policy changes, update both files."

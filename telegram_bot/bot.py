@@ -97,20 +97,20 @@ if TYPE_CHECKING:
 else:
     BotContextType = Any
 
-***REMOVED*** Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
-HistoryService: Any = None  ***REMOVED*** type: ignore[no-redef]
+# Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
+HistoryService: Any = None  # type: ignore[no-redef]
 BotContext: Any = Any
 
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** --- Checkpoint namespace constants (versioned for safe migration) ---
+# --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
-_AGENT_DRAFT_INTERVAL: float = 0.2  ***REMOVED*** seconds between sendMessageDraft calls
-***REMOVED*** Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
+_AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
+# Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
 _POLLING_LOCK_MAX_REFRESH_FAILURES = 2
 
 
@@ -276,7 +276,7 @@ def _new_draft_id() -> int:
     Bot API ``sendMessageDraft`` accepts arbitrary 32-bit positive integers
     as the draft id; we keep the value within signed-int32 range so it
     serialises cleanly across the aiogram client and the Bot API JSON wire
-    format. Moved here from ``services/draft_streamer.py`` (***REMOVED***1671) so the
+    format. Moved here from ``services/draft_streamer.py`` (#1671) so the
     streaming path stays SDK-only — direct ``bot.send_message_draft(...)``
     calls plus ``agent.astream(stream_mode=[...])`` from LangGraph, no
     custom abstraction in between.
@@ -320,7 +320,7 @@ async def _stream_agent_to_draft(
             content = getattr(msg, "content", None)
             if not content:
                 continue
-            ***REMOVED*** Skip tool-call chunks — they carry tool routing JSON, not user-facing text.
+            # Skip tool-call chunks — they carry tool routing JSON, not user-facing text.
             if getattr(msg, "tool_calls", None):
                 continue
             accumulated += content
@@ -368,19 +368,19 @@ def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
     return None
 
 
-***REMOVED*** Re-export from shared module (avoid circular imports with middlewares)
-***REMOVED*** Re-export checkpointer helpers from shared utility module for backward compat
-from .services.checkpointer_utils import (  ***REMOVED*** noqa: E402
+# Re-export from shared module (avoid circular imports with middlewares)
+# Re-export checkpointer helpers from shared utility module for backward compat
+from .services.checkpointer_utils import (  # noqa: E402
     _delete_checkpointer_thread as _delete_checkpointer_thread,
 )
-from .services.checkpointer_utils import (  ***REMOVED*** noqa: E402
+from .services.checkpointer_utils import (  # noqa: E402
     _supervisor_thread_id as _supervisor_thread_id,
 )
-from .tracing_context import make_session_id as make_session_id  ***REMOVED*** noqa: E402
+from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
-    """Extract current-turn messages from full checkpointer history (***REMOVED***507).
+    """Extract current-turn messages from full checkpointer history (#507).
 
     Agent checkpointer returns full conversation history across turns.
     For per-turn scoring we only need messages after the last HumanMessage.
@@ -411,7 +411,7 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "rerank_applied": result.get("rerank_applied", False),
         "llm_provider_model": result.get("llm_provider_model", ""),
         "llm_ttft_ms": result.get("llm_ttft_ms", 0.0),
-        ***REMOVED*** Response length control (***REMOVED***129)
+        # Response length control (#129)
         "response_style": result.get("response_style"),
         "response_difficulty": result.get("response_difficulty"),
         "response_style_reasoning": result.get("response_style_reasoning"),
@@ -423,15 +423,15 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "legal_answer_safe": result.get("legal_answer_safe", True),
         "semantic_cache_safe_reuse": result.get("semantic_cache_safe_reuse", True),
         "safe_fallback_used": result.get("safe_fallback_used", False),
-        ***REMOVED*** Voice transcription (***REMOVED***151)
+        # Voice transcription (#151)
         "stt_duration_ms": result.get("stt_duration_ms"),
-        ***REMOVED*** Embedding resilience (***REMOVED***210)
+        # Embedding resilience (#210)
         "embedding_error": result.get("embedding_error", False),
         "embedding_error_type": result.get("embedding_error_type"),
-        ***REMOVED*** Conversation memory (***REMOVED***159)
+        # Conversation memory (#159)
         "memory_messages_count": len(result.get("messages", [])),
         "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
-        ***REMOVED*** Voice post-pipeline cleanup diagnostics (***REMOVED***205)
+        # Voice post-pipeline cleanup diagnostics (#205)
         "pipeline_cleanup_error": result.get("pipeline_cleanup_error", False),
         "pipeline_cleanup_error_type": result.get("pipeline_cleanup_error_type"),
     }
@@ -447,7 +447,7 @@ def _write_voice_error_scores(
     """Write minimal Langfuse scores for voice traces that exit early (error paths).
 
     Ensures all voice traces have at least input_type and error context for dashboards.
-    Uses explicit trace_id for score isolation (***REMOVED***435).
+    Uses explicit trace_id for score isolation (#435).
     """
     if not trace_id:
         trace_id = lf.get_current_trace_id()
@@ -478,8 +478,8 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
         "consuming input failed",
         "connection lost",
         "connection closed",
-        ***REMOVED*** RedisVL semantic cache errors (***REMOVED***524): index missing, schema mismatch,
-        ***REMOVED*** RediSearch module not loaded on plain Redis instance
+        # RedisVL semantic cache errors (#524): index missing, schema mismatch,
+        # RediSearch module not loaded on plain Redis instance
         "redisvlerror",
         "redissearcherror",
         "schemavalidationerror",
@@ -590,7 +590,7 @@ class PropertyBot:
         self.bot = Bot(token=config.telegram_token)
         self.dp = Dispatcher()
 
-        ***REMOVED*** Graph config for service factories
+        # Graph config for service factories
         self._graph_config = GraphConfig(
             llm_base_url=config.llm_base_url,
             llm_api_key=config.llm_api_key,
@@ -604,7 +604,7 @@ class PropertyBot:
             domain_language=config.domain_language,
         )
 
-        ***REMOVED*** Initialize LangGraph service dependencies
+        # Initialize LangGraph service dependencies
         from .integrations.cache import CacheLayerManager
         from .integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
         from .services.qdrant import QdrantService
@@ -614,7 +614,7 @@ class PropertyBot:
             base_url=config.bge_m3_url,
             timeout=self._graph_config.bge_m3_timeout,
         )
-        ***REMOVED*** Use hybrid as primary embeddings provider
+        # Use hybrid as primary embeddings provider
         self._embeddings = self._hybrid
         self._sparse = BGEM3SparseEmbeddings(
             base_url=config.bge_m3_url,
@@ -628,7 +628,7 @@ class PropertyBot:
             timeout=config.qdrant_timeout,
         )
 
-        ***REMOVED*** Apartments collection (***REMOVED***629)
+        # Apartments collection (#629)
         from .services.apartments_service import ApartmentsService
 
         self._qdrant_apartments = QdrantService(
@@ -638,19 +638,19 @@ class PropertyBot:
         )
         self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
 
-        ***REMOVED*** Rerank provider (feature flag). "colbert" keeps the existing
-        ***REMOVED*** server-side Qdrant ColBERT path and does not instantiate the
-        ***REMOVED*** deprecated client-side reranker service.
+        # Rerank provider (feature flag). "colbert" keeps the existing
+        # server-side Qdrant ColBERT path and does not instantiate the
+        # deprecated client-side reranker service.
         self._reranker = None
         if config.rerank_provider == "colbert":
             logger.info("Reranking via server-side Qdrant ColBERT path")
         elif config.rerank_provider == "none":
             logger.info("Reranking disabled")
 
-        ***REMOVED*** LLM (optional, defaults via GraphConfig.create_llm)
+        # LLM (optional, defaults via GraphConfig.create_llm)
         self._llm = self._graph_config.create_llm()
 
-        ***REMOVED*** Apartment extraction pipeline: LLM first → regex fallback
+        # Apartment extraction pipeline: LLM first → regex fallback
         from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
         from .services.apartment_filter_extractor import ApartmentFilterExtractor
 
@@ -670,20 +670,20 @@ class PropertyBot:
             llm_extractor=_apt_llm,
             redis=self._cache.redis,
         )
-        ***REMOVED*** Redis health monitor (periodic background task)
+        # Redis health monitor (periodic background task)
         self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
-        ***REMOVED*** Conversation memory checkpointer (initialized in start())
+        # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
 
-        ***REMOVED*** Agent checkpointer — Redis with TTL (***REMOVED***424).
-        ***REMOVED*** HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (***REMOVED***420).
+        # Agent checkpointer — Redis with TTL (#424).
+        # HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (#420).
         self._agent_checkpointer: Any = None
 
-        ***REMOVED*** History service (initialized in start())
+        # History service (initialized in start())
         self._history_service: HistoryService | None = None
 
-        ***REMOVED*** i18n hub (fluentogram) — initialize early for localized menu filters.
+        # i18n hub (fluentogram) — initialize early for localized menu filters.
         self._i18n_hub: Any = None
         try:
             from .middlewares.i18n import create_translator_hub
@@ -696,40 +696,40 @@ class PropertyBot:
                 exc_info=True,
             )
 
-        ***REMOVED*** User service (asyncpg) — initialized in start()
+        # User service (asyncpg) — initialized in start()
         self._user_service: Any = None
 
-        ***REMOVED*** PostgreSQL pool — initialized in start()
+        # PostgreSQL pool — initialized in start()
         self._pg_pool: Any = None
 
-        ***REMOVED*** Kommo CRM client (initialized in start() if enabled)
+        # Kommo CRM client (initialized in start() if enabled)
         self._kommo_client: Any | None = None
 
-        ***REMOVED*** Lead scoring store (initialized in start() with pg_pool)
+        # Lead scoring store (initialized in start() with pg_pool)
         self._lead_scoring_store: Any | None = None
 
-        ***REMOVED*** Favorites service (initialized in start() with pg_pool)
+        # Favorites service (initialized in start() with pg_pool)
         self._favorites_service: Any = None
 
-        ***REMOVED*** Search event store (initialized in start() with pg_pool)
+        # Search event store (initialized in start() with pg_pool)
         self._search_event_store: Any | None = None
 
-        ***REMOVED*** Nurturing scheduler (initialized in start() if enabled)
+        # Nurturing scheduler (initialized in start() if enabled)
         self._nurturing_scheduler: Any | None = None
 
-        ***REMOVED*** Manager runtime services (initialized in start() if enabled)
+        # Manager runtime services (initialized in start() if enabled)
         self._nurturing_service: Any | None = None
         self._funnel_analytics_service: Any | None = None
 
-        ***REMOVED*** Hot lead notifier (initialized in start() when manager_ids configured)
+        # Hot lead notifier (initialized in start() when manager_ids configured)
         self._hot_lead_notifier: Any | None = None
 
-        ***REMOVED*** Handoff services (Forum Topics bridge + Redis state machine)
+        # Handoff services (Forum Topics bridge + Redis state machine)
         self._handoff_state: HandoffState | None = None
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
 
-        ***REMOVED*** Expert topic service (user+expert → thread_id mapping)
+        # Expert topic service (user+expert → thread_id mapping)
         self._topic_redis: Any | None = None
         self._topic_service: TopicService | None = None
         self._topics_enabled: bool = False
@@ -741,11 +741,11 @@ class PropertyBot:
         self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
-        ***REMOVED*** Bounded fan-out for fire-and-forget history persistence (***REMOVED***1600).
-        ***REMOVED*** Without a bound the text path could accumulate unbounded background
-        ***REMOVED*** tasks under burst traffic / slow DB writes. Track every spawned save
-        ***REMOVED*** so shutdown can drain them; reject new saves with a Langfuse signal
-        ***REMOVED*** once the in-flight count reaches `_history_save_max_concurrency`.
+        # Bounded fan-out for fire-and-forget history persistence (#1600).
+        # Without a bound the text path could accumulate unbounded background
+        # tasks under burst traffic / slow DB writes. Track every spawned save
+        # so shutdown can drain them; reject new saves with a Langfuse signal
+        # once the in-flight count reaches `_history_save_max_concurrency`.
         self._history_save_tasks: set[asyncio.Task[None]] = set()
         self._history_save_max_concurrency: int = int(
             os.getenv("HISTORY_SAVE_MAX_CONCURRENCY", "32")
@@ -754,20 +754,20 @@ class PropertyBot:
             os.getenv("HISTORY_SAVE_DRAIN_TIMEOUT_S", "5.0")
         )
 
-        ***REMOVED*** Track initialization state
+        # Track initialization state
         self._cache_initialized = False
         self._pre_agent_filter_extractor: Any | None = None
 
-        ***REMOVED*** Setup middlewares (before handlers)
+        # Setup middlewares (before handlers)
         self._setup_middlewares()
 
-        ***REMOVED*** Register handlers
+        # Register handlers
         self._register_handlers()
 
     def _spawn_history_save(
         self, coro: Coroutine[Any, Any, None], *, user_id: int | str
     ) -> asyncio.Task[None] | None:
-        """Track and bound fan-out for fire-and-forget history persistence (***REMOVED***1600).
+        """Track and bound fan-out for fire-and-forget history persistence (#1600).
 
         Without a bound the text path could accumulate unbounded background
         tasks under burst traffic / slow DB writes. This helper:
@@ -799,7 +799,7 @@ class PropertyBot:
                         )
                 except Exception:
                     logger.warning("Failed to write history-save drop score", exc_info=True)
-            ***REMOVED*** Close the unscheduled coroutine so we do not leak a "never awaited" warning.
+            # Close the unscheduled coroutine so we do not leak a "never awaited" warning.
             close = getattr(coro, "close", None)
             if callable(close):
                 with contextlib.suppress(Exception):
@@ -831,7 +831,7 @@ class PropertyBot:
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
-        ***REMOVED*** Langfuse context must be outermost to wrap all handlers
+        # Langfuse context must be outermost to wrap all handlers
         self.dp.message.outer_middleware(LangfuseContextMiddleware())
         self.dp.callback_query.outer_middleware(LangfuseContextMiddleware())
         setup_throttling_middleware(self.dp, default_rate=1.0, admin_ids=self.config.admin_ids)
@@ -858,7 +858,7 @@ class PropertyBot:
 
         admin_conn: Any = None
         try:
-            ***REMOVED*** Connect to maintenance DB to run CREATE DATABASE (required by PostgreSQL).
+            # Connect to maintenance DB to run CREATE DATABASE (required by PostgreSQL).
             admin_conn = await asyncpg_module.connect(
                 self.config.realestate_database_url,
                 timeout=5,
@@ -1044,19 +1044,19 @@ class PropertyBot:
 
     def _register_handlers(self):
         """Register message handlers."""
-        ***REMOVED*** Phone collector FSM — include before catch-all handlers (***REMOVED***628)
+        # Phone collector FSM — include before catch-all handlers (#628)
         from .handlers.phone_collector import create_phone_router
 
         self.dp.include_router(create_phone_router())
 
-        ***REMOVED*** Group message handler — manager → client relay (***REMOVED***730)
+        # Group message handler — manager → client relay (#730)
         if self.config.managers_group_id:
             self.dp.message(
                 F.chat.id == self.config.managers_group_id,
                 F.message_thread_id,
             )(self._handle_group_message)
 
-        ***REMOVED*** Command handlers Router (extracted from class methods)
+        # Command handlers Router (extracted from class methods)
         from .handlers.command_handlers import create_commands_router
 
         self.dp.include_router(create_commands_router(self))
@@ -1072,22 +1072,22 @@ class PropertyBot:
             F.text.in_(menu_button_texts),
             flags={"rate_limit": {"rate": 0.6, "key": "menu"}},
         )(self.handle_menu_button)
-        ***REMOVED*** NOTE: catch-all handle_query is registered on self._catch_all_router
-        ***REMOVED*** which is included AFTER dialog routers in _setup_dialogs().
-        ***REMOVED*** This ensures dialog MessageInput (e.g. viewing phone input)
-        ***REMOVED*** is resolved before the catch-all (aiogram SDK: first-match wins).
-        ***REMOVED*** Demo flow router
+        # NOTE: catch-all handle_query is registered on self._catch_all_router
+        # which is included AFTER dialog routers in _setup_dialogs().
+        # This ensures dialog MessageInput (e.g. viewing phone input)
+        # is resolved before the catch-all (aiogram SDK: first-match wins).
+        # Demo flow router
         from .handlers.demo_handler import create_demo_router
 
         self.dp.include_router(create_demo_router())
 
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
-        ***REMOVED*** Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
+        # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)
         self.dp.callback_query(FeedbackReasonCB.filter())(self.handle_feedback_reason)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
         self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
-        ***REMOVED*** Client menu inline callbacks (***REMOVED***628)
+        # Client menu inline callbacks (#628)
         self.dp.callback_query(F.data.startswith("svc:"))(self.handle_service_callback)
         self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
         self.dp.callback_query(FavoriteCB.filter(F.action == "add"))(self.handle_fav_add)
@@ -1096,14 +1096,14 @@ class PropertyBot:
         self.dp.callback_query(FavoriteCB.filter(F.action == "viewing_all"))(
             self.handle_fav_viewing_all
         )
-        ***REMOVED*** Legacy buttons in old chat history may contain "fav:viewing_all" (without id part).
+        # Legacy buttons in old chat history may contain "fav:viewing_all" (without id part).
         self.dp.callback_query(F.data == "fav:viewing_all")(self.handle_favorite_callback)
         self.dp.callback_query(ResultsCB.filter())(self.handle_results_callback)
         self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
         self.dp.callback_query(F.data.startswith("ask:"))(self.handle_ask_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
-        """Resolve user role from DB or config fallback (***REMOVED***388)."""
+        """Resolve user role from DB or config fallback (#388)."""
         db_role: str | None = None
         user_service = getattr(self, "_user_service", None)
         if user_service is not None and hasattr(user_service, "get_role"):
@@ -1116,7 +1116,7 @@ class PropertyBot:
             except Exception:
                 logger.warning("Role lookup failed", exc_info=True)
 
-        ***REMOVED*** Config manager_ids should still elevate known managers even if DB is stale.
+        # Config manager_ids should still elevate known managers even if DB is stale.
         if user_id in self.config.manager_ids:
             return "manager"
         return db_role or "client"
@@ -1177,9 +1177,9 @@ class PropertyBot:
                 logger.warning("Expert not found: %s", expert_id)
             return
 
-        ***REMOVED*** Note: answerWebAppQuery не поддерживает message_thread_id —
-        ***REMOVED*** сообщение попало бы в General topic, дублируя контент в треде.
-        ***REMOVED*** Поэтому пишем напрямую в forum topic через send_message.
+        # Note: answerWebAppQuery не поддерживает message_thread_id —
+        # сообщение попало бы в General topic, дублируя контент в треде.
+        # Поэтому пишем напрямую в forum topic через send_message.
 
         try:
             topic_id = await self._topic_manager.get_or_create_topic(
@@ -1197,7 +1197,7 @@ class PropertyBot:
         if not user_message:
             return
 
-        ***REMOVED*** Echo user question in the topic (retry on stale cache — deleted topic)
+        # Echo user question in the topic (retry on stale cache — deleted topic)
         try:
             await self.bot.send_message(
                 chat_id=chat_id,
@@ -1224,13 +1224,13 @@ class PropertyBot:
                 return
 
         if message:
-            ***REMOVED*** Deep link path: full handle_query with streaming support
+            # Deep link path: full handle_query with streaming support
             topic_msg = message.model_copy(
                 update={"text": user_message, "message_thread_id": topic_id}
             )
             await self.handle_query(topic_msg)
         else:
-            ***REMOVED*** Pub/sub path: direct RAG pipeline + send result
+            # Pub/sub path: direct RAG pipeline + send result
             await self._run_miniapp_rag(chat_id, topic_id, user_message)
 
     async def _run_miniapp_rag(self, chat_id: int, topic_id: int, user_message: str) -> None:
@@ -1322,7 +1322,7 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ) -> None:
-        """Route ReplyKeyboard button press to dedicated handler (***REMOVED***628, ***REMOVED***658)."""
+        """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
@@ -1330,7 +1330,7 @@ class PropertyBot:
         if action_id is None:
             return
 
-        ***REMOVED*** Clear only phone-collection FSM state to avoid wiping unrelated flows (***REMOVED***658)
+        # Clear only phone-collection FSM state to avoid wiping unrelated flows (#658)
         current = await state.get_state()
         if isinstance(current, str) and current.startswith("PhoneCollectorStates:"):
             await state.clear()
@@ -1384,13 +1384,13 @@ class PropertyBot:
         await handle_demo_button(message)
 
     async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
-        """Dispatch text query to agent pipeline (from ReplyKeyboard context) (***REMOVED***628)."""
+        """Dispatch text query to agent pipeline (from ReplyKeyboard context) (#628)."""
         patched = message.model_copy(update={"text": query_text})
         await self.handle_query(patched)
 
     @observe(name="menu-search", capture_input=False, capture_output=False)
     async def _handle_search(self, message: Message, dialog_manager: Any = None) -> None:
-        """Start property search funnel via aiogram-dialog (***REMOVED***628, ***REMOVED***658)."""
+        """Start property search funnel via aiogram-dialog (#628, #658)."""
         if dialog_manager is not None:
             from aiogram_dialog import StartMode
 
@@ -1398,12 +1398,12 @@ class PropertyBot:
 
             await dialog_manager.start(FunnelSG.city, mode=StartMode.RESET_STACK)
         else:
-            ***REMOVED*** Fallback when dialog_manager not available (e.g., tests)
+            # Fallback when dialog_manager not available (e.g., tests)
             await self.handle_menu_action_text(message, "Подбери апартаменты")
 
     @observe(name="menu-services", capture_input=False, capture_output=False)
     async def _handle_services(self, message: Message, i18n: Any = None) -> None:
-        """Show services inline menu (***REMOVED***628)."""
+        """Show services inline menu (#628)."""
         from .keyboards.services_keyboard import build_services_menu
 
         if i18n is not None:
@@ -1417,7 +1417,7 @@ class PropertyBot:
     async def _handle_viewing(
         self, message: Message, state: FSMContext, dialog_manager: Any = None
     ) -> None:
-        """Start viewing appointment wizard via aiogram-dialog (***REMOVED***719)."""
+        """Start viewing appointment wizard via aiogram-dialog (#719)."""
         if dialog_manager is not None:
             from aiogram_dialog import StartMode
 
@@ -1433,7 +1433,7 @@ class PropertyBot:
         result: dict,
         telegram_id: int,
     ) -> Message:
-        """Send a single property card with preview photo and action buttons (***REMOVED***722)."""
+        """Send a single property card with preview photo and action buttons (#722)."""
         from .keyboards.property_card import (
             build_card_buttons,
             format_property_card,
@@ -1466,18 +1466,18 @@ class PropertyBot:
         if demo_photos:
             try:
                 media = [InputMediaPhoto(media=FSInputFile(path)) for path in demo_photos]
-                sent_photos = await message.answer_media_group(media=media)  ***REMOVED*** type: ignore[arg-type]
+                sent_photos = await message.answer_media_group(media=media)  # type: ignore[arg-type]
                 photo_message_ids = [m.message_id for m in sent_photos]
             except Exception:
                 logger.warning("Failed to send photo album, falling back to text", exc_info=True)
 
         card_msg = await message.answer(card, reply_markup=reply_markup)
-        card_msg._photo_message_ids = photo_message_ids  ***REMOVED*** type: ignore[attr-defined]
+        card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
         return card_msg
 
     @observe(name="menu-bookmarks", capture_input=False, capture_output=False)
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
-        """Show user's saved favorites (***REMOVED***628)."""
+        """Show user's saved favorites (#628)."""
         if not message.from_user:
             return
 
@@ -1526,7 +1526,7 @@ class PropertyBot:
                 bookmark_photo_ids=bookmark_photo_ids,
             )
 
-    ***REMOVED*** Mapping callback_data -> query text for RAG pipeline
+    # Mapping callback_data -> query text for RAG pipeline
     _ASK_QUERIES: dict[str, str] = {
         "ask:docs": "Какие документы нужны для покупки?",
         "ask:costs": "Сколько стоит оформление сделки?",
@@ -1590,7 +1590,7 @@ class PropertyBot:
         query_text = self._ASK_QUERIES.get(callback.data or "")
         if not query_text or callback.message is None:
             return
-        await self.handle_menu_action_text(callback.message, query_text)  ***REMOVED*** type: ignore[arg-type]
+        await self.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
 
     @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
@@ -1600,7 +1600,7 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handoff to manager (***REMOVED***628, ***REMOVED***730)."""
+        """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
             await start_qualification(
                 message,
@@ -1616,11 +1616,11 @@ class PropertyBot:
             await self.handle_menu_action_text(message, "Соедини с менеджером")
 
     async def _handle_group_message(self, message: Message) -> None:
-        """Handle messages in managers group — relay to client (***REMOVED***730)."""
+        """Handle messages in managers group — relay to client (#730)."""
         if not message.message_thread_id:
             return
         if message.from_user and self._bot_user_id and message.from_user.id == self._bot_user_id:
-            return  ***REMOVED*** Skip own messages (echo).
+            return  # Skip own messages (echo).
 
         if self._handoff_state is None:
             return
@@ -1628,12 +1628,12 @@ class PropertyBot:
         if not handoff:
             return
 
-        ***REMOVED*** /close command — return client to bot.
+        # /close command — return client to bot.
         if message.text and message.text.strip().lower() == "/close":
             await self._close_handoff(handoff)
             return
 
-        ***REMOVED*** First manager message — transition human_waiting → human.
+        # First manager message — transition human_waiting → human.
         if handoff.mode == "human_waiting":
             await self._handoff_state.update_mode(handoff.client_id, "human")
             manager_name = message.from_user.full_name if message.from_user else "Менеджер"
@@ -1642,7 +1642,7 @@ class PropertyBot:
                 text=f"🟢 {manager_name} подключился к чату",
             )
 
-        ***REMOVED*** Relay manager message to client.
+        # Relay manager message to client.
         if self._forum_bridge is not None:
             try:
                 await self._forum_bridge.relay_to_client(
@@ -1663,11 +1663,11 @@ class PropertyBot:
         message: Any,
         state: FSMContext | None = None,
     ) -> None:
-        """Create forum topic + Kommo lead + set handoff state (***REMOVED***730)."""
+        """Create forum topic + Kommo lead + set handoff state (#730)."""
         if self._forum_bridge is None:
             return
 
-        ***REMOVED*** Stale topic cleanup: if Redis has data but topic is deleted — clean up.
+        # Stale topic cleanup: if Redis has data but topic is deleted — clean up.
         if self._handoff_state is not None:
             existing = await self._handoff_state.get_by_client(user_id)
             if existing is not None:
@@ -1676,7 +1676,7 @@ class PropertyBot:
                     text="⚡ Клиент повторно запросил связь с менеджером.",
                 )
                 if topic_alive:
-                    ***REMOVED*** Topic still exists — FSM guard should have caught this, but just in case.
+                    # Topic still exists — FSM guard should have caught this, but just in case.
                     if state is not None:
                         await state.set_state(HandoffStates.active)
                     return
@@ -1686,7 +1686,7 @@ class PropertyBot:
         goal_map = {"buy": "Покупка", "rent": "Аренда", "consult": "Консультация"}
         goal_text = goal_map.get(qualification.get("goal", ""), "Консультация")
 
-        ***REMOVED*** 1. Create forum topic.
+        # 1. Create forum topic.
         try:
             topic_id = await self._forum_bridge.create_topic(
                 client_name=display_name,
@@ -1698,12 +1698,12 @@ class PropertyBot:
                 await message.answer("Менеджер скоро свяжется с вами!")
             return
 
-        ***REMOVED*** 2. AI summary (if sufficient history).
+        # 2. AI summary (if sufficient history).
         summary = None
         history: list[dict[str, str]] = []
         if self._cache.redis is not None:
             try:
-                raw = await self._cache.redis.lrange(f"conversation:{user_id}", 0, -1)  ***REMOVED*** type: ignore[misc]
+                raw = await self._cache.redis.lrange(f"conversation:{user_id}", 0, -1)  # type: ignore[misc]
                 for item in raw:
                     entry = json.loads(item) if isinstance(item, str) else item
                     if isinstance(entry, dict) and "role" in entry and "content" in entry:
@@ -1715,7 +1715,7 @@ class PropertyBot:
 
             summary = await generate_handoff_summary(history, llm=self._llm)
 
-        ***REMOVED*** 3. Kommo lead (optional).
+        # 3. Kommo lead (optional).
         lead_url = None
         lead_id = None
         if self._kommo_client is not None:
@@ -1723,14 +1723,14 @@ class PropertyBot:
                 from .services.kommo_models import LeadCreate
 
                 lead = await self._kommo_client.create_lead(
-                    LeadCreate(name=f"Handoff: {display_name}")  ***REMOVED*** type: ignore[call-arg]
+                    LeadCreate(name=f"Handoff: {display_name}")  # type: ignore[call-arg]
                 )
                 lead_id = lead.id
                 lead_url = f"https://{self.config.kommo_subdomain}.kommo.com/leads/detail/{lead.id}"
             except Exception:
                 logger.exception("Kommo lead creation failed during handoff")
 
-        ***REMOVED*** 4. Post context pack.
+        # 4. Post context pack.
         await self._forum_bridge.post_context_pack(
             topic_id=topic_id,
             client_name=display_name,
@@ -1741,7 +1741,7 @@ class PropertyBot:
             lead_url=lead_url,
         )
 
-        ***REMOVED*** 5. Set Redis state + FSM.
+        # 5. Set Redis state + FSM.
         data = HandoffData(
             client_id=user_id,
             topic_id=topic_id,
@@ -1754,7 +1754,7 @@ class PropertyBot:
         if state is not None:
             await state.set_state(HandoffStates.active)
 
-        ***REMOVED*** 6. Business hours notice.
+        # 6. Business hours notice.
         in_hours = is_business_hours(
             start=self.config.business_hours_start,
             end=self.config.business_hours_end,
@@ -1771,8 +1771,8 @@ class PropertyBot:
             )
 
     async def _close_handoff(self, handoff: HandoffData) -> None:
-        """Manager sends /close — return client to bot (***REMOVED***730)."""
-        ***REMOVED*** Notify topic.
+        """Manager sends /close — return client to bot (#730)."""
+        # Notify topic.
         if self._forum_bridge is not None:
             await self._forum_bridge.send_to_topic(
                 topic_id=handoff.topic_id,
@@ -1780,22 +1780,22 @@ class PropertyBot:
             )
             await self._forum_bridge.close_topic(topic_id=handoff.topic_id)
 
-        ***REMOVED*** Notify client.
+        # Notify client.
         await self.bot.send_message(
             chat_id=handoff.client_id,
             text="Диалог с менеджером завершён.\n\n🤖 Вы снова общаетесь с ботом. Задавайте вопросы — помогу!",
         )
 
-        ***REMOVED*** Cleanup Redis + FSM state.
+        # Cleanup Redis + FSM state.
         if self._handoff_state is not None:
             await self._handoff_state.delete(handoff.client_id)
-        ***REMOVED*** Clear client's FSM state from group context via storage key.
+        # Clear client's FSM state from group context via storage key.
         from aiogram.fsm.storage.base import StorageKey
 
         key = StorageKey(bot_id=self.bot.id, chat_id=handoff.client_id, user_id=handoff.client_id)
         await self.dp.storage.set_state(key, state=None)
 
-        ***REMOVED*** Update Kommo (optional).
+        # Update Kommo (optional).
         if self._kommo_client is not None and handoff.lead_id is not None:
             try:
                 await self._kommo_client.add_note(
@@ -1806,7 +1806,7 @@ class PropertyBot:
 
     @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
-        """Handle service menu inline button clicks (***REMOVED***628)."""
+        """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
             build_service_card_buttons,
             build_services_menu,
@@ -1823,7 +1823,7 @@ class PropertyBot:
 
         if action == "back":
             if callback.message:
-                await callback.message.delete()  ***REMOVED*** type: ignore[union-attr]
+                await callback.message.delete()  # type: ignore[union-attr]
             await callback.answer()
 
         elif action == "menu":
@@ -1833,7 +1833,7 @@ class PropertyBot:
                 text = "Выберите услугу, чтобы узнать подробнее:"
             kb = build_services_menu(i18n=i18n)
             if callback.message:
-                await callback.message.edit_text(text, reply_markup=kb)  ***REMOVED*** type: ignore[union-attr]
+                await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
             await callback.answer()
 
         elif action == "service" and param:
@@ -1845,7 +1845,7 @@ class PropertyBot:
                     "card_text", ""
                 )
                 if callback.message:
-                    await callback.message.edit_text(card_text, reply_markup=kb)  ***REMOVED*** type: ignore[union-attr]
+                    await callback.message.edit_text(card_text, reply_markup=kb)  # type: ignore[union-attr]
             await callback.answer()
 
         else:
@@ -1858,7 +1858,7 @@ class PropertyBot:
         state: FSMContext,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle CTA button clicks (get_offer, manager) (***REMOVED***628)."""
+        """Handle CTA button clicks (get_offer, manager) (#628)."""
         from .handlers.phone_collector import start_phone_collection
         from .keyboards.services_keyboard import parse_service_callback
 
@@ -1873,7 +1873,7 @@ class PropertyBot:
             await start_phone_collection(callback, state, service_key=param or "unknown")
         elif action == "manager":
             if self._forum_bridge is not None:
-                ***REMOVED*** Forum Topics enabled — skip goal step, context already known (***REMOVED***730).
+                # Forum Topics enabled — skip goal step, context already known (#730).
                 await start_qualification(
                     callback,
                     state=state,
@@ -1892,7 +1892,7 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:add:{property_id} — add to favorites (***REMOVED***628)."""
+        """Handle fav:add:{property_id} — add to favorites (#628)."""
         if not callback.from_user:
             await callback.answer()
             return
@@ -1940,7 +1940,7 @@ class PropertyBot:
                 from .keyboards.property_card import build_card_buttons
 
                 with contextlib.suppress(Exception):
-                    await callback.message.edit_reply_markup(  ***REMOVED*** type: ignore[union-attr]
+                    await callback.message.edit_reply_markup(  # type: ignore[union-attr]
                         reply_markup=build_card_buttons(property_id, is_favorited=True)
                     )
         else:
@@ -1953,7 +1953,7 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:remove:{property_id} — remove from favorites (***REMOVED***628)."""
+        """Handle fav:remove:{property_id} — remove from favorites (#628)."""
         if not callback.from_user:
             await callback.answer()
             return
@@ -1987,13 +1987,13 @@ class PropertyBot:
             from .keyboards.property_card import build_card_buttons
 
             with contextlib.suppress(Exception):
-                await callback.message.edit_reply_markup(  ***REMOVED*** type: ignore[union-attr]
+                await callback.message.edit_reply_markup(  # type: ignore[union-attr]
                     reply_markup=build_card_buttons(property_id, is_favorited=False)
                 )
             await callback.answer("Удалено из закладок")
         else:
             if callback.message:
-                ***REMOVED*** Delete photo album messages linked to this card
+                # Delete photo album messages linked to this card
                 raw_photo_ids = state_data.get("bookmark_photo_ids", {})
                 photo_ids = (
                     raw_photo_ids.get(callback_message_id, [])
@@ -2003,11 +2003,11 @@ class PropertyBot:
                 chat_id = callback.message.chat.id
                 for pid in photo_ids:
                     with contextlib.suppress(Exception):
-                        await callback.message.bot.delete_message(  ***REMOVED*** type: ignore[union-attr]
+                        await callback.message.bot.delete_message(  # type: ignore[union-attr]
                             chat_id=chat_id,
                             message_id=pid,
                         )
-                await callback.message.delete()  ***REMOVED*** type: ignore[union-attr]
+                await callback.message.delete()  # type: ignore[union-attr]
             await callback.answer("Удалено из закладок")
 
     async def handle_fav_viewing(
@@ -2017,7 +2017,7 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:viewing:{property_id} — book viewing for one favorite (***REMOVED***628)."""
+        """Handle fav:viewing:{property_id} — book viewing for one favorite (#628)."""
         if not callback.from_user:
             await callback.answer()
             return
@@ -2068,7 +2068,7 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle fav:viewing_all — book viewing for all favorites (***REMOVED***628)."""
+        """Handle fav:viewing_all — book viewing for all favorites (#628)."""
         if not callback.from_user:
             await callback.answer()
             return
@@ -2117,12 +2117,12 @@ class PropertyBot:
         callback_data: FavoriteCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Backward-compat dispatcher for fav: callbacks — delegates to per-action handlers (***REMOVED***628).
+        """Backward-compat dispatcher for fav: callbacks — delegates to per-action handlers (#628).
 
         Kept for test compatibility; production routing uses per-action CallbackData filters.
         """
         if callback_data is None:
-            ***REMOVED*** Parse from raw string (legacy / test path)
+            # Parse from raw string (legacy / test path)
             data = callback.data or ""
             parts = data.split(":", 2)
             if len(parts) < 2 or not callback.from_user:
@@ -2151,7 +2151,7 @@ class PropertyBot:
         callback_data: ResultsCB | None = None,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle property results callbacks (more/refine/viewing) (***REMOVED***654)."""
+        """Handle property results callbacks (more/refine/viewing) (#654)."""
         message = callback.message
         if message is not None and not isinstance(message, InaccessibleMessage):
             with contextlib.suppress(Exception):
@@ -2166,7 +2166,7 @@ class PropertyBot:
         state: FSMContext,
         dialog_manager: Any = None,
     ) -> None:
-        """Handle card action callbacks: card:viewing, card:ask (***REMOVED***722)."""
+        """Handle card action callbacks: card:viewing, card:ask (#722)."""
         from .handlers.phone_collector import start_phone_collection
 
         data = callback.data or ""
@@ -2175,7 +2175,7 @@ class PropertyBot:
             await callback.answer()
             return
 
-        action = parts[1]  ***REMOVED*** "viewing" or "ask"
+        action = parts[1]  # "viewing" or "ask"
         property_id = parts[2]
 
         state_data = await state.get_data()
@@ -2265,17 +2265,17 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ):
-        """Handle user query via supervisor graph (***REMOVED***310: supervisor-only)."""
+        """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
         assert message.bot is not None
         assert message.from_user is not None
         bot = message.bot
 
-        ***REMOVED*** Handoff mode check (***REMOVED***730): relay to topic or skip bot response.
+        # Handoff mode check (#730): relay to topic or skip bot response.
         if self._handoff_state is not None:
             handoff = await self._handoff_state.get_by_client(message.from_user.id)
             if handoff and handoff.mode == "human":
-                ***REMOVED*** Full handoff: relay only, no bot response.
+                # Full handoff: relay only, no bot response.
                 if self._forum_bridge is not None:
                     await self._forum_bridge.relay_to_topic(
                         from_chat_id=message.chat.id,
@@ -2284,7 +2284,7 @@ class PropertyBot:
                     )
                 return
             if handoff and handoff.mode == "human_waiting" and self._forum_bridge is not None:
-                ***REMOVED*** Waiting for manager: relay + continue with normal RAG response.
+                # Waiting for manager: relay + continue with normal RAG response.
                 await self._forum_bridge.relay_to_topic(
                     from_chat_id=message.chat.id,
                     message_id=message.message_id,
@@ -2293,7 +2293,7 @@ class PropertyBot:
 
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        ***REMOVED*** Resolve expert from forum topic thread (int check guards against mock objects in tests)
+        # Resolve expert from forum topic thread (int check guards against mock objects in tests)
         _raw_thread_id = message.message_thread_id
         forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
         expert_id: str | None = None
@@ -2318,13 +2318,13 @@ class PropertyBot:
             update_kwargs["metadata"] = root_trace_metadata
         get_client().update_current_span(**update_kwargs)
 
-        ***REMOVED*** Update session last_active for idle detection (***REMOVED***445)
+        # Update session last_active for idle detection (#445)
         if self._cache.redis is not None:
             try:
                 await self._cache.redis.set(
                     f"session:last_active:{message.from_user.id}",
                     str(time.time()),
-                    ex=7200,  ***REMOVED*** 2h TTL
+                    ex=7200,  # 2h TTL
                 )
             except Exception:
                 logger.debug("Failed to update session last_active", exc_info=True)
@@ -2349,20 +2349,20 @@ class PropertyBot:
         state: FSMContext | None = None,
         dialog_manager: Any = None,
     ) -> str | None:
-        """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (***REMOVED***629)."""
+        """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
         from .services.apartments_service import check_escalation
 
         result = await self._apartment_pipeline.extract(user_text)
 
         if result.meta.confidence == "LOW":
-            return None  ***REMOVED*** escalate to agent
+            return None  # escalate to agent
 
         semantic_query = result.meta.semantic_remainder or user_text
         dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(semantic_query)
         await self._cache.store_embedding(semantic_query, dense)
         await self._cache.store_sparse_embedding(semantic_query, sparse)
 
-        ***REMOVED*** --- Implicit retry detection (***REMOVED***756) ---
+        # --- Implicit retry detection (#756) ---
         if self._cache.redis is not None and message.from_user is not None:
             try:
                 from .implicit_feedback import is_reformulation
@@ -2378,7 +2378,7 @@ class PropertyBot:
                         tid = lf.get_current_trace_id() or ""
                         if tid:
                             score(lf, tid, name="implicit_retry", value=1, data_type="BOOLEAN")
-                ***REMOVED*** Always update state so the next query can compare against this one
+                # Always update state so the next query can compare against this one
                 await self._cache.redis.set(
                     _ikey,
                     json.dumps({"vec": list(dense), "ts": time.time()}),
@@ -2404,7 +2404,7 @@ class PropertyBot:
             confidence=result.meta.confidence,
         )
         if escalation:
-            return None  ***REMOVED*** escalate to agent
+            return None  # escalate to agent
 
         from .services.apartment_formatter import format_apartment_text
         from .services.generate_response import generate_response
@@ -2424,7 +2424,7 @@ class PropertyBot:
         if not generated.get("response_sent"):
             await self._send_markdown_chunks(message, response_text)
 
-        ***REMOVED*** Cut over free-text apartment sessions to the shared dialog-owned catalog runtime.
+        # Cut over free-text apartment sessions to the shared dialog-owned catalog runtime.
         if state is not None and results:
             from .dialogs.catalog import activate_catalog_state, show_catalog_controls
             from .dialogs.states import CatalogSG
@@ -2499,10 +2499,10 @@ class PropertyBot:
             Response text if the pipeline handled the request.
             None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
         """
-        ***REMOVED*** Apartment fast path: intent check → regex filters → hybrid search → generate (***REMOVED***629)
+        # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
         from .pipelines.client import infer_agent_intent, run_client_pipeline
 
-        ***REMOVED*** Pre-agent branch selection should not emit an extra detect-agent-intent span.
+        # Pre-agent branch selection should not emit an extra detect-agent-intent span.
         agent_intent = infer_agent_intent(user_text)
         if agent_intent == "apartment":
             apt_answer = await self._handle_apartment_fast_path(
@@ -2513,7 +2513,7 @@ class PropertyBot:
             )
             if apt_answer is not None:
                 return apt_answer
-            return None  ***REMOVED*** escalate to agent path
+            return None  # escalate to agent path
 
         result = await run_client_pipeline(
             user_text=user_text,
@@ -2534,7 +2534,7 @@ class PropertyBot:
             agent_intent=agent_intent,
         )
         if result.needs_agent:
-            return None  ***REMOVED*** caller falls through to sdk_agent path
+            return None  # caller falls through to sdk_agent path
         return result.answer
 
     @observe(name="telegram-rag-supervisor", capture_input=False, capture_output=False)
@@ -2549,7 +2549,7 @@ class PropertyBot:
         expert_id: str | None = None,
         dialog_manager: Any = None,
     ) -> str:
-        """Handle query via create_agent SDK (***REMOVED***413 — replaces build_supervisor_graph)."""
+        """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
 
         from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.context import BotContext
@@ -2572,9 +2572,9 @@ class PropertyBot:
             user_id=str(user_id),
             tags=["telegram", "rag", "agent"],
         ):
-            ***REMOVED*** --- Pre-agent content filter (***REMOVED***439) ---
-            ***REMOVED*** Text path must run guard BEFORE agent.ainvoke() so that
-            ***REMOVED*** injection attempts never reach the LLM at all.
+            # --- Pre-agent content filter (#439) ---
+            # Text path must run guard BEFORE agent.ainvoke() so that
+            # injection attempts never reach the LLM at all.
             user_text = message.text or ""
             query_type = classify_query(user_text)
             if self.config.content_filter_enabled:
@@ -2618,7 +2618,7 @@ class PropertyBot:
                                 value=pattern or "unknown",
                                 data_type="CATEGORICAL",
                             )
-                            ***REMOVED*** Write full Langfuse score set for guard-blocked path (***REMOVED***1368)
+                            # Write full Langfuse score set for guard-blocked path (#1368)
                             try:
                                 minimal_result = {
                                     "query_type": query_type,
@@ -2650,7 +2650,7 @@ class PropertyBot:
                                 }
                             )
                         return _BLOCKED_RESPONSE
-                    ***REMOVED*** soft/log mode: log but don't block
+                    # soft/log mode: log but don't block
                     logger.warning(
                         "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",
                         self.config.guard_mode,
@@ -2659,21 +2659,21 @@ class PropertyBot:
                         user_text,
                     )
 
-            ***REMOVED*** Pre-agent semantic cache check (***REMOVED***563) — skip agent entirely on HIT.
-            ***REMOVED*** classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
+            # Pre-agent semantic cache check (#563) — skip agent entirely on HIT.
+            # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
             if query_type in CACHEABLE_QUERY_TYPES:
                 extracted_filters: dict[str, Any] = {}
                 try:
-                    ***REMOVED*** 1. Dense embedding for semantic lookup only (***REMOVED***1501)
+                    # 1. Dense embedding for semantic lookup only (#1501)
                     dense = await _get_or_compute_pre_agent_dense(
                         self._cache, self._embeddings, user_text, rag_result_store
                     )
-                    ***REMOVED*** In production embeddings always expose aembed_query; this
-                    ***REMOVED*** guards the theoretical edge case where dense is unavailable.
+                    # In production embeddings always expose aembed_query; this
+                    # guards the theoretical edge case where dense is unavailable.
                     if dense is None:
                         raise RuntimeError("Pre-agent dense embedding unavailable")
 
-                    ***REMOVED*** 2. Topic hint, grounding mode, filters, contextual query
+                    # 2. Topic hint, grounding mode, filters, contextual query
                     topic_hint_label = get_query_topic_hint(user_text)
                     topic_hint = topic_hint_label.value if topic_hint_label is not None else None
                     grounding_mode = get_grounding_mode(
@@ -2688,8 +2688,8 @@ class PropertyBot:
                     rag_result_store["topic_hint"] = topic_hint or ""
                     rag_result_store["grounding_mode"] = grounding_mode
                     if grounding_mode == "strict":
-                        ***REMOVED*** Strict-mode cache hits are only allowed for reusable safe answers,
-                        ***REMOVED*** so keep those observability fields on the early-return path too.
+                        # Strict-mode cache hits are only allowed for reusable safe answers,
+                        # so keep those observability fields on the early-return path too.
                         rag_result_store.setdefault("grounded", True)
                         rag_result_store.setdefault("legal_answer_safe", True)
                         rag_result_store.setdefault("semantic_cache_safe_reuse", True)
@@ -2779,7 +2779,7 @@ class PropertyBot:
                         rag_result_store["cache_hit"] = True
                         rag_result_store["query_type"] = query_type
                         rag_result_store["cache_key_embedding"] = dense
-                        ***REMOVED*** Do NOT prepare sparse/ColBERT on HIT (***REMOVED***1501)
+                        # Do NOT prepare sparse/ColBERT on HIT (#1501)
                         lf = get_client()
                         pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
                         rag_result_store["pre_agent_ms"] = pre_agent_ms
@@ -2840,7 +2840,7 @@ class PropertyBot:
                                 data_type="CATEGORICAL",
                             )
                             score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-                            ***REMOVED*** Write full Langfuse score set for pre-agent cache hit (***REMOVED***1368)
+                            # Write full Langfuse score set for pre-agent cache hit (#1368)
                             try:
                                 write_langfuse_scores(lf, rag_result_store, trace_id=tid)
                             except Exception:
@@ -2851,7 +2851,7 @@ class PropertyBot:
                         if root_trace_metadata is not None:
                             root_trace_metadata.update(cache_trace_metadata)
                         return cached
-                    ***REMOVED*** MISS: prepare retrieval vectors, then build state contract (***REMOVED***1501)
+                    # MISS: prepare retrieval vectors, then build state contract (#1501)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
                     rag_result_store["query_type"] = query_type
                     await _prepare_pre_agent_retrieval_vectors(
@@ -2899,13 +2899,13 @@ class PropertyBot:
                         )
                         if pipeline_answer is not None:
                             return pipeline_answer
-                        ***REMOVED*** needs_agent=True: fall through to sdk_agent path below
+                        # needs_agent=True: fall through to sdk_agent path below
                 except Exception:
                     logger.exception(
                         "Client direct pipeline failed; falling back to sdk_agent",
                     )
 
-            ***REMOVED*** Build tools list via shared helper
+            # Build tools list via shared helper
             from .agents.tool_assembly import build_agent_tools
 
             tools = build_agent_tools(
@@ -2918,7 +2918,7 @@ class PropertyBot:
                 kommo_client=getattr(self, "_kommo_client", None),
             )
 
-            ***REMOVED*** Create agent via SDK — route through LiteLLM proxy (***REMOVED***420)
+            # Create agent via SDK — route through LiteLLM proxy (#420)
             agent = create_bot_agent(
                 model=self.config.supervisor_model,
                 tools=tools,
@@ -2931,7 +2931,7 @@ class PropertyBot:
                 max_tokens=self.config.supervisor_max_tokens,
             )
 
-            ***REMOVED*** Build context for tool DI
+            # Build context for tool DI
             ctx = BotContext(
                 telegram_user_id=user_id,
                 session_id=session_id,
@@ -2957,7 +2957,7 @@ class PropertyBot:
                 search_event_store=self._search_event_store,
             )
 
-            ***REMOVED*** Initialize handler inside propagation context so it inherits session/user/tags.
+            # Initialize handler inside propagation context so it inherits session/user/tags.
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
@@ -2974,7 +2974,7 @@ class PropertyBot:
                     use_streaming=message.chat.type == "private",
                 )
 
-            ***REMOVED*** Check for HITL interrupt (***REMOVED***443)
+            # Check for HITL interrupt (#443)
             interrupt_data = result.get("__interrupt__")
             if interrupt_data:
                 interrupt_payload = interrupt_data[0].value
@@ -2983,15 +2983,15 @@ class PropertyBot:
                     payload=interrupt_payload,
                     thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
                 )
-                return None  ***REMOVED*** type: ignore[return-value]
+                return None  # type: ignore[return-value]
 
-            ***REMOVED*** Extract response from final message
+            # Extract response from final message
             messages = result.get("messages", [])
             if not response_text and messages:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
-            ***REMOVED*** Extract LLM metrics from supervisor agent response (***REMOVED***515)
+            # Extract LLM metrics from supervisor agent response (#515)
             if messages:
                 last_ai = next(
                     (
@@ -3015,26 +3015,26 @@ class PropertyBot:
                     if queue_time is not None:
                         rag_result_store["llm_queue_ms"] = round(float(queue_time) * 1000, 1)
 
-            ***REMOVED*** Send response with feedback buttons, sources, and Markdown (***REMOVED***426).
-            ***REMOVED*** Skip if a tool already delivered the response via streaming (***REMOVED***428).
+            # Send response with feedback buttons, sources, and Markdown (#426).
+            # Skip if a tool already delivered the response via streaming (#428).
             if response_text and not ctx.response_sent:
                 lf = get_client()
                 _raw_trace_id = lf.get_current_trace_id()
                 trace_id = _raw_trace_id if isinstance(_raw_trace_id, str) else ""
                 query_type = rag_result_store.get("query_type", "")
 
-                ***REMOVED*** Build feedback keyboard
+                # Build feedback keyboard
                 reply_markup = None
                 if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
                     from telegram_bot.feedback import build_feedback_keyboard
 
                     reply_markup = build_feedback_keyboard(trace_id)
 
-                ***REMOVED*** Fallback: history_search stores keyboard in BotContext side-channel (***REMOVED***434)
+                # Fallback: history_search stores keyboard in BotContext side-channel (#434)
                 if reply_markup is None and ctx.history_reply_markup is not None:
                     reply_markup = ctx.history_reply_markup
 
-                ***REMOVED*** Build source attribution
+                # Build source attribution
                 sources_html = ""
                 documents = rag_result_store.get("documents", [])
                 if (
@@ -3116,10 +3116,10 @@ class PropertyBot:
                     if html_messages:
                         ctx.response_sent = True
 
-            ***REMOVED*** Store final agent response in semantic cache for cacheable query types.
-            ***REMOVED*** Use cache_key_embedding (original query embedding) so that future
-            ***REMOVED*** check_semantic calls with the same user text can hit the cache
-            ***REMOVED*** even when the agent reformulated the query for retrieval (***REMOVED***504).
+            # Store final agent response in semantic cache for cacheable query types.
+            # Use cache_key_embedding (original query embedding) so that future
+            # check_semantic calls with the same user text can hit the cache
+            # even when the agent reformulated the query for retrieval (#504).
             if self._cache and response_text:
                 query_type = str(rag_result_store.get("query_type", "") or "")
                 grounding_mode_value = str(
@@ -3147,8 +3147,8 @@ class PropertyBot:
                 rag_result_store["degraded_reason"] = decision.degraded_reason
                 rag_result_store["cache_eligible"] = decision.cache_eligible
                 rag_result_store["store_reason"] = decision.store_reason
-                ***REMOVED*** Prefer cache_key_embedding (original query vector) over query_embedding
-                ***REMOVED*** (retrieval/rewritten vector) to avoid check/store vector mismatch.
+                # Prefer cache_key_embedding (original query vector) over query_embedding
+                # (retrieval/rewritten vector) to avoid check/store vector mismatch.
                 store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
                     "query_embedding"
                 )
@@ -3180,11 +3180,11 @@ class PropertyBot:
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
 
-            ***REMOVED*** Wall-time for the full pipeline
+            # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
             pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
 
-            ***REMOVED*** Write Langfuse trace metadata
+            # Write Langfuse trace metadata
             lf = get_client()
             lf.update_current_span(
                 input={"query": message.text},
@@ -3247,7 +3247,7 @@ class PropertyBot:
                     data_type="CATEGORICAL",
                     score_id=f"{tid}-supervisor_model",
                 )
-                ***REMOVED*** User role score (***REMOVED***388)
+                # User role score (#388)
                 lf.create_score(
                     trace_id=tid,
                     name="user_role",
@@ -3256,7 +3256,7 @@ class PropertyBot:
                     score_id=f"{tid}-user_role",
                 )
                 current_turn_msgs = _extract_current_turn(messages)
-                ***REMOVED*** Tool call count (***REMOVED***374): count actual tool calls, not just messages.
+                # Tool call count (#374): count actual tool calls, not just messages.
                 tool_calls = sum(
                     len(m.tool_calls)
                     for m in current_turn_msgs
@@ -3270,17 +3270,17 @@ class PropertyBot:
                         score_id=f"{tid}-tool_calls_total",
                     )
 
-                ***REMOVED*** CRM tool usage scores (***REMOVED***440)
+                # CRM tool usage scores (#440)
                 from telegram_bot.scoring import write_crm_scores
 
                 write_crm_scores(lf, current_turn_msgs, trace_id=tid)
-                ***REMOVED*** Overwrite sources_shown/sources_count with actual post-send values (***REMOVED***514)
+                # Overwrite sources_shown/sources_count with actual post-send values (#514)
                 sources_count_actual = int(rag_result_store.get("sources_count", 0) or 0)
                 if sources_count_actual > 0:
                     score(lf, tid, name="sources_shown", value=1, data_type="BOOLEAN")
                     score(lf, tid, name="sources_count", value=float(sources_count_actual))
 
-            ***REMOVED*** Persist Q&A to history (fire-and-forget — response already sent)
+            # Persist Q&A to history (fire-and-forget — response already sent)
             history_service = self._history_service
             if history_service and response_text:
 
@@ -3399,7 +3399,7 @@ class PropertyBot:
                     await self.bot.send_message_draft(**draft_kwargs)
 
             if accumulated:
-                ***REMOVED*** Finalize later in _handle_query_supervisor after feedback/sources assembly.
+                # Finalize later in _handle_query_supervisor after feedback/sources assembly.
                 rag_result_store["_draft_state"] = draft_state
 
             return accumulated, latest_state or {"messages": stream_messages}
@@ -3410,8 +3410,8 @@ class PropertyBot:
             if not _is_checkpointer_runtime_error(exc):
                 raise
             if role in {"manager", "admin"}:
-                ***REMOVED*** Manager toolsets include write-side effects (CRM/nurturing).
-                ***REMOVED*** Retrying the full agent run can duplicate external actions.
+                # Manager toolsets include write-side effects (CRM/nurturing).
+                # Retrying the full agent run can duplicate external actions.
                 logger.exception(
                     "Supervisor stream failed with checkpointer runtime error; "
                     "skip retry for role=%s to avoid duplicate side effects",
@@ -3454,7 +3454,7 @@ class PropertyBot:
         """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures.
 
         When *message* is provided and STREAMING_ENABLED is True, uses agent.astream()
-        to forward token chunks to Telegram via sendMessageDraft during generation (***REMOVED***952).
+        to forward token chunks to Telegram via sendMessageDraft during generation (#952).
         Falls back to ainvoke() on streaming errors.
         """
         payload = {"messages": [{"role": "user", "content": user_text}]}
@@ -3470,7 +3470,7 @@ class PropertyBot:
             },
         }
 
-        ***REMOVED*** --- Streaming path (***REMOVED***952) ---
+        # --- Streaming path (#952) ---
         streaming_enabled = bool(getattr(self._graph_config, "streaming_enabled", False))
         if message is not None and streaming_enabled:
             bot = getattr(message, "bot", None)
@@ -3494,8 +3494,8 @@ class PropertyBot:
             if not _is_checkpointer_runtime_error(exc):
                 raise
             if role in {"manager", "admin"}:
-                ***REMOVED*** Manager toolsets include write-side effects (CRM/nurturing).
-                ***REMOVED*** Retrying the full agent run can duplicate external actions.
+                # Manager toolsets include write-side effects (CRM/nurturing).
+                # Retrying the full agent run can duplicate external actions.
                 logger.exception(
                     "Supervisor ainvoke failed with checkpointer runtime error; "
                     "skip retry for role=%s to avoid duplicate side effects",
@@ -3534,7 +3534,7 @@ class PropertyBot:
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        ***REMOVED*** Download voice file into memory
+        # Download voice file into memory
         voice = message.voice
         file = await bot.get_file(voice.file_id)
         assert file.file_path is not None
@@ -3542,7 +3542,7 @@ class PropertyBot:
         await bot.download_file(file.file_path, destination=buf)
         voice_bytes = buf.getvalue()
 
-        ***REMOVED*** Guard: Whisper API limit is 25 MB
+        # Guard: Whisper API limit is 25 MB
         if len(voice_bytes) > 25 * 1024 * 1024:
             await message.answer("Голосовое сообщение слишком длинное. Максимум ~16 минут.")
             return
@@ -3550,7 +3550,7 @@ class PropertyBot:
         state = make_initial_state(
             user_id=message.from_user.id,
             session_id=make_session_id("chat", message.chat.id),
-            query="",  ***REMOVED*** will be set by transcribe_node
+            query="",  # will be set by transcribe_node
         )
         state["voice_audio"] = voice_bytes
         state["voice_duration_s"] = float(voice.duration)
@@ -3564,7 +3564,7 @@ class PropertyBot:
             user_id=str(state["user_id"]),
             tags=["telegram", "rag", "voice"],
         ):
-            ***REMOVED*** Inject Langfuse trace_id INSIDE propagate_attributes (***REMOVED***277)
+            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
             lf_pre = get_client()
             state["trace_id"] = lf_pre.get_current_trace_id() or ""
 
@@ -3594,11 +3594,11 @@ class PropertyBot:
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     invoke_start = time.perf_counter()
-                    ***REMOVED*** Direct checkpoint overhead measurement (***REMOVED***1258): the
-                    ***REMOVED*** checkpointer wrapper accumulates per-method I/O times
-                    ***REMOVED*** into a ContextVar bucket while this capture is active.
-                    ***REMOVED*** Falls back to the proxy when the checkpointer is not
-                    ***REMOVED*** instrumented (e.g. MemorySaver in tests).
+                    # Direct checkpoint overhead measurement (#1258): the
+                    # checkpointer wrapper accumulates per-method I/O times
+                    # into a ContextVar bucket while this capture is active.
+                    # Falls back to the proxy when the checkpointer is not
+                    # instrumented (e.g. MemorySaver in tests).
                     overhead_bucket = begin_checkpoint_overhead_capture()
                     try:
                         result = await graph.ainvoke(state, config=invoke_config)
@@ -3650,14 +3650,14 @@ class PropertyBot:
                 return
             except Exception as e:
                 if result is None:
-                    ***REMOVED*** Checkpointer/storage cleanup can fail after nodes complete.
-                    ***REMOVED*** In that case avoid sending a false "recognition failed" message.
+                    # Checkpointer/storage cleanup can fail after nodes complete.
+                    # In that case avoid sending a false "recognition failed" message.
                     if _is_post_pipeline_cleanup_error(e):
                         logger.warning(
                             "Voice pipeline cleanup failed after execution (no extra user error)",
                             exc_info=True,
                         )
-                        ***REMOVED*** Preserve observability even without returned graph state.
+                        # Preserve observability even without returned graph state.
                         result = {
                             "response": state.get("response", ""),
                             "stt_text": state.get("stt_text", ""),
@@ -3669,7 +3669,7 @@ class PropertyBot:
                             "pipeline_cleanup_error": True,
                             "pipeline_cleanup_error_type": type(e).__name__,
                         }
-                    ***REMOVED*** Pipeline never returned — genuine failure
+                    # Pipeline never returned — genuine failure
                     else:
                         logger.exception("Voice pipeline failed (no result)")
                         await message.answer(
@@ -3685,8 +3685,8 @@ class PropertyBot:
                         except Exception:
                             logger.debug("Failed to write voice error scores", exc_info=True)
                         return
-                ***REMOVED*** Pipeline succeeded but post-invoke cleanup failed (***REMOVED***201)
-                ***REMOVED*** Answer already delivered via streaming/respond — don't confuse user
+                # Pipeline succeeded but post-invoke cleanup failed (#201)
+                # Answer already delivered via streaming/respond — don't confuse user
                 else:
                     logger.warning(
                         "Post-pipeline error in voice handler (answer already delivered)",
@@ -3695,7 +3695,7 @@ class PropertyBot:
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
             result["e2e_latency_ms"] = result["pipeline_wall_ms"]
-            ***REMOVED*** User-perceived latency excludes post-respond summarization
+            # User-perceived latency excludes post-respond summarization
             summarize_s = result.get("latency_stages", {}).get("summarize", 0)
             result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
@@ -3723,7 +3723,7 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 
-            ***REMOVED*** Persist Q&A to history (fail-soft)
+            # Persist Q&A to history (fail-soft)
             if self._history_service and result.get("response"):
                 try:
                     query_text = result.get("stt_text") or state.get("query", "")
@@ -3753,13 +3753,13 @@ class PropertyBot:
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
 
-            ***REMOVED*** Update session last_active for idle detection (***REMOVED***445)
+            # Update session last_active for idle detection (#445)
             if self._cache.redis is not None:
                 try:
                     await self._cache.redis.set(
                         f"session:last_active:{message.from_user.id}",
                         str(time.time()),
-                        ex=7200,  ***REMOVED*** 2h TTL
+                        ex=7200,  # 2h TTL
                     )
                 except Exception:
                     logger.debug("Failed to update session last_active", exc_info=True)
@@ -3770,7 +3770,7 @@ class PropertyBot:
         payload: dict,
         thread_id: str,
     ) -> None:
-        """Send inline keyboard for HITL confirmation (***REMOVED***443)."""
+        """Send inline keyboard for HITL confirmation (#443)."""
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
         preview = payload.get("preview", "Подтвердите операцию")
@@ -3791,7 +3791,7 @@ class PropertyBot:
 
     @observe(name="telegram-hitl-callback")
     async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
-        """Handle HITL approve/cancel button click (***REMOVED***443)."""
+        """Handle HITL approve/cancel button click (#443)."""
         from .agents.context import BotContext
 
         if callback.from_user is None or callback.message is None:
@@ -3807,9 +3807,9 @@ class PropertyBot:
         await callback.answer("Принято" if action == "approve" else "Отменено")
 
         with contextlib.suppress(Exception):
-            await callback.message.edit_reply_markup(reply_markup=None)  ***REMOVED*** type: ignore[union-attr]
+            await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
 
-        ***REMOVED*** Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
+        # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
         from .agents.tool_assembly import build_agent_tools
 
         role = await self._resolve_user_role(user_id)
@@ -3885,9 +3885,9 @@ class PropertyBot:
             response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
         if response_text:
-            bot = callback.message.bot  ***REMOVED*** type: ignore[union-attr]
+            bot = callback.message.bot  # type: ignore[union-attr]
             for chunk in _split_telegram_response(response_text):
-                await bot.send_message(chat_id=chat_id, text=chunk)  ***REMOVED*** type: ignore[union-attr]
+                await bot.send_message(chat_id=chat_id, text=chunk)  # type: ignore[union-attr]
 
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
@@ -3896,7 +3896,7 @@ class PropertyBot:
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:
-        """Handle feedback like/dislike/done callback (***REMOVED***229, ***REMOVED***755).
+        """Handle feedback like/dislike/done callback (#229, #755).
 
         Supports CallbackData injection from aiogram DI, with legacy string fallback
         for backward compatibility with tests and old-format buttons.
@@ -3908,12 +3908,12 @@ class PropertyBot:
         )
 
         if callback_data is not None:
-            ***REMOVED*** New CallbackData path (aiogram DI injection)
+            # New CallbackData path (aiogram DI injection)
             if callback_data.action == "done":
                 await callback.answer()
                 return
             if callback_data.action == "dislike":
-                ***REMOVED*** Step 1: show reason keyboard, score written in handle_feedback_reason
+                # Step 1: show reason keyboard, score written in handle_feedback_reason
                 await callback.answer()
                 try:
                     msg = callback.message
@@ -3924,12 +3924,12 @@ class PropertyBot:
                 except Exception:
                     logger.debug("Failed to show dislike reason keyboard", exc_info=True)
                 return
-            ***REMOVED*** "like" action: write score below
+            # "like" action: write score below
             value: float = 1.0
             trace_id: str = callback_data.trace_id
             reason: str | None = None
         else:
-            ***REMOVED*** Legacy fallback (tests and old-format buttons: fb:1/0:, fb:r:)
+            # Legacy fallback (tests and old-format buttons: fb:1/0:, fb:r:)
             data = callback.data or ""
             if data in ("fb:done", "fb:done:"):
                 await callback.answer()
@@ -3940,7 +3940,7 @@ class PropertyBot:
                 return
             value, trace_id, reason = parsed
 
-            ***REMOVED*** Legacy dislike without reason → show reason keyboard
+            # Legacy dislike without reason → show reason keyboard
             if value == 0.0 and reason is None:
                 await callback.answer()
                 try:
@@ -3953,7 +3953,7 @@ class PropertyBot:
                     logger.debug("Failed to show dislike reason keyboard", exc_info=True)
                 return
 
-        ***REMOVED*** Write score (like, or legacy reason path)
+        # Write score (like, or legacy reason path)
         await callback.answer("Спасибо за отзыв!")
         user_id = callback.from_user.id if callback.from_user else 0
 
@@ -3980,7 +3980,7 @@ class PropertyBot:
         except Exception:
             logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
 
-        ***REMOVED*** Update keyboard to confirmation
+        # Update keyboard to confirmation
         liked = value > 0
         try:
             msg = callback.message
@@ -3997,7 +3997,7 @@ class PropertyBot:
     async def handle_feedback_reason(
         self, callback: CallbackQuery, callback_data: FeedbackReasonCB
     ) -> None:
-        """Handle dislike reason selection callback (***REMOVED***755)."""
+        """Handle dislike reason selection callback (#755)."""
         from .feedback import _REASON_CODES, build_feedback_confirmation
 
         reason = _REASON_CODES.get(callback_data.code)
@@ -4084,7 +4084,7 @@ class PropertyBot:
 
         await callback_query.answer()
         if callback_query.message is not None:
-            await callback_query.message.edit_text(text)  ***REMOVED*** type: ignore[union-attr]
+            await callback_query.message.edit_text(text)  # type: ignore[union-attr]
 
     async def handle_menu_action(
         self, callback: CallbackQuery, query_text: str, locale: str = "ru"
@@ -4108,7 +4108,7 @@ class PropertyBot:
         language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
         session_id = make_session_id("chat", chat_id)
 
-        ***REMOVED*** Build tools list via shared helper
+        # Build tools list via shared helper
         from .agents.tool_assembly import build_agent_tools
 
         tools = build_agent_tools(
@@ -4166,7 +4166,7 @@ class PropertyBot:
         ):
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
-            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):  ***REMOVED*** type: ignore[arg-type]
+            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):  # type: ignore[arg-type]
                 result = await self._ainvoke_supervisor_with_recovery(
                     agent=agent,
                     tools=tools,
@@ -4200,7 +4200,7 @@ class PropertyBot:
         logger.info("Starting bot...")
         startup_report = StartupReport()
 
-        ***REMOVED*** Authoritative dependency gate must run before Redis-backed startup work.
+        # Authoritative dependency gate must run before Redis-backed startup work.
         from .preflight import PreflightError, check_dependencies
 
         try:
@@ -4213,21 +4213,21 @@ class PropertyBot:
         if isinstance(preflight_report, StartupReport):
             startup_report.merge(preflight_report)
 
-        ***REMOVED*** Initialize cache at startup
+        # Initialize cache at startup
         if not self._cache_initialized:
             logger.info("Initializing cache service...")
             await self._cache.initialize()
             self._cache_initialized = True
             logger.info("Cache service ready")
 
-        ***REMOVED*** Initialize conversation memory checkpointer (SDK)
+        # Initialize conversation memory checkpointer (SDK)
         from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
 
         try:
             self._checkpointer = create_redis_checkpointer(
                 self.config.redis_url,
-                ttl_minutes=7 * 24 * 60,  ***REMOVED*** 7 days; SDK uses minutes
-                refresh_on_read=True,  ***REMOVED*** idle-based retention
+                ttl_minutes=7 * 24 * 60,  # 7 days; SDK uses minutes
+                refresh_on_read=True,  # idle-based retention
             )
             await self._checkpointer.asetup()
             logger.info("Conversation memory checkpointer ready (Redis)")
@@ -4243,7 +4243,7 @@ class PropertyBot:
                 )
             )
 
-        ***REMOVED*** Agent/voice checkpointer — Redis with TTL for bounded retention (***REMOVED***424).
+        # Agent/voice checkpointer — Redis with TTL for bounded retention (#424).
         try:
             self._agent_checkpointer = create_redis_checkpointer(
                 self.config.redis_url,
@@ -4267,14 +4267,14 @@ class PropertyBot:
                 )
             )
 
-        ***REMOVED*** Initialize topic service (forum topics mapping — user+expert → thread_id)
+        # Initialize topic service (forum topics mapping — user+expert → thread_id)
         import redis.asyncio as aioredis
 
         self._topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
         self._topic_service = TopicService(redis=self._topic_redis)
         logger.info("TopicService ready (Redis)")
 
-        ***REMOVED*** Initialize TopicManager + deeplink Redis for Mini App deep link flow
+        # Initialize TopicManager + deeplink Redis for Mini App deep link flow
         if self.config.expert_topics_enabled:
             from telegram_bot.services.topic_manager import TopicManager
 
@@ -4287,7 +4287,7 @@ class PropertyBot:
             self._deeplink_redis = None
             self._topic_manager = None
         self._miniapp_subscriber_task: asyncio.Task[None] | None = None
-        ***REMOVED*** Initialize history service (Qdrant-backed Q&A history)
+        # Initialize history service (Qdrant-backed Q&A history)
         try:
             history_service_cls = HistoryService
             if history_service_cls is None:
@@ -4312,7 +4312,7 @@ class PropertyBot:
                 )
             )
 
-        ***REMOVED*** Initialize Kommo CRM client if enabled (***REMOVED***420: fail-safe, must not block startup)
+        # Initialize Kommo CRM client if enabled (#420: fail-safe, must not block startup)
         if self.config.kommo_enabled and self.config.kommo_subdomain:
             try:
                 from .services.kommo_client import KommoClient
@@ -4363,7 +4363,7 @@ class PropertyBot:
                 logger.warning("Kommo CRM init failed — CRM features disabled", exc_info=True)
                 self._kommo_client = None
 
-        ***REMOVED*** Initialize PostgreSQL pool for realestate DB
+        # Initialize PostgreSQL pool for realestate DB
         postgres_available = (
             preflight_result.get("postgres", True) if isinstance(preflight_result, dict) else True
         )
@@ -4373,7 +4373,7 @@ class PropertyBot:
 
                 test_conn: Any | None = None
                 try:
-                    ***REMOVED*** Validate DB exists before creating pool (avoid traceback spam ***REMOVED***570)
+                    # Validate DB exists before creating pool (avoid traceback spam #570)
                     test_conn = await asyncpg.connect(
                         self.config.realestate_database_url, timeout=5
                     )
@@ -4408,13 +4408,13 @@ class PropertyBot:
 
                 self._user_service = UserService(pool=self._pg_pool)
 
-                ***REMOVED*** Initialize lead scoring store (***REMOVED***384)
+                # Initialize lead scoring store (#384)
                 from .services.lead_scoring_store import LeadScoringStore
 
                 self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
                 logger.info("Lead scoring store ready")
 
-                ***REMOVED*** Initialize favorites service (***REMOVED***628)
+                # Initialize favorites service (#628)
                 from .services.favorites_service import FavoritesService
 
                 self._favorites_service = FavoritesService(pool=self._pg_pool)
@@ -4425,7 +4425,7 @@ class PropertyBot:
                 self._search_event_store = SearchEventStore(pool=self._pg_pool)
                 logger.info("Search event store ready")
 
-                ***REMOVED*** Initialize hot lead notifier (***REMOVED***402)
+                # Initialize hot lead notifier (#402)
                 if self.config.manager_ids and self._cache.redis is not None:
                     try:
                         from .services.hot_lead_notifier import HotLeadNotifier
@@ -4442,7 +4442,7 @@ class PropertyBot:
                     except Exception:
                         logger.exception("Failed to initialize hot lead notifier")
 
-                ***REMOVED*** Initialize nurturing scheduler (***REMOVED***390)
+                # Initialize nurturing scheduler (#390)
                 if self.config.nurturing_enabled:
                     try:
                         from .services.funnel_analytics_service import FunnelAnalyticsService
@@ -4486,7 +4486,7 @@ class PropertyBot:
                 "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
 
-        ***REMOVED*** Initialize session summary worker (***REMOVED***445)
+        # Initialize session summary worker (#445)
         self._session_summary_worker: Any | None = None
         if self.config.session_summary_enabled and self._cache.redis is not None:
             try:
@@ -4499,9 +4499,9 @@ class PropertyBot:
                     idle_timeout_min=self.config.session_idle_timeout_min,
                     poll_interval_sec=self.config.session_summary_poll_sec,
                     summary_model=self.config.session_summary_model,
-                    ***REMOVED*** Real history retrieval (e.g. LangGraph checkpointer) is
-                    ***REMOVED*** not yet wired (***REMOVED***1599). Pass None explicitly so the worker
-                    ***REMOVED*** logs a startup warning instead of silently no-op'ing.
+                    # Real history retrieval (e.g. LangGraph checkpointer) is
+                    # not yet wired (#1599). Pass None explicitly so the worker
+                    # logs a startup warning instead of silently no-op'ing.
                     history_source=None,
                 )
                 await self._session_summary_worker.start()
@@ -4509,7 +4509,7 @@ class PropertyBot:
             except Exception:
                 logger.exception("Failed to start SessionSummaryWorker")
 
-        ***REMOVED*** Initialize AI Advisor service (***REMOVED***697)
+        # Initialize AI Advisor service (#697)
         self._ai_advisor_service: Any | None = None
         if self._kommo_client is not None:
             try:
@@ -4524,14 +4524,14 @@ class PropertyBot:
             except Exception:
                 logger.exception("Failed to initialize AIAdvisorService")
 
-        ***REMOVED*** Cache bot user id for echo-skip in group handlers (***REMOVED***730 review)
+        # Cache bot user id for echo-skip in group handlers (#730 review)
         try:
             me = await self.bot.me()
             self._bot_user_id = me.id
         except Exception:
             logger.warning("Failed to cache bot user id")
 
-        ***REMOVED*** Verify forum topics mode is enabled for expert threads
+        # Verify forum topics mode is enabled for expert threads
         try:
             me = await self.bot.get_me()
             if not getattr(me, "has_topics_enabled", False):
@@ -4548,7 +4548,7 @@ class PropertyBot:
             logger.warning("Failed to check forum topics status", exc_info=True)
             self._topics_enabled = False
 
-        ***REMOVED*** Initialize handoff services (***REMOVED***730)
+        # Initialize handoff services (#730)
         if self._cache.redis is not None:
             self._handoff_state = HandoffState(
                 self._cache.redis,
@@ -4564,10 +4564,10 @@ class PropertyBot:
                     self.config.managers_group_id,
                 )
 
-        ***REMOVED*** Initialize i18n (fluentogram)
+        # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
 
-        ***REMOVED*** Register services in dp.workflow_data so all handlers receive them via data dict
+        # Register services in dp.workflow_data so all handlers receive them via data dict
         self.dp["user_service"] = self._user_service
         self.dp["lead_scoring_store"] = self._lead_scoring_store
         self.dp["hot_lead_notifier"] = self._hot_lead_notifier
@@ -4589,7 +4589,7 @@ class PropertyBot:
         setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
         logger.info("i18n middleware ready")
 
-        ***REMOVED*** Setup aiogram-dialog routers, including the client root shell.
+        # Setup aiogram-dialog routers, including the client root shell.
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
         from .dialogs.catalog import catalog_dialog
@@ -4618,7 +4618,7 @@ class PropertyBot:
         from .dialogs.viewing import viewing_dialog
         from .handlers.crm_callbacks import create_crm_router
 
-        ***REMOVED*** CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (***REMOVED***697)
+        # CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (#697)
         self.dp.include_router(create_crm_router())
 
         self.dp.include_router(client_menu_dialog)
@@ -4644,9 +4644,9 @@ class PropertyBot:
         self.dp.include_router(viewing_dialog)
         self.dp.include_router(handoff_dialog)
 
-        ***REMOVED*** Catch-all text handler — AFTER all dialog routers so that dialog
-        ***REMOVED*** MessageInput (e.g. viewing phone input) is resolved first.
-        ***REMOVED*** aiogram SDK: handlers match in registration order, first-match wins.
+        # Catch-all text handler — AFTER all dialog routers so that dialog
+        # MessageInput (e.g. viewing phone input) is resolved first.
+        # aiogram SDK: handlers match in registration order, first-match wins.
         from aiogram import Router as _Router
 
         self._catch_all_router = _Router(name="catch_all_query")
@@ -4660,11 +4660,11 @@ class PropertyBot:
         aiogram_setup_dialogs(self.dp)
         logger.info("aiogram-dialog setup complete")
 
-        ***REMOVED*** Start Redis health monitor (background task, every 5 min)
+        # Start Redis health monitor (background task, every 5 min)
         await self._redis_monitor.start()
 
-        ***REMOVED*** Register bot commands in Telegram menu
-        ***REMOVED*** Note: /call is intentionally excluded — it's admin-only (gated by _is_admin)
+        # Register bot commands in Telegram menu
+        # Note: /call is intentionally excluded — it's admin-only (gated by _is_admin)
         await self.bot.set_my_commands(
             [
                 BotCommand(command="start", description="Начать работу с ботом"),
@@ -4677,7 +4677,7 @@ class PropertyBot:
             ]
         )
 
-        ***REMOVED*** Set Menu Button: WebApp when MINI_APP_URL is configured, else commands list (***REMOVED***883)
+        # Set Menu Button: WebApp when MINI_APP_URL is configured, else commands list (#883)
         if self.config.mini_app_url:
             from aiogram.types import MenuButtonWebApp, WebAppInfo
 
@@ -4693,10 +4693,10 @@ class PropertyBot:
 
             await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
-        ***REMOVED*** Warm up BGE-M3 connection pool (***REMOVED***953)
+        # Warm up BGE-M3 connection pool (#953)
         await self._warmup_bge()
 
-        ***REMOVED*** Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
+        # Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
         if self._topic_manager is not None:
             self._miniapp_subscriber_task = asyncio.create_task(
                 self._miniapp_subscriber_loop(), name="miniapp-pubsub"
@@ -4742,7 +4742,7 @@ class PropertyBot:
                 self._polling_lock_scheduler = None
 
     async def _warmup_bge(self) -> None:
-        """Warm up BGE-M3 connection pool (***REMOVED***953)."""
+        """Warm up BGE-M3 connection pool (#953)."""
         try:
             await self._hybrid.aembed_query("warmup")
             logger.info("BGE-M3 warmup complete")
@@ -4776,9 +4776,9 @@ class PropertyBot:
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
-        ***REMOVED*** Drain pending fire-and-forget history saves before tearing services down
-        ***REMOVED*** so in-flight DB writes are not lost on shutdown (***REMOVED***1600). Bounded by
-        ***REMOVED*** _history_save_drain_timeout_s so a stuck DB cannot block shutdown.
+        # Drain pending fire-and-forget history saves before tearing services down
+        # so in-flight DB writes are not lost on shutdown (#1600). Bounded by
+        # _history_save_drain_timeout_s so a stuck DB cannot block shutdown.
         if self._history_save_tasks:
             in_flight = list(self._history_save_tasks)
             logger.info("Draining %d in-flight history-save tasks...", len(in_flight))

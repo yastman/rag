@@ -40,14 +40,14 @@ class TestScenario:
     description: str = ""
     expected_keywords: list[str] = field(default_factory=list)
     expected_filters: ExpectedFilters | None = None
-    should_skip_rag: bool = False  ***REMOVED*** For CHITCHAT tests
+    should_skip_rag: bool = False  # For CHITCHAT tests
     timeout: int = 60
-    delivery: str = "text"  ***REMOVED*** "text" or "voice"
+    delivery: str = "text"  # "text" or "voice"
 
 
-***REMOVED*** All 28 test scenarios
+# All 28 test scenarios
 SCENARIOS: list[TestScenario] = [
-    ***REMOVED*** Group 0: Immigration corpus (6 tests)
+    # Group 0: Immigration corpus (6 tests)
     TestScenario(
         id="0.1",
         name="Digital Nomad visa basics",
@@ -90,7 +90,7 @@ SCENARIOS: list[TestScenario] = [
         group=TestGroup.IMMIGRATION,
         expected_keywords=["2026", "внж", "пмж", "измен"],
     ),
-    ***REMOVED*** Group 1: Commands (4 tests)
+    # Group 1: Commands (4 tests)
     TestScenario(
         id="1.1",
         name="/start command",
@@ -119,7 +119,7 @@ SCENARIOS: list[TestScenario] = [
         group=TestGroup.COMMANDS,
         expected_keywords=["статистик", "кеш", "%"],
     ),
-    ***REMOVED*** Group 2: CHITCHAT (4 tests)
+    # Group 2: CHITCHAT (4 tests)
     TestScenario(
         id="2.1",
         name="Greeting",
@@ -151,7 +151,7 @@ SCENARIOS: list[TestScenario] = [
         group=TestGroup.CHITCHAT,
         should_skip_rag=True,
     ),
-    ***REMOVED*** Group 3: Price Filters (4 tests)
+    # Group 3: Price Filters (4 tests)
     TestScenario(
         id="3.1",
         name="Price max",
@@ -180,7 +180,7 @@ SCENARIOS: list[TestScenario] = [
         group=TestGroup.PRICE_FILTERS,
         expected_filters=None,
     ),
-    ***REMOVED*** Group 4: Room Filters (4 tests)
+    # Group 4: Room Filters (4 tests)
     TestScenario(
         id="4.1",
         name="Studio",
@@ -212,7 +212,7 @@ SCENARIOS: list[TestScenario] = [
         group=TestGroup.ROOM_FILTERS,
         expected_filters=ExpectedFilters(rooms=2, price_max=100000),
     ),
-    ***REMOVED*** Group 5: Location Filters (3 tests)
+    # Group 5: Location Filters (3 tests)
     TestScenario(
         id="5.1",
         name="City cyrillic",
@@ -237,7 +237,7 @@ SCENARIOS: list[TestScenario] = [
         expected_filters=ExpectedFilters(distance_to_sea_max=300),
         expected_keywords=["мор", "пляж", "300"],
     ),
-    ***REMOVED*** Group 6: Search (3 tests)
+    # Group 6: Search (3 tests)
     TestScenario(
         id="6.1",
         name="Semantic search",
@@ -260,7 +260,7 @@ SCENARIOS: list[TestScenario] = [
         expected_filters=ExpectedFilters(rooms=2, city="Солнечный берег", price_max=120000),
         expected_keywords=["Солнечн", "мор"],
     ),
-    ***REMOVED*** Group 7: Edge Cases (3 tests)
+    # Group 7: Edge Cases (3 tests)
     TestScenario(
         id="7.1",
         name="No results",
@@ -284,7 +284,7 @@ SCENARIOS: list[TestScenario] = [
         group=TestGroup.EDGE_CASES,
         description="Should handle safely without XSS",
     ),
-    ***REMOVED*** Group 8: Voice transcription (3 tests)
+    # Group 8: Voice transcription (3 tests)
     TestScenario(
         id="8.1",
         name="Voice transcription + property search",

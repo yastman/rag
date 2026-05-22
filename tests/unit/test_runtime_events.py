@@ -81,7 +81,7 @@ class TestRuntimeEventSchema:
         )
         raw = event.to_json()
         assert isinstance(raw, str)
-        ***REMOVED*** Compact: no extra spaces after commas or colons
+        # Compact: no extra spaces after commas or colons
         assert ", " not in raw
         parsed = json.loads(raw)
         assert parsed["event_type"] == "test.event"
@@ -162,7 +162,7 @@ class TestRuntimeEventWriterRotation:
         cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
         writer = RuntimeEventWriter(cfg)
 
-        ***REMOVED*** Fixed UTC datetime: 2026-12-25T23:59Z (UTC date = Dec 25)
+        # Fixed UTC datetime: 2026-12-25T23:59Z (UTC date = Dec 25)
         fixed_dt = datetime(2026, 12, 25, 23, 59, tzinfo=UTC)
         mock_dt_class = MagicMock()
         mock_dt_class.now.return_value = fixed_dt
@@ -247,12 +247,12 @@ class TestRuntimeEventWriterScrubbing:
     @pytest.mark.parametrize(
         "banned_key",
         [
-            ***REMOVED*** Same-case variants (should already work, but verify)
+            # Same-case variants (should already work, but verify)
             "user_id",
             "phone",
             "email",
             "api_key",
-            ***REMOVED*** Mixed-case and upper-case variants (the fix ensures these are caught)
+            # Mixed-case and upper-case variants (the fix ensures these are caught)
             "USER_ID",
             "User_Id",
             "PHONE",
@@ -327,7 +327,7 @@ class TestRuntimeEventWriterScrubbing:
         """Non-dict payloads are wrapped or handled safely."""
         cfg = RuntimeEventsConfig(enabled=True, dir=str(tmp_path))
         writer = RuntimeEventWriter(cfg)
-        ***REMOVED*** The plan says payload is dict[str, Any] | None, but we should be defensive
+        # The plan says payload is dict[str, Any] | None, but we should be defensive
         result = writer._scrub_payload("raw-string")
         assert result == "raw-string"
 
@@ -372,15 +372,15 @@ class TestRuntimeEventWriterDisabled:
             payload=None,
         )
         writer.append(event)
-        ***REMOVED*** No files should be created in tmp_path
+        # No files should be created in tmp_path
         assert list(tmp_path.iterdir()) == []
 
     def test_disabled_writer_append_is_no_op(self, tmp_path):
         """append() returns quickly when disabled."""
         cfg = RuntimeEventsConfig(enabled=False, dir=str(tmp_path))
         writer = RuntimeEventWriter(cfg)
-        ***REMOVED*** Should not raise
-        writer.append(None)  ***REMOVED*** type: ignore[arg-type]
+        # Should not raise
+        writer.append(None)  # type: ignore[arg-type]
 
 
 class TestRuntimeEventWriterResilience:
@@ -414,7 +414,7 @@ class TestEmitRuntimeEventHelper:
         """emit_runtime_event() builds a RuntimeEvent and appends it."""
         monkeypatch.setenv("RUNTIME_EVENTS_ENABLED", "1")
         monkeypatch.setenv("RUNTIME_EVENTS_DIR", str(tmp_path))
-        ***REMOVED*** Reset singleton so it picks up new env
+        # Reset singleton so it picks up new env
         from telegram_bot.runtime_events import _reset_writer
 
         _reset_writer()
@@ -538,8 +538,8 @@ class TestWriterSingleton:
         _reset_writer()
         try:
             writer = _get_writer()
-            ***REMOVED*** Should not raise or create files
-            writer.append(None)  ***REMOVED*** type: ignore[arg-type]
+            # Should not raise or create files
+            writer.append(None)  # type: ignore[arg-type]
             assert list(tmp_path.iterdir()) == []
         finally:
             _reset_writer()
@@ -612,7 +612,7 @@ class TestRuntimeEventWriterRetention:
         writer = RuntimeEventWriter(cfg)
         today = dt.now(UTC).date()
         old_date = (today - timedelta(days=10)).isoformat()
-        ***REMOVED*** Malformed / non-jsonl files
+        # Malformed / non-jsonl files
         (tmp_path / f"{old_date}.txt").write_text("log", encoding="utf-8")
         (tmp_path / "not-a-date.jsonl").write_text("{}", encoding="utf-8")
         (tmp_path / "2026-13-01.jsonl").write_text("{}", encoding="utf-8")

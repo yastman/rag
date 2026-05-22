@@ -38,7 +38,7 @@ class TestRespondNode:
 
     async def test_fallback_to_plain_text(self):
         message = AsyncMock()
-        ***REMOVED*** First call (HTML) raises, second call (plain) succeeds
+        # First call (HTML) raises, second call (plain) succeeds
         message.answer.side_effect = [Exception("parse error"), None]
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "bad *markdown"
@@ -47,7 +47,7 @@ class TestRespondNode:
         result = await respond_node(state)
 
         assert message.answer.await_count == 2
-        ***REMOVED*** Second call should be plain text (no parse_mode)
+        # Second call should be plain text (no parse_mode)
         message.answer.assert_awaited_with("bad *markdown", reply_markup=None)
         assert "respond" in result["latency_stages"]
 
@@ -66,7 +66,7 @@ class TestRespondNode:
         """respond_node should not crash if message is not in state."""
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "answer"
-        ***REMOVED*** No "message" key in state
+        # No "message" key in state
 
         result = await respond_node(state)
 
@@ -143,7 +143,7 @@ class TestRespondNodeFeedbackButtons:
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "Answer text"
         state["message"] = message
-        ***REMOVED*** trace_id is "" by default
+        # trace_id is "" by default
 
         await respond_node(state)
 
@@ -151,7 +151,7 @@ class TestRespondNodeFeedbackButtons:
         assert call_kwargs.kwargs.get("reply_markup") is None
 
     async def test_no_buttons_for_chitchat(self):
-        """CHITCHAT responses don't get feedback buttons even with trace_id (***REMOVED***277)."""
+        """CHITCHAT responses don't get feedback buttons even with trace_id (#277)."""
         message = AsyncMock()
         state = make_initial_state(user_id=1, session_id="s", query="Привет")
         state["response"] = "Привет! 👋"
@@ -165,7 +165,7 @@ class TestRespondNodeFeedbackButtons:
         assert call_kwargs.kwargs.get("reply_markup") is None
 
     async def test_no_buttons_for_off_topic(self):
-        """OFF_TOPIC responses don't get feedback buttons even with trace_id (***REMOVED***277)."""
+        """OFF_TOPIC responses don't get feedback buttons even with trace_id (#277)."""
         message = AsyncMock()
         state = make_initial_state(user_id=1, session_id="s", query="рецепт борща")
         state["response"] = "Я отвечаю только на вопросы о недвижимости."
@@ -196,7 +196,7 @@ class TestRespondNodeFeedbackButtons:
 
 
 class TestFormatSources:
-    """Test format_sources() output format (***REMOVED***225)."""
+    """Test format_sources() output format (#225)."""
 
     def test_formats_sources_with_city(self):
         result = format_sources(_SAMPLE_DOCS)
@@ -221,11 +221,11 @@ class TestFormatSources:
         docs = [{"text": "t", "score": 0.5, "metadata": {"title": "NoCity"}}]
         result = format_sources(docs)
         assert "NoCity" in result
-        assert " — " not in result  ***REMOVED*** no city separator
+        assert " — " not in result  # no city separator
 
 
 class TestRespondNodeSourceAttribution:
-    """Test source attribution in respond_node (***REMOVED***225)."""
+    """Test source attribution in respond_node (#225)."""
 
     async def test_sources_appended_non_streaming(self):
         """Non-streaming: sources appended to response text before sending."""
@@ -303,7 +303,7 @@ class TestRespondNodeSourceAttribution:
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "Answer"
         state["message"] = message
-        ***REMOVED*** documents is [] by default
+        # documents is [] by default
 
         result = await respond_node(state)
 
@@ -328,7 +328,7 @@ class TestRespondNodeSourceAttribution:
 
         await respond_node(state)
 
-        ***REMOVED*** edit_message_text was attempted (2 calls: Markdown + plain)
+        # edit_message_text was attempted (2 calls: Markdown + plain)
         assert message.bot.edit_message_text.await_count == 2
-        ***REMOVED*** Fallback: edit_message_reply_markup for buttons
+        # Fallback: edit_message_reply_markup for buttons
         message.bot.edit_message_reply_markup.assert_awaited_once()

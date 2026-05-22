@@ -1,9 +1,9 @@
-"""Utility tools: mortgage_calculator, daily_summary, handoff (***REMOVED***445).
+"""Utility tools: mortgage_calculator, daily_summary, handoff (#445).
 
 All tools follow the @tool + @observe + RunnableConfig DI pattern from crm_tools.py.
 Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 (SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
-— see ***REMOVED***1252).
+— see #1252).
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ def _fmt(value: float) -> str:
     return f"{value:,.2f}".replace(",", " ")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tool 1: mortgage_calculator
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tool 1: mortgage_calculator
+# ---------------------------------------------------------------------------
 
 
 @tool
@@ -98,9 +98,9 @@ async def mortgage_calculator(
     return "\n".join(lines)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Internal helper for daily_summary
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Internal helper for daily_summary
+# ---------------------------------------------------------------------------
 
 
 async def _summarize_with_llm(data: str, llm: Any, model: str = _DEFAULT_SUMMARY_MODEL) -> str:
@@ -123,9 +123,9 @@ async def _summarize_with_llm(data: str, llm: Any, model: str = _DEFAULT_SUMMARY
     return response.choices[0].message.content or "Нет данных."
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tool 2: daily_summary
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tool 2: daily_summary
+# ---------------------------------------------------------------------------
 
 
 @tool
@@ -143,7 +143,7 @@ async def daily_summary(
     if not ctx or not ctx.kommo_client:
         return "CRM недоступен. Обратитесь к администратору."
 
-    ***REMOVED*** Parse date
+    # Parse date
     if date == "today":
         target = datetime.now(UTC).date()
     elif date == "yesterday":
@@ -155,16 +155,16 @@ async def daily_summary(
             return "Некорректный формат даты. Используйте YYYY-MM-DD."
 
     try:
-        ***REMOVED*** NOTE: KommoClient does not support date-range filtering; fetches latest 50 records.
-        ***REMOVED*** The date parameter is used only for the summary header, not for actual filtering.
-        ***REMOVED*** TODO: add date-range filter when Kommo API supports it (***REMOVED***445)
+        # NOTE: KommoClient does not support date-range filtering; fetches latest 50 records.
+        # The date parameter is used only for the summary header, not for actual filtering.
+        # TODO: add date-range filter when Kommo API supports it (#445)
         leads = await ctx.kommo_client.search_leads(query="", limit=50)
         tasks = await ctx.kommo_client.get_tasks(limit=50)
     except Exception as e:
         logger.exception("daily_summary CRM query failed")
         return f"Ошибка при запросе CRM: {e}"
 
-    ***REMOVED*** Build data string for summarization
+    # Build data string for summarization
     lines = [f"CRM Activity for {target.isoformat()} (latest 50 records):"]
     lines.append(f"Leads: {len(leads)}")
     for lead in leads[:10]:
@@ -178,9 +178,9 @@ async def daily_summary(
     return await _summarize_with_llm(data, ctx.llm)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tool 3: handoff
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tool 3: handoff
+# ---------------------------------------------------------------------------
 
 
 @tool
@@ -227,10 +227,10 @@ async def handoff(
         except Exception:
             logger.warning("Failed to notify manager %s", mid, exc_info=True)
 
-    ***REMOVED*** Kommo handoff task creation was removed in ***REMOVED***1541: the legacy branch was
-    ***REMOVED*** guarded by ``lead_id`` which was always ``None`` (resolution was never
-    ***REMOVED*** implemented). Manager notification above remains the single handoff
-    ***REMOVED*** surface until lead_id resolution lands as a separate behavioural change.
+    # Kommo handoff task creation was removed in #1541: the legacy branch was
+    # guarded by ``lead_id`` which was always ``None`` (resolution was never
+    # implemented). Manager notification above remains the single handoff
+    # surface until lead_id resolution lands as a separate behavioural change.
 
     lf = get_client()
     lf.score_current_trace(name="handoff_triggered", value=1, data_type="BOOLEAN")
@@ -239,9 +239,9 @@ async def handoff(
     return "Ваш запрос передан менеджеру. Ожидайте ответа."
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tool registry
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tool registry
+# ---------------------------------------------------------------------------
 
 
 def get_utility_tools() -> list:

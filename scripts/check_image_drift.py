@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Detect Docker image drift between compose config and running containers.
 
 Compares image tags and digests pinned in docker-compose files against
@@ -6,11 +6,11 @@ the images actually used by running containers. Reports mismatches that
 indicate stale containers running older/different image versions.
 
 Usage:
-    python scripts/check_image_drift.py                         ***REMOVED*** Human-readable
-    python scripts/check_image_drift.py --json                  ***REMOVED*** JSON output
-    python scripts/check_image_drift.py -f compose.dev.yml       ***REMOVED*** Custom file
-    python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml  ***REMOVED*** Multiple files
-    python scripts/check_image_drift.py --fix                   ***REMOVED*** Show fix commands
+    python scripts/check_image_drift.py                         # Human-readable
+    python scripts/check_image_drift.py --json                  # JSON output
+    python scripts/check_image_drift.py -f compose.dev.yml       # Custom file
+    python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml  # Multiple files
+    python scripts/check_image_drift.py --fix                   # Show fix commands
 
 Exit codes:
     0 — no drift detected and at least one running container was checked
@@ -23,16 +23,16 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess  ***REMOVED*** nosec B404
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
-***REMOVED*** Regex to parse image references like:
-***REMOVED***   redis:8.6.0@sha256:abc123...
-***REMOVED***   langfuse/langfuse:3.153.0@sha256:abc123...
-***REMOVED***   ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:abc123...
+# Regex to parse image references like:
+#   redis:8.6.0@sha256:abc123...
+#   langfuse/langfuse:3.153.0@sha256:abc123...
+#   ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:abc123...
 IMAGE_RE = re.compile(
     r"^(?P<name>[^:@]+)"
     r"(?::(?P<tag>[^@]+))?"
@@ -78,7 +78,7 @@ class DriftResult:
 
     @property
     def has_drift(self) -> bool:
-        ***REMOVED*** If expected has digest, compare digests; otherwise compare tags
+        # If expected has digest, compare digests; otherwise compare tags
         if self.expected_digest:
             return not self.digest_match
         return not self.tag_match
@@ -110,7 +110,7 @@ class DriftReport:
 
 def _run(cmd: list[str], *, check: bool = True) -> str:
     """Run a command and return stripped stdout."""
-    result = subprocess.run(cmd, capture_output=True, text=True, check=check)  ***REMOVED*** nosec B603
+    result = subprocess.run(cmd, capture_output=True, text=True, check=check)  # nosec B603
     return result.stdout.strip()
 
 
@@ -123,7 +123,7 @@ def get_compose_services(compose_files: list[str], env_file: str) -> dict[str, d
         cmd.extend(["config", "--format", "json"])
         out = _run(cmd)
         data: dict[str, object] = json.loads(out)
-        services: dict[str, dict[str, object]] = data.get("services", {})  ***REMOVED*** type: ignore[assignment]
+        services: dict[str, dict[str, object]] = data.get("services", {})  # type: ignore[assignment]
         return services
     except subprocess.CalledProcessError as exc:
         files_str = ":".join(compose_files)
@@ -144,7 +144,7 @@ def get_running_containers(compose_files: list[str], env_file: str) -> dict[str,
         out = _run(cmd, check=False)
         if not out:
             return {}
-        ***REMOVED*** docker compose ps --format json can return one JSON per line or an array
+        # docker compose ps --format json can return one JSON per line or an array
         containers = {}
         if out.startswith("["):
             items = json.loads(out)
@@ -155,14 +155,14 @@ def get_running_containers(compose_files: list[str], env_file: str) -> dict[str,
             if svc:
                 containers[svc] = c
         return containers
-    except (subprocess.CalledProcessError, json.JSONDecodeError):  ***REMOVED*** fmt: skip
+    except (subprocess.CalledProcessError, json.JSONDecodeError):  # fmt: skip
         return {}
 
 
 def get_container_image_digest(container_id: str) -> tuple[str, str]:
     """Get the image name and repo digest for a running container."""
     try:
-        ***REMOVED*** Get image name
+        # Get image name
         image = _run(
             [
                 "docker",
@@ -173,7 +173,7 @@ def get_container_image_digest(container_id: str) -> tuple[str, str]:
             ]
         )
 
-        ***REMOVED*** Get image ID, then inspect the image for RepoDigests
+        # Get image ID, then inspect the image for RepoDigests
         image_id = _run(
             [
                 "docker",
@@ -197,7 +197,7 @@ def get_container_image_digest(container_id: str) -> tuple[str, str]:
 
         digests: list[str] = json.loads(repo_digests_raw) if repo_digests_raw else []
 
-        ***REMOVED*** Extract sha256 digest from RepoDigests
+        # Extract sha256 digest from RepoDigests
         digest = ""
         for d in digests:
             if "@sha256:" in d:
@@ -223,12 +223,12 @@ def check_drift(compose_files: list[str], env_file: str) -> DriftReport:
         image_str = svc_config.get("image", "")
         has_build = "build" in svc_config
 
-        ***REMOVED*** Skip custom-built services
+        # Skip custom-built services
         if not image_str or has_build:
             report.skipped_build.append(svc_name)
             continue
 
-        ***REMOVED*** Check if container is running
+        # Check if container is running
         container = containers.get(svc_name)
         if not container:
             report.skipped_not_running.append(svc_name)
@@ -240,9 +240,9 @@ def check_drift(compose_files: list[str], env_file: str) -> DriftReport:
         actual_image, actual_digest = get_container_image_digest(container_id)
         actual = ImageRef.parse(actual_image)
 
-        ***REMOVED*** Compare tag (from image name)
+        # Compare tag (from image name)
         tag_match = not expected.tag or expected.tag == actual.tag
-        ***REMOVED*** Compare digest
+        # Compare digest
         digest_match = not expected.digest or expected.digest == actual_digest
 
         result = DriftResult(
@@ -265,19 +265,19 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
     """Print human-readable report."""
     compose = report.compose_file
 
-    ***REMOVED*** Header
+    # Header
     print(f"\n{'=' * 60}")
     print(f"  Image Drift Report: {compose}")
     print(f"{'=' * 60}")
 
-    ***REMOVED*** OK services
+    # OK services
     if report.ok:
         print(f"\n\033[32m✓ {len(report.ok)} services match pinned images:\033[0m")
         for r in report.ok:
             tag = r.expected_tag or "latest"
             print(f"  {r.service:25s} {tag}")
 
-    ***REMOVED*** Drifted services
+    # Drifted services
     if report.drifted:
         print(f"\n\033[31m✗ {len(report.drifted)} services have image drift:\033[0m")
         for r in report.drifted:
@@ -296,7 +296,7 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
             if r.expected_digest and not r.digest_match:
                 print("    \033[31m→ Digest mismatch\033[0m")
 
-    ***REMOVED*** Skipped
+    # Skipped
     if report.skipped_build:
         print(f"\n\033[33m⊘ {len(report.skipped_build)} custom-build services (skipped):\033[0m")
         print(f"  {', '.join(report.skipped_build)}")
@@ -307,7 +307,7 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
         )
         print(f"  {', '.join(report.skipped_not_running)}")
 
-    ***REMOVED*** Fix commands
+    # Fix commands
     if show_fix and report.drifted:
         drifted_names = [r.service for r in report.drifted]
         names_str = " ".join(drifted_names)
@@ -316,16 +316,16 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
         else:
             file_flags = f"-f {compose}"
         print("\n\033[36mFix commands:\033[0m")
-        print("  ***REMOVED*** Pull fresh images")
+        print("  # Pull fresh images")
         print(f"  docker compose {file_flags} pull {names_str}")
-        print("  ***REMOVED*** Recreate drifted containers")
+        print("  # Recreate drifted containers")
         print(f"  docker compose {file_flags} up -d --force-recreate {names_str}")
-        print("  ***REMOVED*** Or recreate all:")
+        print("  # Or recreate all:")
         print(f"  docker compose {file_flags} down --remove-orphans")
         print(f"  docker compose {file_flags} pull")
         print(f"  docker compose {file_flags} up -d")
 
-    ***REMOVED*** Summary
+    # Summary
     print(f"\n{'─' * 60}")
     total = len(report.checked)
     ok = len(report.ok)
@@ -407,10 +407,10 @@ def main() -> None:
             print(f"Error: {f} not found", file=sys.stderr)
             sys.exit(2)
 
-    ***REMOVED*** Verify docker is available (lightweight check)
+    # Verify docker is available (lightweight check)
     try:
         _run(["docker", "version", "--format", "{{.Server.Version}}"], check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):  ***REMOVED*** fmt: skip
+    except (subprocess.CalledProcessError, FileNotFoundError):  # fmt: skip
         print("Error: docker is not available or not running", file=sys.stderr)
         sys.exit(2)
 

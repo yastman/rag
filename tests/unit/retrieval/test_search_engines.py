@@ -18,9 +18,9 @@ from src.retrieval.search_engines import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -46,9 +46,9 @@ def baseline_engine(mock_settings: Settings) -> BaselineSearchEngine:
     return engine
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** lexical_weights_to_sparse
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# lexical_weights_to_sparse
+# ---------------------------------------------------------------------------
 
 
 class TestLexicalWeightsToSparse:
@@ -71,9 +71,9 @@ class TestLexicalWeightsToSparse:
         assert 0.9 in result.values
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _should_use_acorn
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _should_use_acorn
+# ---------------------------------------------------------------------------
 
 
 class TestShouldUseAcorn:
@@ -146,9 +146,9 @@ class TestShouldUseAcorn:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _build_search_params
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _build_search_params
+# ---------------------------------------------------------------------------
 
 
 class TestBuildSearchParams:
@@ -173,13 +173,13 @@ class TestBuildSearchParams:
     def test_no_acorn_when_acorn_mode_off(self, baseline_engine: BaselineSearchEngine) -> None:
         baseline_engine.settings.acorn_mode = AcornMode.OFF
         params = baseline_engine._build_search_params(has_filters=True)
-        ***REMOVED*** acorn attribute should not be set or should be None
+        # acorn attribute should not be set or should be None
         assert not hasattr(params, "acorn") or params.acorn is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _parse_group_results
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _parse_group_results
+# ---------------------------------------------------------------------------
 
 
 class TestParseGroupResults:
@@ -239,9 +239,9 @@ class TestParseGroupResults:
         assert results[1].article_number == "SECOND"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** BaselineSearchEngine.search
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# BaselineSearchEngine.search
+# ---------------------------------------------------------------------------
 
 
 class TestBaselineEngineSearch:
@@ -294,9 +294,9 @@ class TestBaselineEngineSearch:
         assert results == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** HybridRRFSearchEngine
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# HybridRRFSearchEngine
+# ---------------------------------------------------------------------------
 
 
 class TestHybridRRFEngineSearch:
@@ -331,9 +331,9 @@ class TestHybridRRFEngineSearch:
         assert call_kwargs["using"] == "dense"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Engine names
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Engine names
+# ---------------------------------------------------------------------------
 
 
 class TestEngineNames:
@@ -351,9 +351,9 @@ class TestEngineNames:
         assert engine.get_name() == "hybrid_rrf"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** create_search_engine factory
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# create_search_engine factory
+# ---------------------------------------------------------------------------
 
 
 class TestCreateSearchEngine:
@@ -388,7 +388,7 @@ class TestCreateSearchEngine:
             patch("src.retrieval.search_engines.QdrantClient"),
             patch("src.retrieval.search_engines.get_bge_m3_model"),
         ):
-            engine = create_search_engine("unknown", settings=mock_settings)  ***REMOVED*** type: ignore[arg-type]
+            engine = create_search_engine("unknown", settings=mock_settings)  # type: ignore[arg-type]
         from src.retrieval.search_engines import HybridRRFColBERTSearchEngine
 
         assert isinstance(engine, HybridRRFColBERTSearchEngine)

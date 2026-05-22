@@ -1,4 +1,4 @@
-***REMOVED*** Architecture Decision Records (Legacy Pointer)
+# Architecture Decision Records (Legacy Pointer)
 
 > **This file is a legacy pointer only.** The canonical ADR entrypoint is [`adr/README.md`](adr/README.md). New ADRs should be created there.
 

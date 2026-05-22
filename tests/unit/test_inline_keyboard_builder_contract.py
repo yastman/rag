@@ -1,4 +1,4 @@
-"""Contract tests for Issue ***REMOVED***1238: prefer aiogram InlineKeyboardBuilder.
+"""Contract tests for Issue #1238: prefer aiogram InlineKeyboardBuilder.
 
 The SDK registry rule is: "НЕ писать кастомные InlineKeyboard для навигации
 — использовать Select/Button/SwitchTo / InlineKeyboardBuilder".
@@ -38,9 +38,9 @@ def _module_ast(key: str) -> ast.Module:
     return ast.parse(_module_source(key))
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Import contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Import contract
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("module", ["feedback", "services_keyboard"])
@@ -58,13 +58,13 @@ def test_module_imports_inline_keyboard_builder(module: str) -> None:
             break
     assert found, (
         f"telegram_bot/{SOURCES[module]} must import InlineKeyboardBuilder from "
-        f"aiogram.utils.keyboard (issue ***REMOVED***1238 SDK convention)."
+        f"aiogram.utils.keyboard (issue #1238 SDK convention)."
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Construction contract — no manual InlineKeyboardMarkup(inline_keyboard=...)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Construction contract — no manual InlineKeyboardMarkup(inline_keyboard=...)
+# ---------------------------------------------------------------------------
 
 
 def _calls_inline_keyboard_markup_with_kwarg(tree: ast.Module) -> list[ast.Call]:
@@ -79,13 +79,13 @@ def _calls_inline_keyboard_markup_with_kwarg(tree: ast.Module) -> list[ast.Call]
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        ***REMOVED*** Match both `InlineKeyboardMarkup(...)` and `aiogram.types.InlineKeyboardMarkup(...)`.
+        # Match both `InlineKeyboardMarkup(...)` and `aiogram.types.InlineKeyboardMarkup(...)`.
         is_markup_ctor = (isinstance(func, ast.Name) and func.id == "InlineKeyboardMarkup") or (
             isinstance(func, ast.Attribute) and func.attr == "InlineKeyboardMarkup"
         )
         if not is_markup_ctor:
             continue
-        ***REMOVED*** Only flag the manual construction pattern that ***REMOVED***1238 wants gone.
+        # Only flag the manual construction pattern that #1238 wants gone.
         if any(kw.arg == "inline_keyboard" for kw in node.keywords):
             offending.append(node)
     return offending
@@ -100,7 +100,7 @@ def test_module_uses_builder_not_manual_markup(module: str) -> None:
         locations = ", ".join(f"line {call.lineno}" for call in offending)
         pytest.fail(
             f"telegram_bot/{SOURCES[module]} still constructs InlineKeyboardMarkup "
-            f"manually at {locations}. Issue ***REMOVED***1238 requires using "
+            f"manually at {locations}. Issue #1238 requires using "
             f"InlineKeyboardBuilder().as_markup() instead."
         )
 
@@ -120,7 +120,7 @@ def test_module_invokes_builder(module: str) -> None:
             break
     assert found, (
         f"telegram_bot/{SOURCES[module]} must instantiate InlineKeyboardBuilder() at "
-        f"least once after the issue ***REMOVED***1238 migration."
+        f"least once after the issue #1238 migration."
     )
 
 
@@ -131,5 +131,5 @@ def test_module_calls_as_markup(module: str) -> None:
     src = _module_source(module)
     assert ".as_markup()" in src, (
         f"telegram_bot/{SOURCES[module]} must call ``.as_markup()`` to finalize "
-        f"its InlineKeyboardBuilder (issue ***REMOVED***1238)."
+        f"its InlineKeyboardBuilder (issue #1238)."
     )

@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Run A/B test comparing search engines: Baseline vs Hybrid vs DBSF+ColBERT.
 
@@ -42,7 +42,7 @@ def run_ab_test(
     print("=" * 80)
     print()
 
-    ***REMOVED*** Load test queries
+    # Load test queries
     print("📂 Loading test queries...")
     with open(queries_file, encoding="utf-8") as f:
         queries = json.load(f)
@@ -57,7 +57,7 @@ def run_ab_test(
 
     print()
 
-    ***REMOVED*** Initialize embedding model
+    # Initialize embedding model
     try:
         from FlagEmbedding import BGEM3FlagModel
     except ImportError as e:
@@ -72,7 +72,7 @@ def run_ab_test(
     print(f"   ✓ Model loaded in {load_time:.2f}s")
     print()
 
-    ***REMOVED*** Initialize search engines
+    # Initialize search engines
     print("🔧 Initializing search engines...")
     baseline_engine = create_search_engine("baseline", collection_name, model)
     hybrid_engine = create_search_engine("hybrid", collection_name, model)
@@ -82,10 +82,10 @@ def run_ab_test(
     print("   ✓ DBSF+ColBERT engine (dense+sparse DBSF → ColBERT rerank) ready")
     print()
 
-    ***REMOVED*** Initialize evaluator
+    # Initialize evaluator
     evaluator = SearchEvaluator(ground_truth_file)
 
-    ***REMOVED*** Run baseline search
+    # Run baseline search
     print("=" * 80)
     print("🔍 PHASE 1: Baseline Search (Dense-only)")
     print("=" * 80)
@@ -107,7 +107,7 @@ def run_ab_test(
     print(f"   Average: {baseline_time / len(queries):.3f}s per query")
     print()
 
-    ***REMOVED*** Run hybrid search
+    # Run hybrid search
     print("=" * 80)
     print("🔍 PHASE 2: Hybrid Search (Dense+Sparse RRF, ColBERT disabled)")
     print("=" * 80)
@@ -129,7 +129,7 @@ def run_ab_test(
     print(f"   Average: {hybrid_time / len(queries):.3f}s per query")
     print()
 
-    ***REMOVED*** Run DBSF+ColBERT search
+    # Run DBSF+ColBERT search
     print("=" * 80)
     print("🔍 PHASE 3: DBSF+ColBERT Search (Dense+Sparse DBSF → ColBERT rerank)")
     print("=" * 80)
@@ -151,7 +151,7 @@ def run_ab_test(
     print(f"   Average: {dbsf_time / len(queries):.3f}s per query")
     print()
 
-    ***REMOVED*** Evaluate baseline
+    # Evaluate baseline
     print("=" * 80)
     print("📊 PHASE 4: Evaluating Baseline Results")
     print("=" * 80)
@@ -159,7 +159,7 @@ def run_ab_test(
     print_metrics(baseline_eval["metrics"])
     print()
 
-    ***REMOVED*** Evaluate hybrid
+    # Evaluate hybrid
     print("=" * 80)
     print("📊 PHASE 5: Evaluating Hybrid Results")
     print("=" * 80)
@@ -167,7 +167,7 @@ def run_ab_test(
     print_metrics(hybrid_eval["metrics"])
     print()
 
-    ***REMOVED*** Evaluate DBSF+ColBERT
+    # Evaluate DBSF+ColBERT
     print("=" * 80)
     print("📊 PHASE 6: Evaluating DBSF+ColBERT Results")
     print("=" * 80)
@@ -175,38 +175,38 @@ def run_ab_test(
     print_metrics(dbsf_eval["metrics"])
     print()
 
-    ***REMOVED*** Compare all engines
+    # Compare all engines
     print("=" * 80)
     print("📈 PHASE 7: Statistical Comparison")
     print("=" * 80)
 
-    ***REMOVED*** Baseline vs Hybrid
+    # Baseline vs Hybrid
     print("\n🔸 Baseline vs Hybrid (RRF):")
     print("-" * 80)
     comparison_hybrid = evaluator.compare_engines(baseline_eval, hybrid_eval)
     print_comparison(comparison_hybrid)
 
-    ***REMOVED*** Baseline vs DBSF+ColBERT
+    # Baseline vs DBSF+ColBERT
     print("\n🔸 Baseline vs DBSF+ColBERT:")
     print("-" * 80)
     comparison_dbsf = evaluator.compare_engines(baseline_eval, dbsf_eval)
     print_comparison(comparison_dbsf)
 
-    ***REMOVED*** Hybrid vs DBSF+ColBERT
+    # Hybrid vs DBSF+ColBERT
     print("\n🔸 Hybrid (RRF) vs DBSF+ColBERT:")
     print("-" * 80)
     comparison_hybrid_dbsf = evaluator.compare_engines(hybrid_eval, dbsf_eval)
     print_comparison(comparison_hybrid_dbsf)
     print()
 
-    ***REMOVED*** Save results
+    # Save results
     print("=" * 80)
     print("💾 PHASE 8: Saving Results")
     print("=" * 80)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    ***REMOVED*** Save baseline results
+    # Save baseline results
     baseline_report_file = f"{output_dir}/baseline_results_{timestamp}.json"
     with open(baseline_report_file, "w", encoding="utf-8") as f:
         json.dump(
@@ -224,7 +224,7 @@ def run_ab_test(
         )
     print(f"   ✓ Baseline report: {baseline_report_file}")
 
-    ***REMOVED*** Save hybrid results
+    # Save hybrid results
     hybrid_report_file = f"{output_dir}/hybrid_results_{timestamp}.json"
     with open(hybrid_report_file, "w", encoding="utf-8") as f:
         json.dump(
@@ -242,7 +242,7 @@ def run_ab_test(
         )
     print(f"   ✓ Hybrid report: {hybrid_report_file}")
 
-    ***REMOVED*** Save DBSF+ColBERT results
+    # Save DBSF+ColBERT results
     dbsf_report_file = f"{output_dir}/dbsf_colbert_results_{timestamp}.json"
     with open(dbsf_report_file, "w", encoding="utf-8") as f:
         json.dump(
@@ -260,7 +260,7 @@ def run_ab_test(
         )
     print(f"   ✓ DBSF+ColBERT report: {dbsf_report_file}")
 
-    ***REMOVED*** Save comparison (convert numpy types to Python types for JSON)
+    # Save comparison (convert numpy types to Python types for JSON)
     comparison_report_file = f"{output_dir}/comparison_report_{timestamp}.json"
 
     comparison_hybrid_clean = convert_numpy(comparison_hybrid)
@@ -290,7 +290,7 @@ def run_ab_test(
         )
     print(f"   ✓ Comparison report: {comparison_report_file}")
 
-    ***REMOVED*** Generate human-readable markdown report
+    # Generate human-readable markdown report
     markdown_file = f"{output_dir}/AB_TEST_REPORT_{timestamp}.md"
     generate_markdown_report(
         markdown_file,
@@ -359,7 +359,7 @@ def print_comparison(comparison: dict):
         hybrid = data["hybrid"]
         improvement = data["relative_improvement_pct"]
 
-        ***REMOVED*** Determine if higher or lower is better
+        # Determine if higher or lower is better
         if metric == "failure_rate":
             symbol = "📉" if improvement > 0 else "📈"
         else:
@@ -367,7 +367,7 @@ def print_comparison(comparison: dict):
 
         print(f"   {symbol} {metric:15s}: {baseline:.4f} → {hybrid:.4f} ({improvement:+.1f}%)")
 
-    ***REMOVED*** Statistical significance
+    # Statistical significance
     if "statistical_significance" in comparison:
         sig = comparison["statistical_significance"].get("recall@10", {})
         print("\n📊 Statistical Significance (Paired t-test on Recall@10):")
@@ -423,7 +423,7 @@ def generate_markdown_report(filename: str, data: dict):
     comp_dbsf = data["comparison_dbsf"]
     comp_hybrid_dbsf = data["comparison_hybrid_dbsf"]
 
-    md = f"""***REMOVED*** A/B Test Report: Baseline vs Hybrid vs DBSF+ColBERT
+    md = f"""# A/B Test Report: Baseline vs Hybrid vs DBSF+ColBERT
 
 **Generated:** {data["timestamp"]}
 **Collection:** {data["collection"]}
@@ -431,9 +431,9 @@ def generate_markdown_report(filename: str, data: dict):
 
 ---
 
-***REMOVED******REMOVED*** Executive Summary
+## Executive Summary
 
-***REMOVED******REMOVED******REMOVED*** Search Performance Comparison
+### Search Performance Comparison
 
 | Metric | Baseline | Hybrid (RRF) | DBSF+ColBERT | Best |
 |--------|----------|--------------|--------------|------|
@@ -443,7 +443,7 @@ def generate_markdown_report(filename: str, data: dict):
 | MRR | {baseline.get("mrr", 0):.4f} | {hybrid.get("mrr", 0):.4f} | {dbsf.get("mrr", 0):.4f} | {"DBSF" if dbsf.get("mrr", 0) >= max(baseline.get("mrr", 0), hybrid.get("mrr", 0)) else ("Hybrid" if hybrid.get("mrr", 0) >= baseline.get("mrr", 0) else "Baseline")} |
 | Failure Rate | {baseline.get("failure_rate", 0):.4f} | {hybrid.get("failure_rate", 0):.4f} | {dbsf.get("failure_rate", 0):.4f} | {"DBSF" if dbsf.get("failure_rate", 0) <= min(baseline.get("failure_rate", 0), hybrid.get("failure_rate", 0)) else ("Hybrid" if hybrid.get("failure_rate", 0) <= baseline.get("failure_rate", 0) else "Baseline")} |
 
-***REMOVED******REMOVED******REMOVED*** Search Time
+### Search Time
 
 | Engine | Total Time | Avg per Query |
 |--------|------------|---------------|
@@ -453,9 +453,9 @@ def generate_markdown_report(filename: str, data: dict):
 
 ---
 
-***REMOVED******REMOVED*** Detailed Results
+## Detailed Results
 
-***REMOVED******REMOVED******REMOVED*** Baseline Engine (Dense-only)
+### Baseline Engine (Dense-only)
 
 **Architecture:**
 - Dense vectors only (BGE-M3 1024D INT8)
@@ -468,7 +468,7 @@ def generate_markdown_report(filename: str, data: dict):
 - NDCG@10:   {baseline.get("ndcg@10", 0):.4f}
 - Failure:   {baseline.get("failure_rate", 0):.4f} ({baseline.get("failure_rate", 0) * 100:.1f}%)
 
-***REMOVED******REMOVED******REMOVED*** Hybrid Engine (Dense+Sparse RRF, ColBERT disabled)
+### Hybrid Engine (Dense+Sparse RRF, ColBERT disabled)
 
 **Architecture:**
 - Dense: BGE-M3 1024D INT8 vectors
@@ -483,7 +483,7 @@ def generate_markdown_report(filename: str, data: dict):
 - NDCG@10:   {hybrid.get("ndcg@10", 0):.4f}
 - Failure:   {hybrid.get("failure_rate", 0):.4f} ({hybrid.get("failure_rate", 0) * 100:.1f}%)
 
-***REMOVED******REMOVED******REMOVED*** DBSF+ColBERT Engine (Qdrant 2025 Best Practice)
+### DBSF+ColBERT Engine (Qdrant 2025 Best Practice)
 
 **Architecture:**
 - Stage 1: Dense + Sparse → 100 candidates each
@@ -500,9 +500,9 @@ def generate_markdown_report(filename: str, data: dict):
 
 ---
 
-***REMOVED******REMOVED*** Statistical Comparisons
+## Statistical Comparisons
 
-***REMOVED******REMOVED******REMOVED*** Baseline vs DBSF+ColBERT
+### Baseline vs DBSF+ColBERT
 
 | Metric | Improvement |
 |--------|-------------|
@@ -511,7 +511,7 @@ def generate_markdown_report(filename: str, data: dict):
 | NDCG@10 | {comp_dbsf["improvements"]["ndcg@10"]["relative_improvement_pct"]:+.1f}% |
 | MRR | {comp_dbsf["improvements"]["mrr"]["relative_improvement_pct"]:+.1f}% |
 
-***REMOVED******REMOVED******REMOVED*** Hybrid vs DBSF+ColBERT
+### Hybrid vs DBSF+ColBERT
 
 | Metric | Improvement |
 |--------|-------------|
@@ -522,11 +522,11 @@ def generate_markdown_report(filename: str, data: dict):
 
 ---
 
-***REMOVED******REMOVED*** Conclusion
+## Conclusion
 
 """
 
-    ***REMOVED*** Determine overall winner
+    # Determine overall winner
     dbsf_vs_baseline = comp_dbsf["improvements"]["recall@10"]["relative_improvement_pct"]
     dbsf_vs_hybrid = comp_hybrid_dbsf["improvements"]["recall@10"]["relative_improvement_pct"]
 
@@ -551,10 +551,10 @@ def generate_markdown_report(filename: str, data: dict):
 if __name__ == "__main__":
     import os
 
-    ***REMOVED*** Ensure reports directory exists
+    # Ensure reports directory exists
     os.makedirs("reports", exist_ok=True)
 
-    ***REMOVED*** Run A/B test
+    # Run A/B test
     results = run_ab_test(
         queries_file="data/queries_testset.json",
         ground_truth_file="data/ground_truth_articles.json",

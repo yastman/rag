@@ -11,7 +11,7 @@ import pytest
 
 SCRIPT = Path("scripts/validate_done_json.py")
 
-***REMOVED*** Import the validate function directly for unit tests.
+# Import the validate function directly for unit tests.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from validate_done_json import extra_fields, validate
 
@@ -140,7 +140,7 @@ def test_extra_fields_detected() -> None:
     result = extra_fields(data)
     assert "statux" in result
     assert "bonus" in result
-    ***REMOVED*** Required fields should not appear in extra_fields output
+    # Required fields should not appear in extra_fields output
     assert "status" not in result
 
 

@@ -3,7 +3,7 @@
 Uses AsyncRedisSaver (langgraph-checkpoint-redis SDK) when Redis URL is configured.
 Falls back to MemorySaver for dev/testing. Zero custom logic — SDK wiring only.
 
-Direct checkpoint overhead measurement (***REMOVED***1258)
+Direct checkpoint overhead measurement (#1258)
 ----------------------------------------------
 The Redis saver returned by :func:`create_redis_checkpointer` is wrapped in
 :class:`InstrumentedCheckpointer`, which times the four hot async methods
@@ -29,19 +29,19 @@ from langgraph.checkpoint.memory import MemorySaver
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** -----------------------------------------------------------------------------
-***REMOVED*** Direct checkpointer overhead measurement (***REMOVED***1258)
-***REMOVED*** -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Direct checkpointer overhead measurement (#1258)
+# -----------------------------------------------------------------------------
 
-***REMOVED***: Per-invoke bucket of checkpoint operation durations and call count.
-***REMOVED***: ``None`` means capture is not active (operations pass through untimed).
+#: Per-invoke bucket of checkpoint operation durations and call count.
+#: ``None`` means capture is not active (operations pass through untimed).
 _checkpoint_op_bucket: ContextVar[dict[str, float] | None] = ContextVar(
     "checkpoint_op_bucket", default=None
 )
 
-***REMOVED***: Methods we measure on the wrapped checkpointer. These are the four async
-***REMOVED***: I/O entry points exposed by every LangGraph saver implementation; together
-***REMOVED***: they account for all per-invoke checkpoint reads and writes.
+#: Methods we measure on the wrapped checkpointer. These are the four async
+#: I/O entry points exposed by every LangGraph saver implementation; together
+#: they account for all per-invoke checkpoint reads and writes.
 _INSTRUMENTED_METHODS: tuple[str, ...] = (
     "aput",
     "aget",
@@ -51,7 +51,7 @@ _INSTRUMENTED_METHODS: tuple[str, ...] = (
 
 
 def begin_checkpoint_overhead_capture() -> dict[str, float]:
-    """Start a per-invoke direct measurement of checkpoint I/O latency (***REMOVED***1258).
+    """Start a per-invoke direct measurement of checkpoint I/O latency (#1258).
 
     Returns the fresh bucket so the caller can pass it back into
     :func:`end_checkpoint_overhead_capture` without re-reading the ContextVar.
@@ -84,7 +84,7 @@ def sum_checkpoint_overhead_ms(bucket: dict[str, float] | None) -> float:
 
 
 class InstrumentedCheckpointer:
-    """Time the four hot checkpoint methods and accumulate durations (***REMOVED***1258).
+    """Time the four hot checkpoint methods and accumulate durations (#1258).
 
     Delegates everything else to the underlying saver via ``__getattr__``.
     The wrapper is transparent: LangGraph sees the same interface and treats
@@ -98,12 +98,12 @@ class InstrumentedCheckpointer:
     def __init__(self, saver: Any) -> None:
         object.__setattr__(self, "_saver", saver)
 
-    def __repr__(self) -> str:  ***REMOVED*** pragma: no cover — debug only
+    def __repr__(self) -> str:  # pragma: no cover — debug only
         return f"InstrumentedCheckpointer({self._saver!r})"
 
     def __getattr__(self, name: str) -> Any:
-        ***REMOVED*** __getattr__ runs only when normal lookup misses (i.e. for any
-        ***REMOVED*** attribute that's not on InstrumentedCheckpointer itself).
+        # __getattr__ runs only when normal lookup misses (i.e. for any
+        # attribute that's not on InstrumentedCheckpointer itself).
         attr = getattr(self._saver, name)
         if name in _INSTRUMENTED_METHODS:
             return self._wrap_async(name, attr)
@@ -119,7 +119,7 @@ class InstrumentedCheckpointer:
 
     def _wrap_async(self, name: str, fn: Any) -> Any:
         async def _instrumented(*args: Any, **kwargs: Any) -> Any:
-            ***REMOVED*** Fast path: capture is off, skip timing entirely.
+            # Fast path: capture is off, skip timing entirely.
             if _checkpoint_op_bucket.get() is None:
                 return await fn(*args, **kwargs)
             start = time.perf_counter()
@@ -127,9 +127,9 @@ class InstrumentedCheckpointer:
                 return await fn(*args, **kwargs)
             finally:
                 elapsed_ms = (time.perf_counter() - start) * 1000.0
-                ***REMOVED*** _record is fail-soft: if anything goes wrong (bucket
-                ***REMOVED*** mutated by another task etc.) instrumentation must NEVER
-                ***REMOVED*** break the underlying call.
+                # _record is fail-soft: if anything goes wrong (bucket
+                # mutated by another task etc.) instrumentation must NEVER
+                # break the underlying call.
                 try:
                     InstrumentedCheckpointer._record(name, elapsed_ms)
                 except Exception:
@@ -152,7 +152,7 @@ def create_redis_checkpointer(
     """Create AsyncRedisSaver for persistent conversation memory (SDK).
 
     Returns an :class:`InstrumentedCheckpointer` wrapping the SDK saver so
-    callers can opt into direct checkpoint overhead measurement (***REMOVED***1258) via
+    callers can opt into direct checkpoint overhead measurement (#1258) via
     :func:`begin_checkpoint_overhead_capture` /
     :func:`end_checkpoint_overhead_capture`. The wrapper is transparent — its
     other behaviour is identical to the underlying SDK saver.
@@ -187,5 +187,5 @@ def create_fallback_checkpointer() -> MemorySaver:
     return MemorySaver()
 
 
-***REMOVED*** Backward compat: default singleton for dev/tests
+# Backward compat: default singleton for dev/tests
 checkpointer = MemorySaver()

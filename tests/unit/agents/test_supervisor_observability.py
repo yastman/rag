@@ -1,4 +1,4 @@
-"""Tests for supervisor Langfuse observability (***REMOVED***240 Task 7, ***REMOVED***242, ***REMOVED***413)."""
+"""Tests for supervisor Langfuse observability (#240 Task 7, #242, #413)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _isolate_env(monkeypatch):
 
 @pytest.fixture
 def supervisor_config():
-    """BotConfig for supervisor tests (***REMOVED***310: supervisor-only)."""
+    """BotConfig for supervisor tests (#310: supervisor-only)."""
     return BotConfig(
         telegram_token="test-token",
         voyage_api_key="voyage-key",
@@ -126,32 +126,32 @@ async def test_supervisor_trace_has_pipeline_mode_metadata(supervisor_config):
     assert meta_call[1]["metadata"]["pipeline_mode"] == "sdk_agent"
 
 
-***REMOVED*** --- ***REMOVED***242: @observe decorator presence tests ---
+# --- #242: @observe decorator presence tests ---
 
 
 def test_rag_tool_has_observe_decorator():
-    """rag_search tool module imports observe (***REMOVED***413)."""
+    """rag_search tool module imports observe (#413)."""
     import telegram_bot.agents.rag_tool as rag_mod
 
     assert hasattr(rag_mod, "observe"), "rag_tool module must import observe"
 
 
 def test_history_tool_has_observe_decorator():
-    """history_search tool module imports observe (***REMOVED***413)."""
+    """history_search tool module imports observe (#413)."""
     import telegram_bot.agents.history_tool as hist_mod
 
     assert hasattr(hist_mod, "observe"), "history_tool module must import observe"
 
 
 def test_crm_tools_have_observe_decorator():
-    """CRM tools module imports observe (***REMOVED***413)."""
+    """CRM tools module imports observe (#413)."""
     import telegram_bot.agents.crm_tools as crm_mod
 
     assert hasattr(crm_mod, "observe"), "crm_tools module must import observe"
 
 
 async def test_supervisor_propagate_attributes_called_with_agent_tag(supervisor_config):
-    """SDK agent path calls propagate_attributes with 'agent' tag (***REMOVED***413)."""
+    """SDK agent path calls propagate_attributes with 'agent' tag (#413)."""
     bot = _create_bot_patched(supervisor_config)
     mock_agent = _make_mock_agent()
     mock_lf = MagicMock()
@@ -173,12 +173,12 @@ async def test_supervisor_propagate_attributes_called_with_agent_tag(supervisor_
     mock_prop.assert_called_once()
     call_kwargs = mock_prop.call_args[1]
     assert "agent" in call_kwargs["tags"]
-    assert call_kwargs["session_id"]  ***REMOVED*** non-empty
-    assert call_kwargs["user_id"]  ***REMOVED*** non-empty
+    assert call_kwargs["session_id"]  # non-empty
+    assert call_kwargs["user_id"]  # non-empty
 
 
 async def test_supervisor_writes_user_role_score(supervisor_config):
-    """Supervisor path writes user_role CATEGORICAL score (***REMOVED***388)."""
+    """Supervisor path writes user_role CATEGORICAL score (#388)."""
     supervisor_config.manager_ids = [12345]
     bot = _create_bot_patched(supervisor_config)
 
@@ -212,7 +212,7 @@ async def test_supervisor_writes_user_role_score(supervisor_config):
 
 
 async def test_supervisor_curated_span_metadata_on_routing(supervisor_config):
-    """SDK agent path writes curated trace metadata (***REMOVED***413)."""
+    """SDK agent path writes curated trace metadata (#413)."""
     bot = _create_bot_patched(supervisor_config)
     mock_agent = _make_mock_agent()
     mock_lf = MagicMock()
@@ -234,7 +234,7 @@ async def test_supervisor_curated_span_metadata_on_routing(supervisor_config):
 
 
 async def test_agent_ainvoke_receives_bot_context(supervisor_config):
-    """agent.ainvoke receives BotContext in config.configurable (***REMOVED***413)."""
+    """agent.ainvoke receives BotContext in config.configurable (#413)."""
     bot = _create_bot_patched(supervisor_config)
     mock_agent = _make_mock_agent()
     mock_lf = MagicMock()
@@ -250,11 +250,11 @@ async def test_agent_ainvoke_receives_bot_context(supervisor_config):
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-    ***REMOVED*** Verify agent.ainvoke was called with config containing bot_context
+    # Verify agent.ainvoke was called with config containing bot_context
     call_args = mock_agent.ainvoke.call_args
     config = call_args[1].get("config") or call_args[0][1] if len(call_args[0]) > 1 else None
     if config is None:
-        ***REMOVED*** config passed as keyword
+        # config passed as keyword
         config = call_args[1].get("config")
     assert config is not None
     assert "bot_context" in config["configurable"]

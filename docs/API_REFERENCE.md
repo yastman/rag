@@ -1,17 +1,17 @@
-***REMOVED*** API Reference
+# API Reference
 
 Quick reference for calling the RAG API. [`RAG_API.md`](RAG_API.md) is the canonical request/response contract and owns field-level schema details.
 
-***REMOVED******REMOVED*** Base URL
+## Base URL
 
 ```
-http://localhost:8080  ***REMOVED*** Local development
-http://rag-api:8080   ***REMOVED*** Docker Compose
+http://localhost:8080  # Local development
+http://rag-api:8080   # Docker Compose
 ```
 
-***REMOVED******REMOVED*** Endpoints
+## Endpoints
 
-***REMOVED******REMOVED******REMOVED*** POST /query
+### POST /query
 
 Run a RAG query through the LangGraph pipeline.
 
@@ -25,7 +25,7 @@ Minimal request:
 }
 ```
 
-Response shape is `QueryResponse`; see [`RAG_API.md`](RAG_API.md***REMOVED***post-query) for the full schema. Current `query_type` values are `CHITCHAT`, `OFF_TOPIC`, `STRUCTURED`, `FAQ`, `ENTITY`, and `GENERAL`.
+Response shape is `QueryResponse`; see [`RAG_API.md`](RAG_API.md#post-query) for the full schema. Current `query_type` values are `CHITCHAT`, `OFF_TOPIC`, `STRUCTURED`, `FAQ`, `ENTITY`, and `GENERAL`.
 
 ```json
 {
@@ -52,7 +52,7 @@ curl -X POST http://localhost:8080/query \
   }'
 ```
 
-***REMOVED******REMOVED******REMOVED*** GET /health
+### GET /health
 
 Readiness probe for the RAG API.
 
@@ -64,7 +64,7 @@ Readiness probe for the RAG API.
 }
 ```
 
-***REMOVED******REMOVED*** Error Responses
+## Error Responses
 
 Unhandled exceptions return the structured shape implemented in `src/api/main.py`:
 
@@ -79,13 +79,13 @@ Unhandled exceptions return the structured shape implemented in `src/api/main.py
 
 Validation errors use FastAPI/Pydantic's standard 422 response. `GraphRecursionError` is handled inside `/query` as a successful `QueryResponse` with `query_type: "ERROR"` and a fallback user response.
 
-***REMOVED******REMOVED*** Request/Response Schemas
+## Request/Response Schemas
 
-The Pydantic models live in `src/api/schemas.py`. Field-level documentation is maintained in [`RAG_API.md`](RAG_API.md***REMOVED***post-query).
+The Pydantic models live in `src/api/schemas.py`. Field-level documentation is maintained in [`RAG_API.md`](RAG_API.md#post-query).
 
-***REMOVED******REMOVED*** Integration Examples
+## Integration Examples
 
-***REMOVED******REMOVED******REMOVED*** Python (httpx)
+### Python (httpx)
 
 ```python
 import httpx
@@ -105,7 +105,7 @@ async def query_rag(question: str, user_id: int) -> dict:
         return response.json()
 ```
 
-***REMOVED******REMOVED******REMOVED*** Voice Agent Integration
+### Voice Agent Integration
 
 The voice agent calls RAG API via `httpx`:
 
@@ -125,11 +125,11 @@ async def search_knowledge_base(query: str, trace_id: str | None = None) -> str:
         return data["response"]
 ```
 
-***REMOVED******REMOVED*** Rate Limits
+## Rate Limits
 
 No rate limiting is currently enforced on the RAG API.
 
-***REMOVED******REMOVED*** Health Check Semantics
+## Health Check Semantics
 
 The `/health` endpoint checks:
 - FastAPI application is running
@@ -143,14 +143,14 @@ make test-bot-health
 
 The RAG API also initializes Redis, Qdrant, embeddings, and LLM clients in FastAPI lifespan startup. A successful `/health` response is therefore a cheap liveness/readiness signal for the app process, not a deep dependency probe.
 
-***REMOVED******REMOVED*** Langfuse Tracing
+## Langfuse Tracing
 
 All queries are traced in Langfuse with:
 - **Trace family:** `rag-api-query`
 - **Tags:** `["api", "rag", "{channel}"]`
 - **Metadata:** `query_type`, `source`
 
-***REMOVED******REMOVED*** Related Documentation
+## Related Documentation
 
 - [RAG API Contract](RAG_API.md)
 - [Pipeline Overview](PIPELINE_OVERVIEW.md)

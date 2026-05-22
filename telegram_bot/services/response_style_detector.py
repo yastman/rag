@@ -3,7 +3,7 @@
 Determines response style (short/balanced/detailed) and difficulty (easy/medium/hard)
 using regex patterns and length heuristics. Zero LLM calls, ~0ms latency.
 
-Issue: ***REMOVED***129
+Issue: #129
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ class ResponseStyleDetector:
         lf = get_client()
         lf.update_current_span(input={"query_length": len(query), "word_count": word_count})
 
-        ***REMOVED*** 1. Explicit detailed triggers (highest priority)
+        # 1. Explicit detailed triggers (highest priority)
         if self._detailed_triggers.search(query_lower):
             result = StyleInfo(
                 style="detailed",
@@ -88,7 +88,7 @@ class ResponseStyleDetector:
             )
             return result
 
-        ***REMOVED*** 2. Explicit short triggers
+        # 2. Explicit short triggers
         if self._short_triggers.search(query_lower):
             result = StyleInfo(
                 style="short",
@@ -106,7 +106,7 @@ class ResponseStyleDetector:
             )
             return result
 
-        ***REMOVED*** 3. Transactional domain intents
+        # 3. Transactional domain intents
         if any(p.search(query_lower) for p in self._transactional_patterns):
             result = StyleInfo(
                 style="short",
@@ -124,7 +124,7 @@ class ResponseStyleDetector:
             )
             return result
 
-        ***REMOVED*** 4. Length heuristics (fallback)
+        # 4. Length heuristics (fallback)
         if word_count <= 8:
             style: ResponseStyle = "short"
             reasoning = "short_query"

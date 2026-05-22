@@ -1,4 +1,4 @@
-"""Contract: ``make test-full`` must actually exercise benchmarks (***REMOVED***1618).
+"""Contract: ``make test-full`` must actually exercise benchmarks (#1618).
 
 ``make test-full`` includes ``tests/benchmark/`` in
 ``PYTEST_FULL_PARALLEL_DIRS``, but ColBERT benchmark tests skip unless
@@ -46,9 +46,9 @@ def _target_body(text: str, target: str) -> str:
 
 def test_test_full_phase1_exports_run_benchmark_tests() -> None:
     body = _target_body(MAKEFILE.read_text(encoding="utf-8"), "test-full")
-    ***REMOVED*** Phase 1 is the parallel-safe pytest line that includes
-    ***REMOVED*** $(PYTEST_FULL_PARALLEL_DIRS). It must export RUN_BENCHMARK_TESTS=1
-    ***REMOVED*** for the ColBERT benchmark gate to actually run.
+    # Phase 1 is the parallel-safe pytest line that includes
+    # $(PYTEST_FULL_PARALLEL_DIRS). It must export RUN_BENCHMARK_TESTS=1
+    # for the ColBERT benchmark gate to actually run.
     parallel_lines = [
         line
         for line in body.splitlines()
@@ -70,7 +70,7 @@ def test_test_benchmark_standalone_target_exists() -> None:
     text = MAKEFILE.read_text(encoding="utf-8")
     assert re.search(r"^test-benchmark:", text, re.MULTILINE), (
         "Makefile must define a standalone 'test-benchmark' target so the "
-        "benchmark suite can be exercised independently of test-full (***REMOVED***1618)."
+        "benchmark suite can be exercised independently of test-full (#1618)."
     )
     body = _target_body(text, "test-benchmark")
     assert "RUN_BENCHMARK_TESTS=1" in body, (

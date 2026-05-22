@@ -1,4 +1,4 @@
-"""AI Advisor service — LLM-powered CRM insights (***REMOVED***731).
+"""AI Advisor service — LLM-powered CRM insights (#731).
 
 Two main actions:
 - get_daily_plan(): Morning briefing — leads + tasks + stale deals → action plan
@@ -23,11 +23,11 @@ from telegram_bot.observability import observe
 
 logger = logging.getLogger(__name__)
 
-_BRIEFING_CACHE_TTL = 600  ***REMOVED*** 10 minutes
-_STALE_THRESHOLD_SECONDS = 5 * 86400  ***REMOVED*** 5 days
+_BRIEFING_CACHE_TTL = 600  # 10 minutes
+_STALE_THRESHOLD_SECONDS = 5 * 86400  # 5 days
 _MAX_TOKENS = 800
 
-***REMOVED*** Langfuse prompt names
+# Langfuse prompt names
 _PROMPT_DAILY_PLAN = "advisor-daily-plan"
 _PROMPT_DEAL_TIPS = "advisor-deal-tips"
 
@@ -77,7 +77,7 @@ def _format_days_ago(unix_ts: int | None, now: int) -> str:
     return f"{days} дн. назад"
 
 
-***REMOVED*** Fallback prompts (used when Langfuse unavailable)
+# Fallback prompts (used when Langfuse unavailable)
 _FALLBACK_DAILY_PLAN = (
     "Ты — AI-помощник менеджера по продажам недвижимости в Болгарии.\n"
     "Сегодня: {{today}}.\n\n"
@@ -184,7 +184,7 @@ class AIAdvisorService:
         now = int(time.time())
         parts: list[str] = []
         for task in tasks:
-            ***REMOVED*** Определяем статус срока
+            # Определяем статус срока
             if task.complete_till:
                 days_left = (task.complete_till - now) // 86400
                 if days_left < 0:
@@ -198,7 +198,7 @@ class AIAdvisorService:
             else:
                 status = "Без срока"
 
-            ***REMOVED*** Привязка к лиду
+            # Привязка к лиду
             linked = ""
             if task.entity_type == "leads" and task.entity_id:
                 linked = f"\n  Привязана к лиду ID: {task.entity_id}"
@@ -222,9 +222,9 @@ class AIAdvisorService:
             return "Нет сделок."
 
         now = int(time.time())
-        critical: list[str] = []  ***REMOVED*** 15+ дней
-        attention: list[str] = []  ***REMOVED*** 8-14 дней
-        remind: list[str] = []  ***REMOVED*** 5-7 дней
+        critical: list[str] = []  # 15+ дней
+        attention: list[str] = []  # 8-14 дней
+        remind: list[str] = []  # 5-7 дней
 
         for lead in leads:
             if not lead.updated_at:

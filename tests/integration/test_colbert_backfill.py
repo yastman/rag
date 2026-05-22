@@ -41,7 +41,7 @@ class _FakeSyncQdrantClient:
         if count_filter is None:
             return SimpleNamespace(count=len(self._storage.points))
 
-        ***REMOVED*** Filter contains HasVectorCondition(has_vector="colbert")
+        # Filter contains HasVectorCondition(has_vector="colbert")
         covered = 0
         for point in self._storage.points.values():
             colbert_vec = point.vectors.get("colbert")
@@ -163,7 +163,7 @@ async def test_backfill_enables_server_side_colbert_search(tmp_path):
         colbert_query=[[0.3, 0.6]],
         top_k=5,
     )
-    ***REMOVED*** No point-level ColBERT vectors yet: service falls back to RRF and disables ColBERT path.
+    # No point-level ColBERT vectors yet: service falls back to RRF and disables ColBERT path.
     assert len(before) > 0
     assert service._colbert_available is False
 

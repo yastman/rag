@@ -32,7 +32,7 @@ def _build_apartment_filter(filters: dict | None) -> models.Filter | None:
 
     for key, value in filters.items():
         if isinstance(value, list):
-            ***REMOVED*** MatchAny for tags
+            # MatchAny for tags
             conditions.append(
                 models.FieldCondition(
                     key=key,
@@ -40,7 +40,7 @@ def _build_apartment_filter(filters: dict | None) -> models.Filter | None:
                 )
             )
         elif isinstance(value, bool):
-            ***REMOVED*** Explicit bool check BEFORE dict/int — isinstance(True, int) is True in Python
+            # Explicit bool check BEFORE dict/int — isinstance(True, int) is True in Python
             conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
         elif isinstance(value, dict):
             range_params = {op: value[op] for op in ("lt", "lte", "gt", "gte") if op in value}
@@ -120,7 +120,7 @@ class ApartmentsService:
         """
         qdrant_filter = _build_apartment_filter(filters)
 
-        ***REMOVED*** Build sparse vector
+        # Build sparse vector
         sparse_v = None
         if sparse_vector and sparse_vector.get("indices"):
             sparse_v = models.SparseVector(
@@ -128,7 +128,7 @@ class ApartmentsService:
                 values=sparse_vector["values"],
             )
 
-        ***REMOVED*** Build prefetch (dense + sparse → RRF)
+        # Build prefetch (dense + sparse → RRF)
         prefetch = []
         prefetch.append(
             models.Prefetch(
@@ -149,7 +149,7 @@ class ApartmentsService:
         rrf_query = models.RrfQuery(rrf=models.Rrf(k=rrf_k))
 
         if colbert_query:
-            ***REMOVED*** 3-stage: dense+sparse → RRF → ColBERT rescore
+            # 3-stage: dense+sparse → RRF → ColBERT rescore
             rrf_prefetch = models.Prefetch(
                 prefetch=prefetch,
                 query=rrf_query,
@@ -174,7 +174,7 @@ class ApartmentsService:
                 with_payload=True,
             )
 
-        ***REMOVED*** Format results
+        # Format results
         formatted = []
         for pt in result.points:
             payload = pt.payload or {}
@@ -203,7 +203,7 @@ class ApartmentsService:
         """
         qdrant_filter = _build_apartment_filter(filters)
 
-        ***REMOVED*** Дедупликация: исключить уже показанные ID на границе цены
+        # Дедупликация: исключить уже показанные ID на границе цены
         if exclude_ids:
             exclude_ids_typed: list[int | str | UUID] = list(exclude_ids)
             has_id_cond = models.HasIdCondition(has_id=exclude_ids_typed)
@@ -225,13 +225,13 @@ class ApartmentsService:
 
         count_result = await self._qdrant.client.count(
             collection_name=self._qdrant.collection_name,
-            count_filter=_build_apartment_filter(filters),  ***REMOVED*** без exclude_ids
+            count_filter=_build_apartment_filter(filters),  # без exclude_ids
             exact=True,
         )
 
         formatted = [{"id": str(r.id), "payload": r.payload or {}} for r in records]
 
-        ***REMOVED*** next_start_from = цена последней записи
+        # next_start_from = цена последней записи
         next_start_from_val: float | None = None
         page_ids: list[str] = []
         if records:
@@ -314,7 +314,7 @@ def generate_search_examples(stats: dict) -> list[str]:
     room_names = {1: "Студия", 2: "Двушка", 3: "Трёшка"}
     examples: list[str] = []
 
-    ***REMOVED*** Example 1: room type + city + price
+    # Example 1: room type + city + price
     if cities:
         r = rooms_list[0] if rooms_list else 1
         price = round(max_price * 0.4 / 5000) * 5000
@@ -322,12 +322,12 @@ def generate_search_examples(stats: dict) -> list[str]:
             f"{room_names.get(r, 'Апартамент')} в {cities[0]} до {price:,.0f}€".replace(",", " ")
         )
 
-    ***REMOVED*** Example 2: room type + complex
+    # Example 2: room type + complex
     if complexes:
         r = rooms_list[1] if len(rooms_list) > 1 else 2
         examples.append(f"{room_names.get(r, 'Двушка')} в {complexes[0]}")
 
-    ***REMOVED*** Example 3: room type + city + price
+    # Example 3: room type + city + price
     if len(cities) > 1:
         r = rooms_list[-1] if rooms_list else 3
         price = round(max_price * 0.65 / 5000) * 5000
@@ -335,12 +335,12 @@ def generate_search_examples(stats: dict) -> list[str]:
             f"{room_names.get(r, 'Трёшка')} в {cities[-1]} до {price:,.0f}€".replace(",", " ")
         )
 
-    ***REMOVED*** Example 4: generic + city + price range
+    # Example 4: generic + city + price range
     if len(cities) > 1:
         price = round(max_price * 0.5 / 5000) * 5000
         examples.append(f"Апартамент в {cities[1]} от {price:,.0f}€".replace(",", " "))
 
-    ***REMOVED*** Pad with defaults if needed
+    # Pad with defaults if needed
     defaults = [
         "Студия у моря до 100 000€",
         "Двушка с видом на море",

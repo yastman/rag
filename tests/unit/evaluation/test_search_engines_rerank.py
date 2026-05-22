@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/evaluation/test_search_engines_rerank.py
+# tests/unit/evaluation/test_search_engines_rerank.py
 """Tests for src/evaluation/search_engines_rerank.py."""
 
 from unittest.mock import MagicMock, patch
@@ -36,8 +36,8 @@ class TestRerankSearchEngineInit:
         """Test ImportError when FlagEmbedding is not installed."""
         from src.evaluation.search_engines_rerank import RerankSearchEngine
 
-        ***REMOVED*** Setting module to None in sys.modules makes Python raise ImportError
-        ***REMOVED*** immediately without attempting a real import (which would download the model)
+        # Setting module to None in sys.modules makes Python raise ImportError
+        # immediately without attempting a real import (which would download the model)
         with patch.dict("sys.modules", {"FlagEmbedding": None}):
             mock_model = MagicMock()
             with pytest.raises(ImportError, match="FlagEmbedding is not installed"):
@@ -123,7 +123,7 @@ class TestRerankSearchEngineSearch:
             {"text": "article C", "score": 0.7, "article_number": "C"},
         ]
         mock_baseline.search.return_value = candidates
-        ***REMOVED*** Reranker reverses order: C > B > A
+        # Reranker reverses order: C > B > A
         mock_reranker.compute_score.return_value = [0.3, 0.6, 0.9]
 
         results = engine.search("test query", top_k=3)

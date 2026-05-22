@@ -62,7 +62,7 @@ class _MockReasoningStreamChunk:
         reasoning: str | None = None,
         model: str | None = None,
     ):
-        delta = MagicMock(spec=[])  ***REMOVED*** spec=[] prevents auto-attribute creation
+        delta = MagicMock(spec=[])  # spec=[] prevents auto-attribute creation
         delta.content = None
         delta.reasoning_content = reasoning_content
         delta.reasoning = reasoning
@@ -113,7 +113,7 @@ class _MockStreamChunkWithUsage:
     """Final mock streaming chunk that includes token usage."""
 
     def __init__(self, completion_tokens: int, prompt_tokens: int = 100):
-        self.choices = []  ***REMOVED*** no content in usage-only chunk
+        self.choices = []  # no content in usage-only chunk
         self.model = None
         usage = MagicMock()
         usage.completion_tokens = completion_tokens
@@ -257,7 +257,7 @@ class TestGenerateNode:
         assert "generate" in result["latency_stages"]
         mock_client.chat.completions.create.assert_called_once()
 
-        ***REMOVED*** Verify prompt contains context from docs
+        # Verify prompt contains context from docs
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         messages_text = " ".join(m["content"] for m in messages)
@@ -285,7 +285,7 @@ class TestGenerateNode:
             result = await generate_node(state)
 
         assert result["response"] == "Ответ с учётом контекста разговора."
-        ***REMOVED*** Verify conversation history is included in messages
+        # Verify conversation history is included in messages
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         messages_text = " ".join(m["content"] for m in messages)
@@ -298,7 +298,7 @@ class TestGenerateNode:
 
         mock_config, mock_client = _make_mock_config("Ответ на вопрос.")
 
-        ***REMOVED*** Create state with 30 message pairs (60 messages total) — way more than 10-15
+        # Create state with 30 message pairs (60 messages total) — way more than 10-15
         history = []
         for i in range(30):
             history.append({"role": "user", "content": f"Вопрос {i} о недвижимости"})
@@ -318,14 +318,14 @@ class TestGenerateNode:
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
 
-        ***REMOVED*** Should NOT contain all 60 history messages — only recent window
-        ***REMOVED*** system(1) + history(trimmed) + user_with_context(1)
+        # Should NOT contain all 60 history messages — only recent window
+        # system(1) + history(trimmed) + user_with_context(1)
         history_messages = [m for m in messages if m["role"] != "system"]
-        ***REMOVED*** At most 13 messages (12 history + final user), not 61
+        # At most 13 messages (12 history + final user), not 61
         assert len(history_messages) <= 13, (
             f"Expected limited history, got {len(history_messages)} messages"
         )
-        ***REMOVED*** First history message should NOT be "Вопрос 0" (it was trimmed)
+        # First history message should NOT be "Вопрос 0" (it was trimmed)
         user_history = [m for m in history_messages[:-1] if m["role"] == "user"]
         if user_history:
             assert "Вопрос 0" not in user_history[0]["content"], "Old messages should be trimmed"
@@ -391,7 +391,7 @@ class TestGenerateNode:
 
         assert result["response"] != ""
         assert "generate" in result["latency_stages"]
-        ***REMOVED*** Fallback should mention found objects or service unavailability
+        # Fallback should mention found objects or service unavailability
         assert "Несебр" in result["response"] or "недоступен" in result["response"]
 
     async def test_system_prompt_uses_domain(self) -> None:
@@ -407,7 +407,7 @@ class TestGenerateNode:
         ):
             await generate_node(state)
 
-        ***REMOVED*** System prompt should contain domain
+        # System prompt should contain domain
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         system_msg = messages[0]
@@ -431,7 +431,7 @@ class TestGenerateNode:
         ):
             await generate_node(state)
 
-        ***REMOVED*** Check that context has at most 5 documents
+        # Check that context has at most 5 documents
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         messages_text = " ".join(m["content"] for m in messages)
@@ -505,26 +505,26 @@ class TestGenerateNodeStreaming:
         ):
             result = await generate_node(state, message=message)
 
-        ***REMOVED*** Draft updates are used during generation.
+        # Draft updates are used during generation.
         message.bot.send_message_draft.assert_awaited()
         draft_call = message.bot.send_message_draft.call_args
         assert draft_call.kwargs["chat_id"] == 12345
         assert draft_call.kwargs["text"].startswith("Квартира")
 
-        ***REMOVED*** Final persisted message uses message.answer with Markdown.
+        # Final persisted message uses message.answer with Markdown.
         full_text = "Квартира в Несебре стоит 65000€."
         message.answer.assert_awaited_once()
         assert message.answer.call_args.args[0] == full_text
         assert message.answer.call_args.kwargs["parse_mode"] == "Markdown"
 
-        ***REMOVED*** Response contains all chunks
+        # Response contains all chunks
         assert result["response"] == full_text
         assert result["response_sent"] is True
         assert "generate" in result["latency_stages"]
 
         sent_msg.edit_text.assert_not_called()
 
-        ***REMOVED*** stream=True was passed to LLM
+        # stream=True was passed to LLM
         create_kwargs = mock_client.chat.completions.create.call_args.kwargs
         assert create_kwargs["stream"] is True
 
@@ -551,14 +551,14 @@ class TestGenerateNodeStreaming:
 
         assert result["response_sent"] is True
         assert result["sent_message"] == {"chat_id": 12345, "message_id": 77}
-        ***REMOVED*** Regression guard: this value is persisted by checkpointer and must be msgpack-safe.
+        # Regression guard: this value is persisted by checkpointer and must be msgpack-safe.
         JsonPlusSerializer().dumps_typed(result["sent_message"])
 
     async def test_streaming_fallback_on_stream_error(self) -> None:
         """When streaming fails, falls back to non-streaming LLM call."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        ***REMOVED*** First call (stream=True) raises, second call (non-stream) succeeds
+        # First call (stream=True) raises, second call (non-stream) succeeds
         mock_choice = MagicMock()
         mock_choice.message.content = "Fallback answer."
         mock_response = MagicMock(choices=[mock_choice])
@@ -598,14 +598,14 @@ class TestGenerateNodeStreaming:
 
         assert result["response"] == "Non-stream answer."
         assert result["response_sent"] is False
-        ***REMOVED*** message.answer should NOT have been called (respond_node handles it)
+        # message.answer should NOT have been called (respond_node handles it)
         message.answer.assert_not_called()
 
     async def test_streaming_empty_response_falls_back(self) -> None:
         """Streaming with empty chunks falls back to non-streaming."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        ***REMOVED*** Stream produces no content
+        # Stream produces no content
         mock_choice = MagicMock()
         mock_choice.message.content = "Fallback from empty stream."
         mock_fallback_response = MagicMock(choices=[mock_choice])
@@ -680,7 +680,7 @@ class TestGenerateNodeStreaming:
         ):
             result = await generate_node(state, message=message)
 
-        ***REMOVED*** Fallback answer is the response
+        # Fallback answer is the response
         assert result["response"] == "Fallback complete answer."
         assert result["response_sent"] is True
         message.bot.send_message_draft.assert_awaited()
@@ -775,14 +775,14 @@ class TestGenerateNodeProviderMetadata:
         ):
             result = await generate_node(state, message=message)
 
-        assert result["llm_ttft_ms"] >= 0.0  ***REMOVED*** should be > 0 in real scenario
+        assert result["llm_ttft_ms"] >= 0.0  # should be > 0 in real scenario
         assert result["llm_response_duration_ms"] > 0
 
     async def test_streaming_captures_model_from_chunk(self) -> None:
         """Streaming path extracts model from chunk.model attribute."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        ***REMOVED*** Build chunks with model info
+        # Build chunks with model info
         chunk1 = _MockStreamChunk("Hello ", model="groq/llama-3.1-70b")
         chunk2 = _MockStreamChunk("world.", model="groq/llama-3.1-70b")
         stream = _MockAsyncStream.__new__(_MockAsyncStream)
@@ -838,8 +838,8 @@ class TestGenerateNodeProviderMetadata:
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(
             side_effect=[
-                _MockFailingStream(["Квартира ", "в Несебре "]),  ***REMOVED*** partial stream then error
-                mock_fallback_response,  ***REMOVED*** non-stream fallback response
+                _MockFailingStream(["Квартира ", "в Несебре "]),  # partial stream then error
+                mock_fallback_response,  # non-stream fallback response
             ],
         )
         mock_config, _ = _make_streaming_config(mock_client)
@@ -867,7 +867,7 @@ class TestGenerateNodeProviderMetadata:
 
 
 class TestGenerateNodeLatencyBreakdown:
-    """Test decode_ms, tps, queue_ms, and flag computation (***REMOVED***147)."""
+    """Test decode_ms, tps, queue_ms, and flag computation (#147)."""
 
     async def test_streaming_computes_decode_ms(self) -> None:
         """Streaming path: decode_ms = response_duration_ms - ttft_ms."""
@@ -1070,7 +1070,7 @@ class TestGenerateNodeLatencyBreakdown:
 
 
 class TestGenerateNodeResponseStyle:
-    """Test adaptive response length control (***REMOVED***129)."""
+    """Test adaptive response length control (#129)."""
 
     async def test_short_query_sets_response_style(self) -> None:
         """Short factoid query -> response_style='short', metrics present."""
@@ -1119,7 +1119,7 @@ class TestGenerateNodeResponseStyle:
         mock_config.response_style_enabled = True
         mock_config.response_style_shadow_mode = False
         mock_config.generate_max_tokens = 40
-        ***REMOVED*** "сколько стоит" -> short/easy baseline budget=100, capped to 40
+        # "сколько стоит" -> short/easy baseline budget=100, capped to 40
         state = _make_state_with_docs(query="сколько стоит студия")
 
         with patch(
@@ -1156,13 +1156,13 @@ class TestGenerateNodeResponseStyle:
         ):
             result = await generate_node(state)
 
-        ***REMOVED*** Style fields are populated (shadow collects metrics)
+        # Style fields are populated (shadow collects metrics)
         assert result["response_style"] == "short"
         assert result["response_policy_mode"] == "shadow"
-        ***REMOVED*** Shadow mode stays on the legacy prompt path, which honors prompt-config limits.
+        # Shadow mode stays on the legacy prompt path, which honors prompt-config limits.
         call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs.get("max_tokens") == 512
-        ***REMOVED*** No style prompt manager call in shadow mode (avoid unnecessary overhead)
+        # No style prompt manager call in shadow mode (avoid unnecessary overhead)
         mock_style_prompt.assert_not_called()
 
     async def test_disabled_mode_keeps_legacy_prompt_without_style_lookup(self) -> None:
@@ -1224,7 +1224,7 @@ class TestGenerateNodeResponseStyle:
 
 
 class TestGenerateNodeCitationInstruction:
-    """Test citation instruction injection (***REMOVED***225)."""
+    """Test citation instruction injection (#225)."""
 
     async def test_citation_instruction_in_system_prompt(self) -> None:
         """System prompt includes citation instruction when show_sources=True."""
@@ -1291,7 +1291,7 @@ class TestGenerateNodeCitationInstruction:
 
         mock_config, mock_client = _make_mock_config()
         mock_config.show_sources = True
-        ***REMOVED*** Build state directly — _make_state_with_docs replaces [] with defaults
+        # Build state directly — _make_state_with_docs replaces [] with defaults
         state = make_initial_state(user_id=123, session_id="s-test", query="test")
         state["query_type"] = "GENERAL"
         state["documents"] = []
@@ -1309,7 +1309,7 @@ class TestGenerateNodeCitationInstruction:
 
 
 class TestGenerateNodeEvalFields:
-    """Test eval_query/eval_answer/eval_context fields for managed evaluators (***REMOVED***386)."""
+    """Test eval_query/eval_answer/eval_context fields for managed evaluators (#386)."""
 
     async def test_span_output_includes_eval_fields(self) -> None:
         """Curated span output must include eval_ fields for Langfuse evaluators."""
@@ -1330,7 +1330,7 @@ class TestGenerateNodeEvalFields:
         ):
             await generate_node(state)
 
-        ***REMOVED*** Find the span output call with eval_ fields
+        # Find the span output call with eval_ fields
         output_calls = [
             c.kwargs["output"]
             for c in mock_lf.update_current_span.call_args_list
@@ -1377,7 +1377,7 @@ class TestGenerateNodeEvalFields:
 
         mock_config, _mock_client = _make_mock_config("Ответ.")
         state = _make_state_with_docs()
-        ***REMOVED*** No retrieved_context in state
+        # No retrieved_context in state
 
         mock_lf = MagicMock()
 
@@ -1405,15 +1405,15 @@ def test_format_context_no_raw_score():
         {"text": "ВНЖ пенсионеры", "score": 0.0161, "metadata": {}},
     ]
     result = _format_context(docs, max_docs=5)
-    ***REMOVED*** Must NOT contain raw RRF scores like "0.02" or "0.017"
+    # Must NOT contain raw RRF scores like "0.02" or "0.017"
     assert "0.02" not in result
     assert "0.017" not in result
-    ***REMOVED*** Must contain object markers
+    # Must contain object markers
     assert "[Объект 1]" in result
     assert "[Объект 2]" in result
 
 
-***REMOVED*** --- Reasoning content streaming tests (Cerebras gpt-oss-120b via LiteLLM) ---
+# --- Reasoning content streaming tests (Cerebras gpt-oss-120b via LiteLLM) ---
 
 
 async def test_streaming_reasoning_content_merged(monkeypatch):

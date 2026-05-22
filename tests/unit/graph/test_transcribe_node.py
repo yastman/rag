@@ -152,7 +152,7 @@ class TestTranscribeNode:
             mock_gc.return_value = mock_lf
             await node(state)
 
-        ***REMOVED*** Verify curated span was written (input + output)
+        # Verify curated span was written (input + output)
         assert mock_lf.update_current_span.call_count == 2
 
         input_call = mock_lf.update_current_span.call_args_list[0]
@@ -160,7 +160,7 @@ class TestTranscribeNode:
         assert "voice_language" in input_data
         assert "stt_model" in input_data
         assert "audio_size_bytes" in input_data
-        ***REMOVED*** voice_audio bytes must NOT be in span
+        # voice_audio bytes must NOT be in span
         assert "voice_audio" not in str(input_data)
 
         output_call = mock_lf.update_current_span.call_args_list[1]
@@ -224,7 +224,7 @@ class TestTranscribeNode:
         with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
             result = await node(state)
 
-        ***REMOVED*** STT still ran and returned text despite Langfuse observation failure
+        # STT still ran and returned text despite Langfuse observation failure
         assert result["stt_text"] == "Привет мир"
         assert result["query"] == "Привет мир"
         mock_llm.audio.transcriptions.create.assert_awaited_once()
@@ -256,14 +256,14 @@ class TestTranscribeNode:
         with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
             result = await node(state)
 
-        ***REMOVED*** Text is preserved even though observation.update raised
+        # Text is preserved even though observation.update raised
         assert result["stt_text"] == "Привет мир"
         assert result["query"] == "Привет мир"
         mock_llm.audio.transcriptions.create.assert_awaited_once()
-        ***REMOVED*** Span output metadata is still recorded (best-effort path runs).
-        ***REMOVED*** Extract the output call — avoid fragile nested pytest.approx in
-        ***REMOVED*** assert_any_call since stt_duration_ms is round()'ed in the span
-        ***REMOVED*** payload and mock dict equality does not resolve approx proxies.
+        # Span output metadata is still recorded (best-effort path runs).
+        # Extract the output call — avoid fragile nested pytest.approx in
+        # assert_any_call since stt_duration_ms is round()'ed in the span
+        # payload and mock dict equality does not resolve approx proxies.
         output_calls = [
             c for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
         ]

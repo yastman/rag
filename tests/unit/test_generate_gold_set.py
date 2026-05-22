@@ -159,7 +159,7 @@ class TestUploadToLangfuse:
         from scripts.generate_gold_set import upload_to_langfuse
 
         mock_lf = MagicMock()
-        mock_lf.get_dataset.return_value = MagicMock()  ***REMOVED*** dataset exists
+        mock_lf.get_dataset.return_value = MagicMock()  # dataset exists
         items = [
             {
                 "query": "q?",

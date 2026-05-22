@@ -1,4 +1,4 @@
-"""Tests for nurturing jobs + funnel analytics SQL schema (***REMOVED***390)."""
+"""Tests for nurturing jobs + funnel analytics SQL schema (#390)."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/targets/qdrant_hybrid_target.py
+# src/ingestion/unified/targets/qdrant_hybrid_target.py
 """CocoIndex custom target connector for Qdrant hybrid search.
 
 This target connector receives mutations from CocoIndex and:
@@ -40,31 +40,31 @@ def compute_content_hash(file_path: Path) -> str:
 class QdrantHybridTargetSpec(TargetSpec):
     """Configuration for Qdrant hybrid target."""
 
-    ***REMOVED*** Qdrant
+    # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
     collection_name: str = "gdrive_documents_bge"
 
-    ***REMOVED*** Docling
+    # Docling
     docling_backend: str = "docling_http"
     docling_url: str = "http://localhost:5001"
     docling_timeout: float = 300.0
     max_tokens_per_chunk: int = 512
 
-    ***REMOVED*** Voyage
+    # Voyage
     voyage_api_key: str | None = None
     voyage_model: str = "voyage-4-large"
 
-    ***REMOVED*** Local embeddings (BGE-M3 dense + sparse)
+    # Local embeddings (BGE-M3 dense + sparse)
     use_local_embeddings: bool = False
     bge_m3_url: str = "http://localhost:8000"
     bge_m3_timeout: float = 300.0
     bge_m3_concurrency: int = 1
 
-    ***REMOVED*** Postgres
+    # Postgres
     database_url: str = ""
 
-    ***REMOVED*** Pipeline
+    # Pipeline
     max_retries: int = 3
     pipeline_version: str = "v3.2.1"
 
@@ -116,18 +116,18 @@ class QdrantHybridTargetConnector:
     - Postgres state tracking
     """
 
-    ***REMOVED*** Shared resources (initialized lazily)
-    ***REMOVED*** Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
+    # Shared resources (initialized lazily)
+    # Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
     _writer: QdrantHybridWriter | None = None
-    _writer_key: tuple | None = None  ***REMOVED*** fingerprint for writer cache invalidation (***REMOVED***1605)
+    _writer_key: tuple | None = None  # fingerprint for writer cache invalidation (#1605)
     _docling: DoclingClient | NativeDoclingAdapter | None = None
     _docling_key: tuple[str, str, float, int] | None = None
     _writer_lock = threading.Lock()
     _docling_lock = threading.Lock()
 
-    ***REMOVED*** Sequential processing: Semaphore(1) ensures only one file is processed at a time.
-    ***REMOVED*** Critical for CPU-only VPS where BGE-M3 is slow (~10-50s per batch).
-    ***REMOVED*** Without this, CocoIndex sends parallel requests → queue grows → timeouts.
+    # Sequential processing: Semaphore(1) ensures only one file is processed at a time.
+    # Critical for CPU-only VPS where BGE-M3 is slow (~10-50s per batch).
+    # Without this, CocoIndex sends parallel requests → queue grows → timeouts.
     _process_semaphore = threading.Semaphore(1)
 
     @staticmethod
@@ -162,7 +162,7 @@ class QdrantHybridTargetConnector:
     @classmethod
     def _get_writer(cls, spec: QdrantHybridTargetSpec) -> QdrantHybridWriter:
         """Get or create QdrantHybridWriter, invalidating the cache when the
-        effective spec fingerprint changes (***REMOVED***1605).
+        effective spec fingerprint changes (#1605).
 
         Cache key covers every field consumed by QdrantHybridWriter.__init__:
         qdrant_url, qdrant_api_key, voyage_api_key, voyage_model,
@@ -235,13 +235,13 @@ class QdrantHybridTargetConnector:
 
         NOTE: Uses Semaphore(1) for sequential processing on CPU-only VPS.
         """
-        ***REMOVED*** Acquire semaphore to ensure sequential processing (one file at a time)
+        # Acquire semaphore to ensure sequential processing (one file at a time)
         with cls._process_semaphore:
             logger.info(f"mutate(): {len(all_mutations)} batch(es)")
             for spec, mutations in all_mutations:
                 logger.info(f"Batch: {len(mutations)} mutations, collection={spec.collection_name}")
-                ***REMOVED*** Create fresh state manager for this batch (not cached)
-                ***REMOVED*** This avoids asyncpg pool issues with different event loops
+                # Create fresh state manager for this batch (not cached)
+                # This avoids asyncpg pool issues with different event loops
                 state_manager = UnifiedStateManager(database_url=spec.database_url)
                 logger.debug("Created state_manager, entering sync_context...")
 
@@ -262,9 +262,9 @@ class QdrantHybridTargetConnector:
                                 )
                         except Exception as e:
                             logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
-                            ***REMOVED*** Don't raise — one failing file must not kill the entire
-                            ***REMOVED*** ingestion process.  The error is already tracked in
-                            ***REMOVED*** StateManager (mark_error_sync / DLQ).
+                            # Don't raise — one failing file must not kill the entire
+                            # ingestion process.  The error is already tracked in
+                            # StateManager (mark_error_sync / DLQ).
 
     @classmethod
     def _handle_delete_with_state(
@@ -294,18 +294,18 @@ class QdrantHybridTargetConnector:
         abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
 
-        ***REMOVED*** Compute content hash
+        # Compute content hash
         content_hash = compute_content_hash(abs_path)
         logger.debug(f"Hash: {content_hash}")
 
-        ***REMOVED*** Resolve processing fingerprint pieces.
-        ***REMOVED*** Mirrors the FileState upsert below: bge-m3-api when local embeddings
-        ***REMOVED*** are used, otherwise the configured Voyage model.
+        # Resolve processing fingerprint pieces.
+        # Mirrors the FileState upsert below: bge-m3-api when local embeddings
+        # are used, otherwise the configured Voyage model.
         current_embedding_model = "bge-m3-api" if spec.use_local_embeddings else spec.voyage_model
         current_pipeline_version = spec.pipeline_version
 
-        ***REMOVED*** Check if processing needed (skip unchanged content AND matching
-        ***REMOVED*** processing fingerprint — see issue ***REMOVED***1604).
+        # Check if processing needed (skip unchanged content AND matching
+        # processing fingerprint — see issue #1604).
         if not state_manager.should_process_sync(
             file_id,
             content_hash,
@@ -315,7 +315,7 @@ class QdrantHybridTargetConnector:
             logger.debug(f"Skipping unchanged: {source_path}")
             return
 
-        ***REMOVED*** Persist metadata before processing so state table keeps source/file context.
+        # Persist metadata before processing so state table keeps source/file context.
         state_manager.upsert_state_sync(
             FileState(
                 file_id=file_id,
@@ -332,21 +332,21 @@ class QdrantHybridTargetConnector:
         )
 
         try:
-            ***REMOVED*** Parse and chunk (sync)
+            # Parse and chunk (sync)
             docling_chunks = docling.chunk_file_sync(abs_path)
             if not docling_chunks:
                 state_manager.mark_indexed_sync(file_id, 0, content_hash)
                 logger.warning(f"No chunks from: {source_path}")
                 return
 
-            ***REMOVED*** Convert to ingestion chunks
+            # Convert to ingestion chunks
             chunks = docling.to_ingestion_chunks(
                 docling_chunks,
                 source=source_path,
                 source_type=abs_path.suffix.lstrip("."),
             )
 
-            ***REMOVED*** File metadata
+            # File metadata
             file_metadata = {
                 "file_name": mutation.file_name,
                 "mime_type": mutation.mime_type,
@@ -355,7 +355,7 @@ class QdrantHybridTargetConnector:
                 "modified_time": datetime.now(UTC).isoformat(),
             }
 
-            ***REMOVED*** Write to Qdrant (sync)
+            # Write to Qdrant (sync)
             stats = writer.upsert_chunks_sync(
                 chunks=chunks,
                 file_id=file_id,
@@ -367,7 +367,7 @@ class QdrantHybridTargetConnector:
             if stats.errors:
                 raise Exception("; ".join(stats.errors))
 
-            ***REMOVED*** Update state
+            # Update state
             state_manager.mark_indexed_sync(file_id, stats.points_upserted, content_hash)
             logger.info(f"Indexed: {source_path} ({stats.points_upserted} chunks)")
 
@@ -375,7 +375,7 @@ class QdrantHybridTargetConnector:
             logger.error(f"Upsert failed for {source_path}: {e}")
             state_manager.mark_error_sync(file_id, str(e))
 
-            ***REMOVED*** Check DLQ
+            # Check DLQ
             state = state_manager.get_state_sync(file_id)
             if state and state.retry_count >= spec.max_retries:
                 state_manager.add_to_dlq_sync(
@@ -385,4 +385,4 @@ class QdrantHybridTargetConnector:
                     payload={"source_path": source_path},
                 )
                 logger.warning(f"Moved to DLQ: {source_path}")
-            ***REMOVED*** Don't raise — error is tracked in state/DLQ, process continues
+            # Don't raise — error is tracked in state/DLQ, process continues

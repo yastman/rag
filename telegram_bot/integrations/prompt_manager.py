@@ -16,10 +16,10 @@ from telegram_bot.observability import get_client, observe
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** 1h TTL: prompts change via Langfuse UI deploy, not runtime. Reduces API calls.
+# 1h TTL: prompts change via Langfuse UI deploy, not runtime. Reduces API calls.
 DEFAULT_CACHE_TTL = 3600
 
-***REMOVED*** Module-level TTL caches for prompt existence
+# Module-level TTL caches for prompt existence
 _missing_prompts_until: dict[str, float] = {}
 _transient_failures_until: dict[str, float] = {}
 

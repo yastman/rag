@@ -25,9 +25,9 @@ def test_readme_links_to_license() -> None:
 
 def test_readme_does_not_use_brittle_node_count() -> None:
     text = README.read_text(encoding="utf-8")
-    ***REMOVED*** Exact parenthetical node counts like "(11 nodes)" are brittle because
-    ***REMOVED*** the graph node count varies by configuration (guard and summarize are
-    ***REMOVED*** conditional). We allow descriptive adjectives but not exact counts.
+    # Exact parenthetical node counts like "(11 nodes)" are brittle because
+    # the graph node count varies by configuration (guard and summarize are
+    # conditional). We allow descriptive adjectives but not exact counts.
     match = re.search(r"\(\d+\s+nodes?\)", text)
     assert match is None, (
         f"README must not contain brittle exact node counts like {match.group(0)!r}; "

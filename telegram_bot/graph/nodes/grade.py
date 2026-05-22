@@ -41,7 +41,7 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
             "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
         }
 
-    ***REMOVED*** Defensive normalization: documents can include non-dict placeholders.
+    # Defensive normalization: documents can include non-dict placeholders.
     scores = [doc.get("score", 0) for doc in documents if isinstance(doc, dict)]
     if not scores:
         elapsed = time.perf_counter() - t0
@@ -56,18 +56,18 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
 
     top_score = max(scores)
 
-    ***REMOVED*** RRF scores = 1/(k+rank), k=60 → rank 1 = ~0.016, rank 10 = ~0.014
-    ***REMOVED*** Threshold must be below typical top-1 RRF score
+    # RRF scores = 1/(k+rank), k=60 → rank 1 = ~0.016, rank 10 = ~0.014
+    # Threshold must be below typical top-1 RRF score
     from telegram_bot.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
     relevance_threshold = config.relevance_threshold_rrf
     relevant = top_score > relevance_threshold
 
-    ***REMOVED*** Early termination: skip rerank when confidence is high enough
+    # Early termination: skip rerank when confidence is high enough
     skip_rerank = relevant and top_score >= config.skip_rerank_threshold
 
-    ***REMOVED*** Score improvement check for rewrite guard
+    # Score improvement check for rewrite guard
     delta = top_score - prev_confidence
     score_improved = delta >= config.score_improvement_delta or prev_confidence == 0.0
 

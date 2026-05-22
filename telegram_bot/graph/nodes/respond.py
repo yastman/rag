@@ -54,8 +54,8 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
 
     Reads state["response"] and state["message"] (aiogram Message object),
     sends with Markdown formatting and falls back to plain text on failure.
-    Attaches feedback inline keyboard when trace_id is present (***REMOVED***229).
-    Appends source attribution footnotes when show_sources is enabled (***REMOVED***225).
+    Attaches feedback inline keyboard when trace_id is present (#229).
+    Appends source attribution footnotes when show_sources is enabled (#225).
 
     Returns partial state update with latency_stages["respond"].
     """
@@ -73,7 +73,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     if not response:
         response = "Извините, не удалось сформировать ответ. Попробуйте переформулировать вопрос."
 
-    ***REMOVED*** Build source attribution footnotes (***REMOVED***225)
+    # Build source attribution footnotes (#225)
     sources_text = ""
     sources_count = 0
     if show_sources and documents and query_type not in _NO_SOURCES_TYPES:
@@ -93,7 +93,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
 
     reply_markup = _build_reply_markup(trace_id, query_type)
 
-    ***REMOVED*** Streaming path: response already delivered, append sources + feedback buttons
+    # Streaming path: response already delivered, append sources + feedback buttons
     if response_sent:
         sent_ref = _extract_sent_message_ref(state)
         bot = getattr(message, "bot", None)
@@ -155,7 +155,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
             "sources_count": sources_count,
         }
 
-    ***REMOVED*** Non-streaming path: append sources to response before sending
+    # Non-streaming path: append sources to response before sending
     delivered = False
     used_markdown = False
     if message is not None:

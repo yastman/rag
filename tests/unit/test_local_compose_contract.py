@@ -47,7 +47,7 @@ def test_local_dev_docker_targets_use_local_compose_override() -> None:
 
 def test_docker_core_help_describes_default_unprofiled_stack() -> None:
     text = MAKEFILE.read_text(encoding="utf-8")
-    assert "docker-core-up: ***REMOVED******REMOVED*** Start default local compose stack (unprofiled services)" in text, (
+    assert "docker-core-up: ## Start default local compose stack (unprofiled services)" in text, (
         "docker-core-up help text must describe the default unprofiled local compose stack"
     )
 

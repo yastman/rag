@@ -126,7 +126,7 @@ class TestBGEM3Client:
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
             "dense_vecs": [[0.1] * 1024],
-            ***REMOVED*** lexical_weights intentionally missing
+            # lexical_weights intentionally missing
         }
 
         mock_http = AsyncMock()
@@ -179,8 +179,8 @@ class TestBGEM3Client:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
-        ***REMOVED*** ColBERT: list of texts -> list of (num_tokens, 1024) arrays
-        ***REMOVED*** Single text with 3 tokens, each 1024-dim
+        # ColBERT: list of texts -> list of (num_tokens, 1024) arrays
+        # Single text with 3 tokens, each 1024-dim
         mock_resp.json.return_value = {
             "colbert_vecs": [[[0.1] * 1024] * 3],
             "processing_time": 0.05,
@@ -194,8 +194,8 @@ class TestBGEM3Client:
         result = await client.encode_colbert(["hello"])
 
         assert len(result.colbert_vecs) == 1
-        assert len(result.colbert_vecs[0]) == 3  ***REMOVED*** 3 tokens
-        assert len(result.colbert_vecs[0][0]) == 1024  ***REMOVED*** 1024-dim per token
+        assert len(result.colbert_vecs[0]) == 3  # 3 tokens
+        assert len(result.colbert_vecs[0][0]) == 1024  # 1024-dim per token
         assert result.processing_time == 0.05
         mock_http.post.assert_called_once()
         assert "/encode/colbert" in mock_http.post.call_args[0][0]
@@ -212,7 +212,7 @@ class TestBGEM3Client:
         mock_resp.json.return_value = {
             "dense_vecs": [[0.1] * 1024],
             "lexical_weights": [{"indices": [1], "values": [0.5]}],
-            "colbert_vecs": [[[0.2] * 1024] * 4],  ***REMOVED*** 1 text, 4 tokens
+            "colbert_vecs": [[[0.2] * 1024] * 4],  # 1 text, 4 tokens
             "processing_time": 0.1,
         }
 
@@ -246,7 +246,7 @@ class TestBGEM3Client:
         result = await client.encode_hybrid(["hello"])
 
         assert result.colbert_vecs is None
-        ***REMOVED*** Existing fields still work
+        # Existing fields still work
         assert len(result.dense_vecs) == 1
         assert len(result.lexical_weights) == 1
 
@@ -319,7 +319,7 @@ class TestBGEM3SyncClient:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.raise_for_status = MagicMock()
-        ***REMOVED*** 1 text, 3 tokens, 1024-dim each
+        # 1 text, 3 tokens, 1024-dim each
         mock_resp.json.return_value = {
             "colbert_vecs": [[[0.1] * 1024] * 3],
             "processing_time": 0.05,
@@ -408,7 +408,7 @@ class TestBGEM3SyncClient:
 
 
 class TestBGEM3ClientReconnectRace:
-    """Reconnect race-condition contract for _get_client (***REMOVED***1641).
+    """Reconnect race-condition contract for _get_client (#1641).
 
     Goal: under concurrent reconnect (multiple tasks hitting _get_client when
     self._client is None or closed), only ONE new httpx.AsyncClient must be
@@ -440,8 +440,8 @@ class TestBGEM3ClientReconnectRace:
 
         client = mod.BGEM3Client(base_url="http://localhost:8000")
 
-        ***REMOVED*** Force a yield point inside _get_client so concurrent tasks observe
-        ***REMOVED*** the same self._client is None state before any of them assigns.
+        # Force a yield point inside _get_client so concurrent tasks observe
+        # the same self._client is None state before any of them assigns.
         async def call_get_client() -> object:
             return await client._get_client()
 
@@ -473,7 +473,7 @@ class TestBGEM3ClientReconnectRace:
 
         client = mod.BGEM3Client(base_url="http://localhost:8000")
 
-        ***REMOVED*** Pre-seed a closed client so reconnect path triggers.
+        # Pre-seed a closed client so reconnect path triggers.
         closed = MagicMock()
         closed.is_closed = True
         closed.aclose = AsyncMock()
@@ -488,7 +488,7 @@ class TestBGEM3ClientReconnectRace:
             f"Expected exactly 1 replacement AsyncClient, got {len(instances)}"
         )
         assert all(r is instances[0] for r in results)
-        ***REMOVED*** A pre-closed client must NOT be aclose()'d again (already closed).
+        # A pre-closed client must NOT be aclose()'d again (already closed).
         closed.aclose.assert_not_awaited()
 
     async def test_get_client_returns_existing_open_client_without_replacement(
@@ -515,7 +515,7 @@ class TestBGEM3ClientReconnectRace:
         result = await client._get_client()
 
         assert result is existing
-        assert instances == []  ***REMOVED*** no new construction
+        assert instances == []  # no new construction
 
     async def test_aclose_concurrent_with_get_client_does_not_double_close(
         self, monkeypatch: pytest.MonkeyPatch
@@ -536,15 +536,15 @@ class TestBGEM3ClientReconnectRace:
 
         client = mod.BGEM3Client(base_url="http://localhost:8000")
 
-        ***REMOVED*** Establish initial client.
+        # Establish initial client.
         first = await client._get_client()
         assert first is instances[0]
 
-        ***REMOVED*** Close it; concurrent _get_client must observe is_closed and replace.
+        # Close it; concurrent _get_client must observe is_closed and replace.
         await client.aclose()
         first.aclose.assert_awaited_once()
 
         second = await client._get_client()
         assert second is not first
-        ***REMOVED*** Original closed client never aclose()'d twice.
+        # Original closed client never aclose()'d twice.
         first.aclose.assert_awaited_once()

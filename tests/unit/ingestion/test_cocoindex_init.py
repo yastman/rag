@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_cocoindex_init.py
+# tests/unit/ingestion/test_cocoindex_init.py
 """Tests for CocoIndex initialization."""
 
 from unittest.mock import patch
@@ -30,7 +30,7 @@ class TestCocoIndexInit:
         ns = _app_namespace_for(config)
         assert ns == "unified"
 
-        ***REMOVED*** Different collection name doesn't change namespace
+        # Different collection name doesn't change namespace
         config2 = UnifiedConfig(collection_name="my-collection.v2")
         ns2 = _app_namespace_for(config2)
         assert ns2 == "unified"
@@ -48,23 +48,23 @@ class TestCocoIndexInit:
             collection_name="test_collection",
         )
 
-        ***REMOVED*** ***REMOVED***1601: narrow suppression — only swallow expected post-init failures
-        ***REMOVED*** caused by partially-mocked cocoindex flow construction. Anything else
-        ***REMOVED*** (e.g. AssertionError) is a real bug we want surfaced.
+        # #1601: narrow suppression — only swallow expected post-init failures
+        # caused by partially-mocked cocoindex flow construction. Anything else
+        # (e.g. AssertionError) is a real bug we want surfaced.
         try:
             build_flow(config)
         except (TypeError, AttributeError, RuntimeError, ValueError) as exc:
-            ***REMOVED*** build_flow reached cocoindex.init and only then tripped on the
-            ***REMOVED*** next mocked-out symbol — that is exactly what this unit asserts.
+            # build_flow reached cocoindex.init and only then tripped on the
+            # next mocked-out symbol — that is exactly what this unit asserts.
             assert mock_init.called, (
                 f"cocoindex.init was not invoked before build_flow raised: {exc!r}"
             )
 
-        ***REMOVED*** Verify init was called
+        # Verify init was called
         assert mock_init.called
         call_args = mock_init.call_args
         settings = call_args[0][0]
 
-        ***REMOVED*** Check settings structure
+        # Check settings structure
         assert hasattr(settings, "database")
         assert hasattr(settings, "app_namespace")

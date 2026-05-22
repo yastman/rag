@@ -1,8 +1,8 @@
-***REMOVED*** syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-***REMOVED*** BGE-M3 Embedding Service — uv sync (2026 best practices)
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
+# BGE-M3 Embedding Service — uv sync (2026 best practices)
 
-***REMOVED*** ====== BUILD STAGE ======
-***REMOVED*** Base images pinned — checked 2026-02-09
+# ====== BUILD STAGE ======
+# Base images pinned — checked 2026-02-09
 FROM ghcr.io/astral-sh/uv:0.9-python3.14-bookworm-slim@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1 AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -17,20 +17,20 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libgomp1 libxml2-dev libxslt1-dev zlib1g-dev
 
-***REMOVED*** Deps layer
+# Deps layer
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-dev --no-install-project
 
-***REMOVED*** Code layer
+# Code layer
 COPY pyproject.toml uv.lock ./
 COPY config.py app.py ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-***REMOVED*** ====== RUNTIME STAGE ======
+# ====== RUNTIME STAGE ======
 FROM python:3.14-slim-bookworm@sha256:a9bee15510a364124aa24692899d269835683b883de42f7ebec8c293cf679ccb AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/yastman/rag"

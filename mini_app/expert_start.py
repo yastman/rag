@@ -10,7 +10,7 @@ class StartExpertRequest(BaseModel):
 
     ``user_id`` is optional (and ignored) at the body level: the API
     derives the authoritative Telegram user id from the SDK-validated
-    initData header (***REMOVED***1595). Any body value is accepted for backward
+    initData header (#1595). Any body value is accepted for backward
     compatibility but is overwritten server-side.
     """
 

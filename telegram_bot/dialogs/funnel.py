@@ -1,4 +1,4 @@
-"""Property search funnel dialog (aiogram-dialog) — ***REMOVED***628, refactored ***REMOVED***697."""
+"""Property search funnel dialog (aiogram-dialog) — #628, refactored #697."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ from .filter_constants import (
 from .states import FunnelSG
 
 
-***REMOVED*** --- Constants ---
+# --- Constants ---
 
 _CITY_OPTIONS: list[tuple[str, str]] = [
     ("Солнечный берег", "Солнечный берег"),
@@ -137,7 +137,7 @@ def format_apartment_list(
     """Format apartments as multi-line HTML text for list view mode."""
     parts: list[str] = []
 
-    ***REMOVED*** Header
+    # Header
     shown_end = shown_start + len(results) - 1
     if total is not None and len(results) > 0:
         parts.append(f"Найдено <b>{total}</b> апартаментов (показаны {shown_start}–{shown_end})\n")
@@ -149,7 +149,7 @@ def format_apartment_list(
         price_raw = int(p.get("price_eur", 0))
         price_fmt = f"{price_raw:,}".replace(",", " ")
 
-        ***REMOVED*** Line 1: number + complex + section + apt number
+        # Line 1: number + complex + section + apt number
         line1_parts = [f"<b>{shown_start + i}. {p.get('complex_name', '')}</b>"]
         section = p.get("section", "")
         if section:
@@ -158,7 +158,7 @@ def format_apartment_list(
         if apt_num:
             line1_parts.append(f"№{apt_num}")
 
-        ***REMOVED*** Line 2: type + floor + area + view
+        # Line 2: type + floor + area + view
         line2_parts = [prop_type]
         floor = p.get("floor", 0)
         if floor:
@@ -170,7 +170,7 @@ def format_apartment_list(
         if view:
             line2_parts.append(_VIEW_DISPLAY.get(view, view))
 
-        ***REMOVED*** Line 3: price
+        # Line 3: price
         line3 = f"<b>{price_fmt} €</b>"
 
         parts.append(
@@ -180,7 +180,7 @@ def format_apartment_list(
     return "\n\n".join(parts)
 
 
-***REMOVED*** Preference category items for Multiselect widget
+# Preference category items for Multiselect widget
 _PREF_ITEMS: list[tuple[str, str]] = [
     ("🏢 Этаж", "floor"),
     ("🌅 Вид", "view"),
@@ -191,7 +191,7 @@ _PREF_ITEMS: list[tuple[str, str]] = [
     ("📍 Секция", "section"),
 ]
 
-***REMOVED*** Widget ID for preferences Multiselect
+# Widget ID for preferences Multiselect
 _PREF_MS_ID = "pref_ms"
 
 
@@ -272,7 +272,7 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
     task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
-***REMOVED*** --- Getters (provide data to windows) ---
+# --- Getters (provide data to windows) ---
 
 
 async def get_city_options(**kwargs: Any) -> dict[str, Any]:
@@ -378,7 +378,7 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
 
     btn_back = i18n.get("back") if i18n else "Назад"
 
-    ***REMOVED*** Sync Multiselect widget state from dialog_data
+    # Sync Multiselect widget state from dialog_data
     if dialog_manager is not None:
         with contextlib.suppress(AttributeError):
             dialog_manager.current_context().widget_data[_PREF_MS_ID] = (
@@ -550,7 +550,7 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     data: dict[str, Any] = {}
     if dialog_manager is not None:
         data = getattr(dialog_manager, "dialog_data", {})
-        ***REMOVED*** Populate dialog_data from start_data (when returning from catalog filters)
+        # Populate dialog_data from start_data (when returning from catalog filters)
         start = getattr(dialog_manager, "start_data", None) or {}
         if start and not data:
             data.update(start)
@@ -609,7 +609,7 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
 
     summary_text = "\n".join(lines)
 
-    ***REMOVED*** Live count via payload filter
+    # Live count via payload filter
     svc = None
     if dialog_manager is not None:
         middleware = getattr(dialog_manager, "middleware_data", {})
@@ -653,7 +653,7 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
 _SCROLL_PAGE_SIZE = 10
 
 
-***REMOVED*** --- Handlers (on_click) ---
+# --- Handlers (on_click) ---
 
 
 async def on_city_selected(
@@ -825,7 +825,7 @@ async def on_summary_search(
     data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
 
-    ***REMOVED*** Persist lead score (fire-and-forget)
+    # Persist lead score (fire-and-forget)
     try:
         from telegram_bot.bot import make_session_id
 
@@ -848,10 +848,10 @@ async def on_summary_search(
     except Exception:
         logger.exception("Failed to schedule funnel lead score persistence")
 
-    ***REMOVED*** Grab the current dialog message before closing the dialog context.
+    # Grab the current dialog message before closing the dialog context.
     msg = callback.message
 
-    ***REMOVED*** Resolve services
+    # Resolve services
     svc = manager.middleware_data.get("apartments_service")
     property_bot = manager.middleware_data.get("property_bot")
     if svc is None and property_bot is not None:
@@ -861,7 +861,7 @@ async def on_summary_search(
         await manager.done()
         return
 
-    ***REMOVED*** Search
+    # Search
     try:
         filters = _build_funnel_filters(data)
         results, total_count, _next_start, _page_ids = await svc.scroll_with_filters(
@@ -874,15 +874,15 @@ async def on_summary_search(
         await manager.done()
         return
 
-    ***REMOVED*** Close dialog and explicitly remove the old dialog shell before sending
-    ***REMOVED*** the catalog control-message to avoid duplicate control messages in chat.
+    # Close dialog and explicitly remove the old dialog shell before sending
+    # the catalog control-message to avoid duplicate control messages in chat.
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
     if hasattr(msg, "delete"):
         with contextlib.suppress(Exception):
             await msg.delete()
 
-    ***REMOVED*** Determine view mode from button id
+    # Determine view mode from button id
     view_mode = "list" if button.widget_id == "search_list" else "cards"
 
     state = manager.middleware_data.get("state")
@@ -994,11 +994,11 @@ async def on_zero_suggestion_selected(
     await manager.switch_to(FunnelSG.summary)
 
 
-***REMOVED*** --- Dialog ---
+# --- Dialog ---
 
 
 funnel_dialog = Dialog(
-    ***REMOVED*** Step 1: City selection
+    # Step 1: City selection
     Window(
         Format("{title}"),
         Column(
@@ -1015,7 +1015,7 @@ funnel_dialog = Dialog(
         getter=get_city_options,
         state=FunnelSG.city,
     ),
-    ***REMOVED*** Step 2: Property type
+    # Step 2: Property type
     Window(
         Format("{title}"),
         Column(
@@ -1032,7 +1032,7 @@ funnel_dialog = Dialog(
         getter=get_property_types,
         state=FunnelSG.property_type,
     ),
-    ***REMOVED*** Step 3: Budget
+    # Step 3: Budget
     Window(
         Format("{title}"),
         Column(
@@ -1049,7 +1049,7 @@ funnel_dialog = Dialog(
         getter=get_budget_options,
         state=FunnelSG.budget,
     ),
-    ***REMOVED*** Step 4: Preferences multi-select menu
+    # Step 4: Preferences multi-select menu
     Window(
         Format("{title}"),
         Column(
@@ -1072,7 +1072,7 @@ funnel_dialog = Dialog(
         getter=get_preferences_options,
         state=FunnelSG.preferences,
     ),
-    ***REMOVED*** Step 4a: Floor sub-options
+    # Step 4a: Floor sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1089,7 +1089,7 @@ funnel_dialog = Dialog(
         getter=get_pref_floor_options,
         state=FunnelSG.pref_floor,
     ),
-    ***REMOVED*** Step 4b: View sub-options
+    # Step 4b: View sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1106,7 +1106,7 @@ funnel_dialog = Dialog(
         getter=get_pref_view_options,
         state=FunnelSG.pref_view,
     ),
-    ***REMOVED*** Step 4c: Furnished sub-options
+    # Step 4c: Furnished sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1123,7 +1123,7 @@ funnel_dialog = Dialog(
         getter=get_pref_furnished_options,
         state=FunnelSG.pref_furnished,
     ),
-    ***REMOVED*** Step 4d: Promotion sub-options
+    # Step 4d: Promotion sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1140,7 +1140,7 @@ funnel_dialog = Dialog(
         getter=get_pref_promotion_options,
         state=FunnelSG.pref_promotion,
     ),
-    ***REMOVED*** Step 4f: Area sub-options
+    # Step 4f: Area sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1157,7 +1157,7 @@ funnel_dialog = Dialog(
         getter=get_pref_area_options,
         state=FunnelSG.pref_area,
     ),
-    ***REMOVED*** Step 4e: Complex sub-options
+    # Step 4e: Complex sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1174,7 +1174,7 @@ funnel_dialog = Dialog(
         getter=get_pref_complex_options,
         state=FunnelSG.pref_complex,
     ),
-    ***REMOVED*** Step 4g: Section sub-options
+    # Step 4g: Section sub-options
     Window(
         Format("{title}"),
         Column(
@@ -1191,7 +1191,7 @@ funnel_dialog = Dialog(
         getter=get_pref_section_options,
         state=FunnelSG.pref_section,
     ),
-    ***REMOVED*** Step 5: Summary + confirmation
+    # Step 5: Summary + confirmation
     Window(
         Format("{summary_text}"),
         Row(
@@ -1220,7 +1220,7 @@ funnel_dialog = Dialog(
         getter=get_summary_data,
         state=FunnelSG.summary,
     ),
-    ***REMOVED*** Step 5a: Change filter selection
+    # Step 5a: Change filter selection
     Window(
         Format("{title}"),
         Column(

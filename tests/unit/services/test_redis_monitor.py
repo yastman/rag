@@ -1,4 +1,4 @@
-"""Tests for RedisHealthMonitor checkpoint key growth monitoring (***REMOVED***159)."""
+"""Tests for RedisHealthMonitor checkpoint key growth monitoring (#159)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,7 +8,7 @@ from telegram_bot.services.redis_monitor import RedisHealthMonitor
 async def test_check_health_scans_all_checkpoint_keys_and_alerts_on_growth():
     """SCAN iterates cursor until 0; warns when checkpoint keys grow."""
     monitor = RedisHealthMonitor("redis://localhost:6379")
-    monitor._prev_checkpoint_count = 1  ***REMOVED*** previously 1 key
+    monitor._prev_checkpoint_count = 1  # previously 1 key
 
     mock_redis = AsyncMock()
     mock_redis.info = AsyncMock(
@@ -18,7 +18,7 @@ async def test_check_health_scans_all_checkpoint_keys_and_alerts_on_growth():
         ]
     )
     mock_redis.dbsize = AsyncMock(return_value=5000)
-    ***REMOVED*** Two SCAN iterations: cursor 1 → cursor 0 (3 keys total)
+    # Two SCAN iterations: cursor 1 → cursor 0 (3 keys total)
     mock_redis.scan = AsyncMock(
         side_effect=[
             (1, ["checkpoint:1", "checkpoint:2"]),
@@ -58,11 +58,11 @@ async def test_check_health_no_warning_on_first_run():
     with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
-    ***REMOVED*** No growth warning on first run
+    # No growth warning on first run
     for call in mock_logger.warning.call_args_list:
         assert "checkpoint key growth" not in str(call)
 
-    ***REMOVED*** But prev count is now set
+    # But prev count is now set
     assert monitor._prev_checkpoint_count == 1
 
 
@@ -90,7 +90,7 @@ async def test_check_health_no_warning_when_count_stable():
     with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
-    ***REMOVED*** No growth warning — count stayed at 5
+    # No growth warning — count stayed at 5
     for call in mock_logger.warning.call_args_list:
         assert "checkpoint key growth" not in str(call)
 
@@ -116,7 +116,7 @@ async def test_check_health_checkpoint_scan_failure_is_non_fatal():
     with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
         await monitor._check_health()
 
-    ***REMOVED*** Core INFO health log still emitted despite checkpoint metrics failure.
+    # Core INFO health log still emitted despite checkpoint metrics failure.
     mock_logger.info.assert_any_call(
         "Redis health: memory=%s/%s (%.1f%%), hit_rate=%.1f%%, evicted_keys=%d (new=%d)",
         "1B",
@@ -165,13 +165,13 @@ async def test_start_registers_scheduler_job_and_stop_shuts_down():
         mock_scheduler_cls.return_value = mock_scheduler
         await monitor.start()
 
-    ***REMOVED*** Verify job was added with correct id
+    # Verify job was added with correct id
     mock_scheduler.add_job.assert_called_once()
     add_job_kwargs = mock_scheduler.add_job.call_args
     assert add_job_kwargs[1]["id"] == "redis-health-monitor"
     assert add_job_kwargs[1]["replace_existing"] is True
     assert add_job_kwargs[0][1] == "interval"
 
-    ***REMOVED*** Verify stop shuts down the scheduler
+    # Verify stop shuts down the scheduler
     await monitor.stop()
     mock_scheduler.shutdown.assert_called_once_with(wait=False)

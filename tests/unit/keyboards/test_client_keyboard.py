@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/keyboards/test_client_keyboard.py
+# tests/unit/keyboards/test_client_keyboard.py
 """Tests for client ReplyKeyboard."""
 
 from unittest.mock import MagicMock
@@ -14,7 +14,7 @@ from telegram_bot.keyboards.client_keyboard import (
 from telegram_bot.middlewares.i18n import create_translator_hub
 
 
-***REMOVED*** --- Fallback (no i18n) tests ---
+# --- Fallback (no i18n) tests ---
 
 
 def test_build_client_keyboard_returns_markup():
@@ -58,7 +58,7 @@ def test_action_ids_has_7_entries():
     assert len(_ACTION_IDS) == 7
 
 
-***REMOVED*** --- i18n-aware tests ---
+# --- i18n-aware tests ---
 
 
 def _make_mock_i18n(translations: dict[str, str]) -> MagicMock:
@@ -109,7 +109,7 @@ def test_collect_client_menu_texts_skips_bad_button_without_bare_continue(caplog
     assert "Hello" in texts
 
 
-***REMOVED*** --- parse_menu_button tests ---
+# --- parse_menu_button tests ---
 
 
 def test_parse_ru_button_fallback():
@@ -158,7 +158,7 @@ def test_parse_with_i18n_hub_fallback_to_menu_buttons():
     mock_translator.get.return_value = "something else"
     mock_hub.get_translator_by_locale.return_value = mock_translator
 
-    ***REMOVED*** Russian text not in i18n translations but matches MENU_BUTTONS
+    # Russian text not in i18n translations but matches MENU_BUTTONS
     result = parse_menu_button("🏠 Подобрать квартиру", i18n_hub=mock_hub)
     assert result == "search"
 
@@ -177,9 +177,9 @@ def test_parse_menu_button_i18n_hub_raises_fallback():
     mock_hub = MagicMock()
     mock_hub.get_translator_by_locale.side_effect = RuntimeError("hub broken")
 
-    ***REMOVED*** Still resolves via MENU_BUTTONS fallback
+    # Still resolves via MENU_BUTTONS fallback
     assert parse_menu_button("🏠 Подобрать квартиру", i18n_hub=mock_hub) == "search"
-    ***REMOVED*** Unknown text still returns None
+    # Unknown text still returns None
     assert parse_menu_button("random", i18n_hub=mock_hub) is None
 
 
@@ -200,7 +200,7 @@ def test_client_keyboard_does_not_own_catalog_helpers():
     assert not hasattr(mod, "parse_catalog_button")
 
 
-***REMOVED*** --- MENU_BUTTONS key verification tests ---
+# --- MENU_BUTTONS key verification tests ---
 
 
 def test_menu_buttons_manager_key_is_updated():

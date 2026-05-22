@@ -1,7 +1,7 @@
-***REMOVED*** Runbook: Self-Hosted GitHub Actions Runner (nightly-heavy)
+# Runbook: Self-Hosted GitHub Actions Runner (nightly-heavy)
 
 > **Owner:** CI / Release Engineering
-> **Closes:** ***REMOVED***1531
+> **Closes:** #1531
 > **Last verified:** 2026-05-21
 > **Verification command:**
 > ```bash
@@ -11,7 +11,7 @@
 Use this runbook when the nightly heavy-tier test job fails to start, queues
 forever, or the operator needs to bring a new self-hosted runner online.
 
-***REMOVED******REMOVED*** Symptoms
+## Symptoms
 
 - The `Nightly Heavy Tests` workflow run sits in **Queued** state past its
   02:30 UTC schedule and never picks up a runner.
@@ -20,7 +20,7 @@ forever, or the operator needs to bring a new self-hosted runner online.
 - GitHub Settings → Actions → Runners shows zero runners or all runners
   with status `Offline`.
 
-***REMOVED******REMOVED*** What Depends on the Self-Hosted Runner
+## What Depends on the Self-Hosted Runner
 
 | Workflow file | Job | `runs-on` | What it runs |
 |---|---|---|---|
@@ -31,7 +31,7 @@ self-hosted runner in the repo is eligible. Adding labels here without a
 matching runner update would also break the schedule (label drift, see
 **Common Failure Modes** below).
 
-***REMOVED******REMOVED*** Resource Requirements
+## Resource Requirements
 
 The `heavy-tier` job runs the full union of these pytest markers:
 `requires_extras`, `load`, `chaos`, `e2e`, `benchmark`. Sizing is anchored
@@ -49,7 +49,7 @@ to what those suites actually load.
 These numbers come directly from the workflow source — see the `Run heavy
 tier suites` step in [`nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml).
 
-***REMOVED******REMOVED*** Fast-Path Diagnosis
+## Fast-Path Diagnosis
 
 Run from any checkout with `gh` authenticated against the repo:
 
@@ -72,7 +72,7 @@ gh api repos/$OWNER/$REPO/actions/runners \
 
 If the script exits non-zero, follow **Common Failure Modes** below.
 
-***REMOVED******REMOVED*** How to Register a New Runner
+## How to Register a New Runner
 
 GitHub publishes the canonical, token-bearing instructions at
 **Settings → Actions → Runners → New self-hosted runner** for the
@@ -93,7 +93,7 @@ Reference docs (paraphrased; ≤30 words each):
 After registration, **always** verify with `scripts/check_self_hosted_runner.sh`.
 Do not consider the runner "live" until that script exits 0.
 
-***REMOVED******REMOVED*** How to Verify the Runner
+## How to Verify the Runner
 
 1. Run the diagnostic:
    ```bash
@@ -111,7 +111,7 @@ Do not consider the runner "live" until that script exits 0.
 3. Confirm the run is **In progress** within a minute. If it stays
    `Queued`, the runner is not picking up jobs — see **Common Failure Modes**.
 
-***REMOVED******REMOVED*** Common Failure Modes
+## Common Failure Modes
 
 | Symptom | Likely cause | Recovery |
 |---|---|---|
@@ -122,7 +122,7 @@ Do not consider the runner "live" until that script exits 0.
 | `gh api` call fails with 404 in the diagnostic script | Token lacks `actions:read` scope, or operator is not a repo admin | Re-auth `gh` with a scope-bearing token, or run the script as a maintainer |
 | Heavy-tier job OOM-killed | Runner host below the recommended 8 GiB RAM | Resize host to >= 8 GiB RAM; consider lowering `pytest -n auto` to `-n 2` |
 
-***REMOVED******REMOVED*** How to Mute / Disable nightly-heavy.yml During Maintenance
+## How to Mute / Disable nightly-heavy.yml During Maintenance
 
 If the runner must be down for maintenance, prefer one of the following so
 the schedule does not pile up failed/queued runs:
@@ -130,7 +130,7 @@ the schedule does not pile up failed/queued runs:
 1. **Disable the workflow** (preferred, reversible, surfaced in the UI):
    ```bash
    gh workflow disable nightly-heavy.yml
-   ***REMOVED*** ... maintenance ...
+   # ... maintenance ...
    gh workflow enable nightly-heavy.yml
    ```
 
@@ -149,7 +149,7 @@ the schedule does not pile up failed/queued runs:
 Re-verify with `scripts/check_self_hosted_runner.sh` after maintenance and
 re-enable the workflow only once the script exits 0.
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`scripts/check_self_hosted_runner.sh`](../../scripts/check_self_hosted_runner.sh) — diagnostic this runbook is the operator-facing companion of.
 - [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) — the workflow this runner serves.

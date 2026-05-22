@@ -1,4 +1,4 @@
-"""Settings dialog: language switch, CRM notifications (***REMOVED***697 Task 10)."""
+"""Settings dialog: language switch, CRM notifications (#697 Task 10)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _SUPPORTED_LOCALES = [
     ("uk", "lang-uk"),
 ]
 
-***REMOVED*** CRM settings defaults and helpers
+# CRM settings defaults and helpers
 
 DEFAULT_CRM_SETTINGS: dict[str, Any] = {
     "notifications": True,
@@ -47,7 +47,7 @@ async def get_crm_settings(redis: Any | None, tg_id: int) -> dict[str, Any]:
         raw = await redis.get(_crm_settings_key(tg_id))
         if raw is None:
             return dict(DEFAULT_CRM_SETTINGS)
-        return json.loads(raw)  ***REMOVED*** type: ignore[no-any-return]
+        return json.loads(raw)  # type: ignore[no-any-return]
     except Exception:
         logger.warning("Failed to load CRM settings for user %d", tg_id, exc_info=True)
         return dict(DEFAULT_CRM_SETTINGS)
@@ -61,7 +61,7 @@ async def save_crm_settings(redis: Any, tg_id: int, settings: dict[str, Any]) ->
         logger.warning("Failed to save CRM settings for user %d", tg_id, exc_info=True)
 
 
-***REMOVED*** --- Main settings window getters/handlers ---
+# --- Main settings window getters/handlers ---
 
 
 async def get_settings_data(i18n: Any = None, **kwargs: Any) -> dict[str, str]:
@@ -108,7 +108,7 @@ async def on_language_selected(
     manager: DialogManager,
 ) -> None:
     """Handle language selection button click."""
-    locale = button.widget_id  ***REMOVED*** widget_id = locale code (ru, en, uk)
+    locale = button.widget_id  # widget_id = locale code (ru, en, uk)
     user_service = manager.middleware_data.get("user_service")
     if user_service is not None and callback.from_user:
         try:
@@ -120,11 +120,11 @@ async def on_language_selected(
             logger.warning(
                 "Failed to save locale for user %s", callback.from_user.id, exc_info=True
             )
-    ***REMOVED*** Restart the settings root instead of closing the stack entirely.
+    # Restart the settings root instead of closing the stack entirely.
     await manager.start(SettingsSG.main, mode=StartMode.RESET_STACK)
 
 
-***REMOVED*** --- CRM settings window getters/handlers ---
+# --- CRM settings window getters/handlers ---
 
 
 def _get_redis(manager: DialogManager) -> Any | None:
@@ -219,7 +219,7 @@ async def on_toggle_card_lang(
 
 
 settings_dialog = Dialog(
-    ***REMOVED*** Main settings window
+    # Main settings window
     Window(
         Format("{title}"),
         Column(
@@ -239,7 +239,7 @@ settings_dialog = Dialog(
         getter=get_settings_data,
         state=SettingsSG.main,
     ),
-    ***REMOVED*** Language selection window
+    # Language selection window
     Window(
         Format("{title}"),
         Column(
@@ -252,7 +252,7 @@ settings_dialog = Dialog(
         getter=get_language_data,
         state=SettingsSG.language,
     ),
-    ***REMOVED*** CRM settings window
+    # CRM settings window
     Window(
         Format("{crm_title}\n\n{notifications}\n{briefing}\n{card_lang}"),
         Column(

@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/test_voyage_optional_imports.py
-"""Regression locks: voyageai must remain optional (***REMOVED***1773).
+# tests/unit/test_voyage_optional_imports.py
+"""Regression locks: voyageai must remain optional (#1773).
 
 These tests prove that the default bot/retrieval/ingestion runtime does NOT
 import `voyageai` at module load time. Voyage is an optional extra; importing
@@ -27,8 +27,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-***REMOVED*** Modules that must NOT import voyageai at module load time. Each is on the
-***REMOVED*** default runtime/ingestion path; voyage usage inside them must be lazy.
+# Modules that must NOT import voyageai at module load time. Each is on the
+# default runtime/ingestion path; voyage usage inside them must be lazy.
 DEFAULT_RUNTIME_VOYAGE_CONSUMERS = [
     "src.ingestion.unified.qdrant_writer",
     "src.ingestion.cocoindex_flow",
@@ -93,7 +93,7 @@ def _toplevel_voyage_symbols(source: str) -> list[str]:
 def test_module_has_no_toplevel_voyage_import(dotted: str) -> None:
     """Static lock: no top-level Voyage import in default-runtime consumers.
 
-    Regression for ***REMOVED***1773: if a future change reintroduces a top-level
+    Regression for #1773: if a future change reintroduces a top-level
     `import voyageai`, `from voyageai import ...`, or
     `from telegram_bot.services import VoyageService` in any of these
     modules, base test collection breaks under Python 3.14 even though the
@@ -103,7 +103,7 @@ def test_module_has_no_toplevel_voyage_import(dotted: str) -> None:
     bad = _toplevel_voyage_symbols(src_path.read_text(encoding="utf-8"))
     assert not bad, (
         f"{dotted} has top-level Voyage imports {bad} at {src_path}; "
-        "Voyage is an optional extra (***REMOVED***1773). Move the import inside the "
+        "Voyage is an optional extra (#1773). Move the import inside the "
         "function/method that actually instantiates a Voyage client."
     )
 
@@ -119,7 +119,7 @@ def test_default_bot_runtime_imports_skip_voyageai() -> None:
     importlib.import_module("telegram_bot.services")
     assert "voyageai" not in sys.modules, (
         "Importing telegram_bot.services pulled in voyageai. Voyage is "
-        "optional (***REMOVED***1773); access VoyageService only via attribute lookup "
+        "optional (#1773); access VoyageService only via attribute lookup "
         "from a callsite that needs it."
     )
 
@@ -127,13 +127,13 @@ def test_default_bot_runtime_imports_skip_voyageai() -> None:
 def test_voyage_extra_declared_in_root_pyproject() -> None:
     """Root pyproject must expose `voyage` as an optional extra (not base)."""
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    ***REMOVED*** voyageai must not appear in the [project] dependencies block.
+    # voyageai must not appear in the [project] dependencies block.
     deps_block = pyproject.split("[project.optional-dependencies]", 1)[0]
     assert "voyageai" not in deps_block, (
-        "voyageai is back in base [project.dependencies] (***REMOVED***1773 regression)."
+        "voyageai is back in base [project.dependencies] (#1773 regression)."
     )
-    ***REMOVED*** And it must appear in the [project.optional-dependencies] section
-    ***REMOVED*** under a `voyage` extra.
+    # And it must appear in the [project.optional-dependencies] section
+    # under a `voyage` extra.
     optional_block = pyproject.split("[project.optional-dependencies]", 1)[1]
     assert "voyage = [" in optional_block, "voyage extra missing from pyproject.toml"
     assert "voyageai" in optional_block
@@ -144,7 +144,7 @@ def test_voyage_extra_declared_in_telegram_bot_pyproject() -> None:
     pyproject = (REPO_ROOT / "telegram_bot" / "pyproject.toml").read_text(encoding="utf-8")
     deps_block = pyproject.split("[project.optional-dependencies]", 1)[0]
     assert "voyageai" not in deps_block, (
-        "voyageai is back in telegram_bot base dependencies (***REMOVED***1773 regression)."
+        "voyageai is back in telegram_bot base dependencies (#1773 regression)."
     )
     optional_block = pyproject.split("[project.optional-dependencies]", 1)[1]
     assert "voyage = [" in optional_block

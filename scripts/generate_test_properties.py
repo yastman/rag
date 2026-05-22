@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Generate test property data for E2E testing."""
 
 import json
@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
-***REMOVED*** Bulgarian property complexes (realistic names)
+# Bulgarian property complexes (realistic names)
 COMPLEXES = {
     "Солнечный берег": [
         "Сансет Резорт",
@@ -117,7 +117,7 @@ def generate_property(city: str, rooms: int) -> Property:
     complexes = COMPLEXES.get(city, ["Центральный"])
     district = random.choice(complexes)
 
-    ***REMOVED*** Price correlates with rooms, city, distance to sea
+    # Price correlates with rooms, city, distance to sea
     base_price = 35000 + rooms * 20000
     city_multiplier = {
         "Солнечный берег": 1.2,
@@ -129,24 +129,24 @@ def generate_property(city: str, rooms: int) -> Property:
     }.get(city, 1.0)
     price = int(base_price * city_multiplier * random.uniform(0.8, 1.5))
 
-    ***REMOVED*** Area correlates with rooms
+    # Area correlates with rooms
     area = 25 + rooms * 20 + random.randint(-5, 15)
 
-    ***REMOVED*** Distance to sea (lognormal - more close ones)
+    # Distance to sea (lognormal - more close ones)
     distance_to_sea = int(50 + random.lognormvariate(5, 1))
     distance_to_sea = min(distance_to_sea, 2000)
 
-    ***REMOVED*** Floors
+    # Floors
     total_floors = random.randint(4, 12)
     floor = random.randint(1, total_floors)
 
-    ***REMOVED*** Features (2-6 random)
+    # Features (2-6 random)
     features = random.sample(FEATURES, random.randint(2, 6))
 
     prop = Property(
         id=str(uuid.uuid4()),
         title=f"{'Студия' if rooms == 0 else f'{rooms}-комнатная квартира'} в {city}",
-        description="",  ***REMOVED*** Will be generated
+        description="",  # Will be generated
         city=city,
         district=district,
         rooms=rooms,
@@ -167,7 +167,7 @@ def generate_all_properties(count: int = 100) -> list[Property]:
     """Generate all properties with specified distribution."""
     properties = []
 
-    ***REMOVED*** Distribution: cities
+    # Distribution: cities
     city_distribution = {
         "Солнечный берег": 30,
         "Несебр": 25,
@@ -177,12 +177,12 @@ def generate_all_properties(count: int = 100) -> list[Property]:
         "Равда": 5,
     }
 
-    ***REMOVED*** Distribution: rooms (0=studio, 1, 2, 3, 4+)
+    # Distribution: rooms (0=studio, 1, 2, 3, 4+)
     room_distribution = {0: 20, 1: 25, 2: 30, 3: 20, 4: 5}
 
     for city, city_count in city_distribution.items():
         for _ in range(city_count):
-            ***REMOVED*** Pick rooms according to distribution
+            # Pick rooms according to distribution
             rooms = random.choices(
                 list(room_distribution.keys()),
                 weights=list(room_distribution.values()),
@@ -195,7 +195,7 @@ def generate_all_properties(count: int = 100) -> list[Property]:
 
 def main():
     """Generate and save test properties."""
-    random.seed(42)  ***REMOVED*** Reproducible
+    random.seed(42)  # Reproducible
 
     properties = generate_all_properties(100)
 
@@ -213,7 +213,7 @@ def main():
 
     print(f"Generated {len(properties)} properties to {output_path}")
 
-    ***REMOVED*** Stats
+    # Stats
     cities = {}
     rooms = {}
     prices = []

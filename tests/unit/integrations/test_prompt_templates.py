@@ -26,11 +26,11 @@ class TestTokenLimits:
         assert get_token_limit("balanced", "medium") == 150
 
     def test_unknown_combo_returns_default(self) -> None:
-        assert get_token_limit("short", "unknown") == 150  ***REMOVED*** type: ignore[arg-type]
+        assert get_token_limit("short", "unknown") == 150  # type: ignore[arg-type]
 
     def test_word_limit_approximation(self) -> None:
         wl = get_word_limit("short", "easy")
-        assert 70 <= wl <= 90  ***REMOVED*** 100 tokens / 1.3 ~ 76
+        assert 70 <= wl <= 90  # 100 tokens / 1.3 ~ 76
 
 
 class TestContractPrompts:
@@ -59,7 +59,7 @@ class TestBuildSystemPrompt:
 
     def test_short_prompt_has_word_limit(self) -> None:
         prompt = build_system_prompt("short", "easy", "недвижимость")
-        ***REMOVED*** word_limit for short/easy = 100/1.3 ~ 76
+        # word_limit for short/easy = 100/1.3 ~ 76
         assert "76" in prompt
 
     def test_balanced_prompt_renders(self) -> None:
@@ -96,9 +96,9 @@ class TestBuildSystemPromptWithManager:
             build_system_prompt_with_manager("short", "easy", "недвижимость")
 
         fallback = mock_get_prompt.call_args.kwargs["fallback"]
-        ***REMOVED*** 100 / 1.3 ~= 76 -> hard number should be embedded in fallback
+        # 100 / 1.3 ~= 76 -> hard number should be embedded in fallback
         assert "{word_limit}" not in fallback
         assert "76" in fallback
-        ***REMOVED*** Domain should be deferred for prompt_manager variable substitution
+        # Domain should be deferred for prompt_manager variable substitution
         assert "по {domain}" not in fallback
         assert "{{domain}}" in fallback

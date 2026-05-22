@@ -42,9 +42,9 @@ async def test_get_or_create_existing_user(service, mock_pool):
 @pytest.mark.asyncio
 async def test_get_or_create_new_user(service, mock_pool):
     """New user created when not found."""
-    ***REMOVED*** First call (SELECT) returns None, second call (INSERT) returns new row
+    # First call (SELECT) returns None, second call (INSERT) returns new row
     mock_pool.fetchrow.side_effect = [
-        None,  ***REMOVED*** SELECT
+        None,  # SELECT
         {
             "id": 2,
             "telegram_id": 456,
@@ -53,7 +53,7 @@ async def test_get_or_create_new_user(service, mock_pool):
             "first_name": "New",
             "telegram_language_code": "ru",
             "notifications_enabled": True,
-        },  ***REMOVED*** INSERT ... RETURNING
+        },  # INSERT ... RETURNING
     ]
 
     user = await service.get_or_create(telegram_id=456, first_name="New", language_code="ru")

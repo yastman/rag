@@ -1,8 +1,8 @@
-"""Tests for dead code cleanup — issue ***REMOVED***780.
+"""Tests for dead code cleanup — issue #780.
 
 Verifies:
 1. ColbertRerankerService emits DeprecationWarning (client-side reranking replaced
-   by server-side ColBERT via hybrid_search_rrf_colbert() in ***REMOVED***569).
+   by server-side ColBERT via hybrid_search_rrf_colbert() in #569).
 2. DocumentChunker FIXED_SIZE and SLIDING_WINDOW strategies emit DeprecationWarning
    (replaced by CocoIndex + Docling HybridChunker in production).
 3. DocumentChunker SEMANTIC strategy does NOT emit DeprecationWarning
@@ -31,7 +31,7 @@ class TestColbertRerankerDeprecation:
         )
 
     def test_colbert_reranker_deprecation_message_mentions_replacement(self):
-        """Deprecation message should mention the replacement (hybrid_search or ***REMOVED***569)."""
+        """Deprecation message should mention the replacement (hybrid_search or #569)."""
         from telegram_bot.services.colbert_reranker import ColbertRerankerService
 
         with warnings.catch_warnings(record=True) as w:

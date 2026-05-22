@@ -76,8 +76,8 @@ def build_reply_parameters(message: Any, user_text: str) -> Any | None:
     except Exception:
         return None
 
-    ***REMOVED*** Telegram requires `quote` to be an exact substring of the original message.
-    ***REMOVED*** Keep the original whitespace and truncate by prefix only, without adding ellipsis.
+    # Telegram requires `quote` to be an exact substring of the original message.
+    # Keep the original whitespace and truncate by prefix only, without adding ellipsis.
     quote_text = original_text
     if len(quote_text) > _QUOTE_MAX_LEN:
         quote_text = quote_text[:_QUOTE_MAX_LEN]

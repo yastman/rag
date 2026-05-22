@@ -429,7 +429,7 @@ class TestEdgeCases:
         """Test that ImportError is raised with helpful message when FlagEmbedding is absent."""
         from src.models.embedding_model import get_bge_m3_model
 
-        ***REMOVED*** Ensure FlagEmbedding is NOT in sys.modules
+        # Ensure FlagEmbedding is NOT in sys.modules
         with patch.dict(sys.modules, {"FlagEmbedding": None}):
             with pytest.raises(ImportError, match="ml-local"):
                 get_bge_m3_model()

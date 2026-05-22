@@ -24,54 +24,54 @@ from telegram_bot.observability import get_client, observe
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** --- Injection pattern categories ---
-***REMOVED*** Note: \b does NOT work with Cyrillic in Python regex.
-***REMOVED*** For Russian patterns, use (?<!\w) / (?!\w) or omit word boundaries.
+# --- Injection pattern categories ---
+# Note: \b does NOT work with Cyrillic in Python regex.
+# For Russian patterns, use (?<!\w) / (?!\w) or omit word boundaries.
 
 _IGNORE_INSTRUCTIONS_PATTERNS = [
-    ***REMOVED*** EN: ignore/disregard previous instructions
+    # EN: ignore/disregard previous instructions
     r"\b(ignore|disregard|forget)\b.{0,30}\b(previous|above|prior|all)\b.{0,30}\b(instructions?|rules?|prompt|context)\b",
-    ***REMOVED*** RU: игнорируй предыдущие инструкции
+    # RU: игнорируй предыдущие инструкции
     r"(игнорируй|забудь|отбрось).{0,30}(предыдущ|прошл|все|прежн).{0,30}(инструкц|правил|указан|промпт)",
 ]
 
 _ROLE_OVERRIDE_PATTERNS = [
-    ***REMOVED*** EN: you are now unrestricted / developer mode (exclude DAN — handled in dan_jailbreak)
+    # EN: you are now unrestricted / developer mode (exclude DAN — handled in dan_jailbreak)
     r"\byou are now\b.{0,30}\b(unrestricted|unfiltered|no rules?|jailbr[oe]ak|developer mode)\b",
     r"\b(enter|enable|activate|switch to)\b.{0,20}\b(developer mode|admin mode|god mode|DAN mode)\b",
-    ***REMOVED*** RU: ты теперь без ограничений
+    # RU: ты теперь без ограничений
     r"ты теперь.{0,30}(без ограничен|свободн|неограничен|разработчик)",
-    ***REMOVED*** RU: включи режим разработчика
+    # RU: включи режим разработчика
     r"(включи|активируй|перейди в).{0,20}(режим разработчик|режим админ|без цензур)",
 ]
 
 _SYSTEM_PROMPT_LEAK_PATTERNS = [
-    ***REMOVED*** EN: reveal/show system prompt
+    # EN: reveal/show system prompt
     r"\b(reveal|show|display|print|output|repeat|echo)\b.{0,30}\b(system prompt|hidden instructions?|initial prompt|secret instructions?)\b",
     r"\bwhat (is|are) your\b.{0,20}\b(system prompt|instructions?|rules?|guidelines)\b",
-    ***REMOVED*** RU: покажи системный промпт
+    # RU: покажи системный промпт
     r"(покажи|выведи|напиши|повтори).{0,30}(системн\w* промпт|скрыт\w* инструкц|начальн\w* промпт)",
     r"как\w* тво[ийя].{0,20}(системн\w* промпт|инструкц|правила)",
 ]
 
 _POLICY_BYPASS_PATTERNS = [
-    ***REMOVED*** EN: override/bypass system/policy/safety
+    # EN: override/bypass system/policy/safety
     r"\b(override|bypass|circumvent|disable|turn off)\b.{0,20}\b(system|policy|safety|filter|guard|restriction|moderation)\b",
-    ***REMOVED*** RU: обойди / отключи фильтр
+    # RU: обойди / отключи фильтр
     r"(обойди|отключи|выключи|обход).{0,20}(систем|политик|фильтр|защит|ограничен|модерац)",
 ]
 
 _PERSONA_HIJACK_PATTERNS = [
-    ***REMOVED*** EN: act as admin/root/developer
+    # EN: act as admin/root/developer
     r"\b(act|pretend|behave|respond)\b.{0,10}\bas\b.{0,20}\b(admin|root|developer|hacker|unrestricted|evil)\b",
-    ***REMOVED*** RU: действуй как / притворись
+    # RU: действуй как / притворись
     r"(действуй|притворись|веди себя|отвечай).{0,10}как.{0,20}(админ|разработчик|хакер|злодей)",
 ]
 
 _ENCODING_EVASION_PATTERNS = [
-    ***REMOVED*** Base64 / rot13 / hex encoded instructions
+    # Base64 / rot13 / hex encoded instructions
     r"\b(base64|rot13|hex|decode|encode)\b.{0,30}\b(instruction|payload|command)\b",
-    ***REMOVED*** Token smuggling: unusual unicode or zero-width characters
+    # Token smuggling: unusual unicode or zero-width characters
     r"[\u200b\u200c\u200d\u2060\ufeff]{2,}",
 ]
 
@@ -82,7 +82,7 @@ _DAN_JAILBREAK_PATTERNS = [
     r"\bprompt leak\b",
 ]
 
-***REMOVED*** Combine all patterns with category tags
+# Combine all patterns with category tags
 INJECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = []
 for _category, _patterns in [
     ("ignore_instructions", _IGNORE_INSTRUCTIONS_PATTERNS),
@@ -96,7 +96,7 @@ for _category, _patterns in [
     for _p in _patterns:
         INJECTION_PATTERNS.append((_category, re.compile(_p, re.IGNORECASE)))
 
-***REMOVED*** Risk scores by category (higher = more dangerous)
+# Risk scores by category (higher = more dangerous)
 _CATEGORY_RISK: dict[str, float] = {
     "ignore_instructions": 0.9,
     "role_override": 0.95,
@@ -107,14 +107,14 @@ _CATEGORY_RISK: dict[str, float] = {
     "dan_jailbreak": 0.95,
 }
 
-***REMOVED*** Blocked response message
+# Blocked response message
 _BLOCKED_RESPONSE = (
     "Извините, ваш запрос не может быть обработан.\n\n"
     "Я помощник по недвижимости. Пожалуйста, задайте вопрос о квартирах, "
     "домах или другой недвижимости."
 )
 
-***REMOVED*** Threshold above which score counts as injection
+# Threshold above which score counts as injection
 _INJECTION_THRESHOLD = 0.5
 
 
@@ -154,14 +154,14 @@ async def guard_node(
     - "soft": sets injection_detected=True, logs, continues to classify
     - "log": logs only, continues to classify
     """
-    guard_mode: str = runtime.context.get("guard_mode", "hard")  ***REMOVED*** type: ignore[assignment]
+    guard_mode: str = runtime.context.get("guard_mode", "hard")  # type: ignore[assignment]
     t0 = time.perf_counter()
     lf = get_client()
 
     messages = state["messages"]
     query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
 
-    ***REMOVED*** --- Regex detection ---
+    # --- Regex detection ---
     _detected, risk_score, pattern = detect_injection(query)
     detected = risk_score >= _INJECTION_THRESHOLD
 

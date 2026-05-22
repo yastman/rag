@@ -1,4 +1,4 @@
-***REMOVED*** telegram_bot/services/apartment_filter_extractor.py
+# telegram_bot/services/apartment_filter_extractor.py
 """Apartment-specific filter extraction from natural language queries (0 LLM calls)."""
 
 from __future__ import annotations
@@ -14,9 +14,9 @@ from telegram_bot.services.apartment_models import ApartmentQueryParseResult, co
 from telegram_bot.services.base_filter_extractor import BaseFilterExtractor
 
 
-***REMOVED*** All canonical complex names plus RU/EN short aliases — sorted longest-first for greedy match
+# All canonical complex names plus RU/EN short aliases — sorted longest-first for greedy match
 _COMPLEX_ALIASES: dict[str, str] = {
-    ***REMOVED*** EN canonical
+    # EN canonical
     "premier fort beach": "Premier Fort Beach",
     "prestige fort beach": "Prestige Fort Beach",
     "panorama fort beach": "Panorama Fort Beach",
@@ -27,7 +27,7 @@ _COMPLEX_ALIASES: dict[str, str] = {
     "green fort suites": "Green Fort Suites",
     "premier fort suites": "Premier Fort Suites",
     "nessebar fort residence": "Nessebar Fort Residence",
-    ***REMOVED*** RU short aliases
+    # RU short aliases
     "премьер форт бич": "Premier Fort Beach",
     "премьер форт": "Premier Fort Beach",
     "в премьере": "Premier Fort Beach",
@@ -85,7 +85,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         )
         return compute_confidence(result)
 
-    ***REMOVED*** --- Rooms ---
+    # --- Rooms ---
 
     def _extract_rooms(self, text: str, consumed: list[tuple[int, int]]) -> int | None:
         """Extract rooms count.
@@ -94,7 +94,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         studio=0/1, 1-bed=2, 2-bed=3, 3-bed=4.
         User slang: "двушка"=2 bedrooms=rooms 3, "трёшка"=3 bedrooms=rooms 4.
         """
-        ***REMOVED*** Slang → rooms (total rooms in Qdrant data)
+        # Slang → rooms (total rooms in Qdrant data)
         _slang: list[tuple[str, int]] = [
             (r"двушка", 3),
             (r"трёшка|трешка", 4),
@@ -106,19 +106,19 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                 consumed.append(m.span())
                 return val
 
-        ***REMOVED*** "N спален/спальни" → rooms = N + 1 (bedrooms + living room)
+        # "N спален/спальни" → rooms = N + 1 (bedrooms + living room)
         m = re.search(r"(\d+)\s*спальн", text)
         if m:
             consumed.append(m.span())
             return int(m.group(1)) + 1
 
-        ***REMOVED*** "N комнат" → rooms = N (direct)
+        # "N комнат" → rooms = N (direct)
         m = re.search(r"(\d+)\s*комнат", text)
         if m:
             consumed.append(m.span())
             return int(m.group(1))
 
-        ***REMOVED*** "двухкомнатная" etc → total rooms (direct)
+        # "двухкомнатная" etc → total rooms (direct)
         _num_map = {"одно": 1, "дву": 2, "трех": 3, "трёх": 3, "четырех": 4, "пяти": 5}
         m = re.search(r"(одно|дву|трех|трёх|четырех|пяти)комнатн", text)
         if m:
@@ -129,13 +129,13 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                     return num
         return None
 
-    ***REMOVED*** --- Price ---
+    # --- Price ---
 
     def _extract_price(
         self, text: str, consumed: list[tuple[int, int]]
     ) -> tuple[float | None, float | None]:
-        ***REMOVED*** Range first: "от 100к до 300к" / "от 100000 до 300000 евро"
-        ***REMOVED*** Guard against area/floor phrases like "от 60 до 120 м²".
+        # Range first: "от 100к до 300к" / "от 100000 до 300000 евро"
+        # Guard against area/floor phrases like "от 60 до 120 м²".
         m = re.search(r"от\s+(\d[\d\s]*к?)\s+до\s+(\d[\d\s]*к?)\s*(евро|€|eur)?", text)
         if m:
             mn_raw = m.group(1)
@@ -151,7 +151,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
         min_p: float | None = None
         max_p: float | None = None
 
-        ***REMOVED*** Max price
+        # Max price
         for pat in [
             r"до\s+(\d[\d\s]*к?)\s*(?:евро|€|eur)?",
             r"дешевле\s+(\d[\d\s]*к?)",
@@ -161,13 +161,13 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
             m2 = re.search(pat, text)
             if m2:
                 val = self._parse_number(m2.group(1))
-                ***REMOVED*** Prices are always >= 1000 EUR; guard against area "до 80 м²" false-matches
+                # Prices are always >= 1000 EUR; guard against area "до 80 м²" false-matches
                 if val and val >= 1000:
                     consumed.append(m2.span())
                     max_p = float(val)
                     break
 
-        ***REMOVED*** Min price
+        # Min price
         for pat in [
             r"от\s+(\d[\d\s]*к?)\s*(?:евро|€|eur)?",
             r"дороже\s+(\d[\d\s]*к?)",
@@ -183,12 +183,12 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
 
         return (min_p, max_p)
 
-    ***REMOVED*** --- Area ---
+    # --- Area ---
 
     def _extract_area(
         self, text: str, consumed: list[tuple[int, int]]
     ) -> tuple[float | None, float | None]:
-        ***REMOVED*** Range: "от 60 до 120 м²"
+        # Range: "от 60 до 120 м²"
         m = re.search(r"от\s+(\d+)\s+до\s+(\d+)\s*(?:м²|м2|кв\.?м?)", text)
         if m:
             consumed.append(m.span())
@@ -209,7 +209,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
 
         return (min_a, max_a)
 
-    ***REMOVED*** --- Floor ---
+    # --- Floor ---
 
     def _extract_floor(
         self, text: str, consumed: list[tuple[int, int]]
@@ -229,7 +229,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
             consumed.append(m3.span())
             return (4, None)
 
-        ***REMOVED*** Exact floor: "3 этаж"
+        # Exact floor: "3 этаж"
         m4 = re.search(r"(\d+)\s*этаж", text)
         if m4:
             consumed.append(m4.span())
@@ -238,7 +238,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
 
         return (None, None)
 
-    ***REMOVED*** --- Complex name ---
+    # --- Complex name ---
 
     def _extract_complex(self, text: str, consumed: list[tuple[int, int]]) -> str | None:
         for alias in _COMPLEX_ALIASES_SORTED:
@@ -248,7 +248,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                 return _COMPLEX_ALIASES[alias]
         return None
 
-    ***REMOVED*** --- View ---
+    # --- View ---
 
     def _extract_view(self, text: str, consumed: list[tuple[int, int]]) -> list[str]:
         view_patterns: list[tuple[str, list[str]]] = [
@@ -265,7 +265,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                 return tags
         return []
 
-    ***REMOVED*** --- City ---
+    # --- City ---
 
     def _extract_city(self, text: str, consumed: list[tuple[int, int]]) -> str | None:
         for alias in APARTMENT_CITY_ALIASES_SORTED:
@@ -275,7 +275,7 @@ class ApartmentFilterExtractor(BaseFilterExtractor):
                 return APARTMENT_CITY_ALIASES[alias]
         return None
 
-    ***REMOVED*** --- Semantic query ---
+    # --- Semantic query ---
 
     def _build_semantic_query(self, query: str, consumed: list[tuple[int, int]]) -> str:
         """Remove filter token spans from original query; return descriptive remainder."""

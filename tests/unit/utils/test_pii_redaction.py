@@ -61,7 +61,7 @@ class TestPIIRedactorPhoneNumbers:
         query = "The code is +3801234 which is too short"
         _redacted, metadata = redactor.redact_query(query)
 
-        ***REMOVED*** Should not match - too short
+        # Should not match - too short
         assert "phone_count" not in metadata or metadata.get("phone_count", 0) == 0
 
 
@@ -168,19 +168,19 @@ class TestPIIRedactorTaxID:
 
     def test_nine_digits_not_redacted_as_tax_id(self, redactor: PIIRedactor):
         """Test that 9-digit numbers are not redacted as tax IDs."""
-        query = "Reference: 123456789"  ***REMOVED*** 9 digits, not 10
+        query = "Reference: 123456789"  # 9 digits, not 10
         _redacted, metadata = redactor.redact_query(query)
 
-        ***REMOVED*** Should not be redacted as tax ID
+        # Should not be redacted as tax ID
         assert "tax_id_count" not in metadata or metadata.get("tax_id_count", 0) == 0
 
     def test_eleven_digits_not_redacted_as_tax_id(self, redactor: PIIRedactor):
         """Test that 11-digit numbers are not redacted as tax IDs."""
-        query = "Number: 12345678901"  ***REMOVED*** 11 digits
+        query = "Number: 12345678901"  # 11 digits
         _redacted, _metadata = redactor.redact_query(query)
 
-        ***REMOVED*** 11 digits should not match the 10-digit tax ID pattern
-        ***REMOVED*** Note: The pattern uses \b word boundaries, so this depends on context
+        # 11 digits should not match the 10-digit tax ID pattern
+        # Note: The pattern uses \b word boundaries, so this depends on context
 
     def test_tax_id_starting_with_zero_also_matches_phone(self, redactor: PIIRedactor):
         r"""Test pattern overlap: 10-digit number starting with 0 matches both patterns.
@@ -192,12 +192,12 @@ class TestPIIRedactorTaxID:
         query = "ID: 0987654321"
         _redacted, metadata = redactor.redact_query(query)
 
-        ***REMOVED*** The number matches both tax_id (10 digits) and phone (0 + 9 digits)
-        ***REMOVED*** Order of processing: phone, email, tax_id, passport
-        ***REMOVED*** So tax_id replaces first, then phone pattern tries but text is already [TAX_ID]
-        ***REMOVED*** Actually: phone is processed FIRST, so it matches 0987654321
+        # The number matches both tax_id (10 digits) and phone (0 + 9 digits)
+        # Order of processing: phone, email, tax_id, passport
+        # So tax_id replaces first, then phone pattern tries but text is already [TAX_ID]
+        # Actually: phone is processed FIRST, so it matches 0987654321
         assert metadata["pii_redacted"] is True
-        ***REMOVED*** Both patterns detected the number (before any replacement)
+        # Both patterns detected the number (before any replacement)
         assert metadata.get("phone_count", 0) == 1 or metadata.get("tax_id_count", 0) == 1
 
 
@@ -245,10 +245,10 @@ class TestPIIRedactorPassport:
 
     def test_latin_letters_not_redacted_as_passport(self, redactor: PIIRedactor):
         """Test that Latin letters are not matched as passport."""
-        query = "Code: AB123456"  ***REMOVED*** Latin letters, not Cyrillic
+        query = "Code: AB123456"  # Latin letters, not Cyrillic
         _redacted, metadata = redactor.redact_query(query)
 
-        ***REMOVED*** Latin letters should not match Cyrillic pattern
+        # Latin letters should not match Cyrillic pattern
         assert "passport_count" not in metadata or metadata.get("passport_count", 0) == 0
 
 
@@ -332,7 +332,7 @@ class TestPIIRedactorMixedContent:
         assert metadata["phone_count"] == 1
         assert metadata["email_count"] == 1
         assert metadata["tax_id_count"] == 1
-        assert redacted.count("[") == 4  ***REMOVED*** Four redaction placeholders
+        assert redacted.count("[") == 4  # Four redaction placeholders
 
     def test_mixed_pii_and_regular_text(self, redactor: PIIRedactor):
         """Test that regular text around PII is preserved."""
@@ -349,7 +349,7 @@ class TestPIIRedactorMixedContent:
         assert "Email: [EMAIL]" in redacted
         assert "Phone: [PHONE]" in redacted
         assert "ID: [TAX_ID]" in redacted
-        assert "\n" in redacted  ***REMOVED*** Newlines preserved
+        assert "\n" in redacted  # Newlines preserved
 
 
 class TestPIIRedactorEdgeCases:
@@ -394,7 +394,7 @@ class TestPIIRedactorEdgeCases:
         redacted, _metadata = redactor.redact_query(query)
 
         assert "+380501234567" not in redacted
-        assert "📞" in redacted  ***REMOVED*** Emoji preserved
+        assert "📞" in redacted  # Emoji preserved
 
     def test_repeated_same_pii(self, redactor: PIIRedactor):
         """Test same PII value repeated."""
@@ -409,8 +409,8 @@ class TestPIIRedactorEdgeCases:
         query = "Visit http://example.com/user@test for info"
         _redacted, _metadata = redactor.redact_query(query)
 
-        ***REMOVED*** The email pattern might match user@test - this is expected behavior
-        ***REMOVED*** The test documents the current behavior
+        # The email pattern might match user@test - this is expected behavior
+        # The test documents the current behavior
 
     def test_very_long_query_with_pii(self, redactor: PIIRedactor):
         """Test performance with longer text."""
@@ -419,7 +419,7 @@ class TestPIIRedactorEdgeCases:
 
         assert "+380501234567" not in redacted
         assert "[PHONE]" in redacted
-        assert len(redacted) < len(query)  ***REMOVED*** Shorter due to redaction
+        assert len(redacted) < len(query)  # Shorter due to redaction
 
     def test_metadata_counts_accurate(self, redactor: PIIRedactor):
         """Verify metadata counts are accurate."""
@@ -439,8 +439,8 @@ class TestPIIRedactorPatterns:
 
     def test_phone_pattern_exact_length(self, redactor: PIIRedactor):
         """Test that phone patterns match exact lengths."""
-        ***REMOVED*** +380 followed by exactly 9 digits
-        valid = "+380123456789"  ***REMOVED*** +380 + 9 digits = valid
+        # +380 followed by exactly 9 digits
+        valid = "+380123456789"  # +380 + 9 digits = valid
         query = f"Number: {valid}"
         redacted, metadata = redactor.redact_query(query)
 
@@ -470,11 +470,11 @@ class TestPIIRedactorPatterns:
 
     def test_passport_cyrillic_uppercase_only(self, redactor: PIIRedactor):
         """Test that passport pattern requires uppercase Cyrillic."""
-        ***REMOVED*** Lowercase Cyrillic should not match (pattern uses uppercase)
-        query = "Document: аб123456"  ***REMOVED*** lowercase
+        # Lowercase Cyrillic should not match (pattern uses uppercase)
+        query = "Document: аб123456"  # lowercase
         _redacted, metadata = redactor.redact_query(query)
 
-        ***REMOVED*** Lowercase should not match the uppercase pattern
+        # Lowercase should not match the uppercase pattern
         assert "passport_count" not in metadata or metadata.get("passport_count", 0) == 0
 
 
@@ -515,7 +515,7 @@ class TestPIIRedactorInstance:
         """Test that patterns are pre-compiled regex objects."""
         redactor = PIIRedactor()
 
-        ***REMOVED*** All patterns should be compiled regex objects
+        # All patterns should be compiled regex objects
         import re
 
         for pattern_name, pattern in redactor.patterns.items():

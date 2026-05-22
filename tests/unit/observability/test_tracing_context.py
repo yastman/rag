@@ -12,8 +12,8 @@ class TestMakeSessionId:
         result = make_session_id("chat", 12345)
         parts = result.split("-")
         assert parts[0] == "chat"
-        assert len(parts[1]) == 8  ***REMOVED*** sha256[:8]
-        assert len(parts[2]) == 8  ***REMOVED*** YYYYMMDD
+        assert len(parts[1]) == 8  # sha256[:8]
+        assert len(parts[2]) == 8  # YYYYMMDD
 
     def test_deterministic_hash(self):
         a = make_session_id("chat", 42)
@@ -34,7 +34,7 @@ class TestClassifyAction:
     def test_callback_with_prefix(self):
         event = MagicMock(spec=["data"])
         event.__class__ = type("CallbackQuery", (), {})
-        ***REMOVED*** Use real CallbackQuery-like object
+        # Use real CallbackQuery-like object
         from aiogram.types import CallbackQuery
 
         cb = MagicMock(spec=CallbackQuery)

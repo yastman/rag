@@ -1,16 +1,16 @@
-***REMOVED*** Conversational AI Automation Platform - Resume Case Study
+# Conversational AI Automation Platform - Resume Case Study
 
 This document is a resume/portfolio source file. It summarizes the project as a
 case study, not as developer setup documentation.
 
-***REMOVED******REMOVED*** One-Line Positioning
+## One-Line Positioning
 
 AI-native conversational automation platform combining Telegram, RAG search,
 domain catalog matching, CRM/workflow automation, voice input, observability,
 and Dockerized AI infrastructure. Built with CI verification, automated quality checks, and AI-assisted
 development practices.
 
-***REMOVED******REMOVED*** Resume Summary - English
+## Resume Summary - English
 
 Built a production-like conversational AI automation platform with Telegram bot,
 RAG search, natural-language domain catalog search, Kommo CRM workflows, voice
@@ -25,7 +25,7 @@ implementation units, automated quality gates, and CI-driven verification. AI
 tooling is used as a structured engineering accelerator within a disciplined
 development process.
 
-***REMOVED******REMOVED*** Resume Summary - Russian
+## Resume Summary - Russian
 
 Разработал AI-native платформу conversational automation: Telegram-бот,
 RAG-поиск, поиск по доменному каталогу на естественном языке, интеграция с
@@ -39,7 +39,7 @@ self-hosted BGE-M3 embeddings, Qdrant hybrid retrieval с dense/sparse/ColBERT
 AI-инструменты используются как структурированный инженерный акселератор
 в рамках дисциплинированного процесса разработки.
 
-***REMOVED******REMOVED*** Best Resume Bullets
+## Best Resume Bullets
 
 - Built an AI automation platform for domain-specific business workflows with
   Telegram, voice, CRM, RAG, catalog search, and mini-app surfaces.
@@ -63,7 +63,7 @@ AI-инструменты используются как структуриро
   into focused implementation units with explicit acceptance criteria and
   traceable commits.
 
-***REMOVED******REMOVED*** Engineering Practices
+## Engineering Practices
 
 This project is built with a disciplined development workflow that treats
 automated quality checks as first-class gates:
@@ -83,9 +83,9 @@ This workflow is a portfolio artifact in itself: it demonstrates how to ship
 production-quality AI infrastructure with repeatable quality gates rather than
 ad-hoc scripting.
 
-***REMOVED******REMOVED*** Feature Cards
+## Feature Cards
 
-***REMOVED******REMOVED******REMOVED*** 1. LangGraph RAG Pipeline
+### 1. LangGraph RAG Pipeline
 
 **Problem:** Business users ask repeated questions about products, policies, documents,
 processes, and company workflows. Static FAQ answers are not enough.
@@ -98,7 +98,7 @@ generation, cache store, response, and optional summarization.
 wrapper. It can route easy, off-topic, knowledge, catalog-search, and CRM-related
 queries through different paths.
 
-***REMOVED******REMOVED******REMOVED*** 2. Self-Hosted Qdrant + BGE-M3 Retrieval
+### 2. Self-Hosted Qdrant + BGE-M3 Retrieval
 
 **Problem:** RAG quality, privacy, and cost depend heavily on the retrieval
 stack. API-only embeddings are expensive and less controllable.
@@ -113,7 +113,7 @@ vectors: `dense` 1024-dim cosine vectors, `bm42` sparse vectors with IDF, and
 late-interaction reranking. This reduces vendor dependency and makes embedding
 cost predictable.
 
-***REMOVED******REMOVED******REMOVED*** 3. Qdrant Schema And Ops
+### 3. Qdrant Schema And Ops
 
 **Problem:** Vector search can fail silently when schemas drift or collections
 miss required vectors.
@@ -125,7 +125,7 @@ Ingestion uses deterministic point IDs and replace semantics by `file_id`.
 **Impact:** Retrieval infrastructure is operated like a real subsystem, with
 schema validation, guardrails, and blue/green-ready collection aliases.
 
-***REMOVED******REMOVED******REMOVED*** 4. Tiered Redis Cache
+### 4. Tiered Redis Cache
 
 **Problem:** RAG systems are expensive and slow when every request recomputes
 embeddings, retrieval, reranking, and LLM output.
@@ -138,7 +138,7 @@ lists for short-term state.
 **Impact:** The system can skip unnecessary BGE-M3, Qdrant, rerank, and LLM
 work. This shows cost-aware AI engineering, not just prompt usage.
 
-***REMOVED******REMOVED******REMOVED*** 5. Semantic Dialogue Memory
+### 5. Semantic Dialogue Memory
 
 **Problem:** AI assistants lose context when each message is treated as a
 stateless request.
@@ -151,7 +151,7 @@ and summarize behavior.
 **Impact:** Managers and AI workflows can recover previous client context,
 summarize sessions, and support better handoff.
 
-***REMOVED******REMOVED******REMOVED*** 6. Kommo CRM Automation
+### 6. Kommo CRM Automation
 
 **Problem:** Leads from Telegram conversations can be lost if they are not
 converted into CRM records and follow-up tasks.
@@ -164,7 +164,7 @@ contacts. Write operations require HITL confirmation for lead/contact mutations.
 **Impact:** The bot connects AI conversations to real sales workflow: lead
 capture, qualification, follow-up, and manager handoff.
 
-***REMOVED******REMOVED******REMOVED*** 7. Natural-Language Catalog Search
+### 7. Natural-Language Catalog Search
 
 **Problem:** Users describe what they want in natural language or voice instead
 of filling structured filters.
@@ -180,7 +180,7 @@ support catalog navigation, pagination, cards, favorites, and viewing flow.
 structured filters and avoids unnecessary LLM work when deterministic parsing is
 enough.
 
-***REMOVED******REMOVED******REMOVED*** 8. Voice Input And Voice Agent
+### 8. Voice Input And Voice Agent
 
 **Problem:** Business users may prefer voice messages or phone-like flows instead
 of text.
@@ -194,7 +194,7 @@ inbound call-routing flow.
 **Impact:** One AI workflow works across text, Telegram voice, and voice-agent
 channels.
 
-***REMOVED******REMOVED******REMOVED*** 9. Unified Document Ingestion
+### 9. Unified Document Ingestion
 
 **Problem:** RAG quality depends on reliable document ingestion, not only on the
 chatbot layer.
@@ -207,7 +207,7 @@ vectors in one model pass.
 
 **Impact:** Knowledge-base updates are deterministic, resumable, and observable.
 
-***REMOVED******REMOVED******REMOVED*** 10. Langfuse Observability And Prompt Management
+### 10. Langfuse Observability And Prompt Management
 
 **Problem:** AI workflows are hard to debug without traces, scores, and prompt
 version visibility.
@@ -223,7 +223,7 @@ prompt labels, cached prompt retrieval, fallback prompts, `prompt_source`, and
 manual guessing. Prompt behavior is version-aware and fallback-safe, with
 graceful no-op behavior when Langfuse is not configured or unreachable.
 
-***REMOVED******REMOVED******REMOVED*** 11. Gold Sets, Evaluation, And Experiments
+### 11. Gold Sets, Evaluation, And Experiments
 
 **Problem:** RAG changes need regression checks against expected answers and
 routing behavior.
@@ -239,7 +239,7 @@ produce larger corpus-derived datasets.
 **Impact:** Retrieval, generation, routing, and prompt changes can be compared
 against gold data and Langfuse experiment/baseline metrics.
 
-***REMOVED******REMOVED******REMOVED*** 12. Dockerized Production-Like Runtime
+### 12. Dockerized Production-Like Runtime
 
 **Problem:** AI projects often work only as local scripts and are hard to run as
 a system.
@@ -256,7 +256,7 @@ healthchecks, profiles, resource limits, pinned images, local/VPS workflows, and
 monitoring. The Loki/Alertmanager stack is best described as local/dev
 monitoring unless production deployment evidence is added.
 
-***REMOVED******REMOVED*** Technical Highlights
+## Technical Highlights
 
 - **LLM orchestration:** LangGraph, LiteLLM, Langfuse OpenAI integration.
 - **Retrieval:** Qdrant Query API, RRF fusion, dense/sparse vectors, ColBERT
@@ -279,7 +279,7 @@ monitoring unless production deployment evidence is added.
   task decomposition, automated quality checks, AI-assisted development workflow,
   and traceable commits.
 
-***REMOVED******REMOVED*** Interview Talking Points
+## Interview Talking Points
 
 1. **Why BGE-M3?**
    It gives dense, sparse, and ColBERT vectors from one self-hosted model. This
@@ -306,7 +306,7 @@ monitoring unless production deployment evidence is added.
    It has ingestion, retrieval infrastructure, CRM automation, voice channel,
    memory, evaluation, observability, and Dockerized runtime services.
 
-***REMOVED******REMOVED*** Data and Asset Boundaries
+## Data and Asset Boundaries
 
 This repository is intended for public portfolio review. All committed data,
 photos, and fixtures are either:
@@ -318,7 +318,7 @@ photos, and fixtures are either:
 Do not commit real CRM exports, client contact lists, phone numbers, email
 addresses, private customer/domain records, personal recordings, or unlicensed imagery.
 
-***REMOVED******REMOVED*** Honest Limitations / Next Improvements
+## Honest Limitations / Next Improvements
 
 - Fix and revalidate local Langfuse ML profile startup for the pinned ClickHouse
   image.

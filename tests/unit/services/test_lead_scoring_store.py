@@ -1,4 +1,4 @@
-"""Tests for LeadScoringStore (***REMOVED***384)."""
+"""Tests for LeadScoringStore (#384)."""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ def fake_pool():
     pool = AsyncMock()
     pool.execute = AsyncMock()
 
-    ***REMOVED*** Return rows that look like asyncpg Records
+    # Return rows that look like asyncpg Records
     def _make_row(**kwargs):
         row = MagicMock()
         row.__getitem__ = lambda _self, k: kwargs[k]
         row.keys = lambda: kwargs.keys()
-        ***REMOVED*** Allow dict(row) to work
+        # Allow dict(row) to work
         row.__iter__ = lambda _self: iter(kwargs.keys())
-        ***REMOVED*** Make dict() constructor work via mapping protocol
+        # Make dict() constructor work via mapping protocol
         items = list(kwargs.items())
         row.items = lambda: items
         row.values = lambda: list(kwargs.values())

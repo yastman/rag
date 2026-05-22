@@ -68,7 +68,7 @@ def route_grade(
 ) -> Literal["rerank", "rewrite", "generate"]:
     """Route after grading: skip_rerank → generate, relevant → rerank, not relevant + retries → rewrite/generate.
 
-    Also enforces LLM call limit (***REMOVED***374): when llm_call_count >= max_llm_calls,
+    Also enforces LLM call limit (#374): when llm_call_count >= max_llm_calls,
     prevents further rewrites and routes to generate instead.
     """
     if state.get("documents_relevant", False):
@@ -78,7 +78,7 @@ def route_grade(
             return "generate"
         return "rerank"
 
-    ***REMOVED*** LLM call limit check (***REMOVED***374) — prevent rewrite loops
+    # LLM call limit check (#374) — prevent rewrite loops
     max_llm = state.get("max_llm_calls", 5)
     llm_count = state.get("llm_call_count", 0)
     if llm_count >= max_llm:

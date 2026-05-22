@@ -50,12 +50,12 @@ class TestQdrantInfrastructure:
         """BGE-M3 collection has correct vector config."""
         info = qdrant_client.get_collection("gdrive_documents_bge")
 
-        ***REMOVED*** Check dense vector config
+        # Check dense vector config
         dense_config = info.config.params.vectors.get("dense")
         assert dense_config is not None
-        assert dense_config.size == 1024  ***REMOVED*** bge-m3
+        assert dense_config.size == 1024  # bge-m3
 
-        ***REMOVED*** Check sparse vector exists (may be named 'sparse' or 'bm42')
+        # Check sparse vector exists (may be named 'sparse' or 'bm42')
         sparse_config = info.config.params.sparse_vectors
         assert sparse_config is not None
         assert len(sparse_config) > 0
@@ -85,7 +85,7 @@ class TestQdrantInfrastructure:
         """Sparse search executes without error."""
         from qdrant_client.models import SparseVector
 
-        ***REMOVED*** Get actual sparse vector name from collection config
+        # Get actual sparse vector name from collection config
         info = qdrant_client.get_collection("gdrive_documents_bge")
         sparse_names = list(info.config.params.sparse_vectors.keys())
         sparse_name = sparse_names[0] if sparse_names else "bm42"
@@ -100,7 +100,7 @@ class TestQdrantInfrastructure:
             with_payload=True,
         )
 
-        ***REMOVED*** Sparse search with random indices may return 0 results
+        # Sparse search with random indices may return 0 results
         assert isinstance(results.points, list)
 
 

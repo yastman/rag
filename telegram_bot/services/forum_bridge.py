@@ -10,7 +10,7 @@ from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Telegram API: topic name 1-128 characters.
+# Telegram API: topic name 1-128 characters.
 _MAX_TOPIC_NAME_LEN = 128
 
 
@@ -45,23 +45,23 @@ class ForumBridge:
         lead_url: str | None,
     ) -> None:
         lines: list[str] = ["--- Новый клиент ---"]
-        ***REMOVED*** Identity
+        # Identity
         user_line = client_name
         if username:
             user_line += f" (@{username})"
         lines.append(user_line)
         lines.append(f"Язык: {locale}")
-        ***REMOVED*** Qualification
+        # Qualification
         goal_map = {"buy": "Покупка", "rent": "Аренда", "consult": "Консультация"}
         goal = qualification.get("goal", "")
         lines.append(f"Цель: {goal_map.get(goal, goal)}")
         if budget := qualification.get("budget"):
             lines.append(f"Бюджет: {budget}")
-        ***REMOVED*** AI summary
+        # AI summary
         if summary:
             lines.append("")
             lines.append(f"AI-саммари:\n{summary}")
-        ***REMOVED*** Kommo link
+        # Kommo link
         if lead_url:
             lines.append("")
             lines.append(f"Kommo: {lead_url}")
@@ -105,7 +105,7 @@ class ForumBridge:
             message_thread_id=topic_id,
         )
         if sent.message_thread_id != topic_id:
-            ***REMOVED*** Message landed in General — topic was deleted. Clean up.
+            # Message landed in General — topic was deleted. Clean up.
             with contextlib.suppress(Exception):
                 await self._bot.delete_message(chat_id=self._group_id, message_id=sent.message_id)
             return False

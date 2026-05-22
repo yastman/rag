@@ -1,4 +1,4 @@
-"""Contract test for Mini App frontend test-typecheck gate (***REMOVED***1616).
+"""Contract test for Mini App frontend test-typecheck gate (#1616).
 
 Asserts four structural invariants that close the gap where Vitest tests
 under ``mini_app/frontend/src/__tests__/`` are excluded from
@@ -22,7 +22,7 @@ under ``mini_app/frontend/src/__tests__/`` are excluded from
 The check uses static parsing (regex / JSON load) — no Node toolchain is
 invoked, so it runs identically on developer machines and in CI.
 
-Refs ***REMOVED***1616.
+Refs #1616.
 """
 
 from __future__ import annotations
@@ -69,12 +69,12 @@ def _strip_jsonc(text: str) -> str:
             i += 1
             continue
         if ch == "/" and i + 1 < n and text[i + 1] == "/":
-            ***REMOVED*** Line comment: skip to EOL.
+            # Line comment: skip to EOL.
             while i < n and text[i] != "\n":
                 i += 1
             continue
         if ch == "/" and i + 1 < n and text[i + 1] == "*":
-            ***REMOVED*** Block comment: skip to next ``*/``.
+            # Block comment: skip to next ``*/``.
             i += 2
             while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
                 i += 1
@@ -83,7 +83,7 @@ def _strip_jsonc(text: str) -> str:
         out.append(ch)
         i += 1
     cleaned = "".join(out)
-    ***REMOVED*** Drop trailing commas before closing braces/brackets.
+    # Drop trailing commas before closing braces/brackets.
     cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)
     return cleaned
 
@@ -98,7 +98,7 @@ def test_tsconfig_test_json_exists_and_parses() -> None:
     raw = TSCONFIG_TEST.read_text()
     try:
         json.loads(_strip_jsonc(raw))
-    except json.JSONDecodeError as exc:  ***REMOVED*** pragma: no cover - assertion path
+    except json.JSONDecodeError as exc:  # pragma: no cover - assertion path
         pytest.fail(
             f"{TSCONFIG_TEST.relative_to(REPO_ROOT)} is not valid JSON(C): {exc}"
         )
@@ -126,7 +126,7 @@ def test_package_json_has_typecheck_test_script() -> None:
     scripts = pkg.get("scripts", {})
     assert "typecheck:test" in scripts, (
         "mini_app/frontend/package.json must declare a `typecheck:test` script "
-        "that runs `tsc --noEmit -p tsconfig.test.json` (***REMOVED***1616)."
+        "that runs `tsc --noEmit -p tsconfig.test.json` (#1616)."
     )
     cmd = scripts["typecheck:test"]
     assert "tsc" in cmd and "--noEmit" in cmd, (

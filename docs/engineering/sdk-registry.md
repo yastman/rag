@@ -2,7 +2,7 @@
 paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 ---
 
-***REMOVED*** SDK Registry — rag-fresh
+# SDK Registry — rag-fresh
 
 > SDK and framework registry for scoped product code in this project.
 > Read this file together with `AGENTS.md` and the nearest `AGENTS.override.md` before writing code.
@@ -18,7 +18,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 > For `scripts/`, `tests/`, CI/ops, and one-off local utilities, treat it as a strong hint
 > but verify actual code and current workflows separately.
 
-***REMOVED******REMOVED*** aiogram (core)
+## aiogram (core)
 - **triggers:** bot, handler, router, middleware, filter, dispatcher, FSM, message, callback, command
 - **context7_id:** /aiogram/aiogram
 - **как_у_нас:**
@@ -33,7 +33,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ писать кастомный message routing — использовать aiogram Router + F filters
   - FSMContext только для простых flow (phone collection). Сложные → aiogram-dialog
 
-***REMOVED******REMOVED*** aiogram-dialog
+## aiogram-dialog
 - **triggers:** меню, кнопки, диалог, window, widget, keyboard, навигация, select, multiselect, states, SG
 - **context7_id:** /aiogram/aiogram-dialog
 - **как_у_нас:**
@@ -53,7 +53,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - States определяются ТОЛЬКО в states.py (централизованно)
   - setup_dialogs(dp) вызывается ПОСЛЕДНИМ после всех include_router
 
-***REMOVED******REMOVED*** langgraph
+## langgraph
 - **triggers:** graph, pipeline, node, edge, state, checkpoint, memory, agent, tool, RAG pipeline, voice
 - **context7_id:** /langchain-ai/langgraph
 - **как_у_нас:**
@@ -80,7 +80,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `langchain.agents.create_agent` imports `langgraph.prebuilt`; keep `langchain`, `langgraph`, and `langgraph-prebuilt` compatible as one bundle and verify with `uv --directory telegram_bot run --frozen python -c 'from langchain.agents import create_agent'`.
   - Параллельный fan-out внутри графа = `langgraph.types.Send` (per [ADR-0009](../adr/0009-langgraph-send-fanout-scoping.md)). НЕ заменять `Send` на `asyncio.gather` в graph node — теряется checkpointer context и parent Langfuse span. `asyncio.gather` остаётся правильным выбором вне графа.
 
-***REMOVED******REMOVED*** qdrant-client
+## qdrant-client
 - **triggers:** vector, search, qdrant, collection, embedding, hybrid, RRF, ColBERT, prefetch, filter, points
 - **context7_id:** /qdrant/qdrant-client
 - **как_у_нас:**
@@ -102,7 +102,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Apartments: payload filters без metadata. prefix
   - QDRANT_TIMEOUT=30 для тяжёлых запросов
 
-***REMOVED******REMOVED*** instructor
+## instructor
 - **triggers:** structured extraction, LLM parsing, response_model, Pydantic extraction, фильтры квартир
 - **context7_id:** /instructor-ai/instructor
 - **как_у_нас:**
@@ -119,7 +119,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Streaming primitives `client.create_partial` / `client.create_iterable` сейчас **отключены** проектным решением — см. [ADR-0008](../adr/0008-instructor-create-partial-deferred.md). Не вводить без обновления ADR.
   - response_model = Pydantic v2 модель с `Field(description=)` для каждого поля.
 
-***REMOVED******REMOVED*** redisvl
+## redisvl
 - **triggers:** cache, semantic cache, embedding cache, кеш, кэш, redis vector, similarity
 - **context7_id:** /redis/redis-vl-python
 - **как_у_нас:**
@@ -140,7 +140,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - distance_threshold на RRF scale (~0.005–0.12), НЕ cosine [0-1]
   - BgeM3CacheVectorizer остается кастомным намеренно: вызывает тот же local BGE-M3 pipeline API, чтобы сохранить внутренние threshold/dimensions
 
-***REMOVED******REMOVED*** redis-py (asyncio)
+## redis-py (asyncio)
 - **triggers:** redis, redis.asyncio, pubsub, TTL, event stream, handoff state, deep-link state
 - **context7_id:** /redis/redis-py
 - **как_у_нас:**
@@ -161,7 +161,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ считать, что RedisVL заменяет redis-py exact-key JSON кеши
   - Reuse or close long-lived clients явно; не плодить новые соединения без причины
 
-***REMOVED******REMOVED*** langfuse
+## langfuse
 - **triggers:** observability, tracing, trace, span, score, metrics, monitoring, langfuse, observe
 - **context7_id:** /langfuse/langfuse-python
 - **как_у_нас:**
@@ -183,7 +183,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - capture_input/output=False на тяжёлых нодах (payload bloat prevention)
   - Для полной локальной диагностики в Langfuse v3 лучше `langfuse api traces get <id> --fields core,io,scores,observations,metrics --json`; `traces list` иногда хватает, а `observations list` может быть 404
 
-***REMOVED******REMOVED*** langmem
+## langmem
 - **triggers:** summarization, conversation memory, сжатие, summary, compress messages
 - **context7_id:** /langchain-ai/langmem
 - **как_у_нас:**
@@ -196,7 +196,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Только с checkpointer (без checkpointer — node не добавляется в граф)
   - Lazy import внутри build_graph()
 
-***REMOVED******REMOVED*** apscheduler
+## apscheduler
 - **triggers:** scheduler, cron, interval, job, periodic, nurturing, расписание
 - **context7_id:** /agronholm/apscheduler
 - **как_у_нас:**
@@ -208,7 +208,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - v3 API (НЕ v4) — AsyncIOScheduler, не AsyncScheduler
   - shutdown(wait=False) при остановке
 
-***REMOVED******REMOVED*** fluentogram
+## fluentogram
 - **triggers:** i18n, locale, translation, перевод, .ftl, fluent, язык, language
 - **context7_id:** /Arustinal/fluentogram
 - **как_у_нас:**
@@ -223,7 +223,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ хардкодить текст — всё через .ftl ключи
   - Locale resolving: DB → detect_locale(language_code) → "ru" (default)
 
-***REMOVED******REMOVED*** docling
+## docling
 - **triggers:** docling, document converter, parsing, chunking, docx, xlsx, csv, docling_native, docling_http
 - **context7_id:** /docling-project/docling
 - **как_у_нас:**
@@ -240,7 +240,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - `docling` — optional ingest extra, не предполагать его наличие в base runtime
   - Preserve chunk contract between `DoclingClient` and `NativeDoclingAdapter`
 
-***REMOVED******REMOVED*** cocoindex
+## cocoindex
 - **triggers:** cocoindex, ingestion flow, indexing pipeline, flow builder, target connector, embedding pipeline
 - **context7_id:** /cocoindex-io/cocoindex
 - **как_у_нас:**
@@ -254,7 +254,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ использовать env vars для init — explicit Settings()
   - Custom target: @target_connector, sync mutate() (без asyncio.run)
 
-***REMOVED******REMOVED*** livekit-agents
+## livekit-agents
 - **triggers:** voice, call, SIP, LiveKit, agent, TTS, STT, ElevenLabs
 - **context7_id:** /livekit/agents
 - **как_у_нас:**
@@ -265,7 +265,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **gotchas:**
   - voice — optional extra (uv sync --extra voice)
 
-***REMOVED******REMOVED*** asyncpg
+## asyncpg
 - **triggers:** postgres, database, SQL, lead scoring, DB, таблица, миграция
 - **context7_id:** /MagicStack/asyncpg
 - **как_у_нас:**
@@ -277,7 +277,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **gotchas:**
   - НЕ писать raw SQL где можно — но ORM не используем, asyncpg напрямую
 
-***REMOVED******REMOVED*** fastapi
+## fastapi
 - **triggers:** fastapi, endpoint, route, lifespan, middleware, healthcheck, uvicorn, response_model, API
 - **context7_id:** /fastapi/fastapi
 - **как_у_нас:**
@@ -295,7 +295,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Middleware/CORS добавлять только там, где это часть surface contract, не копировать без причины
   - Preserve structured error/health responses; не заменять их ad-hoc debug поведением
 
-***REMOVED******REMOVED*** httpx
+## httpx
 - **triggers:** httpx, http client, external api, retry, timeout, transport, kommo, docling-serve, vectorizer service
 - **context7_id:** /encode/httpx
 - **как_у_нас:**
@@ -311,7 +311,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Для Kommo canonical path = current first-party `KommoClient`, не сторонний SDK
   - Reuse or close long-lived clients explicitly; не плодить client-per-request без причины
 
-***REMOVED******REMOVED*** tma.js
+## tma.js
 - **triggers:** telegram mini app, tma, webapp, initData, themeParams, viewport, swipe behavior
 - **context7_id:** /telegram-mini-apps/tma.js
 - **как_у_нас:**
@@ -329,7 +329,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Dev/browser fallback path и Telegram runtime path должны оставаться разделенными
   - Mini App routing использует `HashRouter`; не переводить на browser history без отдельного Telegram deployment решения
 
-***REMOVED******REMOVED*** openai (Python SDK)
+## openai (Python SDK)
 - **triggers:** LLM, генерация, completion, chat, AsyncOpenAI, OpenAI, модель, generate, structured output
 - **context7_id:** /openai/openai-python
 - **как_у_нас:**
@@ -348,7 +348,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ хардкодить runtime model name — брать из config/env (`LLM_MODEL`)
   - `LLM_BASE_URL` обязателен для unified routing там, где path идет через LiteLLM
 
-***REMOVED******REMOVED*** groq
+## groq
 - **triggers:** groq, llama3, groq api, fast contextualization, groq contextualizer
 - **context7_id:** /groq/groq-python
 - **как_у_нас:**
@@ -361,8 +361,8 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Прямой Groq API path обходит LiteLLM/Langfuse main-runtime conventions
   - Keep model choice and retry policy local to contextualization path
 
-***REMOVED******REMOVED*** voyageai
-- **status:** **OPTIONAL EXTRA** (***REMOVED***1773). Not used by the default bot/retrieval runtime (BGE-M3 + Qdrant). Install via `uv sync --extra voyage`.
+## voyageai
+- **status:** **OPTIONAL EXTRA** (#1773). Not used by the default bot/retrieval runtime (BGE-M3 + Qdrant). Install via `uv sync --extra voyage`.
 - **triggers:** rerank, embedding, voyage, ColBERT, contextualized embedding
 - **context7_id:** /voyage-ai/voyageai-python
 - **install:** `uv sync --extra voyage`
@@ -374,7 +374,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **паттерны:**
   - `voyageai.Client()` для sync, lazy import (тяжёлые deps: pandas, scipy)
   - Rerank: `client.rerank(query, documents, model="rerank-2")`
-  - Lazy import ОБЯЗАТЕЛЬНО (***REMOVED***1773): `import voyageai` / `from telegram_bot.services import VoyageService` only inside the function/method that needs it.
+  - Lazy import ОБЯЗАТЕЛЬНО (#1773): `import voyageai` / `from telegram_bot.services import VoyageService` only inside the function/method that needs it.
 - **gotchas:**
   - Voyage is an optional extra (`uv sync --extra voyage`); not installed by default.
   - `voyageai` is lazy-loaded inside services; default imports do not require it.
@@ -383,7 +383,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ импортировать на top-level в модулях бота (замедляет старт + ломает Python 3.14 base test collection из-за Pydantic V1 моделей)
   - Voyage-зависимые тесты помечены `pytest.importorskip("voyageai") + @pytest.mark.requires_extras` и пропускаются в core tier.
 
-***REMOVED******REMOVED*** anthropic
+## anthropic
 - **triggers:** Claude, Anthropic, contextualization, claude judge
 - **context7_id:** /anthropics/anthropic-sdk-python
 - **как_у_нас:**
@@ -398,10 +398,10 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 
 ---
 
-***REMOVED******REMOVED*** Шаблон для нового SDK
+## Шаблон для нового SDK
 
 ```markdown
-***REMOVED******REMOVED*** {sdk_name}
+## {sdk_name}
 - **triggers:** keyword1, keyword2, keyword3
 - **context7_id:** /org/project
 - **как_у_нас:**

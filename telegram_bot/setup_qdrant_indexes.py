@@ -1,11 +1,11 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Setup Qdrant payload indexes for fast filtering."""
 
 import sys
 from pathlib import Path
 
 
-***REMOVED*** Add parent directory to path
+# Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from qdrant_client import QdrantClient, models
@@ -17,7 +17,7 @@ def setup_indexes():
     """Create payload indexes for apartment metadata fields."""
     config = BotConfig()
 
-    ***REMOVED*** Initialize Qdrant client
+    # Initialize Qdrant client
     if config.qdrant_api_key:
         client = QdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
     else:
@@ -28,7 +28,7 @@ def setup_indexes():
     print(f"Setting up payload indexes for collection: {collection_name}")
     print("=" * 80)
 
-    ***REMOVED*** Define indexes to create
+    # Define indexes to create
     indexes = [
         {
             "field_name": "metadata.source_type",
@@ -105,7 +105,7 @@ def setup_indexes():
         },
     ]
 
-    ***REMOVED*** Create each index
+    # Create each index
     success_count = 0
     for idx in indexes:
         field_name = idx["field_name"]

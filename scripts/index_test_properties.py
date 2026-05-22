@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Index test properties into Qdrant for E2E testing."""
 
 import asyncio
@@ -16,7 +16,7 @@ from qdrant_client.models import (
 )
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from telegram_bot.services import VoyageService
@@ -32,7 +32,7 @@ COLLECTION_NAME = "contextual_bulgaria_test"
 
 async def main():
     """Index test properties."""
-    ***REMOVED*** Load properties
+    # Load properties
     data_path = Path("data/test_properties.json")
     if not data_path.exists():
         print("Error: data/test_properties.json not found.")
@@ -45,22 +45,22 @@ async def main():
     properties = data["properties"]
     print(f"Loaded {len(properties)} properties")
 
-    ***REMOVED*** Initialize Voyage for embeddings
+    # Initialize Voyage for embeddings
     voyage = VoyageService(
         api_key=VOYAGE_API_KEY,
         model_docs="voyage-4-large",
     )
 
-    ***REMOVED*** Generate embeddings for descriptions
+    # Generate embeddings for descriptions
     descriptions = [p["description"] for p in properties]
     print("Generating embeddings...")
     embeddings = await voyage.embed_documents(descriptions)
     print(f"Generated {len(embeddings)} embeddings (dim={len(embeddings[0])})")
 
-    ***REMOVED*** Initialize Qdrant
+    # Initialize Qdrant
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
 
-    ***REMOVED*** Recreate collection
+    # Recreate collection
     collections = [c.name for c in client.get_collections().collections]
     if COLLECTION_NAME in collections:
         client.delete_collection(COLLECTION_NAME)
@@ -72,7 +72,7 @@ async def main():
     )
     print(f"Created collection: {COLLECTION_NAME}")
 
-    ***REMOVED*** Index points
+    # Index points
     points = []
     for i, (prop, embedding) in enumerate(zip(properties, embeddings, strict=True)):
         point = PointStruct(
@@ -99,18 +99,18 @@ async def main():
         )
         points.append(point)
 
-    ***REMOVED*** Batch upsert
+    # Batch upsert
     batch_size = 50
     for i in range(0, len(points), batch_size):
         batch = points[i : i + batch_size]
         client.upsert(collection_name=COLLECTION_NAME, points=batch)
         print(f"Indexed {min(i + batch_size, len(points))}/{len(points)}")
 
-    ***REMOVED*** Verify
+    # Verify
     info = client.get_collection(COLLECTION_NAME)
     print(f"\nCollection '{COLLECTION_NAME}': {info.points_count} points indexed")
 
-    ***REMOVED*** Test search
+    # Test search
     test_query = "студия в Солнечный берег до 50000"
     test_embedding = await voyage.embed_query(test_query)
     results = client.search(

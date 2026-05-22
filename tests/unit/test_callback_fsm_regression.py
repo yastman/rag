@@ -1,7 +1,7 @@
-"""Callback/FSM transition regression suite (***REMOVED***664).
+"""Callback/FSM transition regression suite (#664).
 
 Tests cross-callback flows, malformed-state resilience, and footer contract.
-Prevents regressions similar to PR ***REMOVED***661/***REMOVED***663.
+Prevents regressions similar to PR #661/#663.
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers (same pattern as existing callback tests)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers (same pattern as existing callback tests)
+# ---------------------------------------------------------------------------
 
-_PAGE_SIZE = 5  ***REMOVED*** must match _APARTMENT_PAGE_SIZE in bot.py
+_PAGE_SIZE = 5  # must match _APARTMENT_PAGE_SIZE in bot.py
 
 
 def _make_config() -> BotConfig:
@@ -121,9 +121,9 @@ def _fav_bot(favorites: list | None = None) -> PropertyBot:
     return bot
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 1. Callback-flow: stale legacy results callbacks
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 1. Callback-flow: stale legacy results callbacks
+# ---------------------------------------------------------------------------
 
 
 class TestLegacyResultsCompat:
@@ -168,9 +168,9 @@ class TestLegacyResultsCompat:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 2. Callback-flow: refine -> stale fav:add (stale-button scenario)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 2. Callback-flow: refine -> stale fav:add (stale-button scenario)
+# ---------------------------------------------------------------------------
 
 
 class TestRefineStaleButton:
@@ -179,11 +179,11 @@ class TestRefineStaleButton:
     async def test_refine_then_stale_fav_add_no_crash(self) -> None:
         """After refine (apartment_results=None), stale fav:add -> no crash."""
         bot = _fav_bot()
-        ***REMOVED*** State after refine: apartment_results=None, apartment_offset=0
+        # State after refine: apartment_results=None, apartment_offset=0
         state = _make_state({"apartment_results": None, "apartment_offset": 0})
         cb = _make_callback("fav:add:prop-0")
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await bot.handle_favorite_callback(cb, state)
 
         call_kwargs = bot._favorites_service.add.call_args.kwargs
@@ -205,9 +205,9 @@ class TestRefineStaleButton:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 3. Callback-flow: viewing -> phone collector contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. Callback-flow: viewing -> phone collector contract
+# ---------------------------------------------------------------------------
 
 
 class TestViewingDialog:
@@ -290,9 +290,9 @@ class TestViewingDialog:
         assert viewing_objects[1]["id"] == "prop-2"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 4. Malformed-state matrix: fav:add resilience
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 4. Malformed-state matrix: fav:add resilience
+# ---------------------------------------------------------------------------
 
 
 class TestMalformedStateFavAdd:
@@ -369,9 +369,9 @@ class TestMalformedStateFavAdd:
         assert call_kwargs["property_data"] == {}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 5. Legacy results footer contract removed
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 5. Legacy results footer contract removed
+# ---------------------------------------------------------------------------
 
 
 class TestFooterContract:

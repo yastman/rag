@@ -1,5 +1,5 @@
-***REMOVED*** tests/contract/test_qdrant_writer_atomic_replace_contract.py
-"""Static guardrail for ***REMOVED***1602 — qdrant_writer must not delete-before-upsert.
+# tests/contract/test_qdrant_writer_atomic_replace_contract.py
+"""Static guardrail for #1602 — qdrant_writer must not delete-before-upsert.
 
 The bug: ``upsert_chunks_sync`` previously called ``delete_file_sync`` at the
 top of the function, before any embedding work or upsert. If embedding or
@@ -66,7 +66,7 @@ def test_upsert_does_not_call_destructive_delete_helpers(func_name: str) -> None
         f"""
         QdrantHybridWriter.{func_name} must not invoke {sorted(found)}; they
         delete by metadata.file_id Filter and run BEFORE the upsert, which is
-        the data-loss pattern called out in ***REMOVED***1602. Use
+        the data-loss pattern called out in #1602. Use
         ``self._delete_stale_points_sync`` AFTER a successful upsert instead.
         """
     ).strip()
@@ -82,7 +82,7 @@ def test_upsert_calls_post_upsert_stale_sweep(func_name: str) -> None:
         QdrantHybridWriter.{func_name} must call
         ``self._delete_stale_points_sync`` after the replacement upsert
         completes successfully. This is the safe orphan-sweep half of the
-        atomic-replace pattern from ***REMOVED***1602.
+        atomic-replace pattern from #1602.
         """
     ).strip()
 
@@ -105,7 +105,7 @@ def test_stale_sweep_runs_after_upsert(func_name: str) -> None:
         ``self._upsert_points_in_batches`` must precede the call to
         ``self._delete_stale_points_sync``. If the order is inverted the
         function falls back to the destructive delete-first pattern from
-        ***REMOVED***1602.
+        #1602.
         """
         ).strip()
     )

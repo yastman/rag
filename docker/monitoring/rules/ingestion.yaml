@@ -1,11 +1,11 @@
-***REMOVED*** docker/monitoring/rules/ingestion.yaml
-***REMOVED*** Alert rules for unified ingestion pipeline (LogQL)
+# docker/monitoring/rules/ingestion.yaml
+# Alert rules for unified ingestion pipeline (LogQL)
 
 groups:
   - name: ingestion
     interval: 1m
     rules:
-      ***REMOVED*** Pipeline stalled
+      # Pipeline stalled
       - alert: IngestionPipelineStalled
         expr: |
           count_over_time({container="dev-ingestion"} |~ "Cycle complete" [1h]) == 0
@@ -19,7 +19,7 @@ groups:
           summary: "Ingestion pipeline stalled"
           description: "No ingestion cycles completed in 1 hour"
 
-      ***REMOVED*** High failure rate
+      # High failure rate
       - alert: IngestionHighFailureRate
         expr: |
           sum(count_over_time({container="dev-ingestion"} |~ "failed=" [15m]))
@@ -32,7 +32,7 @@ groups:
           summary: "Ingestion failure rate >30%"
           description: "Check docling, voyage, or qdrant connectivity"
 
-      ***REMOVED*** DLQ growing
+      # DLQ growing
       - alert: IngestionDLQGrowing
         expr: |
           count_over_time({container="dev-ingestion"} |~ "Moved to DLQ" [1h]) > 3
@@ -44,7 +44,7 @@ groups:
           summary: "Files moving to dead letter queue"
           description: "Multiple files failed after retries"
 
-      ***REMOVED*** Docling errors
+      # Docling errors
       - alert: DoclingErrors
         expr: |
           count_over_time({container="dev-ingestion"} |~ "(?i)docling.*error|docling.*timeout" [10m]) > 2
@@ -56,7 +56,7 @@ groups:
           summary: "Docling processing errors"
           description: "Check dev-docling container health"
 
-      ***REMOVED*** Voyage rate limiting
+      # Voyage rate limiting
       - alert: VoyageRateLimited
         expr: |
           count_over_time({container="dev-ingestion"} |~ "(?i)voyage.*429|rate.*limit" [5m]) > 1
@@ -68,7 +68,7 @@ groups:
           summary: "Voyage API rate limited"
           description: "Consider reducing batch concurrency"
 
-      ***REMOVED*** Container down
+      # Container down
       - alert: IngestionContainerDown
         expr: |
           count_over_time({container="dev-ingestion"} [10m]) == 0

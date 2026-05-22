@@ -1,4 +1,4 @@
-"""CRM card formatting utilities for Telegram messages (***REMOVED***697).
+"""CRM card formatting utilities for Telegram messages (#697).
 
 Formats Lead, Contact, Task objects from Kommo API into Telegram-ready
 text cards with inline keyboards. Supports pagination for list views.
@@ -13,12 +13,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram_bot.services.kommo_models import Contact, Lead, Task
 
 
-***REMOVED*** Callback prefix constants
+# Callback prefix constants
 _LEAD_PREFIX = "crm:lead"
 _CONTACT_PREFIX = "crm:contact"
 _TASK_PREFIX = "crm:task"
 
-***REMOVED*** Pagination defaults
+# Pagination defaults
 PAGE_SIZE = 5
 
 
@@ -27,7 +27,7 @@ def format_lead_card(lead: Lead, task_count: int = 0) -> tuple[str, InlineKeyboa
 
     Args:
         lead: Lead object from Kommo API.
-        task_count: number of open tasks linked to this lead (***REMOVED***731).
+        task_count: number of open tasks linked to this lead (#731).
 
     Returns:
         (text, keyboard) — ready to use in bot.send_message() / edit_message_text().
@@ -40,7 +40,7 @@ def format_lead_card(lead: Lead, task_count: int = 0) -> tuple[str, InlineKeyboa
         contact_name = first.get("name") or first.get("first_name") or "—"
 
     lines = [
-        f"📋 *Сделка ***REMOVED***{lead.id}*",
+        f"📋 *Сделка #{lead.id}*",
         f"Название: {lead.name or '—'}",
         f"Бюджет: {budget_str}",
         f"Контакт: {contact_name}",
@@ -88,7 +88,7 @@ def format_contact_card(contact: Contact) -> tuple[str, InlineKeyboardMarkup]:
     full_name = " ".join(part for part in [contact.first_name, contact.last_name] if part) or "—"
 
     lines = [
-        f"👤 *Контакт ***REMOVED***{contact.id}*",
+        f"👤 *Контакт #{contact.id}*",
         f"Имя: {full_name}",
     ]
     if contact.created_at:
@@ -127,12 +127,12 @@ def format_task_card(task: Task) -> tuple[str, InlineKeyboardMarkup]:
         due_str = dt.strftime("%d.%m.%Y %H:%M")
 
     lines = [
-        f"{status_icon} *Задача ***REMOVED***{task.id}*",
+        f"{status_icon} *Задача #{task.id}*",
         f"Текст: {task.text or '—'}",
         f"Срок: {due_str}",
     ]
     if task.entity_id and task.entity_type:
-        lines.append(f"Сущность: {task.entity_type} ***REMOVED***{task.entity_id}")
+        lines.append(f"Сущность: {task.entity_type} #{task.entity_id}")
 
     text = "\n".join(lines)
 

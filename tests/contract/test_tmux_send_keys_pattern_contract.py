@@ -1,6 +1,6 @@
 """Contract test: forbid the broken ``tmux send-keys ... Enter`` pattern.
 
-Issues ***REMOVED***1721 and ***REMOVED***1590 document a real bug in swarm worker prompt relays:
+Issues #1721 and #1590 document a real bug in swarm worker prompt relays:
 
     tmux send-keys -t "$ORCH_TARGET" "[DONE] $WORKER_NAME $REPORT_FILE" Enter
 
@@ -30,7 +30,7 @@ Contract:
     a non-comment line whose stripped form starts with ``tmux send-keys``
     and ends with the bare token ``Enter`` (no ``-l`` flag on that line).
 
-Refs ***REMOVED***1721, ***REMOVED***1590.
+Refs #1721, #1590.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-***REMOVED*** Directories scanned for the broken pattern. Any subset may be missing in a
-***REMOVED*** given checkout (e.g. ``.codex/`` is gitignored on some hosts); missing dirs
-***REMOVED*** are silently skipped so the test stays portable.
+# Directories scanned for the broken pattern. Any subset may be missing in a
+# given checkout (e.g. ``.codex/`` is gitignored on some hosts); missing dirs
+# are silently skipped so the test stays portable.
 SCAN_TARGETS: tuple[tuple[Path, tuple[str, ...]], ...] = (
     (REPO_ROOT / ".codex", ("*.md", "*.sh")),
     (REPO_ROOT / "skills", ("*.md", "*.sh")),
@@ -51,31 +51,31 @@ SCAN_TARGETS: tuple[tuple[Path, tuple[str, ...]], ...] = (
     (REPO_ROOT / "scripts", ("*.sh",)),
 )
 
-***REMOVED*** Match a line that:
-***REMOVED***   * contains the verb ``tmux send-keys`` (allowing arbitrary args/quotes)
-***REMOVED***   * does NOT contain the ``-l`` literal flag on the same line
-***REMOVED***   * ends with the bare token ``Enter`` (optionally followed by a comment
-***REMOVED***     or trailing whitespace, but not by another argument)
-***REMOVED***
-***REMOVED*** Examples that MUST match (broken):
-***REMOVED***     tmux send-keys -t "$ORCH" "msg" Enter
-***REMOVED***     tmux send-keys -t "$T" Enter
-***REMOVED***     tmux send-keys -t "$T" "[DONE]" Enter   ***REMOVED*** trailing comment is ok
-***REMOVED***
-***REMOVED*** Examples that MUST NOT match (allowed):
-***REMOVED***     tmux send-keys -t "$T" -l "msg"
-***REMOVED***     tmux send-keys -t "$T" C-m
-***REMOVED***     tmux send-keys -t "$T" "Press Enter to continue"   ***REMOVED*** quoted, not a token
-***REMOVED***     ***REMOVED*** tmux send-keys ... Enter  (comment line)
+# Match a line that:
+#   * contains the verb ``tmux send-keys`` (allowing arbitrary args/quotes)
+#   * does NOT contain the ``-l`` literal flag on the same line
+#   * ends with the bare token ``Enter`` (optionally followed by a comment
+#     or trailing whitespace, but not by another argument)
+#
+# Examples that MUST match (broken):
+#     tmux send-keys -t "$ORCH" "msg" Enter
+#     tmux send-keys -t "$T" Enter
+#     tmux send-keys -t "$T" "[DONE]" Enter   # trailing comment is ok
+#
+# Examples that MUST NOT match (allowed):
+#     tmux send-keys -t "$T" -l "msg"
+#     tmux send-keys -t "$T" C-m
+#     tmux send-keys -t "$T" "Press Enter to continue"   # quoted, not a token
+#     # tmux send-keys ... Enter  (comment line)
 _BROKEN = re.compile(
     r"""
-    ^\s*                       ***REMOVED*** optional leading indent
-    (?!\***REMOVED***)                     ***REMOVED*** not a markdown/bash comment line
-    .*\btmux\s+send-keys\b     ***REMOVED*** the verb
-    (?!.*\s-l\b)               ***REMOVED*** no -l flag anywhere on this line
-    .*\sEnter                  ***REMOVED*** bare Enter token preceded by whitespace
-    \s*                        ***REMOVED*** trailing whitespace
-    (?:\***REMOVED***.*)?                  ***REMOVED*** optional trailing shell comment
+    ^\s*                       # optional leading indent
+    (?!\#)                     # not a markdown/bash comment line
+    .*\btmux\s+send-keys\b     # the verb
+    (?!.*\s-l\b)               # no -l flag anywhere on this line
+    .*\sEnter                  # bare Enter token preceded by whitespace
+    \s*                        # trailing whitespace
+    (?:\#.*)?                  # optional trailing shell comment
     $
     """,
     re.VERBOSE,
@@ -105,7 +105,7 @@ def _find_offending_lines(path: Path) -> list[tuple[int, str]]:
     text = path.read_text(encoding="utf-8", errors="replace")
     is_markdown = path.suffix.lower() == ".md"
 
-    in_code_fence = not is_markdown  ***REMOVED*** .sh files are "always code"
+    in_code_fence = not is_markdown  # .sh files are "always code"
     code_fence_lang: str | None = None
     offenders: list[tuple[int, str]] = []
 
@@ -120,8 +120,8 @@ def _find_offending_lines(path: Path) -> list[tuple[int, str]]:
                     in_code_fence = False
                     code_fence_lang = None
                 continue
-            ***REMOVED*** Only flag matches inside shell-flavoured fenced blocks. Other
-            ***REMOVED*** languages (python, yaml, json, ...) cannot execute tmux.
+            # Only flag matches inside shell-flavoured fenced blocks. Other
+            # languages (python, yaml, json, ...) cannot execute tmux.
             if not in_code_fence:
                 continue
             if code_fence_lang not in (None, "", "bash", "sh", "shell", "console", "zsh"):
@@ -136,7 +136,7 @@ def _find_offending_lines(path: Path) -> list[tuple[int, str]]:
 def test_no_broken_tmux_send_keys_enter_pattern() -> None:
     """Fail if any tracked swarm-orchestration file uses the broken pattern.
 
-    Refs ***REMOVED***1721, ***REMOVED***1590.
+    Refs #1721, #1590.
     """
     offenders: list[str] = []
     for f in _iter_files():
@@ -146,7 +146,7 @@ def test_no_broken_tmux_send_keys_enter_pattern() -> None:
 
     if offenders:
         msg = (
-            "Broken `tmux send-keys ... Enter` pattern found (refs ***REMOVED***1721, ***REMOVED***1590). "
+            "Broken `tmux send-keys ... Enter` pattern found (refs #1721, #1590). "
             "Replace with the three-line form:\n"
             '    tmux send-keys -t "$T" -l "<text>"\n'
             "    sleep 0.25\n"
@@ -157,7 +157,7 @@ def test_no_broken_tmux_send_keys_enter_pattern() -> None:
 
 
 def test_contract_regex_matches_canonical_broken_examples() -> None:
-    """Self-test: the regex catches the canonical broken forms from ***REMOVED***1721/***REMOVED***1590."""
+    """Self-test: the regex catches the canonical broken forms from #1721/#1590."""
     broken_samples = [
         'tmux send-keys -t "$ORCH_TARGET" "[DONE] $WORKER_NAME $REPORT_FILE" Enter',
         'tmux send-keys -t "$T" Enter',
@@ -173,7 +173,7 @@ def test_contract_regex_ignores_correct_pattern() -> None:
     allowed_samples = [
         'tmux send-keys -t "$T" -l "[DONE] $WORKER $REPORT"',
         'tmux send-keys -t "$T" C-m',
-        '***REMOVED*** tmux send-keys -t "$T" "msg" Enter   (commented out)',
+        '# tmux send-keys -t "$T" "msg" Enter   (commented out)',
         'tmux send-keys -t "$T" "Press Enter to continue" C-m',
     ]
     for sample in allowed_samples:

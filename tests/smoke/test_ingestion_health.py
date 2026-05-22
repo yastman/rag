@@ -178,7 +178,7 @@ class TestHybridSearch:
         result = _http_post(f"{QDRANT_URL}/collections/{COLLECTION}/points/query", payload)
         hits = result.get("result", {}).get("points", [])
         assert len(hits) > 0, f"Hybrid search returned no results for: '{self.QUERY}'"
-        ***REMOVED*** Top result must carry searchable content in either legacy `text` or canonical `page_content`.
+        # Top result must carry searchable content in either legacy `text` or canonical `page_content`.
         payload = hits[0].get("payload", {})
         text = payload.get("text") or payload.get("page_content", "")
         assert text, f"Top result payload has no searchable text field: {list(payload.keys())}"

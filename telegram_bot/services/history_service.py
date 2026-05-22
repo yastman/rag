@@ -54,7 +54,7 @@ class HistoryService:
             )
             logger.info("Created history collection: %s", self._collection_name)
 
-        ***REMOVED*** Idempotently ensure payload indexes for filter fields
+        # Idempotently ensure payload indexes for filter fields
         for field_name, field_schema in (
             ("metadata.user_id", models.PayloadSchemaType.INTEGER),
             ("metadata.session_id", models.PayloadSchemaType.KEYWORD),
@@ -219,7 +219,7 @@ class HistoryService:
         try:
             all_points: list[Any] = []
             offset: Any = None
-            remaining = min(limit, 500)  ***REMOVED*** hard cap to keep summary bounded
+            remaining = min(limit, 500)  # hard cap to keep summary bounded
 
             while remaining > 0:
                 page_limit = min(remaining, 100)

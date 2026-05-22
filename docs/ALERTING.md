@@ -1,11 +1,11 @@
-***REMOVED*** Alerting
+# Alerting
 
 Monitoring and alerting stack for local/dev runtime:
 - Loki (log storage + ruler)
 - Promtail (Docker log collector)
 - Alertmanager (routing to Telegram)
 
-***REMOVED******REMOVED*** Config Files
+## Config Files
 
 - `docker/monitoring/loki.yaml`
 - `docker/monitoring/promtail.yaml`
@@ -18,7 +18,7 @@ Rule groups currently tracked include:
 - `ingestion.yaml`
 - `extended-services.yaml`
 
-***REMOVED******REMOVED*** Start And Validate
+## Start And Validate
 
 ```bash
 make monitoring-up
@@ -32,7 +32,7 @@ curl -fsS http://localhost:3100/ready
 curl -fsS http://localhost:9093/-/healthy
 ```
 
-***REMOVED******REMOVED*** Telegram Delivery Setup
+## Telegram Delivery Setup
 
 Set in `.env`:
 
@@ -47,7 +47,7 @@ Then send a test alert:
 make monitoring-test-alert
 ```
 
-***REMOVED******REMOVED*** Useful Operations
+## Useful Operations
 
 ```bash
 make monitoring-logs
@@ -62,7 +62,7 @@ curl -G 'http://localhost:3100/loki/api/v1/query_range' \
   --data-urlencode 'limit=100'
 ```
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
 - No Telegram notifications:
   - verify both `TELEGRAM_ALERTING_*` vars in `.env`

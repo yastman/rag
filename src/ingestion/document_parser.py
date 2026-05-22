@@ -20,7 +20,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-import pymupdf  ***REMOVED*** PyMuPDF 1.26+ (NOT fitz!)
+import pymupdf  # PyMuPDF 1.26+ (NOT fitz!)
 
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def _load_docling_converter() -> Any | None:
     """Load Docling lazily so unrelated imports keep working without ingest extras."""
     try:
         module = import_module("docling.document_converter")
-    except Exception as exc:  ***REMOVED*** pragma: no cover - exercised indirectly in full-suite envs
+    except Exception as exc:  # pragma: no cover - exercised indirectly in full-suite envs
         logger.warning("Docling converter unavailable at import time: %s", exc)
         return None
     return getattr(module, "DocumentConverter", None)
@@ -112,7 +112,7 @@ class UniversalDocumentParser:
         """
         self.use_cache = use_cache
         self.cache = ParserCache() if use_cache else None
-        self.docling_converter = None  ***REMOVED*** Lazy init
+        self.docling_converter = None  # Lazy init
 
     def _get_docling_converter(self):
         """
@@ -130,7 +130,7 @@ class UniversalDocumentParser:
                     "docling is unavailable or broken; install the ingest extras with a working "
                     "docling package to parse DOCX/CSV/XLSX files"
                 )
-            ***REMOVED*** Simple converter for DOCX/CSV/XLSX (no complex PDF options needed)
+            # Simple converter for DOCX/CSV/XLSX (no complex PDF options needed)
             self.docling_converter = DocumentConverter()
 
         return self.docling_converter
@@ -154,7 +154,7 @@ class UniversalDocumentParser:
         if not filepath.exists():
             raise FileNotFoundError(f"File not found: {filepath}")
 
-        ***REMOVED*** Check cache first
+        # Check cache first
         if self.use_cache and self.cache is not None:
             cached_content = self.cache.get(filepath)
             if cached_content:
@@ -165,7 +165,7 @@ class UniversalDocumentParser:
                     metadata={"source": "cache"},
                 )
 
-        ***REMOVED*** Auto-detect format
+        # Auto-detect format
         ext = filepath.suffix.lower()
 
         if ext in self.PDF_FORMATS:
@@ -175,7 +175,7 @@ class UniversalDocumentParser:
         else:
             raise ValueError(f"Unsupported format: {ext}. Supported: PDF, DOCX, CSV, XLSX")
 
-        ***REMOVED*** Cache result
+        # Cache result
         if self.use_cache and self.cache is not None:
             self.cache.set(filepath, doc.content)
 
@@ -192,7 +192,7 @@ class UniversalDocumentParser:
 
         doc = pymupdf.open(filepath)
 
-        ***REMOVED*** Extract text from all pages
+        # Extract text from all pages
         num_pages = doc.page_count
         text_parts = []
         for page_number in range(num_pages):
@@ -200,14 +200,14 @@ class UniversalDocumentParser:
 
         content = "\n".join(text_parts)
 
-        ***REMOVED*** Extract metadata
+        # Extract metadata
         metadata = {
             "format": "pdf",
             "parser": "pymupdf",
             "num_pages": num_pages,
         }
 
-        ***REMOVED*** Add PDF metadata if available
+        # Add PDF metadata if available
         if doc.metadata:
             metadata.update(
                 {
@@ -239,11 +239,11 @@ class UniversalDocumentParser:
         converter = self._get_docling_converter()
         result = converter.convert(str(filepath))
 
-        ***REMOVED*** Export to markdown for best text representation
+        # Export to markdown for best text representation
         content = result.document.export_to_markdown()
 
         metadata = {
-            "format": filepath.suffix[1:],  ***REMOVED*** Remove dot
+            "format": filepath.suffix[1:],  # Remove dot
             "parser": "docling",
         }
 
@@ -255,7 +255,7 @@ class UniversalDocumentParser:
         )
 
 
-***REMOVED*** Convenience function
+# Convenience function
 def parse_document(filepath: str | Path, use_cache: bool = True) -> ParsedDocument:
     """
     Parse document with auto-format detection.

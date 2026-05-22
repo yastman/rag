@@ -1,4 +1,4 @@
-"""Tests for client menu wiring fixes (***REMOVED***658)."""
+"""Tests for client menu wiring fixes (#658)."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def test_handle_search_accepts_dialog_manager():
 
 
 async def test_handle_menu_button_clears_stale_fsm_state():
-    """handle_menu_button clears FSM state if user was in phone collection (***REMOVED***658)."""
+    """handle_menu_button clears FSM state if user was in phone collection (#658)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
         from telegram_bot.bot import PropertyBot
 
@@ -39,7 +39,7 @@ async def test_handle_menu_button_clears_stale_fsm_state():
         state.get_state = AsyncMock(return_value="PhoneCollectorStates:waiting_phone")
         state.clear = AsyncMock()
 
-        ***REMOVED*** Mock _handle_services to avoid real logic
+        # Mock _handle_services to avoid real logic
         bot._handle_services = AsyncMock()
 
         await bot.handle_menu_button(message, state)
@@ -95,7 +95,7 @@ async def test_handle_menu_button_no_clear_for_unrelated_state():
 
 
 async def test_handle_search_starts_funnel_dialog():
-    """_handle_search starts FunnelSG.city dialog when dialog_manager available (***REMOVED***658, ***REMOVED***697, ***REMOVED***712)."""
+    """_handle_search starts FunnelSG.city dialog when dialog_manager available (#658, #697, #712)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
         from aiogram_dialog import StartMode
 
@@ -117,7 +117,7 @@ async def test_handle_search_starts_funnel_dialog():
 
 
 async def test_handle_search_fallback_without_dialog_manager():
-    """_handle_search falls back to RAG text when dialog_manager is None (***REMOVED***658)."""
+    """_handle_search falls back to RAG text when dialog_manager is None (#658)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
         from telegram_bot.bot import PropertyBot
 
@@ -132,7 +132,7 @@ async def test_handle_search_fallback_without_dialog_manager():
 
 
 async def test_handle_menu_button_passes_dialog_manager_to_search():
-    """handle_menu_button passes dialog_manager to _handle_search (***REMOVED***658)."""
+    """handle_menu_button passes dialog_manager to _handle_search (#658)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
         from telegram_bot.bot import PropertyBot
 

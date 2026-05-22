@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_state_manager_behavior.py
+# tests/unit/ingestion/test_state_manager_behavior.py
 """Behavior tests for UnifiedStateManager sync methods.
 
 Tests the actual business logic:
@@ -19,9 +19,9 @@ import pytest
 from src.ingestion.unified.state_manager import UnifiedStateManager
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -67,9 +67,9 @@ def _make_state_row(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** SQL identifier hardening
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# SQL identifier hardening
+# ---------------------------------------------------------------------------
 
 
 class TestSqlIdentifierValidation:
@@ -80,9 +80,9 @@ class TestSqlIdentifierValidation:
             UnifiedStateManager._safe_identifier("ingestion_state;DROP TABLE users")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** should_process_sync — hash comparison behavior
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# should_process_sync — hash comparison behavior
+# ---------------------------------------------------------------------------
 
 
 class TestShouldProcessSyncHashComparison:
@@ -131,9 +131,9 @@ class TestShouldProcessSyncHashComparison:
         assert result is True
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** should_process_sync — error/backoff/DLQ logic
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# should_process_sync — error/backoff/DLQ logic
+# ---------------------------------------------------------------------------
 
 
 class TestShouldProcessSyncBackoffAndDlq:
@@ -203,9 +203,9 @@ class TestShouldProcessSyncBackoffAndDlq:
         assert result is True
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** mark_indexed_sync — SQL structure and error field reset
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# mark_indexed_sync — SQL structure and error field reset
+# ---------------------------------------------------------------------------
 
 
 class TestMarkIndexedSyncBehavior:
@@ -261,9 +261,9 @@ class TestMarkIndexedSyncBehavior:
         assert "retry_after = NULL" in sql
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** mark_error_sync — DLQ / retry logic
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# mark_error_sync — DLQ / retry logic
+# ---------------------------------------------------------------------------
 
 
 class TestMarkErrorSyncBehavior:
@@ -320,9 +320,9 @@ class TestMarkErrorSyncBehavior:
         assert "INSERT" not in sql
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** State transition tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# State transition tests
+# ---------------------------------------------------------------------------
 
 
 class TestStateTransitionBehavior:
@@ -330,13 +330,13 @@ class TestStateTransitionBehavior:
 
     def test_new_file_then_indexed_skips_second_process(self, mock_pool):
         """After mark_indexed, same-hash query returns False."""
-        ***REMOVED*** Round 1: file is new
+        # Round 1: file is new
         mock_pool.fetchrow.return_value = None
         with patch("asyncpg.create_pool", new=AsyncMock(return_value=mock_pool)):
             mgr = UnifiedStateManager(database_url="postgres://localhost/test")
             assert mgr.should_process_sync("f1", "hash1") is True
 
-        ***REMOVED*** Round 2: file is now indexed with the same hash
+        # Round 2: file is now indexed with the same hash
         mock_pool.fetchrow.return_value = _make_state_row(status="indexed", content_hash="hash1")
         with patch("asyncpg.create_pool", new=AsyncMock(return_value=mock_pool)):
             mgr2 = UnifiedStateManager(database_url="postgres://localhost/test")
@@ -368,9 +368,9 @@ class TestStateTransitionBehavior:
             assert mgr.should_process_sync("f1", "h") is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** sync_context pool reuse
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# sync_context pool reuse
+# ---------------------------------------------------------------------------
 
 
 class TestSyncContextPoolReuse:

@@ -1,8 +1,8 @@
-***REMOVED*** HITL CRM Flow
+# HITL CRM Flow
 
 Human-in-the-loop (HITL) pattern for CRM operations requiring human approval.
 
-***REMOVED******REMOVED*** Architecture
+## Architecture
 
 ```
 User → Telegram Bot → LangGraph Agent
@@ -20,7 +20,7 @@ Human approves/rejects in Telegram
                   Graph resumes
 ```
 
-***REMOVED******REMOVED*** HITL Trigger Points
+## HITL Trigger Points
 
 CRM tools that trigger HITL via `interrupt()`:
 
@@ -31,23 +31,23 @@ CRM tools that trigger HITL via `interrupt()`:
 | `transfer_lead` | Lead ownership transfer |
 | `update_lead_status` | Status changes to qualified |
 
-***REMOVED******REMOVED*** Flow States
+## Flow States
 
 Defined in `telegram_bot/services/handoff_state.py`:
 
 ```python
 class HandoffState(TypedDict):
     """HITL state persisted in Redis."""
-    state: str                    ***REMOVED*** "waiting", "approved", "rejected"
+    state: str                    # "waiting", "approved", "rejected"
     lead_id: int | None
-    action: str                   ***REMOVED*** "create_lead", "schedule_viewing", etc.
-    payload: dict                 ***REMOVED*** Action parameters
-    supervisor_chat_id: int       ***REMOVED*** Where to send approval request
+    action: str                   # "create_lead", "schedule_viewing", etc.
+    payload: dict                 # Action parameters
+    supervisor_chat_id: int       # Where to send approval request
     created_at: float
     expires_at: float
 ```
 
-***REMOVED******REMOVED*** HandoffData Schema
+## HandoffData Schema
 
 ```python
 class HandoffData(TypedDict):
@@ -59,7 +59,7 @@ class HandoffData(TypedDict):
     qualification_score: float | None
 ```
 
-***REMOVED******REMOVED*** Supervisor Notification
+## Supervisor Notification
 
 When `interrupt()` fires:
 1. Graph execution pauses
@@ -67,14 +67,14 @@ When `interrupt()` fires:
 3. Supervisor approves/rejects via inline keyboard
 4. `Command(resume=...)` fires with decision
 
-***REMOVED******REMOVED*** Redis Keys
+## Redis Keys
 
 | Key Pattern | TTL | Content |
 |-------------|-----|---------|
 | `handoff:{thread_id}` | 300s | Serialized HandoffState |
 | `kommo:oauth:tokens` | long-lived | OAuth tokens (shared) |
 
-***REMOVED******REMOVED*** Code Locations
+## Code Locations
 
 | File | Purpose |
 |------|---------|
@@ -83,16 +83,16 @@ When `interrupt()` fires:
 | `telegram_bot/handlers/handoff.py` | Handoff FSM states and handlers |
 | `telegram_bot/graph/nodes/` | Nodes that may trigger HITL |
 
-***REMOVED******REMOVED*** Error Handling
+## Error Handling
 
 If supervisor times out (300s TTL):
 - Action is automatically rejected
 - User receives timeout message
 - Graph resumes with `rejected` state
 
-***REMOVED******REMOVED*** Testing
+## Testing
 
 ```bash
-***REMOVED*** Test HITL flow
+# Test HITL flow
 uv run pytest tests/unit/telegram_bot/test_handoff.py -v
 ```

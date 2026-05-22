@@ -1,4 +1,4 @@
-"""Edge-case tests for lead_score_sync (***REMOVED***1090)."""
+"""Edge-case tests for lead_score_sync (#1090)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ async def test_sync_pending_lead_scores_continues_after_failed_record() -> None:
             kommo_lead_id=9002,
         ),
     ]
-    ***REMOVED*** First call fails, second succeeds
+    # First call fails, second succeeds
     kommo_client.update_lead_score.side_effect = [
         RuntimeError("kommo down"),
         None,
@@ -46,7 +46,7 @@ async def test_sync_pending_lead_scores_continues_after_failed_record() -> None:
 
     assert result == {"synced": 1, "failed": 1, "skipped": 0}
     assert kommo_client.update_lead_score.await_count == 2
-    ***REMOVED*** Verify second record was synced
+    # Verify second record was synced
     second_call = kommo_client.update_lead_score.await_args_list[1].kwargs
     assert second_call["lead_id"] == 9002
     assert second_call["idempotency_key"] == "lead-score:2:s2:95:hot"

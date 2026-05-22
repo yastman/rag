@@ -1,8 +1,8 @@
-***REMOVED*** Pipeline Overview
+# Pipeline Overview
 
 Operational overview of ingestion, query, and voice flows.
 
-***REMOVED******REMOVED*** 1) Query Pipeline (Telegram Bot / API)
+## 1) Query Pipeline (Telegram Bot / API)
 
 `telegram_bot/graph/graph.py` builds a LangGraph state machine.
 
@@ -31,7 +31,7 @@ START -> (transcribe?) -> classify ->
           - rerank or rewrite or generate -> cache_store -> respond -> (summarize?) -> END
 ```
 
-***REMOVED******REMOVED*** 2) Retrieval Flow
+## 2) Retrieval Flow
 
 - Dense embedding: BGE-M3 API (`/encode/dense`)
 - Sparse embedding: BGE-M3 API (`/encode/sparse`)
@@ -39,7 +39,7 @@ START -> (transcribe?) -> classify ->
 - Optional ColBERT-style rerank path via BGE-M3 API
 - Runtime integrations live in `telegram_bot/integrations/` and `telegram_bot/services/`
 
-***REMOVED******REMOVED*** 3) Ingestion Flow (Unified)
+## 3) Ingestion Flow (Unified)
 
 Source code: `src/ingestion/unified/`.
 
@@ -72,7 +72,7 @@ make ingest-unified-watch
 make ingest-unified-status
 ```
 
-***REMOVED******REMOVED*** 4) Voice Flow
+## 4) Voice Flow
 
 Source code: `src/voice/agent.py` + `src/api/main.py`.
 
@@ -83,7 +83,7 @@ Runtime path:
 4. RAG API runs the same graph pipeline used by Telegram bot.
 5. Transcript persistence goes to PostgreSQL when configured.
 
-***REMOVED******REMOVED*** 5) Observability
+## 5) Observability
 
 - App traces/scores: Langfuse (`telegram_bot/observability.py`, scoring hooks)
 - Required trace families validated by `make validate-traces-fast`:
@@ -93,7 +93,7 @@ Runtime path:
 - Log monitoring: Loki + Promtail + Alertmanager
 - Alert rules: `docker/monitoring/rules/*.yaml`
 
-***REMOVED******REMOVED*** 6) Main Operational Commands
+## 6) Main Operational Commands
 
 ```bash
 make docker-up

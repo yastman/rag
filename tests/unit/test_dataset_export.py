@@ -1,4 +1,4 @@
-"""Tests for dataset export bug fixes (***REMOVED***759).
+"""Tests for dataset export bug fixes (#759).
 
 Covers:
 1. Field mapping: eval_docs (not retrieved_context) — line 100
@@ -36,14 +36,14 @@ def _make_observation(name: str = "node-retrieve", output: dict | None = None) -
     return SimpleNamespace(name=name, output=output)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bug 1: Field mapping mismatch — eval_docs vs retrieved_context
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bug 1: Field mapping mismatch — eval_docs vs retrieved_context
+# ---------------------------------------------------------------------------
 
 
 class TestExtractItemDataEvalDocs:
     def test_uses_eval_docs_field(self):
-        """Bug ***REMOVED***759-1: node-retrieve writes eval_docs string, not retrieved_context list."""
+        """Bug #759-1: node-retrieve writes eval_docs string, not retrieved_context list."""
         trace = _make_trace()
         obs = _make_observation(
             name="node-retrieve",
@@ -54,7 +54,7 @@ class TestExtractItemDataEvalDocs:
         assert len(data["context"]) == 2
 
     def test_retrieved_context_no_longer_used(self):
-        """Bug ***REMOVED***759-1: old retrieved_context field must not populate context."""
+        """Bug #759-1: old retrieved_context field must not populate context."""
         trace = _make_trace()
         obs = _make_observation(
             name="node-retrieve",
@@ -85,14 +85,14 @@ class TestExtractItemDataEvalDocs:
         assert any("tax" in part for part in data["context"])
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bug 2: No deduplication — trace_id as item ID
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bug 2: No deduplication — trace_id as item ID
+# ---------------------------------------------------------------------------
 
 
 class TestExportToLangfuseDeduplication:
     def test_trace_id_used_as_item_id(self):
-        """Bug ***REMOVED***759-2: trace_id must be passed as dataset item id for idempotency."""
+        """Bug #759-2: trace_id must be passed as dataset item id for idempotency."""
         langfuse = MagicMock()
         items = [
             {
@@ -136,14 +136,14 @@ class TestExportToLangfuseDeduplication:
         assert "t2" in ids
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bug 3: No idempotent create — handles existing dataset
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bug 3: No idempotent create — handles existing dataset
+# ---------------------------------------------------------------------------
 
 
 class TestExportToLangfuseIdempotentCreate:
     def test_does_not_raise_if_dataset_exists(self):
-        """Bug ***REMOVED***759-3: create_dataset must not raise when dataset already exists."""
+        """Bug #759-3: create_dataset must not raise when dataset already exists."""
         langfuse = MagicMock()
         langfuse.create_dataset.side_effect = Exception("Dataset already exists")
         items = [
@@ -156,7 +156,7 @@ class TestExportToLangfuseIdempotentCreate:
                 "reasons": [],
             }
         ]
-        ***REMOVED*** Must not raise
+        # Must not raise
         count = export_to_langfuse(langfuse, "existing-dataset", items)
         assert count == 1
 
@@ -178,14 +178,14 @@ class TestExportToLangfuseIdempotentCreate:
         langfuse.create_dataset_item.assert_called_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bug 4: Key mismatch — query vs question in goldset_sync + run_experiment
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bug 4: Key mismatch — query vs question in goldset_sync + run_experiment
+# ---------------------------------------------------------------------------
 
 
 class TestGoldsetSyncQueryKey:
     def test_uses_query_key_not_question(self):
-        """Bug ***REMOVED***759-4: goldset_sync must use 'query' key in input, not 'question'."""
+        """Bug #759-4: goldset_sync must use 'query' key in input, not 'question'."""
         langfuse = MagicMock()
         langfuse.get_dataset.side_effect = Exception("not found")
         samples = [
@@ -208,14 +208,14 @@ class TestGoldsetSyncQueryKey:
         assert call_kwargs["input"]["query"] == "How much tax?"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bug 4 (consumer): run_experiment reads 'query' key, not 'question'
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bug 4 (consumer): run_experiment reads 'query' key, not 'question'
+# ---------------------------------------------------------------------------
 
 
 class TestRunExperimentQueryKey:
     def test_build_rag_task_reads_query_key(self):
-        """Bug ***REMOVED***759-4: build_rag_task must read 'query' from item.input, not 'question'."""
+        """Bug #759-4: build_rag_task must read 'query' from item.input, not 'question'."""
         from unittest.mock import patch
 
         from scripts.eval.run_experiment import build_rag_task

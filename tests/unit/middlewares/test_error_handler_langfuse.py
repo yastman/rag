@@ -28,7 +28,7 @@ async def test_reports_error_to_langfuse():
         return_value=mock_lf,
         create=True,
     ):
-        ***REMOVED*** Patch the import inside handle_error
+        # Patch the import inside handle_error
         with patch.dict(
             "sys.modules",
             {"telegram_bot.observability": MagicMock(get_client=MagicMock(return_value=mock_lf))},

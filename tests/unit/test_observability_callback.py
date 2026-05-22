@@ -1,4 +1,4 @@
-"""Tests for Langfuse CallbackHandler factory (***REMOVED***413)."""
+"""Tests for Langfuse CallbackHandler factory (#413)."""
 
 from __future__ import annotations
 

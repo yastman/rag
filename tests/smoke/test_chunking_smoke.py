@@ -8,7 +8,7 @@ import pytest
 from src.ingestion.chunker import Chunk, ChunkingStrategy, DocumentChunker
 
 
-***REMOVED*** Sample Ukrainian legal text with typical structural markers
+# Sample Ukrainian legal text with typical structural markers
 SAMPLE_LEGAL_TEXT = """
 Розділ I. ЗАГАЛЬНІ ПОЛОЖЕННЯ
 
@@ -91,9 +91,9 @@ class TestChunkingSmoke:
         """Test that chunks have reasonable text lengths (not too short or too long)."""
         for i, chunk in enumerate(chunks):
             text_len = len(chunk.text)
-            ***REMOVED*** Each chunk should have at least some meaningful content
+            # Each chunk should have at least some meaningful content
             assert text_len >= 10, f"Chunk {i} is too short ({text_len} chars)"
-            ***REMOVED*** No chunk should be excessively large (more than 3x chunk_size)
+            # No chunk should be excessively large (more than 3x chunk_size)
             assert text_len <= 3072, f"Chunk {i} is too large ({text_len} chars)"
 
     def test_semantic_strategy_respects_structure(self, semantic_chunker):
@@ -104,25 +104,25 @@ class TestChunkingSmoke:
             article_number="1",
         )
 
-        ***REMOVED*** The chunker should recognize Stattya/Rozdil/Hlava markers
+        # The chunker should recognize Stattya/Rozdil/Hlava markers
         all_text = " ".join(c.text for c in chunks)
         assert "Стаття" in all_text, "Stattya marker not preserved in chunks"
         assert "Розділ" in all_text, "Rozdil marker not preserved in chunks"
 
-        ***REMOVED*** Semantic splitting should produce chunk boundaries at structural markers
+        # Semantic splitting should produce chunk boundaries at structural markers
         assert any(c.text.startswith("Стаття") for c in chunks), (
             "No chunk starts with a structural marker - semantic splitting may not be working"
         )
 
     def test_extract_metadata_from_chunk_text(self, chunks):
         """Test that extract_metadata can parse article numbers from chunk text."""
-        ***REMOVED*** At least one chunk should contain an article marker that extract_metadata can parse
+        # At least one chunk should contain an article marker that extract_metadata can parse
         found_article = False
         for chunk in chunks:
             metadata = DocumentChunker.extract_metadata(chunk.text)
             if "article_number" in metadata:
                 found_article = True
-                ***REMOVED*** Parsed article number should be a numeric string
+                # Parsed article number should be a numeric string
                 assert metadata["article_number"].isdigit(), (
                     f"Extracted article_number is not numeric: {metadata['article_number']}"
                 )

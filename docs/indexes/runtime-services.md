@@ -1,12 +1,12 @@
-***REMOVED*** Runtime Services Index
+# Runtime Services Index
 
 Quick orientation for Docker services, ingestion, the mini app, and the Telegram bot. Links to canonical docs instead of duplicating service tables or env rules.
 
-***REMOVED******REMOVED*** Docker Services
+## Docker Services
 
 The canonical source of truth for Compose files, profiles, service names, ports, and env is [`../../DOCKER.md`](../../DOCKER.md). This section provides orientation only.
 
-***REMOVED******REMOVED******REMOVED*** Compose Profiles
+### Compose Profiles
 
 | Profile | When You Need It |
 |---|---|
@@ -24,16 +24,16 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 Common commands:
 
 ```bash
-make docker-up          ***REMOVED*** default/unprofiled services
-make docker-bot-up      ***REMOVED*** bot profile
-make docker-ingest-up   ***REMOVED*** ingestion profile
-make docker-ml-up       ***REMOVED*** ML/Langfuse profile
-make docker-obs-up      ***REMOVED*** observability profile (Loki, Promtail, Alertmanager)
-make monitoring-up      ***REMOVED*** observability alias with endpoint hints
-make docker-ps          ***REMOVED*** list running containers
+make docker-up          # default/unprofiled services
+make docker-bot-up      # bot profile
+make docker-ingest-up   # ingestion profile
+make docker-ml-up       # ML/Langfuse profile
+make docker-obs-up      # observability profile (Loki, Promtail, Alertmanager)
+make monitoring-up      # observability alias with endpoint hints
+make docker-ps          # list running containers
 ```
 
-***REMOVED******REMOVED******REMOVED*** Local Service Containers
+### Local Service Containers
 
 For per-service build, healthcheck, and test details, see [`../../services/README.md`](../../services/README.md).
 
@@ -43,7 +43,7 @@ For per-service build, healthcheck, and test details, see [`../../services/READM
 | `docling` | http://localhost:5001 | PDF/DOCX → markdown parsing |
 | `user-base` | http://localhost:8003 | Russian dense embeddings |
 
-***REMOVED******REMOVED*** Ingestion
+## Ingestion
 
 The unified ingestion pipeline is the primary document ingestion path.
 
@@ -54,11 +54,11 @@ The unified ingestion pipeline is the primary document ingestion path.
 Quick commands:
 
 ```bash
-make ingest-unified-preflight   ***REMOVED*** validate deps and env
-make ingest-unified-bootstrap   ***REMOVED*** create/validate collection schema
-make ingest-unified             ***REMOVED*** one-shot run
-make ingest-unified-status      ***REMOVED*** state/DLQ status
-make ingest-unified-logs        ***REMOVED*** container logs
+make ingest-unified-preflight   # validate deps and env
+make ingest-unified-bootstrap   # create/validate collection schema
+make ingest-unified             # one-shot run
+make ingest-unified-status      # state/DLQ status
+make ingest-unified-logs        # container logs
 ```
 
 Key concepts:
@@ -69,7 +69,7 @@ Key concepts:
 
 See also: [`../QDRANT_STACK.md`](../QDRANT_STACK.md) for collection schema and bootstrap details.
 
-***REMOVED******REMOVED*** Mini App
+## Mini App
 
 Telegram Mini App backend (FastAPI) and frontend (React + Vite).
 
@@ -91,7 +91,7 @@ API surface:
 - `POST /api/phone` — Collect phone and create CRM lead
 - `GET /health` — Service health
 
-***REMOVED******REMOVED*** Telegram Bot
+## Telegram Bot
 
 Telegram transport layer and RAG orchestration.
 
@@ -118,13 +118,13 @@ Subsystems:
 Quick commands:
 
 ```bash
-make run-bot           ***REMOVED*** native bot run (fast iteration)
-make docker-bot-up     ***REMOVED*** bot in Docker
-make test-bot-health   ***REMOVED*** local prerequisite check
-python -m telegram_bot.preflight   ***REMOVED*** startup health check
+make run-bot           # native bot run (fast iteration)
+make docker-bot-up     # bot in Docker
+make test-bot-health   # local prerequisite check
+python -m telegram_bot.preflight   # startup health check
 ```
 
-***REMOVED******REMOVED*** Voice Agent
+## Voice Agent
 
 LiveKit-powered voice path. Deferred by default.
 

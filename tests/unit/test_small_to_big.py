@@ -70,22 +70,22 @@ class TestSmallToBigService:
     async def test_expand_context_missing_metadata(self, service, mock_client):
         """Test expand_context when chunks have no doc_id/order."""
         chunks = [
-            {"text": "some text", "metadata": {}},  ***REMOVED*** No doc_id or order
+            {"text": "some text", "metadata": {}},  # No doc_id or order
         ]
 
         result = await service.expand_context(chunks)
 
-        ***REMOVED*** Should return chunk without expansion
+        # Should return chunk without expansion
         assert len(result) == 1
         assert result[0].original_chunk == chunks[0]
         assert result[0].expanded_text == "some text"
         assert result[0].neighbor_chunks == []
-        ***REMOVED*** Client should not be called
+        # Client should not be called
         mock_client.scroll.assert_not_called()
 
     async def test_expand_context_with_neighbors(self, service, mock_client):
         """Test expand_context fetches and merges neighbors."""
-        ***REMOVED*** Setup input chunk
+        # Setup input chunk
         chunks = [
             {
                 "text": "center chunk",
@@ -94,7 +94,7 @@ class TestSmallToBigService:
             },
         ]
 
-        ***REMOVED*** Mock neighbor chunks from Qdrant
+        # Mock neighbor chunks from Qdrant
         mock_neighbor_points = [
             MagicMock(
                 id="neighbor1",
@@ -113,77 +113,77 @@ class TestSmallToBigService:
         ]
         mock_client.scroll.return_value = (mock_neighbor_points, None)
 
-        ***REMOVED*** Execute
+        # Execute
         result = await service.expand_context(
             chunks=chunks,
             window_before=1,
             window_after=1,
         )
 
-        ***REMOVED*** Verify
+        # Verify
         assert len(result) == 1
         expanded = result[0]
 
-        ***REMOVED*** Check neighbors were fetched
+        # Check neighbors were fetched
         mock_client.scroll.assert_called_once()
 
-        ***REMOVED*** Check expanded text contains all chunks in order
+        # Check expanded text contains all chunks in order
         assert "before chunk" in expanded.expanded_text
         assert "center chunk" in expanded.expanded_text
         assert "after chunk" in expanded.expanded_text
 
-        ***REMOVED*** Verify order (before comes first)
+        # Verify order (before comes first)
         assert expanded.expanded_text.index("before") < expanded.expanded_text.index("center")
         assert expanded.expanded_text.index("center") < expanded.expanded_text.index("after")
 
-        ***REMOVED*** Check neighbor chunks
+        # Check neighbor chunks
         assert len(expanded.neighbor_chunks) == 2
 
     async def test_expand_context_respects_max_chunks_limit(self, service, mock_client):
         """Test that expansion stops when max_expanded_chunks is reached."""
         service._max_expanded_chunks = 2
 
-        ***REMOVED*** Create 5 chunks
+        # Create 5 chunks
         chunks = [
             {"text": f"chunk {i}", "metadata": {"doc_id": "doc1", "order": i}} for i in range(5)
         ]
 
-        ***REMOVED*** Mock empty neighbors (simplifies test)
+        # Mock empty neighbors (simplifies test)
         mock_client.scroll.return_value = ([], None)
 
         result = await service.expand_context(chunks)
 
-        ***REMOVED*** Should only expand first 2 chunks
+        # Should only expand first 2 chunks
         assert len(result) == 2
 
     async def test_expand_context_respects_token_limit(self, service, mock_client):
         """Test that expansion stops when max_context_tokens is reached."""
-        service._max_context_tokens = 50  ***REMOVED*** ~200 characters
+        service._max_context_tokens = 50  # ~200 characters
 
-        ***REMOVED*** Create chunks with ~100 chars each
+        # Create chunks with ~100 chars each
         chunks = [{"text": "A" * 100, "metadata": {"doc_id": "doc1", "order": i}} for i in range(5)]
 
         mock_client.scroll.return_value = ([], None)
 
         result = await service.expand_context(chunks)
 
-        ***REMOVED*** Should stop after ~2 chunks (200 chars = 50 tokens)
+        # Should stop after ~2 chunks (200 chars = 50 tokens)
         assert len(result) <= 3
 
     async def test_expand_context_deduplicates(self, service, mock_client):
         """Test that duplicate chunks are removed across expansions."""
-        ***REMOVED*** Two adjacent chunks that would fetch overlapping neighbors
+        # Two adjacent chunks that would fetch overlapping neighbors
         chunks = [
             {"text": "chunk1", "metadata": {"doc_id": "doc1", "order": 5}},
             {"text": "chunk2", "metadata": {"doc_id": "doc1", "order": 6}},
         ]
 
-        ***REMOVED*** First call returns neighbor at order 6
-        ***REMOVED*** Second call returns neighbor at order 5
+        # First call returns neighbor at order 6
+        # Second call returns neighbor at order 5
         def scroll_side_effect(*args, **kwargs):
             filter_obj = kwargs.get("scroll_filter")
             if filter_obj:
-                ***REMOVED*** Return empty to simplify - dedup logic is tested via seen_chunk_ids
+                # Return empty to simplify - dedup logic is tested via seen_chunk_ids
                 return ([], None)
             return ([], None)
 
@@ -192,7 +192,7 @@ class TestSmallToBigService:
         result = await service.expand_context(chunks, deduplicate=True)
 
         assert len(result) == 2
-        ***REMOVED*** Both should be expanded but no duplicates in final context
+        # Both should be expanded but no duplicates in final context
 
     async def test_fetch_neighbors_builds_correct_filter(self, service, mock_client):
         """Test that _fetch_neighbors builds correct Qdrant filter."""
@@ -205,15 +205,15 @@ class TestSmallToBigService:
             window_after=3,
         )
 
-        ***REMOVED*** Verify scroll was called
+        # Verify scroll was called
         mock_client.scroll.assert_called_once()
 
-        ***REMOVED*** Check call arguments
+        # Check call arguments
         call_kwargs = mock_client.scroll.call_args.kwargs
         assert call_kwargs["collection_name"] == "test_collection"
         assert call_kwargs["with_payload"] is True
 
-        ***REMOVED*** Verify filter structure
+        # Verify filter structure
         scroll_filter = call_kwargs["scroll_filter"]
         assert scroll_filter is not None
 
@@ -271,7 +271,7 @@ class TestSmallToBigSettings:
         with patch.dict(
             "os.environ",
             {
-                ***REMOVED*** Isolate from runner secrets/default provider selection
+                # Isolate from runner secrets/default provider selection
                 "API_PROVIDER": "groq",
                 "GROQ_API_KEY": "test-groq-key",
                 "SMALL_TO_BIG_MODE": "on",
@@ -282,10 +282,10 @@ class TestSmallToBigSettings:
             },
             clear=True,
         ):
-            ***REMOVED*** Import after patching env
+            # Import after patching env
             from src.config.settings import Settings
 
-            ***REMOVED*** Need to create fresh instance
+            # Need to create fresh instance
             settings = Settings()
 
             assert settings.small_to_big_mode == "on"
@@ -299,7 +299,7 @@ class TestSmallToBigSettings:
         with patch.dict(
             "os.environ",
             {
-                ***REMOVED*** Ensure Settings() is valid regardless of host environment
+                # Ensure Settings() is valid regardless of host environment
                 "API_PROVIDER": "groq",
                 "GROQ_API_KEY": "test-groq-key",
             },
@@ -357,14 +357,14 @@ class TestIndexerMetadataFields:
 
     def test_indexer_creates_doc_id_alias(self):
         """Test that indexer adds doc_id as alias for document_name."""
-        ***REMOVED*** This tests the metadata dict structure in indexer._index_batch
-        ***REMOVED*** We verify through the code structure rather than runtime
-        ***REMOVED*** since runtime requires Qdrant connection
+        # This tests the metadata dict structure in indexer._index_batch
+        # We verify through the code structure rather than runtime
+        # since runtime requires Qdrant connection
         import inspect
 
         from src.ingestion.indexer import DocumentIndexer
 
-        ***REMOVED*** Verify the code includes doc_id field
+        # Verify the code includes doc_id field
 
         source = inspect.getsource(DocumentIndexer)
         assert '"doc_id": chunk.document_name' in source

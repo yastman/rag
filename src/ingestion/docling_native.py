@@ -18,7 +18,7 @@ DocumentConverterType = Any
 def _load_runtime_document_converter() -> Any | None:
     try:
         module = import_module("docling.document_converter")
-    except Exception:  ***REMOVED*** pragma: no cover - exercised in unit tests via injected converter
+    except Exception:  # pragma: no cover - exercised in unit tests via injected converter
         return None
     return getattr(module, "DocumentConverter", None)
 
@@ -55,7 +55,7 @@ class NativeDoclingAdapter(DoclingClient):
         contextualize: bool = True,
     ) -> list[DoclingChunk]:
         """Convert document natively and normalize it into DoclingChunk objects."""
-        del contextualize  ***REMOVED*** Native path already emits the final chunk text.
+        del contextualize  # Native path already emits the final chunk text.
 
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -84,10 +84,10 @@ class NativeDoclingAdapter(DoclingClient):
 
         for raw_line in markdown.splitlines():
             line = raw_line.rstrip()
-            if line.startswith("***REMOVED***"):
+            if line.startswith("#"):
                 flush()
                 current_lines = []
-                heading = line.lstrip("***REMOVED***").strip()
+                heading = line.lstrip("#").strip()
                 current_heading = [heading] if heading else []
                 continue
 

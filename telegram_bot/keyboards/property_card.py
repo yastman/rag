@@ -1,5 +1,5 @@
-***REMOVED*** telegram_bot/keyboards/property_card.py
-"""Property card formatting and buttons (***REMOVED***628)."""
+# telegram_bot/keyboards/property_card.py
+"""Property card formatting and buttons (#628)."""
 
 from __future__ import annotations
 
@@ -140,7 +140,7 @@ async def send_property_card(
 ) -> Message:
     """Send a property card with optional photo album and action buttons.
 
-    Standalone version of PropertyBot._send_property_card (***REMOVED***907 DRY).
+    Standalone version of PropertyBot._send_property_card (#907 DRY).
     Can be called from dialogs and handlers without a bot class instance.
     """
     from aiogram.types import FSInputFile, InputMediaPhoto
@@ -169,11 +169,11 @@ async def send_property_card(
     if demo_photos:
         try:
             media = [InputMediaPhoto(media=FSInputFile(path)) for path in demo_photos]
-            sent_photos = await message.answer_media_group(media=media)  ***REMOVED*** type: ignore[arg-type]
+            sent_photos = await message.answer_media_group(media=media)  # type: ignore[arg-type]
             photo_message_ids = [m.message_id for m in sent_photos]
         except Exception:
             logger.warning("Failed to send photo album, falling back to text card", exc_info=True)
 
     card_msg = await message.answer(card, reply_markup=reply_markup)
-    card_msg._photo_message_ids = photo_message_ids  ***REMOVED*** type: ignore[attr-defined]
+    card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
     return card_msg

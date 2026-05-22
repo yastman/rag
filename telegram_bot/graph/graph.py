@@ -84,7 +84,7 @@ def build_graph(
     from telegram_bot.graph.nodes.rewrite import rewrite_node
     from telegram_bot.graph.nodes.transcribe import make_transcribe_node
 
-    ***REMOVED*** Build run-scoped dependency context — injected into nodes via Runtime.
+    # Build run-scoped dependency context — injected into nodes via Runtime.
     ctx: GraphContext = {
         "cache": cache,
         "embeddings": embeddings,
@@ -99,8 +99,8 @@ def build_graph(
 
     workflow = StateGraph(RAGState, context_schema=GraphContext)
 
-    ***REMOVED*** Add nodes — Runtime[GraphContext] is injected automatically by LangGraph.
-    workflow.add_node("classify", classify_node)  ***REMOVED*** type: ignore[call-overload]
+    # Add nodes — Runtime[GraphContext] is injected automatically by LangGraph.
+    workflow.add_node("classify", classify_node)  # type: ignore[call-overload]
 
     workflow.add_node(
         "transcribe",
@@ -114,27 +114,27 @@ def build_graph(
     )
 
     if content_filter_enabled:
-        workflow.add_node("guard", guard_node)  ***REMOVED*** type: ignore[call-overload]
+        workflow.add_node("guard", guard_node)  # type: ignore[call-overload]
 
-    workflow.add_node("cache_check", cache_check_node)  ***REMOVED*** type: ignore[call-overload]
-    workflow.add_node("retrieve", retrieve_node)  ***REMOVED*** type: ignore[call-overload]
-    workflow.add_node("grade", grade_node)  ***REMOVED*** type: ignore[call-overload]
-    workflow.add_node("rerank", rerank_node)  ***REMOVED*** type: ignore[call-overload]
+    workflow.add_node("cache_check", cache_check_node)  # type: ignore[call-overload]
+    workflow.add_node("retrieve", retrieve_node)  # type: ignore[call-overload]
+    workflow.add_node("grade", grade_node)  # type: ignore[call-overload]
+    workflow.add_node("rerank", rerank_node)  # type: ignore[call-overload]
 
     workflow.add_node(
         "generate",
         _make_generate_node(message),
     )
 
-    workflow.add_node("rewrite", rewrite_node)  ***REMOVED*** type: ignore[call-overload]
-    workflow.add_node("cache_store", cache_store_node)  ***REMOVED*** type: ignore[call-overload]
+    workflow.add_node("rewrite", rewrite_node)  # type: ignore[call-overload]
+    workflow.add_node("cache_store", cache_store_node)  # type: ignore[call-overload]
 
     workflow.add_node(
         "respond",
         _make_respond_node(message),
     )
 
-    ***REMOVED*** Conversation memory: SDK summarization (langmem) — only when checkpointer is active
+    # Conversation memory: SDK summarization (langmem) — only when checkpointer is active
     if checkpointer is not None:
         from langchain_core.messages.utils import count_tokens_approximately
         from langmem.short_term import SummarizationNode
@@ -168,7 +168,7 @@ def build_graph(
                 )
                 result = state.copy()
             else:
-                ***REMOVED*** Best-effort Langfuse generation observation — must not fail the pipeline
+                # Best-effort Langfuse generation observation — must not fail the pipeline
                 with contextlib.suppress(Exception):
                     lf = get_client()
                     if lf is not None:
@@ -182,9 +182,9 @@ def build_graph(
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
             return cast(RAGState, result)
 
-        workflow.add_node("summarize", summarize_wrapper)  ***REMOVED*** type: ignore[call-overload]
+        workflow.add_node("summarize", summarize_wrapper)  # type: ignore[call-overload]
 
-    ***REMOVED*** Edges
+    # Edges
     workflow.add_conditional_edges(
         START,
         route_start,
@@ -257,14 +257,14 @@ def build_graph(
     compiled = workflow.compile(checkpointer=checkpointer)
     configured = compiled.with_config(recursion_limit=15)
 
-    ***REMOVED*** Pre-bind the run-scoped context so callers use the existing API:
-    ***REMOVED***   graph = build_graph(cache=..., ...)
-    ***REMOVED***   result = await graph.ainvoke(state, config=config)
+    # Pre-bind the run-scoped context so callers use the existing API:
+    #   graph = build_graph(cache=..., ...)
+    #   result = await graph.ainvoke(state, config=config)
     orig_ainvoke = configured.ainvoke
 
     async def _ainvoke_with_ctx(input_: Any, config: Any = None, **kwargs: Any) -> Any:
-        ***REMOVED*** Preserve default build_graph context but allow per-call overrides via
-        ***REMOVED*** graph.ainvoke(..., context={...}) without passing duplicate kwargs.
+        # Preserve default build_graph context but allow per-call overrides via
+        # graph.ainvoke(..., context={...}) without passing duplicate kwargs.
         call_context = kwargs.pop("context", None)
         if call_context is None:
             merged_context: Any = dict(ctx)
@@ -274,7 +274,7 @@ def build_graph(
             merged_context = call_context
         return await orig_ainvoke(input_, config=config, context=merged_context, **kwargs)
 
-    configured.ainvoke = _ainvoke_with_ctx  ***REMOVED*** type: ignore[assignment]
+    configured.ainvoke = _ainvoke_with_ctx  # type: ignore[assignment]
     return configured
 
 
@@ -283,9 +283,9 @@ def _create_summarize_model(config: Any) -> Any:
 
     Uses LangChain's SDK-native ``init_chat_model`` (LangChain 1.x) instead of
     direct ChatOpenAI construction so the abstraction stays provider-neutral
-    (***REMOVED***1653). Tracing is handled by @observe on pipeline nodes and LiteLLM
+    (#1653). Tracing is handled by @observe on pipeline nodes and LiteLLM
     proxy logging. CallbackHandler removed: broken context propagation in
-    async LangGraph (***REMOVED***157).
+    async LangGraph (#157).
     """
     from langchain.chat_models import init_chat_model
 

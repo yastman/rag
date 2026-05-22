@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Index local Markdown files into Qdrant via BGE-M3 embeddings.
 
 Document-scoped pipeline: for each file, chunk -> embed -> delete old -> upsert.
@@ -30,14 +30,14 @@ from qdrant_client.models import (
 )
 
 
-print = functools.partial(print, flush=True)  ***REMOVED*** type: ignore[assignment]
+print = functools.partial(print, flush=True)  # type: ignore[assignment]
 
-***REMOVED*** --- Config defaults ---
+# --- Config defaults ---
 DEFAULT_DOCS_DIR = os.getenv("DOCS_DIR", "./docs")
 DEFAULT_COLLECTION = "gdrive_documents_bge"
 DEFAULT_BGE_M3_URL = "http://localhost:8000"
 DEFAULT_QDRANT_URL = "http://localhost:6333"
-MAX_CHUNK_CHARS = 2000  ***REMOVED*** ~500 tokens
+MAX_CHUNK_CHARS = 2000  # ~500 tokens
 EMBED_BATCH_SIZE = 4
 UPLOAD_BATCH_SIZE = 1
 UPLOAD_MAX_RETRIES = 3
@@ -48,16 +48,16 @@ PAYLOAD_INDEX_FIELDS = [
 ]
 
 
-***REMOVED*** --- Chunking ---
+# --- Chunking ---
 
 
 def _heading_level(line: str) -> int | None:
-    m = re.match(r"^(***REMOVED***{1,3})\s", line)
+    m = re.match(r"^(#{1,3})\s", line)
     return len(m.group(1)) if m else None
 
 
 def chunk_markdown(text: str, source_file: str) -> list[dict]:
-    """Split markdown by ***REMOVED******REMOVED*** headings, merge small sections."""
+    """Split markdown by ## headings, merge small sections."""
     lines = text.split("\n")
     sections: list[dict] = []
     current_heading = Path(source_file).stem
@@ -72,13 +72,13 @@ def chunk_markdown(text: str, source_file: str) -> list[dict]:
         level = _heading_level(line)
         if level is not None and level <= 2:
             _flush()
-            current_heading = line.lstrip("***REMOVED***").strip() or current_heading
+            current_heading = line.lstrip("#").strip() or current_heading
             current_lines = []
         else:
             current_lines.append(line)
     _flush()
 
-    ***REMOVED*** Split oversized sections by paragraphs
+    # Split oversized sections by paragraphs
     chunks: list[dict] = []
     for sec in sections:
         txt = sec["text"]
@@ -111,7 +111,7 @@ def load_document_chunks(md_file: Path) -> list[dict]:
     return file_chunks
 
 
-***REMOVED*** --- BGE-M3 SDK ---
+# --- BGE-M3 SDK ---
 
 
 def _create_bge_client(bge_url: str):
@@ -163,7 +163,7 @@ def encode_hybrid_http(
     return {"dense": dense, "sparse": sparse, "colbert": colbert}
 
 
-***REMOVED*** --- Qdrant helpers ---
+# --- Qdrant helpers ---
 
 
 def preflight_check(client: QdrantClient, collection: str) -> None:
@@ -290,7 +290,7 @@ def upsert_points(
     return len(points)
 
 
-***REMOVED*** --- Main ---
+# --- Main ---
 
 
 def main() -> int:
@@ -314,7 +314,7 @@ def main() -> int:
     print(f"  Qdrant:     {args.qdrant_url}")
     print()
 
-    ***REMOVED*** Find .md files
+    # Find .md files
     docs_path = Path(args.docs_dir)
     if not docs_path.exists():
         print(f"Error: directory not found: {args.docs_dir}", file=sys.stderr)
@@ -327,13 +327,13 @@ def main() -> int:
 
     print(f"Found {len(md_files)} .md files")
 
-    ***REMOVED*** Qdrant preflight
+    # Qdrant preflight
     qdrant = QdrantClient(url=args.qdrant_url, timeout=60)
     preflight_check(qdrant, args.collection)
     ensure_payload_indexes(qdrant, args.collection)
     print("Preflight OK\n")
 
-    ***REMOVED*** BGE-M3 client
+    # BGE-M3 client
     bge_client = _create_bge_client(args.bge_url)
     use_sdk = bge_client is not None
     if use_sdk:
@@ -341,31 +341,31 @@ def main() -> int:
     else:
         print("Using raw HTTP (BGEM3SyncClient not available)")
 
-    ***REMOVED*** Document-scoped pipeline
+    # Document-scoped pipeline
     total_points = 0
     try:
         for file_idx, md_file in enumerate(md_files, 1):
             print(f"\n[{file_idx}/{len(md_files)}] {md_file.name}")
 
-            ***REMOVED*** 1. Chunk
+            # 1. Chunk
             chunks = load_document_chunks(md_file)
             if not chunks:
                 print("  No chunks, skipping")
                 continue
             print(f"  {len(chunks)} chunks")
 
-            ***REMOVED*** 2. Embed
+            # 2. Embed
             texts = [c["text"] for c in chunks]
             if use_sdk:
                 embeddings = encode_hybrid_sdk(bge_client, texts)
             else:
                 embeddings = encode_hybrid_http(texts, args.bge_url, args.batch_size)
 
-            ***REMOVED*** 3. Delete old points for this doc (idempotent)
+            # 3. Delete old points for this doc (idempotent)
             doc_id = md_file.name
             delete_doc_points(qdrant, args.collection, doc_id)
 
-            ***REMOVED*** 4. Upload new points with retry
+            # 4. Upload new points with retry
             count = upsert_points(qdrant, args.collection, chunks, embeddings)
             total_points += count
             print(f"  Upserted {count} points")

@@ -1,4 +1,4 @@
-"""Tests for role-gated nurturing + analytics tools (***REMOVED***390)."""
+"""Tests for role-gated nurturing + analytics tools (#390)."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ async def test_manager_run_nurturing_batch_returns_count():
 
 
 def _make_bot_context(role: str = "client") -> BotContext:
-    """Minimal BotContext for role-path tests (***REMOVED***479)."""
+    """Minimal BotContext for role-path tests (#479)."""
     return BotContext(
         telegram_user_id=1,
         session_id="chat-test",
@@ -107,7 +107,7 @@ def _make_bot_context(role: str = "client") -> BotContext:
 
 
 async def test_manager_analytics_allows_manager_via_bot_context():
-    """Role read from ctx.role when configurable has no direct 'role' key (***REMOVED***479)."""
+    """Role read from ctx.role when configurable has no direct 'role' key (#479)."""
     analytics_service = AsyncMock()
     analytics_service.get_latest_summary = AsyncMock(
         return_value=[{"stage": "inquiry", "rate": 0.4}]
@@ -127,7 +127,7 @@ async def test_manager_analytics_allows_manager_via_bot_context():
 
 
 async def test_manager_analytics_denies_client_via_bot_context():
-    """Client role from ctx.role is denied (***REMOVED***479)."""
+    """Client role from ctx.role is denied (#479)."""
     tools = create_manager_nurturing_tools(
         analytics_service=AsyncMock(),
         nurturing_service=AsyncMock(),
@@ -142,7 +142,7 @@ async def test_manager_analytics_denies_client_via_bot_context():
 
 
 async def test_nurturing_batch_allows_manager_via_bot_context():
-    """Role read from ctx.role for nurturing batch tool (***REMOVED***479)."""
+    """Role read from ctx.role for nurturing batch tool (#479)."""
     nurturing_service = AsyncMock()
     nurturing_service.run_once = AsyncMock(return_value=7)
     tools = create_manager_nurturing_tools(

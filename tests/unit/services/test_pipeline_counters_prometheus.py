@@ -1,4 +1,4 @@
-"""Tests for SDK-native pipeline event Counter (***REMOVED***1648 slice 3/4).
+"""Tests for SDK-native pipeline event Counter (#1648 slice 3/4).
 
 Slice 3/4 of the observability migration replaces log-as-metric events
 with a labeled ``prometheus_client.Counter`` in
@@ -26,7 +26,7 @@ Counter-level cardinality stays low: a single ``event`` label whose
 values are the six event names above (and any future hot-path counters
 added in subsequent sprints).
 
-Refs ***REMOVED***1648.
+Refs #1648.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ from telegram_bot.services.metrics import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -62,9 +62,9 @@ def _reset_counter_children():
     PipelineMetrics.reset()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 1. Counter object exists and has the right shape
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 1. Counter object exists and has the right shape
+# ---------------------------------------------------------------------------
 
 
 class TestCounterDefinition:
@@ -78,8 +78,8 @@ class TestCounterDefinition:
 
     def test_rag_pipeline_counter_metric_name(self):
         """Counter metric name base is rag_pipeline_events (prometheus_client strips _total from _name)."""
-        ***REMOVED*** prometheus_client strips the ``_total`` suffix from ``._name``
-        ***REMOVED*** but exposes the sample as ``rag_pipeline_events_total``.
+        # prometheus_client strips the ``_total`` suffix from ``._name``
+        # but exposes the sample as ``rag_pipeline_events_total``.
         assert rag_pipeline_events_total._name == "rag_pipeline_events", (
             f"Expected '_name' == 'rag_pipeline_events', got '{rag_pipeline_events_total._name}'. "
             "prometheus_client strips the _total suffix from the internal _name attribute."
@@ -93,7 +93,7 @@ class TestCounterDefinition:
 
     def test_rag_pipeline_counter_uses_default_registry(self):
         """Counter must be in prometheus_client.REGISTRY (no custom registry)."""
-        ***REMOVED*** prometheus_client stores the family name without _total suffix in REGISTRY.collect()
+        # prometheus_client stores the family name without _total suffix in REGISTRY.collect()
         names = {m.name for m in REGISTRY.collect()}
         assert "rag_pipeline_events" in names, (
             "rag_pipeline_events is not in prometheus_client.REGISTRY. "
@@ -101,9 +101,9 @@ class TestCounterDefinition:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 2. record_pipeline_event() helper
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 2. record_pipeline_event() helper
+# ---------------------------------------------------------------------------
 
 
 class TestRecordPipelineEvent:
@@ -169,7 +169,7 @@ class TestRecordPipelineEvent:
             "colbert_fallback_to_rrf",
         ]
         for event in hot_path_events:
-            record_pipeline_event(event)  ***REMOVED*** must not raise
+            record_pipeline_event(event)  # must not raise
 
         for event in hot_path_events:
             val = REGISTRY.get_sample_value(
@@ -181,9 +181,9 @@ class TestRecordPipelineEvent:
             )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 3. Backward-compat: PipelineMetrics.inc() still works
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. Backward-compat: PipelineMetrics.inc() still works
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineMetricsIncBackwardCompat:
@@ -199,7 +199,7 @@ class TestPipelineMetricsIncBackwardCompat:
     def test_existing_callers_of_PipelineMetrics_inc_still_work(self):
         """PipelineMetrics.get().inc('cache_hit') does not raise."""
         m = PipelineMetrics.get()
-        m.inc("cache_hit")  ***REMOVED*** must not raise
+        m.inc("cache_hit")  # must not raise
         m.inc("cache_hit", 2)
 
     def test_PipelineMetrics_inc_also_feeds_prometheus_counter(self):

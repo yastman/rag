@@ -1,21 +1,21 @@
-***REMOVED*** syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-***REMOVED*** Mini App React frontend — Node build + nginx serve
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
+# Mini App React frontend — Node build + nginx serve
 
-***REMOVED*** ====== BUILD STAGE ======
+# ====== BUILD STAGE ======
 FROM node:20.20.2-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS builder
 
 WORKDIR /app
 
-***REMOVED*** Deps layer
+# Deps layer
 COPY package.json package-lock.json ./
 RUN npm ci --prefer-offline
 
-***REMOVED*** Source layer
+# Source layer
 COPY . .
 
 RUN npm run build
 
-***REMOVED*** ====== RUNTIME STAGE ======
+# ====== RUNTIME STAGE ======
 FROM nginx:1.31-alpine@sha256:2f07d83bf561b506400dc183b1b2003803e39efbd22451f848adaba14d28c7c7 AS runtime
 
 COPY --from=builder /app/dist /usr/share/nginx/html

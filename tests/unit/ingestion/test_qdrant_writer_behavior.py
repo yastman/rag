@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_qdrant_writer_behavior.py
+# tests/unit/ingestion/test_qdrant_writer_behavior.py
 """Behavior tests for QdrantHybridWriter sync methods.
 
 Tests the actual business logic:
@@ -18,9 +18,9 @@ from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from src.services.bge_m3_client import HybridResult
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_chunk(
@@ -41,9 +41,9 @@ def _make_chunk(
     return chunk
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -53,8 +53,8 @@ def mock_qdrant_client():
     client.count.return_value = MagicMock(count=0)
     client.delete = MagicMock()
     client.upsert = MagicMock()
-    ***REMOVED*** Default: no orphan points exist for the file_id, so the post-upsert
-    ***REMOVED*** stale-id sweep finds nothing to delete (***REMOVED***1602 atomic-replace).
+    # Default: no orphan points exist for the file_id, so the post-upsert
+    # stale-id sweep finds nothing to delete (#1602 atomic-replace).
     client.scroll.return_value = ([], None)
     return client
 
@@ -102,7 +102,7 @@ def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
             voyage_api_key="test_key",
             use_local_embeddings=False,
         )
-    ***REMOVED*** After construction, inject mocks so tests can set side_effects
+    # After construction, inject mocks so tests can set side_effects
     w.client = mock_qdrant_client
     w._bge_client = mock_bge_client
     w.voyage = mock_voyage
@@ -131,9 +131,9 @@ def writer_local(mock_qdrant_client, mock_bge_client):
     yield w
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** delete_file_sync
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# delete_file_sync
+# ---------------------------------------------------------------------------
 
 
 class TestDeleteFileSyncBehavior:
@@ -178,8 +178,8 @@ class TestDeleteFileSyncBehavior:
 
         delete_kwargs = mock_qdrant_client.delete.call_args.kwargs
         selector = delete_kwargs["points_selector"]
-        ***REMOVED*** Canonical SDK shape per Qdrant Python client docs (Context7-verified):
-        ***REMOVED*** `points_selector=models.FilterSelector(filter=models.Filter(...))`.
+        # Canonical SDK shape per Qdrant Python client docs (Context7-verified):
+        # `points_selector=models.FilterSelector(filter=models.Filter(...))`.
         assert isinstance(selector, FilterSelector)
         filt = selector.filter
         assert isinstance(filt, Filter)
@@ -197,9 +197,9 @@ class TestDeleteFileSyncBehavior:
         assert delete_kwargs["collection_name"] == "target_collection"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** upsert_chunks_sync — payload contract and vector structure
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# upsert_chunks_sync — payload contract and vector structure
+# ---------------------------------------------------------------------------
 
 
 class TestUpsertChunksSyncBehavior:
@@ -304,9 +304,9 @@ class TestUpsertChunksSyncBehavior:
     def test_upsert_called_before_stale_delete_atomic_swap(
         self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
     ):
-        """Upsert must run BEFORE the post-upsert stale-id sweep (***REMOVED***1602)."""
+        """Upsert must run BEFORE the post-upsert stale-id sweep (#1602)."""
         call_order: list[str] = []
-        ***REMOVED*** Pretend there's a stale orphan so a delete sweep is required after upsert
+        # Pretend there's a stale orphan so a delete sweep is required after upsert
         mock_qdrant_client.count.return_value = MagicMock(count=1)
         mock_qdrant_client.scroll.return_value = (
             [MagicMock(id="00000000-0000-0000-0000-stalexxxxxxx")],
@@ -322,7 +322,7 @@ class TestUpsertChunksSyncBehavior:
         chunk = _make_chunk()
         writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
-        ***REMOVED*** Replacement points become live first; stale ids are swept after.
+        # Replacement points become live first; stale ids are swept after.
         assert call_order == ["upsert", "delete"]
 
     def test_stats_points_upserted_matches_chunk_count(
@@ -343,9 +343,9 @@ class TestUpsertChunksSyncBehavior:
         assert stats.errors is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** upsert_chunks_sync — colbert vector behavior
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# upsert_chunks_sync — colbert vector behavior
+# ---------------------------------------------------------------------------
 
 
 class TestColbertVectorBehavior:
@@ -385,9 +385,9 @@ class TestColbertVectorBehavior:
         assert "colbert" in points[0].vector
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** upsert_chunks_sync — edge cases
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# upsert_chunks_sync — edge cases
+# ---------------------------------------------------------------------------
 
 
 class TestUpsertChunksSyncEdgeCases:
@@ -418,7 +418,7 @@ class TestUpsertChunksSyncEdgeCases:
     ):
         """Voyage API calls are batched at VOYAGE_BATCH_SIZE chunks per call."""
         batch_size = QdrantHybridWriter.VOYAGE_BATCH_SIZE
-        num_chunks = batch_size + 10  ***REMOVED*** forces 2 batches
+        num_chunks = batch_size + 10  # forces 2 batches
 
         mock_qdrant_client.count.return_value = MagicMock(count=0)
         mock_voyage._client.embed.side_effect = [
@@ -463,7 +463,7 @@ class TestUpsertChunksSyncEdgeCases:
             weights=[{"indices": [1], "values": [0.5]}]
         )
 
-        ***REMOVED*** Create chunk with oversized text (~40MB)
+        # Create chunk with oversized text (~40MB)
         huge_text = "x" * (35 * 1024 * 1024)
         chunk = _make_chunk(text=huge_text)
         stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/big.pdf", {}, "col")
@@ -531,9 +531,9 @@ class TestUpsertChunksSyncEdgeCases:
         mock_qdrant_client.upsert.assert_not_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Regression guard: local BGE-M3 path must use encode_hybrid()
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Regression guard: local BGE-M3 path must use encode_hybrid()
+# ---------------------------------------------------------------------------
 
 
 class TestHybridEncodingRegression:

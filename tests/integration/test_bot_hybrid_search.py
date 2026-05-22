@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 
 
-***REMOVED*** This suite validates real telegram_bot.bot imports; skip cleanly if optional
-***REMOVED*** Telegram runtime dependency is not installed in the environment.
+# This suite validates real telegram_bot.bot imports; skip cleanly if optional
+# Telegram runtime dependency is not installed in the environment.
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from telegram_bot.bot import PropertyBot

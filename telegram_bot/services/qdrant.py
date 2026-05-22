@@ -29,9 +29,9 @@ class QdrantService:
     - Quantization mode-based collection selection
     """
 
-    ***REMOVED*** ACORN filtered search (Feb 2026): Code ready in src/retrieval/search_engines.py
-    ***REMOVED*** but AcornSearchParams not yet exported by qdrant-client SDK.
-    ***REMOVED*** Track: waiting for qdrant-client 1.18+ release. See ***REMOVED***590.
+    # ACORN filtered search (Feb 2026): Code ready in src/retrieval/search_engines.py
+    # but AcornSearchParams not yet exported by qdrant-client SDK.
+    # Track: waiting for qdrant-client 1.18+ release. See #590.
 
     def __init__(
         self,
@@ -54,7 +54,7 @@ class QdrantService:
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
             timeout: Connection timeout in seconds (default 30)
         """
-        ***REMOVED*** Strip api_key for http:// to avoid "insecure connection" warning (***REMOVED***570)
+        # Strip api_key for http:// to avoid "insecure connection" warning (#570)
         scheme = urlparse(url).scheme.lower()
         effective_api_key = api_key if scheme == "https" else None
         self._client = AsyncQdrantClient(
@@ -284,7 +284,7 @@ class QdrantService:
             resp = await self._client.get_collections()
             names = {c.name for c in resp.collections}
         except Exception as e:
-            ***REMOVED*** If we can't list collections, let the actual query raise a meaningful error.
+            # If we can't list collections, let the actual query raise a meaningful error.
             logger.warning(f"QdrantService: unable to list collections: {e}")
             lf.update_current_span(
                 level="WARNING",
@@ -307,7 +307,7 @@ class QdrantService:
             )
             return
 
-        ***REMOVED*** Fallback: use base collection if it exists.
+        # Fallback: use base collection if it exists.
         if self._base_collection_name in names:
             logger.warning(
                 "QdrantService: collection '%s' not found, falling back to base '%s'",
@@ -385,16 +385,16 @@ class QdrantService:
         dense_weight: float = 0.6,
         sparse_weight: float = 0.4,
         prefetch_multiplier: int = 3,
-        ***REMOVED*** Quantization A/B testing params
+        # Quantization A/B testing params
         quantization_ignore: bool | None = None,
         quantization_rescore: bool = True,
         quantization_oversampling: float = 2.0,
-        ***REMOVED*** RRF tuning
+        # RRF tuning
         rrf_k: int = 60,
-        ***REMOVED*** Grouping for diverse results
+        # Grouping for diverse results
         group_by: str | None = None,
         group_size: int = 2,
-        ***REMOVED*** Per-call error meta (***REMOVED***117)
+        # Per-call error meta (#117)
         return_meta: bool = False,
     ) -> list[dict] | tuple[list[dict], dict[str, Any]]:
         """Hybrid search with RRF fusion (dense + sparse).
@@ -436,10 +436,10 @@ class QdrantService:
                 "quantization_mode": self._quantization_mode,
             },
         )
-        ***REMOVED*** Build prefetch queries
+        # Build prefetch queries
         prefetch = []
 
-        ***REMOVED*** Dense prefetch
+        # Dense prefetch
         dense_limit = max(int(top_k * prefetch_multiplier * dense_weight), top_k)
         prefetch.append(
             models.Prefetch(
@@ -449,7 +449,7 @@ class QdrantService:
             )
         )
 
-        ***REMOVED*** Sparse prefetch (if available)
+        # Sparse prefetch (if available)
         if sparse_vector and sparse_vector.get("indices"):
             sparse_limit = max(int(top_k * prefetch_multiplier * sparse_weight), top_k)
             prefetch.append(
@@ -463,7 +463,7 @@ class QdrantService:
                 )
             )
 
-        ***REMOVED*** Build search params for quantization A/B testing
+        # Build search params for quantization A/B testing
         search_params = None
         if quantization_ignore is not None:
             search_params = models.SearchParams(
@@ -481,7 +481,7 @@ class QdrantService:
             "error_message": None,
         }
 
-        ***REMOVED*** Execute RRF fusion search with graceful degradation
+        # Execute RRF fusion search with graceful degradation
         try:
             if group_by:
                 group_result = await self._client.query_points_groups(
@@ -536,7 +536,7 @@ class QdrantService:
                 return results, ok_meta
             return results
         except Exception as e:
-            ***REMOVED*** Graceful degradation: return empty list on any Qdrant error
+            # Graceful degradation: return empty list on any Qdrant error
             logger.error(f"Qdrant search failed (graceful degradation): {e}")
             lf.update_current_span(
                 level="ERROR",
@@ -681,7 +681,7 @@ class QdrantService:
             sparse_limit if sparse_limit is not None else max(int(100 * sparse_weight / 0.4), top_k)
         )
 
-        ***REMOVED*** Inner prefetch: dense + sparse candidates
+        # Inner prefetch: dense + sparse candidates
         inner_prefetch = [
             models.Prefetch(
                 query=dense_vector,
@@ -702,8 +702,8 @@ class QdrantService:
                 )
             )
 
-        ***REMOVED*** Middle stage: RRF fusion of dense + sparse
-        ***REMOVED*** Overfetch so ColBERT has enough candidates to meaningfully rerank
+        # Middle stage: RRF fusion of dense + sparse
+        # Overfetch so ColBERT has enough candidates to meaningfully rerank
         rrf_limit = max(top_k * 4, 20)
         rrf_prefetch = models.Prefetch(
             prefetch=inner_prefetch,
@@ -718,7 +718,7 @@ class QdrantService:
         }
 
         try:
-            ***REMOVED*** Outer stage: ColBERT MaxSim reranking on pre-stored multivectors
+            # Outer stage: ColBERT MaxSim reranking on pre-stored multivectors
             result = await self._client.query_points(
                 collection_name=self._collection_name,
                 prefetch=[rrf_prefetch],
@@ -920,7 +920,7 @@ class QdrantService:
                 requests=requests,
             )
 
-            ***REMOVED*** Merge and deduplicate across all query responses
+            # Merge and deduplicate across all query responses
             seen: dict[str, dict] = {}
             for response in responses:
                 for point in response.points:
@@ -981,7 +981,7 @@ class QdrantService:
 
         for key, value in filters.items():
             if isinstance(value, dict):
-                ***REMOVED*** Range filter
+                # Range filter
                 range_params = {}
                 for op in ["lt", "lte", "gt", "gte"]:
                     if op in value:
@@ -995,7 +995,7 @@ class QdrantService:
                         )
                     )
             else:
-                ***REMOVED*** Exact match
+                # Exact match
                 conditions.append(
                     models.FieldCondition(
                         key=f"metadata.{key}",
@@ -1003,7 +1003,7 @@ class QdrantService:
                     )
                 )
 
-        return models.Filter(must=conditions) if conditions else None  ***REMOVED*** type: ignore[arg-type]  ***REMOVED*** list invariance
+        return models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]  # list invariance
 
     def _format_results(self, points: list[Any]) -> list[dict]:
         """Format Qdrant points to standard dict format."""

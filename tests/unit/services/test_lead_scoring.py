@@ -10,7 +10,7 @@ def test_hot_lead():
         budget="mid",
         timeline="asap",
     )
-    assert score >= 60  ***REMOVED*** Hot threshold
+    assert score >= 60  # Hot threshold
 
 
 def test_cold_lead():
@@ -30,7 +30,7 @@ def test_warm_lead():
         budget="high",
         timeline="3months",
     )
-    assert score == 55  ***REMOVED*** house(10) + high budget(20) + 3months(25)
+    assert score == 55  # house(10) + high budget(20) + 3months(25)
 
 
 def test_classify_hot():

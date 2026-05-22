@@ -32,19 +32,19 @@ from telegram_bot.services.types import PipelineResult
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Query types that bypass RAG — return canned response immediately.
+# Query types that bypass RAG — return canned response immediately.
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 
-***REMOVED*** Cache store allowlist mirrors graph semantic cache policy.
+# Cache store allowlist mirrors graph semantic cache policy.
 _PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY", "STRUCTURED"})
 
-***REMOVED*** Fallback confidence threshold for semantic cache store guard.
+# Fallback confidence threshold for semantic cache store guard.
 _CONFIDENCE_THRESHOLD = 0.005
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Intent detection
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Intent detection
+# ---------------------------------------------------------------------------
 
 
 @observe(name="detect-agent-intent", capture_input=False, capture_output=False)
@@ -97,9 +97,9 @@ def infer_agent_intent(user_text: str) -> str:
     return intent
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Canned responses for non-RAG query types
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Canned responses for non-RAG query types
+# ---------------------------------------------------------------------------
 
 
 def _build_non_rag_response(query_type: str) -> str:
@@ -130,9 +130,9 @@ def _safe_langfuse_env(config: Any) -> str:
     return value if isinstance(value, str) else ""
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Cache helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Cache helpers
+# ---------------------------------------------------------------------------
 
 
 def _is_contextual_query(user_text: str) -> bool:
@@ -140,9 +140,9 @@ def _is_contextual_query(user_text: str) -> bool:
     return is_contextual_query(user_text)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Telegram send helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Telegram send helpers
+# ---------------------------------------------------------------------------
 
 
 async def _send_html_chunks(
@@ -177,9 +177,9 @@ async def _send_markdown_chunks(
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Main pipeline
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
 
 
 @observe(name="client-direct-pipeline", capture_input=False, capture_output=False)
@@ -229,7 +229,7 @@ async def run_client_pipeline(
         role: User role ("client" or "manager").
         query_type: Pre-classified query type from classify_query().
         agent_intent: Pre-computed intent from detect_agent_intent() to avoid
-            duplicate observation (***REMOVED***1369). Empty string triggers detection.
+            duplicate observation (#1369). Empty string triggers detection.
 
     Returns:
         PipelineResult with answer, metadata, and routing signals.
@@ -237,7 +237,7 @@ async def run_client_pipeline(
     pipeline_start = time.perf_counter()
     lf = get_client()
 
-    ***REMOVED*** --- Step a) Classify gate ---
+    # --- Step a) Classify gate ---
     if query_type in _NO_RAG_QUERY_TYPES:
         response_text = _build_non_rag_response(query_type)
         await _send_html_chunks(message, response_text, reply_to_user_text=user_text)
@@ -260,7 +260,7 @@ async def run_client_pipeline(
                 "Failed to update Langfuse trace metadata in client-direct non-RAG path",
                 exc_info=True,
             )
-        ***REMOVED*** Write minimal scores for non-RAG early-return paths (***REMOVED***1368)
+        # Write minimal scores for non-RAG early-return paths (#1368)
         tid = lf.get_current_trace_id() or ""
         if tid:
             try:
@@ -286,11 +286,11 @@ async def run_client_pipeline(
             latency_ms=latency_ms,
         )
 
-    ***REMOVED*** --- Step b) Agent intent gate ---
+    # --- Step b) Agent intent gate ---
     resolved_intent = agent_intent or detect_agent_intent(user_text)
     if resolved_intent:
         latency_ms = (time.perf_counter() - pipeline_start) * 1000
-        ***REMOVED*** Write minimal scores for agent-intent early-return paths (***REMOVED***1368)
+        # Write minimal scores for agent-intent early-return paths (#1368)
         tid = lf.get_current_trace_id() or ""
         if tid:
             try:
@@ -316,7 +316,7 @@ async def run_client_pipeline(
             latency_ms=latency_ms,
         )
 
-    ***REMOVED*** --- Step c) RAG pipeline ---
+    # --- Step c) RAG pipeline ---
     result: dict[str, Any] = {
         "query_type": query_type,
         "cache_hit": False,
@@ -393,7 +393,7 @@ async def run_client_pipeline(
     result.update(pipeline_result)
     response_text = str(pipeline_result.get("response", "") or "")
 
-    ***REMOVED*** --- Step d) Generate if RAG did not return cached response ---
+    # --- Step d) Generate if RAG did not return cached response ---
     if not response_text:
         generated = await generate_response(
             query=user_text,
@@ -416,7 +416,7 @@ async def run_client_pipeline(
 
     result["response"] = response_text
 
-    ***REMOVED*** --- Step e) Send ---
+    # --- Step e) Send ---
     trace_id = lf.get_current_trace_id() or ""
     reply_markup = None
     if trace_id:
@@ -433,13 +433,13 @@ async def run_client_pipeline(
 
     response_already_sent = result.get("response_sent", False)
     if response_already_sent:
-        ***REMOVED*** Streaming already delivered the main response; only send sources if applicable.
+        # Streaming already delivered the main response; only send sources if applicable.
         if sources_html:
             await send_html_messages(
                 message, "", sources_html=sources_html, reply_markup=reply_markup
             )
         elif reply_markup:
-            ***REMOVED*** Attach feedback keyboard to the streamed message (***REMOVED***745).
+            # Attach feedback keyboard to the streamed message (#745).
             ref = result.get("sent_message")
             if ref and isinstance(ref, dict):
                 try:
@@ -462,7 +462,7 @@ async def run_client_pipeline(
             reply_to_user_text=user_text,
         )
 
-    ***REMOVED*** --- Step f) Post-process ---
+    # --- Step f) Post-process ---
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
     e2e_wall_ms = wall_ms + pre_agent_ms
     topic_hint = result.get("topic_hint")
@@ -542,7 +542,7 @@ async def run_client_pipeline(
         except Exception:
             logger.warning("Failed to store semantic cache in client pipeline", exc_info=True)
 
-    ***REMOVED*** Langfuse update + scores.
+    # Langfuse update + scores.
     try:
         with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
             lf.update_current_span(
@@ -579,7 +579,7 @@ async def run_client_pipeline(
         except Exception:
             logger.warning("Failed to write Langfuse scores in client pipeline", exc_info=True)
 
-    ***REMOVED*** History save.
+    # History save.
     if history_service and response_text:
         try:
             saved = await history_service.save_turn(
@@ -601,7 +601,7 @@ async def run_client_pipeline(
         except Exception:
             logger.warning("Failed to save history turn in client pipeline", exc_info=True)
 
-    ***REMOVED*** Build sources list for PipelineResult.
+    # Build sources list for PipelineResult.
     sources: list[dict[str, str]] = []
     for doc in documents_list[:_MAX_SOURCES]:
         if isinstance(doc, dict):

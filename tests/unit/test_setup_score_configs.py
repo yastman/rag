@@ -17,7 +17,7 @@ def _load_module():
     return module
 
 
-***REMOVED*** ---- SCORE_CONFIGS structure tests ----
+# ---- SCORE_CONFIGS structure tests ----
 
 EXPECTED_CONFIG_NAMES = {
     "user_feedback",
@@ -87,7 +87,7 @@ def test_confidence_score_is_numeric_0_to_1():
     assert cfg["max_value"] == 1.0
 
 
-***REMOVED*** ---- get_existing_configs() tests ----
+# ---- get_existing_configs() tests ----
 
 
 def test_get_existing_configs_returns_name_id_mapping():
@@ -127,7 +127,7 @@ def test_get_existing_configs_empty_when_no_configs():
     assert result == {}
 
 
-***REMOVED*** ---- setup_score_configs() tests ----
+# ---- setup_score_configs() tests ----
 
 
 def test_setup_score_configs_creates_all_when_none_exist():

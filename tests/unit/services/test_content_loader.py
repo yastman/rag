@@ -33,7 +33,7 @@ def test_load_services_config_file_not_found(monkeypatch, tmp_path):
     """FileNotFoundError when services.yaml is missing."""
     import telegram_bot.services.content_loader as mod
 
-    ***REMOVED*** Clear lru_cache so the patched path is used
+    # Clear lru_cache so the patched path is used
     mod.load_services_config.cache_clear()
     monkeypatch.setattr(mod, "_CONFIG_DIR", tmp_path / "nonexistent")
 
@@ -42,7 +42,7 @@ def test_load_services_config_file_not_found(monkeypatch, tmp_path):
     with pytest.raises(FileNotFoundError):
         mod.load_services_config()
 
-    ***REMOVED*** Restore cache for other tests
+    # Restore cache for other tests
     mod.load_services_config.cache_clear()
 
 

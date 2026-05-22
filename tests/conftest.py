@@ -10,33 +10,33 @@ import pytest
 from dotenv import load_dotenv
 
 
-***REMOVED*** Set testing flag to prevent heavy imports in src/__init__.py
+# Set testing flag to prevent heavy imports in src/__init__.py
 os.environ["RAG_TESTING"] = "true"
 
-***REMOVED*** Disable Langfuse tracing by default for tests to avoid timeouts when Langfuse
-***REMOVED*** is not running locally. Opt-in in Makefile targets that require tracing.
+# Disable Langfuse tracing by default for tests to avoid timeouts when Langfuse
+# is not running locally. Opt-in in Makefile targets that require tracing.
 os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
 
-***REMOVED*** Disable all OpenTelemetry exporters to prevent network calls in unit tests
+# Disable all OpenTelemetry exporters to prevent network calls in unit tests
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 os.environ.setdefault("OTEL_TRACES_EXPORTER", "none")
 os.environ.setdefault("OTEL_METRICS_EXPORTER", "none")
 os.environ.setdefault("OTEL_LOGS_EXPORTER", "none")
 
-***REMOVED*** Disable Langfuse completely (belt and suspenders)
+# Disable Langfuse completely (belt and suspenders)
 os.environ.setdefault("LANGFUSE_ENABLED", "false")
 os.environ.setdefault("LANGFUSE_HOST", "http://localhost:3001")
 os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
 
-***REMOVED*** Ragas registers an atexit shutdown hook that logs debug messages late in
-***REMOVED*** interpreter teardown. In pytest this can hit already-closed handlers and print
-***REMOVED*** noisy "I/O operation on closed file" tracebacks after all tests passed.
+# Ragas registers an atexit shutdown hook that logs debug messages late in
+# interpreter teardown. In pytest this can hit already-closed handlers and print
+# noisy "I/O operation on closed file" tracebacks after all tests passed.
 for _logger_name in ("ragas", "ragas._analytics"):
     _logger = logging.getLogger(_logger_name)
     _logger.disabled = True
     _logger.propagate = False
 
-***REMOVED*** Load environment variables before any imports
+# Load environment variables before any imports
 load_dotenv()
 
 
@@ -62,9 +62,9 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
                 item.add_marker(getattr(pytest.mark, marker))
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** HTTP MOCKING FIXTURES
-***REMOVED*** =============================================================================
+# =============================================================================
+# HTTP MOCKING FIXTURES
+# =============================================================================
 
 
 @pytest.fixture

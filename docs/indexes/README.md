@@ -1,10 +1,10 @@
-***REMOVED*** Documentation Indexes
+# Documentation Indexes
 
 Task-oriented entrypoints for fast agent and human orientation. Use these pages when you know what you want to do, not when you want to read everything.
 
 For the full documentation map, see [`../README.md`](../README.md). For operational incident response, see [`../runbooks/README.md`](../runbooks/README.md).
 
-***REMOVED******REMOVED*** Index Pages
+## Index Pages
 
 | Page | Use When |
 |---|---|
@@ -14,7 +14,7 @@ For the full documentation map, see [`../README.md`](../README.md). For operatio
 | [`local-runtime.md`](local-runtime.md) | You need local bot startup, Telegram E2E, Telethon session, or polling lock guidance. |
 | [`engineering-workflows.md`](engineering-workflows.md) | You need testing, issue triage, SDK lookup, dependency update, docs maintenance, or swarm process guidance. |
 
-***REMOVED******REMOVED*** Canonical Doc Owners
+## Canonical Doc Owners
 
 | Fact | Canonical Doc |
 |---|---|

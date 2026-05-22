@@ -1,4 +1,4 @@
-"""Tests for NurturingService.dispatch_pending + NurturingScheduler dispatch job (***REMOVED***445)."""
+"""Tests for NurturingService.dispatch_pending + NurturingScheduler dispatch job (#445)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from telegram_bot.services.nurturing_scheduler import NurturingScheduler
 from telegram_bot.services.nurturing_service import NurturingService
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -40,9 +40,9 @@ def fake_services_dispatch():
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** dispatch_pending tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# dispatch_pending tests
+# ---------------------------------------------------------------------------
 
 
 async def test_dispatch_no_pending(nurturing_svc):
@@ -142,9 +142,9 @@ async def test_dispatch_multiple_jobs(nurturing_svc):
     assert nurturing_svc._pool.execute.call_count == 3
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** NurturingScheduler dispatch job tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# NurturingScheduler dispatch job tests
+# ---------------------------------------------------------------------------
 
 
 async def test_scheduler_registers_dispatch_job_when_enabled(fake_services_dispatch):

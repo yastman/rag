@@ -23,7 +23,7 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 RetryWrappedFn = TypeVar("RetryWrappedFn", bound=Callable[..., Any])
 
-***REMOVED*** Transient transport errors worth retrying
+# Transient transport errors worth retrying
 RETRYABLE_TRANSPORT_ERRORS = (
     httpx.RemoteProtocolError,
     httpx.ConnectError,
@@ -32,7 +32,7 @@ RETRYABLE_TRANSPORT_ERRORS = (
     httpx.PoolTimeout,
 )
 
-***REMOVED*** Kommo-specific: also retry on certain HTTP status codes
+# Kommo-specific: also retry on certain HTTP status codes
 RETRYABLE_HTTP_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
@@ -72,7 +72,7 @@ def make_retry_decorator(
     )
 
 
-***REMOVED*** Convenience decorators matching original configurations
+# Convenience decorators matching original configurations
 kommo_retry = make_retry_decorator(
     retry_on_http_status=True,
     initial=1,

@@ -1,6 +1,6 @@
-***REMOVED*** Base configuration — all services, no ports exposed.
-***REMOVED*** Use with override: COMPOSE_FILE=compose.yml:compose.dev.yml
-***REMOVED*** See DOCKER.md and docs/LOCAL-DEVELOPMENT.md
+# Base configuration — all services, no ports exposed.
+# Use with override: COMPOSE_FILE=compose.yml:compose.dev.yml
+# See DOCKER.md and docs/LOCAL-DEVELOPMENT.md
 
 x-logging: &default-logging
   driver: json-file
@@ -16,9 +16,9 @@ x-security-defaults: &security-defaults
     - /tmp
 
 services:
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** DATABASES
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # DATABASES
+  # =============================================================================
 
   postgres:
     <<: *security-defaults
@@ -81,8 +81,8 @@ services:
     logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
-      ***REMOVED*** Storage optimisation config — fixes ***REMOVED***1545 (3.1 GB unbounded growth).
-      ***REMOVED*** Qdrant loads /qdrant/config/production.yaml on start when present.
+      # Storage optimisation config — fixes #1545 (3.1 GB unbounded growth).
+      # Qdrant loads /qdrant/config/production.yaml on start when present.
       - ./docker/qdrant/config.yaml:/qdrant/config/production.yaml:ro
     environment:
       QDRANT__SERVICE__GRPC_PORT: 6334
@@ -97,9 +97,9 @@ services:
         limits:
           memory: 1G
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** AI SERVICES
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # AI SERVICES
+  # =============================================================================
 
   bge-m3:
     <<: *security-defaults
@@ -122,7 +122,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      ***REMOVED*** Cold-start model download can take several minutes on first run.
+      # Cold-start model download can take several minutes on first run.
       start_period: 420s
     deploy:
       resources:
@@ -149,7 +149,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      ***REMOVED*** Cold-start model download can take several minutes on first run.
+      # Cold-start model download can take several minutes on first run.
       start_period: 420s
     deploy:
       resources:
@@ -165,8 +165,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     logging: *default-logging
-    ***REMOVED*** Docling writes temporary files and HuggingFace caches at runtime.
-    ***REMOVED*** Keep hardening defaults, but allow writes for this service.
+    # Docling writes temporary files and HuggingFace caches at runtime.
+    # Keep hardening defaults, but allow writes for this service.
     read_only: false
     environment:
       UVICORN_HOST: 0.0.0.0
@@ -189,14 +189,14 @@ services:
           memory: 2G
           pids: 200
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** LLM GATEWAY
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # LLM GATEWAY
+  # =============================================================================
 
   litellm:
     <<: *security-defaults
-    ***REMOVED*** LiteLLM writes migration/UI artifacts under site-packages at startup.
-    ***REMOVED*** Keep hardening defaults, but allow writes for this service.
+    # LiteLLM writes migration/UI artifacts under site-packages at startup.
+    # Keep hardening defaults, but allow writes for this service.
     read_only: false
     image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
     restart: unless-stopped
@@ -204,19 +204,19 @@ services:
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     environment:
-      ***REMOVED*** Auth
+      # Auth
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
-      ***REMOVED*** LLM Providers
+      # LLM Providers
       CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-${LLM_API_KEY}}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ***REMOVED*** Langfuse v3 OTEL (Docker internal network)
+      # Langfuse v3 OTEL (Docker internal network)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       LANGFUSE_OTEL_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
-      ***REMOVED*** Database disabled — config.yaml is source of truth for local dev
-      ***REMOVED*** DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/litellm
+      # Database disabled — config.yaml is source of truth for local dev
+      # DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/litellm
     command: ["--config", "/app/config.yaml"]
     depends_on: {}
     healthcheck:
@@ -231,9 +231,9 @@ services:
           memory: 512M
           pids: 100
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** TELEGRAM BOT
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # TELEGRAM BOT
+  # =============================================================================
 
   bot:
     <<: *security-defaults
@@ -244,35 +244,35 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      ***REMOVED*** Telegram
+      # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
-      ***REMOVED*** Local embeddings (matches VPS production)
+      # Local embeddings (matches VPS production)
       RETRIEVAL_DENSE_PROVIDER: bge_m3_api
       RETRIEVAL_SPARSE_PROVIDER: bge_m3_api
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
       GENERATE_MAX_TOKENS: "${GENERATE_MAX_TOKENS:-2048}"
       RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
-      ***REMOVED*** Semantic cache
+      # Semantic cache
       USE_LOCAL_EMBEDDINGS: "true"
       USER_BASE_URL: http://user-base:8000
-      ***REMOVED*** Services
+      # Services
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
-      ***REMOVED*** LLM (via LiteLLM Proxy)
+      # LLM (via LiteLLM Proxy)
       LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
-      ***REMOVED*** Latency knobs
+      # Latency knobs
       MAX_REWRITE_ATTEMPTS: "${MAX_REWRITE_ATTEMPTS:-1}"
       REWRITE_MAX_TOKENS: "${REWRITE_MAX_TOKENS:-64}"
-      ***REMOVED*** Pipeline mode
+      # Pipeline mode
       CLIENT_DIRECT_PIPELINE_ENABLED: "${CLIENT_DIRECT_PIPELINE_ENABLED:-false}"
-      ***REMOVED*** Domain configuration
+      # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
-      ***REMOVED*** Langfuse observability (optional — bot degrades gracefully)
+      # Langfuse observability (optional — bot degrades gracefully)
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
@@ -281,7 +281,7 @@ services:
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
       LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
-      ***REMOVED*** CRM — Kommo integration
+      # CRM — Kommo integration
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
       KOMMO_ACCESS_TOKEN: "${KOMMO_ACCESS_TOKEN:-}"
@@ -298,7 +298,7 @@ services:
       KOMMO_SERVICE_FIELD_ID: "${KOMMO_SERVICE_FIELD_ID:-0}"
       KOMMO_SOURCE_FIELD_ID: "${KOMMO_SOURCE_FIELD_ID:-0}"
       KOMMO_TELEGRAM_USERNAME_FIELD_ID: "${KOMMO_TELEGRAM_USERNAME_FIELD_ID:-0}"
-      ***REMOVED*** Manager
+      # Manager
       MANAGER_IDS: "${MANAGER_IDS:-}"
       MANAGER_HOT_LEAD_THRESHOLD: "${MANAGER_HOT_LEAD_THRESHOLD:-60}"
       MANAGER_HOT_LEAD_DEDUPE_SEC: "${MANAGER_HOT_LEAD_DEDUPE_SEC:-3600}"
@@ -310,7 +310,7 @@ services:
       BUSINESS_HOURS_END: "${BUSINESS_HOURS_END:-18}"
       BUSINESS_HOURS_TZ: "${BUSINESS_HOURS_TZ:-Europe/Sofia}"
       HANDOFF_WAIT_TIMEOUT_MIN: "${HANDOFF_WAIT_TIMEOUT_MIN:-15}"
-      ***REMOVED*** Real Estate DB
+      # Real Estate DB
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
     depends_on:
       postgres:
@@ -337,9 +337,9 @@ services:
           memory: 512M
           pids: 100
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** MINI APP (Telegram Web App — FastAPI + React/nginx)
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # MINI APP (Telegram Web App — FastAPI + React/nginx)
+  # =============================================================================
 
   mini-app-api:
     <<: *security-defaults
@@ -414,9 +414,9 @@ services:
         limits:
           memory: 64M
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** UNIFIED INGESTION PIPELINE (v3.2.1)
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # UNIFIED INGESTION PIPELINE (v3.2.1)
+  # =============================================================================
 
   ingestion:
     <<: *security-defaults
@@ -438,7 +438,7 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - DOCLING_URL=http://docling:5001
       - GDRIVE_COLLECTION_NAME=gdrive_documents_bge
-      ***REMOVED*** Local embeddings (matches VPS production)
+      # Local embeddings (matches VPS production)
       - USE_LOCAL_DENSE_EMBEDDINGS=true
       - BGE_M3_URL=http://bge-m3:8000
       - BGE_M3_TIMEOUT=600
@@ -472,11 +472,11 @@ services:
         limits:
           memory: 1G
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** ML PLATFORM (Langfuse stack — always-on on VPS, profile-gated on dev via override)
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # ML PLATFORM (Langfuse stack — always-on on VPS, profile-gated on dev via override)
+  # =============================================================================
 
-  ***REMOVED*** ClickHouse for Langfuse v3 analytics
+  # ClickHouse for Langfuse v3 analytics
   clickhouse:
     <<: *security-defaults
     image: clickhouse/clickhouse-server:26.4.3@sha256:a70f0e250a9dca5a48db51d8c00ac15747da999040b8dce0238b1d89f5220d8a
@@ -502,7 +502,7 @@ services:
         limits:
           memory: 1536M
 
-  ***REMOVED*** MinIO S3-compatible storage for Langfuse v3
+  # MinIO S3-compatible storage for Langfuse v3
   minio:
     <<: *security-defaults
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
@@ -527,7 +527,7 @@ services:
         limits:
           memory: 256M
 
-  ***REMOVED*** Redis for Langfuse v3 (separate from app Redis)
+  # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
     <<: *security-defaults
     image: redis:8.6.3@sha256:e628485c98f8cfe942d8b6f34d461dabf069884bf18932ccbdd9dd9af20b1acc
@@ -562,7 +562,7 @@ services:
         limits:
           memory: 128M
 
-  ***REMOVED*** Langfuse v3 Worker
+  # Langfuse v3 Worker
   langfuse-worker:
     image: langfuse/langfuse-worker:3.175.0@sha256:cf7ac3d5d29bce3d2f4626d5b3231665c5585a81599b5f54fd8e30f648874403
     restart: always
@@ -580,20 +580,20 @@ services:
         condition: service_healthy
         restart: true
     environment: &langfuse-env
-      ***REMOVED*** Database
+      # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/langfuse
-      ***REMOVED*** Auth
+      # Auth
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3001}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
       SALT: ${SALT:?SALT is required}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
-      ***REMOVED*** ClickHouse
+      # ClickHouse
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
-      ***REMOVED*** S3/MinIO
+      # S3/MinIO
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
@@ -608,11 +608,11 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
-      ***REMOVED*** Redis
+      # Redis
       REDIS_HOST: redis-langfuse
       REDIS_PORT: 6379
       REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-}
-      ***REMOVED*** Telemetry
+      # Telemetry
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
     logging: *default-logging
@@ -627,7 +627,7 @@ services:
         limits:
           memory: 512M
 
-  ***REMOVED*** Langfuse v3 Web
+  # Langfuse v3 Web
   langfuse:
     image: langfuse/langfuse:3.175.0@sha256:45c0fb329106da48ebffcfc17a5a7f585bb5bfb94c44125add7bdd19a440ed9b
     restart: always
@@ -665,9 +665,9 @@ services:
         limits:
           memory: 512M
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** MONITORING & ALERTING (dev-only)
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # MONITORING & ALERTING (dev-only)
+  # =============================================================================
 
   loki:
     <<: *security-defaults
@@ -725,10 +725,10 @@ services:
       - /bin/sh
       - -c
       - |
-        ***REMOVED*** Check if Telegram bot token is configured
+        # Check if Telegram bot token is configured
         if [ -z "$${TELEGRAM_ALERTING_BOT_TOKEN}" ]; then
           echo "WARNING: TELEGRAM_ALERTING_BOT_TOKEN not set, using null receiver"
-          ***REMOVED*** Create minimal config with null receiver
+          # Create minimal config with null receiver
           cat > /etc/alertmanager/alertmanager.yml << 'NULLCONFIG'
         global:
           resolve_timeout: 5m
@@ -742,13 +742,13 @@ services:
           - name: 'null'
         NULLCONFIG
         else
-          ***REMOVED*** Substitute environment variables in config template
+          # Substitute environment variables in config template
           cat /etc/alertmanager/alertmanager.tmpl | \
             sed "s|\$${TELEGRAM_ALERTING_BOT_TOKEN}|$${TELEGRAM_ALERTING_BOT_TOKEN}|g" | \
             sed "s|\$${TELEGRAM_ALERTING_CHAT_ID}|$${TELEGRAM_ALERTING_CHAT_ID}|g" \
             > /etc/alertmanager/alertmanager.yml
         fi
-        ***REMOVED*** Start alertmanager
+        # Start alertmanager
         exec /bin/alertmanager \
           --config.file=/etc/alertmanager/alertmanager.yml \
           --storage.path=/alertmanager \
@@ -767,9 +767,9 @@ services:
         limits:
           memory: 128M
 
-  ***REMOVED*** =============================================================================
-  ***REMOVED*** VOICE (dev-only — LiveKit Agents + SIP)
-  ***REMOVED*** =============================================================================
+  # =============================================================================
+  # VOICE (dev-only — LiveKit Agents + SIP)
+  # =============================================================================
 
   rag-api:
     <<: *security-defaults
@@ -914,9 +914,9 @@ services:
         limits:
           memory: 1G
 
-***REMOVED*** =============================================================================
-***REMOVED*** VOLUMES
-***REMOVED*** =============================================================================
+# =============================================================================
+# VOLUMES
+# =============================================================================
 
 volumes:
   postgres_data:

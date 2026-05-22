@@ -13,11 +13,11 @@ from mini_app.api import app, get_validated_init_data
 from mini_app.phone import PhoneRequest, submit_phone
 
 
-***REMOVED*** The endpoint enforces SDK-validated Telegram initData (***REMOVED***1595). Tests in
-***REMOVED*** this file focus on the CRM/Kommo path, so we bypass the auth dependency
-***REMOVED*** with a synthetic validated payload. Auth enforcement itself is covered
-***REMOVED*** by tests/unit/mini_app/test_mini_app_auth_enforcement.py and
-***REMOVED*** tests/contract/test_mini_app_auth_contract.py.
+# The endpoint enforces SDK-validated Telegram initData (#1595). Tests in
+# this file focus on the CRM/Kommo path, so we bypass the auth dependency
+# with a synthetic validated payload. Auth enforcement itself is covered
+# by tests/unit/mini_app/test_mini_app_auth_enforcement.py and
+# tests/contract/test_mini_app_auth_contract.py.
 def _stub_init_data(user_id: int = 123) -> dict:
     return {"user": {"id": user_id, "first_name": "Test"}, "auth_date": "0"}
 
@@ -63,7 +63,7 @@ async def test_submit_phone_invalid():
 async def test_submit_phone_crm_failure_returns_error_payload():
     """CRM failures must surface as success=False so clients can react.
     Previously every exception was swallowed into success=True, leaving
-    the UI unable to distinguish a real lead from a dropped one (***REMOVED***1596).
+    the UI unable to distinguish a real lead from a dropped one (#1596).
     """
     with patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")):
         result = await submit_phone(PhoneRequest(phone="+359888123456", source="test", user_id=123))
@@ -76,7 +76,7 @@ async def test_submit_phone_crm_failure_returns_error_payload():
 async def test_phone_endpoint_returns_502_on_crm_failure():
     """The /api/phone endpoint must return a non-2xx status (502 Bad Gateway)
     when the CRM submission fails so the frontend can show a retry/error
-    UI instead of treating the lead as captured (***REMOVED***1596)."""
+    UI instead of treating the lead as captured (#1596)."""
     with patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(

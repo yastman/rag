@@ -1,12 +1,12 @@
-***REMOVED*** telegram_bot/
+# telegram_bot/
 
 Telegram transport layer and bot orchestration for the contextual RAG system.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Handles Telegram updates (text, voice, callbacks), delegates all retrieval and generation to pipelines, and surfaces answers back to users. Keeps transport concerns separate from domain logic.
 
-***REMOVED******REMOVED*** Entrypoints
+## Entrypoints
 
 | Entrypoint | Role |
 |------------|------|
@@ -17,13 +17,13 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 | [`pipelines/client.py`](./pipelines/client.py) | Client-direct non-RAG and RAG paths for simple queries |
 | [`preflight.py`](./preflight.py) | Startup health checks (Redis, Qdrant, Langfuse) |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - **Transport does not absorb retrieval/domain logic.** `bot.py` handlers call into `graph`, `agents`, or `pipelines/client`; they do not query Qdrant or run LLM prompts directly.
 - **LangGraph state contracts** (`telegram_bot/graph/state.py`) must be preserved when adding new nodes or edges.
 - **Ingestion determinism** is owned by `src/ingestion/`; bot code must not modify collection schemas or manifest identity.
 
-***REMOVED******REMOVED*** Related Runtime Services
+## Related Runtime Services
 
 - **Qdrant** — vector search (collections: documents, domain catalogs, history)
 - **Redis** — caching, throttling, user context
@@ -31,20 +31,20 @@ Handles Telegram updates (text, voice, callbacks), delegates all retrieval and g
 - **Langfuse** — tracing and observability (optional, graceful degradation)
 - **LiveKit** — voice calls (see `src/voice/`; deferred by default)
 
-***REMOVED******REMOVED*** Focused Checks
+## Focused Checks
 
 ```bash
-***REMOVED*** Lint and type-check
+# Lint and type-check
 make check
 
-***REMOVED*** Focused bot/runtime unit tests
+# Focused bot/runtime unit tests
 uv run pytest tests/unit/graph/test_graph.py tests/unit/pipelines/test_client_pipeline.py tests/unit/test_preflight.py -v
 
-***REMOVED*** Service-dependent local preflight helper
+# Service-dependent local preflight helper
 make test-bot-health
 ```
 
-***REMOVED******REMOVED*** Directory Guide
+## Directory Guide
 
 | Directory | Concern |
 |-----------|---------|
@@ -56,7 +56,7 @@ make test-bot-health
 | `pipelines/` | Client-direct pipeline entrypoints |
 | `services/` | Bot services (Qdrant, cache, query analysis, response generation) |
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`AGENTS.override.md`](AGENTS.override.md) — Bot-specific scope rules and validation
 - [`../DOCKER.md`](../DOCKER.md) — Docker bring-up and service dependencies

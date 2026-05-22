@@ -22,7 +22,7 @@ def _api_url() -> str:
 
 def _is_api_available() -> bool:
     url = _api_url()
-    ***REMOVED*** Parse host/port from URL like http://host:port
+    # Parse host/port from URL like http://host:port
     try:
         without_scheme = url.split("://", 1)[1]
         host, _, port_str = without_scheme.partition(":")
@@ -64,7 +64,7 @@ class TestMiniAppApi:
             response = await client.get("/api/config")
         assert response.status_code == 200
         data = response.json()
-        ***REMOVED*** Config must contain at minimum these keys (from mini_app.yaml)
+        # Config must contain at minimum these keys (from mini_app.yaml)
         assert isinstance(data, dict), "Config must be a dict"
         assert "questions" in data or "experts" in data, (
             f"Expected 'questions' or 'experts' in config, got keys: {list(data.keys())}"
@@ -89,7 +89,7 @@ class TestMiniAppApi:
         payload = {"phone": "", "source": "smoke_test", "user_id": 999999}
         async with httpx.AsyncClient(base_url=_api_url(), timeout=10.0) as client:
             response = await client.post("/api/phone", json=payload)
-        ***REMOVED*** Either 422 (validation) or 200 with error key — both acceptable
+        # Either 422 (validation) or 200 with error key — both acceptable
         assert response.status_code in (200, 422), (
             f"Unexpected status {response.status_code}: {response.text}"
         )

@@ -4,7 +4,7 @@ import pytest
 
 
 try:
-    from redisvl.utils.vectorize import BaseVectorizer  ***REMOVED*** noqa: F401
+    from redisvl.utils.vectorize import BaseVectorizer  # noqa: F401
 except (ImportError, ModuleNotFoundError, ValueError):
     pytest.skip("redisvl not installed", allow_module_level=True)
 
@@ -45,7 +45,7 @@ class TestUserBaseVectorizer:
         assert isinstance(client, httpx.AsyncClient)
         assert vectorizer._async_client is client
 
-        ***REMOVED*** Cleanup
+        # Cleanup
         await vectorizer.aclose()
 
     async def test_get_client_reuses_existing_client(self):
@@ -57,7 +57,7 @@ class TestUserBaseVectorizer:
 
         assert client1 is client2
 
-        ***REMOVED*** Cleanup
+        # Cleanup
         await vectorizer.aclose()
 
     async def test_aembed_single_text(self):
@@ -136,11 +136,11 @@ class TestUserBaseVectorizer:
         """Should close httpx clients and set to None."""
         vectorizer = UserBaseVectorizer()
 
-        ***REMOVED*** Create async client
+        # Create async client
         mock_async_client = AsyncMock()
         vectorizer._async_client = mock_async_client
 
-        ***REMOVED*** Create sync client
+        # Create sync client
         mock_sync_client = MagicMock()
         vectorizer._sync_client = mock_sync_client
 
@@ -157,7 +157,7 @@ class TestUserBaseVectorizer:
         assert vectorizer._async_client is None
         assert vectorizer._sync_client is None
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await vectorizer.aclose()
 
         assert vectorizer._async_client is None
@@ -171,7 +171,7 @@ class TestUserBaseVectorizerRedisVL:
         """Should implement RedisVL vectorizer interface."""
         vectorizer = UserBaseVectorizer()
 
-        ***REMOVED*** RedisVL expects these methods
+        # RedisVL expects these methods
         assert hasattr(vectorizer, "embed")
         assert hasattr(vectorizer, "embed_many")
         assert callable(vectorizer.embed)

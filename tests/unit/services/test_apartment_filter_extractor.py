@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/services/test_apartment_filter_extractor.py
+# tests/unit/services/test_apartment_filter_extractor.py
 """Tests for apartment-specific filter extraction."""
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ class TestCombined:
 
     def test_semantic_query_extracted(self) -> None:
         result = _ext.parse("уютная двушка до 200к в Премьере")
-        ***REMOVED*** semantic_query should retain descriptive words, strip numbers/filters
+        # semantic_query should retain descriptive words, strip numbers/filters
         assert "уютн" in result.semantic_query.lower() or result.semantic_query != ""
 
 
@@ -180,7 +180,7 @@ class TestCity:
             ("элените 3 комнаты", "Элените"),
             ("elenite apartment", "Элените"),
             ("санни бич до 100к", "Солнечный берег"),
-            ("двушка в несебре", None),  ***REMOVED*** несебр — не в нашей БД
+            ("двушка в несебре", None),  # несебр — не в нашей БД
         ],
     )
     def test_city_extraction(self, query: str, expected_city: str | None) -> None:

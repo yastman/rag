@@ -1,4 +1,4 @@
-"""Tests for KommoClient error and retry paths (***REMOVED***1090)."""
+"""Tests for KommoClient error and retry paths (#1090)."""
 
 from __future__ import annotations
 

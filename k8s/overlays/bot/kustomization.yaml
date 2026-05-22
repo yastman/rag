@@ -7,7 +7,7 @@ resources:
   - ../../base/namespace.yaml
   - ../../base/configmaps/postgres-init.yaml
   - ../../base/configmaps/litellm-config.yaml
-  ***REMOVED*** Databases
+  # Databases
   - ../../base/postgres/pvc.yaml
   - ../../base/postgres/deployment.yaml
   - ../../base/postgres/service.yaml
@@ -17,12 +17,12 @@ resources:
   - ../../base/qdrant/pvc.yaml
   - ../../base/qdrant/deployment.yaml
   - ../../base/qdrant/service.yaml
-  ***REMOVED*** ML Services
+  # ML Services
   - ../../base/bge-m3/deployment.yaml
   - ../../base/bge-m3/service.yaml
   - ../../base/user-base/deployment.yaml
   - ../../base/user-base/service.yaml
-  ***REMOVED*** Application
+  # Application
   - ../../base/litellm/deployment.yaml
   - ../../base/litellm/service.yaml
   - ../../base/bot/deployment.yaml

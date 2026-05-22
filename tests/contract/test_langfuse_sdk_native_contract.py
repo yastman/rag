@@ -1,6 +1,6 @@
-"""Contract: lock SDK-native Langfuse v4 usage (***REMOVED***1648).
+"""Contract: lock SDK-native Langfuse v4 usage (#1648).
 
-Issue ***REMOVED***1648 — Langfuse v4 native usage SDK-audit.
+Issue #1648 — Langfuse v4 native usage SDK-audit.
 
 Verified via Context7 (/langfuse/langfuse-python):
 - ``@observe`` decorator wraps spans and captures inputs/outputs.
@@ -29,7 +29,7 @@ no patterns — to keep the policy explicit and easy to audit.
 
 Content was rephrased for compliance with licensing restrictions.
 
-Refs ***REMOVED***1648.
+Refs #1648.
 """
 
 from __future__ import annotations
@@ -48,33 +48,33 @@ SCAN_DIRS: tuple[Path, ...] = (
     REPO_ROOT / "scripts",
 )
 
-***REMOVED*** Files allowed to construct OTLPSpanExporter / TracerProvider /
-***REMOVED*** BatchSpanProcessor or to import TracerProvider from
-***REMOVED*** ``opentelemetry.sdk.trace``. Frozen baseline — must shrink, never grow.
+# Files allowed to construct OTLPSpanExporter / TracerProvider /
+# BatchSpanProcessor or to import TracerProvider from
+# ``opentelemetry.sdk.trace``. Frozen baseline — must shrink, never grow.
 OTEL_BOOTSTRAP_ALLOWLIST: frozenset[str] = frozenset(
     {
-        ***REMOVED*** LiveKit's set_tracer_provider helper requires an explicit
-        ***REMOVED*** SDK TracerProvider; this is the only legitimate manual OTEL
-        ***REMOVED*** bootstrap in the production runtime.
+        # LiveKit's set_tracer_provider helper requires an explicit
+        # SDK TracerProvider; this is the only legitimate manual OTEL
+        # bootstrap in the production runtime.
         "src/voice/agent.py",
-        ***REMOVED*** isinstance check on the active provider during graceful
-        ***REMOVED*** shutdown — imports the symbol but never constructs it.
+        # isinstance check on the active provider during graceful
+        # shutdown — imports the symbol but never constructs it.
         "telegram_bot/observability_bootstrap.py",
     }
 )
 
-***REMOVED*** Files allowed to construct ``Langfuse(...)`` directly. Frozen baseline —
-***REMOVED*** must shrink, never grow. The production runtime singleton lives in
-***REMOVED*** telegram_bot/observability.py; evaluation modules and CLI scripts each
-***REMOVED*** create their own client because they run as standalone processes.
+# Files allowed to construct ``Langfuse(...)`` directly. Frozen baseline —
+# must shrink, never grow. The production runtime singleton lives in
+# telegram_bot/observability.py; evaluation modules and CLI scripts each
+# create their own client because they run as standalone processes.
 LANGFUSE_CTOR_ALLOWLIST: frozenset[str] = frozenset(
     {
-        ***REMOVED*** Production singleton bootstrap.
+        # Production singleton bootstrap.
         "telegram_bot/observability.py",
-        ***REMOVED*** Evaluation modules instantiate dedicated short-lived clients.
+        # Evaluation modules instantiate dedicated short-lived clients.
         "src/evaluation/langfuse_integration.py",
         "src/evaluation/ragas_evaluation.py",
-        ***REMOVED*** CLI scripts running outside the bot process.
+        # CLI scripts running outside the bot process.
         "scripts/e2e/langfuse_latest_trace_audit.py",
         "scripts/e2e/langfuse_trace_validator.py",
         "scripts/eval/calibrate_judge.py",
@@ -185,7 +185,7 @@ def test_no_unallowlisted_otel_bootstrap() -> None:
             )
     if offenders:
         raise AssertionError(
-            "Custom OTEL bootstrap detected outside the allowlist (***REMOVED***1648).\n"
+            "Custom OTEL bootstrap detected outside the allowlist (#1648).\n"
             "Use SDK-native Langfuse v4 instead: @observe, langfuse.get_client(), "
             "propagate_attributes(...).\n"
             "Allowlist (exact relative paths):\n"
@@ -209,7 +209,7 @@ def test_no_unallowlisted_langfuse_constructor() -> None:
             offenders.append(f"  {rel}:{lineno} -> Langfuse(...)")
     if offenders:
         raise AssertionError(
-            "Direct Langfuse() construction outside the allowlist (***REMOVED***1648).\n"
+            "Direct Langfuse() construction outside the allowlist (#1648).\n"
             "Use telegram_bot.observability.get_langfuse_client() for the bot "
             "singleton, or langfuse.get_client() inside @observe-decorated code.\n"
             "Allowlist (exact relative paths):\n"
@@ -226,7 +226,7 @@ def test_allowlist_paths_exist() -> None:
         if not (REPO_ROOT / rel).exists():
             missing.append(rel)
     assert not missing, (
-        "Allowlist points to missing files (***REMOVED***1648). Update the contract test "
+        "Allowlist points to missing files (#1648). Update the contract test "
         "after a rename/delete:\n" + "\n".join(f"  {p}" for p in missing)
     )
 
@@ -258,6 +258,6 @@ def test_allowlist_entries_actually_use_pattern() -> None:
             stale.append(f"  {rel} (no Langfuse() constructor remains)")
 
     assert not stale, (
-        "Stale allowlist entries (***REMOVED***1648) — remove from this contract test:\n"
+        "Stale allowlist entries (#1648) — remove from this contract test:\n"
         + "\n".join(stale)
     )

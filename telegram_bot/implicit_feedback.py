@@ -1,4 +1,4 @@
-"""Implicit retry detection via embedding similarity (***REMOVED***756).
+"""Implicit retry detection via embedding similarity (#756).
 
 Detects when a user reformulates a query — an implicit negative feedback signal.
 If cosine_similarity(current, previous) > 0.7 AND time_delta < 60s → implicit_retry=1.

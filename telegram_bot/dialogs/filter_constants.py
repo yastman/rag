@@ -10,15 +10,15 @@ from typing import Any
 from telegram_bot.constants.apartment_constants import APARTMENT_CITY_OPTIONS
 
 
-***REMOVED*** ============================================================
-***REMOVED*** City options — (label, value) pairs for dialog Select
-***REMOVED*** ============================================================
+# ============================================================
+# City options — (label, value) pairs for dialog Select
+# ============================================================
 
 CITY_OPTIONS: list[tuple[str, str]] = APARTMENT_CITY_OPTIONS
 
-***REMOVED*** ============================================================
-***REMOVED*** Rooms options — (label, int_value) pairs
-***REMOVED*** ============================================================
+# ============================================================
+# Rooms options — (label, int_value) pairs
+# ============================================================
 
 ROOMS_OPTIONS: list[tuple[str, int]] = [
     ("Студия", 1),
@@ -37,12 +37,12 @@ ROOMS_DISPLAY: dict[int, str] = {
     5: "4+ спальни",
 }
 
-***REMOVED*** Property type → rooms (used by funnel)
+# Property type → rooms (used by funnel)
 ROOMS_MAP: dict[str, int | list[int]] = {"studio": [0, 1], "1bed": 2, "2bed": 3, "3bed": 4}
 
-***REMOVED*** ============================================================
-***REMOVED*** Budget
-***REMOVED*** ============================================================
+# ============================================================
+# Budget
+# ============================================================
 
 BUDGET_MAP: dict[str, dict[str, int]] = {
     "low": {"lte": 50_000},
@@ -64,9 +64,9 @@ BUDGET_OPTIONS: list[tuple[str, str]] = [
     (BUDGET_DISPLAY[key], key) for key in ("low", "mid", "high", "premium", "luxury")
 ]
 
-***REMOVED*** ============================================================
-***REMOVED*** Floor
-***REMOVED*** ============================================================
+# ============================================================
+# Floor
+# ============================================================
 
 FLOOR_MAP: dict[str, dict[str, int]] = {
     "low": {"gte": 0, "lte": 1},
@@ -86,9 +86,9 @@ FLOOR_OPTIONS: list[tuple[str, str]] = [
     (FLOOR_DISPLAY[key], key) for key in ("low", "mid", "high", "top")
 ]
 
-***REMOVED*** ============================================================
-***REMOVED*** Area
-***REMOVED*** ============================================================
+# ============================================================
+# Area
+# ============================================================
 
 AREA_MAP: dict[str, dict[str, int]] = {
     "small": {"lte": 40},
@@ -110,9 +110,9 @@ AREA_OPTIONS: list[tuple[str, str]] = [
     (AREA_DISPLAY[key], key) for key in ("small", "mid", "large", "xlarge", "xxlarge")
 ]
 
-***REMOVED*** ============================================================
-***REMOVED*** View
-***REMOVED*** ============================================================
+# ============================================================
+# View
+# ============================================================
 
 VIEW_DISPLAY: dict[str, str] = {
     "sea": "Море",
@@ -126,9 +126,9 @@ VIEW_DISPLAY: dict[str, str] = {
 
 VIEW_OPTIONS: list[tuple[str, str]] = [(display, key) for key, display in VIEW_DISPLAY.items()]
 
-***REMOVED*** ============================================================
-***REMOVED*** Field → filter key mapping
-***REMOVED*** ============================================================
+# ============================================================
+# Field → filter key mapping
+# ============================================================
 
 FIELD_TO_FILTER_KEY: dict[str, str] = {
     "city": "city",
@@ -142,9 +142,9 @@ FIELD_TO_FILTER_KEY: dict[str, str] = {
     "promotion": "is_promotion",
 }
 
-***REMOVED*** ============================================================
-***REMOVED*** Coercion helper
-***REMOVED*** ============================================================
+# ============================================================
+# Coercion helper
+# ============================================================
 
 
 def coerce_filter_value(field: str, value: str) -> Any:
@@ -183,9 +183,9 @@ def coerce_filter_value(field: str, value: str) -> Any:
     return value or None
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Build filters dict from raw dialog / FSMContext data
-***REMOVED*** ============================================================
+# ============================================================
+# Build filters dict from raw dialog / FSMContext data
+# ============================================================
 
 
 def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
@@ -202,7 +202,7 @@ def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
     for field, value in raw.items():
         if value is None or value == "" or value == "any" or value == "None":
             continue
-        ***REMOVED*** Coerce string item_ids from Radio widgets; passthrough typed values
+        # Coerce string item_ids from Radio widgets; passthrough typed values
         coerced = coerce_filter_value(field, value) if isinstance(value, str) else value
         if coerced is None:
             continue

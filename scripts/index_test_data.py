@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Index test data from JSON into Qdrant."""
 
 import asyncio
@@ -30,13 +30,13 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
 
 def create_collection(client: QdrantClient, collection_name: str, vector_size: int = 1024):
     """Create or recreate Qdrant collection."""
-    ***REMOVED*** Delete if exists
+    # Delete if exists
     collections = [c.name for c in client.get_collections().collections]
     if collection_name in collections:
         client.delete_collection(collection_name)
         print(f"Deleted existing collection: {collection_name}")
 
-    ***REMOVED*** Create new with named vector "dense" (required by RetrieverService)
+    # Create new with named vector "dense" (required by RetrieverService)
     client.create_collection(
         collection_name=collection_name,
         vectors_config={"dense": VectorParams(size=vector_size, distance=Distance.COSINE)},
@@ -46,30 +46,30 @@ def create_collection(client: QdrantClient, collection_name: str, vector_size: i
 
 async def index_documents(json_path: str):
     """Index documents from JSON file."""
-    ***REMOVED*** Load data
+    # Load data
     with open(json_path) as f:
         data = json.load(f)
 
     documents = data["documents"]
     print(f"Loaded {len(documents)} documents from {json_path}")
 
-    ***REMOVED*** Get embeddings
+    # Get embeddings
     texts = [doc["content"] for doc in documents]
     print("Getting embeddings...")
     embeddings = await get_embeddings(texts)
     print(f"Got {len(embeddings)} embeddings")
 
-    ***REMOVED*** Create collection
+    # Create collection
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
     create_collection(client, COLLECTION_NAME)
 
-    ***REMOVED*** Index points with named vector and RetrieverService-compatible payload
+    # Index points with named vector and RetrieverService-compatible payload
     points = [
         PointStruct(
             id=i,
             vector={"dense": embeddings[i]},
             payload={
-                "page_content": doc["content"],  ***REMOVED*** RetrieverService expects this key
+                "page_content": doc["content"],  # RetrieverService expects this key
                 "metadata": {
                     "id": doc["id"],
                     "title": doc["title"],
@@ -83,7 +83,7 @@ async def index_documents(json_path: str):
     client.upsert(collection_name=COLLECTION_NAME, points=points)
     print(f"Indexed {len(points)} documents into {COLLECTION_NAME}")
 
-    ***REMOVED*** Verify
+    # Verify
     info = client.get_collection(COLLECTION_NAME)
     print(f"Collection info: {info.points_count} points")
 

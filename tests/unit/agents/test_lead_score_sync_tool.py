@@ -1,4 +1,4 @@
-"""Tests for crm_sync_lead_score supervisor tool (***REMOVED***384)."""
+"""Tests for crm_sync_lead_score supervisor tool (#384)."""
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ class TestCrmSyncLeadScoreTool:
 
 
 def _make_bot_context_for_sync(role: str = "client") -> BotContext:
-    """Minimal BotContext for crm_sync_lead_score role-path tests (***REMOVED***479)."""
+    """Minimal BotContext for crm_sync_lead_score role-path tests (#479)."""
     return BotContext(
         telegram_user_id=99,
         session_id="chat-1",
@@ -147,7 +147,7 @@ def _make_bot_context_for_sync(role: str = "client") -> BotContext:
 
 
 class TestCrmSyncLeadScoreToolBotContextPath:
-    """Verify crm_sync_lead_score reads role from ctx.role (BotContext path) (***REMOVED***479)."""
+    """Verify crm_sync_lead_score reads role from ctx.role (BotContext path) (#479)."""
 
     async def test_allows_manager_via_bot_context(self, mock_scoring_store, mock_kommo_client):
         sync_tool = create_crm_score_sync_tool(

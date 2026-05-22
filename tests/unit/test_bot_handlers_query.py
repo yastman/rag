@@ -1,4 +1,4 @@
-"""Unit tests for bot query/voice handler edge cases (***REMOVED***1250 recursion limit)."""
+"""Unit tests for bot query/voice handler edge cases (#1250 recursion limit)."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def _make_typing_cm():
 
 
 class TestHandleVoiceRecursionLimit:
-    """Test handle_voice GraphRecursionError handling — ***REMOVED***1250."""
+    """Test handle_voice GraphRecursionError handling — #1250."""
 
     async def test_recursion_limit_sends_graceful_message(self, mock_config):
         """GraphRecursionError should send a graceful 'limit reached' message."""
@@ -100,7 +100,7 @@ class TestHandleVoiceRecursionLimit:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
-        ***REMOVED*** User should receive graceful limit-reached message, not generic error
+        # User should receive graceful limit-reached message, not generic error
         message.answer.assert_called()
         limit_msg_sent = any(
             "лимит" in str(call).lower() or "limit" in str(call).lower()
@@ -108,13 +108,13 @@ class TestHandleVoiceRecursionLimit:
         )
         assert limit_msg_sent, "Expected graceful recursion-limit message to user"
 
-        ***REMOVED*** Error scores should be written with recursion_limit reason
+        # Error scores should be written with recursion_limit reason
         mock_error_scores.assert_called_once()
         call_kwargs = mock_error_scores.call_args.kwargs
         assert call_kwargs.get("error_reason") == "recursion_limit"
         assert call_kwargs.get("voice_duration_s") == 5
 
-        ***REMOVED*** write_langfuse_scores should NOT be called because there is no result state
+        # write_langfuse_scores should NOT be called because there is no result state
         mock_write_scores.assert_not_called()
 
     async def test_recursion_limit_logs_with_session_context(self, mock_config, caplog):
@@ -138,7 +138,7 @@ class TestHandleVoiceRecursionLimit:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
-        ***REMOVED*** Log should contain user/session context for observability
+        # Log should contain user/session context for observability
         assert any(
             "recursion" in record.message.lower() or "limit" in record.message.lower()
             for record in caplog.records
@@ -146,7 +146,7 @@ class TestHandleVoiceRecursionLimit:
 
 
 class TestClientDirectIntentPrecheck:
-    """Regression tests for client-direct pre-agent intent detection (***REMOVED***1369)."""
+    """Regression tests for client-direct pre-agent intent detection (#1369)."""
 
     async def test_pre_agent_intent_check_does_not_call_traced_detector(self, mock_config):
         """PropertyBot precheck must avoid creating extra detect-agent-intent spans."""

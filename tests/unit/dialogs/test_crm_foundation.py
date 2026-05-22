@@ -1,4 +1,4 @@
-"""Tests for CRM foundation: states, card formatters (***REMOVED***697)."""
+"""Tests for CRM foundation: states, card formatters (#697)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from telegram_bot.dialogs.states import (
 )
 
 
-***REMOVED*** --- FSM States ---
+# --- FSM States ---
 
 
 def test_crm_menu_sg_has_main():
@@ -56,7 +56,7 @@ def test_ai_advisor_sg_has_main():
     assert hasattr(AIAdvisorSG, "main")
 
 
-***REMOVED*** --- Card Formatters ---
+# --- Card Formatters ---
 
 
 def test_format_lead_card_returns_text_and_keyboard():
@@ -164,7 +164,7 @@ def test_build_pagination_buttons_first_page():
 
     buttons = build_pagination_buttons(prefix="crm:lead:page", page=0, total=20, page_size=5)
     assert len(buttons) == 1
-    assert "1" in buttons[0].callback_data  ***REMOVED*** next page = 1
+    assert "1" in buttons[0].callback_data  # next page = 1
 
 
 def test_build_pagination_buttons_middle_page():
@@ -181,7 +181,7 @@ def test_build_pagination_buttons_last_page():
 
     buttons = build_pagination_buttons(prefix="crm:lead:page", page=3, total=20, page_size=5)
     assert len(buttons) == 1
-    assert "2" in buttons[0].callback_data  ***REMOVED*** prev page = 2
+    assert "2" in buttons[0].callback_data  # prev page = 2
 
 
 def test_build_pagination_buttons_single_page():
@@ -192,7 +192,7 @@ def test_build_pagination_buttons_single_page():
     assert len(buttons) == 0
 
 
-***REMOVED*** --- KommoClient new methods ---
+# --- KommoClient new methods ---
 
 
 async def test_kommo_client_has_update_task():

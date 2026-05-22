@@ -1,9 +1,9 @@
-***REMOVED*** Superpowers Agent Skills
+# Superpowers Agent Skills
 
 Repo-local operating guide for agentic issue execution. Use this folder when a
 GitHub issue is handed to Kiro Web, Codex, or another autonomous coding agent.
 
-***REMOVED******REMOVED*** Kiro Web Entry Points
+## Kiro Web Entry Points
 
 Kiro Web can start from `app.kiro.dev`, from a GitHub issue comment containing
 `/kiro`, or from a GitHub issue labeled `kiro`. Kiro reads persistent workspace
@@ -18,7 +18,7 @@ When sending an issue to Kiro, include:
 - any safety gates such as no production, secrets, SSH, cloud, or live CRM
   writes unless explicitly approved.
 
-***REMOVED******REMOVED*** Core Skills
+## Core Skills
 
 - [`using-git-worktrees.md`](using-git-worktrees.md) - isolate each issue in a
   dedicated worktree/branch and verify a clean baseline.
@@ -33,7 +33,7 @@ When sending an issue to Kiro, include:
 - [`executing-plans.md`](executing-plans.md) - for executing an approved plan
   step by step in one session.
 
-***REMOVED******REMOVED*** Issue Routing
+## Issue Routing
 
 Use [`issue-skill-map.md`](issue-skill-map.md) as the current queue map. It
 maps each audited issue to the minimum skill set an agent should load before

@@ -1,4 +1,4 @@
-"""Funnel analytics service: daily snapshot computation and persistence (***REMOVED***390)."""
+"""Funnel analytics service: daily snapshot computation and persistence (#390)."""
 
 from __future__ import annotations
 

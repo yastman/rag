@@ -1,4 +1,4 @@
-***REMOVED*** Главное меню
+# Главное меню
 hello = Привет, { $name }! Я бот-помощник по недвижимости в Болгарии.
 menu-search = Подобрать недвижимость
 menu-favorites = Мои подборки
@@ -6,24 +6,24 @@ menu-faq = Полезная информация
 menu-settings = Настройки
 menu-manager = Связаться с менеджером
 
-***REMOVED*** Настройки
+# Настройки
 settings-title = Настройки
 settings-language = Язык
 settings-notifications = Уведомления
 settings-notifications-on = Вкл
 settings-notifications-off = Выкл
 
-***REMOVED*** Языки
+# Языки
 lang-ru = Русский
 lang-en = English
 lang-uk = Українська
 
-***REMOVED*** Навигация
+# Навигация
 back = Назад
 close = Закрыть
 main-menu = 🏠 Главное меню
 
-***REMOVED*** Воронка
+# Воронка
 funnel-what-looking = Что вас интересует?
 funnel-buy-apartment = Купить квартиру
 funnel-buy-house = Купить дом
@@ -48,17 +48,17 @@ funnel-results-empty = Пока не нашли подходящих вариа�
 funnel-booking = Записаться на показ
 funnel-subscribe = Подписаться на обновления
 
-***REMOVED*** Команды
+# Команды
 cmd-help = Задавайте вопросы о недвижимости или используйте меню.
 cmd-clear-done = История диалога очищена.
 
-***REMOVED*** Клиентское меню (новые кнопки)
+# Клиентское меню (новые кнопки)
 menu-catalog = Каталог объектов
 menu-booking = Записаться на показ
 menu-mortgage = Рассчитать ипотеку
 menu-my-leads = Мои заявки
 
-***REMOVED*** Меню менеджера (root CRM hub)
+# Меню менеджера (root CRM hub)
 mgr-hello = 📊 CRM — Привет, { $name }!
 mgr-leads = 📋 Сделки
 mgr-contacts = 👤 Контакты
@@ -68,7 +68,7 @@ mgr-ai-advisor = 🤖 AI-Советник
 mgr-search = 🔍 Поиск по базе
 mgr-settings = ⚙️ Настройки
 
-***REMOVED*** CRM подменю
+# CRM подменю
 crm-title = CRM
 crm-create-deal = Создать сделку
 crm-create-contact = Создать контакт
@@ -76,7 +76,7 @@ crm-add-note = Добавить заметку
 crm-create-task = Создать задачу
 crm-pipelines = Pipelines
 
-***REMOVED*** CRM Hub (навигационное меню) — ***REMOVED***697
+# CRM Hub (навигационное меню) — #697
 crm-hub-title = CRM — Панель менеджера
 crm-hub-btn-leads = 📋 Сделки
 crm-hub-btn-contacts = 👤 Контакты
@@ -86,7 +86,7 @@ crm-hub-btn-note = 📝 Заметка
 crm-hub-btn-ai-advisor = 🤖 AI-Советник
 crm-hub-btn-back = ← Назад
 
-***REMOVED*** CRM Сделки (Leads) — ***REMOVED***697
+# CRM Сделки (Leads) — #697
 crm-leads-title = 📋 Сделки
 crm-leads-btn-create = ➕ Создать сделку
 crm-leads-btn-my-leads = 🗂 Мои сделки
@@ -99,7 +99,7 @@ crm-leads-btn-edit-name = ✏️ Изменить название
 crm-leads-search-prompt = Введите текст для поиска сделок:
 crm-leads-empty = Нет сделок
 
-***REMOVED*** CRM Контакты (Contacts) — ***REMOVED***697
+# CRM Контакты (Contacts) — #697
 crm-contacts-title = 👤 Контакты
 crm-contacts-btn-create = ➕ Создать контакт
 crm-contacts-btn-search = 🔍 Поиск
@@ -112,7 +112,7 @@ crm-contacts-btn-edit-name = ✏️ Изменить имя
 crm-contacts-search-prompt = Введите имя или телефон для поиска контактов:
 crm-contacts-empty = Контакты не найдены
 
-***REMOVED*** CRM Задачи (Tasks) — ***REMOVED***697
+# CRM Задачи (Tasks) — #697
 crm-tasks-title-create = ✅ Создание задачи
 crm-tasks-step1 = Шаг 1/5: Введите описание задачи:
 crm-tasks-step2 = Шаг 2/5: Выберите тип задачи:
@@ -125,25 +125,25 @@ crm-tasks-filter-all = Все задачи
 crm-tasks-filter-today = Сегодня
 crm-tasks-filter-overdue = Просроченные
 
-***REMOVED*** CRM Заметки (Notes) — ***REMOVED***697
+# CRM Заметки (Notes) — #697
 crm-notes-title = 📝 Создание заметки
 crm-notes-step1 = Шаг 1/4: Введите текст заметки:
 crm-notes-step2 = Шаг 2/4: К чему привязать заметку?
 crm-notes-btn-confirm = ✅ Сохранить
 
-***REMOVED*** CRM AI-Советник (AI Advisor) — ***REMOVED***697
+# CRM AI-Советник (AI Advisor) — #697
 crm-advisor-title = 🤖 AI-Советник
 crm-advisor-loading = Анализирую данные...
 crm-advisor-btn-back = ← К меню советника
 crm-advisor-btn-cancel = ← CRM
 
-***REMOVED*** CRM навигация и общие кнопки — ***REMOVED***697
+# CRM навигация и общие кнопки — #697
 crm-btn-back = ← Назад
 crm-btn-cancel = Отмена
 crm-btn-close = Закрыть
 crm-btn-skip = Пропустить
 
-***REMOVED*** CRM ошибки — ***REMOVED***697
+# CRM ошибки — #697
 crm-error-no-crm = ⚠️ CRM недоступна.
 crm-error-note-empty = ⚠️ Текст заметки не может быть пустым.
 crm-error-task-empty = ⚠️ Текст задачи не может быть пустым.
@@ -152,7 +152,7 @@ crm-error-create-task = ⚠️ Ошибка при создании задачи
 crm-error-complete-task = ⚠️ Ошибка при завершении задачи.
 crm-error-postpone-task = ⚠️ Ошибка при откладывании задачи.
 
-***REMOVED*** Клиентское ReplyKeyboard (***REMOVED***660)
+# Клиентское ReplyKeyboard (#660)
 kb-search = 🏠 Подобрать квартиру
 kb-services = 🔑 Услуги
 kb-viewing = 📅 Запись на осмотр
@@ -161,7 +161,7 @@ kb-ask = 💬 Задать вопрос
 kb-bookmarks = 📌 Мои закладки
 kb-demo = 🎯 Демонстрация
 
-***REMOVED*** Welcome (***REMOVED***660)
+# Welcome (#660)
 welcome-text =
     Привет, { $name }! 👋
 
@@ -186,7 +186,7 @@ ask-costs = 💰 Сколько стоит оформление сделки?
 ask-vnzh = 📋 Как получить ВНЖ в Болгарии?
 ask-installment = 💳 Какие условия рассрочки?
 
-***REMOVED*** Воронка — шаги (***REMOVED***660)
+# Воронка — шаги (#660)
 funnel-step-rooms = Выберите количество комнат:
 funnel-rooms-studio = Студио
 funnel-rooms-1bed = 1 спальня
@@ -203,7 +203,7 @@ funnel-step-refine = Хотите уточнить параметры?
 funnel-show-results = 🔍 Показать варианты
 funnel-refine-more = ⚙️ Уточнить ещё
 
-***REMOVED*** Результаты (***REMOVED***660)
+# Результаты (#660)
 results-shown = Показано { $shown } из { $total } вариантов
 results-show-more = 🔄 Показать ещё
 results-show-more-remaining = 🔄 Показать ещё ({ $remaining } осталось)
@@ -219,33 +219,33 @@ results-no-results =
     К сожалению, по вашим критериям ничего не найдено.
     Попробуйте изменить параметры.
 
-***REMOVED*** Телефон (***REMOVED***660)
+# Телефон (#660)
 phone-prompt = Введите ваш номер телефона:
 phone-invalid = Пожалуйста, введите корректный номер телефона. Например: +359 88 123 4567
 phone-success = ✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.
 
-***REMOVED*** Акции (***REMOVED***660)
+# Акции (#660)
 promotions-title = 🎁 Актуальные акции
 promotions-empty = Сейчас нет активных акций.
 
-***REMOVED*** Закладки (***REMOVED***660)
+# Закладки (#660)
 bookmarks-title = 📌 Ваши закладки ({ $count }):
 bookmarks-empty =
     📌 У вас пока нет закладок.
     Нажмите «🏠 Подбор апартаментов» чтобы найти квартиру.
 bookmarks-remove = 🗑 Убрать
 
-***REMOVED*** Услуги (***REMOVED***660)
+# Услуги (#660)
 services-menu-text = Выберите услугу, чтобы узнать подробнее:
 
-***REMOVED*** Services — titles
+# Services — titles
 svc-passive-income-title = Пассивный доход
 svc-online-deals-title = Сделки онлайн
 svc-vnzh-title = ВНЖ и легализация
 svc-installment-title = Рассрочка
 svc-infotour-title = Инфотур
 
-***REMOVED*** Services — card text
+# Services — card text
 svc-passive-income-card =
     Пассивный доход — сдаём вашу недвижимость
 
@@ -287,13 +287,13 @@ svc-infotour-card =
     Сейчас лучшее время совместить приятное с полезным —
     отдохнуть и выбрать недвижимость у моря.
 
-***REMOVED*** Services — buttons
+# Services — buttons
 svc-back = Назад
 svc-get-offer = Оставить заявку
 svc-contact-manager = Связаться с менеджером
 svc-back-to-services = Назад к услугам
 
-***REMOVED*** ── Handoff (Forum Topics) ──────────────────────────────────────
+# ── Handoff (Forum Topics) ──────────────────────────────────────
 handoff-qual-prompt = 📋 Какая тема вас интересует?
 handoff-goal-search = 🏠 Подбор недвижимости
 handoff-goal-services = 🔑 Услуги

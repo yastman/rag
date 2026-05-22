@@ -79,10 +79,10 @@ class IngestionService:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-        ***REMOVED*** Google Drive service account key path
+        # Google Drive service account key path
         self.google_service_account_key = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
 
-        ***REMOVED*** Qdrant client for stats
+        # Qdrant client for stats
         self._qdrant_client: QdrantClient | None = None
 
         logger.info(
@@ -137,7 +137,7 @@ class IngestionService:
             stats.errors.append("CocoIndex not available. Install with: pip install cocoindex")
             return stats
 
-        ***REMOVED*** Count documents
+        # Count documents
         supported_extensions = {".pdf", ".docx", ".doc", ".md", ".txt", ".html", ".htm"}
         documents = await anyio.to_thread.run_sync(
             lambda: [
@@ -154,7 +154,7 @@ class IngestionService:
 
         logger.info(f"Ingesting {stats.total_documents} documents from {directory}")
 
-        ***REMOVED*** Run CocoIndex flow
+        # Run CocoIndex flow
         config = self._create_flow_config()
         result = setup_and_run_flow(
             source_path=str(directory),
@@ -165,7 +165,7 @@ class IngestionService:
         if not result.get("success"):
             stats.errors.append(result.get("error", "Unknown error"))
         else:
-            ***REMOVED*** Get collection stats to determine indexed count
+            # Get collection stats to determine indexed count
             try:
                 collection_stats = await self.get_collection_stats()
                 stats.indexed_nodes = collection_stats.get("points_count", 0)
@@ -211,8 +211,8 @@ class IngestionService:
             stats.errors.append("CocoIndex not available. Install with: pip install cocoindex")
             return stats
 
-        ***REMOVED*** Note: CocoIndex Google Drive support would need to be added
-        ***REMOVED*** For now, return an error indicating this is not yet implemented
+        # Note: CocoIndex Google Drive support would need to be added
+        # For now, return an error indicating this is not yet implemented
         stats.errors.append(
             "Google Drive ingestion via CocoIndex is not yet implemented. "
             "Use the DoclingClient with direct file downloads instead."
@@ -270,7 +270,7 @@ class IngestionService:
         logger.info("IngestionService closed")
 
 
-***REMOVED*** Convenience functions for CLI and Makefile integration
+# Convenience functions for CLI and Makefile integration
 
 
 async def ingest_from_directory(

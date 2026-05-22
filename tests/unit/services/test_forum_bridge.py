@@ -72,7 +72,7 @@ async def test_post_context_pack_no_summary(bridge, mock_bot):
         lead_url=None,
     )
     text = mock_bot.send_message.call_args.kwargs["text"]
-    assert "AI" not in text  ***REMOVED*** no summary block
+    assert "AI" not in text  # no summary block
     assert "/close" in text
 
 

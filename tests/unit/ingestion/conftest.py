@@ -37,8 +37,8 @@ def mock_qdrant_client():
     client.count.return_value = MagicMock(count=0)
     client.delete = MagicMock()
     client.upsert = MagicMock()
-    ***REMOVED*** Default: no orphan points exist for the file_id, so the post-upsert
-    ***REMOVED*** stale-id sweep finds nothing to delete (***REMOVED***1602 atomic-replace).
+    # Default: no orphan points exist for the file_id, so the post-upsert
+    # stale-id sweep finds nothing to delete (#1602 atomic-replace).
     client.scroll.return_value = ([], None)
     return client
 
@@ -86,7 +86,7 @@ def writer_voyage(mock_qdrant_client, mock_bge_client, mock_voyage):
             voyage_api_key="test_key",
             use_local_embeddings=False,
         )
-    ***REMOVED*** After construction, inject mocks so tests can set side_effects.
+    # After construction, inject mocks so tests can set side_effects.
     w.client = mock_qdrant_client
     w._bge_client = mock_bge_client
     w.voyage = mock_voyage

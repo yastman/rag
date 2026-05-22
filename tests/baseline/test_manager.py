@@ -92,16 +92,16 @@ class TestBaselineManager:
             timestamp=datetime(2026, 1, 28),
             tag="current",
             session_id="s2",
-            llm_latency_p50_ms=160.0,  ***REMOVED*** +6% OK
-            llm_latency_p95_ms=380.0,  ***REMOVED*** +8% OK (threshold 20%)
-            full_rag_latency_p95_ms=2700.0,  ***REMOVED*** +8% OK
-            total_cost_usd=0.052,  ***REMOVED*** +4% OK (threshold 10%)
+            llm_latency_p50_ms=160.0,  # +6% OK
+            llm_latency_p95_ms=380.0,  # +8% OK (threshold 20%)
+            full_rag_latency_p95_ms=2700.0,  # +8% OK
+            total_cost_usd=0.052,  # +4% OK (threshold 10%)
             llm_tokens_input=10500,
             llm_tokens_output=2600,
-            llm_calls=102,  ***REMOVED*** +2% OK
+            llm_calls=102,  # +2% OK
             voyage_embed_calls=105,
             voyage_rerank_calls=52,
-            cache_hit_rate=0.58,  ***REMOVED*** -2% OK (threshold 10%)
+            cache_hit_rate=0.58,  # -2% OK (threshold 10%)
             cache_hits=58,
             cache_misses=42,
         )
@@ -139,7 +139,7 @@ class TestBaselineManager:
             tag="current",
             session_id="s2",
             llm_latency_p50_ms=150.0,
-            llm_latency_p95_ms=500.0,  ***REMOVED*** +43% FAIL (threshold 20%)
+            llm_latency_p95_ms=500.0,  # +43% FAIL (threshold 20%)
             full_rag_latency_p95_ms=2500.0,
             total_cost_usd=0.05,
             llm_tokens_input=10000,
@@ -194,7 +194,7 @@ class TestBaselineManager:
             llm_calls=100,
             voyage_embed_calls=100,
             voyage_rerank_calls=50,
-            cache_hit_rate=0.45,  ***REMOVED*** -25% FAIL (threshold 10%)
+            cache_hit_rate=0.45,  # -25% FAIL (threshold 10%)
             cache_hits=45,
             cache_misses=55,
         )
@@ -235,7 +235,7 @@ class TestJudgeThresholds:
         manager = BaselineManager(collector=collector)
 
         current_judge = {
-            "faithfulness_mean": 0.60,  ***REMOVED*** Below 0.75 threshold
+            "faithfulness_mean": 0.60,  # Below 0.75 threshold
             "answer_relevance_mean": 0.80,
             "context_relevance_mean": 0.75,
         }
@@ -256,17 +256,17 @@ class TestJudgeThresholds:
         collector = Mock()
         manager = BaselineManager(collector=collector)
 
-        ***REMOVED*** Both None
+        # Both None
         passed, regressions = manager.compare_judge(None, None)
         assert passed is True
         assert len(regressions) == 0
 
-        ***REMOVED*** Current present, baseline absent
+        # Current present, baseline absent
         passed, regressions = manager.compare_judge({"faithfulness_mean": 0.5}, None)
         assert passed is True
         assert len(regressions) == 0
 
-        ***REMOVED*** Current absent, baseline present
+        # Current absent, baseline present
         passed, regressions = manager.compare_judge(None, {"faithfulness_mean": 0.8})
         assert passed is True
         assert len(regressions) == 0

@@ -15,29 +15,29 @@ async def test_full_flow_city_type_budget_done():
     data: dict = {}
     manager = SimpleNamespace(dialog_data=data, switch_to=AsyncMock())
 
-    ***REMOVED*** Step 1: city
+    # Step 1: city
     await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Элените")
     assert data["city"] == "Элените"
     manager.switch_to.assert_awaited_with(FunnelSG.property_type)
 
-    ***REMOVED*** Step 2: type
+    # Step 2: type
     manager.switch_to.reset_mock()
     await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "2bed")
     assert data["property_type"] == "2bed"
     manager.switch_to.assert_awaited_with(FunnelSG.budget)
 
-    ***REMOVED*** Step 3: budget
+    # Step 3: budget
     manager.switch_to.reset_mock()
     await funnel_module.on_budget_selected(MagicMock(), SimpleNamespace(), manager, "high")
     assert data["budget"] == "high"
     manager.switch_to.assert_awaited_with(FunnelSG.preferences)
 
-    ***REMOVED*** Step 4: skip preferences → done
+    # Step 4: skip preferences → done
     manager.switch_to.reset_mock()
     await funnel_module.on_pref_done(MagicMock(), SimpleNamespace(), manager)
     manager.switch_to.assert_awaited_with(FunnelSG.summary)
 
-    ***REMOVED*** Verify filters
+    # Verify filters
     filters = build_funnel_filters(
         city=data["city"], rooms=data["property_type"], budget=data["budget"]
     )
@@ -57,7 +57,7 @@ async def test_full_flow_with_preferences_and_section():
     await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "studio")
     await funnel_module.on_budget_selected(MagicMock(), SimpleNamespace(), manager, "low")
 
-    ***REMOVED*** Preferences: floor + section
+    # Preferences: floor + section
     await funnel_module.on_pref_floor_selected(MagicMock(), SimpleNamespace(), manager, "high")
     await funnel_module.on_pref_section_selected(MagicMock(), SimpleNamespace(), manager, "D-1")
     await funnel_module.on_pref_done(MagicMock(), SimpleNamespace(), manager)
@@ -82,12 +82,12 @@ async def test_change_filter_flow_returns_to_summary():
     data: dict = {"city": "Элените", "property_type": "1bed", "budget": "mid"}
     manager = SimpleNamespace(dialog_data=data, switch_to=AsyncMock())
 
-    ***REMOVED*** Enter change mode
+    # Enter change mode
     await funnel_module.on_change_filter_selected(MagicMock(), SimpleNamespace(), manager, "city")
     assert data["_return_to_summary"] is True
     manager.switch_to.assert_awaited_with(FunnelSG.city)
 
-    ***REMOVED*** Re-select city → should return to summary
+    # Re-select city → should return to summary
     manager.switch_to.reset_mock()
     await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Свети Влас")
     assert data["city"] == "Свети Влас"
@@ -114,7 +114,7 @@ async def test_zero_results_recovery_removes_filter():
     assert data.get("scroll_start_from") is None
     manager.switch_to.assert_awaited_with(FunnelSG.summary)
 
-    ***REMOVED*** Verify filters without floor
+    # Verify filters without floor
     filters = build_funnel_filters(
         city=data.get("city"),
         rooms=data.get("property_type", "any"),

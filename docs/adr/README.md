@@ -1,8 +1,8 @@
-***REMOVED*** Architecture Decision Records
+# Architecture Decision Records
 
 This directory is the canonical entrypoint for architecture decision records. [`../ADRS.md`](../ADRS.md) is kept only as a legacy compatibility pointer and should not duplicate ADR contents.
 
-***REMOVED******REMOVED*** Index
+## Index
 
 - [0001 - ColBERT reranking](0001-colbert-reranking.md)
 - [0002 - BGE-M3 embeddings](0002-bge-m3-embeddings.md)
@@ -18,10 +18,10 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0012 - LangGraph state machine orchestration](0012-langgraph-orchestration.md)
 - [0013 - CocoIndex + Docling ingestion pipeline](0013-cocoindex-docling-ingestion.md)
 
-***REMOVED******REMOVED*** When To Use
+## When To Use
 
 Start here when changing retrieval architecture, embeddings, reranking, semantic cache behavior, CRM integration, or voice/Text LangGraph boundaries. Verify every ADR against current code before treating it as active implementation truth.
 
-***REMOVED******REMOVED*** Adding ADRs
+## Adding ADRs
 
 Create a new `NNNN-short-title.md` file in this directory and add it to the index above. Keep decisions concise: context, decision, consequences, and current implementation notes when implementation details matter.

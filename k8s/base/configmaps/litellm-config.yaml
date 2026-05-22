@@ -5,10 +5,10 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      ***REMOVED*** Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
-      ***REMOVED*** ALIAS: "gpt-4o-mini" is an internal alias — it does NOT call OpenAI.
-      ***REMOVED*** The bot sends requests to "gpt-4o-mini" which LiteLLM routes to Cerebras.
-      ***REMOVED*** See router_settings.fallbacks for the actual OpenAI fallback (gpt-4o-mini-openai).
+      # Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
+      # ALIAS: "gpt-4o-mini" is an internal alias — it does NOT call OpenAI.
+      # The bot sends requests to "gpt-4o-mini" which LiteLLM routes to Cerebras.
+      # See router_settings.fallbacks for the actual OpenAI fallback (gpt-4o-mini-openai).
       - model_name: gpt-4o-mini
         litellm_params:
           model: cerebras/zai-glm-4.7
@@ -18,7 +18,7 @@ data:
           timeout: 30
           stream_timeout: 5
 
-      ***REMOVED*** Standalone alias for benchmarking (reasoning model)
+      # Standalone alias for benchmarking (reasoning model)
       - model_name: gpt-oss-120b
         litellm_params:
           model: cerebras/gpt-oss-120b
@@ -26,7 +26,7 @@ data:
           max_completion_tokens: 1024
           merge_reasoning_content_in_choices: true
 
-      ***REMOVED*** Fallback 1: Cerebras gpt-oss-120b (reasoning, slower TTFT)
+      # Fallback 1: Cerebras gpt-oss-120b (reasoning, slower TTFT)
       - model_name: gpt-4o-mini-cerebras-oss
         litellm_params:
           model: cerebras/gpt-oss-120b
@@ -34,19 +34,19 @@ data:
           max_completion_tokens: 1024
           merge_reasoning_content_in_choices: true
 
-      ***REMOVED*** Fallback 2: Groq (fast, free tier)
+      # Fallback 2: Groq (fast, free tier)
       - model_name: gpt-4o-mini-fallback
         litellm_params:
           model: groq/llama-3.1-70b-versatile
           api_key: os.environ/GROQ_API_KEY
 
-      ***REMOVED*** Fallback 3: OpenAI (reliable)
+      # Fallback 3: OpenAI (reliable)
       - model_name: gpt-4o-mini-openai
         litellm_params:
           model: openai/gpt-4o-mini
           api_key: os.environ/OPENAI_API_KEY
 
-      ***REMOVED*** Speech-to-text: Whisper via OpenAI
+      # Speech-to-text: Whisper via OpenAI
       - model_name: whisper
         litellm_params:
           model: whisper-1
@@ -63,7 +63,7 @@ data:
     router_settings:
       retry_policy:
         retry_count: 2
-      ***REMOVED*** Model-group fallbacks on upstream/provider errors
+      # Model-group fallbacks on upstream/provider errors
       fallbacks:
         - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
         - gpt-oss-120b: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]

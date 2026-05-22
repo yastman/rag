@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Validate a DONE JSON file against the expected schema for swarm workers.
 
 Usage:

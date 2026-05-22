@@ -1,4 +1,4 @@
-***REMOVED*** Runbook: LiteLLM Failure and Fallback Behavior
+# Runbook: LiteLLM Failure and Fallback Behavior
 
 - **Owner:** LLM Proxy / On-call
 - **Last verified:** 2026-05-07
@@ -6,7 +6,7 @@
 
 Use this runbook when LiteLLM provider has outages or LLM calls are failing.
 
-***REMOVED******REMOVED*** Symptoms
+## Symptoms
 
 - `LLM_TIMEOUT` errors in logs
 - `Model not found` (404) errors
@@ -15,20 +15,20 @@ Use this runbook when LiteLLM provider has outages or LLM calls are failing.
 - Traces show `LLM failed: Connection error` while Langfuse ingestion appears healthy
 - LiteLLM container exits with code `137` (`OOMKilled`)
 
-***REMOVED******REMOVED*** Diagnosis
+## Diagnosis
 
-***REMOVED******REMOVED******REMOVED*** Verify Current Primary / Fallback Routing (read-only)
+### Verify Current Primary / Fallback Routing (read-only)
 
 Before restarting or editing config, confirm the active routing from the repo config files:
 
 ```bash
-***REMOVED*** Primary model for the gpt-4o-mini group (read-only)
+# Primary model for the gpt-4o-mini group (read-only)
 grep -A8 'model_name: gpt-4o-mini' docker/litellm/config.yaml
 
-***REMOVED*** Fallback chain
+# Fallback chain
 grep -A5 'fallbacks:' docker/litellm/config.yaml
 
-***REMOVED*** Kubernetes equivalent
+# Kubernetes equivalent
 grep -A8 'model_name: gpt-4o-mini' k8s/base/configmaps/litellm-config.yaml
 grep -A5 'fallbacks:' k8s/base/configmaps/litellm-config.yaml
 ```
@@ -45,45 +45,45 @@ Expected state (do **not** change without product decision):
 - **Do not switch the primary back to a 120B model.** The `gpt-oss-120b` alias is reserved for benchmarking and fallback.
 - The bot sends requests to alias `gpt-4o-mini` (see `telegram_bot/graph/config.py`). `telegram_bot/config.py` sets a native default of `zai-glm-4.7` when running without the proxy.
 
-***REMOVED******REMOVED******REMOVED*** 1. Check LiteLLM Container State
+### 1. Check LiteLLM Container State
 
 ```bash
-***REMOVED*** Check if LiteLLM container is running
+# Check if LiteLLM container is running
 docker compose ps litellm
 
-***REMOVED*** View bounded LiteLLM logs
+# View bounded LiteLLM logs
 docker compose logs litellm --tail=100
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Test LiteLLM Connectivity
+### 2. Test LiteLLM Connectivity
 
 ```bash
-***REMOVED*** Health check
+# Health check
 curl -s http://localhost:4000/health | jq
 
-***REMOVED*** Or your configured LiteLLM URL
+# Or your configured LiteLLM URL
 curl -s ${LITELLM_URL}/health | jq
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Check Model Availability
+### 3. Check Model Availability
 
 ```bash
-***REMOVED*** List available models via LiteLLM proxy
+# List available models via LiteLLM proxy
 curl -s http://localhost:4000/v1/models | jq
 ```
 
-***REMOVED******REMOVED******REMOVED*** 4. Check Bot Logs for LLM Errors
+### 4. Check Bot Logs for LLM Errors
 
 ```bash
 docker compose logs bot 2>&1 | grep -i "llm\|openai\|timeout" | tail -50
 ```
 
-***REMOVED******REMOVED******REMOVED*** 5. OOM / Exit 137 Diagnosis
+### 5. OOM / Exit 137 Diagnosis
 
 If the LiteLLM container is restarting or missing:
 
 ```bash
-***REMOVED*** Inspect exit status and OOM flag
+# Inspect exit status and OOM flag
 docker inspect <litellm-container> --format '
   Name={{.Name}}
   OOMKilled={{.State.OOMKilled}}
@@ -91,7 +91,7 @@ docker inspect <litellm-container> --format '
   Status={{.State.Status}}
 '
 
-***REMOVED*** Bounded recent logs around the crash
+# Bounded recent logs around the crash
 docker compose logs litellm --tail=200 | grep -i "killed\|oom\|memory\|137"
 ```
 
@@ -100,20 +100,20 @@ docker compose logs litellm --tail=200 | grep -i "killed\|oom\|memory\|137"
 - `Status=restarting` with `OOMKilled=false` → Likely a configuration or upstream provider error; inspect logs for `ZodError`, `P1000`, or connection refused messages.
 - If health endpoint returns `200` but models list is empty → LiteLLM is alive but cannot reach upstream providers.
 
-***REMOVED******REMOVED******REMOVED*** 6. Verify Environment Variables (Presence Only)
+### 6. Verify Environment Variables (Presence Only)
 
 ```bash
-***REMOVED*** Check that required variables are present (do not print values)
+# Check that required variables are present (do not print values)
 for v in LLM_BASE_URL LITELLM_URL LITELLM_MASTER_KEY; do
   grep -q "^${v}=" .env && echo "${v}: present" || echo "${v}: MISSING"
 done
 
-***REMOVED*** Should be:
-***REMOVED*** LLM_BASE_URL=http://litellm:4000
-***REMOVED*** Not pointing directly to an upstream provider
+# Should be:
+# LLM_BASE_URL=http://litellm:4000
+# Not pointing directly to an upstream provider
 ```
 
-***REMOVED******REMOVED******REMOVED*** 7. Distinguish Langfuse Healthy vs LLM Unhealthy
+### 7. Distinguish Langfuse Healthy vs LLM Unhealthy
 
 Langfuse ingestion can be **fully healthy** while traces show `LLM failed: Connection error`.
 
@@ -124,9 +124,9 @@ Langfuse ingestion can be **fully healthy** while traces show `LLM failed: Conne
 2. Check LiteLLM health: `curl -s http://localhost:4000/health` → expect `true` or a healthy body
 3. If Langfuse is OK but LiteLLM health fails → root cause is LiteLLM or upstream provider, not Langfuse
 
-***REMOVED******REMOVED*** Common Error Patterns
+## Common Error Patterns
 
-***REMOVED******REMOVED******REMOVED*** WSL / Docker Desktop Stale Bind-Mount (`Exited 127`)
+### WSL / Docker Desktop Stale Bind-Mount (`Exited 127`)
 
 **When:** Docker Desktop on WSL restarts, resumes from sleep, or updates; the host path for `./docker/litellm/config.yaml` becomes stale inside the VM.
 
@@ -144,7 +144,7 @@ Langfuse ingestion can be **fully healthy** while traces show `LLM failed: Conne
 **Diagnosis:**
 
 ```bash
-***REMOVED*** Verify exit code and bind-mount error
+# Verify exit code and bind-mount error
 docker compose ps -a litellm
 docker inspect dev-litellm-1 --format '
   Name={{.Name}}
@@ -165,13 +165,13 @@ COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d --fo
 **Validation:**
 
 ```bash
-***REMOVED*** 1. Container is running
+# 1. Container is running
 docker compose ps litellm
 
-***REMOVED*** 2. Liveliness returns 200
+# 2. Liveliness returns 200
 curl -sS -m 5 -i http://127.0.0.1:4000/health/liveliness
 
-***REMOVED*** 3. Local smoke test (redacted — do not print secrets)
+# 3. Local smoke test (redacted — do not print secrets)
 curl -sS -m 10 http://127.0.0.1:4000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
@@ -179,22 +179,22 @@ curl -sS -m 10 http://127.0.0.1:4000/v1/chat/completions \
   -o /dev/null -w "HTTP_STATUS=%{http_code}\n"
 ```
 
-***REMOVED******REMOVED******REMOVED*** "Model gpt-4o-mini not found" (404)
+### "Model gpt-4o-mini not found" (404)
 
 **Cause:** `LLM_BASE_URL` points directly to Cerebras instead of LiteLLM proxy.
 
 **Fix:**
 ```bash
-***REMOVED*** Check LITELLM configuration (presence only)
+# Check LITELLM configuration (presence only)
 grep -q "^LLM_BASE_URL=" .env && echo "LLM_BASE_URL: present" || echo "LLM_BASE_URL: MISSING"
 grep -q "^LITELLM" .env && echo "LITELLM vars: present" || echo "LITELLM vars: MISSING"
 
-***REMOVED*** Should be:
-***REMOVED*** LLM_BASE_URL=http://litellm:4000
-***REMOVED*** Not pointing directly to cerebras
+# Should be:
+# LLM_BASE_URL=http://litellm:4000
+# Not pointing directly to cerebras
 ```
 
-***REMOVED******REMOVED******REMOVED*** Timeout Errors
+### Timeout Errors
 
 **Cause:** LiteLLM proxy can't reach upstream LLM provider.
 
@@ -203,7 +203,7 @@ grep -q "^LITELLM" .env && echo "LITELLM vars: present" || echo "LITELLM vars: M
 2. Increase timeout in LiteLLM config
 3. Enable fallback models
 
-***REMOVED******REMOVED*** Fallback Behavior
+## Fallback Behavior
 
 The bot has graceful degradation for LLM failures:
 
@@ -211,17 +211,17 @@ The bot has graceful degradation for LLM failures:
 2. **Safe fallback response** — If LLM completely unavailable, returns pre-defined safe response
 3. **Cache fallback** — If LLM is slow, cached responses may be served
 
-***REMOVED******REMOVED*** Remediation
+## Remediation
 
 > **Caution:** Mutating commands below. Run only after confirming the diagnosis above.
 
-***REMOVED******REMOVED******REMOVED*** Restart LiteLLM
+### Restart LiteLLM
 
 ```bash
 docker compose restart litellm
 ```
 
-***REMOVED******REMOVED******REMOVED*** Increase LiteLLM Memory Limit
+### Increase LiteLLM Memory Limit
 
 If OOM is confirmed, raise the memory limit and recreate:
 
@@ -234,7 +234,7 @@ After changing the limit, recreate the container:
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --profile bot up -d --force-recreate litellm
 ```
 
-***REMOVED******REMOVED******REMOVED*** Switch LLM Provider
+### Switch LLM Provider
 
 If using multiple providers:
 
@@ -244,7 +244,7 @@ If using multiple providers:
    docker compose restart bot
    ```
 
-***REMOVED******REMOVED******REMOVED*** Configure Fallback Models
+### Configure Fallback Models
 
 > **Caution:** Do not switch the primary model back to a 120B model (e.g., `cerebras/gpt-oss-120b`). GLM 4.7 (`cerebras/zai-glm-4.7`) remains the primary for low TTFT. Changing the primary requires a product decision.
 
@@ -261,21 +261,21 @@ If you must adjust fallback ordering, edit the config file and restart:
 docker compose restart litellm
 ```
 
-***REMOVED******REMOVED*** Impact on RAG Quality
+## Impact on RAG Quality
 
 When LLM fallback occurs:
 - Responses may be less contextual
 - No streaming (slower perceived response)
 - Safe fallback responses are generic
 
-***REMOVED******REMOVED*** Prevention
+## Prevention
 
 - Monitor LiteLLM uptime
 - Set up alerts for LLM timeout rates
 - Regular health checks: `curl -s ${LLM_BASE_URL}/health`
 - Watch for `OOMKilled` in container state after deploys or traffic spikes
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [Langfuse Tracing Gaps](LANGFUSE_TRACING_GAPS.md)
 - [Docker Services Reference](../../DOCKER.md)

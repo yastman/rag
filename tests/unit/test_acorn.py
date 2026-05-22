@@ -18,7 +18,7 @@ from src.config.settings import Settings
 from src.retrieval.search_engines import ACORN_AVAILABLE, BaselineSearchEngine
 
 
-***REMOVED*** Skip marker for tests requiring AcornSearchParams
+# Skip marker for tests requiring AcornSearchParams
 requires_acorn = pytest.mark.skipif(
     not ACORN_AVAILABLE,
     reason="AcornSearchParams not available in current qdrant-client version",
@@ -142,11 +142,11 @@ class TestAcornShouldUseLogic:
             engine = BaselineSearchEngine(mock_settings_acorn_off)
             engine.settings = mock_settings_acorn_off
 
-            ***REMOVED*** No filters
+            # No filters
             assert engine._should_use_acorn(has_filters=False, estimated_selectivity=None) is False
-            ***REMOVED*** With filters
+            # With filters
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=None) is False
-            ***REMOVED*** Low selectivity
+            # Low selectivity
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.1) is False
 
     def test_acorn_on_enables_with_filters(self, mock_settings_acorn_on):
@@ -155,11 +155,11 @@ class TestAcornShouldUseLogic:
             engine = BaselineSearchEngine(mock_settings_acorn_on)
             engine.settings = mock_settings_acorn_on
 
-            ***REMOVED*** With filters - should enable
+            # With filters - should enable
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=None) is True
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.9) is True
 
-            ***REMOVED*** Without filters - should not enable
+            # Without filters - should not enable
             assert engine._should_use_acorn(has_filters=False, estimated_selectivity=None) is False
 
     def test_acorn_auto_selectivity_logic(self, mock_settings_acorn_auto):
@@ -168,18 +168,18 @@ class TestAcornShouldUseLogic:
             engine = BaselineSearchEngine(mock_settings_acorn_auto)
             engine.settings = mock_settings_acorn_auto
 
-            ***REMOVED*** No filters - never enable
+            # No filters - never enable
             assert engine._should_use_acorn(has_filters=False, estimated_selectivity=0.1) is False
 
-            ***REMOVED*** Low selectivity - should enable
+            # Low selectivity - should enable
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.1) is True
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.3) is True
 
-            ***REMOVED*** High selectivity - should not enable
+            # High selectivity - should not enable
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.5) is False
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.9) is False
 
-            ***REMOVED*** Exactly at threshold - should not enable (< not <=)
+            # Exactly at threshold - should not enable (< not <=)
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=0.4) is False
 
     def test_acorn_auto_unknown_selectivity_enables(self, mock_settings_acorn_auto):
@@ -188,7 +188,7 @@ class TestAcornShouldUseLogic:
             engine = BaselineSearchEngine(mock_settings_acorn_auto)
             engine.settings = mock_settings_acorn_auto
 
-            ***REMOVED*** Unknown selectivity with filters - conservative default to enabled
+            # Unknown selectivity with filters - conservative default to enabled
             assert engine._should_use_acorn(has_filters=True, estimated_selectivity=None) is True
 
 
@@ -295,7 +295,7 @@ class TestBaselineSearchEngineAcorn:
                 estimated_selectivity=0.2,
             )
 
-            ***REMOVED*** Verify query_points was called with ACORN params
+            # Verify query_points was called with ACORN params
             call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
             search_params = call_kwargs.get("search_params")
 
@@ -317,11 +317,11 @@ class TestBaselineSearchEngineAcorn:
                 estimated_selectivity=None,
             )
 
-            ***REMOVED*** Verify query_points was called without ACORN params
+            # Verify query_points was called without ACORN params
             call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
             search_params = call_kwargs.get("search_params")
 
-            ***REMOVED*** ACORN should be None when no filters
+            # ACORN should be None when no filters
             assert search_params.acorn is None
 
 
@@ -353,6 +353,6 @@ class TestAcornSearchParamsModel:
         """Test AcornSearchParams default values."""
         params = models.AcornSearchParams()
 
-        ***REMOVED*** Default is enable=False per Qdrant docs
+        # Default is enable=False per Qdrant docs
         assert params.enable is False
         assert params.max_selectivity is None

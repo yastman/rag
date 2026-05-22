@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: ingestion
 spec:
-  replicas: 0  ***REMOVED*** Scale up manually: kubectl scale deployment ingestion -n rag --replicas=1
+  replicas: 0  # Scale up manually: kubectl scale deployment ingestion -n rag --replicas=1
   selector:
     matchLabels:
       app: ingestion

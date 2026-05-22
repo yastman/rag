@@ -1,4 +1,4 @@
-"""Tests for Kommo CRM Pydantic models (***REMOVED***413)."""
+"""Tests for Kommo CRM Pydantic models (#413)."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def test_note_response():
     assert note.id == 789
 
 
-***REMOVED*** --- Phase 2: extended models (***REMOVED***443) ---
+# --- Phase 2: extended models (#443) ---
 
 
 def test_lead_with_responsible_user_id():
@@ -169,9 +169,9 @@ def test_contact_update_build_empty():
     assert fields == []
 
 
-***REMOVED*** -----------------------------------------------------------------------------
-***REMOVED*** KommoCustomField (***REMOVED***1655) — typed builder for custom_fields_values payloads
-***REMOVED*** -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# KommoCustomField (#1655) — typed builder for custom_fields_values payloads
+# -----------------------------------------------------------------------------
 
 
 class TestKommoCustomFieldValue:
@@ -226,7 +226,7 @@ class TestKommoCustomField:
         """
         from telegram_bot.services.kommo_models import KommoCustomField
 
-        ***REMOVED*** field_id=0 / None must produce an explicit None so callers can filter.
+        # field_id=0 / None must produce an explicit None so callers can filter.
         assert KommoCustomField.build_simple(field_id=0, value="x") is None
         assert KommoCustomField.build_simple(field_id=None, value="x") is None
 
@@ -245,8 +245,8 @@ class TestKommoCustomField:
 
         items = [
             KommoCustomField.build_simple(field_id=100, value="A"),
-            None,  ***REMOVED*** represents a missing field — must be skipped
-            KommoCustomField.build_simple(field_id=0, value="B"),  ***REMOVED*** also None
+            None,  # represents a missing field — must be skipped
+            KommoCustomField.build_simple(field_id=0, value="B"),  # also None
             KommoCustomField.build_simple(field_id=300, value="C"),
         ]
         payload = KommoCustomField.dump_list(items)
@@ -257,7 +257,7 @@ class TestKommoCustomField:
 
 
 class TestPhoneCollectorBuildsViaPydantic:
-    """phone_collector._build_custom_fields must construct entries via KommoCustomField (***REMOVED***1655).
+    """phone_collector._build_custom_fields must construct entries via KommoCustomField (#1655).
 
     The function still returns ``list[dict]`` for httpx posting, but each entry
     must come from KommoCustomField.model_dump(by_alias=True, exclude_none=True)
@@ -278,7 +278,7 @@ class TestPhoneCollectorBuildsViaPydantic:
             telegram_username_field_id=400,
         )
 
-        ***REMOVED*** Existing dict shape preserved — Kommo API contract unchanged.
+        # Existing dict shape preserved — Kommo API contract unchanged.
         assert {"field_id": 100, "values": [{"value": "Осмотр объектов"}]} in fields
         assert {"field_id": 200, "values": [{"value": "Telegram-бот"}]} in fields
         assert {"field_id": 300, "values": [{"value": "12345"}]} in fields
@@ -314,8 +314,8 @@ class TestPhoneCollectorBuildsViaPydantic:
                 ):
                     uses_model = True
             if isinstance(node, ast.Dict):
-                ***REMOVED*** A literal dict whose keys include 'field_id' AND 'values'
-                ***REMOVED*** is exactly the hand-built shape we want to remove.
+                # A literal dict whose keys include 'field_id' AND 'values'
+                # is exactly the hand-built shape we want to remove.
                 key_strings = {
                     k.value
                     for k in node.keys
@@ -327,7 +327,7 @@ class TestPhoneCollectorBuildsViaPydantic:
         assert uses_model, (
             "phone_collector._build_custom_fields must build entries via "
             "KommoCustomField (build_simple / dump_list / model_dump), "
-            "not raw dict literals (***REMOVED***1655)"
+            "not raw dict literals (#1655)"
         )
         assert not bad_literals, (
             "phone_collector._build_custom_fields contains hand-built "

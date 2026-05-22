@@ -1,7 +1,7 @@
-"""Async Kommo CRM API adapter (***REMOVED***413).
+"""Async Kommo CRM API adapter (#413).
 
 First-party httpx adapter with OAuth2 auto-refresh delegated to a custom
-``httpx.Auth`` flow (***REMOVED***1646). Bearer header injection and refresh-on-401
+``httpx.Auth`` flow (#1646). Bearer header injection and refresh-on-401
 live in :class:`KommoOAuthAuth`, exactly as documented for multi-request
 auth flows in the upstream HTTPX advanced authentication docs.
 Pattern: BGEM3Client (same project).
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class KommoOAuthAuth(httpx.Auth):
-    """Bearer-token auth flow for Kommo with refresh-on-401 (***REMOVED***1646).
+    """Bearer-token auth flow for Kommo with refresh-on-401 (#1646).
 
     The flow:
 
@@ -81,7 +81,7 @@ class KommoOAuthAuth(httpx.Auth):
                 else:
                     token = await self._token_store.force_refresh()
         except RuntimeError:
-            ***REMOVED*** No refresh_token (seeded long-lived) — surface the original 401.
+            # No refresh_token (seeded long-lived) — surface the original 401.
             return
 
         request.headers["Authorization"] = f"Bearer {token}"
@@ -111,12 +111,12 @@ class KommoClient:
         if response.status_code == 204:
             return {}
 
-        ***REMOVED*** Raises for 401 (after the auth flow has already retried), 429, 5xx so
-        ***REMOVED*** tenacity retries transient cases and a seeded-token 401 surfaces
-        ***REMOVED*** as the canonical HTTPStatusError.
+        # Raises for 401 (after the auth flow has already retried), 429, 5xx so
+        # tenacity retries transient cases and a seeded-token 401 surfaces
+        # as the canonical HTTPStatusError.
         response.raise_for_status()
 
-        ***REMOVED*** Kommo can return empty body on some successful endpoints.
+        # Kommo can return empty body on some successful endpoints.
         if not response.content:
             return {}
 
@@ -126,7 +126,7 @@ class KommoClient:
             raise RuntimeError(msg)
         return cast(dict[str, Any], response_json)
 
-    ***REMOVED*** --- Leads ---
+    # --- Leads ---
 
     @observe(name="kommo-create-lead")
     async def create_lead(self, lead: LeadCreate) -> Lead:
@@ -161,7 +161,7 @@ class KommoClient:
     ) -> list[Lead]:
         """GET /api/v4/leads with optional query or responsible_user_id filter.
 
-        with_contacts: include embedded contacts via Kommo ?with=contacts (***REMOVED***731).
+        with_contacts: include embedded contacts via Kommo ?with=contacts (#731).
         """
         params: dict[str, Any] = {"limit": limit}
         if query is not None:
@@ -192,7 +192,7 @@ class KommoClient:
     ) -> list[Task]:
         """GET /api/v4/tasks with optional filters.
 
-        entity_id: filter tasks by lead/contact entity (***REMOVED***731).
+        entity_id: filter tasks by lead/contact entity (#731).
         """
         params: dict[str, Any] = {"limit": limit}
         if responsible_user_id is not None:
@@ -205,7 +205,7 @@ class KommoClient:
         items = data.get("_embedded", {}).get("tasks", [])
         return [Task(**item) for item in items]
 
-    ***REMOVED*** --- Contacts ---
+    # --- Contacts ---
 
     @observe(name="kommo-upsert-contact")
     async def upsert_contact(self, phone: str, contact: ContactCreate) -> Contact:
@@ -258,7 +258,7 @@ class KommoClient:
         )
         return Contact(**data)
 
-    ***REMOVED*** --- Notes ---
+    # --- Notes ---
 
     @observe(name="kommo-add-note")
     async def add_note(self, entity_type: str, entity_id: int, text: str) -> Note:
@@ -271,7 +271,7 @@ class KommoClient:
         item = data["_embedded"]["notes"][0]
         return Note(**item)
 
-    ***REMOVED*** --- Tasks ---
+    # --- Tasks ---
 
     @observe(name="kommo-create-task")
     async def create_task(self, task: TaskCreate) -> Task:
@@ -282,7 +282,7 @@ class KommoClient:
 
     @observe(name="kommo-update-task")
     async def update_task(self, task_id: int, update: TaskUpdate) -> Task:
-        """PATCH /api/v4/tasks/{id} (***REMOVED***697)."""
+        """PATCH /api/v4/tasks/{id} (#697)."""
         data = await self._request(
             "PATCH",
             f"/tasks/{task_id}",
@@ -292,14 +292,14 @@ class KommoClient:
 
     @observe(name="kommo-complete-task")
     async def complete_task(self, task_id: int, result_text: str | None = None) -> Task:
-        """PATCH /api/v4/tasks/{id} — mark task as completed (***REMOVED***697)."""
+        """PATCH /api/v4/tasks/{id} — mark task as completed (#697)."""
         payload: dict = {"is_completed": True}
         if result_text is not None:
             payload["result"] = {"text": result_text}
         data = await self._request("PATCH", f"/tasks/{task_id}", json=payload)
         return Task(**data)
 
-    ***REMOVED*** --- Links ---
+    # --- Links ---
 
     @observe(name="kommo-link-contact")
     async def link_contact_to_lead(self, lead_id: int, contact_id: int) -> None:
@@ -310,7 +310,7 @@ class KommoClient:
             json=[{"to_entity_id": contact_id, "to_entity_type": "contacts"}],
         )
 
-    ***REMOVED*** --- Pipelines ---
+    # --- Pipelines ---
 
     @observe(name="kommo-list-pipelines")
     async def list_pipelines(self) -> list[Pipeline]:
@@ -319,7 +319,7 @@ class KommoClient:
         items = data.get("_embedded", {}).get("pipelines", [])
         return [Pipeline(**p) for p in items]
 
-    ***REMOVED*** --- Lead Scores (compatibility path for supervisor tools/tests) ---
+    # --- Lead Scores (compatibility path for supervisor tools/tests) ---
 
     @observe(name="kommo-update-lead-score")
     async def update_lead_score(self, *, lead_id: int, payload: dict, idempotency_key: str) -> dict:

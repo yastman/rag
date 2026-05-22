@@ -130,7 +130,7 @@ def test_release_gate_script_uses_safe_env_parsing() -> None:
     assert "Invalid .env line" in script
 
 
-***REMOVED*** ── VPS cleanup-script contract tests ──────────────────────────────────
+# ── VPS cleanup-script contract tests ──────────────────────────────────
 
 
 def test_vps_cleanup_script_uses_explicit_allowlist() -> None:
@@ -169,7 +169,7 @@ def test_release_gate_has_disk_pressure_blocker() -> None:
     assert "disk usage" in script.lower()
 
 
-***REMOVED*** ── Healthcheck contract tests (PR ***REMOVED***1256 runtime blockers) ──────────────
+# ── Healthcheck contract tests (PR #1256 runtime blockers) ──────────────
 
 
 _PYTHON_SLIM_DOCKERFILES = [
@@ -204,7 +204,7 @@ def test_compose_rag_api_voice_agent_healthchecks_do_not_use_wget() -> None:
     wget is not available there."""
     compose_text = (ROOT / "compose.yml").read_text()
 
-    ***REMOVED*** Find rag-api healthcheck section
+    # Find rag-api healthcheck section
     rag_api_match = re.search(
         r"rag-api:.*?healthcheck:\s*\n(.*?)(?=\n  \w|\n\w|\Z)",
         compose_text,

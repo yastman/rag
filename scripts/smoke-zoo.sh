@@ -1,7 +1,7 @@
-***REMOVED***!/usr/bin/env bash
-***REMOVED*** scripts/smoke-zoo.sh - Quick smoke test for all zoo services
-***REMOVED*** Usage: ./scripts/smoke-zoo.sh [--quiet]
-***REMOVED*** Exit: 0 if all pass, 1 if any fail
+#!/usr/bin/env bash
+# scripts/smoke-zoo.sh - Quick smoke test for all zoo services
+# Usage: ./scripts/smoke-zoo.sh [--quiet]
+# Exit: 0 if all pass, 1 if any fail
 
 set -euo pipefail
 
@@ -9,7 +9,7 @@ QUIET="${1:-}"
 FAILED=0
 PASSED=0
 
-***REMOVED*** Colors (disabled in quiet mode)
+# Colors (disabled in quiet mode)
 if [[ "$QUIET" != "--quiet" ]]; then
     RED='\033[0;31m'
     GREEN='\033[0;32m'
@@ -37,28 +37,28 @@ check() {
 [[ "$QUIET" != "--quiet" ]] && echo -e "${YELLOW}Zoo Smoke Tests${NC}"
 [[ "$QUIET" != "--quiet" ]] && echo "=================="
 
-***REMOVED*** 1. Redis
+# 1. Redis
 check "Redis PING" "redis-cli -h localhost -p 6379 PING | grep -q PONG"
 
-***REMOVED*** 2. Redis Query Engine (FT.*)
+# 2. Redis Query Engine (FT.*)
 check "Redis FT._LIST" "redis-cli -h localhost -p 6379 FT._LIST"
 
-***REMOVED*** 3. Qdrant
+# 3. Qdrant
 check "Qdrant readyz" "curl -sf http://localhost:6333/readyz"
 
-***REMOVED*** 4. bge-m3
+# 4. bge-m3
 check "bge-m3 health" "curl -sf http://localhost:8000/health | grep -q ok"
 
-***REMOVED*** 5. bm42
+# 5. bm42
 check "bm42 health" "curl -sf http://localhost:8002/health | grep -q ok"
 
-***REMOVED*** 6. user-base
+# 6. user-base
 check "user-base health" "curl -sf http://localhost:8003/health | grep -q ok"
 
-***REMOVED*** 7. litellm
+# 7. litellm
 check "litellm health" "curl -sf http://localhost:4000/health/liveliness"
 
-***REMOVED*** Summary
+# Summary
 [[ "$QUIET" != "--quiet" ]] && echo "=================="
 [[ "$QUIET" != "--quiet" ]] && echo -e "Passed: ${GREEN}$PASSED${NC}, Failed: ${RED}$FAILED${NC}"
 

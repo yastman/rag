@@ -1,12 +1,12 @@
-***REMOVED*** evaluation/
+# evaluation/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Evaluation, experimentation, and observability tooling for the RAG system.
 Owns offline evaluation tools, RAGAS runners, A/B experiment helpers, and quality metric logging.
 Provides scripts for generating and syncing evaluation datasets and smoke checks.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 | File | Purpose |
 |------|---------|
@@ -23,19 +23,19 @@ Provides scripts for generating and syncing evaluation datasets and smoke checks
 | `metrics_logger.py` | Legacy metrics logging (superseded by Langfuse) |
 | `config_snapshot.py` | Legacy config versioning (superseded by MLflow) |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Does not own production request serving or Telegram bot runtime behavior.
 - Does not own trace instrumentation contracts outside evaluation and reporting helpers.
 - RAG quality score taxonomy belongs in [`../../docs/RAG_QUALITY_SCORES.md`](../../docs/RAG_QUALITY_SCORES.md).
 
-***REMOVED******REMOVED*** Focused checks
+## Focused checks
 
 ```bash
 uv run pytest tests/unit/evaluation/ -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`docs/RAG_QUALITY_SCORES.md`](../../docs/RAG_QUALITY_SCORES.md) — Scoring taxonomy
 - [`tests/README.md`](../../tests/README.md) — Test tiers and commands

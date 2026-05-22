@@ -40,9 +40,9 @@ class StreamingPartialDeliveryError(Exception):
         super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
 
 
-***REMOVED*** 5 context docs: more context diversity, marginal TTFT impact (~50ms).
+# 5 context docs: more context diversity, marginal TTFT impact (~50ms).
 _MAX_CONTEXT_DOCS = 5
-***REMOVED*** 200ms draft interval — sendMessageDraft has no rate limit.
+# 200ms draft interval — sendMessageDraft has no rate limit.
 _DRAFT_INTERVAL = 0.2
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
@@ -214,7 +214,7 @@ async def _chat_create_with_optional_name(
     """Call chat.completions.create with Langfuse `name` when supported."""
     create_fn = llm.chat.completions.create
     if getattr(llm, "_langfuse_auto_trace", True) is False:
-        ***REMOVED*** Plain client created via GraphConfig.create_llm(auto_trace=False).
+        # Plain client created via GraphConfig.create_llm(auto_trace=False).
         return await create_fn(**kwargs)
     try:
         return await create_fn(name=observation_name, **kwargs)
@@ -273,10 +273,10 @@ async def _generate_streaming(
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
-            ***REMOVED*** Reasoning models (e.g. gpt-oss-120b via Cerebras) may send tokens
-            ***REMOVED*** as delta.reasoning_content or delta.reasoning instead of delta.content.
-            ***REMOVED*** LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
-            ***REMOVED*** (issues ***REMOVED***9578, ***REMOVED***15690), so we merge client-side as fallback.
+            # Reasoning models (e.g. gpt-oss-120b via Cerebras) may send tokens
+            # as delta.reasoning_content or delta.reasoning instead of delta.content.
+            # LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
+            # (issues #9578, #15690), so we merge client-side as fallback.
             text = delta.content if delta else None
             if not text:
                 text = getattr(delta, "reasoning_content", None) or getattr(
@@ -315,7 +315,7 @@ async def _generate_streaming(
     if not accumulated:
         raise ValueError("Streaming produced empty response")
 
-    ***REMOVED*** Final message — persisted in chat history
+    # Final message — persisted in chat history
     try:
         sent_msg = await message.answer(accumulated, parse_mode="Markdown")
     except Exception:

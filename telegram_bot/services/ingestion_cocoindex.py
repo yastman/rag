@@ -30,7 +30,7 @@ from src.ingestion.service import (
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** Re-export with CocoIndex naming
+# Re-export with CocoIndex naming
 class CocoIndexIngestionStats(IngestionStats):
     """Alias for IngestionStats."""
 
@@ -42,7 +42,7 @@ class CocoIndexIngestionService(IngestionService):
     """
 
 
-***REMOVED*** Convenience functions
+# Convenience functions
 async def ingest_from_directory(
     directory: str | Path,
     collection_name: str = "documents",
@@ -69,7 +69,7 @@ def main() -> int:
 
     Returns the process exit code (0 on success, 1 on usage error or unknown
     command) rather than calling ``sys.exit`` from inside the function body
-    (***REMOVED***1072). Single ``sys.exit(main())`` lives at the ``__main__`` guard so
+    (#1072). Single ``sys.exit(main())`` lives at the ``__main__`` guard so
     the function is testable in-process and any caller that imports
     :func:`main` cannot accidentally terminate its host interpreter.
     """

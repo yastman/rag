@@ -17,43 +17,43 @@ logger = logging.getLogger(__name__)
 
 JUDGE_SYSTEM_PROMPT = """Ты — судья качества ответов RAG-бота по недвижимости в Болгарии.
 
-***REMOVED******REMOVED*** Твоя задача
+## Твоя задача
 Оценить ответ бота по 5 критериям. Для каждого критерия дай балл 0-10.
 
-***REMOVED******REMOVED*** Критерии оценки
+## Критерии оценки
 
-***REMOVED******REMOVED******REMOVED*** 1. Relevance (релевантность) — 0-10
+### 1. Relevance (релевантность) — 0-10
 - 10: Ответ точно отвечает на вопрос
 - 7-9: Ответ релевантен, но есть minor отклонения
 - 4-6: Частично релевантен
 - 0-3: Не отвечает на вопрос
 
-***REMOVED******REMOVED******REMOVED*** 2. Completeness (полнота) — 0-10
+### 2. Completeness (полнота) — 0-10
 - 10: Вся необходимая информация, конкретные цены/адреса
 - 7-9: Достаточно информации для принятия решения
 - 4-6: Базовая информация, не хватает деталей
 - 0-3: Слишком короткий или пустой ответ
 
-***REMOVED******REMOVED******REMOVED*** 3. Filter Accuracy (точность фильтров) — 0-10
+### 3. Filter Accuracy (точность фильтров) — 0-10
 - 10: Все упомянутые объекты соответствуют фильтрам запроса
 - 7-9: Большинство соответствует, 1-2 отклонения
 - 4-6: Половина соответствует
 - 0-3: Фильтры проигнорированы
 - N/A: Если в запросе нет фильтров (верни 10)
 
-***REMOVED******REMOVED******REMOVED*** 4. Tone & Format (тон и формат) — 0-10
+### 4. Tone & Format (тон и формат) — 0-10
 - 10: Дружелюбный тон, хорошее Markdown форматирование
 - 7-9: Адекватный тон, читаемый формат
 - 4-6: Нейтральный, но сложно читать
 - 0-3: Грубый тон или нечитаемый формат
 
-***REMOVED******REMOVED******REMOVED*** 5. No Hallucination (без галлюцинаций) — 0-10
+### 5. No Hallucination (без галлюцинаций) — 0-10
 - 10: Все факты можно проверить, признаёт незнание
 - 7-9: Нет явных выдумок
 - 4-6: Есть сомнительные утверждения
 - 0-3: Явно выдуманные данные
 
-***REMOVED******REMOVED*** Формат ответа
+## Формат ответа
 Ответь ТОЛЬКО валидным JSON без комментариев:
 {
   "relevance": {"score": 8, "reason": "краткая причина"},
@@ -129,13 +129,13 @@ class _BaseLLMJudge:
                 filters_parts.append(f"до моря <= {ef.distance_to_sea_max}м")
             filters_str = ", ".join(filters_parts) if filters_parts else "Нет"
 
-        return f"""***REMOVED******REMOVED*** Запрос пользователя
+        return f"""## Запрос пользователя
 {scenario.query}
 
-***REMOVED******REMOVED*** Ожидаемые фильтры
+## Ожидаемые фильтры
 {filters_str}
 
-***REMOVED******REMOVED*** Ответ бота
+## Ответ бота
 {bot_response}
 
 Оцени ответ по критериям. Ответь ТОЛЬКО валидным JSON."""
@@ -262,7 +262,7 @@ class PassthroughJudge:
         currency-only text like ``"Все цены указаны в евро"`` is rejected.
         """
         lowered = response.lower()
-        ***REMOVED*** "70 000 евро", "70000€", "70к евро", "€70000", "евро 70 000"
+        # "70 000 евро", "70000€", "70к евро", "€70000", "евро 70 000"
         return bool(re.search(r"(?:евро\b|€)\s*\d", lowered)) or bool(
             re.search(r"\d[\d\s]*(?:k|к)?\s*(?:евро\b|€)", lowered)
         )
@@ -336,7 +336,7 @@ class PassthroughJudge:
         check_details: dict = {"presence": True}
         failed_checks: list[str] = []
 
-        ***REMOVED*** 1. Expected keywords
+        # 1. Expected keywords
         if scenario.expected_keywords:
             has_keywords = self._contains_any_keyword(bot_response, scenario.expected_keywords)
             check_details["expected_keywords"] = has_keywords
@@ -345,7 +345,7 @@ class PassthroughJudge:
         else:
             check_details["expected_keywords"] = None
 
-        ***REMOVED*** 2. Generic fallback rejection for RAG/property scenarios
+        # 2. Generic fallback rejection for RAG/property scenarios
         is_rag_property = scenario.group in {
             TestGroup.PRICE_FILTERS,
             TestGroup.ROOM_FILTERS,
@@ -362,7 +362,7 @@ class PassthroughJudge:
         else:
             check_details["generic_fallback"] = None
 
-        ***REMOVED*** 3. Expected filter evidence
+        # 3. Expected filter evidence
         if scenario.expected_filters is not None:
             evidence = self._check_filter_evidence(bot_response, scenario.expected_filters)
             check_details["filter_evidence"] = evidence

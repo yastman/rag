@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MAX_TOPIC_NAME_LEN = 128
-_TOPIC_TTL = 30 * 86400  ***REMOVED*** 30 дней
+_TOPIC_TTL = 30 * 86400  # 30 дней
 
 
 def _truncate(name: str) -> str:

@@ -4,7 +4,7 @@ Based on best practices 2025-2026:
 - Contract-style prompts > vague adjectives ("be concise" doesn't work)
 - Dynamic token budgets based on style + difficulty (LASER-D pattern)
 
-Issue: ***REMOVED***129
+Issue: #129
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ CONTRACT_PROMPTS: dict[ResponseStyle, str] = {
     ),
 }
 
-***REMOVED*** LASER-D inspired token budgets: (style, difficulty) -> max_tokens
+# LASER-D inspired token budgets: (style, difficulty) -> max_tokens
 TOKEN_LIMITS: dict[tuple[ResponseStyle, str], int] = {
     ("short", "easy"): 100,
     ("short", "medium"): 130,
@@ -101,7 +101,7 @@ def build_system_prompt_with_manager(
     for Langfuse variable substitution.
     """
     word_limit = get_word_limit(style, difficulty)
-    ***REMOVED*** Pre-render word_limit (dynamic), keep {{domain}} for Langfuse substitution
+    # Pre-render word_limit (dynamic), keep {{domain}} for Langfuse substitution
     fallback = CONTRACT_PROMPTS[style].replace("{word_limit}", str(word_limit))
     fallback = fallback.replace("{domain}", "{{domain}}")
     prompt_name = f"generate_{style}"

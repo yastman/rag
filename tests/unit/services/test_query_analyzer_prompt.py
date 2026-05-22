@@ -1,4 +1,4 @@
-"""Regression guard for QueryAnalyzer SYSTEM_PROMPT (***REMOVED***1401).
+"""Regression guard for QueryAnalyzer SYSTEM_PROMPT (#1401).
 
 The document/CSV pipeline canonical filter for furniture is
 ``furnished: bool`` (see docs/QDRANT_STACK.md). This test pins the prompt

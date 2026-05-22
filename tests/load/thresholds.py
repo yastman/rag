@@ -1,4 +1,4 @@
-***REMOVED*** tests/load/thresholds.py
+# tests/load/thresholds.py
 """P95 latency thresholds for load tests."""
 
 from dataclasses import dataclass
@@ -12,18 +12,18 @@ class Thresholds:
     fail_ms: int
 
 
-***REMOVED*** Component-level thresholds
+# Component-level thresholds
 THRESHOLDS = {
     "routing": Thresholds(warn_ms=20, fail_ms=30),
     "cache_hit": Thresholds(warn_ms=20, fail_ms=30),
     "qdrant": Thresholds(warn_ms=120, fail_ms=200),
     "full_rag": Thresholds(warn_ms=3000, fail_ms=4000),
-    ***REMOVED*** TTFT only checked if actually measured (streaming enabled)
+    # TTFT only checked if actually measured (streaming enabled)
     "ttft": Thresholds(warn_ms=800, fail_ms=1200),
 }
 
-***REMOVED*** Regression threshold (fail if p95 > baseline * 1.20)
+# Regression threshold (fail if p95 > baseline * 1.20)
 REGRESSION_THRESHOLD = 1.20
 
-***REMOVED*** Minimum cache hit rate (50% is reasonable for diverse queries)
+# Minimum cache hit rate (50% is reasonable for diverse queries)
 MIN_CACHE_HIT_RATE = 0.50

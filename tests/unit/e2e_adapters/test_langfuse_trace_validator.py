@@ -66,12 +66,12 @@ def test_validator_accepts_current_langgraph_span_names(
     - node-cache-store
     - node-respond
     """
-    ***REMOVED*** Mock Langfuse trace with current LangGraph span names
+    # Mock Langfuse trace with current LangGraph span names
     mock_trace = MagicMock()
     mock_trace.input = {"query_hash": "abc123"}
     mock_trace.output = {"answer_hash": "def456"}
     mock_trace.observations = [
-        ***REMOVED*** Current LangGraph pipeline spans
+        # Current LangGraph pipeline spans
         type(
             "Obs",
             (),
@@ -90,7 +90,7 @@ def test_validator_accepts_current_langgraph_span_names(
         type("Obs", (), {"name": "node-respond"}),
     ]
 
-    ***REMOVED*** Mock required scores
+    # Mock required scores
     mock_trace.scores = [
         type("Score", (), {"name": "query_type", "value": 1.0}),
         type("Score", (), {"name": "latency_total_ms", "value": 1500.0}),
@@ -114,7 +114,7 @@ def test_validator_accepts_current_langgraph_span_names(
             is_command=False,
         )
 
-    ***REMOVED*** Should pass validation with current span names
+    # Should pass validation with current span names
     assert result.ok, (
         f"Validation failed: missing_spans={result.missing_spans}, missing_scores={result.missing_scores}"
     )
@@ -131,7 +131,7 @@ def test_validator_accepts_telegram_message_root_with_rag_observations(
     mock_trace.input = {"query_hash": "abc123"}
     mock_trace.output = {"answer_hash": "def456"}
     mock_trace.observations = [
-        ***REMOVED*** Root observation with proper context
+        # Root observation with proper context
         type(
             "Obs",
             (),
@@ -143,7 +143,7 @@ def test_validator_accepts_telegram_message_root_with_rag_observations(
         ),
         type("Obs", (), {"name": "telegram-rag-query"}),
         type("Obs", (), {"name": "telegram-rag-supervisor"}),
-        ***REMOVED*** RAG pipeline spans
+        # RAG pipeline spans
         type("Obs", (), {"name": "node-classify"}),
         type("Obs", (), {"name": "node-cache-check"}),
         type("Obs", (), {"name": "node-retrieve"}),
@@ -154,7 +154,7 @@ def test_validator_accepts_telegram_message_root_with_rag_observations(
         type("Obs", (), {"name": "node-respond"}),
     ]
 
-    ***REMOVED*** Mock required scores
+    # Mock required scores
     mock_trace.scores = [
         type("Score", (), {"name": "query_type", "value": 1.0}),
         type("Score", (), {"name": "latency_total_ms", "value": 1500.0}),
@@ -192,11 +192,11 @@ def test_validator_fails_when_root_input_is_missing(
 ):
     """Validator should fail when trace-level input lacks query_hash (Blocker 2)."""
     mock_trace = MagicMock()
-    ***REMOVED*** trace.input lacks query_hash — root_input marker expected
+    # trace.input lacks query_hash — root_input marker expected
     mock_trace.input = {"query_preview": "test query"}
     mock_trace.output = {"answer_hash": "def456"}
     mock_trace.observations = [
-        ***REMOVED*** Root observation missing query_hash in input
+        # Root observation missing query_hash in input
         type(
             "Obs",
             (),
@@ -216,7 +216,7 @@ def test_validator_fails_when_root_input_is_missing(
         type("Obs", (), {"name": "node-respond"}),
     ]
 
-    ***REMOVED*** Mock required scores
+    # Mock required scores
     mock_trace.scores = [
         type("Score", (), {"name": "query_type", "value": 1.0}),
         type("Score", (), {"name": "latency_total_ms", "value": 1500.0}),
@@ -245,7 +245,7 @@ def test_validator_fails_when_root_input_is_missing(
     assert "root_input" in result.missing_spans, (
         f"Expected root_input in missing_spans, got: {result.missing_spans}"
     )
-    ***REMOVED*** root_output should be present since answer_hash is provided
+    # root_output should be present since answer_hash is provided
     assert "root_output" not in result.missing_spans, (
         f"Did not expect root_output in missing_spans, got: {result.missing_spans}"
     )
@@ -362,9 +362,9 @@ def test_validator_fails_when_root_output_is_missing(
     assert "root_output" in result.missing_spans
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Blocker 3: wait_for_trace multi-name support
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Blocker 3: wait_for_trace multi-name support
+# ---------------------------------------------------------------------------
 
 
 def test_wait_for_trace_single_name_backward_compat():
@@ -395,7 +395,7 @@ def test_wait_for_trace_multi_name_finds_match():
                 page.data = []
                 return page
 
-            ***REMOVED*** Return trace only for second name
+            # Return trace only for second name
             def list_for_second(name, tags, from_timestamp, order_by, limit):
                 page = MagicMock()
                 if name == "telegram-message":

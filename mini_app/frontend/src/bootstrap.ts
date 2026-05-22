@@ -14,17 +14,17 @@ export type AppBootstrapResult = {
 
 function applyFallbackTheme() {
   const vars: Record<string, string> = {
-    "--tg-theme-accent-text-color": "***REMOVED***6ab2f2",
-    "--tg-theme-bg-color": "***REMOVED***17212b",
-    "--tg-theme-button-color": "***REMOVED***5288c1",
-    "--tg-theme-button-text-color": "***REMOVED***ffffff",
-    "--tg-theme-destructive-text-color": "***REMOVED***ec3942",
-    "--tg-theme-header-bg-color": "***REMOVED***17212b",
-    "--tg-theme-hint-color": "***REMOVED***708499",
-    "--tg-theme-link-color": "***REMOVED***6ab3f3",
-    "--tg-theme-secondary-bg-color": "***REMOVED***232e3c",
-    "--tg-theme-subtitle-text-color": "***REMOVED***708499",
-    "--tg-theme-text-color": "***REMOVED***f5f5f5",
+    "--tg-theme-accent-text-color": "#6ab2f2",
+    "--tg-theme-bg-color": "#17212b",
+    "--tg-theme-button-color": "#5288c1",
+    "--tg-theme-button-text-color": "#ffffff",
+    "--tg-theme-destructive-text-color": "#ec3942",
+    "--tg-theme-header-bg-color": "#17212b",
+    "--tg-theme-hint-color": "#708499",
+    "--tg-theme-link-color": "#6ab3f3",
+    "--tg-theme-secondary-bg-color": "#232e3c",
+    "--tg-theme-subtitle-text-color": "#708499",
+    "--tg-theme-text-color": "#f5f5f5",
     "--tg-theme-section-separator-color": "rgba(255,255,255,0.08)",
   };
   for (const [key, value] of Object.entries(vars)) {

@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Smoke Test Runner - Quick Regression Testing
 
@@ -15,10 +15,10 @@ Usage:
     python smoke_test.py --engine baseline --quick
 
 Integration with CI/CD:
-    ***REMOVED*** .github/workflows/test.yml
+    # .github/workflows/test.yml
     - name: Run smoke test
       run: python evaluation/smoke_test.py --strict
-      ***REMOVED*** Exit code 1 if SLO violated
+      # Exit code 1 if SLO violated
 """
 
 import argparse
@@ -28,31 +28,31 @@ from pathlib import Path
 from typing import Any
 
 
-***REMOVED*** Import search engines and evaluator. Prefer package-relative imports so the
-***REMOVED*** module is fully importable as ``src.evaluation.smoke_test`` (used by
-***REMOVED*** ``tests/unit/evaluation/test_smoke_test.py`` and the contract test for
-***REMOVED*** ***REMOVED***1619). Fall back to the script-style imports for ``python smoke_test.py``.
-try:  ***REMOVED*** package import path
+# Import search engines and evaluator. Prefer package-relative imports so the
+# module is fully importable as ``src.evaluation.smoke_test`` (used by
+# ``tests/unit/evaluation/test_smoke_test.py`` and the contract test for
+# #1619). Fall back to the script-style imports for ``python smoke_test.py``.
+try:  # package import path
     from src.evaluation.config_snapshot import get_config_hash
     from src.evaluation.search_engines import (
         BaselineSearchEngine,
         HybridDBSFColBERTSearchEngine,
         HybridSearchEngine,
     )
-except ImportError:  ***REMOVED*** script-style fallback (``python smoke_test.py``)
+except ImportError:  # script-style fallback (``python smoke_test.py``)
     sys.path.insert(0, str(Path(__file__).parent))
-    from config_snapshot import get_config_hash  ***REMOVED*** type: ignore[no-redef]
-    from search_engines import (  ***REMOVED*** type: ignore[no-redef]
+    from config_snapshot import get_config_hash  # type: ignore[no-redef]
+    from search_engines import (  # type: ignore[no-redef]
         BaselineSearchEngine,
         HybridDBSFColBERTSearchEngine,
         HybridSearchEngine,
     )
 
 
-***REMOVED*** Smoke test queries: 30 carefully selected queries
-***REMOVED*** Mix of difficulties: 10 hard, 10 medium, 10 easy
+# Smoke test queries: 30 carefully selected queries
+# Mix of difficulties: 10 hard, 10 medium, 10 easy
 SMOKE_QUERIES = [
-    ***REMOVED*** HARD queries (10) - complex, multi-hop, paraphrased
+    # HARD queries (10) - complex, multi-hop, paraphrased
     {
         "id": 1,
         "query": "что регулирует первая статья УК Украины о правовом обеспечении",
@@ -123,7 +123,7 @@ SMOKE_QUERIES = [
         "difficulty": "hard",
         "type": "paraphrased",
     },
-    ***REMOVED*** MEDIUM queries (10) - semantic understanding required
+    # MEDIUM queries (10) - semantic understanding required
     {
         "id": 11,
         "query": "какие цели и задачи ставит перед собой уголовный кодекс Украины",
@@ -194,7 +194,7 @@ SMOKE_QUERIES = [
         "difficulty": "medium",
         "type": "semantic",
     },
-    ***REMOVED*** EASY queries (10) - direct article mentions
+    # EASY queries (10) - direct article mentions
     {
         "id": 21,
         "query": "статья 1 Уголовного кодекса Украины задачи",
@@ -267,13 +267,13 @@ SMOKE_QUERIES = [
     },
 ]
 
-***REMOVED*** SLO thresholds
+# SLO thresholds
 SLO_THRESHOLDS = {
-    "precision_at_1_min": 0.90,  ***REMOVED*** 90% minimum
-    "recall_at_10_min": 0.95,  ***REMOVED*** 95% minimum
-    "p95_latency_ms_max": 800,  ***REMOVED*** 800ms maximum
-    "p99_latency_ms_max": 1200,  ***REMOVED*** 1200ms maximum
-    "failure_rate_max": 0.0,  ***REMOVED*** Zero failures allowed
+    "precision_at_1_min": 0.90,  # 90% minimum
+    "recall_at_10_min": 0.95,  # 95% minimum
+    "p95_latency_ms_max": 800,  # 800ms maximum
+    "p99_latency_ms_max": 1200,  # 1200ms maximum
+    "failure_rate_max": 0.0,  # Zero failures allowed
 }
 
 
@@ -331,7 +331,7 @@ def run_smoke_test(
     print(f"   Queries: {10 if quick else 30}")
     print(f"   Strict Mode: {strict}")
 
-    ***REMOVED*** Initialize engine
+    # Initialize engine
     print(f"\n🔧 Initializing {engine_name} engine...")
     embedding_model = _load_embedding_model()
     engine: Any
@@ -347,7 +347,7 @@ def run_smoke_test(
     else:
         raise ValueError(f"Unknown engine: {engine_name}")
 
-    ***REMOVED*** Run queries
+    # Run queries
     queries = SMOKE_QUERIES[:10] if quick else SMOKE_QUERIES
     results = []
     latencies = []
@@ -362,7 +362,7 @@ def run_smoke_test(
         latency_ms = (time.time() - start_time) * 1000
         latencies.append(latency_ms)
 
-        ***REMOVED*** Check if expected article in results
+        # Check if expected article in results
         retrieved_articles = [_article_number(result) for result in search_results]
         precision_at_1 = 1.0 if retrieved_articles and retrieved_articles[0] == expected else 0.0
         recall_at_10 = 1.0 if expected in retrieved_articles else 0.0
@@ -381,12 +381,12 @@ def run_smoke_test(
         print(
             f"   [{i:2d}/{len(queries)}] {status} "
             f"P@1={precision_at_1:.0%} R@10={recall_at_10:.0%} "
-            f"{latency_ms:5.0f}ms - {query[:60]}..."  ***REMOVED*** type: ignore
+            f"{latency_ms:5.0f}ms - {query[:60]}..."  # type: ignore
         )
 
-    ***REMOVED*** Calculate metrics
-    avg_precision_at_1 = sum(r["precision_at_1"] for r in results) / len(results)  ***REMOVED*** type: ignore
-    avg_recall_at_10 = sum(r["recall_at_10"] for r in results) / len(results)  ***REMOVED*** type: ignore
+    # Calculate metrics
+    avg_precision_at_1 = sum(r["precision_at_1"] for r in results) / len(results)  # type: ignore
+    avg_recall_at_10 = sum(r["recall_at_10"] for r in results) / len(results)  # type: ignore
     failure_rate = 1.0 - avg_recall_at_10
 
     latencies_sorted = sorted(latencies)
@@ -394,7 +394,7 @@ def run_smoke_test(
     p95_latency = latencies_sorted[int(len(latencies_sorted) * 0.95)]
     p99_latency = latencies_sorted[int(len(latencies_sorted) * 0.99)]
 
-    ***REMOVED*** Print results
+    # Print results
     print("\n" + "=" * 80)
     print("📊 SMOKE TEST RESULTS")
     print("=" * 80)
@@ -415,7 +415,7 @@ def run_smoke_test(
     print(f"   p95: {p95_latency:6.0f}ms (target: ≤{SLO_THRESHOLDS['p95_latency_ms_max']}ms)")
     print(f"   p99: {p99_latency:6.0f}ms (target: ≤{SLO_THRESHOLDS['p99_latency_ms_max']}ms)")
 
-    ***REMOVED*** Check SLO violations
+    # Check SLO violations
     violations = []
     if avg_precision_at_1 < SLO_THRESHOLDS["precision_at_1_min"]:
         violations.append(f"Precision@1 too low: {avg_precision_at_1:.1%}")
@@ -436,12 +436,12 @@ def run_smoke_test(
     else:
         print("\n✅ ALL SLO CHECKS PASSED!")
 
-    ***REMOVED*** Breakdown by difficulty
+    # Breakdown by difficulty
     print("\n📈 Breakdown by Difficulty:")
     for difficulty in ["easy", "medium", "hard"]:
         diff_results = [r for r in results if r["difficulty"] == difficulty]
         if diff_results:
-            diff_p1 = sum(r["precision_at_1"] for r in diff_results) / len(diff_results)  ***REMOVED*** type: ignore
+            diff_p1 = sum(r["precision_at_1"] for r in diff_results) / len(diff_results)  # type: ignore
             print(f"   {difficulty.capitalize():6s}: {diff_p1:.1%} ({len(diff_results)} queries)")
 
     print("\n" + "=" * 80)
@@ -495,5 +495,5 @@ if __name__ == "__main__":
         quick=args.quick,
     )
 
-    ***REMOVED*** Exit with appropriate code
+    # Exit with appropriate code
     sys.exit(0 if result["passed"] else 1)

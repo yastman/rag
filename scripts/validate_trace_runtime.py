@@ -1,11 +1,11 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Preflight guard for trace validation runtime safety."""
 
 from __future__ import annotations
 
 import argparse
 import os
-import subprocess  ***REMOVED*** nosec
+import subprocess  # nosec
 import sys
 from pathlib import Path
 
@@ -19,7 +19,7 @@ def _parse_env_file(path: Path) -> dict[str, str]:
     env: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
-        if not line or line.startswith("***REMOVED***") or "=" not in line:
+        if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
         env[key.strip()] = value.strip()
@@ -28,8 +28,8 @@ def _parse_env_file(path: Path) -> dict[str, str]:
 
 def _volume_exists(volume_name: str) -> bool:
     try:
-        ***REMOVED*** nosec: fixed local docker subcommand with no shell expansion.
-        result = subprocess.run(  ***REMOVED*** nosec
+        # nosec: fixed local docker subcommand with no shell expansion.
+        result = subprocess.run(  # nosec
             ["docker", "volume", "inspect", volume_name],
             check=False,
             capture_output=True,

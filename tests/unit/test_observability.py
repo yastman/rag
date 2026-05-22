@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/test_observability.py
+# tests/unit/test_observability.py
 """Unit tests for PII masking and Langfuse client initialization."""
 
 from datetime import UTC, datetime
@@ -41,7 +41,7 @@ class TestMaskPii:
 
         long_text = "x" * 5000
         result = mask_pii(long_text)
-        assert len(result) <= 4015  ***REMOVED*** 4000 + "... [TRUNCATED]"
+        assert len(result) <= 4015  # 4000 + "... [TRUNCATED]"
         assert "[TRUNCATED]" in result
 
     def test_mask_dict_recursively(self):
@@ -77,7 +77,7 @@ class TestTracedPipeline:
         from telegram_bot.observability import traced_pipeline
 
         with traced_pipeline(session_id="test-123", user_id="user-1"):
-            pass  ***REMOVED*** should not raise
+            pass  # should not raise
 
     def test_traced_pipeline_accepts_tags(self):
         from telegram_bot.observability import traced_pipeline
@@ -323,13 +323,13 @@ class TestLangfuseFlushConfig:
 
 
 class TestEndpointReachability:
-    """Tests for graceful fallback when Langfuse endpoint is unreachable (***REMOVED***824)."""
+    """Tests for graceful fallback when Langfuse endpoint is unreachable (#824)."""
 
     def test_is_endpoint_reachable_returns_false_for_refused_connection(self):
         """_is_endpoint_reachable returns False when connection is refused."""
         from src.observability import _is_endpoint_reachable
 
-        ***REMOVED*** Port 1 is almost never open
+        # Port 1 is almost never open
         result = _is_endpoint_reachable("http://localhost:1", timeout=0.1)
         assert result is False
 
@@ -426,14 +426,14 @@ class TestEndpointReachability:
             patch("src.observability.Langfuse"),
             caplog.at_level(logging.WARNING, logger="src.observability"),
         ):
-            ***REMOVED*** First call — should log warning
+            # First call — should log warning
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
                 host="http://localhost:3001",
                 force=True,
             )
-            ***REMOVED*** Second call without force — should NOT log again (cached None)
+            # Second call without force — should NOT log again (cached None)
             observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -465,7 +465,7 @@ class TestEndpointReachability:
                 force=True,
             )
 
-        ***REMOVED*** No host → no reachability check, client created normally
+        # No host → no reachability check, client created normally
         mock_check.assert_not_called()
         assert result is fake_client
 
@@ -651,7 +651,7 @@ class TestDisableOtelExporter:
         from src.observability import _disable_otel_exporter
 
         real_provider = SdkTracerProvider()
-        real_provider.shutdown = MagicMock()  ***REMOVED*** type: ignore[method-assign]
+        real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
 
         with (
             patch("opentelemetry.trace.get_tracer_provider", return_value=real_provider),
@@ -668,7 +668,7 @@ class TestDisableOtelExporter:
         from src.observability import _disable_otel_exporter
 
         real_provider = SdkTracerProvider()
-        real_provider.shutdown = MagicMock()  ***REMOVED*** type: ignore[method-assign]
+        real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
 
         with (
             patch("opentelemetry.trace.get_tracer_provider", return_value=real_provider),
@@ -687,7 +687,7 @@ class TestDisableOtelExporter:
 
         monkeypatch.setitem(sys.modules, "opentelemetry", None)
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         _disable_otel_exporter()
 
     def test_no_shutdown_when_provider_is_not_sdk(self):
@@ -699,7 +699,7 @@ class TestDisableOtelExporter:
         noop_provider = NoOpTracerProvider()
 
         with patch("opentelemetry.trace.get_tracer_provider", return_value=noop_provider):
-            ***REMOVED*** NoOpTracerProvider has no shutdown() — should complete without error
+            # NoOpTracerProvider has no shutdown() — should complete without error
             _disable_otel_exporter()
 
 
@@ -801,7 +801,7 @@ def observability_without_langfuse():
 
     yield obs
 
-    ***REMOVED*** Restore
+    # Restore
     if original_langfuse is not None:
         sys.modules["langfuse"] = original_langfuse
     else:
@@ -875,7 +875,7 @@ class TestLangfuseImportFailure:
 
 
 class TestOtelServiceName:
-    """Tests for OTEL_SERVICE_NAME handling (***REMOVED***1370)."""
+    """Tests for OTEL_SERVICE_NAME handling (#1370)."""
 
     def test_initialize_langfuse_sets_otel_service_name_when_absent(self, monkeypatch):
         """When OTEL_SERVICE_NAME is unset, initialize_langfuse sets it to telegram-bot."""

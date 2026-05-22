@@ -1,4 +1,4 @@
-"""Contract test for issue ***REMOVED***1812: mypy must not regress on lazy ML singletons.
+"""Contract test for issue #1812: mypy must not regress on lazy ML singletons.
 
 Two specific mypy errors were observed on a clean ``dev`` checkout (with the
 ``ml-local`` extra installed so that ``FlagEmbedding`` / ``sentence_transformers``
@@ -23,7 +23,7 @@ available in the sandbox -- in that case the type check cannot be exercised
 and there is nothing meaningful to assert. CI installs the ``dev`` group, so
 the test is expected to actually run there.
 
-Refs ***REMOVED***1812.
+Refs #1812.
 """
 
 from __future__ import annotations
@@ -62,12 +62,12 @@ def _resolve_mypy_command() -> list[str] | None:
 
 
 def test_mypy_clean_on_embedding_model_and_reranker() -> None:
-    """mypy must succeed on the two files cited in ***REMOVED***1812."""
+    """mypy must succeed on the two files cited in #1812."""
     mypy_cmd = _resolve_mypy_command()
     if mypy_cmd is None:
-        pytest.skip("Neither `uv` nor `mypy` is available; cannot run ***REMOVED***1812 contract.")
+        pytest.skip("Neither `uv` nor `mypy` is available; cannot run #1812 contract.")
 
-    ***REMOVED*** Mirror Makefile flags so the test reflects what `make type-check` would do.
+    # Mirror Makefile flags so the test reflects what `make type-check` would do.
     argv = [
         *mypy_cmd,
         *TARGET_FILES,
@@ -95,7 +95,7 @@ def test_mypy_clean_on_embedding_model_and_reranker() -> None:
 
     if failures:
         msg_lines = [
-            "Issue ***REMOVED***1812 regression: mypy reports errors on the patched files.",
+            "Issue #1812 regression: mypy reports errors on the patched files.",
             "Failures:",
             *(f"  - {f}" for f in failures),
             "Full mypy output:",

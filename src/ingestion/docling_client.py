@@ -23,9 +23,9 @@ from src.ingestion.chunker import Chunk
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Profile presets for docling-serve conversion
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Profile presets for docling-serve conversion
+# ---------------------------------------------------------------------------
 
 _PROFILE_SETTINGS: dict[str, dict[str, Any]] = {
     "speed": {
@@ -83,7 +83,7 @@ def get_profile_settings(profile: str) -> dict[str, Any]:
             f"Unknown docling profile {profile!r}. "
             f"Valid profiles: {', '.join(sorted(VALID_PROFILES))}"
         )
-    ***REMOVED*** Return a copy so callers cannot mutate the module-level dict.
+    # Return a copy so callers cannot mutate the module-level dict.
     return dict(_PROFILE_SETTINGS[profile])
 
 
@@ -92,25 +92,25 @@ class DoclingConfig:
     """Configuration for docling-serve client."""
 
     base_url: str = "http://localhost:5001"
-    timeout: float = 300.0  ***REMOVED*** Long timeout for large documents
-    max_tokens: int = 512  ***REMOVED*** Optimal for Voyage-4-large
-    merge_peers: bool = True  ***REMOVED*** Merge undersized peer chunks
-    ***REMOVED*** docling-serve expects a HuggingFace model name (string) for `chunking_tokenizer`.
-    ***REMOVED*** If omitted, docling-serve uses its server-side default tokenizer.
-    ***REMOVED***
-    ***REMOVED*** NOTE: Earlier versions of this client used values like "word" / "huggingface",
-    ***REMOVED*** but the HTTP API does not support those and may return 0 chunks while still
-    ***REMOVED*** responding with HTTP 200.
+    timeout: float = 300.0  # Long timeout for large documents
+    max_tokens: int = 512  # Optimal for Voyage-4-large
+    merge_peers: bool = True  # Merge undersized peer chunks
+    # docling-serve expects a HuggingFace model name (string) for `chunking_tokenizer`.
+    # If omitted, docling-serve uses its server-side default tokenizer.
+    #
+    # NOTE: Earlier versions of this client used values like "word" / "huggingface",
+    # but the HTTP API does not support those and may return 0 chunks while still
+    # responding with HTTP 200.
     tokenizer: str | None = None
-    pdf_backend: str = "dlparse_v4"  ***REMOVED*** Best table parsing (2026)
-    table_mode: str = "accurate"  ***REMOVED*** accurate | fast
-    do_ocr: bool = False  ***REMOVED*** Enable for scanned documents
+    pdf_backend: str = "dlparse_v4"  # Best table parsing (2026)
+    table_mode: str = "accurate"  # accurate | fast
+    do_ocr: bool = False  # Enable for scanned documents
 
-    ***REMOVED*** Profile-based settings (from DOCLING_PROFILE env, default "speed")
+    # Profile-based settings (from DOCLING_PROFILE env, default "speed")
     profile: str = field(default_factory=lambda: os.getenv("DOCLING_PROFILE", "speed"))
-    ocr_engine: str | None = None  ***REMOVED*** auto, easyocr, rapidocr, tesserocr, tesseract
-    force_ocr: bool = False  ***REMOVED*** Replace existing text with OCR output
-    pipeline: str | None = None  ***REMOVED*** Processing pipeline (None = standard, "vlm" = VLM)
+    ocr_engine: str | None = None  # auto, easyocr, rapidocr, tesserocr, tesseract
+    force_ocr: bool = False  # Replace existing text with OCR output
+    pipeline: str | None = None  # Processing pipeline (None = standard, "vlm" = VLM)
 
     def __post_init__(self) -> None:
         """Apply profile defaults for fields left at their init defaults."""
@@ -122,21 +122,21 @@ class DoclingConfig:
             self.profile = "speed"
 
         settings = get_profile_settings(self.profile)
-        ***REMOVED*** Profile sets defaults — explicit constructor args take priority.
-        ***REMOVED*** We detect "not explicitly set" by checking against the dataclass
-        ***REMOVED*** field defaults.  For mutable/factory defaults this is tricky, so
-        ***REMOVED*** we simply always apply the profile for the new fields that had no
-        ***REMOVED*** previous presence in the config.
+        # Profile sets defaults — explicit constructor args take priority.
+        # We detect "not explicitly set" by checking against the dataclass
+        # field defaults.  For mutable/factory defaults this is tricky, so
+        # we simply always apply the profile for the new fields that had no
+        # previous presence in the config.
         if not self.force_ocr and settings["force_ocr"]:
             self.force_ocr = settings["force_ocr"]
         if self.ocr_engine is None:
             self.ocr_engine = settings["ocr_engine"]
         if self.pipeline is None:
             self.pipeline = settings["pipeline"]
-        ***REMOVED*** do_ocr / table_mode / pdf_backend have dataclass defaults that may
-        ***REMOVED*** differ from the chosen profile.  Override them when the current value
-        ***REMOVED*** still matches the dataclass default (i.e. the caller didn't pass a
-        ***REMOVED*** custom value via the constructor).
+        # do_ocr / table_mode / pdf_backend have dataclass defaults that may
+        # differ from the chosen profile.  Override them when the current value
+        # still matches the dataclass default (i.e. the caller didn't pass a
+        # custom value via the constructor).
         if not self.do_ocr and settings["do_ocr"]:
             self.do_ocr = settings["do_ocr"]
         if self.table_mode == "accurate" and settings["table_mode"] != "accurate":
@@ -267,8 +267,8 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
-        ***REMOVED*** Prepare multipart form data - read file into memory to avoid
-        ***REMOVED*** async context issues with file handles
+        # Prepare multipart form data - read file into memory to avoid
+        # async context issues with file handles
         file_content = await async_path.read_bytes()
         files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
 
@@ -281,7 +281,7 @@ class DoclingClient:
         response.raise_for_status()
         result = response.json()
 
-        ***REMOVED*** Extract converted content
+        # Extract converted content
         documents = result.get("documents", [])
         if not documents:
             raise ValueError("No documents returned from conversion")
@@ -317,8 +317,8 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
-        ***REMOVED*** Prepare multipart form data - read file into memory to avoid
-        ***REMOVED*** async context issues with file handles
+        # Prepare multipart form data - read file into memory to avoid
+        # async context issues with file handles
         file_content = await async_path.read_bytes()
         files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
 
@@ -332,7 +332,7 @@ class DoclingClient:
         response.raise_for_status()
         result = response.json()
 
-        ***REMOVED*** Parse chunks
+        # Parse chunks
         chunks: list[DoclingChunk] = []
         raw_chunks = result.get("chunks", [])
 
@@ -347,7 +347,7 @@ class DoclingClient:
             )
 
         for raw_chunk in raw_chunks:
-            ***REMOVED*** Respect caller preference: contextualized text or raw text.
+            # Respect caller preference: contextualized text or raw text.
             text = (
                 raw_chunk.get("contextualized_text") if contextualize else raw_chunk.get("text")
             ) or raw_chunk.get("text", "")
@@ -390,7 +390,7 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
-        ***REMOVED*** Use sync httpx client (NOT self._client which is async)
+        # Use sync httpx client (NOT self._client which is async)
         with httpx.Client(
             base_url=self.config.base_url,
             timeout=self.config.timeout,
@@ -403,7 +403,7 @@ class DoclingClient:
             response.raise_for_status()
             result = response.json()
 
-        ***REMOVED*** Parse chunks
+        # Parse chunks
         chunks: list[DoclingChunk] = []
         raw_chunks = result.get("chunks", [])
 
@@ -449,30 +449,30 @@ class DoclingClient:
         Returns:
             List of Chunk objects compatible with VoyageIndexer
         """
-        ***REMOVED*** Generate document hash for doc_id
+        # Generate document hash for doc_id
         doc_id = self._generate_doc_id(source)
         created_at = datetime.now(UTC).isoformat()
 
         chunks = []
         for i, dc in enumerate(docling_chunks):
-            ***REMOVED*** Build extra metadata with unified schema
+            # Build extra metadata with unified schema
             extra_metadata = {
                 "doc_id": doc_id,
                 "source": source,
                 "source_type": source_type,
                 "created_at": created_at,
-                "chunk_order": i,  ***REMOVED*** Explicit alias for small-to-big
+                "chunk_order": i,  # Explicit alias for small-to-big
             }
 
-            ***REMOVED*** Add page range if available
+            # Add page range if available
             if dc.page_range:
                 extra_metadata["page_range"] = list(dc.page_range)
 
-            ***REMOVED*** Add section from headings
+            # Add section from headings
             if dc.headings:
                 extra_metadata["section"] = " > ".join(dc.headings)
 
-            ***REMOVED*** Include original docling metadata
+            # Include original docling metadata
             if dc.metadata:
                 extra_metadata["docling_meta"] = dc.metadata
 
@@ -480,7 +480,7 @@ class DoclingClient:
                 text=dc.text,
                 chunk_id=i,
                 document_name=source,
-                article_number=doc_id,  ***REMOVED*** Use doc_id as article_number
+                article_number=doc_id,  # Use doc_id as article_number
                 section=" > ".join(dc.headings) if dc.headings else None,
                 page_range=dc.page_range,
                 order=i,
@@ -547,7 +547,7 @@ class DoclingClient:
             }
         )
 
-        ***REMOVED*** docling-serve expects a HF model id, not "word"/"huggingface".
+        # docling-serve expects a HF model id, not "word"/"huggingface".
         tokenizer = (self.config.tokenizer or "").strip()
         if tokenizer and tokenizer not in {"word", "huggingface"}:
             data["chunking_tokenizer"] = tokenizer
@@ -556,7 +556,7 @@ class DoclingClient:
 
     def _parse_page_range_from_chunk(self, raw_chunk: dict[str, Any]) -> tuple[int, int] | None:
         """Parse page range from a docling-serve chunk payload."""
-        ***REMOVED*** Current docling-serve returns `page_numbers: []` on each chunk.
+        # Current docling-serve returns `page_numbers: []` on each chunk.
         page_numbers = raw_chunk.get("page_numbers")
         if isinstance(page_numbers, list) and page_numbers:
             try:
@@ -566,7 +566,7 @@ class DoclingClient:
             if nums:
                 return (min(nums), max(nums))
 
-        ***REMOVED*** Backward/alternate formats
+        # Backward/alternate formats
         meta = raw_chunk.get("meta") or raw_chunk.get("metadata") or {}
         if isinstance(meta, dict):
             return self._parse_page_range(meta)

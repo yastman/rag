@@ -1,4 +1,4 @@
-"""Pydantic v2 models for Kommo CRM API (***REMOVED***413).
+"""Pydantic v2 models for Kommo CRM API (#413).
 
 Models match Kommo API v4 payloads.
 Kommo API uses "price" for deal value; Python code uses "budget" for readability.
@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-***REMOVED*** --- Custom field building blocks (***REMOVED***1655) ---
+# --- Custom field building blocks (#1655) ---
 
 
 class KommoCustomFieldValue(BaseModel):
@@ -75,7 +75,7 @@ class KommoCustomField(BaseModel):
         ]
 
 
-***REMOVED*** --- Request models (Create/Update) ---
+# --- Request models (Create/Update) ---
 
 
 class LeadCreate(BaseModel):
@@ -143,19 +143,19 @@ class TaskCreate(BaseModel):
     text: str
     entity_id: int
     entity_type: str = "leads"
-    complete_till: int  ***REMOVED*** Unix timestamp
+    complete_till: int  # Unix timestamp
     task_type_id: int | None = None
 
 
 class TaskUpdate(BaseModel):
-    """PATCH /api/v4/tasks/{id} payload (***REMOVED***697)."""
+    """PATCH /api/v4/tasks/{id} payload (#697)."""
 
     text: str | None = None
-    complete_till: int | None = None  ***REMOVED*** Unix timestamp
+    complete_till: int | None = None  # Unix timestamp
     responsible_user_id: int | None = None
 
 
-***REMOVED*** --- Response models ---
+# --- Response models ---
 
 
 class Lead(BaseModel):
@@ -164,7 +164,7 @@ class Lead(BaseModel):
     Note: POST /leads returns minimal response (id only).
     Full fields available via GET /leads/{id}.
     Kommo API field "price" maps to "budget" in Python.
-    contacts: populated from _embedded.contacts when with=contacts requested (***REMOVED***731).
+    contacts: populated from _embedded.contacts when with=contacts requested (#731).
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -178,7 +178,7 @@ class Lead(BaseModel):
     loss_reason_id: int | None = None
     created_at: int | None = None
     updated_at: int | None = None
-    contacts: list[dict[str, Any]] | None = None  ***REMOVED*** from _embedded.contacts (***REMOVED***731)
+    contacts: list[dict[str, Any]] | None = None  # from _embedded.contacts (#731)
 
 
 class Contact(BaseModel):
@@ -208,7 +208,7 @@ class Task(BaseModel):
     entity_type: str | None = None
     responsible_user_id: int | None = None
     is_completed: bool | None = None
-    ***REMOVED*** Kommo may return `result` as dict or empty list depending on task state.
+    # Kommo may return `result` as dict or empty list depending on task state.
     result: dict[str, Any] | list[Any] | None = None
     created_at: int | None = None
     updated_at: int | None = None
@@ -222,7 +222,7 @@ class Pipeline(BaseModel):
     is_main: bool = False
 
 
-***REMOVED*** --- Lead Score Sync (compatibility with existing tools/tests) ---
+# --- Lead Score Sync (compatibility with existing tools/tests) ---
 
 
 class LeadScoreSyncPayload(BaseModel):

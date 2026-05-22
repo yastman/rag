@@ -81,8 +81,8 @@ async def cache_check_node(
 
     start = time.perf_counter()
 
-    ***REMOVED*** Step 1: Get or compute dense embedding via shared core.
-    ***REMOVED*** Voice path has no pre-computed vectors — no pre_computed args passed.
+    # Step 1: Get or compute dense embedding via shared core.
+    # Voice path has no pre-computed vectors — no pre_computed args passed.
     try:
         embedding, _sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
             query, cache=cache, embeddings=embeddings
@@ -114,9 +114,9 @@ async def cache_check_node(
             },
         }
 
-    ***REMOVED*** Step 2: Check semantic cache via shared core.
-    ***REMOVED*** Voice path has no user role — agent_role omitted so voice responses are
-    ***REMOVED*** shared across roles within the same cache_scope="rag" bucket.
+    # Step 2: Check semantic cache via shared core.
+    # Voice path has no user role — agent_role omitted so voice responses are
+    # shared across roles within the same cache_scope="rag" bucket.
     filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
     contextual_query = is_contextual_query(query)
     if contextual_query or (filter_sensitive and filter_signature is None):
@@ -155,9 +155,9 @@ async def cache_check_node(
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
 
-    ***REMOVED*** ColBERT vectors are only needed after semantic miss.
-    ***REMOVED*** Legacy fallback: if compute_query_embedding didn't return colbert
-    ***REMOVED*** (no full bundle support), try standalone aembed_colbert_query.
+    # ColBERT vectors are only needed after semantic miss.
+    # Legacy fallback: if compute_query_embedding didn't return colbert
+    # (no full bundle support), try standalone aembed_colbert_query.
     if colbert_query is None:
         _has_colbert_only = callable(
             getattr(embeddings, "aembed_colbert_query", None)
@@ -234,7 +234,7 @@ async def cache_store_node(
     )
     start = time.perf_counter()
 
-    ***REMOVED*** Store in semantic cache if we have both response and embedding.
+    # Store in semantic cache if we have both response and embedding.
     stored_semantic = False
     filter_sensitive, filter_signature = _resolve_graph_filter_signature(state, query)
     if (
@@ -255,7 +255,7 @@ async def cache_store_node(
             schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
         )
         try:
-            ***REMOVED*** Voice path: agent_role intentionally omitted (no role context in graph state).
+            # Voice path: agent_role intentionally omitted (no role context in graph state).
             stored_semantic = await maybe_store_semantic_response(
                 cache=cache,
                 query=query,
@@ -267,8 +267,8 @@ async def cache_store_node(
                 filter_signature=filter_signature,
             )
         except Exception as exc:
-            ***REMOVED*** RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
-            ***REMOVED*** error from store_semantic must never lose the response (***REMOVED***524).
+            # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
+            # error from store_semantic must never lose the response (#524).
             logger.warning(
                 "cache_store: semantic store failed, response preserved: %s: %s",
                 type(exc).__name__,
@@ -278,7 +278,7 @@ async def cache_store_node(
         if stored_semantic:
             logger.info("cache_store: stored=semantic (type=%s)", query_type)
 
-        ***REMOVED*** Log pipeline result event (fire-and-forget, never blocks main flow)
+        # Log pipeline result event (fire-and-forget, never blocks main flow)
         if event_stream is not None:
             latency_stages = state.get("latency_stages", {})
             total_latency = (

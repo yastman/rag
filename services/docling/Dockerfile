@@ -1,17 +1,17 @@
-***REMOVED*** syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-***REMOVED*** Docling Serve — CPU-only optimized build for VPS
-***REMOVED*** Multi-stage build with uv (Context7 best practices 2026)
-***REMOVED***
-***REMOVED*** Key optimizations:
-***REMOVED*** 1. CPU-only PyTorch (no CUDA) via uv lockfile + pytorch-cpu index
-***REMOVED*** 2. uv sync instead of pip install (lockfile-backed, reproducible)
-***REMOVED*** 3. Multi-stage build (builder + runtime)
-***REMOVED*** 4. Cache mounts for apt and uv
-***REMOVED*** 5. Non-root user
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
+# Docling Serve — CPU-only optimized build for VPS
+# Multi-stage build with uv (Context7 best practices 2026)
+#
+# Key optimizations:
+# 1. CPU-only PyTorch (no CUDA) via uv lockfile + pytorch-cpu index
+# 2. uv sync instead of pip install (lockfile-backed, reproducible)
+# 3. Multi-stage build (builder + runtime)
+# 4. Cache mounts for apt and uv
+# 5. Non-root user
 
-***REMOVED*** =============================================================================
-***REMOVED*** BUILD STAGE
-***REMOVED*** =============================================================================
+# =============================================================================
+# BUILD STAGE
+# =============================================================================
 FROM ghcr.io/astral-sh/uv:0.9-python3.14-bookworm-slim@sha256:7cf77f594be8042dab6daa9fe326f90962252268b4f120a7f5dccce4d947e6c1 AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -20,7 +20,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-***REMOVED*** Install build dependencies with apt cache mount
+# Install build dependencies with apt cache mount
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
@@ -29,21 +29,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     gcc \
     g++
 
-***REMOVED*** Deps layer (cached separately from code)
+# Deps layer (cached separately from code)
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --extra docling
 
-***REMOVED*** =============================================================================
-***REMOVED*** RUNTIME STAGE
-***REMOVED*** =============================================================================
+# =============================================================================
+# RUNTIME STAGE
+# =============================================================================
 FROM python:3.14-slim-bookworm@sha256:a9bee15510a364124aa24692899d269835683b883de42f7ebec8c293cf679ccb AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/yastman/rag"
 
 WORKDIR /app
 
-***REMOVED*** Install minimal runtime dependencies with apt cache
+# Install minimal runtime dependencies with apt cache
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
@@ -52,11 +52,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libglib2.0-0 \
     fonts-liberation
 
-***REMOVED*** Create non-root user
+# Create non-root user
 RUN groupadd -g 1001 docling && \
     useradd -u 1001 -g docling -m -d /app -s /bin/false docling
 
-***REMOVED*** Copy virtual environment from builder
+# Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -69,11 +69,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HF_HOME=/app/.cache/huggingface \
     TRANSFORMERS_CACHE=/app/.cache/huggingface
 
-***REMOVED*** Create cache directory with proper permissions
+# Create cache directory with proper permissions
 RUN mkdir -p /app/.cache/huggingface && \
     chown -R docling:docling /app/.cache
 
-***REMOVED*** RapidOCR downloads models at runtime
+# RapidOCR downloads models at runtime
 RUN chmod -R a+rw /app/.venv/lib/python*/site-packages/rapidocr/ 2>/dev/null || true
 
 USER docling

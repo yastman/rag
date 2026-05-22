@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Generate test queries using LLM.
 Creates 3 types of queries for each article:
@@ -31,12 +31,12 @@ class GeneratedQueries(BaseModel):
     paraphrased: str = Field(description="Paraphrased question about the article content")
 
 
-***REMOVED*** Load settings
+# Load settings
 _settings = Settings()
 QDRANT_URL = _settings.qdrant_url
 QDRANT_API_KEY = _settings.qdrant_api_key or ""
 
-***REMOVED*** LLM configuration from environment
+# LLM configuration from environment
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 
@@ -65,8 +65,8 @@ def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dic
     articles = {}
 
     for article_num in article_numbers:
-        ***REMOVED*** Search for article by article_number filter
-        ***REMOVED*** IMPORTANT: Qdrant stores article_number as int, not string!
+        # Search for article by article_number filter
+        # IMPORTANT: Qdrant stores article_number as int, not string!
         scroll_filter = models.Filter(
             must=[
                 models.FieldCondition(
@@ -110,7 +110,7 @@ async def generate_queries_for_article(
     Returns:
         List of query objects with type and expected_article
     """
-    ***REMOVED*** Truncate text if too long
+    # Truncate text if too long
     text_preview = article_text[:1000] if len(article_text) > 1000 else article_text
 
     prompt = f"""Ты эксперт по Уголовному кодексу Украины. На основе текста статьи {article_num}, создай 3 поисковых запроса:
@@ -142,7 +142,7 @@ async def generate_queries_for_article(
         max_retries=2,
     )
 
-    ***REMOVED*** Create query objects
+    # Create query objects
     return [
         {
             "query": result.direct,
@@ -238,14 +238,14 @@ def select_representative_articles(all_articles: dict[str, list], n: int = 50) -
     Returns:
         List of article numbers (as strings)
     """
-    ***REMOVED*** Get all article numbers (keep as strings to match Qdrant)
+    # Get all article numbers (keep as strings to match Qdrant)
     article_nums = sorted(all_articles.keys(), key=lambda x: int(x))
 
-    ***REMOVED*** Select evenly distributed articles
+    # Select evenly distributed articles
     step = len(article_nums) // n
     selected = [article_nums[i * step] for i in range(n)]
 
-    ***REMOVED*** Convert to int for display
+    # Convert to int for display
     selected_ints = [int(a) for a in selected]
 
     print(f"Selected {len(selected)} articles:")
@@ -264,20 +264,20 @@ async def main():
     collection_name = "ukraine_criminal_code_zai_full"
     num_articles = 50
 
-    ***REMOVED*** Load ground truth
+    # Load ground truth
     ground_truth_file = "evaluation/data/ground_truth_articles.json"
     with open(ground_truth_file, encoding="utf-8") as f:
         all_articles = json.load(f)
 
-    ***REMOVED*** Select representative articles
+    # Select representative articles
     print(f"\nStep 1: Select {num_articles} representative articles")
     selected_articles = select_representative_articles(all_articles, n=num_articles)
 
-    ***REMOVED*** Fetch article texts
+    # Fetch article texts
     print("\nStep 2: Fetch article texts from Qdrant")
     article_texts = fetch_article_texts(collection_name, selected_articles)
 
-    ***REMOVED*** Generate queries
+    # Generate queries
     print("Step 3: Generate test queries with LLM")
     queries = await generate_all_queries(
         article_texts,
@@ -285,14 +285,14 @@ async def main():
         max_concurrent=5,
     )
 
-    ***REMOVED*** Save queries
+    # Save queries
     output_file = "evaluation/data/queries_testset.json"
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(queries, f, ensure_ascii=False, indent=2)
 
     print(f"\nSaved {len(queries)} queries to: {output_file}")
 
-    ***REMOVED*** Print summary
+    # Print summary
     print("\nTest Set Summary:")
     print(f"   Total queries: {len(queries)}")
     print(f"   Direct: {len([q for q in queries if q['type'] == 'direct'])}")

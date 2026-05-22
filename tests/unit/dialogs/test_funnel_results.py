@@ -1,4 +1,4 @@
-"""Tests for funnel filter building and results getter (***REMOVED***697)."""
+"""Tests for funnel filter building and results getter (#697)."""
 
 from telegram_bot.dialogs.funnel import build_funnel_filters
 
@@ -21,7 +21,7 @@ class _FakeI18n:
         return messages[key]
 
 
-***REMOVED*** --- build_funnel_filters ---
+# --- build_funnel_filters ---
 
 
 def test_rooms_studio():
@@ -158,7 +158,7 @@ def test_combined_with_section():
     assert filters["complex_name"] == "Premier Fort Beach"
 
 
-***REMOVED*** --- Task 4: build_funnel_filters edge cases ---
+# --- Task 4: build_funnel_filters edge cases ---
 
 
 def test_area_small():

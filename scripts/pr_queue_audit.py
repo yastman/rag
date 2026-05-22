@@ -1,9 +1,9 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Open PR queue triage report.
 
 Reads open pull requests via ``gh pr list --json ...`` and classifies each
 into actionable buckets so an operator can decide what to merge / nudge /
-close. Designed for the weekly governance runbook (issue ***REMOVED***1719).
+close. Designed for the weekly governance runbook (issue #1719).
 
 Buckets
 -------
@@ -31,11 +31,11 @@ that long-lived but otherwise-ready PRs still surface.
 CLI
 ---
 
-    python scripts/pr_queue_audit.py                     ***REMOVED*** human report
-    python scripts/pr_queue_audit.py --json              ***REMOVED*** machine-readable
-    python scripts/pr_queue_audit.py --base dev          ***REMOVED*** filter by base
+    python scripts/pr_queue_audit.py                     # human report
+    python scripts/pr_queue_audit.py --json              # machine-readable
+    python scripts/pr_queue_audit.py --base dev          # filter by base
     python scripts/pr_queue_audit.py --stale-days 7
-    python scripts/pr_queue_audit.py --bucket conflicts  ***REMOVED*** one bucket only
+    python scripts/pr_queue_audit.py --bucket conflicts  # one bucket only
 
 Exit code is 0 on a clean queue, 1 otherwise.
 
@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess  ***REMOVED*** nosec B404
+import subprocess  # nosec B404
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -66,7 +66,7 @@ PRBucket = Literal[
     "unknown",
 ]
 
-***REMOVED*** Order: most actionable first; used for sorted reports and for triage SLA.
+# Order: most actionable first; used for sorted reports and for triage SLA.
 PRIORITY_ORDER: tuple[PRBucket, ...] = (
     "conflicts",
     "ci-failing",
@@ -136,9 +136,9 @@ class PRStatus:
         }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** gh CLI invocation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# gh CLI invocation
+# ---------------------------------------------------------------------------
 
 
 def fetch_open_prs(
@@ -176,9 +176,9 @@ def fetch_open_prs(
     return parsed
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Classification
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Classification
+# ---------------------------------------------------------------------------
 
 
 def _ci_state(rollup: Iterable[Any] | None) -> str:
@@ -206,7 +206,7 @@ def _ci_state(rollup: Iterable[Any] | None) -> str:
     for check in rollup:
         if not isinstance(check, dict):
             continue
-        ***REMOVED*** Both ``conclusion`` (CheckRun) and ``state`` (StatusContext) appear.
+        # Both ``conclusion`` (CheckRun) and ``state`` (StatusContext) appear.
         state = check.get("conclusion") or check.get("state") or ""
         if not state:
             continue
@@ -221,7 +221,7 @@ def _parse_age_days(created_at: str, *, now: datetime | None = None) -> int:
     if not created_at:
         return 0
     try:
-        ***REMOVED*** Python 3.11+ ``fromisoformat`` parses the trailing ``Z`` natively.
+        # Python 3.11+ ``fromisoformat`` parses the trailing ``Z`` natively.
         dt = datetime.fromisoformat(created_at)
     except ValueError:
         return 0
@@ -286,7 +286,7 @@ def classify_pr(
         bucket = "review-needed"
         blocked_reason = "no approval yet"
     elif review_decision == "":
-        ***REMOVED*** No review policy -> ready if everything else is fine
+        # No review policy -> ready if everything else is fine
         bucket = "ready" if ci_state in {"SUCCESS", ""} else "review-needed"
     else:
         bucket = "unknown"
@@ -310,9 +310,9 @@ def classify_pr(
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Reporting
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Reporting
+# ---------------------------------------------------------------------------
 
 
 def summarise(prs: list[PRStatus]) -> dict[str, int]:
@@ -346,7 +346,7 @@ def print_human_report(prs: list[PRStatus], counts: dict[str, int]) -> None:
         for pr in items:
             stale_flag = " [STALE]" if pr.is_stale else ""
             reason = f"  -- {pr.blocked_reason}" if pr.blocked_reason else ""
-            print(f"  ***REMOVED***{pr.number:>5} ({pr.age_days}d){stale_flag}  {pr.title}")
+            print(f"  #{pr.number:>5} ({pr.age_days}d){stale_flag}  {pr.title}")
             print(f"         base={pr.base} head={pr.head} author=@{pr.author}{reason}")
             print(f"         {pr.url}")
         print()
@@ -358,9 +358,9 @@ def filter_bucket(prs: list[PRStatus], bucket: PRBucket | None) -> list[PRStatus
     return [pr for pr in prs if pr.bucket == bucket]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def build_report(
@@ -422,5 +422,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if actionable == 0 else 1
 
 
-if __name__ == "__main__":  ***REMOVED*** pragma: no cover - thin CLI shim
+if __name__ == "__main__":  # pragma: no cover - thin CLI shim
     sys.exit(main())

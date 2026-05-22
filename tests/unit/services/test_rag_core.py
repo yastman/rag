@@ -18,9 +18,9 @@ from telegram_bot.services.rag_core import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H2: build_retrieved_context
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H2: build_retrieved_context
+# ---------------------------------------------------------------------------
 
 
 class TestBuildRetrievedContext:
@@ -70,9 +70,9 @@ class TestBuildRetrievedContext:
         assert result[0]["chunk_location"] == ""
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H4: rewrite_query_via_llm
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H4: rewrite_query_via_llm
+# ---------------------------------------------------------------------------
 
 
 def _make_llm_response(content: str, model: str = "gpt-4o") -> MagicMock:
@@ -140,9 +140,9 @@ class TestRewriteQueryViaLlm:
             await rewrite_query_via_llm("test query", llm=llm)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H3: perform_rerank
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H3: perform_rerank
+# ---------------------------------------------------------------------------
 
 
 class TestPerformRerank:
@@ -166,7 +166,7 @@ class TestPerformRerank:
         docs, applied, cache_hit = await perform_rerank(
             "query", documents, cache=None, reranker=None, top_k=2
         )
-        assert docs == documents  ***REMOVED*** unchanged, caller's responsibility to sort
+        assert docs == documents  # unchanged, caller's responsibility to sort
         assert applied is False
         assert cache_hit is False
 
@@ -209,9 +209,9 @@ class TestPerformRerank:
         )
 
         assert len(docs) == 2
-        assert docs[0]["text"] == "doc2"  ***REMOVED*** index=2
+        assert docs[0]["text"] == "doc2"  # index=2
         assert docs[0]["score"] == 0.98
-        assert docs[1]["text"] == "doc0"  ***REMOVED*** index=0
+        assert docs[1]["text"] == "doc0"  # index=0
         assert docs[1]["score"] == 0.85
         assert applied is True
         assert cache_hit is False
@@ -269,9 +269,9 @@ class TestPerformRerank:
         client.rerank.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H1: compute_query_embedding + check_semantic_cache
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H1: compute_query_embedding + check_semantic_cache
+# ---------------------------------------------------------------------------
 
 
 class TestComputeQueryEmbedding:
@@ -368,7 +368,7 @@ class TestComputeQueryEmbedding:
 
         dense_vec = [0.4] * 10
 
-        ***REMOVED*** Use spec= so aembed_hybrid is absent → _has_hybrid = False
+        # Use spec= so aembed_hybrid is absent → _has_hybrid = False
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=dense_vec)
 
@@ -457,5 +457,5 @@ class TestCheckSemanticCache:
         assert "ENTITY" in CACHEABLE_QUERY_TYPES
         assert "STRUCTURED" in CACHEABLE_QUERY_TYPES
         assert "GENERAL" in CACHEABLE_QUERY_TYPES
-        ***REMOVED*** Non-cacheable types not included
+        # Non-cacheable types not included
         assert "APARTMENT" not in CACHEABLE_QUERY_TYPES

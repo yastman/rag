@@ -1,8 +1,8 @@
-***REMOVED*** Operational Runbooks Index
+# Operational Runbooks Index
 
 Operator entrypoint for container/service investigations and incident response. If a Docker service breaks, start here before ad hoc log searching.
 
-***REMOVED******REMOVED*** Quick Access
+## Quick Access
 
 | Operator request | First command / doc |
 |---|---|
@@ -15,7 +15,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Compose service health | `make docker-ps` → [`DOCKER.md`](../../DOCKER.md) |
 | Self-hosted runner offline / nightly-heavy queued | `scripts/check_self_hosted_runner.sh` → [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
 
-***REMOVED******REMOVED*** Start Here
+## Start Here
 
 | Symptom / Request | Runbook |
 |---|---|
@@ -30,7 +30,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Self-hosted GitHub Actions runner for `nightly-heavy.yml` is offline | [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
 | Weekly git/pr/issue hygiene workflow | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 
-***REMOVED******REMOVED*** Container / Service Map
+## Container / Service Map
 
 | Service (Compose name) | Common container names | Runbook |
 |---|---|---|
@@ -43,22 +43,22 @@ Operator entrypoint for container/service investigations and incident response. 
 
 > **Note:** Container names may differ between Compose versions (`dev-qdrant-1` vs `dev_qdrant_1`). Prefer `docker compose ps` and service names in docs.
 
-***REMOVED******REMOVED*** Fast Search Commands
+## Fast Search Commands
 
 Search runbooks and source areas by topic:
 
 ```bash
-***REMOVED*** Langfuse / traces / observability
+# Langfuse / traces / observability
 rg -n "Langfuse|trace|score|observation" docs/runbooks docs/audits telegram_bot src scripts
 
-***REMOVED*** Redis / cache
+# Redis / cache
 rg -n "Redis|cache|semantic cache|redis-cli" docs/runbooks telegram_bot src tests
 
-***REMOVED*** Qdrant / vectors
+# Qdrant / vectors
 rg -n "Qdrant|collection|vector|ColBERT|hybrid" docs/runbooks src telegram_bot tests
 ```
 
-***REMOVED******REMOVED*** Safety Notes
+## Safety Notes
 
 - Use Docker Compose native env handling (`--env-file`, `-f`, `COMPOSE_DISABLE_ENV_FILE=1`).
 - Do not print `.env` values in logs or runbooks.

@@ -1,9 +1,9 @@
 """Tests for Docker Compose file structure and correctness.
 
 Covers:
-- ***REMOVED***818: compose.yml/compose.dev.yml structure
-- ***REMOVED***812: VPS ColBERT rerank enabled with reduced candidates
-- ***REMOVED***810: qdrant_ensure_indexes.py exists and creates correct indexes
+- #818: compose.yml/compose.dev.yml structure
+- #812: VPS ColBERT rerank enabled with reduced candidates
+- #810: qdrant_ensure_indexes.py exists and creates correct indexes
 """
 
 import sys
@@ -16,9 +16,9 @@ import yaml
 REPO_ROOT = Path(__file__).parent.parent.parent
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def load_yaml(filename: str) -> dict:
@@ -28,9 +28,9 @@ def load_yaml(filename: str) -> dict:
         return yaml.safe_load(f)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ***REMOVED***818 — compose unification structure
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# #818 — compose unification structure
+# ---------------------------------------------------------------------------
 
 
 def test_compose_yml_is_valid_yaml():
@@ -100,15 +100,15 @@ def test_compose_dev_has_ports_for_core_services():
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ***REMOVED***810 — qdrant_ensure_indexes.py exists
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# #810 — qdrant_ensure_indexes.py exists
+# ---------------------------------------------------------------------------
 
 
 def test_qdrant_ensure_indexes_script_exists():
     """scripts/qdrant_ensure_indexes.py must exist."""
     script = REPO_ROOT / "scripts" / "qdrant_ensure_indexes.py"
-    assert script.exists(), "Missing scripts/qdrant_ensure_indexes.py — create it to fix issue ***REMOVED***810"
+    assert script.exists(), "Missing scripts/qdrant_ensure_indexes.py — create it to fix issue #810"
 
 
 def test_qdrant_ensure_indexes_creates_keyword_indexes():

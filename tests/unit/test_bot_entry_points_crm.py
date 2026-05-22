@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/test_bot_entry_points_crm.py
-"""Tests for bot.py CRM entry points — viewing fork, cta callbacks, context passing (***REMOVED***628)."""
+# tests/unit/test_bot_entry_points_crm.py
+"""Tests for bot.py CRM entry points — viewing fork, cta callbacks, context passing (#628)."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_config() -> BotConfig:
@@ -98,13 +98,13 @@ def _fav_bot(favorites: list | None = None) -> PropertyBot:
     return bot
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: _handle_viewing — starts aiogram-dialog wizard (***REMOVED***719)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: _handle_viewing — starts aiogram-dialog wizard (#719)
+# ---------------------------------------------------------------------------
 
 
 async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
-    """_handle_viewing starts ViewingSG.date via dialog_manager (***REMOVED***719)."""
+    """_handle_viewing starts ViewingSG.date via dialog_manager (#719)."""
     from unittest.mock import AsyncMock
 
     from aiogram_dialog import StartMode
@@ -123,7 +123,7 @@ async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
 
 
 async def test_handle_viewing_fallback_without_dialog_manager() -> None:
-    """_handle_viewing sends fallback message when dialog_manager is None (***REMOVED***719)."""
+    """_handle_viewing sends fallback message when dialog_manager is None (#719)."""
     bot = _create_bot()
     state = _make_state()
     msg = _make_message()
@@ -135,9 +135,9 @@ async def test_handle_viewing_fallback_without_dialog_manager() -> None:
     assert "осмотр" in text.lower() or "меню" in text.lower()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: cta:manager -> start_phone_collection(service_key="manager")
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: cta:manager -> start_phone_collection(service_key="manager")
+# ---------------------------------------------------------------------------
 
 
 async def test_cta_manager_starts_phone_collection() -> None:
@@ -155,9 +155,9 @@ async def test_cta_manager_starts_phone_collection() -> None:
     mock_collect.assert_awaited_once_with(cb, state, service_key="manager")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: cta:get_offer:{param} -> service_key=param
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: cta:get_offer:{param} -> service_key=param
+# ---------------------------------------------------------------------------
 
 
 async def test_cta_get_offer_passes_service_key() -> None:
@@ -175,9 +175,9 @@ async def test_cta_get_offer_passes_service_key() -> None:
     mock_collect.assert_awaited_once_with(cb, state, service_key="installment")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: results:viewing legacy route -> stale compat only
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: results:viewing legacy route -> stale compat only
+# ---------------------------------------------------------------------------
 
 
 async def test_results_viewing_is_stale_compat_only() -> None:
@@ -193,7 +193,7 @@ async def test_results_viewing_is_stale_compat_only() -> None:
                 "price_eur": 200000 + i * 10000,
             },
         }
-        for i in range(7)  ***REMOVED*** 7 results, only first 5 should be passed
+        for i in range(7)  # 7 results, only first 5 should be passed
     ]
     state = _make_state({"apartment_results": results})
     cb = _make_callback("results:viewing")
@@ -210,9 +210,9 @@ async def test_results_viewing_is_stale_compat_only() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: fav:viewing:{id} -> viewing_objects with single matched object
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: fav:viewing:{id} -> viewing_objects with single matched object
+# ---------------------------------------------------------------------------
 
 
 async def test_fav_viewing_passes_single_object() -> None:

@@ -60,7 +60,7 @@ async def test_create_new_topic(manager, mock_bot):
 
 @pytest.mark.asyncio
 async def test_reuse_existing_topic(manager, mock_bot, mock_redis):
-    ***REMOVED*** Первый вызов — создаёт
+    # Первый вызов — создаёт
     await manager.get_or_create_topic(
         chat_id=111,
         expert_id="consultant",
@@ -69,7 +69,7 @@ async def test_reuse_existing_topic(manager, mock_bot, mock_redis):
     )
     mock_bot.create_forum_topic.reset_mock()
 
-    ***REMOVED*** Второй вызов — переиспользует
+    # Второй вызов — переиспользует
     topic_id = await manager.get_or_create_topic(
         chat_id=111,
         expert_id="consultant",

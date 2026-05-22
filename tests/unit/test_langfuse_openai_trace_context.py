@@ -1,4 +1,4 @@
-"""Tests for Langfuse OpenAI trace context (***REMOVED***1362).
+"""Tests for Langfuse OpenAI trace context (#1362).
 
 When ``langfuse.openai.AsyncOpenAI`` auto-traces every completion call without
 awareness of the active trace, it creates orphan ``litellm-acompletion`` root
@@ -177,10 +177,10 @@ class TestGenerateResponseObservability:
 
         assert result["response"] == "Ответ модели"
         assert result["llm_provider_model"] == "gpt-4o-mini"
-        ***REMOVED*** Plain client → no name kwarg
+        # Plain client → no name kwarg
         call_kwargs = mock_client.chat.completions.create.await_args.kwargs
         assert "name" not in call_kwargs
-        ***REMOVED*** Explicit generation update must still happen
+        # Explicit generation update must still happen
         lf.update_current_generation.assert_any_call(
             model="gpt-4o-mini",
             usage_details={"input": 12, "output": 5, "total": 17},
@@ -190,7 +190,7 @@ class TestGenerateResponseObservability:
     async def test_streaming_plain_client_updates_generation(self) -> None:
         """Streaming path with plain client still records usage via update_current_generation."""
 
-        ***REMOVED*** Local copies of test helpers (avoid importing from sibling test files)
+        # Local copies of test helpers (avoid importing from sibling test files)
         class _StreamChunk:
             def __init__(self, content: str, usage=None):
                 delta = MagicMock()

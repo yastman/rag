@@ -1,11 +1,11 @@
-"""History search tool — wraps existing history sub-graph (***REMOVED***413).
+"""History search tool — wraps existing history sub-graph (#413).
 
 Phase 1: Delegates to build_history_graph() (existing 4-node pipeline).
 Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 (SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
-— see ***REMOVED***1252).
+— see #1252).
 
-Semantic caching added in ***REMOVED***431/***REMOVED***464:
+Semantic caching added in #431/#464:
   1. Embedding cache — get_embedding / store_embedding (7d TTL)
   2. Semantic cache — check_semantic / store_semantic (ENTITY, 1h TTL, threshold=0.10)
 """
@@ -57,9 +57,9 @@ async def history_search(
     history_cache_hit = False
 
     try:
-        ***REMOVED*** --- Semantic cache check (before graph) ---
+        # --- Semantic cache check (before graph) ---
         if cache is not None and embeddings_svc is not None:
-            ***REMOVED*** Step 1: Get or compute dense embedding
+            # Step 1: Get or compute dense embedding
             embedding = await cache.get_embedding(query)
             if embedding is None:
                 try:
@@ -75,7 +75,7 @@ async def history_search(
                     logger.warning("History cache: embedding failed, skipping cache check")
                     embedding = None
 
-            ***REMOVED*** Step 2: Check semantic cache (ENTITY type — history queries are specific)
+            # Step 2: Check semantic cache (ENTITY type — history queries are specific)
             if embedding is not None:
                 cached_summary = await cache.check_semantic(
                     query,
@@ -108,7 +108,7 @@ async def history_search(
                     )
                     return str(cached_summary)
 
-        ***REMOVED*** --- Cache miss: run history sub-graph ---
+        # --- Cache miss: run history sub-graph ---
         graph = build_history_graph(
             history_service=ctx.history_service if ctx else None,
             llm=ctx.llm if ctx else None,
@@ -137,7 +137,7 @@ async def history_search(
             write_history_scores(lf, result, trace_id=trace_id)
             summary = result.get("summary", "")
 
-            ***REMOVED*** Step 3: Store summary in semantic cache for future hits
+            # Step 3: Store summary in semantic cache for future hits
             if cache is not None and embedding is not None and summary:
                 await cache.store_semantic(
                     query,
@@ -152,7 +152,7 @@ async def history_search(
                 output={"summary_length": len(summary), "history_cache_hit": False}
             )
 
-            ***REMOVED*** Attach feedback keyboard to BotContext side-channel (***REMOVED***434)
+            # Attach feedback keyboard to BotContext side-channel (#434)
             if ctx is not None and summary and trace_id:
                 from telegram_bot.feedback import build_feedback_keyboard
 

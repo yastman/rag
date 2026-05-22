@@ -7,19 +7,19 @@ dependencies = [
     "aiogram>=3.15.0",
     "aiogram-dialog>=2.4.0",
     "httpx>=0.28.0",
-    "instructor>=1.7.0",  ***REMOVED*** Structured LLM extraction for apartment filters
-    "qdrant-client>=1.14.0",  ***REMOVED*** v1.14+ for FormulaQuery score boosting
+    "instructor>=1.7.0",  # Structured LLM extraction for apartment filters
+    "qdrant-client>=1.14.0",  # v1.14+ for FormulaQuery score boosting
     "grpcio>=1.60.0",
     "redis>=5.0.0",
     "redisvl>=0.3.0",
-    ***REMOVED*** Voyage AI is OPTIONAL (***REMOVED***1773): not used by default bot/retrieval runtime.
-    ***REMOVED*** Install via `uv sync --extra voyage` only for legacy ingestion paths.
+    # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
+    # Install via `uv sync --extra voyage` only for legacy ingestion paths.
     "tenacity>=8.2.0",
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
     "langfuse>=4.0.0,<5.0",
     "openai>=1.10.0",
-    "langchain>=1.2",  ***REMOVED*** create_agent, ToolRuntime, middleware
+    "langchain>=1.2",  # create_agent, ToolRuntime, middleware
     "langchain-core>=1.2",
     "langgraph>=1.1.6,<2.0",
     "langgraph-checkpoint-redis>=0.2.0",
@@ -35,9 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-***REMOVED*** Voyage AI (***REMOVED***1773) — optional. Only required for legacy GDrive ingestion,
-***REMOVED*** contextualized-embedding paths, or `qdrant_writer` with
-***REMOVED*** `use_local_embeddings=False`. Default bot/retrieval runtime does not use it.
+# Voyage AI (#1773) — optional. Only required for legacy GDrive ingestion,
+# contextualized-embedding paths, or `qdrant_writer` with
+# `use_local_embeddings=False`. Default bot/retrieval runtime does not use it.
 voyage = [
     "voyageai>=0.3.0",
 ]

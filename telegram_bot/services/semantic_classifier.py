@@ -13,8 +13,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** --- Route references (Russian) ---
-***REMOVED*** Mirror the regex categories from classify.py
+# --- Route references (Russian) ---
+# Mirror the regex categories from classify.py
 
 _FAQ_REFERENCES = [
     "как оформить покупку",

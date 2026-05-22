@@ -49,7 +49,7 @@ class TestRomanToInt:
             ("XVIII", 18),
             ("XIX", 19),
             ("XX", 20),
-            ***REMOVED*** Case insensitive
+            # Case insensitive
             ("i", 1),
             ("iv", 4),
             ("x", 10),
@@ -83,7 +83,7 @@ class TestUkrainianNumberToInt:
     @pytest.mark.parametrize(
         ("word", "expected"),
         [
-            ***REMOVED*** Feminine forms (used with 'Книга')
+            # Feminine forms (used with 'Книга')
             ("перша", 1),
             ("друга", 2),
             ("третя", 3),
@@ -94,7 +94,7 @@ class TestUkrainianNumberToInt:
             ("восьма", 8),
             ("дев'ята", 9),
             ("десята", 10),
-            ***REMOVED*** Masculine forms
+            # Masculine forms
             ("перший", 1),
             ("другий", 2),
             ("третій", 3),
@@ -105,7 +105,7 @@ class TestUkrainianNumberToInt:
             ("восьмий", 8),
             ("дев'ятий", 9),
             ("десятий", 10),
-            ***REMOVED*** Case insensitive
+            # Case insensitive
             ("ПЕРША", 1),
             ("Друга", 2),
             ("тРеТя", 3),
@@ -122,7 +122,7 @@ class TestUkrainianNumberToInt:
         assert ukrainian_number_to_int(word) is None
 
     def test_ukrainian_numbers_mapping_complete(self):
-        assert len(UKRAINIAN_NUMBERS) == 20  ***REMOVED*** 10 feminine + 10 masculine
+        assert len(UKRAINIAN_NUMBERS) == 20  # 10 feminine + 10 masculine
         assert UKRAINIAN_NUMBERS["перша"] == 1
         assert UKRAINIAN_NUMBERS["десятий"] == 10
 

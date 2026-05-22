@@ -1,4 +1,4 @@
-"""Integration test for history sub-graph assembly (***REMOVED***408)."""
+"""Integration test for history sub-graph assembly (#408)."""
 
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ async def test_graph_rewrite_path(_patch_observe):
 
     assert result["rewrite_count"] == 1
     assert len(result["summary"]) > 0
-    assert call_count == 2  ***REMOVED*** 2 retrieve calls
+    assert call_count == 2  # 2 retrieve calls
 
 
 async def test_graph_empty_results_path(_patch_observe):
@@ -138,11 +138,11 @@ async def test_graph_empty_results_path(_patch_observe):
 
     assert result["results_relevant"] is False
     assert "не найдено" in result["summary"].lower()
-    ***REMOVED*** Rewrite was called once, summarize skipped LLM (empty results fallback)
+    # Rewrite was called once, summarize skipped LLM (empty results fallback)
     assert result["rewrite_count"] == 1
 
 
-***REMOVED*** --- Guard integration tests (***REMOVED***432) ---
+# --- Guard integration tests (#432) ---
 
 
 async def test_graph_guard_blocks_injection(_patch_observe):
@@ -163,7 +163,7 @@ async def test_graph_guard_blocks_injection(_patch_observe):
     assert result["guard_blocked"] is True
     assert result["guard_reason"] == "injection"
     assert "не может быть обработан" in result["summary"]
-    ***REMOVED*** retrieve should NOT have been called
+    # retrieve should NOT have been called
     svc.search_user_history.assert_not_called()
 
 
@@ -222,7 +222,7 @@ async def test_graph_guard_disabled_skips_guard(_patch_observe):
     mock_response.choices = [AsyncMock(message=AsyncMock(content="Ответ."))]
     mock_llm.chat.completions.create = AsyncMock(return_value=mock_response)
 
-    ***REMOVED*** Injection query but guard disabled — should proceed
+    # Injection query but guard disabled — should proceed
     graph = build_history_graph(
         history_service=svc,
         llm=mock_llm,
@@ -234,7 +234,7 @@ async def test_graph_guard_disabled_skips_guard(_patch_observe):
 
     result = await graph.ainvoke(state)
 
-    ***REMOVED*** Guard skipped — retrieve was called despite injection query
+    # Guard skipped — retrieve was called despite injection query
     svc.search_user_history.assert_called_once()
     assert result["guard_blocked"] is False
 
@@ -268,6 +268,6 @@ async def test_graph_guard_log_mode_continues(_patch_observe):
 
     result = await graph.ainvoke(state)
 
-    ***REMOVED*** Log mode: not blocked, retrieve runs
+    # Log mode: not blocked, retrieve runs
     assert result["guard_blocked"] is False
     svc.search_user_history.assert_called_once()

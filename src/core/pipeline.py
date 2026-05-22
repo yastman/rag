@@ -55,14 +55,14 @@ class RAGPipeline:
         """
         self.settings = settings or Settings()
 
-        ***REMOVED*** Initialize components (singleton model - saves 2-3GB RAM)
+        # Initialize components (singleton model - saves 2-3GB RAM)
         self.embedding_model = get_sentence_transformer("BAAI/bge-m3")
         self.search_engine = create_search_engine(settings=self.settings)
 
-        ***REMOVED*** Initialize contextualizer based on API provider
+        # Initialize contextualizer based on API provider
         self.contextualizer = self._create_contextualizer()
 
-        ***REMOVED*** Initialize indexer for document management
+        # Initialize indexer for document management
         self.indexer = DocumentIndexer(self.settings)
         self.chunker = DocumentChunker()
         self.parser = UniversalDocumentParser(use_cache=True)
@@ -75,7 +75,7 @@ class RAGPipeline:
             return OpenAIContextualizer(self.settings)
         if self.settings.api_provider == APIProvider.GROQ:
             return GroqContextualizer(self.settings)
-        ***REMOVED*** Default to Claude
+        # Default to Claude
         return ClaudeContextualizer(self.settings)
 
     @observe(
@@ -110,12 +110,12 @@ class RAGPipeline:
         start_time = time.time()
         top_k = top_k or self.settings.top_k
 
-        ***REMOVED*** Step 1: Determine query format based on search engine
-        ***REMOVED*** Hybrid engines can accept query string directly for sparse/ColBERT vectors
+        # Step 1: Determine query format based on search engine
+        # Hybrid engines can accept query string directly for sparse/ColBERT vectors
         from src.retrieval import HybridRRFColBERTSearchEngine, HybridRRFSearchEngine
 
         if isinstance(self.search_engine, (HybridRRFSearchEngine, HybridRRFColBERTSearchEngine)):
-            ***REMOVED*** Pass query string directly for hybrid search (async handled inside)
+            # Pass query string directly for hybrid search (async handled inside)
             loop = asyncio.get_running_loop()
             search_results = await loop.run_in_executor(
                 None,
@@ -126,14 +126,14 @@ class RAGPipeline:
                 ),
             )
         else:
-            ***REMOVED*** For other engines, generate dense embedding (async)
+            # For other engines, generate dense embedding (async)
             loop = asyncio.get_running_loop()
             ctx = contextvars.copy_context()
             query_embedding = await loop.run_in_executor(
                 None, lambda: ctx.run(self._encode_query, query)
             )
 
-            ***REMOVED*** Step 2: Search using configured search engine (async)
+            # Step 2: Search using configured search engine (async)
             search_results = await loop.run_in_executor(
                 None,
                 lambda: self.search_engine.search(
@@ -143,10 +143,10 @@ class RAGPipeline:
                 ),
             )
 
-        ***REMOVED*** Step 3: Optional contextualization
+        # Step 3: Optional contextualization
         if use_context and self.settings.enable_query_expansion:
-            ***REMOVED*** Enrich results with context (could add query expansion here)
-            ***REMOVED*** For now, just use raw results
+            # Enrich results with context (could add query expansion here)
+            # For now, just use raw results
             pass
 
         execution_time = time.time() - start_time
@@ -186,20 +186,20 @@ class RAGPipeline:
         """
         collection_name = collection_name or self.settings.collection_name
 
-        ***REMOVED*** Create collection
+        # Create collection
         self.indexer.create_collection(
             collection_name=collection_name,
             recreate=recreate_collection,
         )
 
-        ***REMOVED*** Parse and chunk documents
+        # Parse and chunk documents
         all_chunks = []
         for pdf_path in pdf_paths:
             try:
-                ***REMOVED*** Parse
+                # Parse
                 doc = self.parser.parse_file(pdf_path)
 
-                ***REMOVED*** Chunk
+                # Chunk
                 chunks = self.chunker.chunk_text(
                     text=doc.content,
                     document_name=doc.filename,
@@ -210,7 +210,7 @@ class RAGPipeline:
             except Exception as e:
                 print(f"Warning: Failed to process {pdf_path}: {e}")
 
-        ***REMOVED*** Index all chunks
+        # Index all chunks
         stats = await self.indexer.index_chunks(
             chunks=all_chunks,
             collection_name=collection_name,
@@ -251,7 +251,7 @@ class RAGPipeline:
             result = await self.search(query)
             results.append(result)
 
-        ***REMOVED*** Compute metrics if ground truth provided
+        # Compute metrics if ground truth provided
         metrics = {}
         if ground_truth:
             metrics = self._compute_metrics(results, ground_truth)
@@ -269,8 +269,8 @@ class RAGPipeline:
         ground_truth: list[list[str]],
     ) -> dict[str, float]:
         """Compute evaluation metrics (Recall, NDCG, MRR)."""
-        ***REMOVED*** Placeholder for metric computation
-        ***REMOVED*** Would implement Recall@K, NDCG@K, MRR here
+        # Placeholder for metric computation
+        # Would implement Recall@K, NDCG@K, MRR here
         return {
             "recall_at_1": 0.0,
             "recall_at_5": 0.0,
@@ -294,10 +294,10 @@ class RAGPipeline:
 
 async def main():
     """Example usage of RAG pipeline."""
-    ***REMOVED*** Initialize pipeline
+    # Initialize pipeline
     pipeline = RAGPipeline()
 
-    ***REMOVED*** Search example
+    # Search example
     query = "Які права мають громадяни України?"
     result = await pipeline.search(query)
 

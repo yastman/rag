@@ -1,4 +1,4 @@
-"""Contract tests for issue ***REMOVED***1083: sparse vector name must match collection schema.
+"""Contract tests for issue #1083: sparse vector name must match collection schema.
 
 The unified ingestion pipeline creates the Qdrant collection with the
 sparse vector named ``bm42`` (see ``src/ingestion/unified/cli.py``::
@@ -14,7 +14,7 @@ the named vector in the collection. Using a different name produces::
     Client specified an invalid argument
     "Wrong input: Not existing vector name error: \"sparse\""
 
-— exactly the error captured in issue ***REMOVED***1083.
+— exactly the error captured in issue #1083.
 
 These tests guard the contract by parsing the AST of any production
 module that issues Qdrant queries and asserting it never uses
@@ -33,10 +33,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-***REMOVED*** Modules that issue Qdrant queries against the canonical collection
-***REMOVED*** (gdrive_documents_bge / mirrored eval collections). Tests and scripts
-***REMOVED*** that build their *own* schema with a different name (e.g. throwaway
-***REMOVED*** in-memory ":memory:" collections) are intentionally excluded.
+# Modules that issue Qdrant queries against the canonical collection
+# (gdrive_documents_bge / mirrored eval collections). Tests and scripts
+# that build their *own* schema with a different name (e.g. throwaway
+# in-memory ":memory:" collections) are intentionally excluded.
 SCAN_FILES: tuple[Path, ...] = (
     REPO_ROOT / "src" / "evaluation" / "search_engines.py",
     REPO_ROOT / "src" / "retrieval" / "search_engines.py",
@@ -65,7 +65,7 @@ def _iter_using_keywords(source: str) -> list[tuple[int, str]]:
 
 @pytest.mark.parametrize("module_path", SCAN_FILES, ids=lambda p: p.name)
 def test_no_using_sparse_in_production_qdrant_queries(module_path: Path) -> None:
-    """No production Qdrant query may use ``using="sparse"`` — issue ***REMOVED***1083.
+    """No production Qdrant query may use ``using="sparse"`` — issue #1083.
 
     The collection created by the unified ingestion pipeline names the
     sparse vector ``"bm42"``, so any caller that queries with
@@ -79,7 +79,7 @@ def test_no_using_sparse_in_production_qdrant_queries(module_path: Path) -> None
     assert not offenders, (
         f'{module_path.relative_to(REPO_ROOT)} uses ``using="sparse"`` at '
         f"{[lineno for lineno, _ in offenders]!r}. The canonical sparse vector "
-        f"name in the repo is {CANONICAL_SPARSE_VECTOR_NAME!r} — see issue ***REMOVED***1083 "
+        f"name in the repo is {CANONICAL_SPARSE_VECTOR_NAME!r} — see issue #1083 "
         "and src/ingestion/unified/cli.py for the schema."
     )
 
@@ -94,9 +94,9 @@ def test_sparse_using_keyword_is_canonical_name(module_path: Path) -> None:
     """
     assert module_path.exists()
     source = module_path.read_text(encoding="utf-8")
-    ***REMOVED*** We only flag values that look like sparse-vector names. The dense
-    ***REMOVED*** path uses ``"dense"``, the multi-vector ColBERT path uses
-    ***REMOVED*** ``"colbert"`` — those are valid and should not be touched.
+    # We only flag values that look like sparse-vector names. The dense
+    # path uses ``"dense"``, the multi-vector ColBERT path uses
+    # ``"colbert"`` — those are valid and should not be touched.
     sparse_like_values = {
         value
         for _, value in _iter_using_keywords(source)
@@ -107,7 +107,7 @@ def test_sparse_using_keyword_is_canonical_name(module_path: Path) -> None:
         f"{module_path.relative_to(REPO_ROOT)} uses non-canonical sparse "
         f"vector name(s): {sorted(illegal)!r}. Only "
         f"{CANONICAL_SPARSE_VECTOR_NAME!r} is registered in the unified "
-        "ingestion pipeline schema (issue ***REMOVED***1083)."
+        "ingestion pipeline schema (issue #1083)."
     )
 
 

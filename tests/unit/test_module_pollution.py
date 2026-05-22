@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 
-_TESTS_ROOT = Path(__file__).resolve().parents[1]  ***REMOVED*** tests/
+_TESTS_ROOT = Path(__file__).resolve().parents[1]  # tests/
 
 
 def test_no_global_sys_modules_patching():
@@ -26,7 +26,7 @@ def test_no_global_sys_modules_patching():
     - Prevents pytest-xdist from working correctly
     - Can cause flaky tests due to import order
     """
-    ***REMOVED*** These modules should only exist if actually installed
+    # These modules should only exist if actually installed
     forbidden_mocks = [
         "redisvl",
         "redisvl.query",
@@ -36,7 +36,7 @@ def test_no_global_sys_modules_patching():
     for module_name in forbidden_mocks:
         if module_name in sys.modules:
             module = sys.modules[module_name]
-            ***REMOVED*** Real redisvl has __file__ attribute
+            # Real redisvl has __file__ attribute
             if not hasattr(module, "__file__"):
                 pytest.fail(
                     f"Global sys.modules mock detected: {module_name}. "
@@ -48,7 +48,7 @@ def test_langfuse_not_globally_mocked():
     """Langfuse mock must be fixture-scoped, not global."""
     if "langfuse" in sys.modules:
         module = sys.modules["langfuse"]
-        ***REMOVED*** Real langfuse should be an importable module backed by a file.
+        # Real langfuse should be an importable module backed by a file.
         if not isinstance(module, ModuleType) or not getattr(module, "__file__", None):
             pytest.fail(
                 "Global langfuse mock detected. Use @pytest.fixture(autouse=True) "
@@ -87,12 +87,12 @@ def test_no_module_level_sys_modules_assignment():
     violations: list[str] = []
 
     for py_file in sorted(_TESTS_ROOT.rglob("*.py")):
-        ***REMOVED*** conftest.py files may use pytest_configure for collection-time mocks
+        # conftest.py files may use pytest_configure for collection-time mocks
         if py_file.name == "conftest.py":
             continue
 
         source = py_file.read_text(encoding="utf-8")
-        ***REMOVED*** Fast path: most files do not touch sys.modules at all.
+        # Fast path: most files do not touch sys.modules at all.
         if not any(pat in source for pat in _FORBIDDEN):
             continue
 
@@ -102,7 +102,7 @@ def test_no_module_level_sys_modules_assignment():
             continue
 
         for node in ast.iter_child_nodes(tree):
-            ***REMOVED*** Only check top-level statements (module body)
+            # Only check top-level statements (module body)
             if not isinstance(node, (ast.Assign, ast.Expr)):
                 continue
 

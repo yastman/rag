@@ -1,10 +1,10 @@
-***REMOVED*** integrations/
+# integrations/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 External service wrappers and adapters for the Telegram bot. Provides focused adapters between the bot and external services: Redis caching, embedding providers, prompt management, conversation memory, polling locks, and event streaming. Keeps integration concerns separate from business logic in [`../services/`](../services/).
 
-***REMOVED******REMOVED*** Entrypoints
+## Entrypoints
 
 | File | Role |
 |------|------|
@@ -16,19 +16,19 @@ External service wrappers and adapters for the Telegram bot. Provides focused ad
 | [`polling_lock.py`](./polling_lock.py) | Telegram polling lock to prevent duplicate workers |
 | [`event_stream.py`](./event_stream.py) | Event streaming adapter |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Adapters only: business logic lives in [`../services/`](../services/).
 - Does not own Qdrant search algorithms; see [`../../src/retrieval/`](../../src/retrieval/).
 - Redis connection config is owned by [`../config.py`](../config.py) and [`../../src/config/`](../../src/config/).
 
-***REMOVED******REMOVED*** Focused Checks
+## Focused Checks
 
 ```bash
 uv run pytest tests/unit/ -k "cache|embeddings|prompt" -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../README.md`](../README.md) — Telegram transport layer
 - [`../services/README.md`](../services/README.md) — Business logic services

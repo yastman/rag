@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_unified_cli.py
+# tests/unit/ingestion/test_unified_cli.py
 """Tests for unified ingestion CLI (src/ingestion/unified/cli.py)."""
 
 import argparse
@@ -14,9 +14,9 @@ pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)"
 pytestmark = pytest.mark.requires_extras
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Arg parsing
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Arg parsing
+# ---------------------------------------------------------------------------
 
 
 class TestArgParsing:
@@ -117,9 +117,9 @@ class TestArgParsing:
             self._parse()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** setup_logging
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# setup_logging
+# ---------------------------------------------------------------------------
 
 
 class TestSetupLogging:
@@ -129,7 +129,7 @@ class TestSetupLogging:
         from src.ingestion.unified.cli import setup_logging
 
         root = logging.getLogger()
-        ***REMOVED*** Reset handlers so basicConfig can set the level
+        # Reset handlers so basicConfig can set the level
         root.handlers.clear()
         setup_logging(verbose=False)
         assert root.level == logging.INFO
@@ -151,9 +151,9 @@ class TestSetupLogging:
         assert logging.getLogger("cocoindex").level == logging.INFO
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _ok_response(json_data=None):
@@ -188,9 +188,9 @@ def _make_config(**overrides):
     return config
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** cmd_preflight
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# cmd_preflight
+# ---------------------------------------------------------------------------
 
 
 class TestCmdPreflight:
@@ -216,7 +216,7 @@ class TestCmdPreflight:
 
         sync_dir = tmp_path / "sync"
         sync_dir.mkdir()
-        (sync_dir / "knowledge.md").write_text("***REMOVED*** test", encoding="utf-8")
+        (sync_dir / "knowledge.md").write_text("# test", encoding="utf-8")
 
         config = _make_config(sync_dir=sync_dir)
         with (
@@ -249,8 +249,8 @@ class TestCmdPreflight:
     async def test_qdrant_fail_returns_1(self, args, capsys):
         mock_client = AsyncMock()
         mock_client.get.side_effect = [
-            _fail_response(404),  ***REMOVED*** qdrant collection
-            _ok_response(),  ***REMOVED*** docling health
+            _fail_response(404),  # qdrant collection
+            _ok_response(),  # docling health
         ]
         mock_client.post.return_value = _ok_response()
 
@@ -323,7 +323,7 @@ class TestCmdPreflight:
 
         sync_dir = tmp_path / "sync"
         sync_dir.mkdir()
-        (sync_dir / "knowledge.md").write_text("***REMOVED*** test", encoding="utf-8")
+        (sync_dir / "knowledge.md").write_text("# test", encoding="utf-8")
 
         config = _make_config(sync_dir=sync_dir)
         config.docling_backend = "docling_native"
@@ -411,9 +411,9 @@ class TestCmdPreflight:
         assert "[FAIL]" in output
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** cmd_status
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# cmd_status
+# ---------------------------------------------------------------------------
 
 
 class TestCmdStatus:
@@ -520,9 +520,9 @@ class TestCmdStatus:
         assert "Supported files: 2" in output
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** cmd_run
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# cmd_run
+# ---------------------------------------------------------------------------
 
 
 class TestCmdRun:
@@ -561,9 +561,9 @@ class TestCmdRun:
         mock_run_watch.assert_called_once_with(config)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** cmd_reprocess
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# cmd_reprocess
+# ---------------------------------------------------------------------------
 
 
 class TestCmdReprocess:
@@ -727,9 +727,9 @@ class TestCmdReprocess:
         manager.close.assert_awaited_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** cmd_bootstrap
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# cmd_bootstrap
+# ---------------------------------------------------------------------------
 
 
 class TestCmdBootstrap:
@@ -743,7 +743,7 @@ class TestCmdBootstrap:
         config = _make_config(collection_name="existing_col")
         client = MagicMock()
         client.get_collections.return_value = MagicMock()
-        client.get_collection.return_value = MagicMock()  ***REMOVED*** exists
+        client.get_collection.return_value = MagicMock()  # exists
 
         with (
             patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
@@ -872,9 +872,9 @@ class TestCmdSchemaCheck:
         assert "colbert" in output
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** main() dispatch
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# main() dispatch
+# ---------------------------------------------------------------------------
 
 
 class TestMainDispatch:

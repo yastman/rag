@@ -92,7 +92,7 @@ class QueryAnalyzer:
     async def analyze(self, query: str) -> dict[str, Any]:
         """Analyze query and extract filters + semantic query.
 
-        Wrapped in ``@observe`` (***REMOVED***1659) so the auto-traced generation
+        Wrapped in ``@observe`` (#1659) so the auto-traced generation
         produced by ``langfuse.openai`` (preserved through
         ``instructor.from_openai`` — the underlying client's
         ``chat.completions.create`` retains the wrapt langfuse marker, see
@@ -101,7 +101,7 @@ class QueryAnalyzer:
         orphan top-level trace when the analyzer is invoked outside a
         request-scoped trace.
 
-        Per the audit comment on ***REMOVED***1659 the wrapper is a *plain span*, not
+        Per the audit comment on #1659 the wrapper is a *plain span*, not
         ``as_type="generation"``: ``langfuse.openai`` already emits a
         generation observation for each ``chat.completions.create`` call
         and an outer generation would produce duplicate observations.
@@ -147,14 +147,14 @@ class QueryAnalyzer:
                 "max_retries": 2,
                 "temperature": 0.0,
                 "max_tokens": 1000,
-                "name": "query-analysis",  ***REMOVED*** langfuse kwarg
+                "name": "query-analysis",  # langfuse kwarg
             }
             if prompt_obj is not None:
-                ***REMOVED*** Link generation observation to its Langfuse Prompt entry (***REMOVED***1666).
-                ***REMOVED*** Instructor preserves the langfuse.openai wrap, so the kwarg is
-                ***REMOVED*** forwarded to the underlying create() call (verified in ***REMOVED***1681 preflight).
+                # Link generation observation to its Langfuse Prompt entry (#1666).
+                # Instructor preserves the langfuse.openai wrap, so the kwarg is
+                # forwarded to the underlying create() call (verified in #1681 preflight).
                 create_kwargs["langfuse_prompt"] = prompt_obj
-            result = await self._instructor_client.chat.completions.create(  ***REMOVED*** type: ignore[call-overload]
+            result = await self._instructor_client.chat.completions.create(  # type: ignore[call-overload]
                 **create_kwargs,
             )
 

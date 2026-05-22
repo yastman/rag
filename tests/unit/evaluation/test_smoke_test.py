@@ -1,7 +1,7 @@
-***REMOVED*** tests/unit/evaluation/test_smoke_test.py
+# tests/unit/evaluation/test_smoke_test.py
 """Unit tests for ``src/evaluation/smoke_test.py`` (real module).
 
-Closes the placeholder-coverage drift described in ***REMOVED***1619: previously this file
+Closes the placeholder-coverage drift described in #1619: previously this file
 copied ``SMOKE_QUERIES``, ``SLO_THRESHOLDS``, and percentile/violation helpers
 into the test itself, so changes to the real module could regress unobserved.
 The contract test ``tests/contract/test_smoke_test_real_module_contract.py``
@@ -107,12 +107,12 @@ class TestRunSmokeTestEngineSelection:
                 captured["embedding_model"] = embedding_model
                 captured["query_count"] = 0
 
-            def search(self, query: str, top_k: int = 10):  ***REMOVED*** noqa: D401, ARG002
+            def search(self, query: str, top_k: int = 10):  # noqa: D401, ARG002
                 captured["query_count"] = int(captured.get("query_count", 0)) + 1
-                ***REMOVED*** Always return an empty list — we only care about wiring here.
+                # Always return an empty list — we only care about wiring here.
                 return []
 
-        ***REMOVED*** Patch the symbol in the smoke_test module's namespace.
+        # Patch the symbol in the smoke_test module's namespace.
         smoke_module = sys.modules["src.evaluation.smoke_test"]
         monkeypatch.setattr(smoke_module, "BaselineSearchEngine", _FakeEngine)
         monkeypatch.setattr(smoke_module, "_load_embedding_model", lambda: "fake-bge-m3")
@@ -125,12 +125,12 @@ class TestRunSmokeTestEngineSelection:
 
         assert captured["collection_name"] == "unit-test-collection"
         assert captured["embedding_model"] == "fake-bge-m3"
-        ***REMOVED*** quick=True selects the first 10 queries.
+        # quick=True selects the first 10 queries.
         assert captured["query_count"] == 10
         assert result["engine"] == "baseline"
         assert result["collection"] == "unit-test-collection"
         assert result["queries_count"] == 10
-        ***REMOVED*** Empty results means every query missed → all SLOs violated → not passed.
+        # Empty results means every query missed → all SLOs violated → not passed.
         assert result["passed"] is False
         assert result["slo_violations"], "expected SLO violations on all-miss run"
 
@@ -148,23 +148,23 @@ class TestRunSmokeTestSloEvaluation:
                 self.collection_name = collection_name
                 self.embedding_model = embedding_model
 
-            def search(self, query: str, top_k: int = 10):  ***REMOVED*** noqa: ARG002
-                ***REMOVED*** Inverse-lookup the expected article from the query string is
-                ***REMOVED*** heavy — instead, return all 30 expected articles in order so
-                ***REMOVED*** the first hit matches whichever query came in. ``run_smoke_test``
-                ***REMOVED*** only checks the first article id against the expected one, so
-                ***REMOVED*** we cooperate by extracting the expected number from the query
-                ***REMOVED*** itself in the trailing ``"...статья N..."`` style. A simpler
-                ***REMOVED*** route: index by call count is racy under the for-loop, so we
-                ***REMOVED*** instead read the ``expected_article`` field from a closure.
+            def search(self, query: str, top_k: int = 10):  # noqa: ARG002
+                # Inverse-lookup the expected article from the query string is
+                # heavy — instead, return all 30 expected articles in order so
+                # the first hit matches whichever query came in. ``run_smoke_test``
+                # only checks the first article id against the expected one, so
+                # we cooperate by extracting the expected number from the query
+                # itself in the trailing ``"...статья N..."`` style. A simpler
+                # route: index by call count is racy under the for-loop, so we
+                # instead read the ``expected_article`` field from a closure.
                 return [_FakePoint(article=_PerfectEngine.next_expected.pop(0))]
 
-            ***REMOVED*** Will be primed in the test method below.
+            # Will be primed in the test method below.
             next_expected: list[int] = []
 
         smoke_module = sys.modules["src.evaluation.smoke_test"]
 
-        ***REMOVED*** Prime the perfect-engine to return the right article for each query.
+        # Prime the perfect-engine to return the right article for each query.
         _PerfectEngine.next_expected = [int(q["expected_article"]) for q in SMOKE_QUERIES[:10]]
 
         monkeypatch.setattr(smoke_module, "BaselineSearchEngine", _PerfectEngine)
@@ -179,9 +179,9 @@ class TestRunSmokeTestSloEvaluation:
         assert result["precision_at_1"] == 1.0
         assert result["recall_at_10"] == 1.0
         assert result["failure_rate"] == 0.0
-        ***REMOVED*** Latency violations are still possible if the test machine is very
-        ***REMOVED*** slow; but smoke_test stores percentiles in ``latency_p95_ms`` only —
-        ***REMOVED*** if all values are below 800ms the SLO is met.
+        # Latency violations are still possible if the test machine is very
+        # slow; but smoke_test stores percentiles in ``latency_p95_ms`` only —
+        # if all values are below 800ms the SLO is met.
         if result["latency_p95_ms"] <= SLO_THRESHOLDS["p95_latency_ms_max"]:
             assert result["passed"] is True
             assert result["slo_violations"] == []
@@ -195,7 +195,7 @@ class TestSmokeTestResultStructure:
             def __init__(self, collection_name: str, embedding_model: object) -> None:
                 pass
 
-            def search(self, query: str, top_k: int = 10):  ***REMOVED*** noqa: ARG002
+            def search(self, query: str, top_k: int = 10):  # noqa: ARG002
                 return []
 
         smoke_module = sys.modules["src.evaluation.smoke_test"]

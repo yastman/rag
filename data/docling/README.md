@@ -1,9 +1,9 @@
-***REMOVED*** Docling Data
+# Docling Data
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Local Docling input/output data area.
 
-***REMOVED******REMOVED*** Parent
+## Parent
 
 - [Data directory](../README.md)

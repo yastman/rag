@@ -60,9 +60,9 @@ def _make_message(text="test query"):
     return message
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestQuerySupervisorContentFilter
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestQuerySupervisorContentFilter
+# ---------------------------------------------------------------------------
 
 
 class TestQuerySupervisorContentFilter:
@@ -140,26 +140,26 @@ class TestQuerySupervisorContentFilter:
 
             bot._resolve_user_role = AsyncMock(return_value="client")
 
-            ***REMOVED*** Mock the agent to return a simple response
+            # Mock the agent to return a simple response
             mock_agent = AsyncMock()
             mock_agent.ainvoke = AsyncMock(
                 return_value={"messages": [MagicMock(content="agent response")]}
             )
             mock_agent_factory.return_value = mock_agent
 
-            ***REMOVED*** Mock _send_markdown_chunks to avoid complex downstream
+            # Mock _send_markdown_chunks to avoid complex downstream
             bot._send_markdown_chunks = AsyncMock()
-            ***REMOVED*** Mock _spawn_history_save
+            # Mock _spawn_history_save
             bot._spawn_history_save = MagicMock(return_value=None)
 
             result = await bot._handle_query_supervisor(
                 message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
-        ***REMOVED*** Should NOT have sent the blocked response
+        # Should NOT have sent the blocked response
         for call in message.answer.call_args_list:
             assert call.args[0] != _BLOCKED_RESPONSE
-        ***REMOVED*** Method should have returned some response (not blocked)
+        # Method should have returned some response (not blocked)
         assert result != _BLOCKED_RESPONSE
 
     async def test_content_filter_disabled_skips_guard(self):
@@ -211,9 +211,9 @@ class TestQuerySupervisorContentFilter:
         mock_detect.assert_not_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestQuerySupervisorHandoffMode
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestQuerySupervisorHandoffMode
+# ---------------------------------------------------------------------------
 
 
 class TestQuerySupervisorHandoffMode:
@@ -249,7 +249,7 @@ class TestQuerySupervisorHandoffMode:
             message_id=100,
             topic_id=999,
         )
-        ***REMOVED*** Should NOT call send_chat_action (returned before that)
+        # Should NOT call send_chat_action (returned before that)
         message.bot.send_chat_action.assert_not_awaited()
 
     async def test_handoff_human_waiting_relays_and_continues(self):
@@ -282,13 +282,13 @@ class TestQuerySupervisorHandoffMode:
 
             await bot.handle_query(message)
 
-        ***REMOVED*** Relay was called
+        # Relay was called
         forum_bridge.relay_to_topic.assert_awaited_once_with(
             from_chat_id=12345,
             message_id=100,
             topic_id=999,
         )
-        ***REMOVED*** AND _handle_query_supervisor was called (continues processing)
+        # AND _handle_query_supervisor was called (continues processing)
         mock_hqs.assert_awaited_once()
 
     async def test_no_handoff_proceeds_normally(self):
@@ -313,9 +313,9 @@ class TestQuerySupervisorHandoffMode:
         mock_hqs.assert_awaited_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestQuerySupervisorSemanticCache
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestQuerySupervisorSemanticCache
+# ---------------------------------------------------------------------------
 
 
 class TestQuerySupervisorSemanticCache:
@@ -353,13 +353,13 @@ class TestQuerySupervisorSemanticCache:
 
             bot._resolve_user_role = AsyncMock(return_value="client")
 
-            ***REMOVED*** Setup cache to return a hit
+            # Setup cache to return a hit
             bot._cache.check_semantic = AsyncMock(return_value="Cached: deposit is 10%")
 
-            ***REMOVED*** Mock helper functions that cache-hit path calls
+            # Mock helper functions that cache-hit path calls
             bot._send_markdown_chunks = AsyncMock()
 
-            ***REMOVED*** Mock pre-agent helper functions needed before cache check
+            # Mock pre-agent helper functions needed before cache check
             with (
                 patch(
                     "telegram_bot.bot.get_query_topic_hint",
@@ -389,11 +389,11 @@ class TestQuerySupervisorSemanticCache:
                     message, time.perf_counter(), locale="ru", root_trace_metadata={}
                 )
 
-        ***REMOVED*** Should return cached response
+        # Should return cached response
         assert result == "Cached: deposit is 10%"
-        ***REMOVED*** Agent should NOT be created
+        # Agent should NOT be created
         mock_agent_factory.assert_not_called()
-        ***REMOVED*** Should have sent the cached response via _send_markdown_chunks
+        # Should have sent the cached response via _send_markdown_chunks
         bot._send_markdown_chunks.assert_awaited_once()
 
     async def test_cache_miss_proceeds_to_agent(self):
@@ -428,10 +428,10 @@ class TestQuerySupervisorSemanticCache:
 
             bot._resolve_user_role = AsyncMock(return_value="client")
 
-            ***REMOVED*** Cache returns None (miss)
+            # Cache returns None (miss)
             bot._cache.check_semantic = AsyncMock(return_value=None)
 
-            ***REMOVED*** Mock the agent
+            # Mock the agent
             mock_agent = AsyncMock()
             mock_agent.ainvoke = AsyncMock(
                 return_value={"messages": [MagicMock(content="agent says schools nearby")]}
@@ -470,9 +470,9 @@ class TestQuerySupervisorSemanticCache:
                     message, time.perf_counter(), locale="ru", root_trace_metadata={}
                 )
 
-        ***REMOVED*** Agent was invoked
+        # Agent was invoked
         mock_agent_factory.assert_called_once()
-        ***REMOVED*** Result came from agent
+        # Result came from agent
         assert "agent says schools nearby" in result
 
     async def test_non_cacheable_query_type_skips_cache(self):
@@ -503,7 +503,7 @@ class TestQuerySupervisorSemanticCache:
 
             bot._resolve_user_role = AsyncMock(return_value="client")
 
-            ***REMOVED*** Mock the agent
+            # Mock the agent
             mock_agent = AsyncMock()
             mock_agent.ainvoke = AsyncMock(
                 return_value={"messages": [MagicMock(content="I am doing well!")]}
@@ -517,8 +517,8 @@ class TestQuerySupervisorSemanticCache:
                 message, time.perf_counter(), locale="ru", root_trace_metadata={}
             )
 
-        ***REMOVED*** Cache check_semantic should NOT be called (CHITCHAT not in CACHEABLE_QUERY_TYPES)
+        # Cache check_semantic should NOT be called (CHITCHAT not in CACHEABLE_QUERY_TYPES)
         bot._cache.check_semantic.assert_not_called()
-        ***REMOVED*** Agent was invoked directly
+        # Agent was invoked directly
         mock_agent_factory.assert_called_once()
         assert "I am doing well!" in result

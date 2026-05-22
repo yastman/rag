@@ -49,8 +49,8 @@ from telegram_bot.services.catalog_session import (
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** "Любой" option used in every filter sub-menu to clear that filter.
-***REMOVED*** IMPORTANT: use "any" (not "") — aiogram-dialog widgets skip empty item_ids.
+# "Любой" option used in every filter sub-menu to clear that filter.
+# IMPORTANT: use "any" (not "") — aiogram-dialog widgets skip empty item_ids.
 _ANY_OPTION = ("Любой", "any")
 
 
@@ -238,9 +238,9 @@ def _make_switch_trace_handler(action: str, target_state: Any):
     return handler
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Hub getter
-***REMOVED*** ============================================================
+# ============================================================
+# Hub getter
+# ============================================================
 
 
 @observe(name="dialog-filter-hub-data", capture_input=False, capture_output=False, as_type="span")
@@ -270,7 +270,7 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         VIEW_DISPLAY,
     )
 
-    ***REMOVED*** Build dynamic active filters summary — only show selected (non-default) filters
+    # Build dynamic active filters summary — only show selected (non-default) filters
     lines: list[str] = []
 
     city_val = dd.get("city")
@@ -339,9 +339,9 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     }
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Individual filter getters
-***REMOVED*** ============================================================
+# ============================================================
+# Individual filter getters
+# ============================================================
 
 
 async def get_city_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -415,9 +415,9 @@ async def get_promotion_data(dialog_manager: DialogManager, **kwargs: Any) -> di
     }
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Radio on_state_changed handlers — store selection in dialog_data + switch to hub
-***REMOVED*** ============================================================
+# ============================================================
+# Radio on_state_changed handlers — store selection in dialog_data + switch to hub
+# ============================================================
 
 
 def _make_radio_handler(field: str):
@@ -437,11 +437,11 @@ def _make_radio_handler(field: str):
             callback_data=getattr(callback, "data", None),
         ) as observation:
             if item_id == "any":
-                ***REMOVED*** "Любой" selected — clear this filter
+                # "Любой" selected — clear this filter
                 manager.dialog_data.pop(field, None)
                 manager.dialog_data.pop(FIELD_TO_FILTER_KEY.get(field, field), None)
             else:
-                ***REMOVED*** Store raw item_id string — coercion happens in build_filters_dict
+                # Store raw item_id string — coercion happens in build_filters_dict
                 manager.dialog_data[field] = item_id
             await manager.switch_to(FilterSG.hub)
             _update_filter_observation(
@@ -466,9 +466,9 @@ on_radio_furnished = _make_radio_handler("furnished")
 on_radio_promotion = _make_radio_handler("promotion")
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Reverse mapping: Qdrant filters → dialog_data field names
-***REMOVED*** ============================================================
+# ============================================================
+# Reverse mapping: Qdrant filters → dialog_data field names
+# ============================================================
 
 
 def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
@@ -481,7 +481,7 @@ def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
     if filters.get("rooms") is not None:
         rooms = filters["rooms"]
         if isinstance(rooms, list):
-            ***REMOVED*** Studio from funnel: [0, 1] → "1" for FilterDialog Radio
+            # Studio from funnel: [0, 1] → "1" for FilterDialog Radio
             dd["rooms"] = "1"
         else:
             dd["rooms"] = str(rooms)
@@ -516,7 +516,7 @@ def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
     return dd
 
 
-***REMOVED*** Map dialog_data field → (radio_widget_id, value_to_str converter)
+# Map dialog_data field → (radio_widget_id, value_to_str converter)
 _FIELD_TO_RADIO_ID: dict[str, str] = {
     "city": "r_city",
     "rooms": "r_rooms",
@@ -552,14 +552,14 @@ async def on_filter_dialog_start(
         manager.dialog_data.pop(field, None)
     manager.dialog_data.update(dialog_data)
 
-    ***REMOVED*** aiogram-dialog Radio stores selection in widget_data and does not support
-    ***REMOVED*** clearing via set_checked(None): it serializes None to the string "None".
+    # aiogram-dialog Radio stores selection in widget_data and does not support
+    # clearing via set_checked(None): it serializes None to the string "None".
     with contextlib.suppress(Exception):
         widget_data = manager.current_context().widget_data
         for radio_id in _FIELD_TO_RADIO_ID.values():
             widget_data.pop(radio_id, None)
 
-    ***REMOVED*** Sync Radio widget checked states with dialog_data
+    # Sync Radio widget checked states with dialog_data
     for field, radio_id in _FIELD_TO_RADIO_ID.items():
         value = dialog_data.get(field)
         if value is None:
@@ -572,9 +572,9 @@ async def on_filter_dialog_start(
         lf.update_current_span(output={"context_after": _snapshot_filter_context(manager)})
 
 
-***REMOVED*** ============================================================
-***REMOVED*** on_apply — save filters to FSMContext, done()
-***REMOVED*** ============================================================
+# ============================================================
+# on_apply — save filters to FSMContext, done()
+# ============================================================
 
 
 async def on_apply(
@@ -599,7 +599,7 @@ async def on_apply(
             fsm_data.get(CATALOG_RUNTIME_DATA_KEY) if isinstance(fsm_data, dict) else {}
         ) or {}
 
-        ***REMOVED*** Fetch first page with new filters
+        # Fetch first page with new filters
         svc = manager.middleware_data.get("apartments_service")
         results: list = []
         total_count = 0
@@ -626,7 +626,7 @@ async def on_apply(
         )
         await state.update_data(**{CATALOG_RUNTIME_DATA_KEY: runtime})
 
-        ***REMOVED*** Show apartment results respecting view mode
+        # Show apartment results respecting view mode
         msg = callback.message
         if msg is None or isinstance(msg, InaccessibleMessage):
             _update_filter_observation(
@@ -634,8 +634,8 @@ async def on_apply(
             )
             return
 
-        ***REMOVED*** Close the filter shell before handing control back to catalog so users
-        ***REMOVED*** do not interact with a stale filter message after apply.
+        # Close the filter shell before handing control back to catalog so users
+        # do not interact with a stale filter message after apply.
         manager.show_mode = ShowMode.NO_UPDATE
         await manager.done()
         if hasattr(msg, "delete"):
@@ -683,9 +683,9 @@ async def on_apply(
         )
 
 
-***REMOVED*** ============================================================
-***REMOVED*** on_reset — clear all filter fields in dialog_data + Radio states
-***REMOVED*** ============================================================
+# ============================================================
+# on_reset — clear all filter fields in dialog_data + Radio states
+# ============================================================
 
 
 async def on_reset(
@@ -716,12 +716,12 @@ async def on_reset(
         )
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Dialog definition — Radio widgets with ✓/○ indicators
-***REMOVED*** ============================================================
+# ============================================================
+# Dialog definition — Radio widgets with ✓/○ indicators
+# ============================================================
 
 filter_dialog = Dialog(
-    ***REMOVED*** Hub window: filter summary + navigation
+    # Hub window: filter summary + navigation
     Window(
         Format("🏠 Фильтры поиска\n\n{active_filters}\n\nНайдено: {count} апартаментов"),
         Row(
@@ -800,7 +800,7 @@ filter_dialog = Dialog(
         getter=get_hub_data,
         state=FilterSG.hub,
     ),
-    ***REMOVED*** City window — Radio with ✓ indicator + back button
+    # City window — Radio with ✓ indicator + back button
     Window(
         Const("📍 Выберите город:"),
         Column(
@@ -823,7 +823,7 @@ filter_dialog = Dialog(
         getter=get_city_data,
         state=FilterSG.city,
     ),
-    ***REMOVED*** Rooms window
+    # Rooms window
     Window(
         Const("🛏 Выберите количество комнат:"),
         Column(
@@ -846,7 +846,7 @@ filter_dialog = Dialog(
         getter=get_rooms_data,
         state=FilterSG.rooms,
     ),
-    ***REMOVED*** Budget window
+    # Budget window
     Window(
         Const("💰 Выберите бюджет:"),
         Column(
@@ -869,7 +869,7 @@ filter_dialog = Dialog(
         getter=get_budget_data,
         state=FilterSG.budget,
     ),
-    ***REMOVED*** View window
+    # View window
     Window(
         Const("🌅 Выберите вид:"),
         Column(
@@ -892,7 +892,7 @@ filter_dialog = Dialog(
         getter=get_view_data,
         state=FilterSG.view,
     ),
-    ***REMOVED*** Area window
+    # Area window
     Window(
         Const("📐 Выберите площадь:"),
         Column(
@@ -915,7 +915,7 @@ filter_dialog = Dialog(
         getter=get_area_data,
         state=FilterSG.area,
     ),
-    ***REMOVED*** Floor window
+    # Floor window
     Window(
         Const("🏢 Выберите этаж:"),
         Column(
@@ -938,7 +938,7 @@ filter_dialog = Dialog(
         getter=get_floor_data,
         state=FilterSG.floor,
     ),
-    ***REMOVED*** Complex window
+    # Complex window
     Window(
         Const("🏘 Выберите комплекс:"),
         Column(
@@ -961,7 +961,7 @@ filter_dialog = Dialog(
         getter=get_complex_data,
         state=FilterSG.complex_name,
     ),
-    ***REMOVED*** Furnished window
+    # Furnished window
     Window(
         Const("🛋 Наличие мебели:"),
         Column(
@@ -984,7 +984,7 @@ filter_dialog = Dialog(
         getter=get_furnished_data,
         state=FilterSG.furnished,
     ),
-    ***REMOVED*** Promotion window
+    # Promotion window
     Window(
         Const("🏷 Акционные предложения:"),
         Column(

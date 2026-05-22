@@ -1,4 +1,4 @@
-"""Tests for nurturing + funnel Langfuse scores (***REMOVED***390)."""
+"""Tests for nurturing + funnel Langfuse scores (#390)."""
 
 from telegram_bot.scoring import write_langfuse_scores
 
@@ -7,7 +7,7 @@ _FAKE_TRACE_ID = "test-nurturing-trace"
 
 
 class FakeLangfuse:
-    """Minimal fake Langfuse client that records create_score calls (***REMOVED***435)."""
+    """Minimal fake Langfuse client that records create_score calls (#435)."""
 
     def __init__(self):
         self._scores: dict[str, object] = {}

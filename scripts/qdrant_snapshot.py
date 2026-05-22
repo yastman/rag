@@ -1,20 +1,20 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Qdrant snapshot backup script.
 
 Creates and downloads snapshots for Qdrant collections.
 Supports backing up specific collections or all collections at once.
 
 Usage:
-    ***REMOVED*** Backup all collections
+    # Backup all collections
     python scripts/qdrant_snapshot.py
 
-    ***REMOVED*** Backup specific collections
+    # Backup specific collections
     python scripts/qdrant_snapshot.py --collections gdrive_documents_bge legal_documents
 
-    ***REMOVED*** Custom output directory and URL
+    # Custom output directory and URL
     python scripts/qdrant_snapshot.py --output-dir /tmp/backups --url http://qdrant:6333
 
-    ***REMOVED*** Dry run (list collections only)
+    # Dry run (list collections only)
     python scripts/qdrant_snapshot.py --dry-run
 """
 
@@ -73,7 +73,7 @@ async def create_and_download_snapshot(
     Returns:
         Path to the downloaded snapshot file, or None on failure.
     """
-    ***REMOVED*** Create snapshot
+    # Create snapshot
     logger.info("Creating snapshot for '%s'...", collection_name)
     try:
         snapshot_info = await client.create_snapshot(collection_name=collection_name)
@@ -88,10 +88,10 @@ async def create_and_download_snapshot(
     snapshot_name = snapshot_info.name
     logger.info("Snapshot created: %s", snapshot_name)
 
-    ***REMOVED*** Build download URL
+    # Build download URL
     snapshot_url = f"{qdrant_url}/collections/{collection_name}/snapshots/{snapshot_name}"
 
-    ***REMOVED*** Download snapshot via httpx (streaming for large files)
+    # Download snapshot via httpx (streaming for large files)
     timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     local_filename = f"{collection_name}-{timestamp}.snapshot"
     local_path = output_dir / local_filename
@@ -120,7 +120,7 @@ async def create_and_download_snapshot(
 
     except Exception:
         logger.exception("Failed to download snapshot for '%s'", collection_name)
-        ***REMOVED*** Clean up partial file
+        # Clean up partial file
         if local_path.exists():
             local_path.unlink()
         return None
@@ -148,7 +148,7 @@ async def run_backup(
     client = AsyncQdrantClient(url=qdrant_url, api_key=api_key)
 
     try:
-        ***REMOVED*** Get collection list
+        # Get collection list
         all_collections = await get_all_collections(client)
         if not all_collections:
             logger.warning("No collections found in Qdrant at %s", qdrant_url)
@@ -156,7 +156,7 @@ async def run_backup(
 
         logger.info("Available collections: %s", ", ".join(all_collections))
 
-        ***REMOVED*** Determine which collections to back up
+        # Determine which collections to back up
         if collections:
             target_collections = []
             for name in collections:
@@ -184,11 +184,11 @@ async def run_backup(
                 )
             return 0
 
-        ***REMOVED*** Ensure output directory exists
+        # Ensure output directory exists
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Output directory: %s", output_dir)
 
-        ***REMOVED*** Create and download snapshots
+        # Create and download snapshots
         success_count = 0
         failed: list[str] = []
 
@@ -205,7 +205,7 @@ async def run_backup(
             else:
                 failed.append(name)
 
-        ***REMOVED*** Summary
+        # Summary
         logger.info("Backup complete: %d/%d succeeded", success_count, len(target_collections))
         if failed:
             logger.warning("Failed collections: %s", ", ".join(failed))
@@ -231,10 +231,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s                                  ***REMOVED*** Backup all collections
+  %(prog)s                                  # Backup all collections
   %(prog)s --collections gdrive_documents_bge legal_documents
   %(prog)s --output-dir /tmp/backups --url http://qdrant:6333
-  %(prog)s --dry-run                        ***REMOVED*** List collections only
+  %(prog)s --dry-run                        # List collections only
         """,
     )
     parser.add_argument(

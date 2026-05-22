@@ -1,10 +1,10 @@
-***REMOVED*** ADR-0003: LangGraph for Voice, Deterministic Pipeline for Text
+# ADR-0003: LangGraph for Voice, Deterministic Pipeline for Text
 
 **Status:** Accepted
 
 **Date:** 2026-02-01
 
-***REMOVED******REMOVED*** Context
+## Context
 
 The system serves two input modes:
 - **Voice queries** — Via LiveKit/SIP, transcribed via Whisper
@@ -12,14 +12,14 @@ The system serves two input modes:
 
 Both use the same underlying RAG retrieval but have different orchestration needs.
 
-***REMOVED******REMOVED*** Decision
+## Decision
 
 | Mode | Orchestration | File |
 |------|---------------|------|
 | Voice | LangGraph (11-node graph) | `telegram_bot/graph/graph.py` |
 | Text | Deterministic async pipeline | `telegram_bot/pipelines/client.py` |
 
-***REMOVED******REMOVED******REMOVED*** Why This Split
+### Why This Split
 
 **Voice uses LangGraph because:**
 1. **Voice-specific nodes** — `transcribe` node for Whisper STT
@@ -33,26 +33,26 @@ Both use the same underlying RAG retrieval but have different orchestration need
 3. **Cost** — Fewer LLM calls per query
 4. **Cache efficiency** — Deterministic path enables better cache hit rates
 
-***REMOVED******REMOVED*** Consequences
+## Consequences
 
-***REMOVED******REMOVED******REMOVED*** Positive
+### Positive
 - Voice gets full LangGraph capabilities (interrupts, checkpointer, complex routing)
 - Text is fast and cost-efficient
 - Clear separation of concerns
 
-***REMOVED******REMOVED******REMOVED*** Negative
+### Negative
 - Code duplication risk — changes must be applied to both paths
 - Dual observability paths (different span names)
 - Testing complexity — two different flows to verify
 
-***REMOVED******REMOVED*** Unification Opportunity
+## Unification Opportunity
 
 Future consideration: Unify both paths under LangGraph if:
 - Client pipeline also needs interrupts (HITL)
 - Client queries become more complex
 - Cache hit rates drop significantly
 
-***REMOVED******REMOVED*** References
+## References
 
 - Voice graph: `telegram_bot/graph/graph.py`
 - Client pipeline: `telegram_bot/pipelines/client.py`

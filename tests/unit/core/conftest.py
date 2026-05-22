@@ -1,7 +1,7 @@
 """Core test conftest — install optional-dep stubs at configure time.
 
 Keeps src.core.pipeline importable in CI without ingest extras (pymupdf, docling).
-Uses pytest_configure/pytest_unconfigure for proper cleanup (***REMOVED***611).
+Uses pytest_configure/pytest_unconfigure for proper cleanup (#611).
 """
 
 import sys
@@ -24,10 +24,10 @@ def pytest_configure(config):
             sys.modules[name] = mod
             _INJECTED_MODULES.append(name)
 
-    ***REMOVED*** Wire docling.document_converter.DocumentConverter mock
+    # Wire docling.document_converter.DocumentConverter mock
     converter_mod = sys.modules["docling.document_converter"]
-    converter_mod.DocumentConverter = MagicMock  ***REMOVED*** type: ignore[attr-defined]
-    sys.modules["docling"].document_converter = converter_mod  ***REMOVED*** type: ignore[attr-defined]
+    converter_mod.DocumentConverter = MagicMock  # type: ignore[attr-defined]
+    sys.modules["docling"].document_converter = converter_mod  # type: ignore[attr-defined]
 
 
 def pytest_unconfigure(config):

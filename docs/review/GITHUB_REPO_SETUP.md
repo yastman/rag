@@ -1,9 +1,9 @@
-***REMOVED*** GitHub Repository Setup
+# GitHub Repository Setup
 
 This checklist is for making the repository understandable and safe for
 recruiters, technical interviewers, collaborators, and public contributors.
 
-***REMOVED******REMOVED*** Repository Metadata
+## Repository Metadata
 
 Recommended GitHub sidebar description:
 
@@ -34,7 +34,7 @@ Recommended homepage link:
 - a live demo, sanitized demo video, or `docs/portfolio/resume-case-study.md`
   rendered through GitHub.
 
-***REMOVED******REMOVED*** Default Review Entry Points
+## Default Review Entry Points
 
 Pin or link these prominently:
 
@@ -44,7 +44,7 @@ Pin or link these prominently:
 - `docs/review/ACCESS_FOR_REVIEWERS.md`
 - `DOCKER.md`
 
-***REMOVED******REMOVED*** Branch And Release Hygiene
+## Branch And Release Hygiene
 
 For **this** repository:
 
@@ -59,7 +59,7 @@ For **this** repository:
 Keep PR and release instructions consistent: if the everyday integration branch
 is `dev`, every doc that mentions merging should say `dev`, not `main`.
 
-***REMOVED******REMOVED*** CI Expectations
+## CI Expectations
 
 CI is intentionally limited to fast static guardrails:
 
@@ -73,7 +73,7 @@ verification remains stronger than CI. README should say that CI is a static
 guardrail and local `make check` plus focused tests are the primary evidence
 for code changes.
 
-***REMOVED******REMOVED*** Security And Sanitization
+## Security And Sanitization
 
 Before publishing or sharing the repository:
 
@@ -92,7 +92,7 @@ Recommended files:
 - `CODE_OF_CONDUCT.md`
 - `docs/review/ACCESS_FOR_REVIEWERS.md`
 
-***REMOVED******REMOVED*** README Checklist
+## README Checklist
 
 The README should answer these in under one minute:
 
@@ -104,7 +104,7 @@ The README should answer these in under one minute:
 - Which docs explain the architecture?
 - What are the honest limitations?
 
-***REMOVED******REMOVED*** Portfolio Review Checklist
+## Portfolio Review Checklist
 
 Before sending a repository link, verify:
 

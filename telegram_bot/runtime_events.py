@@ -141,7 +141,7 @@ class RuntimeEventWriter:
             return
         try:
             scrubbed_payload = self._scrub_payload(event.payload)
-            ***REMOVED*** Build a new event with scrubbed payload so the original stays immutable
+            # Build a new event with scrubbed payload so the original stays immutable
             event = RuntimeEvent(
                 ts=event.ts,
                 event_type=event.event_type,
@@ -158,12 +158,12 @@ class RuntimeEventWriter:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8", errors="replace") as fh:
                 fh.write(line)
-        except Exception as exc:  ***REMOVED*** pragma: no cover
+        except Exception as exc:  # pragma: no cover
             logger.warning("Failed to append runtime event: %s", exc)
         self._cleanup_old_files()
 
 
-***REMOVED*** Module-level singleton cache
+# Module-level singleton cache
 _writer_instance: RuntimeEventWriter | _NoOpWriter | None = None
 
 

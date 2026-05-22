@@ -1,7 +1,7 @@
-***REMOVED*** tests/contract/test_vps_noncore_list_single_source_contract.py
+# tests/contract/test_vps_noncore_list_single_source_contract.py
 """Contract: VPS non-core service removal list lives in exactly one place.
 
-Closes ***REMOVED***1611.
+Closes #1611.
 
 The VPS minimal-runtime transition relies on a list of "non-core" services
 that must be stopped/removed on production VPS hosts. Before this contract,
@@ -48,7 +48,7 @@ DUPLICATE_SCAN_FILES = sorted(
     - {SHARED_LIB}
 )
 
-***REMOVED*** Profile in compose.vps.yml that gates non-core (removable) services.
+# Profile in compose.vps.yml that gates non-core (removable) services.
 NONCORE_PROFILE = "vps-noncore"
 
 
@@ -67,7 +67,7 @@ def _parse_shared_lib_array() -> list[str]:
     body = match.group("body")
     items: list[str] = []
     for raw in body.splitlines():
-        raw = raw.split("***REMOVED***", 1)[0].strip()
+        raw = raw.split("#", 1)[0].strip()
         if not raw:
             continue
         for tok in raw.split():
@@ -96,7 +96,7 @@ def test_shared_lib_exists_and_is_parseable() -> None:
     )
     items = _parse_shared_lib_array()
     assert items, "VPS_NONCORE_SERVICES is empty in shared lib"
-    ***REMOVED*** No duplicates inside the canonical list itself.
+    # No duplicates inside the canonical list itself.
     assert len(items) == len(set(items)), (
         f"VPS_NONCORE_SERVICES contains duplicates: {items}"
     )
@@ -137,7 +137,7 @@ def test_consumers_have_no_inline_shell_array_duplicate() -> None:
             var, body = match.group(1), match.group(2)
             tokens: set[str] = set()
             for line in body.splitlines():
-                line = line.split("***REMOVED***", 1)[0]
+                line = line.split("#", 1)[0]
                 for tok in line.split():
                     tok = tok.strip().strip("'").strip('"')
                     if tok:
@@ -165,7 +165,7 @@ def test_consumers_have_no_inline_python_literal_duplicate() -> None:
             body = match.group(1)
             tokens: set[str] = set()
             for line in body.splitlines():
-                line = line.split("***REMOVED***", 1)[0]
+                line = line.split("#", 1)[0]
                 for tok in line.split(","):
                     tok = tok.strip().strip("'").strip('"').strip()
                     if tok:

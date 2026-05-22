@@ -1,4 +1,4 @@
-***REMOVED*** Skill: verification-before-completion
+# Skill: verification-before-completion
 
 Use before claiming an issue is complete, opening a PR, merging, or closing an
 issue.

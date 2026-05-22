@@ -13,11 +13,11 @@ from httpx import ASGITransport, AsyncClient
 from mini_app.api import app, get_redis, get_validated_init_data
 
 
-***REMOVED*** Default override returns a synthetic SDK-validated init_data dict so
-***REMOVED*** tests focused on /api/start-expert business logic don't have to forge
-***REMOVED*** Telegram HMAC signatures (auth enforcement is covered separately by
-***REMOVED*** tests/unit/mini_app/test_mini_app_auth_enforcement.py and
-***REMOVED*** tests/contract/test_mini_app_auth_contract.py — ***REMOVED***1595).
+# Default override returns a synthetic SDK-validated init_data dict so
+# tests focused on /api/start-expert business logic don't have to forge
+# Telegram HMAC signatures (auth enforcement is covered separately by
+# tests/unit/mini_app/test_mini_app_auth_enforcement.py and
+# tests/contract/test_mini_app_auth_contract.py — #1595).
 def _stub_init_data() -> dict:
     return {"user": {"id": 123, "first_name": "Test"}, "auth_date": "0"}
 
@@ -25,8 +25,8 @@ def _stub_init_data() -> dict:
 def _override_redis(mock_redis: AsyncMock) -> None:
     """Install ``mock_redis`` as the FastAPI Depends(get_redis) override."""
     app.dependency_overrides[get_redis] = lambda: mock_redis
-    ***REMOVED*** Bypass real HMAC validation so non-auth tests don't need to forge
-    ***REMOVED*** initData; the auth contract is exercised in the dedicated suites.
+    # Bypass real HMAC validation so non-auth tests don't need to forge
+    # initData; the auth contract is exercised in the dedicated suites.
     app.dependency_overrides[get_validated_init_data] = _stub_init_data
 
 
@@ -114,13 +114,13 @@ async def test_start_expert_stores_payload_in_redis():
     finally:
         _clear_redis_override()
     assert resp.status_code == 200
-    ***REMOVED*** Redis.set should have been called with TTL=300
+    # Redis.set should have been called with TTL=300
     mock_redis.set.assert_called_once()
     call_args = mock_redis.set.call_args
-    ***REMOVED*** key starts with "miniapp:q:"
+    # key starts with "miniapp:q:"
     key = call_args.args[0] if call_args.args else call_args.kwargs.get("name", "")
     assert key.startswith("miniapp:q:")
-    ***REMOVED*** TTL is 300
+    # TTL is 300
     assert call_args.kwargs.get("ex") == 300 or (
         len(call_args.args) > 2 and call_args.args[2] == 300
     )

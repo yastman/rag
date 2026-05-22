@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/test_bot_scores.py
-"""Tests for Langfuse score writing (***REMOVED***310: scoring logic moved to scoring.py)."""
+# tests/unit/test_bot_scores.py
+"""Tests for Langfuse score writing (#310: scoring logic moved to scoring.py)."""
 
 import asyncio
 
@@ -47,7 +47,7 @@ def _create_bot(mock_config):
         patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
     ):
         bot = PropertyBot(mock_config)
-    return bot  ***REMOVED*** noqa: RET504
+    return bot  # noqa: RET504
 
 
 def _make_message(text="квартиры до 100000 евро", user_id=123456789, chat_id=987654321):
@@ -75,7 +75,7 @@ def _make_voice_message(user_id=123456789, chat_id=987654321):
     message.bot.send_chat_action = AsyncMock()
     message.bot.get_file = AsyncMock()
 
-    ***REMOVED*** download_file writes bytes into the destination buffer (like real aiogram)
+    # download_file writes bytes into the destination buffer (like real aiogram)
     async def _fake_download(file_path, destination):
         destination.write(b"fake-ogg-audio-data")
 
@@ -106,9 +106,9 @@ _TEST_TRACE_ID = "test-trace-abc-123"
 def _run_score_writer(result, mock_lf):
     """Call write_langfuse_scores directly for unit testing scoring logic.
 
-    Since ***REMOVED***310, pipeline scores are written by scoring.py (called from rag_agent tool
+    Since #310, pipeline scores are written by scoring.py (called from rag_agent tool
     and handle_voice). This helper tests the scoring function in isolation.
-    Uses explicit trace_id (***REMOVED***435) — create_score with idempotency keys.
+    Uses explicit trace_id (#435) — create_score with idempotency keys.
     """
     if not hasattr(mock_lf, "get_current_trace_id") or not callable(
         getattr(mock_lf, "get_current_trace_id", None)
@@ -119,7 +119,7 @@ def _run_score_writer(result, mock_lf):
 
 
 def _mock_agent_result(**overrides):
-    """Create a standard SDK agent result dict (***REMOVED***413)."""
+    """Create a standard SDK agent result dict (#413)."""
     base = {
         "messages": [MagicMock(content="Supervisor response")],
     }
@@ -130,7 +130,7 @@ def _mock_agent_result(**overrides):
 async def _run_handle_query_supervisor(
     mock_config, mock_lf_client, *, history_service=None, streaming=False
 ):
-    """Run handle_query through SDK agent path with mocked agent (***REMOVED***413)."""
+    """Run handle_query through SDK agent path with mocked agent (#413)."""
     from langchain_core.messages import AIMessageChunk
 
     bot = _create_bot(mock_config)
@@ -164,11 +164,11 @@ async def _run_handle_query_supervisor(
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-    await asyncio.sleep(0)  ***REMOVED*** drain fire-and-forget history-save task
+    await asyncio.sleep(0)  # drain fire-and-forget history-save task
     return mock_lf_client, bot
 
 
-***REMOVED*** Typical graph result for a full RAG pipeline (cache miss, search, rerank, generate)
+# Typical graph result for a full RAG pipeline (cache miss, search, rerank, generate)
 FULL_PIPELINE_RESULT = {
     "response": "Вот квартиры до 100000 евро...",
     "query_type": "STRUCTURED",
@@ -190,7 +190,7 @@ FULL_PIPELINE_RESULT = {
         "generate": 0.500,
         "respond": 0.010,
     },
-    ***REMOVED*** Latency breakdown (***REMOVED***147)
+    # Latency breakdown (#147)
     "llm_ttft_ms": 150.0,
     "llm_response_duration_ms": 450.0,
     "llm_decode_ms": 300.0,
@@ -199,7 +199,7 @@ FULL_PIPELINE_RESULT = {
     "llm_timeout": False,
     "llm_stream_recovery": False,
     "streaming_enabled": True,
-    ***REMOVED*** Response length control (***REMOVED***129)
+    # Response length control (#129)
     "response_style": "balanced",
     "response_difficulty": "medium",
     "response_style_reasoning": "length_heuristic",
@@ -207,16 +207,16 @@ FULL_PIPELINE_RESULT = {
     "answer_chars": 65,
     "answer_to_question_ratio": 2.4,
     "response_policy_mode": "enforced",
-    ***REMOVED*** Source attribution (***REMOVED***225)
+    # Source attribution (#225)
     "sources_count": 3,
-    ***REMOVED*** Conversation memory (***REMOVED***154)
+    # Conversation memory (#154)
     "messages": [
         {"role": "user", "content": "query"},
         {"role": "assistant", "content": "response"},
     ],
 }
 
-***REMOVED*** Cache hit result (short-circuit)
+# Cache hit result (short-circuit)
 CACHE_HIT_RESULT = {
     "response": "Cached answer here",
     "query_type": "GENERAL",
@@ -239,7 +239,7 @@ CACHE_HIT_RESULT = {
     "messages": [{"role": "user", "content": "query"}],
 }
 
-***REMOVED*** Chitchat result (no RAG at all)
+# Chitchat result (no RAG at all)
 CHITCHAT_RESULT = {
     "response": "Привет! 👋 Я помогу найти недвижимость.",
     "query_type": "CHITCHAT",
@@ -296,16 +296,16 @@ class TestScoreWriting:
             "input_type",
             "bge_embed_error",
             "bge_embed_latency_ms",
-            ***REMOVED*** Prompt injection defense (***REMOVED***226)
+            # Prompt injection defense (#226)
             "security_alert",
-            ***REMOVED*** Source attribution (***REMOVED***225)
+            # Source attribution (#225)
             "sources_shown",
             "sources_count",
             "grounded",
             "legal_answer_safe",
             "semantic_cache_safe_reuse",
             "safe_fallback_used",
-            ***REMOVED*** Conversation memory (***REMOVED***159)
+            # Conversation memory (#159)
             "memory_messages_count",
             "summarization_triggered",
             "checkpointer_overhead_proxy_ms",
@@ -388,14 +388,14 @@ class TestScoreWriting:
             assert scores[name] == expected_value, f"{name}: {scores[name]} != {expected_value}"
 
     def test_cache_hit_does_not_emit_misleading_no_results(self):
-        """Regression: semantic cache hit must NOT score no_results=1 or results_count=0 (***REMOVED***1493)."""
+        """Regression: semantic cache hit must NOT score no_results=1 or results_count=0 (#1493)."""
         mock_lf = MagicMock()
         _run_score_writer(CACHE_HIT_RESULT, mock_lf)
 
         score_names = [call.kwargs["name"] for call in mock_lf.create_score.call_args_list]
         assert "no_results" not in score_names
         assert "results_count" not in score_names
-        ***REMOVED*** semantic_cache_hit must still be recorded
+        # semantic_cache_hit must still be recorded
         scores = {
             call.kwargs["name"]: call.kwargs["value"]
             for call in mock_lf.create_score.call_args_list
@@ -430,13 +430,13 @@ class TestScoreWriting:
         _reset_langfuse_client_for_tests()
 
         disabled_client = get_client()
-        ***REMOVED*** Disabled client may not have active trace context; pass explicit trace_id
-        ***REMOVED*** to exercise score writing code path without relying on context lookup.
+        # Disabled client may not have active trace context; pass explicit trace_id
+        # to exercise score writing code path without relying on context lookup.
         write_langfuse_scores(disabled_client, FULL_PIPELINE_RESULT, trace_id="null-trace")
 
 
 class TestLatencyBreakdownScores:
-    """Test latency breakdown score writing (***REMOVED***147)."""
+    """Test latency breakdown score writing (#147)."""
 
     def test_streaming_path_writes_numeric_and_boolean_scores(self):
         """Streaming: writes llm_decode_ms, llm_tps as NUMERIC; boolean flags."""
@@ -541,7 +541,7 @@ class TestVoiceTraceMetadata:
         call_kwargs = mock_lf.update_current_span.call_args.kwargs
         metadata = call_kwargs["metadata"]
 
-        ***REMOVED*** All keys from handle_query must be present
+        # All keys from handle_query must be present
         expected_keys = {
             "query_type",
             "cache_hit",
@@ -555,10 +555,10 @@ class TestVoiceTraceMetadata:
             "response_policy_mode",
             "answer_words",
             "answer_to_question_ratio",
-            ***REMOVED*** Voice-specific
+            # Voice-specific
             "input_type",
             "stt_duration_ms",
-            ***REMOVED*** Embedding resilience (***REMOVED***210)
+            # Embedding resilience (#210)
             "embedding_error",
             "embedding_error_type",
         }
@@ -585,7 +585,7 @@ class TestVoiceTraceMetadata:
 
 
 class TestVoiceSafePayloads:
-    """Test that handle_voice uses PII-safe input/output payloads (***REMOVED***1307)."""
+    """Test that handle_voice uses PII-safe input/output payloads (#1307)."""
 
     async def test_voice_input_payload_is_safe(self, mock_config):
         """handle_voice must not include raw stt_text in update_current_span input."""
@@ -651,7 +651,7 @@ VOICE_PIPELINE_RESULT = {
 
 
 class TestVoiceScores:
-    """Test voice-specific Langfuse scores (***REMOVED***158)."""
+    """Test voice-specific Langfuse scores (#158)."""
 
     def test_voice_scores_written(self):
         """Voice result should emit stt_duration_ms and voice_duration_s scores."""
@@ -704,7 +704,7 @@ class TestGroundingScores:
 
 
 class TestMemoryScores:
-    """Test conversation memory Langfuse scores (***REMOVED***159)."""
+    """Test conversation memory Langfuse scores (#159)."""
 
     @pytest.mark.parametrize(
         ("result_override", "expected_count"),
@@ -713,7 +713,7 @@ class TestMemoryScores:
                 {"messages": [{"role": "user"}, {"role": "assistant"}, {"role": "user"}]},
                 3.0,
             ),
-            (None, 0.0),  ***REMOVED*** None means pop "messages" key
+            (None, 0.0),  # None means pop "messages" key
         ],
         ids=["three_messages", "no_messages_key"],
     )
@@ -760,14 +760,14 @@ class TestMemoryScores:
 def test_compute_checkpointer_overhead_proxy_ms():
     """Unit test for compute_checkpointer_overhead_proxy_ms helper."""
     result = {"latency_stages": {"classify": 0.001, "generate": 0.100}}
-    ***REMOVED*** stages = 101ms, ainvoke wall = 140ms -> proxy overhead = 39ms
+    # stages = 101ms, ainvoke wall = 140ms -> proxy overhead = 39ms
     assert compute_checkpointer_overhead_proxy_ms(result, 140.0) == pytest.approx(39.0, abs=0.1)
-    ***REMOVED*** clamp at zero
+    # clamp at zero
     assert compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
 
 
 class TestHistoryScores:
-    """Test history-related Langfuse scores (***REMOVED***239, ***REMOVED***310 supervisor path)."""
+    """Test history-related Langfuse scores (#239, #310 supervisor path)."""
 
     @pytest.mark.parametrize(
         ("save_result", "expected_value"),
@@ -792,7 +792,7 @@ class TestHistoryScores:
         assert scores["history_save_success"]["data_type"] == "BOOLEAN"
 
     async def test_supervisor_model_score(self, mock_config):
-        """supervisor_model CATEGORICAL score always written (***REMOVED***413)."""
+        """supervisor_model CATEGORICAL score always written (#413)."""
         mock_lf = MagicMock()
         mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
@@ -896,12 +896,12 @@ class TestHistoryScores:
 
 
 class TestCheckpointerOverheadScore:
-    """Test checkpointer_overhead_proxy_ms score (***REMOVED***159)."""
+    """Test checkpointer_overhead_proxy_ms score (#159)."""
 
     def test_checkpointer_overhead_proxy_score_written(self):
         """checkpointer_overhead_proxy_ms written when present in result."""
         mock_lf = MagicMock()
-        ***REMOVED*** Simulate rag_agent computing overhead: stages = 862ms, ainvoke = 901ms → 39ms
+        # Simulate rag_agent computing overhead: stages = 862ms, ainvoke = 901ms → 39ms
         result = {
             **FULL_PIPELINE_RESULT,
             "checkpointer_overhead_proxy_ms": compute_checkpointer_overhead_proxy_ms(
@@ -915,26 +915,26 @@ class TestCheckpointerOverheadScore:
 
 
 class TestScoreIsolation:
-    """Verify scores use explicit trace_id via create_score, not session-wide (***REMOVED***435)."""
+    """Verify scores use explicit trace_id via create_score, not session-wide (#435)."""
 
     def test_write_langfuse_scores_uses_create_score_with_trace_id(self):
-        """All scores go through create_score(trace_id=...) for isolation (***REMOVED***435)."""
+        """All scores go through create_score(trace_id=...) for isolation (#435)."""
         mock_lf = MagicMock()
         _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
-        ***REMOVED*** Verify create_score is used with explicit trace_id
+        # Verify create_score is used with explicit trace_id
         assert mock_lf.create_score.call_count > 0
         for call in mock_lf.create_score.call_args_list:
             assert call.kwargs["trace_id"] == _TEST_TRACE_ID
-            ***REMOVED*** Idempotency key format: {trace_id}-{name}
+            # Idempotency key format: {trace_id}-{name}
             expected_id = f"{_TEST_TRACE_ID}-{call.kwargs['name']}"
             assert call.kwargs["score_id"] == expected_id
 
-        ***REMOVED*** score_current_trace must NOT be used
+        # score_current_trace must NOT be used
         mock_lf.score_current_trace.assert_not_called()
 
     async def test_supervisor_scores_use_create_score_with_trace_id(self, mock_config):
-        """Supervisor-specific scores use create_score(trace_id=...) (***REMOVED***435)."""
+        """Supervisor-specific scores use create_score(trace_id=...) (#435)."""
         mock_lf = MagicMock()
         mock_lf.update_current_span = MagicMock()
         mock_lf.create_score = MagicMock()
@@ -942,20 +942,20 @@ class TestScoreIsolation:
 
         await _run_handle_query_supervisor(mock_config, mock_lf)
 
-        ***REMOVED*** All supervisor scores via create_score with trace_id
+        # All supervisor scores via create_score with trace_id
         score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
         assert "supervisor_model" in score_names
         assert "user_role" in score_names
         for call in mock_lf.create_score.call_args_list:
             assert call.kwargs["trace_id"] == "trace-xyz"
-            assert "score_id" in call.kwargs  ***REMOVED*** idempotency key
+            assert "score_id" in call.kwargs  # idempotency key
 
-        ***REMOVED*** score_current_trace must NOT be used
+        # score_current_trace must NOT be used
         mock_lf.score_current_trace.assert_not_called()
 
 
 class TestCreateScoreNoBarId:
-    """Regression guard: create_score must use score_id=, never id= (***REMOVED***480)."""
+    """Regression guard: create_score must use score_id=, never id= (#480)."""
 
     def test_no_bare_id_kwarg_in_create_score_calls(self):
         """All create_score() calls use score_id= for idempotency, not id=."""
@@ -974,7 +974,7 @@ class TestCreateScoreNoBarId:
                 if not isinstance(node, ast.Call):
                     continue
                 func = node.func
-                ***REMOVED*** Match *.create_score(...) calls
+                # Match *.create_score(...) calls
                 if isinstance(func, ast.Attribute) and func.attr == "create_score":
                     for kw in node.keywords:
                         if kw.arg == "id":
@@ -983,7 +983,7 @@ class TestCreateScoreNoBarId:
 
 
 class TestTextPathFeedbackButtons:
-    """Test feedback buttons and source attribution in text path (***REMOVED***426)."""
+    """Test feedback buttons and source attribution in text path (#426)."""
 
     async def test_text_response_has_feedback_keyboard(self, mock_config):
         """Text response should include feedback inline keyboard."""
@@ -996,7 +996,7 @@ class TestTextPathFeedbackButtons:
         bot = _create_bot(mock_config)
         message = _make_message()
 
-        ***REMOVED*** Mock agent that populates rag_result_store via side-channel
+        # Mock agent that populates rag_result_store via side-channel
         def _agent_side_effect(state, config=None, **kw):
             cfg = config or kw.get("config", {})
             store = cfg.get("configurable", {}).get("rag_result_store")
@@ -1017,7 +1017,7 @@ class TestTextPathFeedbackButtons:
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-        ***REMOVED*** Verify message.answer was called with reply_markup
+        # Verify message.answer was called with reply_markup
         answer_calls = message.answer.call_args_list
         assert len(answer_calls) > 0
         last_call = answer_calls[-1]
@@ -1335,7 +1335,7 @@ class TestTextPathSemanticCacheStore:
 
 
 class TestExtractCurrentTurn:
-    """Regression tests for current-turn score isolation (***REMOVED***507)."""
+    """Regression tests for current-turn score isolation (#507)."""
 
     def test_extracts_messages_after_last_human(self):
         from telegram_bot.bot import _extract_current_turn

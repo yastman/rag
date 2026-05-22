@@ -1,2 +1,2 @@
-***REMOVED*** tests/benchmark/conftest.py
+# tests/benchmark/conftest.py
 """Benchmark test configuration."""

@@ -1,4 +1,4 @@
-"""SDK shape regression locks for ``instructor`` (closes ***REMOVED***1672 / ADR-0008).
+"""SDK shape regression locks for ``instructor`` (closes #1672 / ADR-0008).
 
 These contracts pin the project decision to:
 
@@ -38,7 +38,7 @@ def _iter_python_files() -> list[Path]:
         if not root.exists():
             continue
         for path in root.rglob("*.py"):
-            ***REMOVED*** Exclude vendored / generated artefacts if any.
+            # Exclude vendored / generated artefacts if any.
             if any(part in {".venv", "node_modules", "build", "dist"} for part in path.parts):
                 continue
             files.append(path)
@@ -54,7 +54,7 @@ def _is_attr_call(call: ast.Call, root: str, attr: str) -> bool:
     func = call.func
     if not isinstance(func, ast.Attribute) or func.attr != attr:
         return False
-    ***REMOVED*** Walk down to the leftmost Name token.
+    # Walk down to the leftmost Name token.
     node: ast.AST = func.value
     while isinstance(node, ast.Attribute):
         node = node.value
@@ -70,7 +70,7 @@ def test_no_instructor_from_provider_in_production(path: Path) -> None:
     """
     source = path.read_text(encoding="utf-8")
     if "instructor" not in source:
-        return  ***REMOVED*** Fast path: file does not touch instructor at all.
+        return  # Fast path: file does not touch instructor at all.
 
     tree = ast.parse(source, filename=str(path))
     offenders = [
@@ -114,7 +114,7 @@ def test_known_instructor_call_sites_use_from_openai() -> None:
     path. This is a positive lock complementing
     :func:`test_no_instructor_from_provider_in_production`.
 
-    NOTE: ``telegram_bot/services/llm.py`` was removed in ***REMOVED***1541 (residual
+    NOTE: ``telegram_bot/services/llm.py`` was removed in #1541 (residual
     slice). The remaining two consumers are still on this list.
     """
     expected = [

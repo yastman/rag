@@ -43,8 +43,8 @@ class TestLoadContextualChunks:
         )
         chunks = load_contextual_chunks(doc)
 
-        ***REMOVED*** Should use text_for_embedding, not raw text
-        assert "***REMOVED*** Цены" in chunks[0].text
+        # Should use text_for_embedding, not raw text
+        assert "# Цены" in chunks[0].text
         assert "Контекст о ценах" in chunks[0].text
         assert "50000 евро" in chunks[0].text
 
@@ -112,7 +112,7 @@ class TestLoadContextualJson:
 
     def test_loads_from_file(self, tmp_path):
         """Should load JSON file and convert to Chunks."""
-        ***REMOVED*** Create test JSON
+        # Create test JSON
         doc = ContextualDocument(
             source="test.vtt",
             chunks=[
@@ -128,9 +128,9 @@ class TestLoadContextualJson:
         json_file = tmp_path / "test.json"
         doc.save(str(json_file))
 
-        ***REMOVED*** Load and convert
+        # Load and convert
         chunks = load_contextual_json(str(json_file))
 
         assert len(chunks) == 1
         assert isinstance(chunks[0], Chunk)
-        assert "***REMOVED*** Тест" in chunks[0].text
+        assert "# Тест" in chunks[0].text

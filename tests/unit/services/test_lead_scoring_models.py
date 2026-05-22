@@ -1,4 +1,4 @@
-"""Tests for lead scoring models and Kommo payload contract (***REMOVED***384)."""
+"""Tests for lead scoring models and Kommo payload contract (#384)."""
 
 import pytest
 

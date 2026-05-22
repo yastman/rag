@@ -1,4 +1,4 @@
-"""HistoryState schema for the history search sub-graph (***REMOVED***408).
+"""HistoryState schema for the history search sub-graph (#408).
 
 Minimal state for retrieve → grade → rewrite → summarize pipeline.
 """
@@ -22,7 +22,7 @@ class HistoryState(TypedDict):
         max_rewrite_attempts: Cap on rewrite iterations.
         summary: LLM-generated summary of relevant history.
         latency_stages: Per-node timing breakdown (seconds).
-        guard_blocked: Whether guard node blocked the query (***REMOVED***432).
+        guard_blocked: Whether guard node blocked the query (#432).
         guard_reason: Reason for blocking (e.g. "injection"), or None.
     """
 

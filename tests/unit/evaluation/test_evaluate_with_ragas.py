@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-***REMOVED*** Mock heavy dependencies before importing the module under test
+# Mock heavy dependencies before importing the module under test
 _mock_modules = {
     "datasets": MagicMock(),
     "openai": MagicMock(),
@@ -35,9 +35,9 @@ with patch.dict(sys.modules, _mock_modules):
     )
 
 
-***REMOVED*** Mock modules using class-scope fixture to avoid test pollution
-***REMOVED*** Note: We use class scope to ensure mocks are set up once per test class
-***REMOVED*** and cleaned up properly to avoid polluting sys.modules
+# Mock modules using class-scope fixture to avoid test pollution
+# Note: We use class scope to ensure mocks are set up once per test class
+# and cleaned up properly to avoid polluting sys.modules
 @pytest.fixture
 def mock_evaluation_imports():
     """Mock heavy dependencies for evaluate_with_ragas tests.
@@ -46,16 +46,16 @@ def mock_evaluation_imports():
     can cause test pollution. Instead, tests should use this fixture explicitly
     when they need the mocked imports.
     """
-    ***REMOVED*** Create mock modules
+    # Create mock modules
     mock_datasets = MagicMock()
     mock_ragas = MagicMock()
     mock_ragas_metrics = MagicMock()
     mock_search_engines = MagicMock()
 
-    ***REMOVED*** Setup mock classes -- use instances, NOT the MagicMock class itself.
-    ***REMOVED*** Assigning `MagicMock` (the class) then setting `.return_value` on it
-    ***REMOVED*** overwrites the class-level property descriptor and permanently corrupts
-    ***REMOVED*** MagicMock for all subsequent tests in the process.
+    # Setup mock classes -- use instances, NOT the MagicMock class itself.
+    # Assigning `MagicMock` (the class) then setting `.return_value` on it
+    # overwrites the class-level property descriptor and permanently corrupts
+    # MagicMock for all subsequent tests in the process.
     mock_search_engines.BaselineSearchEngine = MagicMock()
     mock_search_engines.HybridSearchEngine = MagicMock()
     mock_search_engines.HybridDBSFColBERTSearchEngine = MagicMock()
@@ -77,7 +77,7 @@ class TestEvaluateWithRagas:
         Note: This test uses mocks instead of importing real datasets/ragas modules
         to avoid test pollution that affects async code in other test modules.
         """
-        ***REMOVED*** Setup mock search results
+        # Setup mock search results
         mock_result = MagicMock()
         mock_result.text = "Sample document text for testing"
 
@@ -85,7 +85,7 @@ class TestEvaluateWithRagas:
         mock_engine.search.return_value = [mock_result]
         mock_evaluation_imports["search_engines"].BaselineSearchEngine.return_value = mock_engine
 
-        ***REMOVED*** Setup mock RAGAS evaluation result
+        # Setup mock RAGAS evaluation result
         mock_ragas_result = {
             "faithfulness": 0.85,
             "context_relevancy": 0.78,
@@ -94,10 +94,10 @@ class TestEvaluateWithRagas:
         }
         mock_evaluation_imports["ragas"].evaluate.return_value = mock_ragas_result
 
-        ***REMOVED*** Setup mock Dataset
+        # Setup mock Dataset
         mock_evaluation_imports["datasets"].Dataset.from_dict.return_value = MagicMock()
 
-        ***REMOVED*** Create test queries file
+        # Create test queries file
         queries_file = tmp_path / "queries.json"
         queries_data = [
             {"query": "test query 1", "expected_article": "115"},
@@ -105,11 +105,11 @@ class TestEvaluateWithRagas:
         ]
         queries_file.write_text(json.dumps(queries_data))
 
-        ***REMOVED*** Simulate evaluation logic using mocks (no real imports to avoid pollution)
+        # Simulate evaluation logic using mocks (no real imports to avoid pollution)
         mock_dataset = mock_evaluation_imports["datasets"]
         mock_evaluate = mock_evaluation_imports["ragas"].evaluate
 
-        ***REMOVED*** Simulate the function's behavior
+        # Simulate the function's behavior
         engine = mock_engine
         queries = queries_data
 
@@ -130,7 +130,7 @@ class TestEvaluateWithRagas:
             ragas_data["contexts"].append(contexts)
             ragas_data["ground_truth"].append(f"Article {q.get('expected_article', '')}")
 
-        ***REMOVED*** Use mocks for evaluation
+        # Use mocks for evaluation
         dataset = mock_dataset.Dataset.from_dict(ragas_data)
         eval_result = mock_evaluate(dataset, metrics=[])
 
@@ -179,7 +179,7 @@ class TestEvaluateWithRagas:
         mock_evaluation_imports["ragas"].evaluate.return_value = mock_ragas_result
         mock_evaluation_imports["datasets"].Dataset.from_dict.return_value = MagicMock()
 
-        ***REMOVED*** Test with sample=3
+        # Test with sample=3
         sample = 3
         limited_queries = queries_data[:sample]
 
@@ -195,7 +195,7 @@ class TestEvaluateWithRagas:
 
     def test_ragas_score_calculation(self):
         """Test RAGAS score is average of all metrics using _metric_mean."""
-        ***REMOVED*** _metric_mean accepts a dict-like object and extracts values by key
+        # _metric_mean accepts a dict-like object and extracts values by key
         mock_result = {
             "faithfulness": [0.8, 0.9, 0.7],
             "context_relevancy": [0.7, 0.8, 0.6],
@@ -213,7 +213,7 @@ class TestEvaluateWithRagas:
         assert ans_rel_mean == pytest.approx(0.9)
         assert ctx_rec_mean == pytest.approx(0.6)
 
-        ***REMOVED*** Overall RAGAS score is the average of metric means
+        # Overall RAGAS score is the average of metric means
         ragas_score = (faith_mean + ctx_rel_mean + ans_rel_mean + ctx_rec_mean) / 4
         assert ragas_score == pytest.approx(0.75)
 
@@ -234,7 +234,7 @@ class TestEvaluateWithRagas:
 
         assert ground_truth == "Article 115"
 
-        ***REMOVED*** Test with None
+        # Test with None
         expected_article_none = None
         ground_truth_none = f"Article {expected_article_none}" if expected_article_none else ""
         assert ground_truth_none == ""
@@ -255,7 +255,7 @@ class TestEvaluateWithRagas:
             "ground_truth": [],
         }
 
-        ***REMOVED*** Add test data
+        # Add test data
         ragas_data["question"].append("Test question")
         ragas_data["answer"].append("Test answer")
         ragas_data["contexts"].append(["context1", "context2"])
@@ -281,10 +281,10 @@ class TestEvaluateWithRagas:
 
         output_file.write_text(json.dumps(results_data, indent=2))
 
-        ***REMOVED*** Verify file was created
+        # Verify file was created
         assert output_file.exists()
 
-        ***REMOVED*** Verify content
+        # Verify content
         loaded = json.loads(output_file.read_text())
         assert loaded["engine"] == "baseline"
         assert loaded["metrics"]["faithfulness"] == 0.8
@@ -388,7 +388,7 @@ class TestMetricsExtraction:
 
     def test_metrics_extraction(self):
         """Test metrics are extracted using _metric_mean."""
-        ***REMOVED*** _metric_mean works with dict-like objects supporting __getitem__
+        # _metric_mean works with dict-like objects supporting __getitem__
         mock_result = {
             "faithfulness": [0.85],
             "context_relevancy": [0.78],
@@ -473,7 +473,7 @@ class TestResultsFormat:
         assert "metrics" in result
         assert "num_queries" in result
         assert "ragas_score" in result["metrics"]
-        ***REMOVED*** Verify metrics exceed thresholds
+        # Verify metrics exceed thresholds
         assert result["metrics"]["faithfulness"] >= FAITHFULNESS_THRESHOLD
         assert result["metrics"]["answer_relevancy"] >= ANSWER_RELEVANCY_THRESHOLD
 

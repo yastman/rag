@@ -23,7 +23,7 @@ from .states import HandoffSG, ViewingSG
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** --- Date range → label mapping ---
+# --- Date range → label mapping ---
 
 DATE_LABELS: dict[str, str] = {
     "nearest": "📅 Ближайшие дни",
@@ -33,7 +33,7 @@ DATE_LABELS: dict[str, str] = {
     "phone": "📞 Согласуем по телефону",
 }
 
-***REMOVED*** --- Due date offsets (seconds) ---
+# --- Due date offsets (seconds) ---
 
 _DUE_OFFSETS: dict[str, int] = {
     "nearest": 3 * 86400,
@@ -49,14 +49,14 @@ def compute_due_date(date_range: str) -> int:
     return int(time.time()) + _DUE_OFFSETS.get(date_range, 7 * 86400)
 
 
-***REMOVED*** ── Getter ───────────────────────────────────────────────────────────
+# ── Getter ───────────────────────────────────────────────────────────
 
 
 async def get_date_options(
     dialog_manager: DialogManager | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     """Getter for date range selection."""
-    items = list(DATE_LABELS.items())  ***REMOVED*** [(key, label), ...]
+    items = list(DATE_LABELS.items())  # [(key, label), ...]
     return {
         "title": "📅 Выберите удобную дату для осмотра апартаментов",
         "items": [(label, key) for key, label in items],
@@ -69,7 +69,7 @@ async def get_date_options(
     }
 
 
-***REMOVED*** ── Handlers ─────────────────────────────────────────────────────────
+# ── Handlers ─────────────────────────────────────────────────────────
 
 
 async def on_cancel_to_manager(
@@ -86,13 +86,13 @@ async def on_date_selected(
     item_id: str,
 ) -> None:
     """Save date range, close dialog, start phone_collector FSM."""
-    ***REMOVED*** Grab FSM state BEFORE done() destroys dialog context.
+    # Grab FSM state BEFORE done() destroys dialog context.
     state = manager.middleware_data.get("state")
 
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
 
-    ***REMOVED*** Remove inline keyboard message — phone_collector sends its own prompt.
+    # Remove inline keyboard message — phone_collector sends its own prompt.
     msg = callback.message
     if msg and hasattr(msg, "delete"):
         with contextlib.suppress(Exception):
@@ -102,7 +102,7 @@ async def on_date_selected(
         logger.warning("FSMContext not in middleware_data for viewing phone handoff")
         return
 
-    ***REMOVED*** Store date_range in FSM state so phone_collector includes it in CRM note.
+    # Store date_range in FSM state so phone_collector includes it in CRM note.
     await state.update_data(date_range=item_id)
 
     from telegram_bot.handlers.phone_collector import start_phone_collection
@@ -120,7 +120,7 @@ async def on_date_selected(
     )
 
 
-***REMOVED*** ── Dialog Assembly ──────────────────────────────────────────────────
+# ── Dialog Assembly ──────────────────────────────────────────────────
 
 viewing_dialog = Dialog(
     Window(

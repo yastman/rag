@@ -20,7 +20,7 @@ def create_text_for_embedding(topic: str, context: str, text: str) -> str:
     Create Markdown-formatted text for embedding.
 
     Format:
-    ***REMOVED*** {topic}
+    # {topic}
 
     {context}
 
@@ -34,7 +34,7 @@ def create_text_for_embedding(topic: str, context: str, text: str) -> str:
     Returns:
         Formatted Markdown string
     """
-    parts = [f"***REMOVED*** {topic}"]
+    parts = [f"# {topic}"]
 
     if context and context.strip():
         parts.append(f"\n{context}")

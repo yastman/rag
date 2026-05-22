@@ -14,27 +14,27 @@ from .collector import LangfuseMetricsCollector
 class BaselineSnapshot:
     """Snapshot of metrics for comparison."""
 
-    ***REMOVED*** Metadata
+    # Metadata
     timestamp: datetime
     tag: str
     session_id: str
 
-    ***REMOVED*** Latency (milliseconds)
+    # Latency (milliseconds)
     llm_latency_p50_ms: float
     llm_latency_p95_ms: float
     full_rag_latency_p95_ms: float
 
-    ***REMOVED*** Cost
+    # Cost
     total_cost_usd: float
     llm_tokens_input: int
     llm_tokens_output: int
 
-    ***REMOVED*** Call counts
+    # Call counts
     llm_calls: int
     voyage_embed_calls: int
     voyage_rerank_calls: int
 
-    ***REMOVED*** Cache effectiveness
+    # Cache effectiveness
     cache_hit_rate: float
     cache_hits: int
     cache_misses: int
@@ -116,7 +116,7 @@ class BaselineManager:
         thresholds = custom_thresholds or self.thresholds
         regressions: list[str] = []
 
-        ***REMOVED*** Latency checks
+        # Latency checks
         latency_thresholds = thresholds.get("latency", {})
 
         llm_factor = latency_thresholds.get("llm_p95_factor", 1.2)
@@ -135,7 +135,7 @@ class BaselineManager:
                 f"vs baseline {baseline.full_rag_latency_p95_ms:.0f}ms (+{pct:.1f}%)"
             )
 
-        ***REMOVED*** Cost checks
+        # Cost checks
         cost_thresholds = thresholds.get("cost", {})
 
         cost_factor = cost_thresholds.get("total_factor", 1.1)
@@ -149,7 +149,7 @@ class BaselineManager:
                 f"vs baseline ${baseline.total_cost_usd:.4f} (+{pct:.1f}%)"
             )
 
-        ***REMOVED*** Cache checks
+        # Cache checks
         cache_thresholds = thresholds.get("cache", {})
 
         cache_drop = cache_thresholds.get("hit_rate_min_drop", 0.1)
@@ -160,7 +160,7 @@ class BaselineManager:
                 f"vs baseline {baseline.cache_hit_rate:.1%} (-{drop:.1%})"
             )
 
-        ***REMOVED*** Call count checks
+        # Call count checks
         calls_thresholds = thresholds.get("calls", {})
 
         llm_calls_factor = calls_thresholds.get("llm_factor", 1.05)
@@ -191,7 +191,7 @@ class BaselineManager:
         Returns:
             Tuple of (passed, list of regression messages).
         """
-        ***REMOVED*** Skip judge check when data is absent from either side
+        # Skip judge check when data is absent from either side
         if current_judge is None or baseline_judge is None:
             return True, []
 

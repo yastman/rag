@@ -30,7 +30,7 @@ async def sync_pending_lead_scores(
     """Sync pending lead scores to Kommo and return counters.
 
     Wrapped in ``@observe`` so the background job emits a named Langfuse span
-    (***REMOVED***1663). Curated ``update_current_span(output=...)`` records aggregate
+    (#1663). Curated ``update_current_span(output=...)`` records aggregate
     counters only (no per-record payloads, no PII).
     """
     lf = get_client()

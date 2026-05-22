@@ -25,8 +25,8 @@ class TestFormatApartmentText:
         )
         text = format_apartment_text(record)
         assert "Premier Fort Beach" in text
-        assert "215" in text  ***REMOVED*** price
-        assert "78.66" in text  ***REMOVED*** area
+        assert "215" in text  # price
+        assert "78.66" in text  # area
 
     def test_promotion_flag(self) -> None:
         record = ApartmentRecord(

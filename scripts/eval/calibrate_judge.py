@@ -1,5 +1,5 @@
-***REMOVED***!/usr/bin/env python3
-"""Judge Calibration — Score Analytics + Cohen's Kappa (Issue ***REMOVED***761).
+#!/usr/bin/env python3
+"""Judge Calibration — Score Analytics + Cohen's Kappa (Issue #761).
 
 Compares LLM-as-Judge scores (judge_faithfulness) with human feedback
 (user_feedback) to calibrate judge quality.
@@ -30,13 +30,13 @@ SCORE_USER_FEEDBACK = "user_feedback"
 SCORE_JUDGE_FAITHFULNESS = "judge_faithfulness"
 DEFAULT_THRESHOLD = 0.75
 DEFAULT_MIN_PAIRS = 50
-DEFAULT_HOURS = 168  ***REMOVED*** 1 week
+DEFAULT_HOURS = 168  # 1 week
 BATCH_SIZE = 100
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Pure computation helpers (no Langfuse dependency)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pure computation helpers (no Langfuse dependency)
+# ---------------------------------------------------------------------------
 
 
 def binarize_judge(score: float, *, threshold: float = DEFAULT_THRESHOLD) -> int:
@@ -69,18 +69,18 @@ def compute_kappa(human_labels: list[int], judge_labels: list[int]) -> float:
     if n == 0:
         return 0.0
 
-    ***REMOVED*** Observed agreement
+    # Observed agreement
     agreements = sum(h == j for h, j in zip(human_labels, judge_labels, strict=True))
     po = agreements / n
 
-    ***REMOVED*** Expected agreement by chance
+    # Expected agreement by chance
     p_human_1 = sum(human_labels) / n
     p_human_0 = 1.0 - p_human_1
     p_judge_1 = sum(judge_labels) / n
     p_judge_0 = 1.0 - p_judge_1
     pe = p_human_1 * p_judge_1 + p_human_0 * p_judge_0
 
-    ***REMOVED*** Degenerate case: all labels identical → pe = 1.0
+    # Degenerate case: all labels identical → pe = 1.0
     denominator = 1.0 - pe
     if abs(denominator) < 1e-12:
         return 1.0 if po >= 1.0 else 0.0
@@ -113,7 +113,7 @@ def compute_tpr_tnr(human_labels: list[int], judge_labels: list[int]) -> tuple[f
             fn += 1
         elif h == 1 and j == 1:
             tn += 1
-        else:  ***REMOVED*** h == 1 and j == 0
+        else:  # h == 1 and j == 0
             fp += 1
 
     tpr = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -122,9 +122,9 @@ def compute_tpr_tnr(human_labels: list[int], judge_labels: list[int]) -> tuple[f
     return tpr, tnr
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Langfuse data fetching
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Langfuse data fetching
+# ---------------------------------------------------------------------------
 
 
 def _fetch_scores_by_name(
@@ -214,9 +214,9 @@ def fetch_matched_pairs(
     return pairs
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Report building
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Report building
+# ---------------------------------------------------------------------------
 
 
 def build_disagreement_report(
@@ -262,9 +262,9 @@ def build_disagreement_report(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Orchestration
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
 
 
 def run_calibration(
@@ -312,7 +312,7 @@ def _format_report(report: dict[str, Any]) -> str:
         f"Disagreements:     {report['n_disagreements']} / {report['n_pairs']}",
     ]
 
-    ***REMOVED*** Interpretation
+    # Interpretation
     kappa = report["kappa"]
     if kappa >= 0.8:
         quality = "Excellent (κ ≥ 0.8)"
@@ -329,9 +329,9 @@ def _format_report(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI entry point
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:

@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/handlers/test_phone_crm_integration.py
-"""TDD tests for phone collector -> Kommo CRM integration (***REMOVED***660)."""
+# tests/unit/handlers/test_phone_crm_integration.py
+"""TDD tests for phone collector -> Kommo CRM integration (#660)."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ async def test_creates_manager_task(mock_kommo, mock_message, mock_state, mock_c
     mock_kommo.create_task.assert_awaited_once()
     task_arg = mock_kommo.create_task.call_args[0][0]
     assert "+380501234567" in task_arg.text
-    assert task_arg.entity_id == 101  ***REMOVED*** lead.id
+    assert task_arg.entity_id == 101  # lead.id
 
 
 async def test_graceful_when_kommo_disabled(mock_message, mock_state, mock_config):
@@ -139,7 +139,7 @@ async def test_graceful_on_kommo_401(mock_kommo, mock_message, mock_state, mock_
     text = mock_message.answer.call_args[0][0]
     assert "Заявка оформлена" in text
 
-    ***REMOVED*** 401 should be logged as warning, not error with traceback
+    # 401 should be logged as warning, not error with traceback
     assert any("401" in rec.message and rec.levelname == "WARNING" for rec in caplog.records)
     assert not any(rec.levelname == "ERROR" for rec in caplog.records)
 
@@ -155,7 +155,7 @@ async def test_source_tracking_in_lead_name(mock_kommo, mock_message, mock_state
 
     mock_kommo.create_lead.assert_awaited_once()
     lead_arg = mock_kommo.create_lead.call_args[0][0]
-    ***REMOVED*** crm_title "Консультация" should be in the lead name
+    # crm_title "Консультация" should be in the lead name
     assert "Консультация" in lead_arg.name
 
 
@@ -196,7 +196,7 @@ class TestPhoneCollectorSearchSummary:
                 search_event_store=mock_store,
             )
 
-        ***REMOVED*** message.answer вызван — подтверждение заявки
+        # message.answer вызван — подтверждение заявки
         message.answer.assert_called_once()
 
     async def test_note_includes_search_summary(self, mock_kommo, mock_config) -> None:
@@ -235,7 +235,7 @@ class TestPhoneCollectorSearchSummary:
                 search_event_store=mock_store,
             )
 
-        ***REMOVED*** add_note вызван с текстом включающим самари
+        # add_note вызван с текстом включающим самари
         mock_kommo.add_note.assert_called_once()
         note_text = mock_kommo.add_note.call_args[0][2]
         assert "двушка у моря" in note_text

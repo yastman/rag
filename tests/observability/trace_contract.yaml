@@ -1,7 +1,7 @@
-***REMOVED*** Canonical trace contract for RAG pipeline observability.
-***REMOVED*** Defines required trace families, all known @observe spans, sensitive spans,
-***REMOVED*** score keys, and expected error allowlist entries.
-***REMOVED*** Used by tests/contract/test_trace_families_contract.py for static verification.
+# Canonical trace contract for RAG pipeline observability.
+# Defines required trace families, all known @observe spans, sensitive spans,
+# score keys, and expected error allowlist entries.
+# Used by tests/contract/test_trace_families_contract.py for static verification.
 
 required_families:
   - telegram-rag-query
@@ -286,10 +286,10 @@ spans:
     - query-analyzer
     - session-summary-llm
 
-***REMOVED*** Spans that must set capture_input=False, capture_output=False in production.
-***REMOVED*** These spans handle PII, raw embeddings, or security-sensitive payloads.
+# Spans that must set capture_input=False, capture_output=False in production.
+# These spans handle PII, raw embeddings, or security-sensitive payloads.
 sensitive_spans:
-  ***REMOVED*** graph_nodes (excluding node-guard, node-classify, node-grade, node-rerank)
+  # graph_nodes (excluding node-guard, node-classify, node-grade, node-rerank)
   - transcribe
   - classify-query
   - node-cache-check
@@ -299,21 +299,21 @@ sensitive_spans:
   - node-rewrite
   - node-respond
   - node-summarize
-  ***REMOVED*** agent_pipeline
+  # agent_pipeline
   - rag-pipeline
   - cache-check
   - hybrid-retrieve
   - retrieval.initial
   - retrieval.relax
   - cache-store
-  ***REMOVED*** agent_tools
+  # agent_tools
   - tool-rag-search
   - tool-history-search
   - tool-apartment-search
-  ***REMOVED*** history_graph
+  # history_graph
   - history-retrieve
   - history-summarize
-  ***REMOVED*** cache (all tiers handle raw vectors / PII responses)
+  # cache (all tiers handle raw vectors / PII responses)
   - cache-semantic-check
   - cache-semantic-store
   - cache-exact-get
@@ -328,13 +328,13 @@ sensitive_spans:
   - cache-rerank-store
   - cache-bge-m3-bundle-get
   - cache-bge-m3-bundle-store
-  ***REMOVED*** bge_m3_client (raw vectors)
+  # bge_m3_client (raw vectors)
   - bge-m3-encode-dense
   - bge-m3-encode-sparse
   - bge-m3-encode-hybrid
   - bge-m3-rerank
   - bge-m3-encode-colbert
-  ***REMOVED*** bge_m3_embeddings (raw vectors)
+  # bge_m3_embeddings (raw vectors)
   - bge-m3-dense-embed
   - bge-m3-sparse-embed
   - bge-m3-sparse-embed-batch
@@ -343,37 +343,37 @@ sensitive_spans:
   - bge-m3-dense-query-embed
   - bge-m3-colbert-query-embed
   - bge-m3-hybrid-embed-batch
-  ***REMOVED*** bge_m3_service (raw vectors)
+  # bge_m3_service (raw vectors)
   - bge-m3-service-encode-dense
   - bge-m3-service-encode-sparse
   - bge-m3-service-encode-hybrid
   - bge-m3-service-rerank
   - bge-m3-service-encode-colbert
-  ***REMOVED*** user_base_service (raw vectors)
+  # user_base_service (raw vectors)
   - user-base-service-embed
   - user-base-service-embed-batch
-  ***REMOVED*** search_engines (raw vectors)
+  # search_engines (raw vectors)
   - search-engine-encode-hybrid
   - search-engine-encode-hybrid-colbert
   - search-engine-encode-dbsf-colbert
   - colbert-rerank-search
-  ***REMOVED*** qdrant (raw search payloads + lifecycle)
+  # qdrant (raw search payloads + lifecycle)
   - qdrant-ensure-collection
   - qdrant-apply-strict-mode
   - qdrant-ensure-alias
   - qdrant-hybrid-search-rrf
   - qdrant-hybrid-search-rrf-colbert
   - qdrant-batch-search-rrf
-  ***REMOVED*** history_service (conversation PII)
+  # history_service (conversation PII)
   - history-save
   - history-search
   - history-delete
   - history-get-session-turns
-  ***REMOVED*** pipeline
+  # pipeline
   - detect-agent-intent
   - client-direct-pipeline
   - core-pipeline-query-embedding
-  ***REMOVED*** services
+  # services
   - service-generate-response
   - detect-response-style
   - get-prompt
@@ -387,7 +387,7 @@ sensitive_spans:
   - advisor-llm-call
   - session-summary-generate
   - nurturing-llm-generate
-  ***REMOVED*** bot command/menu/callback flows
+  # bot command/menu/callback flows
   - cmd-start
   - cmd-clear
   - cmd-clearcache
@@ -410,7 +410,7 @@ sensitive_spans:
   - cb-clearcache
   - telegram-rag-query
   - telegram-rag-supervisor
-  ***REMOVED*** dialog/handler spans with capture disabled
+  # dialog/handler spans with capture disabled
   - dialog-crm-create-note
   - dialog-crm-create-contact
   - dialog-funnel-search
@@ -422,10 +422,10 @@ sensitive_spans:
   - demo-search
   - crm-quick-complete
   - crm-quick-note
-  ***REMOVED*** voice + api entry points
+  # voice + api entry points
   - voice-session
   - rag-api-query
-  ***REMOVED*** ingestion
+  # ingestion
   - ingestion-cli-run
   - ingestion-cli-preflight
   - ingestion-flow-run-once
@@ -433,7 +433,7 @@ sensitive_spans:
   - ingestion-qdrant-delete-file
   - ingestion-qdrant-upsert-chunks
   - ingestion-indexer-embed-texts
-  ***REMOVED*** contextualization (raw text chunks and queries)
+  # contextualization (raw text chunks and queries)
   - claude-contextualize
   - claude-contextualize-batch
   - claude-contextualize-sync
@@ -443,7 +443,7 @@ sensitive_spans:
   - groq-contextualize
   - groq-contextualize-batch
   - groq-contextualize-sync
-  ***REMOVED*** observability_wrappers (user messages, CRM notes/tasks, job payloads)
+  # observability_wrappers (user messages, CRM notes/tasks, job payloads)
   - crm-contact-note-prompt
   - crm-lead-note-prompt
   - crm-lead-task-prompt
@@ -493,7 +493,7 @@ scores:
     - user_feedback
 
 error_allowlist:
-  ***REMOVED*** Graph nodes — core pipeline error/fallback paths
+  # Graph nodes — core pipeline error/fallback paths
   - span: node-generate
     level: ERROR
     trigger: "LLM call failed"
@@ -512,7 +512,7 @@ error_allowlist:
   - span: node-cache-check
     level: ERROR
     trigger: "Cache check failed"
-  ***REMOVED*** Agent tools — pipeline wrapper error paths
+  # Agent tools — pipeline wrapper error paths
   - span: tool-rag-search
     level: ERROR
     trigger: "RAG pipeline failed"
@@ -531,7 +531,7 @@ error_allowlist:
   - span: history-summarize
     level: ERROR
     trigger: "History summarize failed"
-  ***REMOVED*** Services — curated error spans for degraded operations
+  # Services — curated error spans for degraded operations
   - span: cache-*
     level: ERROR
     trigger: "Cache tier operation failed"

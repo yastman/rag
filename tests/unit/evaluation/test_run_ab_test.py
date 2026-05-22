@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/evaluation/test_run_ab_test.py
+# tests/unit/evaluation/test_run_ab_test.py
 """Tests for src/evaluation/run_ab_test.py helper functions."""
 
 import json
@@ -120,7 +120,7 @@ class TestMarkdownReportGeneration:
 
     def test_markdown_report_structure(self):
         """Test that markdown report follows expected structure."""
-        ***REMOVED*** This tests the structure that would be generated
+        # This tests the structure that would be generated
         data = {
             "timestamp": "20250128_120000",
             "collection": "test_collection",
@@ -157,7 +157,7 @@ class TestMarkdownReportGeneration:
             },
         }
 
-        ***REMOVED*** Verify data structure is valid
+        # Verify data structure is valid
         assert "timestamp" in data
         assert "collection" in data
         assert "baseline_eval" in data
@@ -173,8 +173,8 @@ class TestMarkdownReportGeneration:
 
     def test_conclusion_significant_improvement(self):
         """Test conclusion logic for significant improvement."""
-        dbsf_vs_baseline = 18.75  ***REMOVED*** > 10%
-        dbsf_vs_hybrid = 8.0  ***REMOVED*** > 5%
+        dbsf_vs_baseline = 18.75  # > 10%
+        dbsf_vs_hybrid = 8.0  # > 5%
 
         conclusion = determine_conclusion(dbsf_vs_baseline, dbsf_vs_hybrid)
 
@@ -182,8 +182,8 @@ class TestMarkdownReportGeneration:
 
     def test_conclusion_moderate_improvement(self):
         """Test conclusion logic for moderate improvement."""
-        dbsf_vs_baseline = 7.5  ***REMOVED*** > 5% but <= 10%
-        dbsf_vs_hybrid = 3.0  ***REMOVED*** <= 5%
+        dbsf_vs_baseline = 7.5  # > 5% but <= 10%
+        dbsf_vs_hybrid = 3.0  # <= 5%
 
         conclusion = determine_conclusion(dbsf_vs_baseline, dbsf_vs_hybrid)
 
@@ -304,13 +304,13 @@ class TestReportFileOperations:
             filename = f.name
 
         try:
-            md_content = """***REMOVED*** A/B Test Report
+            md_content = """# A/B Test Report
 
-***REMOVED******REMOVED*** Summary
+## Summary
 - Collection: test_collection
 - Queries: 100
 
-***REMOVED******REMOVED*** Results
+## Results
 | Metric | Value |
 |--------|-------|
 | Recall@1 | 0.90 |

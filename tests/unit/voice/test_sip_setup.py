@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/voice/test_sip_setup.py
+# tests/unit/voice/test_sip_setup.py
 """Tests for SIP trunk provisioning (lifecell Ukraine)."""
 
 from __future__ import annotations

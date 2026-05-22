@@ -1,12 +1,12 @@
-***REMOVED*** LiteLLM Proxy Configuration
-***REMOVED*** Docs: https://docs.litellm.ai/docs/proxy/configs
-***REMOVED*** Image: ghcr.io/berriai/litellm:main-v1.81.14-stable
+# LiteLLM Proxy Configuration
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+# Image: ghcr.io/berriai/litellm:main-v1.81.14-stable
 
 model_list:
-  ***REMOVED*** Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
-  ***REMOVED*** ALIAS: "gpt-4o-mini" is an internal alias — it does NOT call OpenAI.
-  ***REMOVED*** The bot sends requests to "gpt-4o-mini" which LiteLLM routes to Cerebras.
-  ***REMOVED*** See router_settings.fallbacks for the actual OpenAI fallback (gpt-4o-mini-openai).
+  # Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
+  # ALIAS: "gpt-4o-mini" is an internal alias — it does NOT call OpenAI.
+  # The bot sends requests to "gpt-4o-mini" which LiteLLM routes to Cerebras.
+  # See router_settings.fallbacks for the actual OpenAI fallback (gpt-4o-mini-openai).
   - model_name: gpt-4o-mini
     litellm_params:
       model: cerebras/zai-glm-4.7
@@ -16,7 +16,7 @@ model_list:
       timeout: 30
       stream_timeout: 5
 
-  ***REMOVED*** Standalone alias for benchmarking (reasoning model)
+  # Standalone alias for benchmarking (reasoning model)
   - model_name: gpt-oss-120b
     litellm_params:
       model: cerebras/gpt-oss-120b
@@ -24,7 +24,7 @@ model_list:
       max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
 
-  ***REMOVED*** Fallback 1: Cerebras gpt-oss-120b (reasoning, slower TTFT)
+  # Fallback 1: Cerebras gpt-oss-120b (reasoning, slower TTFT)
   - model_name: gpt-4o-mini-cerebras-oss
     litellm_params:
       model: cerebras/gpt-oss-120b
@@ -32,19 +32,19 @@ model_list:
       max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
 
-  ***REMOVED*** Fallback 2: Groq (fast, free tier)
+  # Fallback 2: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
     litellm_params:
       model: groq/llama-3.1-70b-versatile
       api_key: os.environ/GROQ_API_KEY
 
-  ***REMOVED*** Fallback 3: OpenAI (reliable)
+  # Fallback 3: OpenAI (reliable)
   - model_name: gpt-4o-mini-openai
     litellm_params:
       model: openai/gpt-4o-mini
       api_key: os.environ/OPENAI_API_KEY
 
-  ***REMOVED*** Speech-to-text: Whisper via OpenAI
+  # Speech-to-text: Whisper via OpenAI
   - model_name: whisper
     litellm_params:
       model: whisper-1
@@ -52,34 +52,34 @@ model_list:
     model_info:
       mode: audio_transcription
 
-***REMOVED*** Production general settings
+# Production general settings
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   proxy_batch_write_at: 60
   disable_error_logs: true
   allow_requests_on_db_unavailable: true
 
-***REMOVED*** Routing retry policy
+# Routing retry policy
 router_settings:
   retry_policy:
     retry_count: 2
-  ***REMOVED*** Model-group fallbacks on upstream/provider errors
+  # Model-group fallbacks on upstream/provider errors
   fallbacks:
     - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
     - gpt-oss-120b: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
 
-***REMOVED*** LiteLLM settings
+# LiteLLM settings
 litellm_settings:
   request_timeout: 600
   set_verbose: false
   json_logs: true
-  ***REMOVED*** Drop provider-unsupported request params instead of failing hard
+  # Drop provider-unsupported request params instead of failing hard
   drop_params: true
-  ***REMOVED*** Langfuse observability callbacks
+  # Langfuse observability callbacks
   success_callback: ["langfuse"]
   failure_callback: ["langfuse"]
 
-***REMOVED*** Environment variables for Langfuse v3
+# Environment variables for Langfuse v3
 environment_variables:
   LANGFUSE_PUBLIC_KEY: os.environ/LANGFUSE_PUBLIC_KEY
   LANGFUSE_SECRET_KEY: os.environ/LANGFUSE_SECRET_KEY

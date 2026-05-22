@@ -11,7 +11,7 @@ from telegram_bot.services.handoff_state import HandoffData, HandoffState
 @pytest.mark.asyncio
 async def test_full_handoff_flow(mock_redis):
     """Test: qualification → topic creation → relay → close."""
-    ***REMOVED*** Setup
+    # Setup
     state = HandoffState(mock_redis, ttl_hours=24)
     bot = AsyncMock()
     bot.create_forum_topic = AsyncMock(return_value=MagicMock(message_thread_id=42))
@@ -20,7 +20,7 @@ async def test_full_handoff_flow(mock_redis):
     bot.close_forum_topic = AsyncMock()
     bridge = ForumBridge(bot=bot, managers_group_id=-100)
 
-    ***REMOVED*** 1. Create topic + set state
+    # 1. Create topic + set state
     topic_id = await bridge.create_topic(client_name="Иван", goal="Покупка")
     data = HandoffData(
         client_id=999,
@@ -30,22 +30,22 @@ async def test_full_handoff_flow(mock_redis):
     )
     await state.set(data)
 
-    ***REMOVED*** 2. Verify state
+    # 2. Verify state
     stored = await state.get_by_client(999)
     assert stored.mode == "human_waiting"
     assert stored.topic_id == 42
 
-    ***REMOVED*** 3. Relay client message to topic
+    # 3. Relay client message to topic
     await bridge.relay_to_topic(from_chat_id=999, message_id=10, topic_id=42)
     bot.copy_message.assert_called()
 
-    ***REMOVED*** 4. Manager joins — mode transition
+    # 4. Manager joins — mode transition
     await state.update_mode(999, "human")
     stored = await state.get_by_client(999)
     assert stored.mode == "human"
     assert stored.manager_joined_at is not None
 
-    ***REMOVED*** 5. Close handoff
+    # 5. Close handoff
     await bridge.close_topic(topic_id=42)
     await state.delete(999)
     assert await state.get_by_client(999) is None
@@ -59,7 +59,7 @@ def mock_redis():
     return fakeredis.aioredis.FakeRedis(decode_responses=True)
 
 
-***REMOVED*** --- parse_qual_callback ---
+# --- parse_qual_callback ---
 
 
 def test_parse_qual_callback_valid():
@@ -86,7 +86,7 @@ def test_parse_qual_callback_wrong_prefix():
     assert result is None
 
 
-***REMOVED*** --- start_qualification ---
+# --- start_qualification ---
 
 
 @pytest.mark.asyncio

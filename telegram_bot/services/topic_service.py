@@ -14,10 +14,10 @@ class TopicService:
 
     _PREFIX = "topics"
 
-    def __init__(self, redis: Redis) -> None:  ***REMOVED*** type: ignore[type-arg]
+    def __init__(self, redis: Redis) -> None:  # type: ignore[type-arg]
         self._redis = redis
 
-    ***REMOVED*** ── Keys ────────────────────────────────────────────────────────
+    # ── Keys ────────────────────────────────────────────────────────
 
     def _key(self, user_id: int, expert_id: str) -> str:
         return f"{self._PREFIX}:{user_id}:{expert_id}"
@@ -25,7 +25,7 @@ class TopicService:
     def _reverse_key(self, user_id: int, thread_id: int) -> str:
         return f"{self._PREFIX}:{user_id}:thread:{thread_id}"
 
-    ***REMOVED*** ── Read ────────────────────────────────────────────────────────
+    # ── Read ────────────────────────────────────────────────────────
 
     async def get_thread_id(self, user_id: int, expert_id: str) -> int | None:
         """Get message_thread_id for a user+expert pair, or None."""
@@ -37,7 +37,7 @@ class TopicService:
         val = await self._redis.get(self._reverse_key(user_id, thread_id))
         return val.decode() if val is not None else None
 
-    ***REMOVED*** ── Write ───────────────────────────────────────────────────────
+    # ── Write ───────────────────────────────────────────────────────
 
     async def save_thread(self, user_id: int, expert_id: str, thread_id: int) -> None:
         """Store bidirectional mapping (persistent, no TTL)."""

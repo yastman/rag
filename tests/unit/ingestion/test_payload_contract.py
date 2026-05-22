@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_payload_contract.py
+# tests/unit/ingestion/test_payload_contract.py
 """Tests for payload contract compliance."""
 
 from __future__ import annotations
@@ -41,14 +41,14 @@ class TestPayloadContract:
             file_metadata=file_metadata,
         )
 
-        ***REMOVED*** Required top-level fields
+        # Required top-level fields
         assert "page_content" in payload
         assert payload["page_content"] == "Test content"
         assert "metadata" in payload
         assert isinstance(payload["metadata"], dict)
-        assert "file_id" in payload  ***REMOVED*** Flat for delete
+        assert "file_id" in payload  # Flat for delete
 
-        ***REMOVED*** Required metadata fields (for small-to-big)
+        # Required metadata fields (for small-to-big)
         assert payload["metadata"]["file_id"] == "file123"
         assert payload["metadata"]["doc_id"] == "file123"
         assert payload["metadata"]["order"] == 0
@@ -107,12 +107,12 @@ class TestPayloadContract:
         id2 = QdrantHybridWriter.generate_point_id("file123", "page_1_offset_0")
         id3 = QdrantHybridWriter.generate_point_id("file123", "page_1_offset_1")
 
-        assert id1 == id2  ***REMOVED*** Same input = same output
-        assert id1 != id3  ***REMOVED*** Different chunk_location = different ID
+        assert id1 == id2  # Same input = same output
+        assert id1 != id3  # Different chunk_location = different ID
 
     def test_fallback_chunk_location(self):
         """Should fallback gracefully when no docling meta."""
-        ***REMOVED*** No metadata
+        # No metadata
         chunk = MagicMock()
         chunk.extra_metadata = None
         chunk.order = None
@@ -120,7 +120,7 @@ class TestPayloadContract:
         loc = QdrantHybridWriter.get_chunk_location(chunk, 5)
         assert loc == "chunk_5"
 
-        ***REMOVED*** With order
+        # With order
         chunk.order = 3
         loc = QdrantHybridWriter.get_chunk_location(chunk, 5)
         assert loc == "order_3"
@@ -169,7 +169,7 @@ class TestColbertVectorInUpsert:
 
         mock_bge = MagicMock()
 
-        ***REMOVED*** Single hybrid call returns dense + sparse + colbert
+        # Single hybrid call returns dense + sparse + colbert
         mock_bge.encode_hybrid.return_value = HybridResult(
             dense_vecs=[[0.1] * 1024],
             lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
@@ -178,12 +178,12 @@ class TestColbertVectorInUpsert:
 
         writer = _make_writer_with_mocks(mock_bge)
 
-        ***REMOVED*** Mock qdrant client
+        # Mock qdrant client
         mock_qdrant = MagicMock()
         mock_qdrant.count.return_value = MagicMock(count=0)
         writer.client = mock_qdrant
 
-        ***REMOVED*** Create chunk
+        # Create chunk
         chunk = MagicMock()
         chunk.text = "test chunk"
         chunk.order = 0
@@ -201,7 +201,7 @@ class TestColbertVectorInUpsert:
             collection_name="gdrive_documents_bge",
         )
 
-        ***REMOVED*** Verify upsert was called and point has colbert vector
+        # Verify upsert was called and point has colbert vector
         mock_qdrant.upsert.assert_called_once()
         call_kwargs = mock_qdrant.upsert.call_args[1]
         points: list[PointStruct] = call_kwargs["points"]

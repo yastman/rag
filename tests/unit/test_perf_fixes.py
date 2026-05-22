@@ -1,4 +1,4 @@
-"""Tests for performance fixes ***REMOVED***951, ***REMOVED***953, ***REMOVED***955."""
+"""Tests for performance fixes #951, #953, #955."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ***REMOVED***951: Eliminate redundant BGE-M3 call on agent query rewrite
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# #951: Eliminate redundant BGE-M3 call on agent query rewrite
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -77,17 +77,17 @@ def _reranker_951():
 async def test_agent_rewrite_no_separate_colbert_call(
     _cache_951, _embeddings_951, _sparse_951, _qdrant_951, _reranker_951
 ):
-    """***REMOVED***951: When agent reformulates query (cache_key != query), should NOT call
+    """#951: When agent reformulates query (cache_key != query), should NOT call
     aembed_colbert_query separately — let _hybrid_retrieve handle it in one call."""
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** Pre-computed embeddings for original query (cache_key)
+    # Pre-computed embeddings for original query (cache_key)
     pre_embedding = [0.5] * 1024
     pre_sparse = {"indices": [2], "values": [0.8]}
     pre_colbert = [[0.3] * 128]
 
     result = await rag_pipeline(
-        query="reformulated better query",  ***REMOVED*** different from original_query
+        query="reformulated better query",  # different from original_query
         user_id=42,
         session_id="test",
         query_type="GENERAL",
@@ -102,9 +102,9 @@ async def test_agent_rewrite_no_separate_colbert_call(
         pre_computed_colbert=pre_colbert,
     )
 
-    ***REMOVED*** aembed_colbert_query should NOT have been called separately (***REMOVED***951 fix)
-    ***REMOVED*** Before fix: cache_key != query branch called aembed_colbert_query independently.
-    ***REMOVED*** After fix: query_embedding=None → _hybrid_retrieve does ONE combined call.
+    # aembed_colbert_query should NOT have been called separately (#951 fix)
+    # Before fix: cache_key != query branch called aembed_colbert_query independently.
+    # After fix: query_embedding=None → _hybrid_retrieve does ONE combined call.
     _embeddings_951.aembed_colbert_query.assert_not_called()
     assert result["cache_hit"] is False
 
@@ -134,21 +134,21 @@ async def test_same_query_reuses_precomputed(
     )
 
     assert result["cache_hit"] is False
-    ***REMOVED*** Embedding service should NOT be called for dense (pre-computed used)
+    # Embedding service should NOT be called for dense (pre-computed used)
     _embeddings_951.aembed_query.assert_not_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ***REMOVED***953: Warm BGE-M3 connection pool on bot startup
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# #953: Warm BGE-M3 connection pool on bot startup
+# ---------------------------------------------------------------------------
 
 
 async def test_warmup_bge_calls_hybrid_embed():
-    """***REMOVED***953: _warmup_bge() should call _hybrid.aembed_query('warmup')."""
+    """#953: _warmup_bge() should call _hybrid.aembed_query('warmup')."""
     import sys
     from unittest.mock import MagicMock as _MagicMock
 
-    ***REMOVED*** Mock the problematic import chain before importing PropertyBot
+    # Mock the problematic import chain before importing PropertyBot
     _mocked = {}
     for mod in ("src.retrieval", "src.retrieval.topic_classifier",
                 "src.retrieval.search_engines", "src.retrieval.search_engine_shared"):
@@ -171,7 +171,7 @@ async def test_warmup_bge_calls_hybrid_embed():
 
 
 async def test_warmup_bge_failure_nonfatal():
-    """***REMOVED***953: BGE-M3 warmup failure should not prevent bot startup."""
+    """#953: BGE-M3 warmup failure should not prevent bot startup."""
     import sys
     from unittest.mock import MagicMock as _MagicMock
 
@@ -188,7 +188,7 @@ async def test_warmup_bge_failure_nonfatal():
         bot._hybrid = AsyncMock()
         bot._hybrid.aembed_query = AsyncMock(side_effect=ConnectionError("BGE-M3 down"))
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await bot._warmup_bge()
 
         bot._hybrid.aembed_query.assert_called_once_with("warmup")
@@ -198,18 +198,18 @@ async def test_warmup_bge_failure_nonfatal():
 
 
 async def test_start_calls_warmup_bge():
-    """***REMOVED***953: PropertyBot.start() invokes _warmup_bge()."""
+    """#953: PropertyBot.start() invokes _warmup_bge()."""
     import ast
     from pathlib import Path
 
-    ***REMOVED*** Use AST-based verification (same pattern as tests/unit/dialogs/_property_bot_ast.py)
-    ***REMOVED*** to confirm that start() calls self._warmup_bge() without running the full method.
+    # Use AST-based verification (same pattern as tests/unit/dialogs/_property_bot_ast.py)
+    # to confirm that start() calls self._warmup_bge() without running the full method.
     tree = ast.parse(Path("telegram_bot/bot.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == "PropertyBot":
             for item in node.body:
                 if isinstance(item, ast.AsyncFunctionDef) and item.name == "start":
-                    ***REMOVED*** Look for `await self._warmup_bge()` in start()
+                    # Look for `await self._warmup_bge()` in start()
                     for child in ast.walk(item):
                         if (
                             isinstance(child, ast.Await)
@@ -217,18 +217,18 @@ async def test_start_calls_warmup_bge():
                             and isinstance(child.value.func, ast.Attribute)
                             and child.value.func.attr == "_warmup_bge"
                         ):
-                            return  ***REMOVED*** Found it
+                            return  # Found it
                     raise AssertionError("start() does not call self._warmup_bge()")
     raise AssertionError("PropertyBot.start not found")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ***REMOVED***955: Voice pipeline scores recorded correctly
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# #955: Voice pipeline scores recorded correctly
+# ---------------------------------------------------------------------------
 
 
 def test_write_langfuse_scores_voice_fields():
-    """***REMOVED***955: write_langfuse_scores writes voice-specific scores when present."""
+    """#955: write_langfuse_scores writes voice-specific scores when present."""
     from telegram_bot.scoring import write_langfuse_scores
 
     lf = MagicMock()
@@ -249,12 +249,12 @@ def test_write_langfuse_scores_voice_fields():
 
     write_langfuse_scores(lf, result, trace_id="test-trace-id")
 
-    ***REMOVED*** Collect all score names written
+    # Collect all score names written
     score_names = [
         call.kwargs.get("name", call.args[2] if len(call.args) > 2 else None)
         for call in lf.create_score.call_args_list
     ]
-    ***REMOVED*** Try name from kwargs first
+    # Try name from kwargs first
     if not any(score_names):
         score_names = []
         for call in lf.create_score.call_args_list:
@@ -269,7 +269,7 @@ def test_write_langfuse_scores_voice_fields():
 
 
 def test_write_langfuse_scores_llm_used_when_generate_in_stages():
-    """***REMOVED***955: llm_used=1.0 when 'generate' key exists in latency_stages."""
+    """#955: llm_used=1.0 when 'generate' key exists in latency_stages."""
     from telegram_bot.scoring import write_langfuse_scores
 
     lf = MagicMock()
@@ -281,7 +281,7 @@ def test_write_langfuse_scores_llm_used_when_generate_in_stages():
 
     write_langfuse_scores(lf, result, trace_id="t1")
 
-    ***REMOVED*** Find the llm_used score call
+    # Find the llm_used score call
     for call in lf.create_score.call_args_list:
         if call.kwargs.get("name") == "llm_used":
             assert call.kwargs["value"] == 1.0
@@ -290,7 +290,7 @@ def test_write_langfuse_scores_llm_used_when_generate_in_stages():
 
 
 def test_write_langfuse_scores_results_count():
-    """***REMOVED***955: results_count reflects search_results_count from state."""
+    """#955: results_count reflects search_results_count from state."""
     from telegram_bot.scoring import write_langfuse_scores
 
     lf = MagicMock()
@@ -310,7 +310,7 @@ def test_write_langfuse_scores_results_count():
 
 
 def test_write_langfuse_scores_no_results_flag():
-    """***REMOVED***955: no_results=1 when search_results_count is 0."""
+    """#955: no_results=1 when search_results_count is 0."""
     from telegram_bot.scoring import write_langfuse_scores
 
     lf = MagicMock()
@@ -330,7 +330,7 @@ def test_write_langfuse_scores_no_results_flag():
 
 
 def test_write_langfuse_scores_cache_hit_voice():
-    """***REMOVED***955: Voice cache hit path still records scores correctly."""
+    """#955: Voice cache hit path still records scores correctly."""
     from telegram_bot.scoring import write_langfuse_scores
 
     lf = MagicMock()
@@ -349,7 +349,7 @@ def test_write_langfuse_scores_cache_hit_voice():
     score_names = [call.kwargs.get("name") for call in lf.create_score.call_args_list]
     assert "semantic_cache_hit" in score_names
     assert "input_type" in score_names
-    ***REMOVED*** llm_used should be 0 (no generate stage)
+    # llm_used should be 0 (no generate stage)
     for call in lf.create_score.call_args_list:
         if call.kwargs.get("name") == "llm_used":
             assert call.kwargs["value"] == 0.0

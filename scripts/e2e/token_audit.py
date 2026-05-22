@@ -66,7 +66,7 @@ async def main() -> int:
                 await conv.send_message(query)
                 response = await conv.get_response()
 
-                ***REMOVED*** Wait for streaming edits
+                # Wait for streaming edits
                 await asyncio.sleep(2.0)
                 try:
                     final = await conv.get_edit(timeout=10)
@@ -102,15 +102,15 @@ async def main() -> int:
             )
             logger.error("  -> FAIL: %s (%dms)", e, elapsed_ms)
 
-        ***REMOVED*** Pause between queries to avoid rate limiting
+        # Pause between queries to avoid rate limiting
         if i < len(QUERIES):
             await asyncio.sleep(3)
 
     await client.disconnect()
 
-    ***REMOVED*** Print summary
+    # Print summary
     print("\n" + "=" * 80)
-    print(f"{'***REMOVED***':>2}  {'Query':<50}  {'Words':>5}  {'Chars':>5}  {'Time':>6}  {'OK'}")
+    print(f"{'#':>2}  {'Query':<50}  {'Words':>5}  {'Chars':>5}  {'Time':>6}  {'OK'}")
     print("-" * 80)
     ok_results = [r for r in results if r["ok"]]
     for i, r in enumerate(results, 1):

@@ -1,4 +1,4 @@
-"""Unit checks for voice-transcription E2E scenario catalog (***REMOVED***538)."""
+"""Unit checks for voice-transcription E2E scenario catalog (#538)."""
 
 from scripts.e2e import test_scenarios as scenarios
 

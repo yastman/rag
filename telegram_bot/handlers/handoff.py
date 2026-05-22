@@ -21,7 +21,7 @@ class HandoffStates(StatesGroup):
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ── Callback parsing ────────────────────────────────────────────
+# ── Callback parsing ────────────────────────────────────────────
 
 
 def parse_qual_callback(data: str) -> tuple[str, str] | None:
@@ -31,7 +31,7 @@ def parse_qual_callback(data: str) -> tuple[str, str] | None:
     return None
 
 
-***REMOVED*** ── Start qualification (aiogram-dialog) ────────────────────────
+# ── Start qualification (aiogram-dialog) ────────────────────────
 
 
 async def start_qualification(
@@ -46,7 +46,7 @@ async def start_qualification(
     Args:
         goal: Pre-selected goal (e.g. "services") — skips goal selection step.
     """
-    ***REMOVED*** FSM guard: if handoff already active, don't start again.
+    # FSM guard: if handoff already active, don't start again.
     if state is not None and await state.get_state() == HandoffStates.active:
         reply = "Вы уже на связи с менеджером, ожидайте ответа 💬"
         if hasattr(message_or_callback, "message"):
@@ -64,7 +64,7 @@ async def start_qualification(
         from telegram_bot.dialogs.states import HandoffSG
 
         if goal:
-            ***REMOVED*** Context already known — skip goal step, go directly to contact.
+            # Context already known — skip goal step, go directly to contact.
             await dialog_manager.start(
                 HandoffSG.contact,
                 data={"goal": goal},
@@ -73,7 +73,7 @@ async def start_qualification(
         else:
             await dialog_manager.start(HandoffSG.goal, mode=StartMode.RESET_STACK)
     else:
-        ***REMOVED*** Fallback when dialog_manager not available — send plain text.
+        # Fallback when dialog_manager not available — send plain text.
         logger.warning("start_qualification called without dialog_manager")
         text = "📋 Какая тема вас интересует?"
         if hasattr(message_or_callback, "message"):

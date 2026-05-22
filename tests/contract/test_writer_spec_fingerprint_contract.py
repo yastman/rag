@@ -1,8 +1,8 @@
-***REMOVED*** tests/contract/test_writer_spec_fingerprint_contract.py
+# tests/contract/test_writer_spec_fingerprint_contract.py
 """Contract: QdrantHybridTargetConnector must not reuse a cached writer when
 the effective target spec changes.
 
-Closes ***REMOVED***1605.
+Closes #1605.
 
 Audit finding:
   ``QdrantHybridTargetConnector._get_writer()`` checked only ``cls._writer is None``.
@@ -41,9 +41,9 @@ TARGET_MODULE_PATH = (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Static contract: source-code shape
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Static contract: source-code shape
+# ---------------------------------------------------------------------------
 
 
 def _read_src() -> str:
@@ -80,10 +80,10 @@ def test_get_writer_contains_key_comparison() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Behavioural contract: distinct specs produce distinct writers
-***REMOVED*** (requires cocoindex ingest extra)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Behavioural contract: distinct specs produce distinct writers
+# (requires cocoindex ingest extra)
+# ---------------------------------------------------------------------------
 
 requires_cocoindex = pytest.mark.skipif(
     importlib.util.find_spec("cocoindex") is None,
@@ -146,7 +146,7 @@ def test_same_spec_returns_cached_writer() -> None:
     writer_b = MagicMock(name="writer_b")
 
     result1 = _call_get_writer(spec, writer_a)
-    result2 = _call_get_writer(spec, writer_b)  ***REMOVED*** writer_b should NOT be constructed
+    result2 = _call_get_writer(spec, writer_b)  # writer_b should NOT be constructed
 
     assert result1 is result2, (
         "Same spec must return cached writer (writer_b should not be constructed)."

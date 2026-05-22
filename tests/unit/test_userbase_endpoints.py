@@ -55,8 +55,8 @@ def userbase_env():
             "mock_model_instance": mock_model_instance,
         }
 
-        ***REMOVED*** Clean up cached service import (not a mock — real module imported
-        ***REMOVED*** via syspath_prepend that shouldn't leak to other test files).
+        # Clean up cached service import (not a mock — real module imported
+        # via syspath_prepend that shouldn't leak to other test files).
         sys.modules.pop("main", None)
 
 

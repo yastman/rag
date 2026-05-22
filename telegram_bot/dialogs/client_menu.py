@@ -57,7 +57,7 @@ async def get_menu_data(
         welcome = load_services_config().get("welcome", {}).get("text", "Добро пожаловать!")
         if name:
             welcome = welcome.replace("Привет! 👋", f"Привет, {name}! 👋", 1)
-        ***REMOVED*** Fallback if i18n not injected (e.g., tests)
+        # Fallback if i18n not injected (e.g., tests)
         return {
             "title": welcome,
             "btn_search": "🏠 Подобрать квартиру",

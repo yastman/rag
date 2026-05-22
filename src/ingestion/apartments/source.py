@@ -14,7 +14,7 @@ from pathlib import Path
 from src.models.apartment import ApartmentRecord
 
 
-***REMOVED*** Mutable fields — changes in these trigger re-embedding
+# Mutable fields — changes in these trigger re-embedding
 _CHANGE_FIELDS = ("price_eur", "area_m2", "is_furnished", "is_promotion", "view_raw", "city")
 
 

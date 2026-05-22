@@ -44,11 +44,11 @@ def test_check_required_trace_coverage_marks_missing_trace_families() -> None:
 def test_check_required_trace_coverage_accepts_telegram_observations_under_root() -> None:
     mock_lf = MagicMock()
     mock_lf.api.trace.list.side_effect = [
-        ***REMOVED*** Direct family checks
+        # Direct family checks
         SimpleNamespace(data=[SimpleNamespace(id="trace-api")]),
         SimpleNamespace(data=[SimpleNamespace(id="trace-voice")]),
         SimpleNamespace(data=[SimpleNamespace(id="trace-ingest")]),
-        ***REMOVED*** Telegram root traces in lookback window
+        # Telegram root traces in lookback window
         SimpleNamespace(data=[SimpleNamespace(id="root-1"), SimpleNamespace(id="root-2")]),
     ]
 
@@ -123,8 +123,8 @@ def test_check_required_trace_coverage_fails_when_root_context_is_unsanitized() 
     bad_root.observations = [_obs("telegram-rag-query")]
     mock_lf.api.trace.get.return_value = bad_root
     mock_lf.api.trace.list.side_effect = [
-        SimpleNamespace(data=[]),  ***REMOVED*** opportunistic voice-session check
-        SimpleNamespace(data=[SimpleNamespace(id="bad-root")]),  ***REMOVED*** telegram root check
+        SimpleNamespace(data=[]),  # opportunistic voice-session check
+        SimpleNamespace(data=[SimpleNamespace(id="bad-root")]),  # telegram root check
     ]
 
     with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):

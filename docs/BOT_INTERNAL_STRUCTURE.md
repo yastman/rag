@@ -1,23 +1,23 @@
-***REMOVED*** PropertyBot Internal Structure
+# PropertyBot Internal Structure
 
 `PropertyBot` in `telegram_bot/bot.py` is the main orchestrator for the Telegram bot. This document provides an internal map for navigation without relying on brittle line ranges.
 
-***REMOVED******REMOVED*** Class Overview
+## Class Overview
 
 ```
 PropertyBot
-├── __init__()              ***REMOVED*** Initialize all services
-├── _register_handlers()    ***REMOVED*** Register commands, messages, callbacks, routers
-├── _setup_dialogs()        ***REMOVED*** Include aiogram-dialog routers before catch-all text routing
-├── _setup_middlewares()    ***REMOVED*** Configure middleware chain
-├── handle_query()          ***REMOVED*** Main entry point for text queries
-├── handle_voice()          ***REMOVED*** Entry point for voice messages
-└── start()                 ***REMOVED*** Startup preflight, service init, polling
+├── __init__()              # Initialize all services
+├── _register_handlers()    # Register commands, messages, callbacks, routers
+├── _setup_dialogs()        # Include aiogram-dialog routers before catch-all text routing
+├── _setup_middlewares()    # Configure middleware chain
+├── handle_query()          # Main entry point for text queries
+├── handle_voice()          # Entry point for voice messages
+└── start()                 # Startup preflight, service init, polling
 ```
 
-***REMOVED******REMOVED*** Key Methods
+## Key Methods
 
-***REMOVED******REMOVED******REMOVED*** `__init__()`
+### `__init__()`
 
 Initializes all service dependencies:
 
@@ -25,18 +25,18 @@ Initializes all service dependencies:
 self._cache = CacheLayerManager(redis_url=...)
 self._hybrid = BGEM3HybridEmbeddings(...)
 self._qdrant = QdrantService(...)
-self._reranker = None  ***REMOVED*** server-side Qdrant ColBERT is used when enabled
+self._reranker = None  # server-side Qdrant ColBERT is used when enabled
 self._llm = self._graph_config.create_llm()
 ```
 
-***REMOVED******REMOVED******REMOVED*** `handle_query()`
+### `handle_query()`
 
 Routes text queries through dual-path architecture:
 
 ```
 handle_query()
-├── _handle_client_direct_pipeline()  ***REMOVED*** Fast path for simple queries
-└── _handle_query_supervisor()        ***REMOVED*** Full agent for complex queries
+├── _handle_client_direct_pipeline()  # Fast path for simple queries
+└── _handle_query_supervisor()        # Full agent for complex queries
 ```
 
 Find it with:
@@ -45,7 +45,7 @@ Find it with:
 rg -n "async def handle_query|_handle_client_direct_pipeline|_handle_query_supervisor" telegram_bot/bot.py
 ```
 
-***REMOVED******REMOVED******REMOVED*** `handle_voice()`
+### `handle_voice()`
 
 Processes voice messages through LangGraph:
 
@@ -61,9 +61,9 @@ Find it with:
 rg -n "async def handle_voice|voice_audio|make_initial_state|build_graph\\(" telegram_bot/bot.py
 ```
 
-***REMOVED******REMOVED*** Internal Handler Methods
+## Internal Handler Methods
 
-***REMOVED******REMOVED******REMOVED*** Menu & Callback Handlers
+### Menu & Callback Handlers
 
 | Method | Purpose |
 |--------|---------|
@@ -75,7 +75,7 @@ rg -n "async def handle_voice|voice_audio|make_initial_state|build_graph\\(" tel
 | `handle_feedback()` | Like/dislike feedback |
 | `handle_clearcache_callback()` | Cache clear (`cc:`) |
 
-***REMOVED******REMOVED******REMOVED*** Command Handlers
+### Command Handlers
 
 | Command | Handler |
 |---------|---------|
@@ -86,12 +86,12 @@ rg -n "async def handle_voice|voice_audio|make_initial_state|build_graph\\(" tel
 | `/stats` | `cmd_stats()` |
 | `/metrics` | `cmd_metrics()` |
 
-***REMOVED******REMOVED******REMOVED*** FSM Handlers
+### FSM Handlers
 
 - `PhoneCollector` — Phone number collection for lead capture
 - Uses aiogram FSM for state management
 
-***REMOVED******REMOVED*** Query Flow
+## Query Flow
 
 ```
 User Message
@@ -117,7 +117,7 @@ PropertyBot.handle_query()
                                           3. Return response
 ```
 
-***REMOVED******REMOVED*** Service Dependencies (initialized in `__init__`)
+## Service Dependencies (initialized in `__init__`)
 
 | Service | Class | Purpose |
 |---------|-------|---------|
@@ -132,41 +132,41 @@ PropertyBot.handle_query()
 | `self._apartments_service` | ApartmentsService | Structured catalog search |
 | `self._user_service` | UserService | User management |
 
-***REMOVED******REMOVED*** Middleware Stack
+## Middleware Stack
 
 ```
 Update → ThrottlingMiddleware → ErrorMiddleware → I18nMiddleware → Handler
 ```
 
-***REMOVED******REMOVED******REMOVED*** ThrottlingMiddleware
+### ThrottlingMiddleware
 - TTL cache (10,000 users, 1.5s TTL)
 - Admins bypass throttling
 
-***REMOVED******REMOVED******REMOVED*** ErrorHandlerMiddleware
+### ErrorHandlerMiddleware
 - Catches all exceptions
 - Logs with `exc_info=True`
 - Returns user-friendly message
 
-***REMOVED******REMOVED******REMOVED*** I18nMiddleware
+### I18nMiddleware
 - Loads user locale from DB
 - Injects `i18n`, `locale`, `property_bot`, `apartments_service`
 
-***REMOVED******REMOVED*** Finding Code
+## Finding Code
 
 Due to file size, use `rg` recipes instead of line-number maps:
 
 ```bash
-***REMOVED*** Find method definition
+# Find method definition
 rg -n "async def handle_query|async def handle_voice|async def start|def _register_handlers" telegram_bot/bot.py
 
-***REMOVED*** Find class attribute initialization
+# Find class attribute initialization
 rg -n "self\\._cache = |self\\._hybrid = |self\\._qdrant = |self\\._reranker =" telegram_bot/bot.py
 
-***REMOVED*** Find handler registration
+# Find handler registration
 rg -n "dp\\.message|dp\\.callback_query|include_router|Command\\(" telegram_bot/bot.py
 ```
 
-***REMOVED******REMOVED*** Related Documentation
+## Related Documentation
 
 - [Bot Architecture](BOT_ARCHITECTURE.md)
 - [Client Pipeline](CLIENT_PIPELINE.md)

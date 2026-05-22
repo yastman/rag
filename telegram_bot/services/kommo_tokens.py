@@ -22,7 +22,7 @@ from tenacity import (
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Retryable errors for token operations
+# Retryable errors for token operations
 _RETRYABLE_TOKEN_ERRORS = (
     httpx.ConnectError,
     httpx.ReadTimeout,
@@ -34,7 +34,7 @@ _RETRYABLE_TOKEN_ERRORS = (
 
 @runtime_checkable
 class KommoTokenStoreProtocol(Protocol):
-    """Abstract token store contract for future Postgres migration (***REMOVED***384)."""
+    """Abstract token store contract for future Postgres migration (#384)."""
 
     async def get_valid_token(self) -> str: ...
 
@@ -42,7 +42,7 @@ class KommoTokenStoreProtocol(Protocol):
 
 
 REDIS_KEY = "kommo:oauth:tokens"
-REFRESH_BUFFER_SEC = 300  ***REMOVED*** refresh 5 min before expiry
+REFRESH_BUFFER_SEC = 300  # refresh 5 min before expiry
 
 
 class KommoTokenStore:
@@ -81,8 +81,8 @@ class KommoTokenStore:
         except (TypeError, ValueError):
             expires_at = 0
 
-        ***REMOVED*** Kommo OAuth refresh flow requires refresh_token. If only access_token is
-        ***REMOVED*** available (seed/manual mode), use it as-is and let API 401 trigger handling.
+        # Kommo OAuth refresh flow requires refresh_token. If only access_token is
+        # available (seed/manual mode), use it as-is and let API 401 trigger handling.
         if not refresh_token:
             logger.info("Kommo token has no refresh_token; using cached access_token as-is")
             return access_token
@@ -135,7 +135,7 @@ class KommoTokenStore:
 
         If tokens already exist in Redis, returns the current valid token.
         """
-        ***REMOVED*** Try loading existing tokens
+        # Try loading existing tokens
         data = await self._load_tokens()
         if data and data.get("access_token"):
             return await self.get_valid_token()
@@ -229,7 +229,7 @@ class KommoTokenStore:
         raw = await self._redis.hgetall(REDIS_KEY)
         if not raw:
             return None
-        ***REMOVED*** Decode bytes → str
+        # Decode bytes → str
         decoded: dict[str, str] = {}
         for key, value in raw.items():
             key_str = key.decode() if isinstance(key, bytes) else str(key)

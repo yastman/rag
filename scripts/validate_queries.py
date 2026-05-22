@@ -13,22 +13,22 @@ class ValidationQuery:
     """Single validation query."""
 
     text: str
-    source: str  ***REMOVED*** smoke | eval | manual
-    difficulty: str  ***REMOVED*** easy | medium | hard
-    collection: str  ***REMOVED*** legal_documents | contextual_bulgaria_voyage | any
+    source: str  # smoke | eval | manual
+    difficulty: str  # easy | medium | hard
+    collection: str  # legal_documents | contextual_bulgaria_voyage | any
     expect_rewrite: bool = False
 
 
-***REMOVED*** Bulgarian property queries (from tests/smoke/queries.py, skip CHITCHAT)
+# Bulgarian property queries (from tests/smoke/queries.py, skip CHITCHAT)
 PROPERTY_QUERIES: list[ValidationQuery] = [
-    ***REMOVED*** SIMPLE (6)
+    # SIMPLE (6)
     ValidationQuery("Сколько стоит квартира?", "smoke", "easy", "contextual_bulgaria_voyage"),
     ValidationQuery("Какая цена на студию?", "smoke", "easy", "contextual_bulgaria_voyage"),
     ValidationQuery("Сколько стоит дом?", "smoke", "easy", "contextual_bulgaria_voyage"),
     ValidationQuery("Какая цена аренды?", "smoke", "easy", "contextual_bulgaria_voyage"),
     ValidationQuery("Двухкомнатная квартира", "smoke", "easy", "contextual_bulgaria_voyage"),
     ValidationQuery("Трёхкомнатная квартира", "smoke", "easy", "contextual_bulgaria_voyage"),
-    ***REMOVED*** COMPLEX (8)
+    # COMPLEX (8)
     ValidationQuery(
         "Найди двухкомнатную квартиру в Солнечном берегу до 50000 евро с видом на море",
         "smoke",
@@ -79,9 +79,9 @@ PROPERTY_QUERIES: list[ValidationQuery] = [
     ),
 ]
 
-***REMOVED*** Criminal Code queries (subset from src/evaluation/smoke_test.py)
+# Criminal Code queries (subset from src/evaluation/smoke_test.py)
 LEGAL_QUERIES: list[ValidationQuery] = [
-    ***REMOVED*** HARD (5)
+    # HARD (5)
     ValidationQuery(
         "что регулирует первая статья УК Украины о правовом обеспечении",
         "eval",
@@ -112,7 +112,7 @@ LEGAL_QUERIES: list[ValidationQuery] = [
         "hard",
         "legal_documents",
     ),
-    ***REMOVED*** MEDIUM (5)
+    # MEDIUM (5)
     ValidationQuery(
         "какие цели и задачи ставит перед собой уголовный кодекс Украины",
         "eval",
@@ -145,9 +145,9 @@ LEGAL_QUERIES: list[ValidationQuery] = [
     ),
 ]
 
-***REMOVED*** Bulgarian property queries with BGE-M3 embeddings (gdrive_documents_bge)
+# Bulgarian property queries with BGE-M3 embeddings (gdrive_documents_bge)
 GDRIVE_BGE_QUERIES: list[ValidationQuery] = [
-    ***REMOVED*** EASY (10)
+    # EASY (10)
     ValidationQuery("квартира в Несебре", "smoke", "easy", "gdrive_documents_bge"),
     ValidationQuery("студия на Солнечном берегу", "smoke", "easy", "gdrive_documents_bge"),
     ValidationQuery("цена дома в Равде", "smoke", "easy", "gdrive_documents_bge"),
@@ -158,7 +158,7 @@ GDRIVE_BGE_QUERIES: list[ValidationQuery] = [
     ValidationQuery("купить квартиру Бургас", "smoke", "easy", "gdrive_documents_bge"),
     ValidationQuery("сколько стоит студия", "smoke", "easy", "gdrive_documents_bge"),
     ValidationQuery("квартира первая линия", "smoke", "easy", "gdrive_documents_bge"),
-    ***REMOVED*** MEDIUM (10)
+    # MEDIUM (10)
     ValidationQuery(
         "квартира до 50000 евро с мебелью",
         "smoke",
@@ -219,7 +219,7 @@ GDRIVE_BGE_QUERIES: list[ValidationQuery] = [
         "medium",
         "gdrive_documents_bge",
     ),
-    ***REMOVED*** HARD (10)
+    # HARD (10)
     ValidationQuery(
         "сравни цены Солнечный берег vs Святой Влас 2024",
         "smoke",
@@ -282,9 +282,9 @@ GDRIVE_BGE_QUERIES: list[ValidationQuery] = [
     ),
 ]
 
-***REMOVED*** Manual edge cases
+# Manual edge cases
 EDGE_CASE_QUERIES: list[ValidationQuery] = [
-    ***REMOVED*** Should trigger rewrite (nonsensical → low relevance → rewrite)
+    # Should trigger rewrite (nonsensical → low relevance → rewrite)
     ValidationQuery(
         "фиолетовые документы с перламутровыми пуговицами",
         "manual",
@@ -292,14 +292,14 @@ EDGE_CASE_QUERIES: list[ValidationQuery] = [
         "any",
         expect_rewrite=True,
     ),
-    ***REMOVED*** Should return empty or low results
+    # Should return empty or low results
     ValidationQuery(
         "quantum computing applications in molecular biology",
         "manual",
         "hard",
         "any",
     ),
-    ***REMOVED*** Simple, should be fast
+    # Simple, should be fast
     ValidationQuery(
         "цена",
         "manual",
@@ -318,7 +318,7 @@ def get_queries_for_collection(collection: str) -> list[ValidationQuery]:
         result.extend(PROPERTY_QUERIES)
     elif collection == "gdrive_documents_bge":
         result.extend(GDRIVE_BGE_QUERIES)
-    ***REMOVED*** Edge cases apply to any collection
+    # Edge cases apply to any collection
     result.extend(EDGE_CASE_QUERIES)
     return result
 
@@ -334,7 +334,7 @@ def get_cache_hit_queries(
     count: int = 10,
 ) -> list[ValidationQuery]:
     """Select queries to repeat for cache-hit testing."""
-    ***REMOVED*** Pick a mix: easy (likely cached) + medium + hard
+    # Pick a mix: easy (likely cached) + medium + hard
     easy = [q for q in cold_queries if q.difficulty == "easy"][:4]
     medium = [q for q in cold_queries if q.difficulty == "medium"][:3]
     hard = [q for q in cold_queries if q.difficulty == "hard"][:3]

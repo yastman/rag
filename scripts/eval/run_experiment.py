@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Run RAG experiment on Langfuse gold set dataset.
 
 Usage:

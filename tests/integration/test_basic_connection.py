@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Базовый тест подключения к Qdrant (без зависимостей).
 Проверяет доступность и список коллекций.
@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 import pytest
 
 
-***REMOVED*** Настройки из .env
+# Настройки из .env
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
@@ -30,7 +30,7 @@ def _run_qdrant_connection_checks() -> bool:
     print(f"   URL: {QDRANT_URL}")
     print(f"   API Key: ***{QDRANT_API_KEY[-10:]}")
 
-    ***REMOVED*** Тест 1: Проверка версии Qdrant
+    # Тест 1: Проверка версии Qdrant
     print("\n🔌 Тест 1: Проверка доступности Qdrant...")
     try:
         req = urllib.request.Request(QDRANT_URL)
@@ -48,7 +48,7 @@ def _run_qdrant_connection_checks() -> bool:
         print(f"   ❌ Ошибка: {e}")
         return False
 
-    ***REMOVED*** Тест 2: Получение списка коллекций
+    # Тест 2: Получение списка коллекций
     print("\n📦 Тест 2: Получение списка коллекций...")
     try:
         req = urllib.request.Request(f"{QDRANT_URL}/collections")
@@ -71,7 +71,7 @@ def _run_qdrant_connection_checks() -> bool:
         print(f"   ❌ Ошибка: {e}")
         return False
 
-    ***REMOVED*** Тест 3: Детали первой коллекции
+    # Тест 3: Детали первой коллекции
     if collections:
         collection_name = collections[0]["name"]
         print(f"\n🔍 Тест 3: Детали коллекции '{collection_name}'...")
@@ -89,13 +89,13 @@ def _run_qdrant_connection_checks() -> bool:
                 print(f"      Векторов: {result.get('indexed_vectors_count', 0):,}")
                 print(f"      Сегментов: {result.get('segments_count', 0)}")
 
-                ***REMOVED*** Vector configuration info
+                # Vector configuration info
                 vectors_config = result.get("config", {}).get("params", {}).get("vectors", {})
                 if vectors_config:
                     print("\n      Конфигурация векторов:")
-                    ***REMOVED*** Qdrant may return either:
-                    ***REMOVED*** - named vectors mapping: {"dense": {"size": 1024, "distance": "Cosine"}}
-                    ***REMOVED*** - single unnamed vector object: {"size": 1024, "distance": "Cosine"}
+                    # Qdrant may return either:
+                    # - named vectors mapping: {"dense": {"size": 1024, "distance": "Cosine"}}
+                    # - single unnamed vector object: {"size": 1024, "distance": "Cosine"}
                     if isinstance(vectors_config, dict) and "size" in vectors_config:
                         size = vectors_config.get("size", "N/A")
                         distance = vectors_config.get("distance", "N/A")

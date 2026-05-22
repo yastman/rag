@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 RAGAS integration for RAG quality evaluation with Langfuse tracing.
 
@@ -15,13 +15,13 @@ Thresholds:
 - Answer Relevancy >= 0.80
 
 Usage:
-    ***REMOVED*** Run evaluation
+    # Run evaluation
     make eval-rag
 
-    ***REMOVED*** Quick evaluation (10 samples)
+    # Quick evaluation (10 samples)
     make eval-rag-quick
 
-    ***REMOVED*** As module
+    # As module
     python -m src.evaluation.ragas_evaluation
 """
 
@@ -39,7 +39,7 @@ from ragas import evaluate
 from ragas.dataset_schema import EvaluationResult
 from ragas.llms import llm_factory
 
-***REMOVED*** RAGAS v0.4+ API - use ragas.metrics.collections instead of deprecated ragas.metrics
+# RAGAS v0.4+ API - use ragas.metrics.collections instead of deprecated ragas.metrics
 from ragas.metrics.collections import (
     AnswerRelevancy,
     ContextPrecision,
@@ -48,7 +48,7 @@ from ragas.metrics.collections import (
 )
 
 
-***REMOVED*** Expose metric factories for testing (patched in unit tests)
+# Expose metric factories for testing (patched in unit tests)
 faithfulness = Faithfulness
 context_precision = ContextPrecision
 context_recall = ContextRecall
@@ -62,12 +62,12 @@ def _maybe_build_metric(metric_factory, llm):
     return metric_factory(llm=llm)
 
 
-***REMOVED*** Default LiteLLM configuration
+# Default LiteLLM configuration
 DEFAULT_LITELLM_BASE_URL = "http://localhost:4000"
-DEFAULT_EVAL_MODEL = "cerebras/llama-3.3-70b"  ***REMOVED*** Fast, accurate model for evaluation
+DEFAULT_EVAL_MODEL = "cerebras/llama-3.3-70b"  # Fast, accurate model for evaluation
 
 
-***REMOVED*** Faithfulness threshold (required >= 0.80)
+# Faithfulness threshold (required >= 0.80)
 FAITHFULNESS_THRESHOLD = 0.80
 CONTEXT_PRECISION_THRESHOLD = 0.80
 CONTEXT_RECALL_THRESHOLD = 0.90
@@ -101,10 +101,10 @@ def _get_evaluator_llm():
 
     try:
         client = OpenAI(
-            api_key="not-needed",  ***REMOVED*** LiteLLM handles auth
+            api_key="not-needed",  # LiteLLM handles auth
             base_url=base_url,
         )
-        ***REMOVED*** Use litellm adapter for compatibility with any model
+        # Use litellm adapter for compatibility with any model
         llm = llm_factory(model, client=client, adapter="litellm")
         print(f"   RAGAS evaluator LLM: {model} via {base_url}")
         return llm
@@ -153,7 +153,7 @@ def _log_ragas_scores_to_langfuse(
         return None
 
     try:
-        ***REMOVED*** Create trace for this evaluation
+        # Create trace for this evaluation
         trace = langfuse_client.trace(
             name=trace_name,
             session_id=session_id,
@@ -169,7 +169,7 @@ def _log_ragas_scores_to_langfuse(
             },
         )
 
-        ***REMOVED*** Log each RAGAS metric as a score
+        # Log each RAGAS metric as a score
         score_names = [
             "faithfulness",
             "context_precision",
@@ -185,7 +185,7 @@ def _log_ragas_scores_to_langfuse(
                     comment=f"RAGAS {score_name} score",
                 )
 
-        ***REMOVED*** Log additional metrics
+        # Log additional metrics
         if "eval_duration_seconds" in metrics:
             trace.score(
                 name="eval_duration_seconds",
@@ -200,7 +200,7 @@ def _log_ragas_scores_to_langfuse(
                 comment="Number of queries evaluated",
             )
 
-        ***REMOVED*** Log pass/fail status
+        # Log pass/fail status
         passed = metrics.get("faithfulness", 0) >= FAITHFULNESS_THRESHOLD
         trace.score(
             name="acceptance_passed",
@@ -208,7 +208,7 @@ def _log_ragas_scores_to_langfuse(
             comment=f"Faithfulness threshold {FAITHFULNESS_THRESHOLD} {'met' if passed else 'not met'}",
         )
 
-        ***REMOVED*** Update trace output
+        # Update trace output
         trace.update(
             output={
                 "metrics": metrics,
@@ -216,7 +216,7 @@ def _log_ragas_scores_to_langfuse(
             }
         )
 
-        ***REMOVED*** Flush to ensure scores are sent
+        # Flush to ensure scores are sent
         langfuse_client.flush()
 
         return str(trace.id)
@@ -239,18 +239,18 @@ class RAGASEvaluator:
         self.experiment_name = experiment_name
         self.langfuse_client = _get_langfuse_client()
 
-        ***REMOVED*** Get evaluator LLM via LiteLLM
+        # Get evaluator LLM via LiteLLM
         evaluator_llm = _get_evaluator_llm()
 
-        ***REMOVED*** RAGAS v0.4+ metrics - instantiate with LLM
+        # RAGAS v0.4+ metrics - instantiate with LLM
         self.metrics = [
-            _maybe_build_metric(faithfulness, evaluator_llm),  ***REMOVED*** Claims in answer are grounded
-            _maybe_build_metric(context_precision, evaluator_llm),  ***REMOVED*** Retrieved chunks are relevant
-            _maybe_build_metric(context_recall, evaluator_llm),  ***REMOVED*** Ground truth is in context
-            _maybe_build_metric(answer_relevancy, evaluator_llm),  ***REMOVED*** Answer addresses the query
+            _maybe_build_metric(faithfulness, evaluator_llm),  # Claims in answer are grounded
+            _maybe_build_metric(context_precision, evaluator_llm),  # Retrieved chunks are relevant
+            _maybe_build_metric(context_recall, evaluator_llm),  # Ground truth is in context
+            _maybe_build_metric(answer_relevancy, evaluator_llm),  # Answer addresses the query
         ]
 
-        ***REMOVED*** Thresholds
+        # Thresholds
         self.faithfulness_threshold = FAITHFULNESS_THRESHOLD
 
     async def evaluate_pipeline(
@@ -270,7 +270,7 @@ class RAGASEvaluator:
         Returns:
             Dictionary with RAGAS evaluation results
         """
-        ***REMOVED*** Load evaluation dataset
+        # Load evaluation dataset
         dataset_path = Path(test_set_path)
         if not dataset_path.is_absolute():
             dataset_path = Path(__file__).parent.parent.parent / test_set_path
@@ -280,7 +280,7 @@ class RAGASEvaluator:
 
         samples = test_set.get("samples", test_set.get("queries", []))
 
-        ***REMOVED*** Apply sample size limit
+        # Apply sample size limit
         if sample_size:
             samples = samples[:sample_size]
         elif len(samples) > MAX_EVAL_SAMPLES:
@@ -288,19 +288,19 @@ class RAGASEvaluator:
 
         print(f"   Evaluating {len(samples)} samples from {dataset_path.name}...")
 
-        ***REMOVED*** Run RAG pipeline on all samples
+        # Run RAG pipeline on all samples
         results = []
         for sample in samples:
             question = sample.get("question", sample.get("query", ""))
 
-            ***REMOVED*** Get RAG response
+            # Get RAG response
             try:
                 response = await rag_pipeline.query(question, top_k=10)
             except Exception as e:
                 print(f"   Failed query '{question[:50]}...': {e}")
                 continue
 
-            ***REMOVED*** Format for RAGAS
+            # Format for RAGAS
             results.append(
                 {
                     "question": question,
@@ -314,16 +314,16 @@ class RAGASEvaluator:
             print("   No valid results to evaluate")
             return {}
 
-        ***REMOVED*** Convert to RAGAS dataset format
+        # Convert to RAGAS dataset format
         dataset = Dataset.from_list(results)
 
-        ***REMOVED*** Run RAGAS evaluation
+        # Run RAGAS evaluation
         print("   Running RAGAS evaluation...")
         start_time = datetime.now()
         ragas_results = cast(EvaluationResult, evaluate(dataset, metrics=self.metrics))
         eval_duration = (datetime.now() - start_time).total_seconds()
 
-        ***REMOVED*** Extract metrics
+        # Extract metrics
         metrics = {
             "faithfulness": _metric_mean(ragas_results, "faithfulness"),
             "context_precision": _metric_mean(ragas_results, "context_precision"),
@@ -333,16 +333,16 @@ class RAGASEvaluator:
             "queries_evaluated": len(results),
         }
 
-        ***REMOVED*** Print results
+        # Print results
         self._print_results(metrics)
 
-        ***REMOVED*** Log to Langfuse
+        # Log to Langfuse
         session_id = f"ragas-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         trace_id = _log_ragas_scores_to_langfuse(self.langfuse_client, metrics, session_id)
         if trace_id:
             print(f"   Langfuse trace: {trace_id}")
 
-        ***REMOVED*** Check acceptance criteria
+        # Check acceptance criteria
         self._check_acceptance(metrics)
 
         return metrics
@@ -427,7 +427,7 @@ async def run_ragas_evaluation():
     sample_size = int(os.getenv("EVAL_SAMPLE_SIZE", "0")) or None
     metrics = await evaluator.evaluate_pipeline(pipeline, sample_size=sample_size)
 
-    ***REMOVED*** Alert if faithfulness drops below threshold
+    # Alert if faithfulness drops below threshold
     if metrics.get("faithfulness", 0) < FAITHFULNESS_THRESHOLD:
         print(f"   ALERT: Faithfulness {metrics['faithfulness']:.3f} < {FAITHFULNESS_THRESHOLD}")
 
@@ -443,7 +443,7 @@ if __name__ == "__main__":
         metrics = asyncio.run(run_ragas_evaluation())
         print("\n" + "=" * 60)
 
-        ***REMOVED*** Exit with error if acceptance criteria not met
+        # Exit with error if acceptance criteria not met
         if metrics.get("faithfulness", 0) < FAITHFULNESS_THRESHOLD:
             sys.exit(1)
 

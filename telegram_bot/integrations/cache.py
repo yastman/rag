@@ -48,12 +48,12 @@ logger = logging.getLogger(__name__)
 CACHE_VERSION = "v5"
 SEMANTIC_CACHE_VERSION = "v8"
 
-***REMOVED*** Default TTLs per exact-cache tier (seconds)
+# Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
-    "embeddings": 7 * 86400,  ***REMOVED*** 7 days
-    "sparse": 7 * 86400,  ***REMOVED*** 7 days
-    "search": 7200,  ***REMOVED*** 2 hours
-    "rerank": 7200,  ***REMOVED*** 2 hours
+    "embeddings": 7 * 86400,  # 7 days
+    "sparse": 7 * 86400,  # 7 days
+    "search": 7200,  # 2 hours
+    "rerank": 7200,  # 2 hours
 }
 
 _METRIC_TIERS = ("semantic", "embeddings", "sparse", "search", "rerank")
@@ -155,7 +155,7 @@ class CacheLayerManager:
         self.semantic_cache: SemanticCache | None = None
         self.embed_cache: EmbeddingsCache | None = None
 
-        ***REMOVED*** Semantic cache thresholds per query type (cosine distance, lower = stricter)
+        # Semantic cache thresholds per query type (cosine distance, lower = stricter)
         self.cache_thresholds = cache_thresholds or {
             "FAQ": 0.12,
             "ENTITY": 0.10,
@@ -163,22 +163,22 @@ class CacheLayerManager:
             "STRUCTURED": 0.05,
         }
 
-        ***REMOVED*** Semantic cache TTL per query type (seconds)
+        # Semantic cache TTL per query type (seconds)
         self.cache_ttl = cache_ttl or {
-            "FAQ": 86400,  ***REMOVED*** 24h
-            "ENTITY": 3600,  ***REMOVED*** 1h
-            "GENERAL": 3600,  ***REMOVED*** 1h
-            "STRUCTURED": 7200,  ***REMOVED*** 2h
+            "FAQ": 86400,  # 24h
+            "ENTITY": 3600,  # 1h
+            "GENERAL": 3600,  # 1h
+            "STRUCTURED": 7200,  # 2h
         }
 
-        ***REMOVED*** Exact cache TTLs
+        # Exact cache TTLs
         self.exact_ttls = exact_ttls or dict(DEFAULT_TTLS)
 
-        ***REMOVED*** Conversation settings
+        # Conversation settings
         self.conversation_max_messages = conversation_max_messages
         self.conversation_ttl = conversation_ttl
 
-        ***REMOVED*** Metrics
+        # Metrics
         self._metrics: dict[str, dict[str, int]] = {
             tier: {"hits": 0, "misses": 0} for tier in _METRIC_TIERS
         }
@@ -197,7 +197,7 @@ class CacheLayerManager:
                 retry=Retry(ExponentialBackoff(), 3),
                 health_check_interval=30,
             )
-            await self.redis.ping()  ***REMOVED*** type: ignore[misc]
+            await self.redis.ping()  # type: ignore[misc]
             logger.info("Redis connected: %s", _redact_redis_credentials(self.redis_url))
         except Exception as e:
             logger.error(
@@ -208,7 +208,7 @@ class CacheLayerManager:
             self.redis = None
             return
 
-        ***REMOVED*** Lazy import vectorizer for semantic cache
+        # Lazy import vectorizer for semantic cache
         try:
             import os
 
@@ -229,7 +229,7 @@ class CacheLayerManager:
             logger.warning("Semantic cache setup skipped: %s: %s", type(e).__name__, e)
             self.semantic_cache = None
 
-        ***REMOVED*** Init EmbeddingsCache (RedisVL SDK) for dense embedding storage
+        # Init EmbeddingsCache (RedisVL SDK) for dense embedding storage
         try:
             embed_ttl = self.exact_ttls.get("embeddings", DEFAULT_TTLS["embeddings"])
             self.embed_cache = _create_embed_cache(
@@ -249,7 +249,7 @@ class CacheLayerManager:
             await self.redis.aclose()
         logger.info("CacheLayerManager closed")
 
-    ***REMOVED*** ========== Semantic Cache ==========
+    # ========== Semantic Cache ==========
 
     @observe(name="cache-semantic-check", capture_input=False, capture_output=False)
     async def check_semantic(
@@ -472,7 +472,7 @@ class CacheLayerManager:
                 output={"stored": False, "error": type(e).__name__},
             )
 
-    ***REMOVED*** ========== Exact Caches (SET/GET) ==========
+    # ========== Exact Caches (SET/GET) ==========
 
     @observe(name="cache-exact-get", capture_input=False, capture_output=False)
     async def get_exact(self, tier: str, key: str) -> Any | None:
@@ -549,7 +549,7 @@ class CacheLayerManager:
                 output={"stored": False, "tier": tier, "error": type(e).__name__},
             )
 
-    ***REMOVED*** ========== Convenience: Embeddings ==========
+    # ========== Convenience: Embeddings ==========
 
     @observe(name="cache-embedding-get", capture_input=False, capture_output=False)
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:
@@ -621,7 +621,7 @@ class CacheLayerManager:
                 metadata={"model": model},
             )
 
-    ***REMOVED*** ========== Convenience: Sparse Embeddings ==========
+    # ========== Convenience: Sparse Embeddings ==========
 
     @observe(name="cache-sparse-get", capture_input=False, capture_output=False)
     async def get_sparse_embedding(
@@ -661,7 +661,7 @@ class CacheLayerManager:
         )
         lf.update_current_span(output={"stored": True}, metadata={"model": model})
 
-    ***REMOVED*** ========== Convenience: BGE-M3 Query Bundle ==========
+    # ========== Convenience: BGE-M3 Query Bundle ==========
 
     @observe(name="cache-bge-m3-bundle-get", capture_input=False, capture_output=False)
     async def get_bge_m3_query_bundle(
@@ -797,7 +797,7 @@ class CacheLayerManager:
                 metadata={"model": model},
             )
 
-    ***REMOVED*** ========== Convenience: Search Results ==========
+    # ========== Convenience: Search Results ==========
 
     @observe(name="cache-search-get", capture_input=False, capture_output=False)
     async def get_search_results(
@@ -838,7 +838,7 @@ class CacheLayerManager:
         await self.store_exact("search", key, results)
         lf.update_current_span(output={"stored": True, "results_count": len(results)})
 
-    ***REMOVED*** ========== Convenience: Rerank Results ==========
+    # ========== Convenience: Rerank Results ==========
 
     def _build_rerank_key(self, query: str, documents: list[dict[str, Any]], top_k: int) -> str:
         doc_fingerprints = [
@@ -897,8 +897,8 @@ class CacheLayerManager:
         await self.store_exact("rerank", key, results)
         lf.update_current_span(output={"stored": True, "results_count": len(results)})
 
-    ***REMOVED*** ========== Conversation History ==========
-    ***REMOVED*** Legacy store/get methods removed in ***REMOVED***157: memory owned by LangGraph checkpointer.
+    # ========== Conversation History ==========
+    # Legacy store/get methods removed in #157: memory owned by LangGraph checkpointer.
 
     async def clear_conversation(self, user_id: int) -> None:
         """Clear conversation history for a user."""
@@ -910,7 +910,7 @@ class CacheLayerManager:
         except Exception as e:
             logger.error("Conversation clear error: %s: %s", type(e).__name__, e)
 
-    ***REMOVED*** ========== Cache Clearing ==========
+    # ========== Cache Clearing ==========
 
     async def clear_by_tier(self, tier: str) -> int:
         """Clear all Redis keys for the given exact cache tier via SCAN + DELETE.
@@ -987,7 +987,7 @@ class CacheLayerManager:
             results[tier] = await self.clear_by_tier(tier)
         return results
 
-    ***REMOVED*** ========== Metrics ==========
+    # ========== Metrics ==========
 
     def get_metrics(self) -> dict[str, Any]:
         """Get hit/miss metrics for all tiers."""
@@ -1008,7 +1008,7 @@ class CacheLayerManager:
         result["overall_hit_rate"] = round((total_hits / total * 100) if total > 0 else 0, 1)
         return result
 
-    ***REMOVED*** ========== Utilities ==========
+    # ========== Utilities ==========
 
     @staticmethod
     def make_hash(data: str) -> str:

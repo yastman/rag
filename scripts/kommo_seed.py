@@ -33,7 +33,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-***REMOVED*** --- Data pools ---
+# --- Data pools ---
 
 FIRST_NAMES_RU = [
     "Александр",
@@ -128,7 +128,7 @@ PHONE_PREFIXES = ["+380", "+7", "+359", "+48", "+49"]
 
 def generate_contact_data(index: int) -> dict:
     """Generate a contact dict with realistic RU/UA data."""
-    if index % 3 == 0:  ***REMOVED*** ~33% Ukrainian names
+    if index % 3 == 0:  # ~33% Ukrainian names
         first = random.choice(FIRST_NAMES_UA)
         last = random.choice(LAST_NAMES_UA)
     else:
@@ -159,7 +159,7 @@ SCENARIOS = [
         note_templates=[
             "Клиент интересуется {complex_name}. Бюджет: {budget}€. Источник: Telegram бот.",
             "Подобраны варианты: {complex_name}, {rooms}-комн, {area_m2}м², этаж {floor}. Вид: {view_primary}.",
-            "Клиент запросил планировку и фото для {complex_name} ***REMOVED***{apartment_number}.",
+            "Клиент запросил планировку и фото для {complex_name} #{apartment_number}.",
         ],
         task_templates=[
             "Перезвонить: {phone} ({name}) — подбор апартаментов в {complex_name}",
@@ -175,7 +175,7 @@ SCENARIOS = [
         ],
         task_templates=[
             "Согласовать дату осмотра с {name} — {complex_name}",
-            "Подготовить ключи для осмотра {complex_name} ***REMOVED***{apartment_number}",
+            "Подготовить ключи для осмотра {complex_name} #{apartment_number}",
         ],
     ),
     Scenario(
@@ -194,7 +194,7 @@ SCENARIOS = [
         service_key="installment",
         crm_title="Рассрочка",
         note_templates=[
-            "Запрос рассрочки на {complex_name} ***REMOVED***{apartment_number}. Цена: {price_eur}€. Источник: Telegram.",
+            "Запрос рассрочки на {complex_name} #{apartment_number}. Цена: {price_eur}€. Источник: Telegram.",
             "Расчёт рассрочки: {price_eur}€, взнос 10% = {deposit}€, ежемесячно ~{monthly}€ на 36 мес.",
         ],
         task_templates=[
@@ -218,7 +218,7 @@ SCENARIOS = [
         service_key="passive_income",
         crm_title="Пассивный доход",
         note_templates=[
-            "Интерес к сдаче в аренду. Объект: {complex_name} ***REMOVED***{apartment_number}, {rooms}-комн, {area_m2}м².",
+            "Интерес к сдаче в аренду. Объект: {complex_name} #{apartment_number}, {rooms}-комн, {area_m2}м².",
             "Расчёт доходности для {complex_name}: ~{rental_yield}€/мес при ставке аренды сезона.",
         ],
         task_templates=[
@@ -234,7 +234,7 @@ def pick_scenario() -> Scenario:
     return random.choice(SCENARIOS)
 
 
-***REMOVED*** --- Qdrant reader ---
+# --- Qdrant reader ---
 
 
 def fetch_apartments(
@@ -243,7 +243,7 @@ def fetch_apartments(
     limit: int = 50,
 ) -> list[dict]:
     """Scroll apartments from Qdrant (sync, no vectors)."""
-    records, _ = qdrant_client.scroll(  ***REMOVED*** type: ignore[attr-defined]
+    records, _ = qdrant_client.scroll(  # type: ignore[attr-defined]
         collection_name=collection,
         limit=limit,
         with_payload=True,
@@ -257,7 +257,7 @@ def fetch_apartments(
     return apartments
 
 
-***REMOVED*** --- Lead distribution ---
+# --- Lead distribution ---
 
 STAGE_WEIGHTS = {
     "new": 0.30,
@@ -279,7 +279,7 @@ def distribute_statuses(count: int, statuses: dict[str, int]) -> list[int | None
     Returns:
         List of status_ids (or None when status is unspecified), length == count.
     """
-    ***REMOVED*** Ignore non-positive placeholders (0/-1) and keep only real Kommo status IDs.
+    # Ignore non-positive placeholders (0/-1) and keep only real Kommo status IDs.
     valid_statuses = {stage: status for stage, status in statuses.items() if status > 0}
 
     result: list[int | None] = []
@@ -292,7 +292,7 @@ def distribute_statuses(count: int, statuses: dict[str, int]) -> list[int | None
     if default_status is None and valid_statuses:
         default_status = next(iter(valid_statuses.values()))
 
-    ***REMOVED*** Pad/trim to exact count
+    # Pad/trim to exact count
     while len(result) < count:
         result.append(default_status)
     return result[:count]
@@ -310,13 +310,13 @@ def build_lead_data(
     complex_name = apartment.get("complex_name", "N/A")
     return {
         "name": f"{scenario.crm_title} {complex_name} — {contact_name}",
-        "budget": int(price_eur * 100),  ***REMOVED*** Kommo uses cents
+        "budget": int(price_eur * 100),  # Kommo uses cents
         "pipeline_id": pipeline_id,
         "status_id": status_id,
     }
 
 
-***REMOVED*** --- Template rendering ---
+# --- Template rendering ---
 
 
 def _build_render_context(apartment: dict, extra: dict) -> dict:
@@ -324,7 +324,7 @@ def _build_render_context(apartment: dict, extra: dict) -> dict:
     price_eur = apartment.get("price_eur", 0)
     deposit = int(price_eur * 0.10)
     monthly = int((price_eur - deposit) / 36) if price_eur else 0
-    rental_yield = int(price_eur * 0.005)  ***REMOVED*** rough estimate ~0.5%/month
+    rental_yield = int(price_eur * 0.005)  # rough estimate ~0.5%/month
     return {
         **apartment,
         **extra,
@@ -354,7 +354,7 @@ def render_task(template: str, apartment: dict, ctx: dict) -> str:
     return render_note(template, apartment, ctx)
 
 
-***REMOVED*** --- Seeding orchestrator ---
+# --- Seeding orchestrator ---
 
 
 @dataclass
@@ -393,7 +393,7 @@ async def seed_crm(
         msg = "num_contacts must be > 0 when num_leads > 0"
         raise ValueError(msg)
 
-    ***REMOVED*** --- Phase 1: Create contacts ---
+    # --- Phase 1: Create contacts ---
     contacts: list[dict] = []
     for i in range(num_contacts):
         data = generate_contact_data(i)
@@ -410,7 +410,7 @@ async def seed_crm(
             async with sem:
                 from telegram_bot.services.kommo_models import ContactCreate
 
-                contact = await kommo_client.upsert_contact(  ***REMOVED*** type: ignore[union-attr]
+                contact = await kommo_client.upsert_contact(  # type: ignore[union-attr]
                     data["phone"],
                     ContactCreate(
                         first_name=data["first_name"],
@@ -422,10 +422,10 @@ async def seed_crm(
                 stats.contacts_created += 1
                 stats.api_calls += 1
                 logger.info(
-                    "Created contact ***REMOVED***%d: %s %s", contact.id, data["first_name"], data["last_name"]
+                    "Created contact #%d: %s %s", contact.id, data["first_name"], data["last_name"]
                 )
 
-    ***REMOVED*** --- Phase 2: Create leads + link + notes + tasks ---
+    # --- Phase 2: Create leads + link + notes + tasks ---
     status_ids = distribute_statuses(num_leads, statuses)
     random.shuffle(status_ids)
 
@@ -447,14 +447,14 @@ async def seed_crm(
             stats.leads_created += 1
             logger.info("[DRY-RUN] Lead: %s (status=%s)", lead_data["name"], status_id)
 
-            ***REMOVED*** Notes
+            # Notes
             note_count = random.randint(1, min(3, len(scenario.note_templates)))
             for tmpl in scenario.note_templates[:note_count]:
                 note_text = render_note(tmpl, apartment, render_ctx)
                 stats.notes_created += 1
                 logger.info("[DRY-RUN]   Note: %s", note_text[:80])
 
-            ***REMOVED*** Tasks (only for non-closed leads)
+            # Tasks (only for non-closed leads)
             is_closed = status_id in (statuses.get("won", -1), statuses.get("lost", -1))
             if not is_closed and scenario.task_templates:
                 task_text = render_task(scenario.task_templates[0], apartment, render_ctx)
@@ -466,45 +466,45 @@ async def seed_crm(
             async with sem:
                 from telegram_bot.services.kommo_models import LeadCreate, TaskCreate
 
-                lead = await kommo_client.create_lead(  ***REMOVED*** type: ignore[union-attr]
+                lead = await kommo_client.create_lead(  # type: ignore[union-attr]
                     LeadCreate(**lead_data)
                 )
                 lead_id = lead.id
                 stats.leads_created += 1
                 stats.api_calls += 1
 
-            ***REMOVED*** Link contact
+            # Link contact
             async with sem:
-                await kommo_client.link_contact_to_lead(lead_id, contact["id"])  ***REMOVED*** type: ignore[union-attr]
+                await kommo_client.link_contact_to_lead(lead_id, contact["id"])  # type: ignore[union-attr]
                 stats.links_created += 1
                 stats.api_calls += 1
 
-            ***REMOVED*** Notes
+            # Notes
             note_count = random.randint(1, min(3, len(scenario.note_templates)))
             for tmpl in scenario.note_templates[:note_count]:
                 note_text = render_note(tmpl, apartment, render_ctx)
                 async with sem:
-                    await kommo_client.add_note("leads", lead_id, note_text)  ***REMOVED*** type: ignore[union-attr]
+                    await kommo_client.add_note("leads", lead_id, note_text)  # type: ignore[union-attr]
                     stats.notes_created += 1
                     stats.api_calls += 1
 
-            ***REMOVED*** Tasks (non-closed only)
+            # Tasks (non-closed only)
             is_closed = status_id in (statuses.get("won", -1), statuses.get("lost", -1))
             if not is_closed and scenario.task_templates:
                 task_text = render_task(scenario.task_templates[0], apartment, render_ctx)
-                ***REMOVED*** Due date: 1-7 days from now; 20% overdue (past)
+                # Due date: 1-7 days from now; 20% overdue (past)
                 if random.random() < 0.2:
                     due = int(time.time()) - random.randint(1, 3) * 86400
                 else:
                     due = int(time.time()) + random.randint(1, 7) * 86400
                 async with sem:
-                    await kommo_client.create_task(  ***REMOVED*** type: ignore[union-attr]
+                    await kommo_client.create_task(  # type: ignore[union-attr]
                         TaskCreate(text=task_text, entity_id=lead_id, complete_till=due)
                     )
                     stats.tasks_created += 1
                     stats.api_calls += 1
 
-            logger.info("Created lead ***REMOVED***%d: %s", lead_id, lead_data["name"])
+            logger.info("Created lead #%d: %s", lead_id, lead_data["name"])
 
     return {
         "contacts_created": stats.contacts_created,
@@ -521,7 +521,7 @@ async def main() -> None:
     """CLI entrypoint: parse args, connect services, run seeder."""
     args = parse_args()
 
-    ***REMOVED*** --- Connect to Qdrant (sync) ---
+    # --- Connect to Qdrant (sync) ---
     from qdrant_client import QdrantClient
 
     qdrant_url = os.environ.get("QDRANT_URL", "http://localhost:6333")
@@ -532,7 +532,7 @@ async def main() -> None:
         sys.exit(1)
     random.shuffle(apartments)
 
-    ***REMOVED*** --- Pipeline statuses ---
+    # --- Pipeline statuses ---
     statuses: dict[str, int] = {
         "new": int(os.environ.get("KOMMO_NEW_STATUS_ID", "0")) or 0,
         "qualified": 0,
@@ -573,7 +573,7 @@ async def main() -> None:
             redirect_uri=os.environ.get("KOMMO_REDIRECT_URI", ""),
         )
 
-        ***REMOVED*** Seed access token from env if not yet in Redis (***REMOVED***678 fallback)
+        # Seed access token from env if not yet in Redis (#678 fallback)
         env_token = os.environ.get("KOMMO_ACCESS_TOKEN", "")
         if env_token:
             try:

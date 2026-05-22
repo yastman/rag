@@ -52,27 +52,27 @@ class TestVoyageServiceUnit:
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
-            ***REMOVED*** Return different number of embeddings for each batch
+            # Return different number of embeddings for each batch
             mock_client.embed.side_effect = [
-                MagicMock(embeddings=[[0.1] * 1024] * 128),  ***REMOVED*** First batch: 128
-                MagicMock(embeddings=[[0.1] * 1024] * 72),  ***REMOVED*** Second batch: 72
+                MagicMock(embeddings=[[0.1] * 1024] * 128),  # First batch: 128
+                MagicMock(embeddings=[[0.1] * 1024] * 72),  # Second batch: 72
             ]
             mock_client_class.return_value = mock_client
 
             service = VoyageService(api_key="test-key")
 
-            ***REMOVED*** 200 texts should result in 2 batches (128 + 72)
+            # 200 texts should result in 2 batches (128 + 72)
             texts = [f"text_{i}" for i in range(200)]
             result = await service.embed_documents(texts)
 
-            ***REMOVED*** Result should have 200 embeddings
+            # Result should have 200 embeddings
             assert len(result) == 200
-            ***REMOVED*** Should be called twice (2 batches)
+            # Should be called twice (2 batches)
             assert mock_client.embed.call_count == 2
-            ***REMOVED*** First batch: 128 texts
+            # First batch: 128 texts
             first_call = mock_client.embed.call_args_list[0]
             assert len(first_call[1]["texts"]) == 128
-            ***REMOVED*** Second batch: 72 texts
+            # Second batch: 72 texts
             second_call = mock_client.embed.call_args_list[1]
             assert len(second_call[1]["texts"]) == 72
 
@@ -177,14 +177,14 @@ class TestVoyageServiceBackwardCompatibility:
             mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
             mock_client_class.return_value = mock_client
 
-            ***REMOVED*** VoyageService should have same methods as VoyageEmbeddingService
+            # VoyageService should have same methods as VoyageEmbeddingService
             service = VoyageService(api_key="test-key")
 
-            ***REMOVED*** embed_query (async) - primary method used in bot.py
+            # embed_query (async) - primary method used in bot.py
             result = await service.embed_query("test")
             assert len(result) == 1024
 
-            ***REMOVED*** embed_documents (async) - used for indexing
+            # embed_documents (async) - used for indexing
             result = await service.embed_documents(["test"])
             assert len(result) == 1
 
@@ -203,7 +203,7 @@ class TestVoyageServiceBackwardCompatibility:
 
             service = VoyageService(api_key="test-key")
 
-            ***REMOVED*** rerank (async) - primary method used in bot.py
+            # rerank (async) - primary method used in bot.py
             result = await service.rerank("query", ["doc"])
             assert len(result) == 1
             assert "relevance_score" in result[0]
@@ -219,11 +219,11 @@ class TestVoyageServiceBackwardCompatibility:
 
             service = VoyageService(api_key="test-key")
 
-            ***REMOVED*** embed_query_sync
+            # embed_query_sync
             result = service.embed_query_sync("test")
             assert len(result) == 1024
 
-            ***REMOVED*** embed_documents_sync
+            # embed_documents_sync
             result = service.embed_documents_sync(["test"])
             assert len(result) == 1
 
@@ -333,10 +333,10 @@ class TestVoyageServiceMatryoshka:
 
             service = VoyageService(api_key="test-key")
 
-            ***REMOVED*** embed_documents_matryoshka_sync
+            # embed_documents_matryoshka_sync
             result = service.embed_documents_matryoshka_sync(["test"], output_dimension=512)
             assert len(result) == 1
 
-            ***REMOVED*** embed_query_matryoshka_sync
+            # embed_query_matryoshka_sync
             result = service.embed_query_matryoshka_sync("test", output_dimension=512)
             assert len(result) == 512

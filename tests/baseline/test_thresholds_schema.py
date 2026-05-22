@@ -44,6 +44,6 @@ class TestThresholdsSchema:
             assert go_no_go[key] > 0, f"go_no_go.{key} must be positive"
 
     def test_llm_factor_at_least_1_10(self, thresholds):
-        """Issue ***REMOVED***168: factor must be >= 1.10 to avoid false positives."""
+        """Issue #168: factor must be >= 1.10 to avoid false positives."""
         factor = thresholds["calls"]["llm_factor"]
         assert factor >= 1.10, f"llm_factor {factor} too tight, need >= 1.10"

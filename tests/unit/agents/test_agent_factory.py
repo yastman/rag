@@ -1,4 +1,4 @@
-"""Tests for create_bot_agent factory (***REMOVED***413)."""
+"""Tests for create_bot_agent factory (#413)."""
 
 from __future__ import annotations
 
@@ -126,24 +126,24 @@ def test_create_bot_agent_custom_prompt_bypasses_prompt_manager():
 
 
 def test_default_system_prompt_contains_safety_instructions():
-    """CLIENT_SYSTEM_PROMPT must include safety/refusal instructions (***REMOVED***439)."""
+    """CLIENT_SYSTEM_PROMPT must include safety/refusal instructions (#439)."""
     from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT
 
-    ***REMOVED*** Must refuse prompt injection attempts
+    # Must refuse prompt injection attempts
     assert "НЕ выполняй" in CLIENT_SYSTEM_PROMPT
-    ***REMOVED*** Must refuse system prompt leaks
+    # Must refuse system prompt leaks
     assert "НЕ раскрывай" in CLIENT_SYSTEM_PROMPT
-    ***REMOVED*** Must have a safety section
+    # Must have a safety section
     assert "Безопасность" in CLIENT_SYSTEM_PROMPT
-    ***REMOVED*** Must enforce rag_search for property questions
+    # Must enforce rag_search for property questions
     assert "rag_search" in CLIENT_SYSTEM_PROMPT
 
 
-***REMOVED*** --- ***REMOVED***519: Sliding-window history trimmer ---
+# --- #519: Sliding-window history trimmer ---
 
 
 def test_create_bot_agent_passes_history_trimmer_middleware():
-    """create_bot_agent injects a before_model history-trimmer when checkpointer set (***REMOVED***519)."""
+    """create_bot_agent injects a before_model history-trimmer when checkpointer set (#519)."""
     from langchain.agents.middleware import AgentMiddleware
 
     from telegram_bot.agents.agent import create_bot_agent
@@ -152,7 +152,7 @@ def test_create_bot_agent_passes_history_trimmer_middleware():
         create_bot_agent(
             model="openai/gpt-4o-mini",
             tools=[],
-            checkpointer=MagicMock(),  ***REMOVED*** non-None checkpointer
+            checkpointer=MagicMock(),  # non-None checkpointer
             max_history_messages=10,
         )
         call_kwargs = mock_ca.call_args[1]
@@ -163,7 +163,7 @@ def test_create_bot_agent_passes_history_trimmer_middleware():
 
 
 def test_create_bot_agent_no_middleware_without_checkpointer():
-    """create_bot_agent skips history-trimmer middleware when checkpointer=None (***REMOVED***519)."""
+    """create_bot_agent skips history-trimmer middleware when checkpointer=None (#519)."""
     from telegram_bot.agents.agent import create_bot_agent
 
     with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
@@ -179,22 +179,22 @@ def test_create_bot_agent_no_middleware_without_checkpointer():
 
 
 def test_create_bot_agent_default_max_history_messages():
-    """create_bot_agent defaults to max_history_messages=15 (***REMOVED***519)."""
+    """create_bot_agent defaults to max_history_messages=15 (#519)."""
     from telegram_bot.agents.agent import create_bot_agent
 
     with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
         create_bot_agent(
             model="openai/gpt-4o-mini",
             tools=[],
-            checkpointer=MagicMock(),  ***REMOVED*** non-None to get middleware
+            checkpointer=MagicMock(),  # non-None to get middleware
         )
         call_kwargs = mock_ca.call_args[1]
-        ***REMOVED*** Middleware must still be present with default window
+        # Middleware must still be present with default window
         assert len(call_kwargs.get("middleware", [])) == 1
 
 
 def test_history_trimmer_noop_when_within_limit():
-    """_create_history_trimmer returns None when messages <= max_messages (***REMOVED***519)."""
+    """_create_history_trimmer returns None when messages <= max_messages (#519)."""
     from unittest.mock import MagicMock
 
     from langchain_core.messages import AIMessage, HumanMessage
@@ -213,7 +213,7 @@ def test_history_trimmer_noop_when_within_limit():
 
 
 def test_history_trimmer_removes_old_messages_when_over_limit():
-    """_create_history_trimmer resets state and re-adds trimmed window (***REMOVED***519)."""
+    """_create_history_trimmer resets state and re-adds trimmed window (#519)."""
     from unittest.mock import MagicMock
 
     from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
@@ -223,7 +223,7 @@ def test_history_trimmer_removes_old_messages_when_over_limit():
 
     trimmer = _create_history_trimmer(max_messages=4)
 
-    ***REMOVED*** Build 6 messages: 3 turns (H, AI) — oldest turn should be removed
+    # Build 6 messages: 3 turns (H, AI) — oldest turn should be removed
     messages = [
         HumanMessage(content="q1", id="h1"),
         AIMessage(content="a1", id="a1"),
@@ -245,15 +245,15 @@ def test_history_trimmer_removes_old_messages_when_over_limit():
 
 
 def test_history_trimmer_respects_start_on_human():
-    """Trimmer never starts window on a non-human message (***REMOVED***519)."""
+    """Trimmer never starts window on a non-human message (#519)."""
     from unittest.mock import MagicMock
 
     from langchain_core.messages import AIMessage, HumanMessage
 
     from telegram_bot.agents.agent import _create_history_trimmer
 
-    ***REMOVED*** 5 messages, max=3 — naive cut would start on AIMessage
-    ***REMOVED*** start_on="human" must push window start to the next HumanMessage
+    # 5 messages, max=3 — naive cut would start on AIMessage
+    # start_on="human" must push window start to the next HumanMessage
     trimmer = _create_history_trimmer(max_messages=3)
     messages = [
         HumanMessage(content="q1", id="h1"),
@@ -266,22 +266,22 @@ def test_history_trimmer_respects_start_on_human():
     result = trimmer.before_model(state, MagicMock())
 
     assert result is not None
-    kept = result["messages"][1:]  ***REMOVED*** first element is RemoveMessage(REMOVE_ALL_MESSAGES)
+    kept = result["messages"][1:]  # first element is RemoveMessage(REMOVE_ALL_MESSAGES)
     assert kept, "Expected non-empty kept window"
     assert isinstance(kept[0], HumanMessage), f"Window starts on {type(kept[0])}"
     assert [m.id for m in kept] == ["h2", "a2", "h3"]
 
 
 def test_history_trimmer_noop_when_no_human_message_fits_window():
-    """Trimmer returns None when trim_messages produces an empty window (***REMOVED***519)."""
+    """Trimmer returns None when trim_messages produces an empty window (#519)."""
     from unittest.mock import MagicMock
 
     from langchain_core.messages import AIMessage
 
     from telegram_bot.agents.agent import _create_history_trimmer
 
-    ***REMOVED*** 5 consecutive AI messages — start_on="human" finds no valid boundary,
-    ***REMOVED*** so trim_messages returns []. The trimmer must not wipe the whole state.
+    # 5 consecutive AI messages — start_on="human" finds no valid boundary,
+    # so trim_messages returns []. The trimmer must not wipe the whole state.
     trimmer = _create_history_trimmer(max_messages=2)
     messages = [AIMessage(content=f"a{i}", id=f"a{i}") for i in range(5)]
     state = {"messages": messages}
@@ -300,10 +300,10 @@ def test_history_trimmer_handles_messages_without_ids():
 
     trimmer = _create_history_trimmer(max_messages=3)
     messages = [
-        HumanMessage(content="q1"),  ***REMOVED*** id=None
-        AIMessage(content="a1"),  ***REMOVED*** id=None
-        HumanMessage(content="q2"),  ***REMOVED*** id=None
-        AIMessage(content="a2"),  ***REMOVED*** id=None
+        HumanMessage(content="q1"),  # id=None
+        AIMessage(content="a1"),  # id=None
+        HumanMessage(content="q2"),  # id=None
+        AIMessage(content="a2"),  # id=None
     ]
     result = trimmer.before_model({"messages": messages}, MagicMock())
 
@@ -407,14 +407,14 @@ def test_manager_prompt_has_crm_instructions():
     ]
     for tool in crm_tools:
         assert tool in MANAGER_SYSTEM_PROMPT, f"MANAGER_SYSTEM_PROMPT must mention {tool}"
-    ***REMOVED*** HITL confirmation instructions must be present
+    # HITL confirmation instructions must be present
     assert (
         "подтвердите" in MANAGER_SYSTEM_PROMPT.lower()
         or "подтверждение" in MANAGER_SYSTEM_PROMPT.lower()
     )
 
 
-***REMOVED*** --- supervisor_max_tokens ---
+# --- supervisor_max_tokens ---
 
 
 def test_create_bot_agent_passes_max_tokens_to_chat_openai():

@@ -1,4 +1,4 @@
-"""Contract: provider.contextualize must not duplicate the per-chunk loop (***REMOVED***1533).
+"""Contract: provider.contextualize must not duplicate the per-chunk loop (#1533).
 
 The base class ``ContextualizeProvider.contextualize_batch`` already implements
 concurrent per-chunk dispatch with a TaskGroup, semaphore, and fallback
@@ -66,7 +66,7 @@ def _has_try_except(method: ast.AsyncFunctionDef) -> bool:
 
 @pytest.mark.parametrize("relpath", PROVIDER_FILES)
 def test_provider_contextualize_delegates_to_base(relpath: str) -> None:
-    """Each provider.contextualize must delegate to base.contextualize_batch (***REMOVED***1533)."""
+    """Each provider.contextualize must delegate to base.contextualize_batch (#1533)."""
     repo_root = Path(__file__).resolve().parents[2]
     src = (repo_root / relpath).read_text(encoding="utf-8")
     tree = ast.parse(src)
@@ -74,13 +74,13 @@ def test_provider_contextualize_delegates_to_base(relpath: str) -> None:
 
     assert not _has_chunk_loop(method), (
         f"{relpath}::contextualize must not iterate over chunks itself; "
-        "delegate to self.contextualize_batch(chunks, query) instead (***REMOVED***1533)."
+        "delegate to self.contextualize_batch(chunks, query) instead (#1533)."
     )
     assert not _has_try_except(method), (
         f"{relpath}::contextualize must not implement its own per-chunk "
-        "try/except fallback; the base contextualize_batch already does (***REMOVED***1533)."
+        "try/except fallback; the base contextualize_batch already does (#1533)."
     )
     assert _calls_contextualize_batch(method), (
         f"{relpath}::contextualize must call self.contextualize_batch(chunks, query) "
-        "to share the concurrent per-chunk dispatch with the base class (***REMOVED***1533)."
+        "to share the concurrent per-chunk dispatch with the base class (#1533)."
     )

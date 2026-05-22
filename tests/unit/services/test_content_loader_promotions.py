@@ -1,4 +1,4 @@
-"""Tests for get_promotions in content_loader (***REMOVED***628)."""
+"""Tests for get_promotions in content_loader (#628)."""
 
 from telegram_bot.services.content_loader import get_promotions
 

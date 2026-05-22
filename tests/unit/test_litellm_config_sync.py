@@ -27,7 +27,7 @@ def _iter_model_entries(cfg: dict, provider_model: str) -> list[dict]:
 
 
 def _fallback_model_groups(cfg: dict) -> set[str]:
-    ***REMOVED*** Prefer modern LiteLLM location, keep legacy fallback for compatibility.
+    # Prefer modern LiteLLM location, keep legacy fallback for compatibility.
     fallbacks = cfg.get("litellm_settings", {}).get("fallbacks")
     if not fallbacks:
         fallbacks = cfg.get("router_settings", {}).get("fallbacks", [])
@@ -72,13 +72,13 @@ class TestLiteLLMConfigSync:
             docker_params = docker_models[name]
             k8s_params = k8s_models[name]
 
-            ***REMOVED*** provider model must match exactly
+            # provider model must match exactly
             assert docker_params.get("model") == k8s_params.get("model"), (
                 f"Model '{name}' provider model: docker={docker_params.get('model')!r}, "
                 f"k8s={k8s_params.get('model')!r}"
             )
 
-            ***REMOVED*** token limits must match (normalized across key names)
+            # token limits must match (normalized across key names)
             docker_limit = _normalize_token_limit(docker_params)
             k8s_limit = _normalize_token_limit(k8s_params)
             assert docker_limit == k8s_limit, (
@@ -86,7 +86,7 @@ class TestLiteLLMConfigSync:
                 f"k8s={k8s_limit} (from {k8s_params!r})"
             )
 
-            ***REMOVED*** merge_reasoning_content_in_choices must match if present in either
+            # merge_reasoning_content_in_choices must match if present in either
             docker_merge = docker_params.get("merge_reasoning_content_in_choices")
             k8s_merge = k8s_params.get("merge_reasoning_content_in_choices")
             assert docker_merge == k8s_merge, (
@@ -162,7 +162,7 @@ class TestLiteLLMConfigSync:
             k8s_limit = _normalize_token_limit(k8s_models[name])
 
             if docker_limit is None and k8s_limit is None:
-                continue  ***REMOVED*** both have no token limit — OK
+                continue  # both have no token limit — OK
 
             if docker_limit != k8s_limit:
                 mismatches.append(f"  '{name}': docker={docker_limit}, k8s={k8s_limit}")
@@ -195,7 +195,7 @@ class TestLiteLLMConfigSync:
             k8s_key = _token_limit_key(k8s_models[name])
 
             if docker_key is None and k8s_key is None:
-                continue  ***REMOVED*** both absent — OK
+                continue  # both absent — OK
 
             if docker_key != k8s_key:
                 mismatches.append(f"  '{name}': docker uses {docker_key!r}, k8s uses {k8s_key!r}")

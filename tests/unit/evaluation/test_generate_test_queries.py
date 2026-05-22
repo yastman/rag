@@ -13,22 +13,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-***REMOVED*** Mock heavy dependencies before importing
-***REMOVED*** Note: We don't mock 'aiohttp' or 'requests' in sys.modules because they're used
-***REMOVED*** by httpx internally and mocking them causes test pollution in other test modules.
+# Mock heavy dependencies before importing
+# Note: We don't mock 'aiohttp' or 'requests' in sys.modules because they're used
+# by httpx internally and mocking them causes test pollution in other test modules.
 @pytest.fixture(autouse=True)
 def mock_imports(monkeypatch: pytest.MonkeyPatch):
     """Mock external dependencies that won't pollute other tests."""
     mock_contextualize = MagicMock()
     mock_settings = MagicMock()
 
-    ***REMOVED*** Setup Settings mock
+    # Setup Settings mock
     mock_settings_instance = MagicMock()
     mock_settings_instance.qdrant_url = "http://localhost:6333"
     mock_settings_instance.qdrant_api_key = "test-key"
     mock_settings.return_value = mock_settings_instance
 
-    ***REMOVED*** Only mock modules that won't affect other parts of the codebase
+    # Only mock modules that won't affect other parts of the codebase
     monkeypatch.setitem(sys.modules, "contextualize_groq_async", mock_contextualize)
 
     with patch("src.config.Settings", mock_settings):
@@ -45,7 +45,7 @@ class TestFetchArticleTexts:
         """Test fetching a single article from Qdrant via SDK scroll."""
         mock_client = MagicMock()
 
-        ***REMOVED*** Mock scroll return: a point with text
+        # Mock scroll return: a point with text
         mock_point = MagicMock()
         mock_point.payload = {"text": "Article 115 text content"}
         mock_client.scroll.return_value = ([mock_point], None)
@@ -69,7 +69,7 @@ class TestFetchArticleTexts:
         mock_client = MagicMock()
 
         def mock_scroll(collection_name, scroll_filter, limit, with_payload, with_vectors):
-            ***REMOVED*** Extract article number from the filter
+            # Extract article number from the filter
             must = scroll_filter.must
             value = must[0].match.value
             article_num = str(value)
@@ -231,7 +231,7 @@ class TestGenerateAllQueries:
                 api_key="test-key",
             )
 
-        assert len(result) == 6  ***REMOVED*** 3 queries per article * 2 articles
+        assert len(result) == 6  # 3 queries per article * 2 articles
         assert result[0]["expected_article"] == "115"
         assert result[3]["expected_article"] == "121"
 
@@ -247,7 +247,7 @@ class TestGenerateAllQueries:
         async def _create_side_effect(**kwargs):
             nonlocal call_count
             call_count += 1
-            ***REMOVED*** Determine which article based on the prompt content
+            # Determine which article based on the prompt content
             content = kwargs.get("messages", [{}])[0].get("content", "")
             if "999" in content:
                 raise ValueError("LLM API error")
@@ -277,7 +277,7 @@ class TestGenerateAllQueries:
                 api_key="test-key",
             )
 
-        ***REMOVED*** Only articles 115 and 121 succeed (3 queries each)
+        # Only articles 115 and 121 succeed (3 queries each)
         assert len(result) == 6
         expected_articles = {q["expected_article"] for q in result}
         assert "115" in expected_articles
@@ -290,7 +290,7 @@ class TestSelectRepresentativeArticles:
 
     def test_select_50_articles(self):
         """Test selecting 50 representative articles."""
-        all_articles = {str(i): [] for i in range(1, 500)}  ***REMOVED*** 499 articles
+        all_articles = {str(i): [] for i in range(1, 500)}  # 499 articles
 
         article_nums = sorted(all_articles.keys(), key=lambda x: int(x))
         n = 50
@@ -298,16 +298,16 @@ class TestSelectRepresentativeArticles:
         selected = [article_nums[i * step] for i in range(n)]
 
         assert len(selected) == 50
-        ***REMOVED*** First article should be near the beginning
+        # First article should be near the beginning
         assert int(selected[0]) < 20
-        ***REMOVED*** Distribution should be even
+        # Distribution should be even
         gaps = [int(selected[i + 1]) - int(selected[i]) for i in range(len(selected) - 1)]
         avg_gap = sum(gaps) / len(gaps)
-        assert 5 < avg_gap < 15  ***REMOVED*** Approximately evenly distributed
+        assert 5 < avg_gap < 15  # Approximately evenly distributed
 
     def test_select_from_small_dataset(self):
         """Test selection when dataset is smaller than n."""
-        all_articles = {str(i): [] for i in range(1, 30)}  ***REMOVED*** 29 articles
+        all_articles = {str(i): [] for i in range(1, 30)}  # 29 articles
         n = 50
 
         article_nums = sorted(all_articles.keys(), key=lambda x: int(x))
@@ -317,7 +317,7 @@ class TestSelectRepresentativeArticles:
             for i in range(min(n, len(article_nums)))
         ]
 
-        ***REMOVED*** Should not exceed available articles
+        # Should not exceed available articles
         assert len(selected) <= len(article_nums)
 
     def test_sorting_by_article_number(self):
@@ -330,7 +330,7 @@ class TestSelectRepresentativeArticles:
 
     def test_even_distribution(self):
         """Test selected articles are evenly distributed."""
-        all_articles = {str(i): [] for i in range(1, 101)}  ***REMOVED*** 100 articles
+        all_articles = {str(i): [] for i in range(1, 101)}  # 100 articles
         n = 10
 
         article_nums = sorted(all_articles.keys(), key=lambda x: int(x))
@@ -339,7 +339,7 @@ class TestSelectRepresentativeArticles:
 
         selected_ints = [int(a) for a in selected]
 
-        ***REMOVED*** Check even distribution (every 10th article)
+        # Check even distribution (every 10th article)
         assert selected_ints[0] == 1
         assert selected_ints[1] == 11
         assert selected_ints[9] == 91
@@ -462,7 +462,7 @@ class TestLLMClientConfiguration:
         model = "openai/gpt-oss-120b"
         max_concurrent = 5
 
-        ***REMOVED*** Verify configuration values
+        # Verify configuration values
         assert "gpt-oss-120b" in model
         assert max_concurrent == 5
 
@@ -470,7 +470,7 @@ class TestLLMClientConfiguration:
         """Test instructor client is called with correct parameters."""
         from src.evaluation.generate_test_queries import GeneratedQueries
 
-        ***REMOVED*** Verify expected call parameters for instructor
+        # Verify expected call parameters for instructor
         expected_kwargs = {
             "model": "openai/gpt-oss-120b",
             "response_model": GeneratedQueries,
@@ -507,7 +507,7 @@ class TestErrorHandling:
         from src.evaluation.generate_test_queries import GeneratedQueries
 
         with pytest.raises(ValidationError):
-            GeneratedQueries(direct="query 1")  ***REMOVED*** type: ignore[call-arg]
+            GeneratedQueries(direct="query 1")  # type: ignore[call-arg]
 
 
 class TestStructuredOutputParsing:
@@ -534,13 +534,13 @@ class TestStructuredOutputParsing:
         from src.evaluation.generate_test_queries import GeneratedQueries
 
         with pytest.raises(ValidationError):
-            GeneratedQueries(direct="query 1", semantic="query 2")  ***REMOVED*** type: ignore[call-arg]
+            GeneratedQueries(direct="query 1", semantic="query 2")  # type: ignore[call-arg]
 
         with pytest.raises(ValidationError):
-            GeneratedQueries(direct="query 1")  ***REMOVED*** type: ignore[call-arg]
+            GeneratedQueries(direct="query 1")  # type: ignore[call-arg]
 
         with pytest.raises(ValidationError):
-            GeneratedQueries()  ***REMOVED*** type: ignore[call-arg]
+            GeneratedQueries()  # type: ignore[call-arg]
 
     async def test_structured_parsing_returns_correct_shape(self, mock_imports):
         """Test generate_queries_for_article returns list of 3 dicts with correct keys."""
@@ -562,15 +562,15 @@ class TestStructuredOutputParsing:
             mock_client, "openai/gpt-oss-120b", "121", "Article 121 about injuries..."
         )
 
-        ***REMOVED*** Correct number of queries
+        # Correct number of queries
         assert len(result) == 3
 
-        ***REMOVED*** Each dict has required keys
+        # Each dict has required keys
         required_keys = {"query", "type", "expected_article", "difficulty"}
         for query_dict in result:
             assert set(query_dict.keys()) == required_keys
 
-        ***REMOVED*** Type and difficulty mappings are correct
+        # Type and difficulty mappings are correct
         assert result[0]["type"] == "direct"
         assert result[0]["difficulty"] == "easy"
         assert result[1]["type"] == "semantic"
@@ -578,10 +578,10 @@ class TestStructuredOutputParsing:
         assert result[2]["type"] == "paraphrased"
         assert result[2]["difficulty"] == "hard"
 
-        ***REMOVED*** Expected article is set correctly
+        # Expected article is set correctly
         assert all(q["expected_article"] == "121" for q in result)
 
-        ***REMOVED*** Query content matches model output
+        # Query content matches model output
         assert result[0]["query"] == "статья 121"
         assert result[1]["query"] == "тяжкие телесные повреждения"
         assert result[2]["query"] == "что будет за нанесение тяжких травм"
@@ -631,19 +631,19 @@ class TestStructuredOutputParsing:
                 api_key="custom-key",
             )
 
-            ***REMOVED*** Verify AsyncOpenAI was created with correct params
+            # Verify AsyncOpenAI was created with correct params
             mock_openai_cls.assert_called_once_with(
                 base_url="http://custom.api/v1", api_key="custom-key"
             )
 
-            ***REMOVED*** Verify instructor.from_openai was called with the AsyncOpenAI instance
+            # Verify instructor.from_openai was called with the AsyncOpenAI instance
             mock_instructor_mod.from_openai.assert_called_once_with(mock_openai_instance)
 
     def test_generated_queries_model_extra_fields_ignored(self):
         """Test that extra fields do not break GeneratedQueries model."""
         from src.evaluation.generate_test_queries import GeneratedQueries
 
-        ***REMOVED*** Pydantic v2 default ignores extra fields
+        # Pydantic v2 default ignores extra fields
         result = GeneratedQueries.model_validate(
             {
                 "direct": "query 1",

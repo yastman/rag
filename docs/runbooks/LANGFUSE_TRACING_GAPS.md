@@ -1,4 +1,4 @@
-***REMOVED*** Runbook: Langfuse Tracing Gaps
+# Runbook: Langfuse Tracing Gaps
 
 - **Owner:** Observability / On-call
 - **Last verified:** 2026-05-12
@@ -6,7 +6,7 @@
 
 Use this runbook when traces are missing from Langfuse or observability is broken.
 
-***REMOVED******REMOVED*** Symptoms
+## Symptoms
 
 - Queries not appearing in Langfuse UI
 - Incomplete traces (missing spans)
@@ -15,9 +15,9 @@ Use this runbook when traces are missing from Langfuse or observability is broke
 - Traces show `LLM failed: Connection error` despite healthy Langfuse ingestion
 - Repeated traceback spam with `HTTPConnectionPool(host='localhost', port=3001)` when running bot natively and local Langfuse is down
 
-Expected local behavior after ***REMOVED***1446: one warning from `telegram_bot.observability` that the configured endpoint is unreachable, then tracing export is disabled for that process.
+Expected local behavior after #1446: one warning from `telegram_bot.observability` that the configured endpoint is unreachable, then tracing export is disabled for that process.
 
-***REMOVED******REMOVED*** Quick Validation Focus
+## Quick Validation Focus
 
 When traces appear missing, validate **app pipeline coverage** first:
 
@@ -29,7 +29,7 @@ When traces appear missing, validate **app pipeline coverage** first:
 
 If direct families and nested Telegram families are present and root input is sanitized, flat `litellm-acompletion` traces do **not** indicate a defect.
 
-***REMOVED******REMOVED******REMOVED*** Cache-smoke behavior check
+### Cache-smoke behavior check
 
 For cache regression checks:
 
@@ -37,15 +37,15 @@ For cache regression checks:
 2. Immediate repeat of the same query should be a semantic cache hit path only and must not add fresh `bge-m3-encode-*`, Qdrant, or LLM spans.
 3. The semantic-hit replay should not emit new `results_count=0` / `no_results=1` scoring artifacts.
 
-***REMOVED******REMOVED*** Diagnosis
+## Diagnosis
 
-***REMOVED******REMOVED******REMOVED*** 1. Check Langfuse Connectivity
+### 1. Check Langfuse Connectivity
 
 ```bash
-***REMOVED*** Ping Langfuse
+# Ping Langfuse
 curl -s ${LANGFUSE_HOST}/api/public/health | jq
 
-***REMOVED*** Should return {"status": "ok"}
+# Should return {"status": "ok"}
 ```
 
 If `LANGFUSE_HOST` points to local Langfuse (for example `http://localhost:3001`) and health check fails, either:
@@ -57,39 +57,39 @@ Langfuse is part of the `ml` profile with ClickHouse, MinIO, and
 `make monitoring-up`) is for Loki, Promtail, and Alertmanager; it does not
 start Langfuse.
 
-***REMOVED******REMOVED******REMOVED*** 2. Verify Environment Variables (Presence Only)
+### 2. Verify Environment Variables (Presence Only)
 
 ```bash
-***REMOVED*** Check that required variables are present (do not print values)
+# Check that required variables are present (do not print values)
 for v in LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_HOST; do
   grep -q "^${v}=" .env && echo "${v}: present" || echo "${v}: MISSING"
 done
 
-***REMOVED*** Required:
-***REMOVED*** LANGFUSE_PUBLIC_KEY
-***REMOVED*** LANGFUSE_SECRET_KEY
-***REMOVED*** LANGFUSE_HOST (should be full URL, not just hostname)
+# Required:
+# LANGFUSE_PUBLIC_KEY
+# LANGFUSE_SECRET_KEY
+# LANGFUSE_HOST (should be full URL, not just hostname)
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Latest Trace API Fast Path
+### 3. Latest Trace API Fast Path
 
 ```bash
-***REMOVED*** List the most recent traces with full inline fields
+# List the most recent traces with full inline fields
 langfuse api traces list --limit 20 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 
-***REMOVED*** Filter to a specific required trace family
+# Filter to a specific required trace family
 langfuse api traces list --name rag-api-query --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 langfuse api traces list --name voice-session --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 langfuse api traces list --name ingestion-cli-run --limit 5 --order-by timestamp.desc --fields core,io,scores,observations,metrics --json
 
-***REMOVED*** Get a specific trace with inline observations and scores (primary full-trace path)
+# Get a specific trace with inline observations and scores (primary full-trace path)
 langfuse api traces get <trace-id> --fields core,io,scores,observations,metrics --json
 
-***REMOVED*** List scores for a trace
+# List scores for a trace
 langfuse api scores list --trace-id <trace-id> --json
 
-***REMOVED*** List observations for a trace
-***REMOVED*** In some local deployments this endpoint returns 404; use `traces get` as the primary full-tree command.
+# List observations for a trace
+# In some local deployments this endpoint returns 404; use `traces get` as the primary full-tree command.
 langfuse api observations list --trace-id <trace-id> --fields core,basic,io,metadata,usage,metrics --json
 ```
 
@@ -97,7 +97,7 @@ If `observations list` returns 404 in your deployment, continue with `traces get
 
 **Validation focus:** Check missing/stale `rag-api-query`, `voice-session`, `ingestion-cli-run`, then inspect recent `telegram-message` traces for nested `telegram-rag-query`/`telegram-rag-supervisor` observations plus sanitized root fields. Use `traces get` for full trace trees. Proxy-generated `litellm-acompletion` traces are expected flat noise and should not be treated as app coverage.
 
-***REMOVED******REMOVED******REMOVED*** 4. Trace Interpretation Matrix
+### 4. Trace Interpretation Matrix
 
 | Trace Name | Expected Structure | Common Gaps |
 |---|---|---|
@@ -111,10 +111,10 @@ If `observations list` returns 404 in your deployment, continue with `traces get
 
 **Key distinction:** `litellm-acompletion` traces are created by the LiteLLM proxy's built-in Langfuse callback (`success_callback: ["langfuse"]`), not by the application's `@observe` decorators. They will never contain child spans, scores, or session attribution.
 
-***REMOVED******REMOVED******REMOVED*** 5. Check Observability Module
+### 5. Check Observability Module
 
 ```python
-***REMOVED*** Test Langfuse client
+# Test Langfuse client
 from telegram_bot.observability import get_client
 
 lf = get_client()
@@ -122,7 +122,7 @@ print(f"Langfuse initialized: {lf is not None}")
 print(f"Current trace: {lf.get_current_trace_id()}")
 ```
 
-***REMOVED******REMOVED******REMOVED*** 6. Run Trace Validation
+### 6. Run Trace Validation
 
 ```bash
 make validate-traces-fast
@@ -137,7 +137,7 @@ This checks required direct families plus Telegram nested-family/root-context co
 
 If these are present and fresh, flat `litellm-acompletion` traces are expected proxy-generated noise and do not indicate a defect.
 
-***REMOVED******REMOVED******REMOVED*** 7. Post-E2E Latest-Trace Audit
+### 7. Post-E2E Latest-Trace Audit
 
 After running `make e2e-test-traces-core`, run the sanitized latest-trace audit to verify app coverage without exposing raw values:
 
@@ -156,9 +156,9 @@ This command:
 
 The audit intentionally never prints raw Telegram payloads, trace input/output values, Qdrant contents, secrets, or API keys.
 
-***REMOVED******REMOVED*** Common Issues
+## Common Issues
 
-***REMOVED******REMOVED******REMOVED*** "Public key not valid" Error
+### "Public key not valid" Error
 
 **Cause:** Invalid or expired Langfuse API keys.
 
@@ -171,7 +171,7 @@ The audit intentionally never prints raw Telegram payloads, trace input/output v
    ```
 3. Restart bot
 
-***REMOVED******REMOVED******REMOVED*** Prisma `P1000 Authentication failed against database server` During `make validate-traces-fast`
+### Prisma `P1000 Authentication failed against database server` During `make validate-traces-fast`
 
 **Cause:** `validate-traces-fast` fell back to `tests/fixtures/compose.ci.env` (no `.env` present), while an existing local Postgres volume (`dev_postgres_data`) was initialized with a password that does not match the fallback `POSTGRES_PASSWORD`.
 
@@ -185,7 +185,7 @@ The audit intentionally never prints raw Telegram payloads, trace input/output v
 
 `validate-traces-fast` includes a preflight guard that allows the known-safe fallback (`POSTGRES_PASSWORD=postgres`) with existing `dev_postgres_data`, and fails early when fallback password and existing volume credentials can mismatch.
 
-***REMOVED******REMOVED******REMOVED*** Trace Family Missing
+### Trace Family Missing
 
 **Cause:** Span not properly decorated with `@observe`.
 
@@ -199,7 +199,7 @@ async def my_operation():
     ...
 ```
 
-***REMOVED******REMOVED******REMOVED*** Scores Not Written
+### Scores Not Written
 
 **Cause:** `write_langfuse_scores()` not called after pipeline execution.
 
@@ -212,7 +212,7 @@ result = await graph.ainvoke(state)
 write_langfuse_scores(lf, result, trace_id=trace_id)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Embedding Span Missing or Orphaned (`core-pipeline-query-embedding`)
+### Embedding Span Missing or Orphaned (`core-pipeline-query-embedding`)
 
 **Cause:** The core RAG pipeline runs query embedding inside a thread-pool via `run_in_executor`. Langfuse spans rely on `contextvars` for parent-trace linkage; standard `run_in_executor` drops that context, so the span becomes orphaned or invisible.
 
@@ -243,7 +243,7 @@ def _encode_query(self, query: str):
 
 **Prevention:** All embedding spans (including `bge-m3-*`, `search-engine-*`, and pipeline spans) must keep `capture_input=False` and `capture_output=False` to avoid leaking raw vectors or query text into Langfuse.
 
-***REMOVED******REMOVED******REMOVED*** Flat `litellm-acompletion` Traces Everywhere
+### Flat `litellm-acompletion` Traces Everywhere
 
 **Cause:** LiteLLM proxy is logging every LLM call as a standalone trace via its native Langfuse callback. This is expected behavior, but it produces flat traces with no pipeline context.
 
@@ -252,26 +252,26 @@ def _encode_query(self, query: str):
 - If you need structured LLM spans, look for `generate-answer` or `service-generate-response` inside `telegram-message` traces instead.
 - If the noise is excessive, consider disabling the LiteLLM callback in `docker/litellm/config.yaml` and relying on app-native `@observe` decorators alone (requires product decision).
 
-***REMOVED******REMOVED*** Remediation
+## Remediation
 
 > **Caution:** Mutating commands below. Run only after confirming the diagnosis above.
 
-***REMOVED******REMOVED******REMOVED*** Restart Observability
+### Restart Observability
 
 ```bash
 docker compose restart bot
 ```
 
-***REMOVED******REMOVED******REMOVED*** Clear Langfuse Cache
+### Clear Langfuse Cache
 
 If keys were rotated:
 
 ```bash
-***REMOVED*** In bot container
+# In bot container
 redis-cli DEL langfuse:prompt_cache
 ```
 
-***REMOVED******REMOVED******REMOVED*** Enable Debug Logging
+### Enable Debug Logging
 
 Add to `.env` (do not commit):
 
@@ -286,14 +286,14 @@ Then restart the bot:
 docker compose restart bot
 ```
 
-***REMOVED******REMOVED*** Prevention
+## Prevention
 
 - Regular `make validate-traces-fast` runs
 - Monitor Langfuse ingestion rate
 - Alert on trace family gaps
 - Distinguish proxy-generated `litellm-acompletion` traces from app-instrumented `telegram-message` traces when triaging gaps
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [Docker Services Reference](../../DOCKER.md)
 - [Local Development Guide](../LOCAL-DEVELOPMENT.md)

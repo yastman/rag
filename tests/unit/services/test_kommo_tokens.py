@@ -52,7 +52,7 @@ class TestKommoTokenStore:
 
     async def test_get_valid_token_refreshes_when_near_expiry(self, token_store, mock_redis):
         """Auto-refresh when token expires within REFRESH_BUFFER_SEC."""
-        near_expiry_ts = str(int(time.time()) + 60)  ***REMOVED*** 60s left, buffer is 300s
+        near_expiry_ts = str(int(time.time()) + 60)  # 60s left, buffer is 300s
         mock_redis.hgetall.return_value = {
             b"access_token": b"old_token",
             b"refresh_token": b"refresh_123",
@@ -132,14 +132,14 @@ class TestKommoTokenStore:
         )
         mock_redis.hset.assert_called_once()
         call_kwargs = mock_redis.hset.call_args
-        assert call_kwargs[0][0] == "kommo:oauth:tokens"  ***REMOVED*** key
+        assert call_kwargs[0][0] == "kommo:oauth:tokens"  # key
 
-    ***REMOVED*** --- ***REMOVED***682: empty refresh_token must not trigger refresh ---
+    # --- #682: empty refresh_token must not trigger refresh ---
 
     async def test_get_valid_token_with_empty_refresh_returns_token_without_refresh(
         self, token_store, mock_redis
     ):
-        """***REMOVED***682: expires_at=0 + empty refresh_token → return access_token as-is, no refresh call."""
+        """#682: expires_at=0 + empty refresh_token → return access_token as-is, no refresh call."""
         mock_redis.hgetall.return_value = {
             b"access_token": b"seeded_env_token",
             b"refresh_token": b"",
@@ -150,10 +150,10 @@ class TestKommoTokenStore:
             assert token == "seeded_env_token"
             mock_refresh.assert_not_called()
 
-    ***REMOVED*** --- ***REMOVED***678 Task 3: seed_env_token method ---
+    # --- #678 Task 3: seed_env_token method ---
 
     async def test_seed_env_token_writes_correct_mapping_to_redis(self, token_store, mock_redis):
-        """***REMOVED***678 Task 3: seed_env_token writes required access fields only."""
+        """#678 Task 3: seed_env_token writes required access fields only."""
         await token_store.seed_env_token("env_access_token_abc")
         mock_redis.hset.assert_called_once()
         call_args = mock_redis.hset.call_args
@@ -167,8 +167,8 @@ class TestKommoTokenStore:
     async def test_get_valid_token_after_seed_env_token_returns_seeded_token(
         self, token_store, mock_redis
     ):
-        """***REMOVED***678+***REMOVED***682: after seeding, get_valid_token returns seeded token without refresh attempt."""
-        ***REMOVED*** Simulate seed written to Redis (expires_at=0, refresh_token="")
+        """#678+#682: after seeding, get_valid_token returns seeded token without refresh attempt."""
+        # Simulate seed written to Redis (expires_at=0, refresh_token="")
         mock_redis.hgetall.return_value = {
             b"access_token": b"live_env_token",
             b"refresh_token": b"",
@@ -180,7 +180,7 @@ class TestKommoTokenStore:
             mock_refresh.assert_not_called()
 
     async def test_initialize_with_seeded_token_does_not_raise(self, token_store, mock_redis):
-        """***REMOVED***678+***REMOVED***682: initialize() with seeded token (no auth_code) succeeds without refresh."""
+        """#678+#682: initialize() with seeded token (no auth_code) succeeds without refresh."""
         mock_redis.hgetall.return_value = {
             b"access_token": b"seeded_token",
             b"refresh_token": b"",

@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/config.py
+# src/ingestion/unified/config.py
 """Configuration for unified ingestion pipeline."""
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 class UnifiedConfig:
     """Unified ingestion pipeline configuration."""
 
-    ***REMOVED*** Paths
+    # Paths
     sync_dir: Path = field(
         default_factory=lambda: Path(
             os.getenv("GDRIVE_SYNC_DIR", os.path.expanduser("~/drive-sync"))
@@ -20,10 +20,10 @@ class UnifiedConfig:
         default_factory=lambda: Path(v) if (v := os.getenv("MANIFEST_DIR")) else None
     )
 
-    ***REMOVED*** Database
+    # Database
     database_url: str = field(default_factory=lambda: os.getenv("INGESTION_DATABASE_URL", ""))
 
-    ***REMOVED*** Qdrant
+    # Qdrant
     qdrant_url: str = field(
         default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
     )
@@ -32,7 +32,7 @@ class UnifiedConfig:
         default_factory=lambda: os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")
     )
 
-    ***REMOVED*** Docling
+    # Docling
     docling_backend: str = field(
         default_factory=lambda: os.getenv("DOCLING_BACKEND", "docling_http")
     )
@@ -42,11 +42,11 @@ class UnifiedConfig:
     docling_timeout: float = 300.0
     max_tokens_per_chunk: int = 512
 
-    ***REMOVED*** Voyage
+    # Voyage
     voyage_api_key: str = field(default_factory=lambda: os.getenv("VOYAGE_API_KEY", ""))
     voyage_model: str = "voyage-4-large"
 
-    ***REMOVED*** BGE-M3 API (dense + sparse embeddings)
+    # BGE-M3 API (dense + sparse embeddings)
     bge_m3_url: str = field(
         default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
     )
@@ -58,13 +58,13 @@ class UnifiedConfig:
         default_factory=lambda: os.getenv("USE_LOCAL_DENSE_EMBEDDINGS", "false").lower() == "true"
     )
 
-    ***REMOVED*** Pipeline
-    ***REMOVED*** NOTE: Watch mode is handled by CocoIndex FlowLiveUpdater (no manual poll loop).
+    # Pipeline
+    # NOTE: Watch mode is handled by CocoIndex FlowLiveUpdater (no manual poll loop).
     poll_interval_seconds: int = 60
     max_retries: int = 3
     pipeline_version: str = "v3.2.1"
 
-    ***REMOVED*** Supported extensions
+    # Supported extensions
     supported_extensions: frozenset[str] = frozenset(
         {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
     )

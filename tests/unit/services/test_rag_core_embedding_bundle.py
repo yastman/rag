@@ -66,14 +66,14 @@ class TestComputeQueryEmbeddingBundle:
 
         embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("test query")
         cache.store_bge_m3_query_bundle.assert_awaited_once()
-        ***REMOVED*** Verify bundle contents
+        # Verify bundle contents
         stored_bundle = cache.store_bge_m3_query_bundle.call_args[0][1]
         assert isinstance(stored_bundle, BgeM3QueryVectorBundle)
         assert stored_bundle.dense == dense_vec
         assert stored_bundle.sparse == sparse_vec
         assert stored_bundle.colbert == colbert_vec
 
-        ***REMOVED*** Legacy caches also populated
+        # Legacy caches also populated
         cache.store_embedding.assert_awaited_once_with("test query", dense_vec)
         cache.store_sparse_embedding.assert_awaited_once_with("test query", sparse_vec)
 
@@ -110,9 +110,9 @@ class TestComputeQueryEmbeddingBundle:
         assert colbert == colbert_vec
         assert from_cache is False
 
-        ***REMOVED*** store_bge_m3_query_bundle not called because API absent (spec excludes it)
+        # store_bge_m3_query_bundle not called because API absent (spec excludes it)
         assert not hasattr(cache, "store_bge_m3_query_bundle")
-        ***REMOVED*** But legacy caches still populated
+        # But legacy caches still populated
         cache.store_embedding.assert_awaited_once()
         cache.store_sparse_embedding.assert_awaited_once()
 
@@ -144,9 +144,9 @@ class TestComputeQueryEmbeddingBundle:
         """Cache without bundle API falls back to legacy dense cache."""
         cache = AsyncMock()
         cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
-        ***REMOVED*** No get_bge_m3_query_bundle → _has_bundle_get checks getattr with default None
-        ***REMOVED*** For AsyncMock, getattr returns AsyncMock, but we test with a real-ish object
-        ***REMOVED*** that lacks the method.
+        # No get_bge_m3_query_bundle → _has_bundle_get checks getattr with default None
+        # For AsyncMock, getattr returns AsyncMock, but we test with a real-ish object
+        # that lacks the method.
         del cache.get_bge_m3_query_bundle
 
         embeddings = AsyncMock()
@@ -175,7 +175,7 @@ class TestComputeQueryEmbeddingBundle:
 
         embeddings = MagicMock()
         embeddings.aembed_hybrid = AsyncMock(return_value=(dense_vec, sparse_vec))
-        ***REMOVED*** aembed_hybrid_with_colbert not present
+        # aembed_hybrid_with_colbert not present
 
         dense, sparse, colbert, from_cache = await compute_query_embedding(
             "test query", cache=cache, embeddings=embeddings

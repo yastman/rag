@@ -105,7 +105,7 @@ class TestMainFunction:
         mock_logging_config_mod.setup_logging = mock_setup_logging
 
         mock_config_instance = MagicMock()
-        mock_config_instance.telegram_token = ""  ***REMOVED*** Empty token
+        mock_config_instance.telegram_token = ""  # Empty token
         mock_config_instance.llm_api_key = "test-api-key"
         mock_bot_config.return_value = mock_config_instance
 
@@ -124,7 +124,7 @@ class TestMainFunction:
 
             await main_module.main()
 
-            ***REMOVED*** Bot should not be created when token is missing
+            # Bot should not be created when token is missing
             mock_property_bot.assert_not_called()
 
     async def test_main_retries_on_temporary_startup_error(self):

@@ -1,10 +1,10 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Ensure Qdrant payload indexes exist for all collections.
 
 Creates missing keyword and integer payload indexes needed for efficient
 filtering and order_by queries. Safe to run multiple times (idempotent).
 
-Issue: ***REMOVED***810 — VPS/local parity: Qdrant indexes
+Issue: #810 — VPS/local parity: Qdrant indexes
 
 Usage:
     python scripts/qdrant_ensure_indexes.py

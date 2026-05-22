@@ -1,11 +1,11 @@
-***REMOVED*** Alert Rules for Telegram Bot
-***REMOVED*** Monitors bot health, errors, and performance
+# Alert Rules for Telegram Bot
+# Monitors bot health, errors, and performance
 
 groups:
   - name: telegram-bot
     interval: 1m
     rules:
-      ***REMOVED*** Bot container down
+      # Bot container down
       - alert: BotContainerDown
         expr: |
           count_over_time({container="dev-bot"} [5m]) == 0
@@ -17,7 +17,7 @@ groups:
           summary: "Telegram bot container is down"
           description: "No logs received from dev-bot container for 5 minutes"
 
-      ***REMOVED*** High error rate in bot
+      # High error rate in bot
       - alert: BotHighErrorRate
         expr: |
           sum(rate({container="dev-bot"} |~ "(?i)(error|exception|failed)" [5m])) > 0.1
@@ -29,7 +29,7 @@ groups:
           summary: "High error rate in Telegram bot"
           description: "Bot is producing errors at rate > 0.1/s for 5 minutes"
 
-      ***REMOVED*** Bot critical errors
+      # Bot critical errors
       - alert: BotCriticalError
         expr: |
           count_over_time({container="dev-bot"} |~ "(?i)(critical|fatal|panic)" [5m]) > 0
@@ -41,7 +41,7 @@ groups:
           summary: "Critical error in Telegram bot"
           description: "Bot encountered a critical/fatal error"
 
-      ***REMOVED*** Telegram API errors
+      # Telegram API errors
       - alert: TelegramAPIError
         expr: |
           count_over_time({container="dev-bot"} |~ "(?i)telegram.*error|aiogram.*error" [5m]) > 5
@@ -53,7 +53,7 @@ groups:
           summary: "Telegram API errors detected"
           description: "Multiple Telegram API errors in bot logs"
 
-      ***REMOVED*** Bot restart detected
+      # Bot restart detected
       - alert: BotRestarted
         expr: |
           count_over_time({container="dev-bot"} |= "Starting bot" [5m]) > 1
@@ -65,7 +65,7 @@ groups:
           summary: "Telegram bot restarted"
           description: "Bot has restarted in the last 5 minutes"
 
-      ***REMOVED*** Query processing errors
+      # Query processing errors
       - alert: QueryProcessingError
         expr: |
           count_over_time({container="dev-bot"} |~ "(?i)query.*error|search.*failed|retrieval.*error" [5m]) > 3
@@ -77,7 +77,7 @@ groups:
           summary: "Query processing errors in bot"
           description: "Multiple query processing errors detected"
 
-      ***REMOVED*** LLM errors in bot
+      # LLM errors in bot
       - alert: LLMGenerationError
         expr: |
           count_over_time({container="dev-bot"} |~ "(?i)llm.*error|generation.*failed|litellm.*error" [5m]) > 2
@@ -89,7 +89,7 @@ groups:
           summary: "LLM generation errors in bot"
           description: "LLM/generation errors detected in bot"
 
-      ***REMOVED*** Cache errors
+      # Cache errors
       - alert: CacheError
         expr: |
           count_over_time({container="dev-bot"} |~ "(?i)cache.*error|redis.*error|cache.*failed" [5m]) > 3
@@ -101,7 +101,7 @@ groups:
           summary: "Cache errors in bot"
           description: "Redis/cache errors detected in bot"
 
-      ***REMOVED*** Slow response warning
+      # Slow response warning
       - alert: SlowBotResponse
         expr: |
           count_over_time({container="dev-bot"} |~ "response_time.*[5-9][0-9]{3,}|response_time.*[1-9][0-9]{4,}" [5m]) > 5
@@ -113,7 +113,7 @@ groups:
           summary: "Slow bot responses detected"
           description: "Multiple slow responses (>5s) in bot"
 
-      ***REMOVED*** Memory warning (if logged)
+      # Memory warning (if logged)
       - alert: BotMemoryWarning
         expr: |
           count_over_time({container="dev-bot"} |~ "(?i)memory.*warning|memory.*high|oom" [5m]) > 0

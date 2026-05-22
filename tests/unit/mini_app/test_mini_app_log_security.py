@@ -1,4 +1,4 @@
-"""TDD tests for /api/log security hardening (issue ***REMOVED***1613).
+"""TDD tests for /api/log security hardening (issue #1613).
 
 RED phase: these tests FAIL against the original code.
 GREEN phase: they pass after the Pydantic schema + structured logging fix.
@@ -23,9 +23,9 @@ from mini_app.api import app
 _AUTH_HEADERS = {"X-Init-Data": "test-init-data"}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _log_handler_source() -> str:
@@ -45,9 +45,9 @@ async def _post_log(json: dict, headers: dict[str, str] | None = None):
         return await client.post("/api/log", json=json, headers=headers)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Schema validation tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Schema validation tests
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -146,9 +146,9 @@ async def test_log_endpoint_accepts_all_valid_levels():
             )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Structured logging / no print() test
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Structured logging / no print() test
+# ---------------------------------------------------------------------------
 
 
 def test_log_endpoint_uses_structured_logging_not_print():

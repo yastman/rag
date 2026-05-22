@@ -96,34 +96,34 @@ def test_upsert_points_uses_upload_points_with_retry() -> None:
     client.upsert.assert_not_called()
 
 
-***REMOVED*** --- _heading_level ---
+# --- _heading_level ---
 
 
 class TestHeadingLevel:
     def test_heading_levels_1_2_3(self) -> None:
         from scripts.index_local_docs import _heading_level
 
-        assert _heading_level("***REMOVED*** Title") == 1
-        assert _heading_level("***REMOVED******REMOVED*** Section") == 2
-        assert _heading_level("***REMOVED******REMOVED******REMOVED*** Sub") == 3
+        assert _heading_level("# Title") == 1
+        assert _heading_level("## Section") == 2
+        assert _heading_level("### Sub") == 3
 
     def test_non_heading_returns_none(self) -> None:
         from scripts.index_local_docs import _heading_level
 
         assert _heading_level("Normal text") is None
         assert _heading_level("") is None
-        assert _heading_level("***REMOVED******REMOVED******REMOVED******REMOVED***No space") is None
-        assert _heading_level("  ***REMOVED******REMOVED*** indented") is None
+        assert _heading_level("####No space") is None
+        assert _heading_level("  ## indented") is None
 
 
-***REMOVED*** --- chunk_markdown ---
+# --- chunk_markdown ---
 
 
 class TestChunkMarkdown:
     def test_chunk_splits_by_h2_headings(self) -> None:
         from scripts.index_local_docs import chunk_markdown
 
-        text = "***REMOVED******REMOVED*** Alpha\nContent A\n***REMOVED******REMOVED*** Beta\nContent B"
+        text = "## Alpha\nContent A\n## Beta\nContent B"
         chunks = chunk_markdown(text, "test.md")
         headings = [c["heading"] for c in chunks]
         assert "Alpha" in headings
@@ -134,7 +134,7 @@ class TestChunkMarkdown:
         """Sections smaller than MAX_CHUNK_CHARS stay as single chunks."""
         from scripts.index_local_docs import chunk_markdown
 
-        text = "***REMOVED******REMOVED*** A\nShort.\n***REMOVED******REMOVED*** B\nAlso short."
+        text = "## A\nShort.\n## B\nAlso short."
         chunks = chunk_markdown(text, "test.md")
         assert len(chunks) == 2
         assert chunks[0]["text"] == "Short."
@@ -143,9 +143,9 @@ class TestChunkMarkdown:
     def test_chunk_splits_oversized_sections(self) -> None:
         from scripts import index_local_docs as subject
 
-        ***REMOVED*** Build a section larger than MAX_CHUNK_CHARS with multiple paragraphs
-        para = "word " * 300  ***REMOVED*** ~1500 chars per paragraph
-        text = "***REMOVED******REMOVED*** Big\n" + para + "\n\n" + para
+        # Build a section larger than MAX_CHUNK_CHARS with multiple paragraphs
+        para = "word " * 300  # ~1500 chars per paragraph
+        text = "## Big\n" + para + "\n\n" + para
         chunks = subject.chunk_markdown(text, "big.md")
         assert len(chunks) >= 2
         for c in chunks:
@@ -154,14 +154,14 @@ class TestChunkMarkdown:
     def test_chunk_preserves_content(self) -> None:
         from scripts.index_local_docs import chunk_markdown
 
-        text = "***REMOVED******REMOVED*** Intro\nHello world\n\nSecond paragraph"
+        text = "## Intro\nHello world\n\nSecond paragraph"
         chunks = chunk_markdown(text, "f.md")
         combined = " ".join(c["text"] for c in chunks)
         assert "Hello world" in combined
         assert "Second paragraph" in combined
 
 
-***REMOVED*** --- load_document_chunks ---
+# --- load_document_chunks ---
 
 
 class TestLoadDocumentChunks:
@@ -169,11 +169,11 @@ class TestLoadDocumentChunks:
         from scripts.index_local_docs import load_document_chunks
 
         md = tmp_path / "doc.md"
-        md.write_text("***REMOVED******REMOVED*** Sec\nBody", encoding="utf-8")
+        md.write_text("## Sec\nBody", encoding="utf-8")
         chunks_a = load_document_chunks(md)
         chunks_b = load_document_chunks(md)
         assert chunks_a[0]["id"] == chunks_b[0]["id"]
-        ***REMOVED*** Valid UUID
+        # Valid UUID
         import uuid
 
         uuid.UUID(chunks_a[0]["id"])
@@ -182,7 +182,7 @@ class TestLoadDocumentChunks:
         from scripts.index_local_docs import load_document_chunks
 
         md = tmp_path / "notes.md"
-        md.write_text("***REMOVED******REMOVED*** A\nFirst\n***REMOVED******REMOVED*** B\nSecond", encoding="utf-8")
+        md.write_text("## A\nFirst\n## B\nSecond", encoding="utf-8")
         chunks = load_document_chunks(md)
         assert len(chunks) == 2
         for i, c in enumerate(chunks):
@@ -191,7 +191,7 @@ class TestLoadDocumentChunks:
             assert c["source_file"] == "notes.md"
 
 
-***REMOVED*** --- delete_doc_points ---
+# --- delete_doc_points ---
 
 
 def test_delete_calls_qdrant_with_filter() -> None:
@@ -209,7 +209,7 @@ def test_delete_calls_qdrant_with_filter() -> None:
     assert filt.must[0].match.value == "my_doc.md"
 
 
-***REMOVED*** --- ensure_payload_indexes ---
+# --- ensure_payload_indexes ---
 
 
 class TestEnsurePayloadIndexes:
@@ -233,13 +233,13 @@ class TestEnsurePayloadIndexes:
 
         client = mock.MagicMock()
         client.create_payload_index.side_effect = RuntimeError("already exists")
-        ***REMOVED*** Should not raise
+        # Should not raise
         ensure_payload_indexes(client, "col")
         out = capsys.readouterr().out
         assert "WARNING" in out
 
 
-***REMOVED*** --- encode_hybrid_http ---
+# --- encode_hybrid_http ---
 
 
 class TestEncodeHybridHttp:
@@ -257,8 +257,8 @@ class TestEncodeHybridHttp:
         with mock.patch("httpx.post", return_value=mock_response) as mock_post:
             encode_hybrid_http(["a", "b", "c"], "http://bge:8000", batch_size=2)
 
-        assert mock_post.call_count == 2  ***REMOVED*** 2 texts + 1 text
-        ***REMOVED*** First batch has 2 texts, second has 1
+        assert mock_post.call_count == 2  # 2 texts + 1 text
+        # First batch has 2 texts, second has 1
         first_call_texts = mock_post.call_args_list[0].kwargs["json"]["texts"]
         second_call_texts = mock_post.call_args_list[1].kwargs["json"]["texts"]
         assert first_call_texts == ["a", "b"]
@@ -286,7 +286,7 @@ class TestEncodeHybridHttp:
         assert len(result["colbert"]) == 1
 
 
-***REMOVED*** --- preflight_check (additional) ---
+# --- preflight_check (additional) ---
 
 
 class TestPreflightCheck:
@@ -312,5 +312,5 @@ class TestPreflightCheck:
         client.collection_exists.return_value = True
         client.get_collection.return_value = _collection_info()
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         preflight_check(client, "col")

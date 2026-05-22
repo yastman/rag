@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 LLM_BASE_URL=${LLM_BASE_URL:-${LITELLM_BASE_URL:-http://localhost:4000}}
@@ -20,7 +20,7 @@ if ! command -v uv >/dev/null 2>&1; then
   fail "uv is required"
 fi
 
-***REMOVED*** Redis: use the same BotConfig + redis-py path as native bot startup
+# Redis: use the same BotConfig + redis-py path as native bot startup
 uv run --no-sync python - <<'PY' || fail "Redis is unreachable or auth failed for native bot startup"
 from telegram_bot.config import BotConfig
 import redis
@@ -56,8 +56,8 @@ finally:
 PY
 echo "✓ Redis auth OK"
 
-***REMOVED*** Postgres: report the REAL_ESTATE_DATABASE_URL localhost:5432 contract used by
-***REMOVED*** native bot startup without turning optional DB reachability into a hard fail.
+# Postgres: report the REAL_ESTATE_DATABASE_URL localhost:5432 contract used by
+# native bot startup without turning optional DB reachability into a hard fail.
 uv run --no-sync python - <<'PY'
 from telegram_bot.config import BotConfig
 import socket
@@ -84,7 +84,7 @@ else:
     )
 PY
 
-***REMOVED*** Qdrant: use the same BotConfig + qdrant-client collection contract as native bot startup
+# Qdrant: use the same BotConfig + qdrant-client collection contract as native bot startup
 uv run --no-sync python - <<'PY' || fail "Qdrant is unreachable or the configured collection is missing"
 from telegram_bot.config import BotConfig
 from qdrant_client import QdrantClient
@@ -104,7 +104,7 @@ finally:
     client.close()
 PY
 
-***REMOVED*** LiteLLM/LLM connectivity
+# LiteLLM/LLM connectivity
 normalized_llm_base_url="$(strip_trailing_slash "$LLM_BASE_URL")"
 health_base_url="${normalized_llm_base_url%/v1}"
 models_url="$normalized_llm_base_url/models"
@@ -113,7 +113,7 @@ health_url="$health_base_url/health/readiness"
 if curl -fsS "$health_url" >/dev/null; then
   echo "✓ LiteLLM readiness OK: $health_url"
 else
-  ***REMOVED*** Fallback for OpenAI-compatible endpoints.
+  # Fallback for OpenAI-compatible endpoints.
   curl -fsS "$models_url" >/dev/null || fail "LLM endpoint not responding at $LLM_BASE_URL"
   echo "✓ LLM models OK: $models_url"
 fi

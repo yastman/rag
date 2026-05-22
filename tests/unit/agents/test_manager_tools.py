@@ -16,9 +16,9 @@ from telegram_bot.agents.manager_tools import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _cfg(**kwargs: Any) -> RunnableConfig:
@@ -26,7 +26,7 @@ def _cfg(**kwargs: Any) -> RunnableConfig:
     return RunnableConfig(configurable=kwargs)
 
 
-def _passthrough_observe(name: str | None = None, **kw: Any):  ***REMOVED*** type: ignore[return]
+def _passthrough_observe(name: str | None = None, **kw: Any):  # type: ignore[return]
     """Passthrough decorator replacing telegram_bot.observability.observe."""
 
     def dec(fn: Any) -> Any:
@@ -67,9 +67,9 @@ def _make_score_sync_tool(
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _resolve_role
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _resolve_role
+# ---------------------------------------------------------------------------
 
 
 class TestResolveRole:
@@ -91,13 +91,13 @@ class TestResolveRole:
         assert _resolve_role(_cfg()) == "client"
 
     def test_defaults_to_client_for_none_config(self) -> None:
-        ***REMOVED*** RunnableConfig can be empty
+        # RunnableConfig can be empty
         assert _resolve_role(RunnableConfig()) == "client"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _get_user_context
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _get_user_context
+# ---------------------------------------------------------------------------
 
 
 class TestGetUserContext:
@@ -117,9 +117,9 @@ class TestGetUserContext:
         assert sid is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** build_tools_for_role
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# build_tools_for_role
+# ---------------------------------------------------------------------------
 
 
 class TestBuildToolsForRole:
@@ -139,7 +139,7 @@ class TestBuildToolsForRole:
         assert "tool_b" not in result
 
     def test_admin_does_not_get_extra_tools(self) -> None:
-        ***REMOVED*** build_tools_for_role only checks for "manager"
+        # build_tools_for_role only checks for "manager"
         result = build_tools_for_role(role="admin", base_tools=[], manager_tools=["x"])
         assert "x" not in result
 
@@ -149,9 +149,9 @@ class TestBuildToolsForRole:
         assert result is not base
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** create_manager_nurturing_tools
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# create_manager_nurturing_tools
+# ---------------------------------------------------------------------------
 
 
 class TestCreateManagerNurturingTools:
@@ -195,9 +195,9 @@ class TestCreateManagerNurturingTools:
         assert "7" in result
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** create_crm_score_sync_tool
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# create_crm_score_sync_tool
+# ---------------------------------------------------------------------------
 
 
 class TestCreateCrmScoreSyncTool:

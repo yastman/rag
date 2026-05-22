@@ -37,8 +37,8 @@ class TestLatencyUnitsConsistency:
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["query_type"] = "GENERAL"
 
-        ***REMOVED*** Simulate 50ms elapsed: time.time() returns epoch seconds,
-        ***REMOVED*** time.perf_counter() returns monotonic seconds
+        # Simulate 50ms elapsed: time.time() returns epoch seconds,
+        # time.perf_counter() returns monotonic seconds
         time_values = iter([1000.0, 1000.05])
         with patch("telegram_bot.graph.nodes.cache.time") as mock_time:
             mock_time.time = MagicMock(side_effect=time_values)
@@ -48,7 +48,7 @@ class TestLatencyUnitsConsistency:
             )
 
         latency = result["latency_stages"]["cache_check"]
-        ***REMOVED*** In seconds: 0.05. In ms: 50.0. Threshold at 1.0 catches the bug.
+        # In seconds: 0.05. In ms: 50.0. Threshold at 1.0 catches the bug.
         assert latency < 1.0, f"cache_check latency {latency} looks like ms, should be seconds"
         assert 0.04 < latency < 0.06, f"Expected ~0.05s, got {latency}"
 
@@ -66,7 +66,7 @@ class TestLatencyUnitsConsistency:
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["query_embedding"] = [0.1] * 1024
 
-        ***REMOVED*** Simulate 200ms elapsed
+        # Simulate 200ms elapsed
         time_values = iter([1000.0, 1000.2])
         with patch("telegram_bot.graph.nodes.retrieve.time") as mock_time:
             mock_time.time = MagicMock(side_effect=time_values)
@@ -91,24 +91,24 @@ class TestLatencyUnitsConsistency:
             "cache_hit": False,
             "rerank_applied": False,
             "search_results_count": 5,
-            "pipeline_wall_ms": 2862.0,  ***REMOVED*** wall-time, not sum of stages
+            "pipeline_wall_ms": 2862.0,  # wall-time, not sum of stages
             "latency_stages": {
-                "classify": 0.001,  ***REMOVED*** 1ms
-                "cache_check": 0.050,  ***REMOVED*** 50ms
-                "retrieve": 0.200,  ***REMOVED*** 200ms
-                "grade": 0.001,  ***REMOVED*** 1ms
-                "rerank": 0.100,  ***REMOVED*** 100ms
-                "generate": 2.500,  ***REMOVED*** 2500ms
-                "respond": 0.010,  ***REMOVED*** 10ms
+                "classify": 0.001,  # 1ms
+                "cache_check": 0.050,  # 50ms
+                "retrieve": 0.200,  # 200ms
+                "grade": 0.001,  # 1ms
+                "rerank": 0.100,  # 100ms
+                "generate": 2.500,  # 2500ms
+                "respond": 0.010,  # 10ms
             },
         }
 
         _write_langfuse_scores(mock_lf, result, trace_id="test-trace")
 
-        ***REMOVED*** latency_total_ms reads pipeline_wall_ms directly (wall-time)
+        # latency_total_ms reads pipeline_wall_ms directly (wall-time)
         expected_ms = result["pipeline_wall_ms"]
 
-        ***REMOVED*** Verify the actual score value matches (***REMOVED***435: create_score with trace_id)
+        # Verify the actual score value matches (#435: create_score with trace_id)
         calls = mock_lf.create_score.call_args_list
         for call in calls:
             name = call.kwargs.get("name", "")

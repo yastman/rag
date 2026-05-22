@@ -150,7 +150,7 @@ class TestHandleError:
         mock_event.update = mock_update
 
         with patch("telegram_bot.middlewares.error_handler.logger"):
-            await handle_error(mock_event)  ***REMOVED*** must not raise
+            await handle_error(mock_event)  # must not raise
 
     async def test_no_message_sent_when_no_message_in_update(self) -> None:
         """Handler does not attempt answer() when there is no message to reply to."""
@@ -159,7 +159,7 @@ class TestHandleError:
         mock_answer = AsyncMock()
         mock_update = MagicMock()
         mock_update.message = None
-        ***REMOVED*** callback_query exists but has no .message
+        # callback_query exists but has no .message
         mock_update.callback_query = MagicMock()
         mock_update.callback_query.message = None
 
@@ -170,7 +170,7 @@ class TestHandleError:
         with patch("telegram_bot.middlewares.error_handler.logger"):
             await handle_error(mock_event)
 
-        ***REMOVED*** Neither path should have triggered answer()
+        # Neither path should have triggered answer()
         mock_answer.assert_not_called()
 
     async def test_updates_langfuse_span_status_when_trace_active(self) -> None:
@@ -225,7 +225,7 @@ class TestSetupErrorHandler:
         setup_error_handler(mock_dp)
 
         call_args = mock_dp.errors.register.call_args
-        ***REMOVED*** Second positional arg should be ExceptionTypeFilter instance
+        # Second positional arg should be ExceptionTypeFilter instance
         filters = call_args.args[1:]
         assert any(isinstance(f, ExceptionTypeFilter) for f in filters), (
             "setup_error_handler must pass ExceptionTypeFilter to dp.errors.register"

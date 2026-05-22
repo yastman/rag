@@ -132,7 +132,7 @@ class TestEvaluateQuery:
             evaluator = SearchEvaluator(f.name)
 
             query = {"query": "test", "expected_article": "121"}
-            ***REMOVED*** Expected at position 1 = perfect NDCG
+            # Expected at position 1 = perfect NDCG
             results = [{"article_number": "121", "score": 0.95}]
 
             metrics = evaluator.evaluate_query(query, results)
@@ -156,7 +156,7 @@ class TestEvaluateQuery:
 
             metrics = evaluator.evaluate_query(query, results)
 
-            ***REMOVED*** Only one relevant result at position 1
+            # Only one relevant result at position 1
             assert metrics["precision@1"] == 1.0
             assert metrics["precision@3"] == pytest.approx(1 / 3)
 
@@ -184,7 +184,7 @@ class TestCalculateNDCG:
             evaluator = SearchEvaluator(f.name)
 
             ndcg = evaluator._calculate_ndcg("121", ["122", "121", "123"])
-            ***REMOVED*** DCG = 1/log2(3) ≈ 0.63, IDCG = 1.0
+            # DCG = 1/log2(3) ≈ 0.63, IDCG = 1.0
             assert ndcg == pytest.approx(1 / np.log2(3))
 
     def test_ndcg_not_found(self):
@@ -227,7 +227,7 @@ class TestEvaluateQueries:
 
             assert result["total_queries"] == 2
             assert "metrics" in result
-            ***REMOVED*** Average recall@1: (1 + 0) / 2 = 0.5
+            # Average recall@1: (1 + 0) / 2 = 0.5
             assert result["metrics"]["recall@1"] == 0.5
 
     def test_evaluate_queries_by_type(self):
@@ -269,15 +269,15 @@ class TestEvaluateQueries:
                 {"query": "q2", "expected_article": "122"},
             ]
 
-            ***REMOVED*** q1 fails, q2 succeeds
+            # q1 fails, q2 succeeds
             search_results_map = {
-                "q1": [{"article_number": "999", "score": 0.95}],  ***REMOVED*** Wrong
-                "q2": [{"article_number": "122", "score": 0.95}],  ***REMOVED*** Correct
+                "q1": [{"article_number": "999", "score": 0.95}],  # Wrong
+                "q2": [{"article_number": "122", "score": 0.95}],  # Correct
             }
 
             result = evaluator.evaluate_queries(queries, search_results_map)
 
-            ***REMOVED*** recall@10 = 0.5, failure_rate = 1 - 0.5 = 0.5
+            # recall@10 = 0.5, failure_rate = 1 - 0.5 = 0.5
             assert result["metrics"]["failure_rate"] == 0.5
 
 
@@ -304,9 +304,9 @@ class TestCompareEngines:
 
             hybrid_results = {
                 "metrics": {
-                    "recall@1": 0.90,  ***REMOVED*** +10%
-                    "recall@10": 0.95,  ***REMOVED*** +5.5%
-                    "mrr": 0.85,  ***REMOVED*** +13.3%
+                    "recall@1": 0.90,  # +10%
+                    "recall@10": 0.95,  # +5.5%
+                    "mrr": 0.85,  # +13.3%
                 },
                 "detailed_results": [],
             }
@@ -333,11 +333,11 @@ class TestCompareEngines:
             }
 
             hybrid_results = {
-                "metrics": {"failure_rate": 0.10},  ***REMOVED*** 50% reduction
+                "metrics": {"failure_rate": 0.10},  # 50% reduction
                 "detailed_results": [],
             }
 
             comparison = evaluator.compare_engines(baseline_results, hybrid_results)
 
-            ***REMOVED*** For failure rate, improvement is (baseline - hybrid) / baseline
+            # For failure rate, improvement is (baseline - hybrid) / baseline
             assert comparison["improvements"]["failure_rate"]["relative_improvement_pct"] == 50.0

@@ -7,7 +7,7 @@ import pytest
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class TestColbertRerankerService:
-    """Tests for ColbertRerankerService (deprecated — see ***REMOVED***780)."""
+    """Tests for ColbertRerankerService (deprecated — see #780)."""
 
     @pytest.fixture
     def service(self):
@@ -27,7 +27,7 @@ class TestColbertRerankerService:
         }
         mock_response.raise_for_status = MagicMock()
 
-        ***REMOVED*** Patch the internal httpx client inside BGEM3Client
+        # Patch the internal httpx client inside BGEM3Client
         http_client = AsyncMock()
         http_client.post = AsyncMock(return_value=mock_response)
         http_client.is_closed = False

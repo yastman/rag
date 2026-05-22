@@ -31,8 +31,8 @@ describe('setupMockEnv', () => {
           tgWebAppVersion: '8',
           tgWebAppPlatform: 'tdesktop',
           tgWebAppThemeParams: expect.objectContaining({
-            bg_color: '***REMOVED***17212b',
-            text_color: '***REMOVED***f5f5f5',
+            bg_color: '#17212b',
+            text_color: '#f5f5f5',
           }),
           tgWebAppData: expect.any(URLSearchParams),
         }),

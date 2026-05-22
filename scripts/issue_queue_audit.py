@@ -1,9 +1,9 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Open issue queue hygiene report.
 
 Reads open issues via ``gh issue list --json ...`` and classifies each into
 hygiene buckets so an operator can decide what to label, assign, split, or
-close. Designed for the weekly governance runbook (issue ***REMOVED***1720).
+close. Designed for the weekly governance runbook (issue #1720).
 
 Lane labels respected
 ---------------------
@@ -62,7 +62,7 @@ class IssueStatus:
     age_days: int
     labels: list[str] = field(default_factory=list)
     assignees: list[str] = field(default_factory=list)
-    lane: str = ""  ***REMOVED*** "" when no lane:* label
+    lane: str = ""  # "" when no lane:* label
     flags: list[IssueBucket] = field(default_factory=list)
 
     @property
@@ -129,7 +129,7 @@ def _parse_age_days(created_at: str, *, now: datetime | None = None) -> int:
     if not created_at:
         return 0
     try:
-        ***REMOVED*** Python 3.11+ ``fromisoformat`` parses the trailing ``Z`` natively.
+        # Python 3.11+ ``fromisoformat`` parses the trailing ``Z`` natively.
         dt = datetime.fromisoformat(created_at)
     except ValueError:
         return 0
@@ -243,16 +243,16 @@ def print_human_report(issues: list[IssueStatus], counts: dict[str, int]) -> Non
     else:
         for issue in actionable:
             flags_str = ",".join(issue.flags)
-            print(f"  ***REMOVED***{issue.number:>5} ({issue.age_days}d) [{flags_str}]  {issue.title}")
+            print(f"  #{issue.number:>5} ({issue.age_days}d) [{flags_str}]  {issue.title}")
             assignees = ", ".join(f"@{a}" for a in issue.assignees) or "—"
             lane = issue.lane or "—"
             print(f"         lane={lane}  assignees={assignees}")
             print(f"         {issue.url}")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def build_report(
@@ -312,5 +312,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if actionable == 0 else 1
 
 
-if __name__ == "__main__":  ***REMOVED*** pragma: no cover - thin CLI shim
+if __name__ == "__main__":  # pragma: no cover - thin CLI shim
     sys.exit(main())

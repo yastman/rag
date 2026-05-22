@@ -52,16 +52,16 @@ def _issue(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Per-flag classification
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Per-flag classification
+# ---------------------------------------------------------------------------
 
 
 def test_issue_with_no_labels_no_assignee(iq) -> None:
     out = iq.classify_issue(_issue(), now=NOW)
     assert "no-labels" in out.flags
     assert "no-assignee" in out.flags
-    assert "no-lane" not in out.flags  ***REMOVED*** gated on having any labels
+    assert "no-lane" not in out.flags  # gated on having any labels
     assert out.is_triaged is False
 
 
@@ -89,7 +89,7 @@ def test_stale_flag_added_when_old(iq) -> None:
         now=NOW,
     )
     assert "stale" in out.flags
-    assert out.is_triaged is False  ***REMOVED*** any flag means not fully triaged
+    assert out.is_triaged is False  # any flag means not fully triaged
 
 
 def test_lane_picks_first_lane_label(iq) -> None:
@@ -100,15 +100,15 @@ def test_lane_picks_first_lane_label(iq) -> None:
     assert out.lane == "lane:quick-win"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Aggregation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Aggregation
+# ---------------------------------------------------------------------------
 
 
 def test_summarise_counts_buckets_and_lanes(iq) -> None:
     raw = [
-        _issue(number=1),  ***REMOVED*** no-labels + no-assignee
-        _issue(number=2, labels=["bug"]),  ***REMOVED*** no-lane + no-assignee
+        _issue(number=1),  # no-labels + no-assignee
+        _issue(number=2, labels=["bug"]),  # no-lane + no-assignee
         _issue(number=3, labels=["bug", "lane:quick-win"], assignees=["alice"]),
         _issue(
             number=4,
@@ -141,9 +141,9 @@ def test_filter_bucket_returns_only_matches(iq) -> None:
     assert [i.number for i in only_no_labels] == [1]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** fetch_open_issues uses gh CLI through the runner
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# fetch_open_issues uses gh CLI through the runner
+# ---------------------------------------------------------------------------
 
 
 def test_fetch_open_issues_invokes_gh(iq) -> None:

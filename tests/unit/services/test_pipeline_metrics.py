@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/services/test_pipeline_metrics.py
+# tests/unit/services/test_pipeline_metrics.py
 """Tests for PipelineMetrics: rolling-window p50/p95 tracking."""
 
 import pytest
@@ -161,13 +161,13 @@ class TestGetStats:
     def test_p50_p95_with_enough_values(self):
         """With enough values, p50 and p95 are calculated correctly."""
         m = PipelineMetrics.get()
-        ***REMOVED*** Record 100 values: 1..100
+        # Record 100 values: 1..100
         for i in range(1, 101):
             m.record("latency", float(i))
         stats = m.get_stats()
         t = stats["timings"]["latency"]
         assert t["count"] == 100
-        ***REMOVED*** p50 should be around 50, p95 around 95
+        # p50 should be around 50, p95 around 95
         assert 45 <= t["p50"] <= 55
         assert 90 <= t["p95"] <= 100
 

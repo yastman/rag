@@ -1,4 +1,4 @@
-"""Verify all traced services have LANGFUSE env vars with dev defaults (***REMOVED***langfuse-coverage)."""
+"""Verify all traced services have LANGFUSE env vars with dev defaults (#langfuse-coverage)."""
 
 from __future__ import annotations
 
@@ -28,10 +28,10 @@ def _get_service_env(compose: dict, service: str) -> dict[str, str]:
     return env
 
 
-***REMOVED*** Сервисы которые ДОЛЖНЫ иметь LANGFUSE vars
+# Сервисы которые ДОЛЖНЫ иметь LANGFUSE vars
 TRACED_SERVICES = ["bot", "litellm", "rag-api", "voice-agent", "ingestion"]
 
-***REMOVED*** Минимальный набор vars для трейсинга
+# Минимальный набор vars для трейсинга
 REQUIRED_LANGFUSE_VARS = [
     "LANGFUSE_PUBLIC_KEY",
     "LANGFUSE_SECRET_KEY",

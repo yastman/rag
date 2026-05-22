@@ -1,4 +1,4 @@
-"""Service-chain integration tests for agent tool routing (***REMOVED***554)."""
+"""Service-chain integration tests for agent tool routing (#554)."""
 
 from __future__ import annotations
 

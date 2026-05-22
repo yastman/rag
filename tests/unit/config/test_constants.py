@@ -16,7 +16,7 @@ from src.config.constants import (
     COLLECTIONS,
     DEFAULT_COLLECTION,
     DEFAULTS,
-    ***REMOVED*** Dictionary constants
+    # Dictionary constants
     RATE_LIMITS,
     APIProvider,
     BatchSizes,
@@ -25,10 +25,10 @@ from src.config.constants import (
     MMRParameters,
     ModelName,
     RetrievalStages,
-    ***REMOVED*** Enums
+    # Enums
     SearchEngine,
     ThresholdValues,
-    ***REMOVED*** Dataclasses
+    # Dataclasses
     VectorDimensions,
 )
 
@@ -57,7 +57,7 @@ class TestSearchEngineEnum:
     def test_search_engine_string_comparison(self):
         """Verify SearchEngine members can be compared as strings."""
         assert SearchEngine.HYBRID_RRF_COLBERT == "hybrid_rrf_colbert"
-        ***REMOVED*** str() returns the enum repr, but value gives the string value
+        # str() returns the enum repr, but value gives the string value
         assert SearchEngine.HYBRID_RRF_COLBERT.value == "hybrid_rrf_colbert"
 
 
@@ -498,14 +498,14 @@ class TestConstantsIntegration:
 
     def test_retrieval_stages_consistent_with_batch_sizes(self):
         """Verify retrieval stages produce reasonable numbers."""
-        ***REMOVED*** Stage 1 candidates should be much larger than final results
+        # Stage 1 candidates should be much larger than final results
         assert RetrievalStages.STAGE1_CANDIDATES >= 10 * RetrievalStages.STAGE2_FINAL
 
     def test_threshold_values_consistent(self):
         """Verify threshold ordering makes sense for search pipeline."""
-        ***REMOVED*** Hybrid should be more lenient than dense-only (gets more candidates)
+        # Hybrid should be more lenient than dense-only (gets more candidates)
         assert ThresholdValues.HYBRID <= ThresholdValues.DENSE_ONLY
-        ***REMOVED*** Minimum should be lowest
+        # Minimum should be lowest
         assert ThresholdValues.MINIMUM <= ThresholdValues.HYBRID
 
 

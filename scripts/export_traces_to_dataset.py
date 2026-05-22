@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Export low-scoring Langfuse traces into versioned evaluation datasets.
 
 Filters production traces by judge scores (faithfulness, relevance, context),
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 50
 
-***REMOVED*** Judge score thresholds from tests/baseline/thresholds.yaml
+# Judge score thresholds from tests/baseline/thresholds.yaml
 SCORE_THRESHOLDS: dict[str, float] = {
     "judge_faithfulness": 0.75,
     "judge_answer_relevance": 0.70,
@@ -39,9 +39,9 @@ SCORE_THRESHOLDS: dict[str, float] = {
 DATASETS_DIR = Path(__file__).resolve().parent.parent / "datasets"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Trace analysis helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Trace analysis helpers
+# ---------------------------------------------------------------------------
 
 
 def get_trace_scores(trace: Any) -> dict[str, float]:
@@ -89,9 +89,9 @@ def extract_item_data(
     if not answer:
         return None
 
-    ***REMOVED*** Extract retrieved context from node-retrieve observation.
-    ***REMOVED*** node-retrieve writes eval_docs as a concatenated string
-    ***REMOVED*** (format: "[score] content\n\n[score] content"), not retrieved_context.
+    # Extract retrieved context from node-retrieve observation.
+    # node-retrieve writes eval_docs as a concatenated string
+    # (format: "[score] content\n\n[score] content"), not retrieved_context.
     context_parts: list[str] = []
     for obs in observations:
         if getattr(obs, "name", "") != "node-retrieve":
@@ -110,9 +110,9 @@ def extract_item_data(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Langfuse trace fetching
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Langfuse trace fetching
+# ---------------------------------------------------------------------------
 
 
 def fetch_exportable_traces(
@@ -145,7 +145,7 @@ def fetch_exportable_traces(
             total_scanned += 1
             scores = get_trace_scores(trace)
 
-            ***REMOVED*** Skip traces without judge scores (not yet evaluated)
+            # Skip traces without judge scores (not yet evaluated)
             has_judge = any(s in scores for s in SCORE_THRESHOLDS)
             if not has_judge:
                 continue
@@ -154,7 +154,7 @@ def fetch_exportable_traces(
             if not reasons:
                 continue
 
-            ***REMOVED*** Fetch observations for context extraction
+            # Fetch observations for context extraction
             obs_page = langfuse.api.observations.get_many(
                 trace_id=trace.id,
                 type="SPAN",
@@ -191,9 +191,9 @@ def fetch_exportable_traces(
     return items
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Export to Langfuse dataset
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Export to Langfuse dataset
+# ---------------------------------------------------------------------------
 
 
 def export_to_langfuse(
@@ -233,9 +233,9 @@ def export_to_langfuse(
     return created
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Export to local JSONL
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Export to local JSONL
+# ---------------------------------------------------------------------------
 
 
 def export_to_jsonl(
@@ -261,9 +261,9 @@ def export_to_jsonl(
     logger.info("Exported %d items to %s", len(items), output_path)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def make_dataset_name(prefix: str = "rag-eval") -> str:
@@ -327,7 +327,7 @@ def main() -> None:
         logger.info("No exportable traces found. Nothing to do.")
         return
 
-    ***REMOVED*** Summary table
+    # Summary table
     logger.info("--- Export Summary ---")
     reason_counts: dict[str, int] = {}
     for item in items:
@@ -349,12 +349,12 @@ def main() -> None:
             logger.info("  ... and %d more", len(items) - 5)
         return
 
-    ***REMOVED*** Export to local JSONL
+    # Export to local JSONL
     output_dir = Path(args.output_dir)
     jsonl_path = output_dir / f"{dataset_name}.jsonl"
     export_to_jsonl(jsonl_path, items)
 
-    ***REMOVED*** Export to Langfuse dataset
+    # Export to Langfuse dataset
     if not args.skip_langfuse_upload:
         export_to_langfuse(langfuse, dataset_name, items)
 

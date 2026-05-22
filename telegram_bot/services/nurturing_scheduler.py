@@ -1,11 +1,11 @@
-"""APScheduler-based nurturing + funnel analytics scheduler (***REMOVED***390).
+"""APScheduler-based nurturing + funnel analytics scheduler (#390).
 
 Uses APScheduler v3 AsyncIOScheduler with:
 - coalesce=True: collapse missed runs into one
 - max_instances=1: prevent concurrent duplicate runs
 - misfire_grace_time=300: 5-min grace window for late execution
 
-TODO(***REMOVED***390): Migrate to APScheduler v4 when stable (currently alpha 4.0.0a6).
+TODO(#390): Migrate to APScheduler v4 when stable (currently alpha 4.0.0a6).
   v4 changes: AsyncScheduler, AnyIO, add_schedule(IntervalTrigger),
   CoalescePolicy.latest, misfire_grace_time=timedelta(minutes=5).
 """
@@ -106,7 +106,7 @@ class NurturingScheduler:
     async def run_nurturing_dispatch(self) -> None:
         """Dispatch pending nurturing messages (called by scheduler).
 
-        Wrapped in ``@observe`` (***REMOVED***1663) so the job emits a named Langfuse span
+        Wrapped in ``@observe`` (#1663) so the job emits a named Langfuse span
         tagged ``job/nurturing``. On failure, records ``level='ERROR'`` and
         re-raises so APScheduler can mark the run as failed.
         """
@@ -125,7 +125,7 @@ class NurturingScheduler:
     async def run_funnel_rollup(self) -> None:
         """Compute and persist daily funnel metrics (called by scheduler).
 
-        Wrapped in ``@observe`` (***REMOVED***1663) so the job emits a named Langfuse span
+        Wrapped in ``@observe`` (#1663) so the job emits a named Langfuse span
         tagged ``job/analytics``. On failure, records ``level='ERROR'`` and
         re-raises so APScheduler can mark the run as failed.
         """

@@ -1,4 +1,4 @@
-"""Tests for system prompt i18n and role_context variable (***REMOVED***444)."""
+"""Tests for system prompt i18n and role_context variable (#444)."""
 
 from __future__ import annotations
 

@@ -1,7 +1,7 @@
-***REMOVED*** tests/contract/test_callback_router_ownership_contract.py
-"""Single-owner contract for Telegram callback routing (***REMOVED***1598).
+# tests/contract/test_callback_router_ownership_contract.py
+"""Single-owner contract for Telegram callback routing (#1598).
 
-***REMOVED***1598 audit (2026-05-19, refreshed 2026-05-21) showed that
+#1598 audit (2026-05-19, refreshed 2026-05-21) showed that
 ``telegram_bot/handlers/{service_callbacks,results_callbacks,favorites_callbacks}.py``
 each defined ``create_*_router()`` factories that were NEVER included in bot
 startup, while ``PropertyBot._register_handlers`` registered the same
@@ -33,9 +33,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 1. Orphan callback router modules must stay deleted.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 1. Orphan callback router modules must stay deleted.
+# ---------------------------------------------------------------------------
 
 
 _ORPHAN_MODULES = pytest.mark.parametrize(
@@ -50,20 +50,20 @@ _ORPHAN_MODULES = pytest.mark.parametrize(
 
 @_ORPHAN_MODULES
 def test_orphan_callback_router_module_is_gone(rel_path: str) -> None:
-    """The orphan callback router modules must not exist (***REMOVED***1598)."""
+    """The orphan callback router modules must not exist (#1598)."""
     src_path = REPO_ROOT / rel_path
     assert not src_path.is_file(), (
-        f"{rel_path} was removed in ***REMOVED***1598 because PropertyBot._register_handlers"
+        f"{rel_path} was removed in #1598 because PropertyBot._register_handlers"
         " owns the same callback prefixes directly. Re-introducing the orphan"
         " router would create duplicate handler ownership unless wiring also"
         " removes the corresponding PropertyBot.handle_*_callback methods."
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 2. Orphan-only test modules must also be gone — they imported the deleted
-***REMOVED***    create_*_router factories and would break collection if kept.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 2. Orphan-only test modules must also be gone — they imported the deleted
+#    create_*_router factories and would break collection if kept.
+# ---------------------------------------------------------------------------
 
 
 _ORPHAN_TEST_MODULES = pytest.mark.parametrize(
@@ -89,17 +89,17 @@ def test_orphan_callback_test_module_is_gone(rel_path: str) -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 3. PropertyBot._register_handlers must keep registering each callback
-***REMOVED***    prefix exactly once. This is the positive lock that pins the
-***REMOVED***    "single-owner" decision so a future refactor can't accidentally drop
-***REMOVED***    a registration.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. PropertyBot._register_handlers must keep registering each callback
+#    prefix exactly once. This is the positive lock that pins the
+#    "single-owner" decision so a future refactor can't accidentally drop
+#    a registration.
+# ---------------------------------------------------------------------------
 
 
-***REMOVED*** NOTE: ``ast.unparse`` always emits single quotes for str literals in
-***REMOVED*** Python 3.12+. The tokens below are matched against the unparsed source,
-***REMOVED*** not against the original ``bot.py`` text, so single quotes are correct.
+# NOTE: ``ast.unparse`` always emits single quotes for str literals in
+# Python 3.12+. The tokens below are matched against the unparsed source,
+# not against the original ``bot.py`` text, so single quotes are correct.
 _REQUIRED_REGISTRATION_TOKENS: dict[str, str] = {
     "F.data.startswith('svc:')": "self.handle_service_callback",
     "F.data.startswith('cta:')": "self.handle_cta_callback",
@@ -139,7 +139,7 @@ def test_property_bot_registers_callback_prefix_exactly_once(
         f"PropertyBot._register_handlers must register filter {filter_token!r}"
         f" exactly once; found {filter_count}. Drift here means either a"
         " duplicate registration (double-handling the same callback) or a"
-        " missing registration (orphaning the prefix again, ***REMOVED***1598)."
+        " missing registration (orphaning the prefix again, #1598)."
     )
     assert handler_count >= 1, (
         f"PropertyBot._register_handlers must reference handler {handler_token!r}"

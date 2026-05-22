@@ -1,4 +1,4 @@
-"""Tests for Kommo lead scoring config fields (***REMOVED***384)."""
+"""Tests for Kommo lead scoring config fields (#384)."""
 
 from telegram_bot.config import BotConfig
 

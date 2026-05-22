@@ -28,7 +28,7 @@ def bot_config():
 def message():
     msg = MagicMock()
     msg.from_user = MagicMock()
-    msg.from_user.id = 111  ***REMOVED*** admin
+    msg.from_user.id = 111  # admin
     msg.chat = MagicMock()
     msg.chat.id = 999
     msg.answer = AsyncMock()
@@ -48,7 +48,7 @@ def _make_bot(bot_config: BotConfig) -> MagicMock:
 def test_call_requires_admin(bot_config, message):
     """Non-admin users should be rejected."""
     bot = _make_bot(bot_config)
-    message.from_user.id = 999  ***REMOVED*** not admin
+    message.from_user.id = 999  # not admin
     asyncio.run(cmd_call(bot, message))
     message.answer.assert_called_once()
     assert "администратор" in message.answer.call_args[0][0].lower()

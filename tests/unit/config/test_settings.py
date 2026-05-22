@@ -18,7 +18,7 @@ from src.config.constants import (
 from src.config.settings import Settings
 
 
-***REMOVED*** Fixture to prevent load_dotenv from loading real .env file
+# Fixture to prevent load_dotenv from loading real .env file
 @pytest.fixture(autouse=True)
 def mock_load_dotenv():
     """Prevent load_dotenv from loading real .env file during tests."""
@@ -57,30 +57,30 @@ class TestSettingsInit:
         """Test that default values are correctly applied."""
         settings = Settings()
 
-        ***REMOVED*** Model defaults
+        # Model defaults
         assert settings.temperature == 0.0
         assert settings.max_tokens == 4096
         assert settings.max_retries == DEFAULTS["max_retries"]
         assert settings.retry_backoff == DEFAULTS["retry_backoff"]
 
-        ***REMOVED*** Vector DB defaults
+        # Vector DB defaults
         assert settings.qdrant_url == "http://localhost:6333"
         assert settings.qdrant_api_key == ""
 
-        ***REMOVED*** Search defaults
+        # Search defaults
         assert settings.search_engine == SearchEngine.HYBRID_RRF_COLBERT
         assert settings.score_threshold == 0.3
         assert settings.top_k == 10
 
-        ***REMOVED*** Collection default
+        # Collection default
         assert settings.collection_name == DEFAULT_COLLECTION
 
-        ***REMOVED*** Batch sizes
+        # Batch sizes
         assert settings.batch_size_embeddings == BatchSizes.EMBEDDINGS
         assert settings.batch_size_documents == BatchSizes.DOCUMENTS
         assert settings.batch_size_queries == BatchSizes.QUERIES
 
-        ***REMOVED*** Retrieval stages
+        # Retrieval stages
         assert settings.retrieval_stage1_candidates == RetrievalStages.STAGE1_CANDIDATES
         assert settings.retrieval_stage2_final == RetrievalStages.STAGE2_FINAL
 
@@ -89,7 +89,7 @@ class TestSettingsInit:
         """Test feature flag default values."""
         settings = Settings()
 
-        ***REMOVED*** Feature flags default to True
+        # Feature flags default to True
         assert settings.enable_caching is True
         assert settings.enable_query_expansion is True
         assert settings.enable_langfuse is True
@@ -203,7 +203,7 @@ class TestSettingsInit:
         """Test that path defaults are relative to project root."""
         settings = Settings()
 
-        ***REMOVED*** Paths should be Path objects
+        # Paths should be Path objects
         assert isinstance(settings.data_dir, Path)
         assert isinstance(settings.docs_dir, Path)
         assert isinstance(settings.logs_dir, Path)
@@ -227,7 +227,7 @@ class TestSettingsInit:
         assert settings.data_dir == Path("/custom/data")
         assert settings.docs_dir == Path("/custom/docs")
         assert settings.logs_dir == Path("/custom/logs")
-        ***REMOVED*** Verify mkdir was called for logs_dir
+        # Verify mkdir was called for logs_dir
         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=True)
@@ -243,7 +243,7 @@ class TestSettingsInit:
         assert settings.data_dir == Path("/arg/data")
         assert settings.docs_dir == Path("/arg/docs")
         assert settings.logs_dir == Path("/arg/logs")
-        ***REMOVED*** Verify mkdir was called for logs_dir
+        # Verify mkdir was called for logs_dir
         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
 
@@ -313,7 +313,7 @@ class TestSettingsValidation:
         os.environ,
         {
             "API_PROVIDER": "claude",
-            "ANTHROPIC_API_KEY": "",  ***REMOVED*** Empty string
+            "ANTHROPIC_API_KEY": "",  # Empty string
         },
         clear=True,
     )
@@ -327,7 +327,7 @@ class TestSettingsValidation:
     @patch.dict(os.environ, {}, clear=True)
     def test_validation_zai_provider_no_validation(self):
         """Test that Z_AI provider does not require validation (legacy)."""
-        ***REMOVED*** Z_AI provider should work without API key validation
+        # Z_AI provider should work without API key validation
         settings = Settings(api_provider="zai")
 
         assert settings.api_provider == APIProvider.Z_AI
@@ -350,13 +350,13 @@ class TestSettingsToDict:
         settings = Settings()
         result = settings.to_dict()
 
-        ***REMOVED*** Should not contain API keys
+        # Should not contain API keys
         assert "anthropic_api_key" not in result
         assert "openai_api_key" not in result
         assert "groq_api_key" not in result
         assert "qdrant_api_key" not in result
 
-        ***REMOVED*** Should not contain the actual secret value
+        # Should not contain the actual secret value
         assert "secret-key-123" not in str(result.values())
 
     @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "secret-key-123"}, clear=True)
@@ -407,7 +407,7 @@ class TestSettingsToDict:
         settings = Settings()
         result = settings.to_dict()
 
-        ***REMOVED*** Enum values should be strings, not enum objects
+        # Enum values should be strings, not enum objects
         assert isinstance(result["api_provider"], str)
         assert isinstance(result["search_engine"], str)
         assert result["api_provider"] == "claude"
@@ -560,7 +560,7 @@ class TestSettingsEdgeCases:
         os.environ,
         {
             "ANTHROPIC_API_KEY": "test-key",
-            "TEMPERATURE": "0.9",  ***REMOVED*** Note: temperature comes from constructor only
+            "TEMPERATURE": "0.9",  # Note: temperature comes from constructor only
         },
         clear=True,
     )
@@ -591,7 +591,7 @@ class TestSettingsEdgeCases:
     )
     def test_all_providers_have_different_defaults(self):
         """Test that each provider has a distinct default model."""
-        ***REMOVED*** Create settings for each provider and verify unique defaults
+        # Create settings for each provider and verify unique defaults
         openai_settings = Settings()
 
         with patch.dict(
@@ -604,7 +604,7 @@ class TestSettingsEdgeCases:
         ):
             claude_settings = Settings()
 
-        ***REMOVED*** All should have different model names
+        # All should have different model names
         assert openai_settings.model_name != groq_settings.model_name
         assert groq_settings.model_name != claude_settings.model_name
         assert claude_settings.model_name != openai_settings.model_name

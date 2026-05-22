@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Index contextual JSON files using BGE-M3 API (fast, no local model loading).
 
@@ -30,10 +30,10 @@ from qdrant_client.models import (
 )
 
 
-***REMOVED*** Configuration
+# Configuration
 QDRANT_URL = "http://localhost:6333"
 BGE_M3_URL = "http://localhost:8000"
-BATCH_SIZE = 8  ***REMOVED*** Texts per API call
+BATCH_SIZE = 8  # Texts per API call
 
 
 async def get_embeddings(texts: list[str]) -> list[dict]:
@@ -66,13 +66,13 @@ def create_collection(client: QdrantClient, collection_name: str, recreate: bool
                 "dense": VectorParams(
                     size=1024,
                     distance=Distance.COSINE,
-                    ***REMOVED*** Dense uses HNSW for fast first-stage retrieval
+                    # Dense uses HNSW for fast first-stage retrieval
                 ),
                 "colbert": VectorParams(
                     size=1024,
                     distance=Distance.COSINE,
                     multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
-                    ***REMOVED*** OPTIMIZATION: Disable HNSW for ColBERT (reranker only)
+                    # OPTIMIZATION: Disable HNSW for ColBERT (reranker only)
                     hnsw_config=HnswConfigDiff(m=0),
                 ),
             },
@@ -89,19 +89,19 @@ async def index_file(client: QdrantClient, json_path: Path, collection_name: str
     """Index a single JSON file."""
     print(f"\n  Processing: {json_path.name}")
 
-    ***REMOVED*** Load JSON
+    # Load JSON
     with open(json_path, encoding="utf-8") as f:
         doc = json.load(f)
 
     chunks = doc["chunks"]
     print(f"    {len(chunks)} chunks")
 
-    ***REMOVED*** Process chunks one at a time (ColBERT vectors are huge)
+    # Process chunks one at a time (ColBERT vectors are huge)
     indexed = 0
     for _i, chunk in enumerate(chunks):
         text = chunk["text_for_embedding"]
 
-        ***REMOVED*** Get embedding for single chunk
+        # Get embedding for single chunk
         emb_response = await get_embeddings([text])
 
         dense_vec = emb_response["dense_vecs"][0]
@@ -140,7 +140,7 @@ async def main(args):
     print("Contextual Retrieval Indexer (API Mode)")
     print("=" * 60)
 
-    ***REMOVED*** Check API
+    # Check API
     async with httpx.AsyncClient() as client:
         resp = await client.get(f"{BGE_M3_URL}/health")
         if resp.json().get("status") != "ok":
@@ -148,22 +148,22 @@ async def main(args):
             return 1
     print(f"\n  BGE-M3 API: {BGE_M3_URL} ✓")
 
-    ***REMOVED*** Connect to Qdrant
+    # Connect to Qdrant
     qdrant = QdrantClient(url=QDRANT_URL)
     print(f"  Qdrant: {QDRANT_URL} ✓")
 
-    ***REMOVED*** Create collection
+    # Create collection
     collection_name = args.collection
     print(f"\n  Collection: {collection_name}")
     create_collection(qdrant, collection_name, recreate=args.recreate)
 
-    ***REMOVED*** Find JSON files
+    # Find JSON files
     input_path = Path(args.input)
     json_files = [input_path] if input_path.is_file() else sorted(input_path.glob("*.json"))
 
     print(f"\n  Found {len(json_files)} JSON files")
 
-    ***REMOVED*** Index each file
+    # Index each file
     results = []
     total_chunks = 0
     for json_path in json_files:
@@ -175,14 +175,14 @@ async def main(args):
             print(f"    ERROR: {e}")
             results.append({"file": json_path.name, "error": str(e)})
 
-    ***REMOVED*** Summary
+    # Summary
     print("\n" + "=" * 60)
     print("Summary")
     print("=" * 60)
     print(f"  Files processed: {len(results)}")
     print(f"  Total chunks: {total_chunks}")
 
-    ***REMOVED*** Collection stats
+    # Collection stats
     info = qdrant.get_collection(collection_name)
     print(f"  Points in collection: {info.points_count}")
 

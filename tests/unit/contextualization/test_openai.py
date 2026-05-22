@@ -128,7 +128,7 @@ class TestOpenAIContextualizerContextualize:
 
     async def test_contextualize_single_chunk(self, contextualizer):
         """Test contextualizing a single chunk."""
-        ***REMOVED*** Mock the API response
+        # Mock the API response
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "Contextual summary"
@@ -149,7 +149,7 @@ class TestOpenAIContextualizerContextualize:
 
     async def test_contextualize_multiple_chunks(self, contextualizer):
         """Test contextualizing multiple chunks."""
-        ***REMOVED*** Mock responses for each chunk
+        # Mock responses for each chunk
         mock_responses = []
         for i in range(3):
             resp = MagicMock()
@@ -186,7 +186,7 @@ class TestOpenAIContextualizerContextualize:
         results = await contextualizer.contextualize(chunks, query=query)
 
         assert len(results) == 1
-        ***REMOVED*** Verify the API was called
+        # Verify the API was called
         contextualizer.client.chat.completions.create.assert_called_once()
         call_kwargs = contextualizer.client.chat.completions.create.call_args[1]
         assert call_kwargs["messages"][1]["role"] == "user"
@@ -203,8 +203,8 @@ class TestOpenAIContextualizerContextualize:
 
         assert len(results) == 1
         assert results[0].original_text == chunks[0]
-        assert results[0].contextual_summary == ""  ***REMOVED*** Fallback
-        assert results[0].context_method == "none"  ***REMOVED*** Indicates failure
+        assert results[0].contextual_summary == ""  # Fallback
+        assert results[0].context_method == "none"  # Indicates failure
 
     async def test_contextualize_empty_chunks(self, contextualizer):
         """Test contextualizing empty list returns empty list."""
@@ -279,7 +279,7 @@ class TestOpenAIContextualizerContextualizeSingle:
         initial_cost = contextualizer.total_cost
         await contextualizer.contextualize_single(text="Text", article_number="A1")
 
-        ***REMOVED*** Expected: (1000 * 5 + 100 * 15) / 1_000_000 = 0.0065
+        # Expected: (1000 * 5 + 100 * 15) / 1_000_000 = 0.0065
         expected_cost = (1000 * 5 + 100 * 15) / 1_000_000
         assert contextualizer.total_cost == pytest.approx(initial_cost + expected_cost)
 
@@ -417,11 +417,11 @@ class TestOpenAIContextualizerGetStats:
             stats = ctx.get_stats()
 
             assert stats["total_tokens"] == 1234
-            assert stats["total_cost_usd"] == 0.5679  ***REMOVED*** Rounded
+            assert stats["total_cost_usd"] == 0.5679  # Rounded
 
 
 class TestOpenAIContextualizerSDKRetries:
-    """Contract: OpenAI SDK native retries replace Tenacity (***REMOVED***1651).
+    """Contract: OpenAI SDK native retries replace Tenacity (#1651).
 
     OpenAI client provides a built-in `max_retries` parameter (default 2)
     that retries connection errors, 408, 409, 429, and >=500 with

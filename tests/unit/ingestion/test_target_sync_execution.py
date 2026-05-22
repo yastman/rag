@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_target_sync_execution.py
+# tests/unit/ingestion/test_target_sync_execution.py
 """Tests for sync execution in target connector."""
 
 import asyncio
@@ -18,7 +18,7 @@ class TestTargetSyncExecution:
     def _skip_if_registry_collision(self):
         """Skip gracefully if cocoindex target_connector is already registered."""
         try:
-            from src.ingestion.unified.targets.qdrant_hybrid_target import (  ***REMOVED*** noqa: F401
+            from src.ingestion.unified.targets.qdrant_hybrid_target import (  # noqa: F401
                 QdrantHybridTargetConnector,
             )
         except ImportError as exc:
@@ -45,7 +45,7 @@ class TestTargetSyncExecution:
             QdrantHybridTargetConnector,
         )
 
-        ***REMOVED*** After refactor, these should not be async
+        # After refactor, these should not be async
         assert not asyncio.iscoroutinefunction(
             QdrantHybridTargetConnector._handle_delete_with_state
         ), "_handle_delete_with_state should be sync"
@@ -57,7 +57,7 @@ class TestTargetSyncExecution:
         """QdrantHybridWriter should have sync methods."""
         from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
-        ***REMOVED*** Check method exists (will be added)
+        # Check method exists (will be added)
         assert hasattr(QdrantHybridWriter, "delete_file_sync")
         assert hasattr(QdrantHybridWriter, "upsert_chunks_sync")
 
@@ -70,8 +70,8 @@ class TestTargetSyncExecution:
         )
 
         source = inspect.getsource(QdrantHybridTargetConnector.mutate)
-        ***REMOVED*** The except block in mutate() should NOT re-raise
-        assert "raise  ***REMOVED*** Propagate" not in source, (
+        # The except block in mutate() should NOT re-raise
+        assert "raise  # Propagate" not in source, (
             "mutate() must not re-raise per-file errors — "
             "one failing file should not kill the entire ingestion process"
         )

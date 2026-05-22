@@ -50,7 +50,7 @@ class TestGradeNodeEmptyInput:
 
     async def test_missing_documents_key_marks_not_relevant(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test")
-        ***REMOVED*** Don't set documents — grade_node does state.get("documents", [])
+        # Don't set documents — grade_node does state.get("documents", [])
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
             mock_cfg_cls.from_env.return_value = _make_config()
@@ -102,13 +102,13 @@ class TestGradeNodeRelevanceThreshold:
     async def test_score_at_threshold_not_relevant(self):
         """Top score == threshold (not strictly greater) → not relevant."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
-        state["documents"] = _make_docs([0.005])  ***REMOVED*** exactly at threshold
+        state["documents"] = _make_docs([0.005])  # exactly at threshold
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
             mock_cfg_cls.from_env.return_value = _make_config(relevance_threshold_rrf=0.005)
             result = await grade_node(state)
 
-        ***REMOVED*** top_score > threshold → 0.005 > 0.005 is False
+        # top_score > threshold → 0.005 > 0.005 is False
         assert result["documents_relevant"] is False
 
     async def test_score_below_threshold_not_relevant(self):
@@ -125,7 +125,7 @@ class TestGradeNodeRelevanceThreshold:
     async def test_typical_rrf_scores_are_relevant(self):
         """Typical RRF rank-1 score (~0.016) should be relevant."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
-        ***REMOVED*** RRF score for rank-1 with k=60: 1/(60+1) ≈ 0.0164
+        # RRF score for rank-1 with k=60: 1/(60+1) ≈ 0.0164
         state["documents"] = _make_docs([0.0164, 0.0154, 0.0145])
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
@@ -154,7 +154,7 @@ class TestGradeNodeSkipRerank:
     async def test_relevant_but_low_confidence_does_not_skip_rerank(self):
         """Score in (threshold, skip_rerank_threshold) → relevant but rerank still runs."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
-        ***REMOVED*** above relevance (0.005) but below skip_rerank (0.018)
+        # above relevance (0.005) but below skip_rerank (0.018)
         state["documents"] = _make_docs([0.014])
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
@@ -183,8 +183,8 @@ class TestGradeNodeScoreImprovement:
     async def test_first_pass_always_score_improved(self):
         """prev_confidence=0.0 → score_improved=True regardless of score."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
-        state["documents"] = _make_docs([0.001])  ***REMOVED*** very low score
-        state["grade_confidence"] = 0.0  ***REMOVED*** first pass
+        state["documents"] = _make_docs([0.001])  # very low score
+        state["grade_confidence"] = 0.0  # first pass
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
             mock_cfg_cls.from_env.return_value = _make_config()
@@ -196,7 +196,7 @@ class TestGradeNodeScoreImprovement:
         """Delta >= score_improvement_delta (0.001) → score_improved=True."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = _make_docs([0.012])
-        state["grade_confidence"] = 0.010  ***REMOVED*** prev, delta=0.002 >= 0.001
+        state["grade_confidence"] = 0.010  # prev, delta=0.002 >= 0.001
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
             mock_cfg_cls.from_env.return_value = _make_config()
@@ -208,7 +208,7 @@ class TestGradeNodeScoreImprovement:
         """Delta < score_improvement_delta → score_improved=False."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = _make_docs([0.0105])
-        state["grade_confidence"] = 0.0100  ***REMOVED*** delta=0.0005 < 0.001
+        state["grade_confidence"] = 0.0100  # delta=0.0005 < 0.001
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
             mock_cfg_cls.from_env.return_value = _make_config()
@@ -220,7 +220,7 @@ class TestGradeNodeScoreImprovement:
         """Score same as previous after rewrite → score_improved=False."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = _make_docs([0.010])
-        state["grade_confidence"] = 0.010  ***REMOVED*** same score, delta=0
+        state["grade_confidence"] = 0.010  # same score, delta=0
 
         with patch("telegram_bot.graph.config.GraphConfig") as mock_cfg_cls:
             mock_cfg_cls.from_env.return_value = _make_config()
@@ -242,7 +242,7 @@ class TestGradeNodeLatencyAndState:
             result = await grade_node(state)
 
         assert "grade" in result["latency_stages"]
-        assert result["latency_stages"]["retrieve"] == 0.05  ***REMOVED*** existing preserved
+        assert result["latency_stages"]["retrieve"] == 0.05  # existing preserved
         assert result["latency_stages"]["grade"] > 0
 
     async def test_grade_confidence_equals_top_score(self):

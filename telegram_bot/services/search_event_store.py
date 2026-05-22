@@ -146,7 +146,7 @@ def format_search_summary(events: list[dict[str, Any]]) -> str:
         "",
     ]
 
-    for i, ev in enumerate(reversed(events), 1):  ***REMOVED*** oldest first
+    for i, ev in enumerate(reversed(events), 1):  # oldest first
         query = ev.get("query", "")
         created = ev.get("created_at")
         ts = ""

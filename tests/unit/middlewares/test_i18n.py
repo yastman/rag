@@ -77,6 +77,6 @@ async def test_i18n_middleware_injects_only_i18n(hub):
     result = await middleware(handler, event, data)
     assert "i18n" in result
     assert "locale" in result
-    ***REMOVED*** Services are NOT injected by middleware; they come from dp.workflow_data
+    # Services are NOT injected by middleware; they come from dp.workflow_data
     assert "apartments_service" not in result
     assert "favorites_service" not in result

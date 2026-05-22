@@ -125,7 +125,7 @@ def test_bot_context_with_kommo():
 
 
 def test_bot_context_original_user_query_default():
-    """original_user_query defaults to empty string (***REMOVED***439)."""
+    """original_user_query defaults to empty string (#439)."""
     from telegram_bot.agents.context import BotContext
 
     ctx = BotContext(
@@ -145,7 +145,7 @@ def test_bot_context_original_user_query_default():
 
 
 def test_bot_context_original_user_query_set():
-    """original_user_query stores raw user text (***REMOVED***439)."""
+    """original_user_query stores raw user text (#439)."""
     from telegram_bot.agents.context import BotContext
 
     ctx = BotContext(
@@ -166,7 +166,7 @@ def test_bot_context_original_user_query_set():
 
 
 def test_bot_context_manager_id_defaults_none():
-    """manager_id defaults to None for non-manager users (***REMOVED***443)."""
+    """manager_id defaults to None for non-manager users (#443)."""
     from telegram_bot.agents.context import BotContext
 
     ctx = BotContext(
@@ -186,7 +186,7 @@ def test_bot_context_manager_id_defaults_none():
 
 
 def test_bot_context_manager_id_set():
-    """manager_id stores Kommo responsible_user_id for manager role (***REMOVED***443)."""
+    """manager_id stores Kommo responsible_user_id for manager role (#443)."""
     from telegram_bot.agents.context import BotContext
 
     ctx = BotContext(

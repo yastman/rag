@@ -16,7 +16,7 @@ class PIIRedactor:
     - Email addresses
     """
 
-    ***REMOVED*** Replacement tokens keyed by pattern name
+    # Replacement tokens keyed by pattern name
     _REPLACEMENTS: dict[str, str] = {
         "passport": "[PASSPORT]",
         "tax_id": "[TAX_ID]",
@@ -26,16 +26,16 @@ class PIIRedactor:
     }
 
     def __init__(self) -> None:
-        ***REMOVED*** Order matters: phone before tax_id so 0-prefixed Ukrainian local numbers (0XXXXXXXXX)
-        ***REMOVED*** are matched as phone rather than tax_id; tax_id before user_id to avoid overlap on
-        ***REMOVED*** 10-digit numbers without prefix.
+        # Order matters: phone before tax_id so 0-prefixed Ukrainian local numbers (0XXXXXXXXX)
+        # are matched as phone rather than tax_id; tax_id before user_id to avoid overlap on
+        # 10-digit numbers without prefix.
         self.patterns: dict[str, re.Pattern[str]] = {
             "passport": re.compile(r"\b[А-ЯІЇЄҐ]{2}\d{6}\b"),
             "phone": re.compile(
                 r"\+\d{9,14}|\b0\d{9}\b"
-            ),  ***REMOVED*** + prefix international or 0 prefix Ukrainian local
-            "tax_id": re.compile(r"\b\d{10}\b"),  ***REMOVED*** РНОКПП (10 digits, applied after phone)
-            "user_id": re.compile(r"\b\d{9,10}\b"),  ***REMOVED*** Telegram user IDs (9-10 digits)
+            ),  # + prefix international or 0 prefix Ukrainian local
+            "tax_id": re.compile(r"\b\d{10}\b"),  # РНОКПП (10 digits, applied after phone)
+            "user_id": re.compile(r"\b\d{9,10}\b"),  # Telegram user IDs (9-10 digits)
             "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
         }
 

@@ -69,10 +69,10 @@ class TestSearchEventStoreAppend:
 
         pool.execute.assert_called_once()
         args = pool.execute.call_args
-        assert args[0][1] == 123  ***REMOVED*** user_id
-        assert args[0][2] == "chat:123"  ***REMOVED*** session_id
-        assert args[0][4] == "двушка у моря"  ***REMOVED*** query
-        assert "rooms" in args[0][5]  ***REMOVED*** filters JSON
+        assert args[0][1] == 123  # user_id
+        assert args[0][2] == "chat:123"  # session_id
+        assert args[0][4] == "двушка у моря"  # query
+        assert "rooms" in args[0][5]  # filters JSON
 
     async def test_append_with_no_filters(self) -> None:
         pool = AsyncMock()
@@ -86,8 +86,8 @@ class TestSearchEventStoreAppend:
 
         pool.execute.assert_called_once()
         args = pool.execute.call_args
-        assert args[0][5] is None  ***REMOVED*** filters = None
-        assert args[0][6] == 0  ***REMOVED*** results_count default
+        assert args[0][5] is None  # filters = None
+        assert args[0][6] == 0  # results_count default
 
 
 class TestSearchEventStoreGet:
@@ -118,7 +118,7 @@ class TestSearchEventStoreGet:
         assert len(events) == 2
         assert events[0]["query"] == "двушка у моря"
         pool.fetch.assert_called_once()
-        ***REMOVED*** Verify user_id passed to query
+        # Verify user_id passed to query
         args = pool.fetch.call_args
         assert args[0][1] == 123
 

@@ -60,7 +60,7 @@ class ClaudeContextualizer(ContextualizeProvider):
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using Claude.
 
-        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (***REMOVED***1533),
+        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (#1533),
         which provides the shared concurrent per-chunk dispatch (TaskGroup +
         semaphore) with per-chunk fallback to ``context_method="none"``. The
         ``@observe`` span name keeps provider-specific tracing intact.
@@ -89,7 +89,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         user_prompt = self.get_user_prompt(text, query)
         model_name = self.settings.model_name or "claude-3-5-haiku-latest"
 
-        ***REMOVED*** Build system param with optional prompt caching
+        # Build system param with optional prompt caching
         system_content: str | list[dict[str, Any]]
         if self.use_cache:
             system_content = [
@@ -105,9 +105,9 @@ class ClaudeContextualizer(ContextualizeProvider):
             messages=[{"role": "user", "content": user_prompt}],
         )
 
-        ***REMOVED*** Track tokens and cost
+        # Track tokens and cost
         self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
-        ***REMOVED*** Rough cost estimation: $5/MTok input, $15/MTok output
+        # Rough cost estimation: $5/MTok input, $15/MTok output
         self.total_cost += (
             response.usage.input_tokens * 5 + response.usage.output_tokens * 15
         ) / 1_000_000
@@ -147,7 +147,7 @@ class ClaudeContextualizer(ContextualizeProvider):
             messages=[{"role": "user", "content": user_prompt}],
         )
 
-        ***REMOVED*** Track tokens
+        # Track tokens
         self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
 
         return ContextualizedChunk(

@@ -21,9 +21,9 @@ from telegram_bot.pipelines.client import (
 from telegram_bot.services.types import PipelineResult
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_message() -> MagicMock:
@@ -78,9 +78,9 @@ def _patch_generate_response(return_value: dict):
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** detect_agent_intent
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# detect_agent_intent
+# ---------------------------------------------------------------------------
 
 
 class TestDetectAgentIntent:
@@ -112,9 +112,9 @@ class TestDetectAgentIntent:
         assert detect_agent_intent("") == ""
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _is_contextual_query
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _is_contextual_query
+# ---------------------------------------------------------------------------
 
 
 class TestIsContextualQuery:
@@ -132,9 +132,9 @@ class TestIsContextualQuery:
         assert _is_contextual_query("подробнее о квартире в Софии") is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_client_pipeline — CHITCHAT / OFF_TOPIC
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_client_pipeline — CHITCHAT / OFF_TOPIC
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineNonRagPaths:
@@ -204,7 +204,7 @@ class TestPipelineNonRagPaths:
         assert "недвижимост" in result.answer
 
     async def test_pipeline_chitchat_writes_langfuse_scores(self):
-        """CHITCHAT early return writes minimal Langfuse scores (***REMOVED***1368)."""
+        """CHITCHAT early return writes minimal Langfuse scores (#1368)."""
         msg = _make_message()
         lf = _make_lf_client()
         lf.get_current_trace_id.return_value = "trace-chitchat"
@@ -241,7 +241,7 @@ class TestPipelineNonRagPaths:
         assert minimal_result["search_results_count"] == 0
 
     async def test_pipeline_off_topic_writes_langfuse_scores(self):
-        """OFF_TOPIC early return writes minimal Langfuse scores (***REMOVED***1368)."""
+        """OFF_TOPIC early return writes minimal Langfuse scores (#1368)."""
         msg = _make_message()
         lf = _make_lf_client()
         lf.get_current_trace_id.return_value = "trace-offtopic"
@@ -274,9 +274,9 @@ class TestPipelineNonRagPaths:
         assert minimal_result["cache_hit"] is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_client_pipeline — Agent intent gate
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_client_pipeline — Agent intent gate
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineAgentIntentGate:
@@ -340,7 +340,7 @@ class TestPipelineAgentIntentGate:
         assert result.agent_intent == "handoff"
 
     async def test_pipeline_agent_intent_gate_writes_langfuse_scores(self):
-        """Agent intent early return writes minimal Langfuse scores (***REMOVED***1368)."""
+        """Agent intent early return writes minimal Langfuse scores (#1368)."""
         msg = _make_message()
         lf = _make_lf_client()
         lf.get_current_trace_id.return_value = "trace-intent"
@@ -375,7 +375,7 @@ class TestPipelineAgentIntentGate:
         assert minimal_result["search_results_count"] == 0
 
     async def test_pipeline_precomputed_agent_intent_skips_detection(self):
-        """Pre-computed agent_intent skips duplicate detect_agent_intent call (***REMOVED***1369)."""
+        """Pre-computed agent_intent skips duplicate detect_agent_intent call (#1369)."""
         msg = _make_message()
         lf = _make_lf_client()
 
@@ -406,9 +406,9 @@ class TestPipelineAgentIntentGate:
         assert result.agent_intent == "mortgage"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_client_pipeline — Cache hit path
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_client_pipeline — Cache hit path
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineCacheHit:
@@ -455,9 +455,9 @@ class TestPipelineCacheHit:
         msg.answer.assert_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_client_pipeline — Full RAG + generate flow
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_client_pipeline — Full RAG + generate flow
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineFullFlow:
@@ -467,7 +467,7 @@ class TestPipelineFullFlow:
         lf = _make_lf_client()
 
         rag_result = {
-            "response": "",  ***REMOVED*** no cached response
+            "response": "",  # no cached response
             "cache_hit": False,
             "documents": [{"metadata": {"title": "Doc 1", "url": "http://x"}, "score": 0.9}],
             "grade_confidence": 0.7,
@@ -510,7 +510,7 @@ class TestPipelineFullFlow:
         msg.answer.assert_called()
 
     async def test_pipeline_trace_tags_override_agent_tag(self):
-        """Client pipeline must override inherited agent tag via propagate_attributes (***REMOVED***566).
+        """Client pipeline must override inherited agent tag via propagate_attributes (#566).
 
         propagate_attributes in bot.py sets tags=["telegram","rag","agent"] before
         the role check, so the client pipeline must override tags to remove "agent".
@@ -965,7 +965,7 @@ class TestPipelineFullFlow:
         assert send_chunks.await_args.kwargs["sources_html"] == ""
 
     async def test_pipeline_passes_message_to_generate_response(self):
-        """generate_response must receive message= so streaming can be enabled (***REMOVED***571)."""
+        """generate_response must receive message= so streaming can be enabled (#571)."""
         msg = _make_message()
         lf = _make_lf_client()
 
@@ -1008,7 +1008,7 @@ class TestPipelineFullFlow:
                 query_type="FAQ",
             )
 
-        ***REMOVED*** message= must be forwarded so streaming can activate
+        # message= must be forwarded so streaming can activate
         call_kwargs = mock_gen.call_args.kwargs
         assert call_kwargs.get("message") is msg, "message not forwarded to generate_response"
 
@@ -1053,7 +1053,7 @@ class TestPipelineFullFlow:
 
     async def test_pipeline_no_double_send_when_streaming_delivers(self):
         """When streaming delivers the response (response_sent=True), _send_markdown_chunks
-        must NOT send the main body again (***REMOVED***571)."""
+        must NOT send the main body again (#571)."""
         msg = _make_message()
         lf = _make_lf_client()
 
@@ -1067,7 +1067,7 @@ class TestPipelineFullFlow:
             "query_embedding": [0.1, 0.2],
             "cache_key_embedding": [0.1, 0.2],
         }
-        ***REMOVED*** Streaming delivered the response — response_sent=True
+        # Streaming delivered the response — response_sent=True
         gen_result = {
             "response": "Streaming delivered this",
             "response_sent": True,
@@ -1096,7 +1096,7 @@ class TestPipelineFullFlow:
                 query_type="FAQ",
             )
 
-        ***REMOVED*** message.answer() must NOT be called again (streaming already sent)
+        # message.answer() must NOT be called again (streaming already sent)
         msg.answer.assert_not_called()
         assert result.answer == "Streaming delivered this"
 
@@ -1131,9 +1131,9 @@ class TestPipelineFullFlow:
                 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Cache store guards
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Cache store guards
+# ---------------------------------------------------------------------------
 
 
 class TestCacheStoreGuards:
@@ -1147,7 +1147,7 @@ class TestCacheStoreGuards:
             "response": "",
             "cache_hit": False,
             "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
-            "grade_confidence": 0.9,  ***REMOVED*** above threshold
+            "grade_confidence": 0.9,  # above threshold
             "llm_call_count": 0,
             "latency_stages": {},
             "cache_key_embedding": [0.1, 0.2, 0.3],
@@ -1163,7 +1163,7 @@ class TestCacheStoreGuards:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="расскажи подробнее",  ***REMOVED*** contextual: "подробнее"
+                user_text="расскажи подробнее",  # contextual: "подробнее"
                 user_id=1,
                 session_id="s1",
                 message=msg,
@@ -1189,7 +1189,7 @@ class TestCacheStoreGuards:
             "response": "",
             "cache_hit": False,
             "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
-            "grade_confidence": _CONFIDENCE_THRESHOLD - 0.1,  ***REMOVED*** below threshold
+            "grade_confidence": _CONFIDENCE_THRESHOLD - 0.1,  # below threshold
             "llm_call_count": 0,
             "latency_stages": {},
             "cache_key_embedding": [0.1, 0.2, 0.3],
@@ -1315,7 +1315,7 @@ class TestCacheStoreGuards:
         rag_result = {
             "response": "",
             "cache_hit": False,
-            "documents": [],  ***REMOVED*** empty
+            "documents": [],  # empty
             "grade_confidence": 0.9,
             "llm_call_count": 0,
             "latency_stages": {},
@@ -1357,7 +1357,7 @@ class TestCacheStoreGuards:
             "response": "",
             "cache_hit": False,
             "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
-            "grade_confidence": _CONFIDENCE_THRESHOLD + 0.1,  ***REMOVED*** above threshold
+            "grade_confidence": _CONFIDENCE_THRESHOLD + 0.1,  # above threshold
             "llm_call_count": 0,
             "latency_stages": {},
             "cache_key_embedding": [0.1, 0.2, 0.3],
@@ -1382,7 +1382,7 @@ class TestCacheStoreGuards:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="Какие документы для ВНЖ?",  ***REMOVED*** no contextual words
+                user_text="Какие документы для ВНЖ?",  # no contextual words
                 user_id=1,
                 session_id="s1",
                 message=msg,
@@ -1393,7 +1393,7 @@ class TestCacheStoreGuards:
                 reranker=None,
                 llm=None,
                 config=_make_config(),
-                query_type="FAQ",  ***REMOVED*** in _PIPELINE_STORE_TYPES
+                query_type="FAQ",  # in _PIPELINE_STORE_TYPES
             )
 
         mock_cache.store_semantic.assert_called_once()
@@ -1602,9 +1602,9 @@ class TestCacheStoreGuards:
         mock_cache.store_semantic.assert_called_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** History save
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# History save
+# ---------------------------------------------------------------------------
 
 
 class TestHistorySave:
@@ -1704,13 +1704,13 @@ class TestHistorySave:
         assert result.response_sent is True
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Pre-computed sparse + colbert passthrough (***REMOVED***571)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pre-computed sparse + colbert passthrough (#571)
+# ---------------------------------------------------------------------------
 
 
 class TestPreComputedEmbeddingPassthrough:
-    """Verify all three pre-computed embeddings are passed to rag_pipeline (***REMOVED***571)."""
+    """Verify all three pre-computed embeddings are passed to rag_pipeline (#571)."""
 
     async def test_passes_sparse_and_colbert_from_rag_result_store(self):
         """pre_computed_sparse and pre_computed_colbert from rag_result_store reach rag_pipeline."""
@@ -1933,9 +1933,9 @@ class TestPreComputedEmbeddingPassthrough:
         assert captured_kwargs.get("pre_computed_colbert") is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 3: Additional cache store guard keyword coverage
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 3: Additional cache store guard keyword coverage
+# ---------------------------------------------------------------------------
 
 
 class TestContextualKeywordCoverage:
@@ -1979,7 +1979,7 @@ class TestCacheStoreGuardMissingVector:
             "grade_confidence": 0.9,
             "llm_call_count": 0,
             "latency_stages": {},
-            ***REMOVED*** No cache_key_embedding or query_embedding → store_vector will be None
+            # No cache_key_embedding or query_embedding → store_vector will be None
         }
         gen_result = {"response": "Answer", "response_sent": False}
 
@@ -2067,9 +2067,9 @@ class TestDetectAgentIntentEdgeCases:
         assert detect_agent_intent("покажи итоги дня") == "daily_summary"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 4: PipelineResult dataclass invariants (telegram_bot/services/types.py)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 4: PipelineResult dataclass invariants (telegram_bot/services/types.py)
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineResultFrozenInvariants:
@@ -2081,13 +2081,13 @@ class TestPipelineResultFrozenInvariants:
 
         result = PipelineResult(answer="test")
         with pytest.raises(FrozenInstanceError):
-            result.answer = "modified"  ***REMOVED*** type: ignore[misc]
+            result.answer = "modified"  # type: ignore[misc]
 
     def test_frozen_raises_on_new_attribute(self):
         """Setting a non-existent attribute must also be rejected (slots=True)."""
         result = PipelineResult()
         with pytest.raises((AttributeError, TypeError)):
-            result.new_field = "value"  ***REMOVED*** type: ignore[attr-defined]
+            result.new_field = "value"  # type: ignore[attr-defined]
 
     def test_uses_slots(self):
         """slots=True should add __slots__ to the class."""
@@ -2166,14 +2166,14 @@ class TestPipelineResultNeedsAgentFlag:
         assert r1.scores is not r2.scores
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Streaming feedback keyboard (***REMOVED***745)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Streaming feedback keyboard (#745)
+# ---------------------------------------------------------------------------
 
 
 class TestStreamingFeedbackKeyboard:
     """When streaming delivers the response, feedback keyboard must still
-    be attached via edit_message_reply_markup (***REMOVED***745)."""
+    be attached via edit_message_reply_markup (#745)."""
 
     async def test_streaming_attaches_feedback_keyboard_via_edit(self):
         """After streaming (response_sent=True), edit_message_reply_markup
@@ -2222,9 +2222,9 @@ class TestStreamingFeedbackKeyboard:
                 query_type="FAQ",
             )
 
-        ***REMOVED*** message.answer must NOT be called (streaming already sent)
+        # message.answer must NOT be called (streaming already sent)
         msg.answer.assert_not_called()
-        ***REMOVED*** edit_message_reply_markup must be called to attach feedback keyboard
+        # edit_message_reply_markup must be called to attach feedback keyboard
         msg.bot.edit_message_reply_markup.assert_called_once()
         call_kwargs = msg.bot.edit_message_reply_markup.call_args
         assert call_kwargs.kwargs["chat_id"] == 12345
@@ -2252,7 +2252,7 @@ class TestStreamingFeedbackKeyboard:
         gen_result = {
             "response": "Streamed answer",
             "response_sent": True,
-            ***REMOVED*** No sent_message — streaming failed to capture ref
+            # No sent_message — streaming failed to capture ref
             "llm_call_count": 1,
         }
 
@@ -2278,7 +2278,7 @@ class TestStreamingFeedbackKeyboard:
                 query_type="FAQ",
             )
 
-        ***REMOVED*** Neither answer nor edit should be called
+        # Neither answer nor edit should be called
         msg.answer.assert_not_called()
         msg.bot.edit_message_reply_markup.assert_not_called()
 
@@ -2331,6 +2331,6 @@ class TestStreamingFeedbackKeyboard:
                 query_type="FAQ",
             )
 
-        ***REMOVED*** Sources sent via message.answer (with keyboard), not via edit
+        # Sources sent via message.answer (with keyboard), not via edit
         msg.answer.assert_called()
         msg.bot.edit_message_reply_markup.assert_not_called()
