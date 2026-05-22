@@ -14,6 +14,11 @@ Operator entrypoint for container/service investigations and incident response. 
 | LiteLLM / provider failure (Russian: "сломался litellm") | `curl -s http://localhost:4000/health` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Compose service health | `make docker-ps` → [`DOCKER.md`](../../DOCKER.md) |
 | Self-hosted runner offline / nightly-heavy queued | `scripts/check_self_hosted_runner.sh` → [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
+| Telegram bot is down / restarting / high error rate | `docker compose ps bot` → [`TELEGRAM_BOT_FAILURE.md`](TELEGRAM_BOT_FAILURE.md) |
+| Embedding service (BGE-M3 / BM42 / Voyage) errors | `docker compose ps bge-m3` → [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md) |
+| Docling document parser down / OOM / conversion errors | `docker compose ps docling` → [`DOCLING_FAILURE.md`](DOCLING_FAILURE.md) |
+| MinIO object storage down / disk full / corruption | `curl -fsS http://localhost:9000/minio/health/ready` → [`MINIO_FAILURE.md`](MINIO_FAILURE.md) |
+| LightRAG graph retrieval down / API errors | `docker compose ps lightrag` → [`LIGHTRAG_FAILURE.md`](LIGHTRAG_FAILURE.md) |
 
 ## Start Here
 
@@ -28,6 +33,11 @@ Operator entrypoint for container/service investigations and incident response. 
 | Postgres WAL recovery or replication issues | [`POSTGRESQL_WAL_RECOVERY.md`](POSTGRESQL_WAL_RECOVERY.md) |
 | VPS / Google Drive ingestion recovery | [`vps-gdrive-ingestion-recovery.md`](vps-gdrive-ingestion-recovery.md) |
 | Self-hosted GitHub Actions runner for `nightly-heavy.yml` is offline | [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
+| Telegram bot container, Telegram API, or query-processing alerts | [`TELEGRAM_BOT_FAILURE.md`](TELEGRAM_BOT_FAILURE.md) |
+| Embedding service (BGE-M3, BM42, Voyage) alerts | [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md) |
+| Docling document parser alerts | [`DOCLING_FAILURE.md`](DOCLING_FAILURE.md) |
+| MinIO storage alerts | [`MINIO_FAILURE.md`](MINIO_FAILURE.md) |
+| LightRAG graph-retrieval alerts | [`LIGHTRAG_FAILURE.md`](LIGHTRAG_FAILURE.md) |
 | Weekly git/pr/issue hygiene workflow | [`GIT_PR_ISSUE_NATIVE.md`](GIT_PR_ISSUE_NATIVE.md) |
 
 ## Container / Service Map

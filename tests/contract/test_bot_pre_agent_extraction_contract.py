@@ -101,7 +101,7 @@ def test_bot_pre_agent_module_imports_are_clean() -> None:
 
 
 @pytest.mark.parametrize("helper", HELPERS)
-def test_helper_exposed(helper: str) -> None:
+def test_bot_pre_agent_helper_exposed(helper: str) -> None:
     """Each helper must be defined at module top-level."""
     tree = ast.parse(NEW_MODULE.read_text())
     names = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -302,7 +302,7 @@ def test_build_pre_agent_state_contract_explicit_filters_take_precedence() -> No
 
 
 @pytest.mark.parametrize("helper", HELPERS)
-def test_bot_py_defines_helper_at_most_once(helper: str) -> None:
+def test_bot_py_defines_pre_agent_helper_at_most_once(helper: str) -> None:
     """``bot.py`` keeps the wrapper exactly once.
 
     Existing tests patch ``telegram_bot.bot._get_or_compute_pre_agent_dense``
@@ -318,7 +318,7 @@ def test_bot_py_defines_helper_at_most_once(helper: str) -> None:
     )
 
 
-def test_bot_py_line_count_below_ratchet() -> None:
+def test_bot_py_pre_agent_line_count_below_ratchet() -> None:
     line_count = sum(1 for _ in BOT_PY.read_text().splitlines())
     assert line_count < BOT_PY_LINE_COUNT_CEILING, (
         f"bot.py line count is {line_count}; #1265 Slice 1 PR-5 ratchet "
