@@ -1,16 +1,11 @@
 """Unit tests for src/ingestion/chunker.py."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from src.ingestion.chunker import (
     Chunk,
     ChunkingStrategy,
     DocumentChunker,
-    _parse_csv_row_metadata,
-    chunk_csv_by_rows,
 )
 
 
@@ -169,137 +164,8 @@ class TestExtractMetadata:
         assert metadata == {}
 
 
-class TestChunkCSVByRows:
-    """Test CSV row-based chunking."""
-
-    def test_csv_chunking_basic(self):
-        """Test basic CSV chunking."""
-        csv_content = """Название,Город,Цена (€),Комнат
-Квартира 1,Варна,50000,2
-Квартира 2,Бургас,75000,3
-"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(csv_content)
-            f.flush()
-
-            chunks = chunk_csv_by_rows(Path(f.name), "properties.csv")
-
-        assert len(chunks) == 2
-        assert "Варна" in chunks[0].text
-        assert "Бургас" in chunks[1].text
-
-    def test_csv_chunking_metadata(self):
-        """Test that CSV chunking extracts metadata."""
-        csv_content = """Название,Город,Цена (€),Комнат,Площадь (м²)
-Апартамент,Несебър,120000,3,85
-"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(csv_content)
-            f.flush()
-
-            chunks = chunk_csv_by_rows(Path(f.name), "test.csv")
-
-        assert len(chunks) == 1
-        assert chunks[0].extra_metadata is not None
-        assert chunks[0].extra_metadata.get("city") == "Несебър"
-        assert chunks[0].extra_metadata.get("price") == 120000
-        assert chunks[0].extra_metadata.get("rooms") == 3
-        assert chunks[0].extra_metadata.get("area") == 85
-
-    def test_csv_chunking_chunk_id(self):
-        """Test that chunk IDs are sequential."""
-        csv_content = """Название,Город
-Row1,City1
-Row2,City2
-Row3,City3
-"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(csv_content)
-            f.flush()
-
-            chunks = chunk_csv_by_rows(Path(f.name), "test.csv")
-
-        assert [c.chunk_id for c in chunks] == [0, 1, 2]
-        assert [c.order for c in chunks] == [0, 1, 2]
-
-
-class TestParseCSVRowMetadata:
-    """Test CSV row metadata parsing."""
-
-    def test_parse_numeric_fields(self):
-        """Test numeric field parsing."""
-        row = {
-            "Цена (€)": "150000",
-            "Комнат": "3",
-            "Площадь (м²)": "95.5",
-            "Этаж": "5",
-        }
-
-        metadata = _parse_csv_row_metadata(row)
-
-        assert metadata["price"] == 150000
-        assert metadata["rooms"] == 3
-        assert metadata["area"] == 95.5
-        assert metadata["floor"] == 5
-
-    def test_parse_number_with_spaces(self):
-        """Test parsing numbers with space formatting."""
-        row = {"Цена (€)": "120 000"}
-
-        metadata = _parse_csv_row_metadata(row)
-
-        assert metadata["price"] == 120000
-
-    def test_parse_boolean_fields(self):
-        """Test boolean field parsing."""
-        row_yes = {"Мебель": "есть", "Круглогодичность": "да"}
-        row_no = {"Мебель": "нет", "Круглогодичность": ""}
-
-        metadata_yes = _parse_csv_row_metadata(row_yes)
-        metadata_no = _parse_csv_row_metadata(row_no)
-
-        assert metadata_yes["furnished"] is True
-        assert metadata_yes["year_round"] is True
-        assert metadata_no.get("furnished", False) is False
-
-    def test_parse_text_fields(self):
-        """Test text field parsing."""
-        row = {
-            "Название": "Квартира у моря",
-            "Город": "Варна",
-            "Описание": "Красивая квартира",
-        }
-
-        metadata = _parse_csv_row_metadata(row)
-
-        assert metadata["title"] == "Квартира у моря"
-        assert metadata["city"] == "Варна"
-        assert metadata["description"] == "Красивая квартира"
-
-    def test_parse_empty_values(self):
-        """Test handling of empty values."""
-        row = {
-            "Цена (€)": "",
-            "Комнат": "   ",
-            "Город": "Варна",
-        }
-
-        metadata = _parse_csv_row_metadata(row)
-
-        assert "price" not in metadata
-        assert "rooms" not in metadata
-        assert metadata["city"] == "Варна"
-
-    def test_source_type_marker(self):
-        """Test that source_type is always added."""
-        row = {"Город": "Варна"}
-
-        metadata = _parse_csv_row_metadata(row)
-
-        assert metadata["source_type"] == "csv_row"
+# ``chunk_csv_by_rows`` and ``_parse_csv_row_metadata`` were removed in the
+# #1235 CSV slice. They had zero production callers — the apartments ingest
+# path uses ``src/ingestion/apartments/source.py`` with its own
+# ``csv.DictReader`` flow. Their absence is pinned by
+# ``tests/contract/test_chunking_strategy_sdk_native_contract.py``.
