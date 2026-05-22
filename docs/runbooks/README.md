@@ -6,6 +6,7 @@ Operator entrypoint for incident response and service investigations. Start here
 
 | Runbook | Scope | Description |
 |---------|-------|-------------|
+| [EMBEDDING_SERVICE_FAILURE.md](EMBEDDING_SERVICE_FAILURE.md) | Embeddings | BGE-M3, BM42 sparse, and Voyage embedding service failures |
 | [GIT_PR_ISSUE_NATIVE.md](GIT_PR_ISSUE_NATIVE.md) | Git / GitHub | Branch, PR, issue, and worktree hygiene |
 | [LANGFUSE_TRACING_GAPS.md](LANGFUSE_TRACING_GAPS.md) | Observability | Langfuse missing traces, spans, and scores |
 | [LITEllm_FAILURE.md](LITEllm_FAILURE.md) | LLM Proxy | LiteLLM proxy outages, provider errors, fallback routing |
