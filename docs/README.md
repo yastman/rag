@@ -71,8 +71,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 ## Engineering Notes
 
 - [`ERROR_RESPONSES.md`](ERROR_RESPONSES.md) — Error response taxonomy.
-- [`HITL.md`](HITL.md) — Human-in-the-loop design.
-- [`HITL_CRM_FLOW.md`](HITL_CRM_FLOW.md) — CRM-specific HITL flow.
+- [`HITL.md`](HITL.md) — Human-in-the-loop design and CRM approval flow.
 - [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache design behavior (architecture, tiers, thresholds, degradation modes).
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
 
