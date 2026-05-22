@@ -1,6 +1,19 @@
 # Client Pipeline: Dual-Path Architecture
 
-The Telegram bot uses a **dual-path architecture** to route queries efficiently based on role and query complexity.
+> **Canonical home for the dual-path split.** This doc describes the runtime asymmetry between the text and voice RAG flows.
+>
+> See also: [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) for the operational overview of all flows (ingestion / query / voice) and [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) for the StateGraph routing rules used by the voice path and the text-path `rag_search` tool.
+>
+> Migration plan and SDK context: [`docs/adr/0010-voice-path-create-agent-migration-plan.md`](adr/0010-voice-path-create-agent-migration-plan.md), SDK-native audit issue [#1538](https://github.com/yastman/rag/issues/1538), voice migration tracker [#1535](https://github.com/yastman/rag/issues/1535).
+
+The Telegram bot uses a **dual-path architecture** to route queries efficiently based on role and query complexity. The two paths use **different orchestrators**:
+
+| Path | Orchestrator | Source | Status |
+|---|---|---|---|
+| Text (text + agent intent) | `langchain.agents.create_agent` (LangChain 1.x) | [`telegram_bot/agents/agent.py`](../telegram_bot/agents/agent.py) | SDK-native |
+| Voice | Custom `StateGraph` from `build_graph()` | [`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py) | Pending migration ([ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md), #1535) |
+
+The voice path's `StateGraph` is reused (read-only) by the text path's `rag_search` tool, so the routing rules in `PIPELINE_ROUTING.md` apply to both paths' retrieve→grade→rerank inner loop.
 
 ## Architecture Overview
 
@@ -17,9 +30,9 @@ PropertyBot.handle_query()
     │                                          │
     │                                    rag_pipeline() → generate_response()
     │                                          │
-    └─── [Manager role OR complex query] ──→ SDK Agent Pipeline
+    └─── [Manager role OR complex query] ──→ SDK Agent Pipeline (create_agent)
                                                │
-                                         Full LangGraph agent
+                                         langchain.agents.create_agent
                                                │
                                     create_bot_agent() → tools
 ```
@@ -77,7 +90,7 @@ Client pipeline uses store guards:
 ### Characteristics
 
 - **1-N LLM calls** (agent loop + generation)
-- **Full LangGraph** with checkpointer
+- **Orchestrator:** `langchain.agents.create_agent` (LangChain 1.x SDK) — not a raw `StateGraph`. Voice path still uses `StateGraph` pending [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) / #1535.
 - **Tools available:** RAG search, history, CRM operations
 - **Higher latency** but more capable
 

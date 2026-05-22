@@ -167,7 +167,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **как_у_нас:**
   - `telegram_bot/observability.py` — центральный модуль (init, observe, callback handler)
   - `telegram_bot/integrations/prompt_manager.py` — prompt management
-  - `telegram_bot/scoring.py` — 14 RAG scores
+  - `telegram_bot/scoring.py` — RAG quality scores written to Langfuse per query (see [`docs/RAG_QUALITY_SCORES.md`](../RAG_QUALITY_SCORES.md) for the full enumeration; parity is enforced by `tests/contract/test_rag_quality_scores_doc_drift.py`)
   - `src/ingestion/unified/observability.py` — ingestion-side @observe
 - **паттерны:**
   - @observe(name="node-X", capture_input=False, capture_output=False) на каждый node/step

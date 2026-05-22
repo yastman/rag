@@ -31,14 +31,6 @@
     "tests/unit/test_query_preprocessor.py",
     "tests/unit/test_query_preprocessor_unit.py"
   ],
-  "test_cache_threshold_adaptive": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
-  ],
-  "test_case_insensitive_translit": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
-  ],
   "test_chunk_creation": [
     "tests/unit/test_chunker.py",
     "tests/unit/test_contextual_schema.py"
@@ -154,10 +146,6 @@
     "tests/unit/test_cocoindex_flow.py",
     "tests/unit/test_ingestion_service.py"
   ],
-  "test_cyrillic_passthrough": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
-  ],
   "test_default_search_engine": [
     "tests/unit/config/test_constants.py",
     "tests/unit/test_settings.py"
@@ -195,7 +183,6 @@
     "tests/unit/test_contextualized_embeddings.py"
   ],
   "test_empty_query": [
-    "tests/integration/test_voyage_integration.py",
     "tests/unit/services/test_filter_extractor.py",
     "tests/unit/services/test_voyage_integration.py"
   ],
@@ -218,10 +205,6 @@
   "test_exact_match": [
     "tests/unit/services/test_apartments_service.py",
     "tests/unit/test_agent_routing_eval.py"
-  ],
-  "test_exact_query_detection": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
   ],
   "test_extract_article_number": [
     "tests/unit/evaluation/test_search_engines_eval.py",
@@ -335,14 +318,6 @@
     "tests/unit/config/test_constants.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_json_round_trip": [
-    "tests/integration/test_contextual_integration.py",
-    "tests/unit/ingestion/test_contextual_integration.py"
-  ],
-  "test_json_to_indexer_chunks": [
-    "tests/integration/test_contextual_integration.py",
-    "tests/unit/ingestion/test_contextual_integration.py"
-  ],
   "test_keyboard_has_7_buttons": [
     "tests/unit/keyboards/test_client_keyboard.py",
     "tests/unit/keyboards/test_demo_button.py"
@@ -364,10 +339,6 @@
     "tests/unit/observability/test_tracing_context.py",
     "tests/unit/test_langfuse_context_middleware.py"
   ],
-  "test_metadata_preserved_for_search_display": [
-    "tests/integration/test_contextual_integration.py",
-    "tests/unit/ingestion/test_contextual_integration.py"
-  ],
   "test_missing_trace_id_returns_none": [
     "tests/unit/test_feedback.py",
     "tests/unit/test_feedback_handler.py"
@@ -375,10 +346,6 @@
   "test_multiple_results_numbered": [
     "tests/unit/handlers/test_demo_search.py",
     "tests/unit/services/test_apartment_formatter.py"
-  ],
-  "test_multiple_translit_replacements": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
   ],
   "test_needs_agent_defaults_to_false": [
     "tests/unit/pipelines/test_client_pipeline.py",
@@ -391,10 +358,6 @@
   "test_paginates_through_all_pages": [
     "tests/unit/test_export_traces_to_dataset.py",
     "tests/unit/test_langfuse_triage.py"
-  ],
-  "test_parses_example_json": [
-    "tests/integration/test_contextual_integration.py",
-    "tests/unit/ingestion/test_contextual_integration.py"
   ],
   "test_payload_has_required_fields": [
     "tests/integration/test_unified_ingestion_e2e.py",
@@ -431,10 +394,6 @@
   "test_redis_maxmemory_set": [
     "tests/load/test_load_redis_eviction.py",
     "tests/smoke/test_preflight.py"
-  ],
-  "test_redis_url_generation": [
-    "tests/integration/test_redis_url.py",
-    "tests/unit/test_redis_url.py"
   ],
   "test_rerank_empty_documents": [
     "tests/unit/graph/test_agentic_nodes.py",
@@ -478,10 +437,6 @@
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
   ],
-  "test_semantic_query_detection": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
-  ],
   "test_sent_message_defaults_to_none": [
     "tests/unit/pipelines/test_client_pipeline.py",
     "tests/unit/services/test_types.py"
@@ -514,14 +469,6 @@
   "test_supported_dimensions": [
     "tests/unit/models/test_contextualized_pipeline.py",
     "tests/unit/test_contextualized_embeddings.py"
-  ],
-  "test_text_for_embedding_format": [
-    "tests/integration/test_contextual_integration.py",
-    "tests/unit/ingestion/test_contextual_integration.py"
-  ],
-  "test_translit_improves_sparse_search": [
-    "tests/integration/test_voyage_integration.py",
-    "tests/unit/services/test_voyage_integration.py"
   ],
   "test_unknown_event": [
     "tests/unit/observability/test_tracing_context.py",
