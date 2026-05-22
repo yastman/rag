@@ -9,6 +9,11 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 - `write_history_scores()` — history search scores
 - `write_crm_scores()` — CRM tool usage scores
 
+> **Drift guard:** the doc/code parity is enforced by
+> [`tests/contract/test_rag_quality_scores_doc_drift.py`](../tests/contract/test_rag_quality_scores_doc_drift.py).
+> Whenever a new `name=...` is added to `scoring.py`, add a row below or
+> entry in `DOC_EXEMPT_SCORE_NAMES`.
+
 ## Main Query Scores
 
 | Score | Type | Description |
@@ -44,6 +49,7 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 | `voice_duration_s` | numeric | Voice input duration (voice only) |
 | `bge_embed_error` | boolean | Embedding service error occurred |
 | `bge_embed_latency_ms` | numeric | Embedding latency |
+| `bge_model_processing_ms` | numeric | Pure model-side BGE-M3 processing time (separates network/queue from inference) |
 | `security_alert` | boolean | Prompt injection detected |
 | `injection_risk_score` | numeric | Injection risk score (0-1) |
 | `injection_pattern` | categorical | Type of injection pattern detected |
@@ -56,6 +62,8 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 | `semantic_cache_safe_reuse` | boolean | Cache reuse was safe |
 | `safe_fallback_used` | boolean | Safe fallback response used |
 | `checkpointer_overhead_proxy_ms` | numeric | Checkpoint overhead proxy |
+| `checkpointer_overhead_ms` | numeric | Direct checkpointer Redis I/O time, summed from `InstrumentedCheckpointer` (#1258); excludes Pregel framework overhead unlike the proxy |
+| `checkpointer_op_count` | numeric | Number of timed checkpointer operations (`aput`/`aget`/`aput_writes`/`aget_tuple`) per query (#1258) |
 | `nurturing_batch_size` | numeric | Nurturing batch size |
 | `nurturing_sent_count` | numeric | Nurturing messages sent |
 | `funnel_conversion_rate` | numeric | Funnel conversion rate |
