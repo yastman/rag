@@ -2,20 +2,20 @@
 
 > This doc covers the client-facing pipeline paths (text and voice); see [Pipeline Overview](PIPELINE_OVERVIEW.md) for ingestion/operational flows and [Pipeline Routing](PIPELINE_ROUTING.md) for voice-path StateGraph routing details.
 
-The Telegram bot uses a **dual-path architecture** with fundamentally different orchestration for text and voice inputs.
+The Telegram bot uses a **dual-path architecture** with separate text and voice orchestration. The text path then has its own fast-path vs agent sub-routing.
 
 ## Architecture Overview
 
 ### Text Path vs Voice Path
 
-The two input modalities use different orchestration strategies:
+The two input modalities enter different orchestration families:
 
 | Path | Orchestration | File | Entry Point | Status |
 |------|--------------|------|-------------|--------|
-| **Text** | `langchain.agents.create_agent` (SDK-native) | `telegram_bot/agents/agent.py` | `create_bot_agent()` | Production |
+| **Text** | Client-direct deterministic path or `langchain.agents.create_agent` supervisor path | `telegram_bot/pipelines/client.py`, `telegram_bot/agents/agent.py` | `run_client_pipeline()`, `create_bot_agent()` | Production |
 | **Voice** | Raw `StateGraph(RAGState, ...)` | `telegram_bot/graph/graph.py` | `build_graph()` | Pending migration to `create_agent` (see [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) and [#1535](https://github.com/yastman/rag/issues/1535)) |
 
-The text path is fully SDK-native: it delegates routing, tool selection, and response generation to the LangChain agent SDK. The voice path still uses a hand-built LangGraph `StateGraph` with explicit nodes and conditional edges.
+The text supervisor path is SDK-native: it delegates agent routing, tool selection, and response generation to the LangChain agent SDK. The text client-direct path remains a deterministic low-latency path around `rag_pipeline()`. The voice path still uses a hand-built LangGraph `StateGraph` with explicit nodes and conditional edges.
 
 ### Text Path Sub-Routing
 
