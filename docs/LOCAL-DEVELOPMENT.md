@@ -4,7 +4,7 @@ Canonical local setup and verification flow.
 
 ## Prerequisites
 
-- Python `3.12` recommended (`>=3.11` supported)
+- Python `3.12`+ required (`>=3.12`)
 - `uv`
 - Docker + Docker Compose v2
 

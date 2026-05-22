@@ -40,7 +40,7 @@ TMP ?= $(TMPDIR)
 TEMP ?= $(TMPDIR)
 export TMPDIR TMP TEMP
 # Python runtime for local pytest targets.
-# Pin to 3.12 to avoid CPython 3.14 breaking voyageai (pydantic.v1 compat).
+# Pin to 3.12 to match requires-python floor.
 # Override: PYTHON_VERSION=3.13 make test-unit
 PYTHON_VERSION ?= 3.12
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
