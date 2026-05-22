@@ -1,9 +1,15 @@
-"""Tests for agent streaming via astream (#413)."""
+"""Tests for agent streaming via astream (#413).
+
+These tests assert plain dataclass/config invariants — no awaitable code path.
+Originally they were `async def` because `pytest-asyncio.mode=auto` would
+silently wrap them; the bodies never `await`, so the `async` qualifier was
+misleading. Stripped per #2071 (test code-smells cleanup).
+"""
 
 from __future__ import annotations
 
 
-async def test_streaming_config_flag():
+def test_streaming_config_flag():
     """Streaming is controlled by GraphConfig.streaming_enabled."""
     from telegram_bot.graph.config import GraphConfig
 
@@ -14,7 +20,7 @@ async def test_streaming_config_flag():
     assert gc2.streaming_enabled is False
 
 
-async def test_streaming_default_is_true():
+def test_streaming_default_is_true():
     """streaming_enabled defaults to True."""
     from telegram_bot.graph.config import GraphConfig
 
@@ -25,7 +31,7 @@ async def test_streaming_default_is_true():
 # --- BotContext.response_sent coordination tests (#428) ---
 
 
-async def test_bot_context_has_response_sent_field():
+def test_bot_context_has_response_sent_field():
     """BotContext has response_sent field defaulting to False (#428)."""
     from unittest.mock import MagicMock
 
@@ -47,7 +53,7 @@ async def test_bot_context_has_response_sent_field():
     assert ctx.response_sent is False
 
 
-async def test_bot_context_response_sent_mutable():
+def test_bot_context_response_sent_mutable():
     """BotContext.response_sent is mutable so streaming tools can set it (#428)."""
     from unittest.mock import MagicMock
 
