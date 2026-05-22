@@ -153,7 +153,7 @@ def test_bge_m3_client_health_method_is_gone() -> None:
     ``/health`` endpoint, not this convenience wrapper, so removing the
     method does not regress runtime behaviour.
     """
-    tree = _parse("telegram_bot/services/bge_m3_client.py")
+    tree = _parse("src/services/bge_m3_client.py")
     bge_class: ast.ClassDef | None = None
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == "BGEM3Client":
