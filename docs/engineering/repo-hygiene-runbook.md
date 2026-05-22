@@ -114,8 +114,8 @@ make docker-clean-orphan-worktree-volumes          # report only (safe)
 make docker-clean-orphan-worktree-volumes-apply    # delete orphan volumes
 ```
 
-The script preserves active worktrees and the protected project prefixes
-(`dev`, `rag`, `rag-fresh`, `vps`). See
+The script preserves active worktrees, unrelated Compose project prefixes, and
+the protected project prefixes (`dev`, `rag`, `rag-fresh`, `vps`). See
 [`scripts/cleanup_orphaned_worktree_volumes.sh`](../../scripts/cleanup_orphaned_worktree_volumes.sh)
 and [`DOCKER.md`](../../DOCKER.md#worktree-volume-cleanup).
 

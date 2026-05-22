@@ -132,12 +132,23 @@ is_active_prefix() {
     return 1
 }
 
+is_repo_worktree_prefix() {
+    local candidate="$1"
+    case "$candidate" in
+        rag-fresh-*|ragfresh-*|wt-*|worktree-*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 # --- enumerate docker volumes ----------------------------------------------
 
 # We only care about volumes that look like Compose-managed volumes (i.e.
-# `<project>_<volume_name>`). We skip volumes without an underscore.
+# `<project>_<volume_name>`) and whose project prefix belongs to the
+# rag-fresh worktree namespace. We skip volumes without an underscore and
+# unrelated Compose projects on the same host.
 declare -a orphan_volumes=()
-declare -a orphan_sizes=()
 
 while read -r vol; do
     [[ -z "$vol" ]] && continue
@@ -145,6 +156,9 @@ while read -r vol; do
         continue
     fi
     project_prefix="${vol%%_*}"
+    if ! is_repo_worktree_prefix "$project_prefix"; then
+        continue
+    fi
     if is_active_prefix "$project_prefix"; then
         continue
     fi
