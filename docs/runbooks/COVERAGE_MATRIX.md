@@ -96,11 +96,11 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 
 | Alert Name | Severity | Service | Runbook | Status | Notes |
 |------------|----------|---------|---------|--------|-------|
-| MinioDown | critical | minio | MINIO_FAILURE.md | gap-to-fill | New runbook needed |
-| MinioDiskFull | critical | minio | MINIO_FAILURE.md | gap-to-fill | New runbook needed |
-| MinioCorruption | critical | minio | MINIO_FAILURE.md | gap-to-fill | New runbook needed |
-| MinioHealingFailed | warning | minio | MINIO_FAILURE.md | gap-to-fill | New runbook needed |
-| MinioError | warning | minio | MINIO_FAILURE.md | gap-to-fill | New runbook needed |
+| MinioDown | critical | minio | [MINIO_FAILURE.md](MINIO_FAILURE.md) | covered | |
+| MinioDiskFull | critical | minio | [MINIO_FAILURE.md](MINIO_FAILURE.md) | covered | |
+| MinioCorruption | critical | minio | [MINIO_FAILURE.md](MINIO_FAILURE.md) | covered | |
+| MinioHealingFailed | warning | minio | [MINIO_FAILURE.md](MINIO_FAILURE.md) | covered | |
+| MinioError | warning | minio | [MINIO_FAILURE.md](MINIO_FAILURE.md) | covered | |
 
 ## extended-services.yaml - Service: redis-langfuse
 
@@ -136,9 +136,9 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 | Metric | Count |
 |--------|-------|
 | **Total alerts** | 52 |
-| **Covered** | 22 |
+| **Covered** | 27 |
 | **Gap-accepted** | 4 |
-| **Gap-to-fill** | 26 |
+| **Gap-to-fill** | 21 |
 
 ### New runbooks needed
 
@@ -147,5 +147,4 @@ Maps every alert from `docker/monitoring/rules/*.yaml` to its resolution status.
 | `TELEGRAM_BOT_FAILURE.md` | BotContainerDown, BotHighErrorRate, BotCriticalError, TelegramAPIError, BotRestarted, QueryProcessingError, SlowBotResponse, BotMemoryWarning |
 | `EMBEDDING_SERVICE_FAILURE.md` | BGEServiceDown, BM42ServiceDown, EmbeddingServiceError, BGEEmbedRetryFromBot, BGEEmbedErrorFromBot, VoyageRateLimited |
 | `DOCLING_FAILURE.md` | DoclingDown, DoclingOOM, DoclingConversionFailed, DoclingError |
-| `MINIO_FAILURE.md` | MinioDown, MinioDiskFull, MinioCorruption, MinioHealingFailed, MinioError |
 | `LIGHTRAG_FAILURE.md` | LightRAGDown, LightRAGError, LightRAGAPIError |
