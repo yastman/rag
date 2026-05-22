@@ -380,9 +380,9 @@ Environment variables:
   QDRANT_API_KEY  Optional API key for authentication
 
 Examples:
-  python scripts/test_int8_vs_binary.py
-  python scripts/test_int8_vs_binary.py --base contextual_bulgaria_voyage
-  python scripts/test_int8_vs_binary.py --k 10 --runs 3 --output report.json
+  python scripts/benchmark/quantization_int8_vs_binary.py
+  python scripts/benchmark/quantization_int8_vs_binary.py --base contextual_bulgaria_voyage
+  python scripts/benchmark/quantization_int8_vs_binary.py --k 10 --runs 3 --output report.json
         """,
     )
 

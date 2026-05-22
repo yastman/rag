@@ -30,6 +30,8 @@ _EXCLUDED_SEGMENTS = {
     "/node_modules/",
     "/__pycache__/",
     "/scripts/e2e/",
+    "/.agents/",
+    "/.kiro/",
 }
 
 
