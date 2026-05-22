@@ -10,6 +10,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  nightly-full:
+    name: Nightly Full (integration + smoke + baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run integration, smoke, and baseline tests
+        run: >
+          PYTHONDONTWRITEBYTECODE=1
+          uv run pytest
+          tests/integration/ tests/smoke/ tests/baseline/
+          -n auto --dist=worksteal
+          -q --timeout=60
+          -m "not legacy_api and not requires_extras"
+          --cov=src --cov=telegram_bot
+          --cov-report=term-missing
+          --cov-fail-under=80
+
   heavy-tier:
     name: Heavy Tier (requires_extras/load/chaos/e2e/benchmark)
     # Requires self-hosted Actions Runner v2.329.0+ (see issue #1338).
