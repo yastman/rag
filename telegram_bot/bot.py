@@ -35,6 +35,7 @@ from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 
+from . import _bot_error_classification
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .constants import (
@@ -80,7 +81,6 @@ from .services.cache_policy import (
     maybe_store_semantic_response,
     resolve_semantic_cache_signature,
 )
-from .services.error_utils import walk_traceback_frames
 from .services.forum_bridge import ForumBridge
 from .services.grounding_policy import get_grounding_mode
 from .services.handoff_state import HandoffData, HandoffState
@@ -460,68 +460,13 @@ def _write_voice_error_scores(
 
 
 def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
-    """Best-effort detection for cleanup failures after graph nodes completed.
-
-    LangGraph checkpointer/storage errors may surface during Pregel loop __aexit__
-    after node execution and even after a response was already delivered.
-    """
-    message = str(exc).lower()
-    cleanup_markers = (
-        "asyncpregelloop.__aexit__",
-        "pregelloop.__aexit__",
-        "checkpointer",
-        "pregel",
-    )
-    storage_markers = (
-        "operationalerror",
-        "redis.connectionerror",
-        "consuming input failed",
-        "connection lost",
-        "connection closed",
-        # RedisVL semantic cache errors (#524): index missing, schema mismatch,
-        # RediSearch module not loaded on plain Redis instance
-        "redisvlerror",
-        "redissearcherror",
-        "schemavalidationerror",
-        "redisvl",
-    )
-
-    if any(m in message for m in cleanup_markers) and any(m in message for m in storage_markers):
-        return True
-
-    for filename, func in walk_traceback_frames(exc):
-        if "langgraph" in filename and func == "__aexit__":
-            return True
-
-    return False
+    """Thin wrapper — see ``_bot_error_classification`` (#1265 Slice 1 PR-3)."""
+    return _bot_error_classification._is_post_pipeline_cleanup_error(exc)
 
 
 def _is_checkpointer_runtime_error(exc: Exception) -> bool:
-    """Detect runtime checkpointer/storage failures in text agent path."""
-    message = str(exc).lower()
-    checkpointer_markers = (
-        "checkpointer",
-        "checkpoint",
-        "aput",
-        "pregelloop.__aexit__",
-        "asyncpregelloop.__aexit__",
-    )
-    storage_markers = (
-        "serializ",
-        "json",
-        "msgpack",
-        "redis",
-        "connection",
-    )
-    if any(m in message for m in checkpointer_markers) and any(
-        m in message for m in storage_markers
-    ):
-        return True
-
-    for filename, _ in walk_traceback_frames(exc):
-        if "langgraph" in filename and "checkpoint" in filename:
-            return True
-    return False
+    """Thin wrapper — see ``_bot_error_classification`` (#1265 Slice 1 PR-3)."""
+    return _bot_error_classification._is_checkpointer_runtime_error(exc)
 
 
 def _extract_stream_chunk_text(message_chunk: Any) -> str:
