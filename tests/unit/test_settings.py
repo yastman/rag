@@ -232,26 +232,11 @@ class TestRepr:
             assert "api_provider=openai" in result
             assert "search_engine=" in result
 
-        # === BotConfig (telegram_bot) field parsing tests ===
-
-
-class TestBotConfigBoolFields:
-    def test_config_bool_fields_parse_env_strings(self, monkeypatch):
-        """Bool fields should parse 'true'/'false' strings from env."""
-        monkeypatch.setenv("USE_HYDE", "true")
-        monkeypatch.setenv("MMR_ENABLED", "false")
-        from telegram_bot.config import BotConfig
-
-        config = BotConfig()
-        assert config.use_hyde is True
-        assert config.mmr_enabled is False
-
-    def test_config_get_collection_name(self):
-        """get_collection_name() still works after migration."""
-        from telegram_bot.config import BotConfig
-
-        config = BotConfig(qdrant_collection="test_col", qdrant_quantization_mode="scalar")
-        assert config.get_collection_name() == "test_col_scalar"
-
-        config2 = BotConfig(qdrant_collection="test_col", qdrant_quantization_mode="off")
-        assert config2.get_collection_name() == "test_col"
+        # NOTE (#1515 D6): BotConfig (telegram_bot) settings tests live in
+        # tests/unit/config/test_bot_config_settings.py — the canonical home.
+        # The byte-identical duplicates that used to live here
+        # (`test_config_bool_fields_parse_env_strings`,
+        # `test_config_get_collection_name`) were removed to tighten the
+        # duplicate-name ratchet (`tests/data/known_duplicate_test_names.json`).
+        # See `tests/contract/test_issue_1515_dedupe_bot_config_contract.py`
+        # for the drift guard.

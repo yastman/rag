@@ -1,5 +1,7 @@
 # Pipeline Routing
 
+> Routing rules and conditional edges of the LangGraph `StateGraph` built by `build_graph()` in [`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py). This graph drives the **voice path** end-to-end and is reused by the **text path** through the `rag_search` tool's internal retrieve→grade→rerank loop. The dual-path split itself is documented in [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md); the operational overview of ingestion / query / voice flows lives in [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md). Voice migration plan: [`docs/adr/0010-voice-path-create-agent-migration-plan.md`](adr/0010-voice-path-create-agent-migration-plan.md), tracked under #1535 and the SDK-native audit issue [#1538](https://github.com/yastman/rag/issues/1538).
+
 Query routing logic through the LangGraph pipeline.
 
 ## Routing Flow

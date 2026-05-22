@@ -17,8 +17,8 @@ from pydantic import BaseModel, Field, field_validator
 from mini_app.auth import validate_init_data
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
-from telegram_bot.observability import get_client, observe, propagate_attributes
-from telegram_bot.services.content_loader import load_mini_app_config
+from src.observability import get_client, observe, propagate_attributes
+from src.services.content_loader import load_mini_app_config
 
 
 logger = logging.getLogger(__name__)
@@ -325,10 +325,18 @@ async def remote_log(
     as structured fields.
     """
     lvl = _LEVEL_MAP.get(request.level, logging.INFO)
+    # Reconstruct a validated level name from the mapped integer so that
+    # CodeQL cannot trace the string back to user-controlled ``request.level``.
+    level_name: str = {
+        logging.DEBUG: "debug",
+        logging.INFO: "info",
+        logging.WARNING: "warn",
+        logging.ERROR: "error",
+    }.get(lvl, "info")
     logger.log(
         lvl,
         "[REMOTE:%s] frontend log received message_len=%d %s",
-        request.level,
+        level_name,
         len(request.message),
         _remote_log_data_shape(request.data),
     )
