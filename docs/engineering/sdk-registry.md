@@ -167,7 +167,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **как_у_нас:**
   - `telegram_bot/observability.py` — центральный модуль (init, observe, callback handler)
   - `telegram_bot/integrations/prompt_manager.py` — prompt management
-  - `telegram_bot/scoring.py` — 14 RAG scores
+  - `telegram_bot/scoring.py` — 60 Langfuse scores (52 main query + 4 history + 4 CRM)
   - `src/ingestion/unified/observability.py` — ingestion-side @observe
 - **паттерны:**
   - @observe(name="node-X", capture_input=False, capture_output=False) на каждый node/step

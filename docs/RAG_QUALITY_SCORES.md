@@ -44,6 +44,7 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 | `voice_duration_s` | numeric | Voice input duration (voice only) |
 | `bge_embed_error` | boolean | Embedding service error occurred |
 | `bge_embed_latency_ms` | numeric | Embedding latency |
+| `bge_model_processing_ms` | numeric | BGE model processing time (ms) |
 | `security_alert` | boolean | Prompt injection detected |
 | `injection_risk_score` | numeric | Injection risk score (0-1) |
 | `injection_pattern` | categorical | Type of injection pattern detected |
@@ -56,6 +57,8 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 | `semantic_cache_safe_reuse` | boolean | Cache reuse was safe |
 | `safe_fallback_used` | boolean | Safe fallback response used |
 | `checkpointer_overhead_proxy_ms` | numeric | Checkpoint overhead proxy |
+| `checkpointer_overhead_ms` | numeric | Direct checkpointer Redis I/O overhead (sum of timed operations) |
+| `checkpointer_op_count` | numeric | Number of checkpointer operations |
 | `nurturing_batch_size` | numeric | Nurturing batch size |
 | `nurturing_sent_count` | numeric | Nurturing messages sent |
 | `funnel_conversion_rate` | numeric | Funnel conversion rate |
