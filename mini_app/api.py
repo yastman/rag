@@ -325,10 +325,18 @@ async def remote_log(
     as structured fields.
     """
     lvl = _LEVEL_MAP.get(request.level, logging.INFO)
+    # Reconstruct a validated level name from the mapped integer so that
+    # CodeQL cannot trace the string back to user-controlled ``request.level``.
+    level_name: str = {
+        logging.DEBUG: "debug",
+        logging.INFO: "info",
+        logging.WARNING: "warn",
+        logging.ERROR: "error",
+    }.get(lvl, "info")
     logger.log(
         lvl,
         "[REMOTE:%s] frontend log received message_len=%d %s",
-        request.level,
+        level_name,
         len(request.message),
         _remote_log_data_shape(request.data),
     )
