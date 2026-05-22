@@ -1,0 +1,21 @@
+[project]
+name = "docling-service"
+version = "1.0.0"
+description = "Docling document parsing service - standalone docling-serve image"
+requires-python = ">=3.14"
+dependencies = [
+    # docling-serve provides the FastAPI HTTP wrapper around the Docling CLI.
+    # Pinned to match the root pyproject.toml `docling` optional extra so
+    # the service-local lockfile and the root extra resolve to the same
+    # docling-serve generation. Keep these in sync.
+    "docling-serve[ui]>=1.0.0",
+]
+
+[project.optional-dependencies]
+# Mirror of the root pyproject.toml `docling` extra; the Dockerfile's
+# `uv sync --frozen --no-dev --no-install-project --extra docling` line
+# resolves against this extra. Kept identical to the dependencies list
+# above so a single dependency change touches both surfaces in one place.
+docling = [
+    "docling-serve[ui]>=1.0.0",
+]
