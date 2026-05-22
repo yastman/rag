@@ -64,23 +64,24 @@ already has a `shutil.which("docker")` skip-guard.
 
 ### Category 3 — Need running services on **localhost**
 
-Connect to host-side ports (`localhost:6333`, `localhost:6379`,
-`localhost:5001`, `localhost:8000`, etc.). With a remote
+Connect to host-side ports (`localhost:5432`, `localhost:6333`,
+`localhost:6379`, `localhost:5001`, `localhost:8000`,
+`localhost:8003`, `localhost:8080`, etc.). With a remote
 `DOCKER_HOST`, the ports live on the *remote* machine, so localhost
 checks either fail or skip via existing TCP / health-check guards.
 
 | Path | Services | Behaviour without port forwarding |
 |------|----------|-----------------------------------|
-| `tests/integration/test_docker_services.py` | PG, Redis, Qdrant, BGE, Docling, LightRAG | TCP probe → graceful skip |
+| `tests/integration/test_docker_services.py` | PostgreSQL, Redis, Qdrant, BGE-M3, Docling | TCP probe → graceful skip |
 | `tests/integration/test_infrastructure.py` | Qdrant, Redis, Langfuse | TCP probe → graceful skip |
 | `tests/integration/test_qdrant_*.py` (3 files) | Qdrant | hard-fail or skip |
 | `tests/integration/test_gdrive_ingestion.py` | Qdrant + Docling | gated by `RUN_INTEGRATION` env |
 | `tests/integration/test_voice_pipeline.py` | RAG API | HTTP probe → skip |
 | `tests/integration/test_userbase_cache.py` | user-base | env-gated skip |
-| `tests/smoke/**` (9 files) | Qdrant + Redis + BGE | `require_live_services` → skip |
-| `tests/chaos/**` (3 files) | Qdrant | hard-fail without forwarding |
-| `tests/load/**` (2 files) | Redis | hard-fail without forwarding |
-| `tests/e2e/**` | Full stack | hard-fail without forwarding |
+| `tests/smoke/**` | Qdrant, Redis, BGE-M3, Docling, LightRAG, user-base | TCP / fixture guards → graceful skip for most files |
+| `tests/chaos/**` | Redis, BGE-M3, Qdrant / failure-mode mocks | mixed mock-only and live probes; skip or fail depending file |
+| `tests/load/**` | Redis | TCP / auth guards → skip unless Redis is reachable |
+| `tests/e2e/**` | Full stack (RAG API + Redis for current live flow) | skip or fail depending scenario |
 
 To run any of these against a remote daemon you must either:
 
@@ -126,9 +127,11 @@ this shape; instead place pure-mock tests directly under
      (`remote-core-up`, `remote-bot-up`, `remote-bot-logs`, …) which
      SSHs into the host and runs Compose there.
 4. For smoke / e2e / chaos / load runs against the remote stack,
-   forward the relevant ports (Qdrant 6333, Redis 6379, RAG API 8000,
-   user-base 5001) over SSH so existing localhost-coded tests can
-   connect without code changes.
+   forward the relevant ports over SSH so existing localhost-coded tests
+   can connect without code changes. Common dev ports are PostgreSQL
+   5432, Qdrant 6333, Redis 6379, BGE-M3 8000, Docling 5001,
+   user-base 8003, RAG API 8080, and LiveKit 7880 when the voice
+   profile is under test.
 
 ## Hygiene rules
 
