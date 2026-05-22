@@ -28,6 +28,7 @@ def test_guard_blocks_ci_fallback_with_existing_postgres_volume(
     assert exit_code == 2
     assert "Postgres auth mismatch risk" in out.err
     assert "dev_postgres_data" in out.err
+    assert "test-postgres-password" not in out.err
 
 
 def test_guard_allows_ci_fallback_when_volume_missing(tmp_path: Path, monkeypatch) -> None:
