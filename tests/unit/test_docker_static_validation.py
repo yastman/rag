@@ -44,7 +44,27 @@ QDRANT_STACK_DOC = Path("docs/QDRANT_STACK.md")
 
 
 def _docker_available() -> bool:
-    return shutil.which("docker") is not None
+    """True only when the docker CLI *and* the compose plugin are usable.
+
+    A bare ``shutil.which("docker")`` is not enough: CI / sandbox environments
+    can ship the docker CLI without the ``docker compose`` plugin (or the
+    legacy ``docker-compose`` binary). In that case ``docker compose ...``
+    exits 125 with ``looking up compose provider failed``, which surfaces as
+    a hard test failure instead of the intended skip. Probe the plugin
+    explicitly so the compose tests skip gracefully when it is absent.
+    """
+    if shutil.which("docker") is None:
+        return False
+    try:
+        probe = subprocess.run(
+            ["docker", "compose", "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return probe.returncode == 0
 
 
 def _run_docker_command(args: list[str]) -> subprocess.CompletedProcess[str]:
