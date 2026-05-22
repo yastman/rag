@@ -95,6 +95,19 @@ def _is_virtual(name: str) -> bool:
     return name in VIRTUAL_DIRS
 
 
+_EXCLUDED_TREE_DIRS: frozenset[str] = frozenset(
+    {
+        ".venv",
+        ".git",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+        ".tox",
+        "node_modules",
+    }
+)
+
+
 def _dir_exists_anywhere(name: str) -> bool:
     """Return True if a directory with this name exists anywhere in the repo.
 
@@ -103,7 +116,7 @@ def _dir_exists_anywhere(name: str) -> bool:
     even though there is no top-level evaluation/ directory.
     """
     for path in REPO_ROOT.rglob(name):
-        if path.is_dir() and ".venv" not in path.parts and ".git" not in path.parts:
+        if path.is_dir() and not _EXCLUDED_TREE_DIRS.intersection(path.parts):
             return True
     return False
 
