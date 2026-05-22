@@ -100,22 +100,47 @@ async def test_kommo_429_retries_then_succeeds():
 
 
 async def test_kommo_401_refreshes_token_and_recovers():
-    """Kommo 401 should force token refresh and retry request."""
+    """Kommo 401 should force token refresh and retry request.
+
+    Regression for #1934: previously this test patched ``client._client.request``,
+    which is the high-level method that *contains* the ``KommoOAuthAuth.async_auth_flow``
+    retry loop. Patching at that level bypassed the very flow being tested. We now
+    use ``httpx.MockTransport`` so the real auth flow runs against a fake transport;
+    see https://github.com/encode/httpx/blob/master/docs/advanced/transports.md.
+    """
     token_store = AsyncMock()
     token_store.get_valid_token = AsyncMock(return_value="expired")
     token_store.force_refresh = AsyncMock(return_value="fresh-token")
     client = KommoClient(subdomain="testcompany", token_store=token_store)
 
-    req = httpx.Request("GET", "https://testcompany.kommo.com/api/v4/leads")
-    resp_401 = httpx.Response(401, request=req)
-    resp_200 = httpx.Response(
-        200,
-        json={"_embedded": {"leads": [{"id": 2, "name": "Lead B"}]}},
-        request=req,
+    # MockTransport receives every request before the auth flow inspects the
+    # response, so the flow's "if response.status_code == 401: refresh + retry"
+    # branch executes naturally.
+    responses = iter(
+        [
+            httpx.Response(401),
+            httpx.Response(
+                200,
+                json={"_embedded": {"leads": [{"id": 2, "name": "Lead B"}]}},
+            ),
+        ]
     )
 
-    with patch.object(client._client, "request", side_effect=[resp_401, resp_200]):
-        leads = await client.search_leads(responsible_user_id=7, limit=5)
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return next(responses)
+
+    # Swap the underlying AsyncClient for one that goes through MockTransport
+    # while keeping the production KommoOAuthAuth attached so the 401 path
+    # actually runs.
+    await client._client.aclose()
+    client._client = httpx.AsyncClient(
+        base_url="https://testcompany.kommo.com/api/v4",
+        transport=httpx.MockTransport(handler),
+        auth=client._client.auth,
+        headers={"Content-Type": "application/json"},
+    )
+
+    leads = await client.search_leads(responsible_user_id=7, limit=5)
 
     assert len(leads) == 1
     assert leads[0].id == 2
