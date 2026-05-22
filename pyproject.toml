@@ -46,6 +46,9 @@ dependencies = [
     # prometheus_client provides Histogram for latency distributions, replacing
     # the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
     "prometheus-client>=0.20.0,<1.0",
+    # Direct root constraints to fix Dependabot alerts #50, #52-#55, #60, #66-#69
+    "pillow>=12.2.0",
+    "gradio>=6.7.0",
 ]
 
 [project.optional-dependencies]
@@ -152,6 +155,17 @@ dev = [
 # UV: CPU-only PyTorch (no CUDA — VPS has no GPU)
 # SDK pattern from Context7: https://github.com/astral-sh/uv/blob/main/docs/guides/integration/pytorch.md
 # =============================================================================
+
+# =============================================================================
+# UV: Dependency Overrides
+# =============================================================================
+# Override docling-serve's <0.58 constraint on opentelemetry-instrumentation-fastapi
+# to resolve three-way conflict between docling-serve, livekit-agents, and otel-api.
+# See: ROOT-PILLOW-GRADIO-COMPAT.baseline.md for full resolution analysis.
+[tool.uv]
+override-dependencies = [
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -272,7 +286,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
 "test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
-"legacy/*.py" = ["ASYNC210"]      # Allow blocking HTTP calls in async functions (legacy code)
 # Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
 # src/ingestion/service.py removed in #1532: ASYNC240 is already in the
 # global ignore list above, so the per-file entries were redundant. The
@@ -340,7 +353,7 @@ disallow_untyped_defs = true
 # Run: bandit -r . -c pyproject.toml
 
 [tool.bandit]
-exclude_dirs = [".venv", "tests", "evaluation", "legacy", "scripts/archive", "__pycache__"]
+exclude_dirs = [".venv", "tests", "evaluation", "scripts/archive", "__pycache__"]
 skips = ["B101"]  # Skip assert_used (common in tests)
 
 # =============================================================================
@@ -353,8 +366,7 @@ skips = ["B101"]  # Skip assert_used (common in tests)
 py-version = "3.13"
 
 # Files/directories to exclude
-ignore = ["legacy", "tests", ".venv", "__pycache__"]
-ignore-patterns = [".*_old\\.py$", ".*_backup\\.py$"]
+ignore = ["tests", ".venv", "__pycache__"]
 
 [tool.pylint.messages_control]
 # Disable specific checks
@@ -396,7 +408,6 @@ addopts = """
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
-norecursedirs = ["tests/legacy"]
 timeout = 30
 markers = [
     "unit: Unit tests with mocks (fast, no external deps)",
@@ -431,7 +442,6 @@ source = ["src", "telegram_bot"]
 branch = true
 omit = [
     "*/tests/*",
-    "*/legacy/*",
     "*/__pycache__/*",
     "*/.venv/*",
     "telegram_bot/.venv/*",

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from scripts.e2e.config import E2EConfig
-from scripts.e2e.test_scenarios import SCENARIOS
-from scripts.e2e.test_scenarios import TestGroup as _ScenarioGroup
+from scripts.e2e.scenarios import SCENARIOS
+from scripts.e2e.scenarios import TestGroup as _ScenarioGroup
 
 
 def test_e2e_config_defaults_to_canonical_collection() -> None:

@@ -5,7 +5,7 @@ import io
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from scripts.e2e import test_scenarios as scenarios
+from scripts.e2e import scenarios as scenarios
 from scripts.e2e.claude_judge import LiteLLMJudge, build_judge
 from scripts.e2e.config import E2EConfig
 from scripts.e2e.langfuse_trace_validator import probe_litellm_route

@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
-RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "test_release_health_vps.sh"
+RELEASE_SMOKE_SCRIPT = ROOT / "scripts" / "probe" / "release_health_vps.sh"
 VPS_NONCORE_SERVICES_LIB = ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
 
 
@@ -15,7 +15,7 @@ def test_release_smoke_script_does_not_allow_profile_mode() -> None:
     script = RELEASE_SMOKE_SCRIPT.read_text()
     assert "auto|true|false" in script
     assert "profile" not in script, (
-        "scripts/test_release_health_vps.sh still supports 'profile', "
+        "scripts/probe/release_health_vps.sh still supports 'profile', "
         "which lets release-critical callers skip minimal-core parity."
     )
 
@@ -42,7 +42,7 @@ def test_release_smoke_asserts_removed_services_absent() -> None:
 def test_public_ci_does_not_run_release_smoke() -> None:
     """Public CI must not run production release smoke checks."""
     workflow = CI_WORKFLOW.read_text()
-    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/test_release_health_vps.sh" not in workflow
+    assert "REQUIRE_MINI_APP_ENDPOINT=true ./scripts/probe/release_health_vps.sh" not in workflow
 
 
 def test_public_ci_does_not_run_prod_env_preflight() -> None:
