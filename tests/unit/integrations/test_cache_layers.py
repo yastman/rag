@@ -174,9 +174,9 @@ class TestCacheLayerManagerInitialize:
         ):
             await mgr.initialize()
 
-        assert "Redis connected:" in caplog.text
+        assert "Redis connected" in caplog.text
         assert "supersecret" not in caplog.text
-        assert "localhost:6379" in caplog.text
+        assert "localhost:6379" not in caplog.text
 
     async def test_initialize_redacts_redis_credentials_in_rediss_logs(self, caplog):
         mgr = CacheLayerManager(redis_url="rediss://:supersecret@localhost:6379/0")
@@ -190,9 +190,9 @@ class TestCacheLayerManagerInitialize:
         ):
             await mgr.initialize()
 
-        assert "Redis connected:" in caplog.text
+        assert "Redis connected" in caplog.text
         assert "supersecret" not in caplog.text
-        assert "rediss://***@localhost:6379/0" in caplog.text
+        assert "rediss://***@localhost:6379/0" not in caplog.text
 
 
 class TestSemanticCache:
