@@ -74,7 +74,7 @@ services:
 
   qdrant:
     <<: *security-defaults
-    image: qdrant/qdrant:v1.18.0@sha256:b3063c673f3973877c038eeecc392bad5011f072ee7892b56c9a8e204a3bdea9
+    image: qdrant/qdrant:v1.18.1@sha256:45f8e3ddc2570a4d029877e1b5ec1045c19b3852b4e22a55c7f43b05aea0ca89
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
