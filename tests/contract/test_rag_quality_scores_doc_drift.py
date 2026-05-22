@@ -1,4 +1,4 @@
-"""Contract: ``docs/RAG_QUALITY_SCORES.md`` matches ``telegram_bot/scoring.py`` (#1956).
+"""Contract: ``docs/RAG_QUALITY_SCORES.md`` matches ``src/scoring.py`` (#1956).
 
 The doc enumerates every Langfuse score we emit per query. Whenever a new
 ``name=...`` lands in ``write_langfuse_scores``, ``write_history_scores``, or
@@ -10,7 +10,7 @@ contract pins parity in both directions:
 
 Scope:
 
-* Source of truth (code): ``telegram_bot/scoring.py``. We collect every
+* Source of truth (code): ``src/scoring.py``. We collect every
   string literal passed as ``name=...`` to ``score(...)`` or
   ``lf.create_score(...)``, plus every key of the always-written ``scores``
   dict literal in ``write_langfuse_scores``.
@@ -31,7 +31,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCORING_PY = REPO_ROOT / "telegram_bot" / "scoring.py"
+SCORING_PY = REPO_ROOT / "src" / "scoring.py"
 DOC_PATH = REPO_ROOT / "docs" / "RAG_QUALITY_SCORES.md"
 
 # Score names emitted by scoring.py that intentionally do not appear in the
@@ -108,7 +108,7 @@ def test_every_emitted_score_is_documented() -> None:
     missing = sorted(code_names - doc_names)
     assert not missing, (
         "#1956: docs/RAG_QUALITY_SCORES.md is missing rows for scores emitted by "
-        "telegram_bot/scoring.py. Add a row per name with type and description, "
+        "src/scoring.py. Add a row per name with type and description, "
         "or add an entry to DOC_EXEMPT_SCORE_NAMES with a reason. Missing names: "
         f"{missing}"
     )
@@ -120,7 +120,7 @@ def test_every_documented_score_is_emitted_by_code() -> None:
     stale = sorted(doc_names - code_names)
     assert not stale, (
         "#1956: docs/RAG_QUALITY_SCORES.md lists scores that are not emitted by "
-        "telegram_bot/scoring.py. Remove the stale rows or restore the missing "
+        "src/scoring.py. Remove the stale rows or restore the missing "
         f"score writes. Stale names: {stale}"
     )
 
