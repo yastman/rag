@@ -9,28 +9,35 @@ They are intentionally separate from the unit tests so that the RED/GREEN TDD
 cycle is visible in CI history and so the contract remains enforceable
 independently of the ASGI test client.
 
+Contract 1 is AST-only and must run in the core environment without FastAPI.
 Tests 2-4 introspect Pydantic v2 model metadata which is only computed at
-class instantiation time, so they need the real ``mini_app.api`` module.
-``mini_app.api`` imports ``fastapi`` (in the ``voice`` extra), so when that
-extra is not installed the whole file skips cleanly via ``importorskip``.
+class instantiation time, so they need the real ``mini_app.api`` module and
+skip individually when the optional Mini App/FastAPI extra is not installed.
 """
 
 from __future__ import annotations
 
 import ast
-import inspect
 from pathlib import Path
 from typing import get_type_hints
 
 import pytest
 
 
-pytest.importorskip("fastapi", reason="mini_app.api requires fastapi (voice extra)")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MINI_APP_API = REPO_ROOT / "mini_app" / "api.py"
+
+
+def _import_mini_app_api():
+    pytest.importorskip("fastapi", reason="mini_app.api requires fastapi (mini-app extra)")
+    import mini_app.api as api_module
+
+    return api_module
 
 
 def _get_remote_log_function():
     """Return the ``remote_log`` handler object from ``mini_app.api``."""
-    import mini_app.api as api_module
+    api_module = _import_mini_app_api()
 
     func = getattr(api_module, "remote_log", None)
     assert func is not None, "remote_log not found in mini_app.api"
@@ -39,9 +46,7 @@ def _get_remote_log_function():
 
 def _get_remote_log_ast_node() -> tuple[ast.AsyncFunctionDef, str]:
     """Return (AST node, full source) for the remote_log handler."""
-    import mini_app.api as api_module
-
-    src = inspect.getsource(api_module)
+    src = MINI_APP_API.read_text(encoding="utf-8")
     tree = ast.parse(src)
     for node in ast.walk(tree):
         if isinstance(node, ast.AsyncFunctionDef) and node.name == "remote_log":
@@ -70,8 +75,7 @@ def test_remote_log_handler_has_no_print_statement():
                 )
             if isinstance(func, ast.Attribute) and func.attr == "print":
                 raise AssertionError(
-                    "remote_log handler contains a *.print() call — "
-                    "replace with structured logging"
+                    "remote_log handler contains a *.print() call — replace with structured logging"
                 )
 
 
@@ -92,16 +96,12 @@ def test_remote_log_handler_uses_pydantic_model_not_dict():
 
     # FastAPI injects ``request`` as the body parameter name.
     param_type = hints.get("request")
-    assert param_type is not None, (
-        "remote_log has no 'request' parameter type annotation"
-    )
+    assert param_type is not None, "remote_log has no 'request' parameter type annotation"
     assert param_type is not dict, (
-        f"remote_log 'request' parameter must be a Pydantic model, not dict — "
-        f"got {param_type!r}"
+        f"remote_log 'request' parameter must be a Pydantic model, not dict — got {param_type!r}"
     )
     assert issubclass(param_type, BaseModel), (
-        f"remote_log 'request' parameter must subclass pydantic.BaseModel — "
-        f"got {param_type!r}"
+        f"remote_log 'request' parameter must subclass pydantic.BaseModel — got {param_type!r}"
     )
 
 
@@ -112,7 +112,7 @@ def test_remote_log_handler_uses_pydantic_model_not_dict():
 
 def test_log_request_model_has_max_length_on_message():
     """LogRequest.message must declare a max_length constraint."""
-    from mini_app.api import LogRequest
+    LogRequest = _import_mini_app_api().LogRequest
 
     field_info = LogRequest.model_fields.get("message")
     assert field_info is not None, "LogRequest has no 'message' field"
@@ -141,7 +141,7 @@ def test_log_request_model_restricts_level_to_known_values():
     import typing
     from typing import Literal
 
-    from mini_app.api import LogRequest
+    LogRequest = _import_mini_app_api().LogRequest
 
     field_info = LogRequest.model_fields.get("level")
     assert field_info is not None, "LogRequest has no 'level' field"
