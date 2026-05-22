@@ -6,8 +6,5 @@
     "telegram_bot.integrations.cache",
     "telegram_bot.scoring",
     "telegram_bot.services.qdrant"
-  ],
-  "mini_app/phone.py": [
-    "telegram_bot.services.kommo_client"
   ]
 }

@@ -116,7 +116,7 @@ class TestKommoTokenStoreEdgeCases:
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
-            "telegram_bot.services.kommo_tokens.httpx.AsyncClient", return_value=mock_client
+            "src.services.kommo_tokens.httpx.AsyncClient", return_value=mock_client
         ):
             with pytest.raises(RuntimeError, match="Unexpected Kommo OAuth2 response shape"):
                 await token_store._token_request({"grant_type": "authorization_code"})
