@@ -39,6 +39,14 @@ def test_release_smoke_asserts_removed_services_absent() -> None:
     assert "removed_service" in script
 
 
+def test_release_smoke_sources_noncore_lib_from_probe_dir() -> None:
+    """The probe script moved under scripts/probe, so the lib path must go up one level."""
+    script = RELEASE_SMOKE_SCRIPT.read_text()
+    assert "# shellcheck source=../lib/vps_noncore_services.sh" in script
+    assert "# shellcheck disable=SC1091" in script
+    assert '. "${SCRIPT_DIR}/../lib/vps_noncore_services.sh"' in script
+
+
 def test_public_ci_does_not_run_release_smoke() -> None:
     """Public CI must not run production release smoke checks."""
     workflow = CI_WORKFLOW.read_text()
