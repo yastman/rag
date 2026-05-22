@@ -20,8 +20,9 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-_LANGFUSE_PUBLIC_KEY_PLACEHOLDER = "pk" "-lf-dev"
-_LANGFUSE_SECRET_KEY_PLACEHOLDER = "sk" "-lf-dev"
+
+_LANGFUSE_PUBLIC_KEY_PLACEHOLDER = "-".join(("pk", "lf", "dev"))
+_LANGFUSE_SECRET_KEY_PLACEHOLDER = "-".join(("sk", "lf", "dev"))
 
 
 # Ensure project root is importable

@@ -18,9 +18,9 @@ Langfuse tracing gaps runbook.
 
 | Question | Where to Look |
 |---|---|
-| Are traces being exported? | `telegram_bot/integrations/langfuse_client.py` and middleware trace root |
+| Are traces being exported? | `telegram_bot/observability.py` (Langfuse client + helpers) and `telegram_bot/middlewares/langfuse_middleware.py` (trace root) |
 | What spans are emitted? | Search for `span=` or `trace=` in `telegram_bot/graph/`, `telegram_bot/services/`, `src/api/` |
-| Is scoring configured? | `src/evaluation/` and `telegram_bot/services/scoring.py` |
+| Is scoring configured? | `src/evaluation/` and `telegram_bot/scoring.py` |
 | Trace validation command | `make validate-traces-fast` |
 
 ### Fast Search

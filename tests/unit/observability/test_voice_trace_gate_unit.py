@@ -221,53 +221,19 @@ class TestUpdateVoiceTraceIntegration:
 
     def test_produces_voice_agent_user_id(self) -> None:
         """update_voice_trace sets user_id='voice-agent' for attribution."""
-        mock_lf = MagicMock()
-        mock_obs = MagicMock()
-        mock_obs_ctx = MagicMock()
-        mock_obs_ctx.__enter__ = MagicMock(return_value=mock_obs)
-        mock_obs_ctx.__exit__ = MagicMock(return_value=None)
-        mock_lf.start_as_current_observation.return_value = mock_obs_ctx
-        mock_lf.create_trace_id.return_value = "trace-unit-001"
-        mock_prop_ctx = MagicMock()
-        mock_prop_ctx.__enter__ = MagicMock(return_value=None)
-        mock_prop_ctx.__exit__ = MagicMock(return_value=None)
-
-        with (
-            patch("src.observability.get_langfuse_client", return_value=mock_lf),
-            patch(
-                "src.observability.propagate_attributes",
-                return_value=mock_prop_ctx,
-            ) as mock_prop,
-        ):
+        with patch("src.voice.observability.update_lifecycle_trace") as update_trace:
             from src.voice.observability import update_voice_trace
 
             update_voice_trace(call_id="unit-1", status="answered")
 
-        kwargs = mock_prop.call_args[1]
+        kwargs = update_trace.call_args.kwargs
         assert kwargs["user_id"] == "voice-agent"
         assert kwargs["tags"] == ["voice", "call-lifecycle"]
         assert kwargs["session_id"] == "voice-unit-1"
 
     def test_produces_correct_session_id_pattern(self) -> None:
         """Session ID follows voice-* pattern."""
-        mock_lf = MagicMock()
-        mock_obs = MagicMock()
-        mock_obs_ctx = MagicMock()
-        mock_obs_ctx.__enter__ = MagicMock(return_value=mock_obs)
-        mock_obs_ctx.__exit__ = MagicMock(return_value=None)
-        mock_lf.start_as_current_observation.return_value = mock_obs_ctx
-        mock_lf.create_trace_id.return_value = "trace-unit-002"
-        mock_prop_ctx = MagicMock()
-        mock_prop_ctx.__enter__ = MagicMock(return_value=None)
-        mock_prop_ctx.__exit__ = MagicMock(return_value=None)
-
-        with (
-            patch("src.observability.get_langfuse_client", return_value=mock_lf),
-            patch(
-                "src.observability.propagate_attributes",
-                return_value=mock_prop_ctx,
-            ) as mock_prop,
-        ):
+        with patch("src.voice.observability.update_lifecycle_trace") as update_trace:
             from src.voice.observability import update_voice_trace
 
             update_voice_trace(
@@ -276,7 +242,7 @@ class TestUpdateVoiceTraceIntegration:
                 session_id="voice-custom-session",
             )
 
-        kwargs = mock_prop.call_args[1]
+        kwargs = update_trace.call_args.kwargs
         assert kwargs["session_id"].startswith("voice-")
 
 
