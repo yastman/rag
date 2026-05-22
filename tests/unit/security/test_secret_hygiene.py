@@ -10,7 +10,7 @@ def test_no_hardcoded_qdrant_secrets_in_integration_tests():
     import re
     from pathlib import Path
 
-    test_file = Path(__file__).parent.parent.parent / "integration" / "test_basic_connection.py"
+    test_file = Path(__file__).parent.parent.parent / "smoke" / "test_basic_connection.py"
 
     if not test_file.exists():
         return  # File doesn't exist, skip
