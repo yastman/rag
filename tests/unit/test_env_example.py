@@ -50,7 +50,7 @@ class TestEnvExampleSanitization:
     BLOCKED_STRINGS = [
         "REDACTED_VPS_IP",  # placeholder: replace with actual VPS IP
         "REDACTED_PRIVATE_IP",  # placeholder: replace with actual LAN IP
-        "[REDACTED-ANTHROPIC-KEY]
+        "[REDACTED-ANTHROPIC-KEY]",
     ]
 
     @pytest.mark.parametrize("blocked", BLOCKED_STRINGS)
