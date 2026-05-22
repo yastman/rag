@@ -1,5 +1,11 @@
 # Runbook: Redis Cache Degradation
 
+> **Scope:** Operator incident runbook for Redis cache infrastructure issues.
+>
+> Related docs:
+> - [Cache Degradation Behavior](../CACHE_DEGRADATION.md) - architecture, tiers, and degradation design
+> - [Troubleshooting Cache](../TROUBLESHOOTING_CACHE.md) - application-level debugging guide
+
 > **Owner:** Retrieval & Cache subsystems
 > **Last verified:** 2026-05-12
 > **Verification command:**
@@ -7,7 +13,10 @@
 > COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'
 > ```
 
-Use this runbook when Redis cache issues affect RAG performance.
+Use this runbook when Redis cache infrastructure issues affect RAG performance.
+For application-level cache debugging (threshold tuning, key inspection, cache
+misses due to config), see
+[Troubleshooting Cache](../TROUBLESHOOTING_CACHE.md).
 
 ## Symptoms
 
@@ -34,15 +43,22 @@ Use this runbook when Redis cache issues affect RAG performance.
 
 ## Cache Tiers in the App
 
+The `CacheLayerManager` manages 5 tiers (see
+[Cache Degradation Behavior](../CACHE_DEGRADATION.md) for full architecture):
+
 - RedisVL **SemanticCache**: `sem:v8:bge1024`
 - RedisVL **EmbeddingsCache**: `embeddings:v5` (dense vectors and BGE-M3 query-bundle payload)
-- Exact async Redis caches (redis-py): `embeddings`, `sparse`, `search`, `rerank`, and `conversation`/state keys (`conversation:<user_id>`)
+- Exact async Redis caches (redis-py): `sparse:v5:`, `search:v5:`, `rerank:v5:`
+- Conversation/state keys: `conversation:<user_id>`
 
-BGE-M3 query-bundle optimization uses **RedisVL EmbeddingsCache** for dense vectors and stores sparse/ColBERT parts as metadata in the same payload. It is still an app-level cache optimization; retrieval remains in Qdrant.
+BGE-M3 query-bundle optimization uses **RedisVL EmbeddingsCache** for dense
+vectors and stores sparse/ColBERT parts as metadata in the same payload. It is
+still an app-level cache optimization; retrieval remains in Qdrant.
 
 ## Fast-Path Diagnosis (read-only)
 
-Run these commands before deciding whether the issue is a service failure or an application bug.
+Run these commands before deciding whether the issue is a service failure or an
+application bug.
 
 ### 1. Container health and reachability
 
@@ -55,7 +71,8 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 ```
 
 Expected: `PONG`.
-If this fails, treat as **service failure** (container down, network partition, or auth misconfiguration at the Compose level).
+If this fails, treat as **service failure** (container down, network partition,
+or auth misconfiguration at the Compose level).
 
 ### 1b. Verify container/runtime version before conclusions
 
@@ -64,7 +81,8 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis-langfuse sh -lc 'if [ -n "${LANGFUSE_REDIS_PASSWORD:-}" ]; then redis-cli -a "$LANGFUSE_REDIS_PASSWORD" INFO server; else redis-cli INFO server; fi | grep "^redis_version"'
 ```
 
-Run both commands independently and compare output before concluding a cache failure is app-Redis-specific.
+Run both commands independently and compare output before concluding a cache
+failure is app-Redis-specific.
 
 ### 2. Read-only keyspace and memory inspection
 
@@ -76,9 +94,9 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 ```
 
 Look for:
-- `used_memory_human` — compare against the `redis` service `deploy.resources.limits.memory` in [`compose.yml`](../../compose.yml)
-- `maxmemory` — verify against the `redis` service definition in [`compose.yml`](../../compose.yml) and dev overrides in [`compose.dev.yml`](../../compose.dev.yml); canonical values are in [`DOCKER.md`](../../DOCKER.md)
-- `evicted_keys` > 0 — confirms aggressive eviction due to memory pressure
+- `used_memory_human` - compare against the `redis` service `deploy.resources.limits.memory` in [`compose.yml`](../../compose.yml)
+- `maxmemory` - verify against the `redis` service definition in [`compose.yml`](../../compose.yml) and dev overrides in [`compose.dev.yml`](../../compose.dev.yml); canonical values are in [`DOCKER.md`](../../DOCKER.md)
+- `evicted_keys` > 0 - confirms aggressive eviction due to memory pressure
 
 ### 3. Logs (read-only)
 
@@ -99,9 +117,9 @@ Check for:
 | `redis-cli ping` works, but bot logs show `Connection refused` | App bug | Verify `REDIS_URL` in bot env; check password encoding |
 | Bot preflight shows `invalid username-password pair` / `WRONGPASS` / `NOAUTH` after local `.env` edit | Local auth drift | Run `make local-redis-recreate`, then `make test-bot-health` |
 | Redis memory is near limit and `evicted_keys` is rising | Service failure / capacity | Scale `maxmemory` or reduce TTL; see Remediation |
-| Cache hit rate is 0% but Redis is healthy and has keys | App bug | Check semantic cache threshold, query_type mapping, or `CACHE_VERSION` drift in `telegram_bot/integrations/cache.py` |
+| Cache hit rate is 0% but Redis is healthy and has keys | App bug | See [Troubleshooting Cache](../TROUBLESHOOTING_CACHE.md) for threshold/version debugging |
 | High latency **with** cache hits | App bug | Profile embedding or rerank tiers; latency may be upstream of Redis |
-| Only specific tiers miss (e.g. `search` hits, `semantic` misses) | App bug | Inspect tier-specific TTLs and `distance_threshold` in source |
+| Only specific tiers miss (e.g. `search` hits, `semantic` misses) | App bug | See [Troubleshooting Cache](../TROUBLESHOOTING_CACHE.md#1-cache-always-miss-despite-correct-query) |
 
 ### Cache Smoke Validation (for cache-hit health)
 
@@ -134,7 +152,8 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
 
 ## Remediation
 
-> ⚠️ **Caution:** Commands in this section mutate state. Run only after fast-path diagnosis confirms the issue is not an app bug.
+> **Caution:** Commands in this section mutate state. Run only after fast-path
+> diagnosis confirms the issue is not an app bug.
 
 ### Redis Connection Refused
 
@@ -155,7 +174,9 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
 
 ### Local `REDIS_PASSWORD` Drift After `.env` Change
 
-When local bot preflight reports auth failures (`invalid username-password pair`, `WRONGPASS`, `NOAUTH`), your running Redis container may still use the previous password.
+When local bot preflight reports auth failures (`invalid username-password pair`,
+`WRONGPASS`, `NOAUTH`), your running Redis container may still use the previous
+password.
 
 1. Recreate local Redis with current `.env` values:
    ```bash
@@ -168,7 +189,8 @@ When local bot preflight reports auth failures (`invalid username-password pair`
 
 ### Cache Corruption or Version Drift
 
-If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_CACHE_VERSION`:
+If cache data appears corrupted or keys use an old `CACHE_VERSION` /
+`SEMANTIC_CACHE_VERSION`:
 
 1. Clear caches programmatically (safe, uses SCAN not `KEYS *`):
    ```bash
@@ -187,7 +209,12 @@ If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_C
 
 2. Or use the bot command: `/clearcache`
 
-> **Avoid `KEYS *`** in production or large keyspaces. The `CacheLayerManager.clear_by_tier()` and `clear_semantic_cache()` methods use `SCAN` iteratively instead.
+> **Avoid `KEYS *`** in production or large keyspaces. The
+> `CacheLayerManager.clear_by_tier()` and `clear_semantic_cache()` methods use
+> `SCAN` iteratively instead.
+
+For details on version bump triggers and manual cache clearing options, see
+[Troubleshooting Cache](../TROUBLESHOOTING_CACHE.md#cache-poisoning--staleness).
 
 ### Memory Issues
 
@@ -200,15 +227,6 @@ If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_C
    - Increasing `maxmemory` in `compose.dev.yml` (dev) or the host Redis config (production)
    - Reducing exact-cache TTLs in `telegram_bot/integrations/cache.py` (`DEFAULT_TTLS`)
    - Clearing old cache entries via tiered `clear_by_tier()`
-
-## Impact on Users
-
-When Redis is down:
-- **Semantic cache unavailable** — queries still work but no cache hits
-- **Embeddings cache unavailable** — fresh embeddings computed each time
-- **Session history unavailable** — new sessions don't retain context
-
-The system degrades gracefully — users still get responses, just without cache benefits.
 
 ## Prevention
 

@@ -1,8 +1,17 @@
 # Troubleshooting: Semantic Cache
 
-The semantic cache is a multi-tier system (`CacheLayerManager` in `telegram_bot/integrations/cache.py`). This guide helps debug cache behavior.
+> **Scope:** Debugging guide for application-level cache behavior issues.
+>
+> Related docs:
+> - [Cache Degradation Behavior](CACHE_DEGRADATION.md) - architecture, tiers, and degradation modes
+> - [Redis Cache Degradation Runbook](runbooks/REDIS_CACHE_DEGRADATION.md) - operator incident runbook
 
-## Cache Architecture
+The semantic cache is a multi-tier system (`CacheLayerManager` in
+`telegram_bot/integrations/cache.py`). This guide helps debug cache behavior
+at the application level. For infrastructure issues (Redis down, container
+failures), see the [incident runbook](runbooks/REDIS_CACHE_DEGRADATION.md).
+
+## Cache Architecture Overview
 
 The `CacheLayerManager` implements 5 cache tiers:
 
@@ -14,6 +23,9 @@ The `CacheLayerManager` implements 5 cache tiers:
 | Search | Redis exact | 2 hours | Search results cache |
 | Rerank | Redis exact | 2 hours | Reranked results cache |
 
+For full tier details, thresholds, and degradation modes, see
+[Cache Degradation Behavior](CACHE_DEGRADATION.md).
+
 ## Common Issues
 
 ### 1. Cache Always MISS Despite Correct Query
@@ -24,24 +36,27 @@ The `CacheLayerManager` implements 5 cache tiers:
 
 #### RRF Scale vs Cosine Similarity Confusion
 
-The `grade_confidence` threshold uses **RRF scale** (~0.0006 to 0.016), NOT cosine similarity [0-1].
+The `grade_confidence` threshold uses **RRF scale** (~0.0006 to 0.016), NOT
+cosine similarity [0-1].
 
 The store guard in `pipelines/client.py` requires:
 ```python
 grade_confidence >= config.relevance_threshold_rrf  # Default: 0.005
 ```
 
-If your threshold is set to `0.8` thinking it's cosine similarity, nothing will store.
+If your threshold is set to `0.8` thinking it's cosine similarity, nothing will
+store.
 
 **Fix:** Use RRF scale thresholds. A good starting point is `0.005`.
 
 #### Cache Key Versioning
 
 Each tier has a version prefix:
-- `sem:v8:` / index `sem:v8:bge1024` — Semantic cache
-- `embeddings:v5:` — Embeddings
-- `sparse:v5:` — Sparse embeddings
-- `search:v5:` — Search results
+- `sem:v8:` / index `sem:v8:bge1024` - Semantic cache
+- `embeddings:v5:` - Embeddings
+- `sparse:v5:` - Sparse embeddings
+- `search:v5:` - Search results
+- `rerank:v5:` - Rerank results
 
 When models change, bump the version in `integrations/cache.py`:
 ```python
@@ -103,6 +118,12 @@ KEYS embeddings:v5:*
 # Check search cache
 KEYS search:v5:*
 
+# Check sparse cache
+KEYS sparse:v5:*
+
+# Check rerank cache
+KEYS rerank:v5:*
+
 # Inspect a semantic cache entry
 GET "sem:v8:bge1024:somekey"
 ```
@@ -133,6 +154,9 @@ results = await cache.clear_all_caches()
 
 Or via bot command: `/clearcache`
 
+For operator-level cache clearing via Docker, see the
+[incident runbook](runbooks/REDIS_CACHE_DEGRADATION.md#cache-corruption-or-version-drift).
+
 ## Cache vs Query Type Mapping
 
 ### Cacheable Query Types
@@ -147,17 +171,8 @@ _SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 
 | Query Pattern | Reason |
 |---------------|--------|
-| Contextual follow-ups ("подробнее"/"more details", "первый"/"the first one", "это"/"this", "ещё"/"more") | Different context |
+| Contextual follow-ups ("more details", "the first one", "this", "more") | Different context |
 | CHITCHAT/OFF_TOPIC | Not RAG queries |
-
-### Cache Thresholds by Query Type
-
-| Query Type | Distance Threshold | TTL |
-|------------|-------------------|-----|
-| FAQ | 0.12 | 24h |
-| ENTITY | 0.10 | 1h |
-| GENERAL | 0.08 | 1h |
-| STRUCTURED | 0.05 | 2h |
 
 ## Metrics and Monitoring
 
