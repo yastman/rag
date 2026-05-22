@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARED_LIB = REPO_ROOT / "scripts" / "lib" / "vps_noncore_services.sh"
 COMPOSE_VPS = REPO_ROOT / "compose.vps.yml"
 CONSUMERS = [
-    REPO_ROOT / "scripts" / "test_release_health_vps.sh",
+    REPO_ROOT / "scripts" / "probe" / "release_health_vps.sh",
     REPO_ROOT / "scripts" / "vps_cleanup_removed_services.sh",
 ]
 DUPLICATE_SCAN_FILES = sorted(
