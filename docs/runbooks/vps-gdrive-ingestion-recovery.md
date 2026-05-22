@@ -4,7 +4,7 @@ Use this VPS-only runbook when `gdrive_documents_bge` exists but stays empty,
 or when ingestion reports `No input data`.
 
 > **VPS/deployment only:** This page references deployment-specific host paths such as
-> `/etc/rag-fresh/rclone-sync.env` and `/var/log/rclone-sync.log` — examples only.
+> `/etc/<project>/rclone-sync.env` and `/var/log/<project>/rclone-sync.log` — examples only.
 > Replace these with your actual deployment paths. For local development, use
 > [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md) instead.
 
@@ -23,13 +23,13 @@ If the host sync directory is missing or empty, Qdrant may still have a valid co
 Confirm required variables are present without printing secret-bearing files:
 
 ```bash
-for file in .env /etc/rag-fresh/rclone-sync.env; do  ***REMOVED*** deployment-specific path; replace with your actual path
+for file in .env /etc/<project>/rclone-sync.env; do  ***REMOVED*** deployment-specific path; replace with your actual path
   sudo test -r "$file" && echo "$file: present" || echo "$file: MISSING"
 done
 
 for v in GDRIVE_SYNC_DIR RCLONE_CONFIG_FILE RCLONE_REMOTE; do
   test -r .env && grep -q "^${v}=" .env && echo ".env ${v}: present" || echo ".env ${v}: MISSING"
-  sudo test -r /etc/rag-fresh/rclone-sync.env 2>/dev/null && sudo grep -q "^${v}=" /etc/rag-fresh/rclone-sync.env 2>/dev/null && \
+  sudo test -r /etc/<project>/rclone-sync.env 2>/dev/null && sudo grep -q "^${v}=" /etc/<project>/rclone-sync.env 2>/dev/null && \
     echo "rclone-sync.env ${v}: present" || echo "rclone-sync.env ${v}: MISSING"
 done
 ```
@@ -55,8 +55,8 @@ Failure modes:
 ```bash
 rclone ls "$RCLONE_REMOTE" --config "$RCLONE_CONFIG_FILE"
 make sync-drive-run
-tail -100 /var/log/rclone-sync.log
-tail -100 /var/log/rclone-manifest.log
+tail -100 /var/log/<project>/rclone-sync.log
+tail -100 /var/log/<project>/rclone-manifest.log
 ```
 
 If `rclone ls` fails, fix credentials, folder sharing, or `root_folder_id` before touching ingestion.
