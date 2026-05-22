@@ -77,12 +77,17 @@ class TestQueryPreprocessorTranslitPrecompiled:
         with patch("re.compile", wraps=re.compile) as mock_compile:
             for q in queries:
                 pp.normalize_translit(q)
-            assert mock_compile.call_count == 0, (
-                "normalize_translit should not call re.compile in the hot path; "
-                f"got {mock_compile.call_count} compilations across "
-                f"{len(queries)} queries. Precompile patterns at class/module "
-                "load time."
-            )
+            # #1515 audit S1: prefer assert_not_called() over call_count == 0
+            # because Mock raises a clearer AssertionError on regression.
+            try:
+                mock_compile.assert_not_called()
+            except AssertionError as exc:  # pragma: no cover - hot-path regression
+                raise AssertionError(
+                    "normalize_translit should not call re.compile in the hot path; "
+                    f"got {mock_compile.call_count} compilations across "
+                    f"{len(queries)} queries. Precompile patterns at class/module "
+                    "load time."
+                ) from exc
 
     @pytest.mark.parametrize(
         ("latin_input", "expected_output"),
