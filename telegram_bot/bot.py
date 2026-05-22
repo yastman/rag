@@ -35,6 +35,7 @@ from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 
+from . import _bot_state_helpers  # #1265 Slice 1 PR-1: extracted state-shape helpers
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .constants import (
@@ -341,31 +342,21 @@ async def _stream_agent_to_draft(
 
 
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Read cached apartment payloads from legacy or dialog-owned state."""
-    raw_results = state_data.get("apartment_results")
-    if isinstance(raw_results, list):
-        return [item for item in raw_results if isinstance(item, dict)]
+    """Read cached apartment payloads from legacy or dialog-owned state.
 
-    runtime = state_data.get("catalog_runtime")
-    if isinstance(runtime, dict):
-        runtime_results = runtime.get("results")
-        if isinstance(runtime_results, list):
-            return [item for item in runtime_results if isinstance(item, dict)]
-
-    return []
+    Implementation lives in :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1
+    PR-1). This wrapper preserves the historical ``telegram_bot.bot`` import
+    surface for existing callers and tests.
+    """
+    return _bot_state_helpers._state_apartment_results(state_data)
 
 
 def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
-    runtime = state_data.get("catalog_runtime")
-    if isinstance(runtime, dict):
-        control_message_id = runtime.get("control_message_id")
-        if isinstance(control_message_id, int):
-            return control_message_id
+    """Locate the catalog control message id (legacy or dialog-owned shape).
 
-    footer_msg_id = state_data.get("apartment_footer_msg_id")
-    if isinstance(footer_msg_id, int):
-        return footer_msg_id
-    return None
+    Re-exported from :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1 PR-1).
+    """
+    return _bot_state_helpers._state_control_message_id(state_data)
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
@@ -380,19 +371,11 @@ from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
-    """Extract current-turn messages from full checkpointer history (#507).
+    """Slice agent checkpointer history down to the current turn (#507).
 
-    Agent checkpointer returns full conversation history across turns.
-    For per-turn scoring we only need messages after the last HumanMessage.
+    Re-exported from :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1 PR-1).
     """
-    last_human_idx = -1
-    for i in range(len(messages) - 1, -1, -1):
-        if getattr(messages[i], "type", None) == "human":
-            last_human_idx = i
-            break
-    if last_human_idx < 0:
-        return messages
-    return messages[last_human_idx:]
+    return _bot_state_helpers._extract_current_turn(messages)
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
