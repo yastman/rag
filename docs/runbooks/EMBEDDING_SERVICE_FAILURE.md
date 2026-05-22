@@ -1,46 +1,45 @@
 # Runbook: Embedding Service Failure
 
-> **Owner:** Retrieval & Embeddings subsystems
-> **Last verified:** 2026-05-07
+> **Owner:** Retrieval & Embedding subsystems
+> **Last verified:** 2025-07-14
 > **Verification command:**
 > ```bash
 > curl -fsS http://localhost:8000/health
 > ```
 
-Use this runbook when embedding services are down, degraded, or returning errors. Covers both the local BGE-M3 embedding service and the external Voyage AI provider used during ingestion.
-
-## Alerts Covered
-
-| Alert | Severity | Source | Trigger |
-|-------|----------|--------|---------|
-| `BGEServiceDown` | warning | infrastructure.yaml | No logs from `dev-bge-m3` container for 10 min |
-| `BM42ServiceDown` | warning | infrastructure.yaml | No logs from `dev-bm42` container for 10 min |
-| `EmbeddingServiceError` | warning | infrastructure.yaml | >3 error/failed/exception lines in embedding containers in 5 min |
-| `BGEEmbedRetryFromBot` | warning | infrastructure.yaml | Bot retrying BGE-M3 embedding calls (>3 retries in 5 min) |
-| `BGEEmbedErrorFromBot` | critical | infrastructure.yaml | Bot embedding calls failing after all retries exhausted |
-| `VoyageRateLimited` | warning | ingestion.yaml | Voyage API 429 responses detected in ingestion logs |
+Use this runbook when embedding service alerts fire or embedding calls fail from the bot or ingestion pipeline.
 
 ## Symptoms
 
-- Bot responses contain no retrieved context (search returns empty)
-- Bot logs show `Retrying telegram_bot.integrations.embeddings` or `Embedding failed after retries`
-- Ingestion pipeline stalls with Voyage rate-limit (HTTP 429) errors
-- Queries to Qdrant succeed but return zero results because embeddings were never generated
-- BGE-M3 health endpoint (`/health`) returns non-200 or times out
-- Container `dev-bge-m3` or `dev-bm42` is restarting or missing from `docker compose ps`
+- BGE-M3 container stops producing logs (BGEServiceDown)
+- BM42 sparse-vector container stops producing logs (BM42ServiceDown)
+- Repeated error/exception messages in embedding containers (EmbeddingServiceError)
+- Bot retrying BGE-M3 embedding calls (BGEEmbedRetryFromBot)
+- Bot embedding calls failing after all retries (BGEEmbedErrorFromBot)
+- Voyage API returning HTTP 429 rate-limit errors during ingestion (VoyageRateLimited)
+- Users receiving degraded responses or timeouts due to missing embeddings
 
 ## Service / Container Map
 
-| Compose service | Typical container names | Port (dev) | Health endpoint |
-|---|---|---|---|
-| `bge-m3` | `dev-bge-m3-1` | `localhost:8000` | `GET /health` |
-| `bm42` | `dev-bm42-1` | (internal only) | `GET /health` |
-| `user-base` | `dev-user-base-1` | (internal only) | `GET /health` |
-| `bot` | `dev-bot-1` | - | - |
-| `ingestion` | `dev-ingestion-1` | - | - |
+| Compose service | Typical container names | Purpose |
+|---|---|---|
+| `bge-m3` | `dev-bge-m3` | Self-hosted BGE-M3 FastAPI embedding service (dense, sparse, ColBERT) |
+| `user-base` | `dev-user-base` | Sentence-transformers service for user-level semantic caching |
+| (historical) | `dev-bm42` | BM42 sparse vector container (sparse vectors now served by BGE-M3) |
 
-> For full service endpoints and Compose profiles, see [`DOCKER.md`](../../DOCKER.md).
+> For service endpoints, ports, and Compose profiles, see the canonical [`DOCKER.md`](../../DOCKER.md).
 > For local development commands and the validation ladder, see [`docs/LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
+
+## Alerts Covered
+
+| Alert | Source | Trigger | Severity |
+|---|---|---|---|
+| `BGEServiceDown` | [infrastructure.yaml](../../docker/monitoring/rules/infrastructure.yaml) | No logs from `dev-bge-m3` container for 10 min | warning |
+| `BM42ServiceDown` | [infrastructure.yaml](../../docker/monitoring/rules/infrastructure.yaml) | No logs from `dev-bm42` container for 10 min | warning |
+| `EmbeddingServiceError` | [infrastructure.yaml](../../docker/monitoring/rules/infrastructure.yaml) | >3 error/exception lines in `dev-bge-m3\|dev-bm42\|dev-user-base` within 5 min | warning |
+| `BGEEmbedRetryFromBot` | [infrastructure.yaml](../../docker/monitoring/rules/infrastructure.yaml) | >3 retry log lines in `dev-bot` for `telegram_bot.integrations.embeddings` within 5 min | warning |
+| `BGEEmbedErrorFromBot` | [infrastructure.yaml](../../docker/monitoring/rules/infrastructure.yaml) | Any "Embedding failed after retries" line in `dev-bot` within 5 min | critical |
+| `VoyageRateLimited` | [ingestion.yaml](../../docker/monitoring/rules/ingestion.yaml) | >1 Voyage 429/rate-limit lines in `dev-ingestion` within 5 min | warning |
 
 ## Fast-Path Diagnosis (read-only)
 
@@ -49,225 +48,219 @@ Run these commands before deciding whether the issue is a service failure or an 
 ### 1. Container health and reachability
 
 ```bash
-# Check embedding service status
+# Check embedding services status
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml ps bge-m3
+  -f compose.yml -f compose.dev.yml ps bge-m3 user-base
 
-# Health check (host-side; bge-m3 publishes on localhost:8000 in dev)
+# BGE-M3 health check (dev Compose publishes on localhost:8000)
 curl -fsS http://localhost:8000/health
 ```
 
-Expected: exit code `0` (HTTP 200 OK).
-If this fails, treat as **service failure** (container down, OOM, or model failed to load).
-
-### 2. Check for BGE-M3 retry/error signals in bot logs
-
-```bash
-# Retries (degraded but still functioning)
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml logs bot --tail=200 \
-  | grep -i "Retrying telegram_bot.integrations.embeddings"
-
-# Hard failures (all retries exhausted)
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml logs bot --tail=200 \
-  | grep -i "Embedding failed after retries"
+Expected: HTTP 200 with:
+```json
+{"status": "ok", "model_loaded": true, "warmed_up": true}
 ```
 
-### 3. Check embedding service logs for errors
+> **Note:** During cold start (up to 7 min), the endpoint returns HTTP 200 with
+> `"model_loaded": false` and `"warmed_up": false`. This means the service is
+> running but **not yet ready to serve embeddings**. Wait for `model_loaded: true`
+> before concluding the service is healthy.
+
+If this fails with a non-200 response or times out, treat as **service failure** (container down or OOM).
+
+### 2. GPU/CPU and memory usage
 
 ```bash
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml logs bge-m3 --tail=200 \
-  | grep -iE "error|failed|exception|oom|killed"
+  -f compose.yml -f compose.dev.yml stats bge-m3 user-base --no-stream
 ```
 
-### 4. Check BM42 container (if alert is BM42ServiceDown)
+BGE-M3 default memory limit is 4G. If usage is near the limit, the container may be OOM-killed.
+
+### 3. Model load status
+
+```bash
+# Check if model is still loading (cold start can take up to 7 min)
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
+  -f compose.yml -f compose.dev.yml logs bge-m3 --tail=50 | grep -i "model\|ready\|loaded"
+```
+
+The BGE-M3 service has a `start_period` of 420s (7 min) for initial model download. If the container recently restarted, wait for model load before escalating.
+
+### 4. Bot retry and failure logs
+
+```bash
+# Check bot embedding retry activity
+COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
+  -f compose.yml -f compose.dev.yml logs bot --tail=100 | grep -i "Retrying telegram_bot.integrations.embeddings\|Embedding failed after retries"
+```
+
+### 5. Voyage API rate-limit logs (ingestion)
 
 ```bash
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml ps bm42
+  -f compose.yml -f compose.dev.yml logs ingestion --tail=100 | grep -i "voyage.*429\|rate.*limit"
+```
 
+### 6. Embedding service error logs
+
+```bash
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml logs bm42 --tail=100
-```
-
-### 5. Voyage rate-limit diagnosis (ingestion pipeline)
-
-```bash
-# Check for 429 errors in ingestion logs
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml logs ingestion --tail=200 \
-  | grep -iE "voyage.*429|rate.*limit"
-```
-
-### 6. OOM / Exit 137 diagnosis
-
-```bash
-docker inspect dev-bge-m3-1 --format '
-  Name={{.Name}}
-  OOMKilled={{.State.OOMKilled}}
-  ExitCode={{.State.ExitCode}}
-  Status={{.State.Status}}
-'
-```
-
-**Interpretation:**
-- `OOMKilled=true` or `ExitCode=137` -- BGE-M3 was killed by the kernel due to memory exhaustion.
-- `Status=restarting` with `OOMKilled=false` -- Likely a model loading failure or configuration error.
-
-### 7. Prometheus metrics (if available)
-
-```bash
-# BGE-M3 encoding metrics
-curl -fsS http://localhost:8000/metrics | grep -E "bge_encode"
+  -f compose.yml -f compose.dev.yml logs bge-m3 user-base --tail=200 | grep -iE "error|failed|exception"
 ```
 
 ## Service Failure vs App Bug
 
 | Observation | Interpretation | Next step |
 |---|---|---|
-| `/health` fails from the host | Service failure | Check container state; restart `bge-m3` |
-| BGE-M3 healthy, but bot shows `Connection refused` | App bug | Verify `BGE_M3_URL` env var in bot container |
-| Retries happening but queries eventually succeed | Degraded service | Monitor; consider increasing `BGE_M3_TIMEOUT` |
-| All retries exhausted, embedding failures | Service failure | Restart `bge-m3`; check OOM |
-| `dev-bm42` container missing | Service failure | Restart `bm42`; check if profile is enabled |
-| Voyage 429 errors during ingestion | Rate limiting | Reduce batch concurrency; add backoff delay |
-| Errors in `dev-user-base` but not `dev-bge-m3` | Partial failure | Restart `user-base` independently |
-| High `bge_encode_seconds` latency | Degraded performance | Check CPU/memory; reduce `BGE_M3_TIMEOUT` batch size |
+| `/health` returns non-200 or times out | Service failure | Check memory/disk; restart `bge-m3` |
+| BGE-M3 healthy, but bot logs show `ConnectError` | App bug | Verify `BGE_M3_URL` env var (default `http://bge-m3:8000`) |
+| Container running but no logs for 10+ min | Service failure | Container may be deadlocked; restart it |
+| Errors only in `user-base` container | Service failure (caching layer) | Restart `user-base`; bot will still function without semantic cache |
+| Bot shows "Retrying" but eventually succeeds | Transient issue | Monitor; if persistent, check BGE-M3 resource usage |
+| Bot shows "Embedding failed after retries" | Service failure or timeout | Increase `BGE_M3_TIMEOUT` or restart `bge-m3` |
+| Voyage 429 errors during ingestion | Rate limiting | Reduce ingestion batch frequency/document volume, or switch to `use_local_embeddings=True`; Voyage retry (6 attempts) will handle transient bursts |
+| Errors only after recent deployment | App bug | Check for config/code changes in embedding wrappers |
 
 ## Source Paths
 
 | Component | Path |
 |---|---|
-| BGE-M3 API service | [`services/bge-m3-api/app.py`](../../services/bge-m3-api/app.py) |
-| BGE-M3 Dockerfile | [`services/bge-m3-api/Dockerfile`](../../services/bge-m3-api/Dockerfile) |
-| Bot embeddings integration | [`telegram_bot/integrations/embeddings.py`](../../telegram_bot/integrations/embeddings.py) |
-| Bot BGE-M3 HTTP client | [`telegram_bot/services/bge_m3_client.py`](../../telegram_bot/services/bge_m3_client.py) |
-| Shared BGE-M3 client (src) | [`src/services/bge_m3_client.py`](../../src/services/bge_m3_client.py) |
+| BGE-M3 FastAPI service | [`services/bge-m3-api/app.py`](../../services/bge-m3-api/app.py) |
+| BGE-M3 service configuration | [`services/bge-m3-api/config.py`](../../services/bge-m3-api/config.py) |
+| LangChain embedding wrappers | [`telegram_bot/integrations/embeddings.py`](../../telegram_bot/integrations/embeddings.py) |
+| Unified HTTP client with retry | [`src/services/bge_m3_client.py`](../../src/services/bge_m3_client.py) |
+| Retry decorator (bge_retry) | [`src/services/_retry.py`](../../src/services/_retry.py) |
 | Voyage AI service | [`src/services/voyage.py`](../../src/services/voyage.py) |
-| Ingestion flow (Voyage embeddings) | [`src/ingestion/cocoindex_flow.py`](../../src/ingestion/cocoindex_flow.py) |
-| Compose service definition | [`compose.yml`](../../compose.yml) |
-| Dev overrides (ports, profiles) | [`compose.dev.yml`](../../compose.dev.yml) |
+| Ingestion pipeline embedding usage | [`src/ingestion/unified/qdrant_writer.py`](../../src/ingestion/unified/qdrant_writer.py) |
 | Alert rules (infrastructure) | [`docker/monitoring/rules/infrastructure.yaml`](../../docker/monitoring/rules/infrastructure.yaml) |
 | Alert rules (ingestion) | [`docker/monitoring/rules/ingestion.yaml`](../../docker/monitoring/rules/ingestion.yaml) |
+| Compose service definitions | [`compose.yml`](../../compose.yml) |
+| Dev port mappings | [`compose.dev.yml`](../../compose.dev.yml) |
 | CI env fixture | [`tests/fixtures/compose.ci.env`](../../tests/fixtures/compose.ci.env) |
+
+## Environment Variables
+
+| Variable | Default | Context |
+|---|---|---|
+| `BGE_M3_URL` | `http://bge-m3:8000` | Base URL for BGE-M3 service |
+| `BGE_M3_TIMEOUT` | `120` (bot) / `600` (ingestion) | HTTP timeout in seconds |
+| `BGE_M3_MEMORY_LIMIT` | `4G` | Docker memory limit for BGE-M3 container |
+| `OMP_NUM_THREADS` | `4` | OpenMP thread count inside container |
+| `MKL_NUM_THREADS` | `4` | MKL thread count inside container |
+| `RETRIEVAL_DENSE_PROVIDER` | `bge_m3_api` | Dense embedding provider selection |
+| `RETRIEVAL_SPARSE_PROVIDER` | `bge_m3_api` | Sparse embedding provider selection |
+| `VOYAGE_API_KEY` | (required) | Voyage AI API key (when `use_local_embeddings=False`) |
+| `BGE_M3_CONCURRENCY` | `1` | Ingestion concurrency for BGE-M3 calls |
+
+## Logs and Artifacts
+
+| Artifact | Location / command |
+|---|---|
+| BGE-M3 runtime logs | `docker compose logs bge-m3 --tail=200` |
+| user-base runtime logs | `docker compose logs user-base --tail=200` |
+| Bot embedding logs | `docker compose logs bot --tail=200 \| grep -i embed` |
+| Ingestion logs | `docker compose logs ingestion --tail=200` |
+| BGE-M3 model cache | Docker volume `bge_m3_model_cache` |
+| Container memory stats | `docker stats dev-bge-m3 --no-stream` |
 
 ## Remediation
 
 > **Caution:** Commands in this section mutate state. Run only after fast-path diagnosis confirms the issue is not an app bug.
 
-### BGEServiceDown / BGEEmbedErrorFromBot - Restart BGE-M3
+### BGE-M3 Container Down or Unresponsive
 
-```bash
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml restart bge-m3
-```
-
-Wait for the health check to pass (start period is up to 420s for cold-start model download):
-
-```bash
-# Poll until healthy
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml ps bge-m3
-```
-
-### BM42ServiceDown - Restart BM42
-
-```bash
-COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-  -f compose.yml -f compose.dev.yml restart bm42
-```
-
-### EmbeddingServiceError - Identify and restart affected container
-
-The alert fires for any of `dev-bge-m3`, `dev-bm42`, or `dev-user-base`. Check which container is generating errors, then restart only that service:
-
-```bash
-# Check each container's recent errors
-for svc in bge-m3 bm42 user-base; do
-  echo "=== $svc ==="
-  COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-    -f compose.yml -f compose.dev.yml logs "$svc" --tail=50 \
-    | grep -ciE "error|failed|exception"
-done
-```
-
-Restart the specific service with the highest error count.
-
-### BGEEmbedRetryFromBot - Investigate degradation
-
-This alert indicates the service is slow or intermittently failing, but the bot is still recovering via retries.
-
-1. Check BGE-M3 resource usage:
+1. Restart the service:
    ```bash
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-     -f compose.yml -f compose.dev.yml stats bge-m3 --no-stream
+     -f compose.yml -f compose.dev.yml restart bge-m3
    ```
 
-2. If memory is near the limit (`BGE_M3_MEMORY_LIMIT`, default 4G), increase it in `compose.yml` or via env:
-   ```bash
-   BGE_M3_MEMORY_LIMIT=6G COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-     -f compose.yml -f compose.dev.yml up -d --force-recreate bge-m3
-   ```
-
-3. If CPU is saturated, reduce concurrent load or increase `BGE_M3_TIMEOUT` in the bot env.
-
-### BGE-M3 OOM (ExitCode 137)
-
-1. Increase the memory limit:
-   - Default: `BGE_M3_MEMORY_LIMIT=4G` in `compose.yml`
-   - Increase to `6G` or `8G` depending on available host memory
-
-2. Recreate the container with the new limit:
+2. Wait for model to load (up to 7 min on cold start):
    ```bash
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-     -f compose.yml -f compose.dev.yml up -d --force-recreate bge-m3
+     -f compose.yml -f compose.dev.yml logs bge-m3 -f --since 1m | grep -i "ready\|loaded"
    ```
 
-3. Monitor for recurrence -- if OOM repeats, check for memory leaks in the model serving code or reduce `--limit-concurrency` in the Dockerfile CMD.
+3. Verify health:
+   ```bash
+   curl -fsS http://localhost:8000/health
+   ```
 
-### VoyageRateLimited - Reduce ingestion batch concurrency
+### OOM or Memory Pressure
 
-The Voyage AI API enforces rate limits. When hit, the ingestion pipeline logs HTTP 429 responses.
+1. Check if the container was killed:
+   ```bash
+   docker inspect dev-bge-m3 --format='{{.State.OOMKilled}}'
+   ```
 
-1. Reduce batch concurrency in the ingestion configuration:
-   - Check `src/ingestion/cocoindex_flow.py` for batch size settings
-   - Reduce the number of concurrent embedding requests
+2. Increase memory limit in `compose.yml` or via env:
+   ```bash
+   # Set BGE_M3_MEMORY_LIMIT=6G in your .env file, then:
+   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
+     -f compose.yml -f compose.dev.yml up -d bge-m3
+   ```
 
-2. Increase backoff delay -- the `VoyageService` in `src/services/voyage.py` uses `tenacity` retry with exponential backoff. If retries are still exhausting, consider:
-   - Increasing `stop_after_attempt` count
-   - Widening the `wait_random_exponential` parameters
+3. Reduce thread counts if memory is limited:
+   ```bash
+   # Set OMP_NUM_THREADS=2 and MKL_NUM_THREADS=2 in .env
+   ```
 
-3. If rate limiting is persistent, check your Voyage AI plan limits and consider upgrading or distributing load across multiple API keys.
+### Bot Embedding Failures (BGEEmbedErrorFromBot)
 
-4. Restart ingestion after adjusting configuration:
+1. Confirm BGE-M3 is healthy (see Fast-Path step 1).
+
+2. If healthy but timing out, increase timeout:
+   ```bash
+   # Set BGE_M3_TIMEOUT=240 in bot environment
+   ```
+
+3. Restart the bot to pick up new config:
    ```bash
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
-     -f compose.yml -f compose.dev.yml restart ingestion
+     -f compose.yml -f compose.dev.yml restart bot
    ```
 
-## Impact on RAG Quality
+The bot uses `bge_retry` (3 attempts, 0.5s initial backoff, 4s max) and retries on transport errors (`ConnectError`, `ReadTimeout`). If all 3 attempts fail, the "Embedding failed after retries" critical alert fires.
 
-When embedding services fail:
-- **Bot queries return no context** -- the retrieval pipeline cannot generate query embeddings, so Qdrant search returns empty results
-- **Ingestion halts** -- new documents are not embedded and will not appear in search results
-- **Degraded mode** -- if retries succeed intermittently, users experience slow responses but still get results
-- **No fallback** -- unlike LLM routing, there is no automatic fallback between BGE-M3 and Voyage for query-time embeddings; they serve different roles (local dense/sparse vs. external ingestion)
+### Voyage API Rate Limiting (VoyageRateLimited)
+
+1. Reduce the number of documents per ingestion run or increase inter-batch delay.
+
+2. If running large ingestion jobs, lower the volume of documents being processed concurrently.
+
+3. The Voyage client uses tenacity with 6 retry attempts and exponential backoff. Rate-limit errors (`voyageai.error.RateLimitError`) are retried automatically. If the alert persists after retries exhaust, reduce ingestion throughput or contact Voyage AI to increase your rate limit.
+
+4. If Voyage is persistently rate-limited, switch to local embeddings:
+   ```bash
+   # Set use_local_embeddings=True in ingestion config
+   # This uses BGE-M3 instead of Voyage AI
+   ```
+
+### user-base Container Issues
+
+1. Restart the service:
+   ```bash
+   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env \
+     -f compose.yml -f compose.dev.yml restart user-base
+   ```
+
+2. The user-base service has a 2G memory limit. If it OOMs, increase via compose overrides.
 
 ## Prevention
 
-- Monitor `bge_encode_requests_total` and `bge_encode_seconds` Prometheus metrics
-- Set up alerts for container restart loops (already covered by `BGEServiceDown`)
-- Keep BGE-M3 memory limit with headroom above observed peak usage
-- For Voyage: monitor API quota usage in the Voyage AI dashboard
-- Run periodic health checks: `curl -fsS http://localhost:8000/health`
-- Validate embedding dimensions after model updates (BGE-M3 produces 1024-dim dense vectors)
+- Monitor `/health` endpoint of BGE-M3 and user-base services
+- Set memory alerts at 80% of configured limits (4G for BGE-M3, 2G for user-base)
+- Keep `BGE_M3_TIMEOUT` tuned to actual inference latency (120s covers most batch sizes)
+- Pre-pull the BGE-M3 model image to reduce cold-start time in production
+- Use `BGE_M3_CONCURRENCY=1` for ingestion to avoid overwhelming the service
+- Monitor Voyage API usage dashboard for approaching rate limits
+- Run `curl -fsS http://localhost:8000/health` as a periodic health check
 
 ## See Also
 
 - [Qdrant Troubleshooting](QDRANT_TROUBLESHOOTING.md)
-- [LiteLLM Failure](LITEllm_FAILURE.md)
+- [Redis Cache Degradation](REDIS_CACHE_DEGRADATION.md)
 - [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md)
 - [Docker Services Reference](../../DOCKER.md)
 - [Local Development Guide](../LOCAL-DEVELOPMENT.md)
