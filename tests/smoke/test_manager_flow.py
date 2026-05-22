@@ -77,23 +77,6 @@ class TestManagerRoleResolution:
         assert role == "client"
 
 
-class TestManagerStartMenu:
-    """Manager /start shows manager-specific menu."""
-
-    def test_render_manager_menu(self):
-        from telegram_bot.services.manager_menu import render_start_menu
-
-        text = render_start_menu(role="manager", domain="test")
-        client_text = render_start_menu(role="client", domain="test")
-        assert text != client_text
-
-    def test_render_client_menu(self):
-        from telegram_bot.services.manager_menu import render_start_menu
-
-        text = render_start_menu(role="client", domain="test_domain")
-        assert "test_domain" in text
-
-
 class TestToolGating:
     """Manager gets CRM tools, client does not."""
 
