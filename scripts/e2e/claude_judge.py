@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from openai import AsyncOpenAI
 
 from .config import E2EConfig
-from .test_scenarios import TestGroup, TestScenario
+from .scenarios import TestGroup, TestScenario
 
 
 logger = logging.getLogger(__name__)
