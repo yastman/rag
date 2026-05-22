@@ -62,6 +62,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 ## Quality & Evaluation
 
 - [`RAG_QUALITY_SCORES.md`](RAG_QUALITY_SCORES.md) — Scoring taxonomy and trace expectations.
+- [`security/no-patch-dependency-alerts.md`](security/no-patch-dependency-alerts.md) — Accepted risk assessment for open Dependabot alerts without upstream patches (ragas, diskcache).
 
 ## Migration & SDK
 

@@ -1,5 +1,8 @@
 # Public release secret scan policy
 
+See also: [no-patch-dependency-alerts.md](no-patch-dependency-alerts.md) —
+exposure assessment for open Dependabot alerts without upstream patches.
+
 This repository history was rewritten in an isolated clone for P0 public-release
 readiness. Do not run destructive history commands in the primary working copy.
 
