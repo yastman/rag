@@ -9,6 +9,10 @@ dependencies = [
     # the service-local lockfile and the root extra resolve to the same
     # docling-serve generation. Keep these in sync.
     "docling-serve[ui]>=1.0.0",
+    # Keep the Docker image CPU-only. Without explicit direct deps plus
+    # [tool.uv.sources], uv resolves PyTorch from PyPI and pulls CUDA packages.
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
 ]
 
 [project.optional-dependencies]
@@ -18,4 +22,19 @@ dependencies = [
 # above so a single dependency change touches both surfaces in one place.
 docling = [
     "docling-serve[ui]>=1.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" },
+]
+torchvision = [
+    { index = "pytorch-cpu" },
 ]
