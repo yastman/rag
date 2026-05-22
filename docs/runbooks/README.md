@@ -13,6 +13,7 @@ Operator entrypoint for incident response and service investigations. Start here
 | [QDRANT_TROUBLESHOOTING.md](QDRANT_TROUBLESHOOTING.md) | Vector DB | Qdrant health, collections, and query issues |
 | [REDIS_CACHE_DEGRADATION.md](REDIS_CACHE_DEGRADATION.md) | Cache | Redis cache misses, eviction, and connection failures |
 | [SELF_HOSTED_RUNNER.md](SELF_HOSTED_RUNNER.md) | CI/CD | GitHub Actions self-hosted runner for nightly-heavy CI |
+| [TELEGRAM_BOT_FAILURE.md](TELEGRAM_BOT_FAILURE.md) | Telegram Bot | Bot container, error rates, API failures, and memory issues |
 | [vps-gdrive-ingestion-recovery.md](vps-gdrive-ingestion-recovery.md) | Ingestion | VPS ingestion pipeline and Google Drive sync recovery |
 
 ## Coverage & Gaps
