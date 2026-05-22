@@ -1,10 +1,17 @@
 # Pipeline Overview
 
+> Operational overview of ingestion, query, and voice flows. The query path is split across two orchestrators (text=`create_agent`, voice=`StateGraph`); see [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) for the canonical dual-path explanation, [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) for the StateGraph routing rules, and [`docs/adr/0010-voice-path-create-agent-migration-plan.md`](adr/0010-voice-path-create-agent-migration-plan.md) plus SDK-native audit issue [#1538](https://github.com/yastman/rag/issues/1538) for the migration context.
+
 Operational overview of ingestion, query, and voice flows.
 
 ## 1) Query Pipeline (Telegram Bot / API)
 
-`telegram_bot/graph/graph.py` builds a LangGraph state machine.
+The bot has **two orchestrators** for queries (see [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) for full details):
+
+- **Text path** uses `langchain.agents.create_agent` ([`telegram_bot/agents/agent.py`](../telegram_bot/agents/agent.py)). The agent calls a `rag_search` tool that internally drives the retrieve→grade→rerank loop, plus other tools (history, CRM).
+- **Voice path** uses a custom `StateGraph` built by `build_graph()` ([`telegram_bot/graph/graph.py`](../telegram_bot/graph/graph.py)). Migration to `create_agent` is tracked in [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) and #1535 / #1538.
+
+The node list below describes the **voice-path StateGraph** and the inner stages reused by the text path's `rag_search` tool. Routing rules and conditional edges between these nodes live in [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md).
 
 Main nodes:
 - `transcribe` (voice input only)
