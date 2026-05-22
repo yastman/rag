@@ -9,11 +9,11 @@ def _makefile_text() -> str:
     return MAKEFILE.read_text(encoding="utf-8")
 
 
-***REMOVED*** --- ***REMOVED***1281 Redis container name contract tests ---
+# --- #1281 Redis container name contract tests ---
 
 
 def test_redis_container_default_matches_local_compose_naming() -> None:
-    """Regression test for ***REMOVED***1281.
+    """Regression test for #1281.
 
     Local Compose uses COMPOSE_PROJECT_NAME=dev (from .env.example), which produces
     container names like dev_redis_1.  make test-redis must default to that name so
@@ -37,7 +37,7 @@ def test_redis_container_override_behavior_preserved() -> None:
     )
 
 
-***REMOVED*** --- ***REMOVED***1282 Local services docling contract tests ---
+# --- #1282 Local services docling contract tests ---
 
 
 def test_local_services_excludes_docling() -> None:
@@ -116,13 +116,13 @@ def test_local_ps_uses_all_services() -> None:
     )
 
 
-***REMOVED*** --- Makefile drift contract tests ---
+# --- Makefile drift contract tests ---
 
 
 def test_makefile_targets_refer_only_to_existing_test_files() -> None:
     """Every test file path referenced by a Makefile target must exist."""
     text = _makefile_text()
-    ***REMOVED*** Find pytest invocations with explicit test file paths
+    # Find pytest invocations with explicit test file paths
     referenced = set(re.findall(r"pytest\s+([\w\-/]+\.py)", text))
     missing = []
     for ref in referenced:
@@ -177,7 +177,7 @@ def test_validate_traces_fast_runs_postgres_auth_preflight() -> None:
     )
 
 
-***REMOVED*** --- ***REMOVED***1307 core trace gate contract tests ---
+# --- #1307 core trace gate contract tests ---
 
 
 def test_e2e_test_traces_core_is_phony() -> None:
@@ -235,11 +235,11 @@ def test_e2e_test_traces_core_includes_required_scenarios() -> None:
     required = ("0.1", "6.3", "7.1", "8.1")
     missing = [s for s in required if f"--scenario {s}" not in block]
     assert not missing, (
-        f"e2e-test-traces-core must include all required ***REMOVED***1307 scenarios; missing: {missing}"
+        f"e2e-test-traces-core must include all required #1307 scenarios; missing: {missing}"
     )
 
 
-***REMOVED*** --- ***REMOVED***1490 latest trace audit contract tests ---
+# --- #1490 latest trace audit contract tests ---
 
 
 def test_langfuse_latest_trace_audit_is_phony() -> None:
@@ -273,7 +273,7 @@ def test_langfuse_latest_trace_audit_runs_audit_script() -> None:
     )
 
 
-***REMOVED*** --- ***REMOVED***1486 runtime env contract tests ---
+# --- #1486 runtime env contract tests ---
 
 
 def test_e2e_trace_targets_use_runtime_env_file() -> None:
@@ -307,7 +307,7 @@ def test_runtime_env_file_has_safe_fallback() -> None:
     )
 
 
-***REMOVED*** --- Local all-test entrypoint contract tests ---
+# --- Local all-test entrypoint contract tests ---
 
 
 def test_frontend_test_target_runs_vitest() -> None:
@@ -346,11 +346,11 @@ def test_local_all_test_targets_are_phony() -> None:
     assert "test-all-local" in combined
 
 
-***REMOVED*** --- ***REMOVED***1778 bounded parallelism contract tests ---
+# --- #1778 bounded parallelism contract tests ---
 
 
 def test_test_full_uses_bounded_parallelism_by_default() -> None:
-    """Regression test for ***REMOVED***1778.
+    """Regression test for #1778.
 
     test-full must use PYTEST_FULL_PARALLEL_ARGS (bounded, e.g. -n 2) instead of
     PYTEST_PARALLEL_ARGS (-n auto) to prevent WSL/Docker OOM under heavy local
@@ -358,20 +358,20 @@ def test_test_full_uses_bounded_parallelism_by_default() -> None:
     """
     text = _makefile_text()
 
-    ***REMOVED*** 1. PYTEST_FULL_PARALLEL_ARGS must be defined
+    # 1. PYTEST_FULL_PARALLEL_ARGS must be defined
     var_match = re.search(
         r"^PYTEST_FULL_PARALLEL_ARGS\s*\?=\s*(.+)$", text, re.MULTILINE
     )
     assert var_match, "PYTEST_FULL_PARALLEL_ARGS not found in Makefile"
 
-    ***REMOVED*** 2. Its default must NOT be unbounded -n auto
+    # 2. Its default must NOT be unbounded -n auto
     default_value = var_match.group(1).strip()
     assert "-n auto" not in default_value, (
         f"PYTEST_FULL_PARALLEL_ARGS must use bounded parallelism, "
         f"got {default_value!r} which contains '-n auto'"
     )
 
-    ***REMOVED*** 3. test-full target must reference PYTEST_FULL_PARALLEL_ARGS, not PYTEST_PARALLEL_ARGS
+    # 3. test-full target must reference PYTEST_FULL_PARALLEL_ARGS, not PYTEST_PARALLEL_ARGS
     block_match = re.search(
         r"^test-full:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
         text,

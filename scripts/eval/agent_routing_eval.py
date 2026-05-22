@@ -1,4 +1,4 @@
-"""Agent trajectory evaluation for tool routing (***REMOVED***760).
+"""Agent trajectory evaluation for tool routing (#760).
 
 Evaluates agent tool-routing accuracy at 3 levels:
   1. Black-box  — final answer contains expected keywords
@@ -32,13 +32,13 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Constants
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
 GOLDEN_SET_DEFAULT = Path(__file__).resolve().parents[2] / "tests/eval/agent_routing_golden.yaml"
 
-***REMOVED*** Tool name prefixes that map to CRM route family
+# Tool name prefixes that map to CRM route family
 _CRM_PREFIXES = (
     "crm_get_deal",
     "crm_create_lead",
@@ -54,9 +54,9 @@ _CRM_PREFIXES = (
     "crm_update_contact",
 )
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Data loading
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
 
 
 def load_golden_set(path: Path | str) -> list[dict[str, Any]]:
@@ -80,9 +80,9 @@ def load_golden_set(path: Path | str) -> list[dict[str, Any]]:
     return data["examples"]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Route helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Route helpers
+# ---------------------------------------------------------------------------
 
 
 def route_from_tools(tool_calls: list[dict[str, Any]]) -> str:
@@ -105,9 +105,9 @@ def route_from_tools(tool_calls: list[dict[str, Any]]) -> str:
     return tool_calls[0]["tool"]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Level 1 — Black-box evaluation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Level 1 — Black-box evaluation
+# ---------------------------------------------------------------------------
 
 
 def evaluate_blackbox(
@@ -141,9 +141,9 @@ def evaluate_blackbox(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Level 2 — Trajectory evaluation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Level 2 — Trajectory evaluation
+# ---------------------------------------------------------------------------
 
 
 def evaluate_trajectory(
@@ -169,7 +169,7 @@ def evaluate_trajectory(
     expected: list[str] = example.get("expected_tools", [])
     actual_names = [c["tool"] for c in actual_tool_calls]
 
-    ***REMOVED*** Direct route: no tools expected
+    # Direct route: no tools expected
     if not expected:
         if not actual_names:
             return {"pass": True, "score": 1.0, "details": {"expected": [], "actual": []}}
@@ -183,7 +183,7 @@ def evaluate_trajectory(
             },
         }
 
-    ***REMOVED*** Compute set-based score
+    # Compute set-based score
     expected_set = set(expected)
     actual_set = set(actual_names)
     intersection = expected_set & actual_set
@@ -202,9 +202,9 @@ def evaluate_trajectory(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Level 3 — Single-step parameter evaluation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Level 3 — Single-step parameter evaluation
+# ---------------------------------------------------------------------------
 
 
 def evaluate_single_step(
@@ -231,7 +231,7 @@ def evaluate_single_step(
     if not tool_params:
         return {"pass": True, "score": 1.0, "details": {}}
 
-    ***REMOVED*** Index actual calls by tool name (keep last call per tool for dedup)
+    # Index actual calls by tool name (keep last call per tool for dedup)
     actual_by_tool: dict[str, dict[str, Any]] = {}
     for call in actual_tool_calls:
         actual_by_tool[call["tool"]] = call.get("args", {})
@@ -244,7 +244,7 @@ def evaluate_single_step(
         if not required_params:
             continue
         if tool_name not in actual_by_tool:
-            ***REMOVED*** Tool not called at all — all params unsatisfied
+            # Tool not called at all — all params unsatisfied
             total_required += len(required_params)
             details[tool_name] = {
                 "error": "tool not called",
@@ -274,9 +274,9 @@ def evaluate_single_step(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Metrics aggregation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Metrics aggregation
+# ---------------------------------------------------------------------------
 
 
 def compute_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -329,9 +329,9 @@ def compute_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Offline dry-run evaluation (mock agent responses)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Offline dry-run evaluation (mock agent responses)
+# ---------------------------------------------------------------------------
 
 
 def _mock_agent_run(example: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
@@ -352,7 +352,7 @@ def _mock_agent_run(example: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]
         params = example.get("tool_params", {}).get(tool_name, {})
         tool_calls.append({"tool": tool_name, "args": params})
 
-    ***REMOVED*** Construct a synthetic answer that includes expected keywords
+    # Construct a synthetic answer that includes expected keywords
     keywords = example.get("answer_keywords", [])
     answer = "Результат: " + " ".join(keywords) if keywords else "Обработано."
     return answer, tool_calls
@@ -403,9 +403,9 @@ def run_eval(
     return per_example, metrics
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -456,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
         for r in per_example:
             status = "✓" if r["trajectory"]["pass"] else "✗"
             print(
-                f"[{status}] ***REMOVED***{r['id']:02d} {r['query'][:55]!r:<58} "
+                f"[{status}] #{r['id']:02d} {r['query'][:55]!r:<58} "
                 f"route={r['route']!r} traj={r['trajectory']['score']:.2f} "
                 f"bb={r['blackbox']['score']:.2f} ss={r['single_step']['score']:.2f}"
             )

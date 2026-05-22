@@ -85,7 +85,7 @@ class TestClassifyNode:
         state = make_initial_state(user_id=1, session_id="s", query=query)
         result = await classify_node(state, _make_runtime())
         assert result["query_type"] == expected_type
-        assert result["response"]  ***REMOVED*** non-empty canned response
+        assert result["response"]  # non-empty canned response
         assert "classify" in result["latency_stages"]
 
     @pytest.mark.parametrize(
@@ -183,7 +183,7 @@ class TestClassifyNodeSemanticMode:
         classifier = self._make_classifier(FAQ, available=False)
         state = make_initial_state(user_id=1, session_id="s", query="Привет!")
         result = await classify_node(state, _make_runtime(classifier=classifier))
-        ***REMOVED*** unavailable → regex → CHITCHAT
+        # unavailable → regex → CHITCHAT
         assert result["query_type"] == CHITCHAT
         classifier.classify.assert_not_called()
 
@@ -193,7 +193,7 @@ class TestClassifyNodeSemanticMode:
         classifier.classify.side_effect = RuntimeError("Redis gone")
         state = make_initial_state(user_id=1, session_id="s", query="Привет!")
         result = await classify_node(state, _make_runtime(classifier=classifier))
-        ***REMOVED*** fallback → regex → CHITCHAT
+        # fallback → regex → CHITCHAT
         assert result["query_type"] == CHITCHAT
 
     async def test_no_classifier_uses_regex(self):
@@ -227,7 +227,7 @@ class TestClassifyNodeSemanticMode:
         with patch("telegram_bot.graph.nodes.classify.asyncio.to_thread", new=recording_to_thread):
             result = await classify_node(state, _make_runtime(classifier=classifier))
 
-        ***REMOVED*** asyncio.to_thread must have been called with classifier.classify and the query
+        # asyncio.to_thread must have been called with classifier.classify and the query
         assert len(thread_calls) == 1
         called_func, called_args, _ = thread_calls[0]
         assert called_func is classifier.classify

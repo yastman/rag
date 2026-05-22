@@ -1,7 +1,7 @@
-***REMOVED*** tests/contract/test_env_example_completeness_contract.py
-"""Bidirectional ``.env.example`` ↔ source code sync contract (***REMOVED***1268).
+# tests/contract/test_env_example_completeness_contract.py
+"""Bidirectional ``.env.example`` ↔ source code sync contract (#1268).
 
-Issue ***REMOVED***1268 (refresh 2026-05-21) called for a deterministic env-var scanner
+Issue #1268 (refresh 2026-05-21) called for a deterministic env-var scanner
 that fails on drift in either direction:
 
 1. Variables read by production code but missing from ``.env.example``
@@ -61,18 +61,18 @@ EXCLUDE_PARTS: frozenset[str] = frozenset(
 ENV_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Allowlists
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED***
-***REMOVED*** Both lists must stay short. Add an entry only with a comment explaining
-***REMOVED*** why the variable is intentionally not in the other side of the contract.
+# ---------------------------------------------------------------------------
+# Allowlists
+# ---------------------------------------------------------------------------
+#
+# Both lists must stay short. Add an entry only with a comment explaining
+# why the variable is intentionally not in the other side of the contract.
 
-***REMOVED*** Vars READ by Python code but intentionally NOT in .env.example.
-***REMOVED*** These are runtime-only / test-fixture / container-internal vars that
-***REMOVED*** operators should never set in their local .env.
+# Vars READ by Python code but intentionally NOT in .env.example.
+# These are runtime-only / test-fixture / container-internal vars that
+# operators should never set in their local .env.
 ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
-    ***REMOVED*** --- Standard library / Python runtime -----------------------------------
+    # --- Standard library / Python runtime -----------------------------------
     "PATH": "OS PATH; never an operator-set bot variable",
     "HOME": "OS HOME; never an operator-set bot variable",
     "USER": "OS USER; never an operator-set bot variable",
@@ -95,19 +95,19 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "RUNNER_TEMP": "GitHub Actions temp dir",
     "FORCE_COLOR": "Color output toggle for CLI tools",
     "NO_COLOR": "Color output toggle for CLI tools",
-    ***REMOVED*** --- Test infrastructure (never set by operators) ------------------------
+    # --- Test infrastructure (never set by operators) ------------------------
     "PYTEST_CURRENT_TEST": "Set by pytest at runtime; never an operator var",
     "PYTEST_XDIST_TESTRUNUID": "Set by pytest-xdist at runtime",
     "PYTEST_XDIST_WORKER": "Set by pytest-xdist at runtime",
     "PYTEST_XDIST_WORKER_COUNT": "Set by pytest-xdist at runtime",
     "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "pytest internal",
     "PYTEST_ADDOPTS": "Make/CI knob, not bot config",
-    "RUN_BENCHMARK_TESTS": "make test-benchmark gate (***REMOVED***1618); test-only flag",
+    "RUN_BENCHMARK_TESTS": "make test-benchmark gate (#1618); test-only flag",
     "RUN_CHAOS_TESTS": "Chaos suite gate; test-only flag",
     "RUN_E2E_TESTS": "E2E suite gate; test-only flag",
     "RUN_LOAD_TESTS": "Load suite gate; test-only flag",
     "PYTEST_INTEGRATION": "Integration-suite gate; test-only flag",
-    ***REMOVED*** --- E2E test fixtures (read by tests/e2e harnesses, never by bot) -----
+    # --- E2E test fixtures (read by tests/e2e harnesses, never by bot) -----
     "E2E_COLLECTION_NAME": "E2E harness fixture (tests/e2e); never an operator var",
     "E2E_JUDGE_API_KEY": "E2E LLM-judge harness fixture",
     "E2E_JUDGE_BASE_URL": "E2E LLM-judge harness fixture",
@@ -125,12 +125,12 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "JUDGE_MODEL": "LLM-judge runtime override; eval-suite only",
     "JUDGE_SAMPLE_RATE": "LLM-judge runtime sampling rate; eval-suite only",
     "REPO_BASE_BRANCH": "scripts/lib base-branch resolver; CI/dev tooling",
-    ***REMOVED*** --- OpenTelemetry SDK internals (set per-service in Compose, not .env) -
+    # --- OpenTelemetry SDK internals (set per-service in Compose, not .env) -
     "UV_LINK_MODE": "uv-only; documented in CONTRIBUTING/Makefile",
     "UV_PROJECT_ENVIRONMENT": "uv-only; managed by uv",
     "UV_CACHE_DIR": "uv-only; managed by uv",
     "FORCE_REINSTALL": "Make-only knob; not a bot env",
-    ***REMOVED*** --- LangChain / Langfuse internal toggles read at import time ----------
+    # --- LangChain / Langfuse internal toggles read at import time ----------
     "LANGCHAIN_TRACING_V2": "LangChain SDK auto-detect; not an operator setting",
     "LANGFUSE_DEBUG": "Langfuse SDK debug flag; documented in Langfuse docs",
     "LANGFUSE_OTEL_PYTHON_DISABLED_INSTRUMENTATIONS": "Langfuse SDK internal",
@@ -142,19 +142,19 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "OTEL_METRICS_EXPORTER": "OTel SDK env; set per-service in Compose",
     "OTEL_TRACES_EXPORTER": "OTel SDK env; set per-service in Compose",
     "OTEL_SDK_DISABLED": "OTel SDK kill-switch; tests set explicitly, prod via Compose",
-    ***REMOVED*** --- Compose / docker-internal hostnames (never operator-set) -----------
+    # --- Compose / docker-internal hostnames (never operator-set) -----------
     "HOSTNAME": "Container HOSTNAME; never operator-set",
     "DOCKER_HOST": "Docker CLI; not bot config",
-    ***REMOVED*** --- Advanced tuning (***REMOVED***1268 follow-up): production-code env vars with
-    ***REMOVED*** sane defaults that have not yet been documented in .env.example.
-    ***REMOVED*** TODO(***REMOVED***1268): incrementally migrate these into .env.example sections
-    ***REMOVED*** ("Retrieval tuning", "Voice agent", "Apartments", "Funnel/nurturing",
-    ***REMOVED*** "Localization", "Ingestion paths", ...) so operators can discover them.
-    ***REMOVED*** Each entry kept here so the contract test passes today but cannot
-    ***REMOVED*** silently grow new entries without an explicit allowlist commit.
-    "ACORN_MODE": "Advanced retrieval tuning (***REMOVED***590); doc TBD",
-    "ACORN_ENABLED_SELECTIVITY_THRESHOLD": "Advanced retrieval tuning (***REMOVED***590); doc TBD",
-    "ACORN_MAX_SELECTIVITY": "Advanced retrieval tuning (***REMOVED***590); doc TBD",
+    # --- Advanced tuning (#1268 follow-up): production-code env vars with
+    # sane defaults that have not yet been documented in .env.example.
+    # TODO(#1268): incrementally migrate these into .env.example sections
+    # ("Retrieval tuning", "Voice agent", "Apartments", "Funnel/nurturing",
+    # "Localization", "Ingestion paths", ...) so operators can discover them.
+    # Each entry kept here so the contract test passes today but cannot
+    # silently grow new entries without an explicit allowlist commit.
+    "ACORN_MODE": "Advanced retrieval tuning (#590); doc TBD",
+    "ACORN_ENABLED_SELECTIVITY_THRESHOLD": "Advanced retrieval tuning (#590); doc TBD",
+    "ACORN_MAX_SELECTIVITY": "Advanced retrieval tuning (#590); doc TBD",
     "AGENT_CHECKPOINTER_TTL_MINUTES": "Agent state TTL; doc TBD",
     "AGENT_MAX_HISTORY_MESSAGES": "Agent history truncation knob; doc TBD",
     "APARTMENT_EXTRACTION_MODEL": "Apartment LLM extractor model override; doc TBD",
@@ -171,7 +171,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "DOCLING_BACKEND": "Docling backend selector; doc TBD",
     "DOCLING_PROFILE": "Docling profile selector; doc TBD",
     "EXPERT_TOPICS_ENABLED": "Expert topics feature flag; doc TBD",
-    "FRESHNESS_BOOST": "Score boosting toggle (***REMOVED***590); doc TBD",
+    "FRESHNESS_BOOST": "Score boosting toggle (#590); doc TBD",
     "FRESHNESS_FIELD": "Score boosting payload field; doc TBD",
     "FRESHNESS_SCALE_DAYS": "Score boosting decay scale; doc TBD",
     "FUNNEL_ROLLUP_CRON": "Funnel rollup cron; doc TBD",
@@ -198,31 +198,31 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "VOYAGE_MODEL_QUERIES": "Voyage queries model override; legacy",
 }
 
-***REMOVED*** Vars in .env.example but NOT directly read by Python code. These are
-***REMOVED*** typically consumed by Compose YAML, Dockerfile RUN, init scripts, or
-***REMOVED*** third-party services that read the env directly.
+# Vars in .env.example but NOT directly read by Python code. These are
+# typically consumed by Compose YAML, Dockerfile RUN, init scripts, or
+# third-party services that read the env directly.
 ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
-    ***REMOVED*** --- Docker Compose top-level controls ----------------------------------
+    # --- Docker Compose top-level controls ----------------------------------
     "COMPOSE_FILE": "Read by docker compose CLI, not Python",
-    ***REMOVED*** --- Service credentials consumed by service entrypoints ---------------
+    # --- Service credentials consumed by service entrypoints ---------------
     "REDIS_MAXMEMORY": "Read by redis container CMD args, not Python",
     "CLICKHOUSE_PASSWORD": "Read by clickhouse image entrypoint",
     "MINIO_ROOT_PASSWORD": "Read by minio image entrypoint",
     "POSTGRES_PASSWORD": "Read by postgres image entrypoint, not Python",
     "ELEVENLABS_API_KEY": "Read by voice agent SDK at runtime via env_file, not directly by Python",
-    ***REMOVED*** --- Langfuse stack secrets (read by langfuse server image) ------------
+    # --- Langfuse stack secrets (read by langfuse server image) ------------
     "NEXTAUTH_SECRET": "Read by Langfuse server image",
     "SALT": "Read by Langfuse server image",
     "ENCRYPTION_KEY": "Read by Langfuse server image",
     "LANGFUSE_DOCKER_HOST": "Container-network alias for langfuse; consumed by compose env_file",
-    ***REMOVED*** --- Misc ops vars -----------------------------------------------------
+    # --- Misc ops vars -----------------------------------------------------
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
 }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Scanner
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Scanner
+# ---------------------------------------------------------------------------
 
 
 def _iter_python_files() -> list[Path]:
@@ -278,7 +278,7 @@ def _is_attr_chain(call: ast.Call, *, root_name: str, leaf_attrs: tuple[str, ...
 def _collect_env_keys_from_tree(tree: ast.Module) -> set[str]:
     keys: set[str] = set()
     for node in ast.walk(tree):
-        ***REMOVED*** Subscript access: ``os.environ["KEY"]``
+        # Subscript access: ``os.environ["KEY"]``
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute):
             attr = node.value
             if (
@@ -298,14 +298,14 @@ def _collect_env_keys_from_tree(tree: ast.Module) -> set[str]:
         if not isinstance(node, ast.Call):
             continue
 
-        ***REMOVED*** os.getenv("KEY"[, default])  — only args[0] names the variable
+        # os.getenv("KEY"[, default])  — only args[0] names the variable
         if _is_attr_chain(node, root_name="os", leaf_attrs=("getenv",)):
             value = _first_string_arg(node)
             if value is not None and ENV_KEY_PATTERN.match(value):
                 keys.add(value)
             continue
 
-        ***REMOVED*** os.environ.get / os.environ.setdefault / os.environ.pop — args[0] only
+        # os.environ.get / os.environ.setdefault / os.environ.pop — args[0] only
         if (
             _is_attr_chain(node, root_name="os", leaf_attrs=("environ", "get"))
             or _is_attr_chain(node, root_name="os", leaf_attrs=("environ", "setdefault"))
@@ -316,7 +316,7 @@ def _collect_env_keys_from_tree(tree: ast.Module) -> set[str]:
                 keys.add(value)
             continue
 
-        ***REMOVED*** AliasChoices("snake", "UPPER", ...) (pydantic settings)
+        # AliasChoices("snake", "UPPER", ...) (pydantic settings)
         target = node.func
         if isinstance(target, ast.Name) and target.id == "AliasChoices":
             for value in _iter_string_args(node):
@@ -339,14 +339,14 @@ def _scan_code() -> set[str]:
 
 
 _KEY_LINE = re.compile(r"^([A-Z][A-Z0-9_]*)=")
-_COMMENTED_KEY_LINE = re.compile(r"^***REMOVED***\s*([A-Z][A-Z0-9_]*)=")
+_COMMENTED_KEY_LINE = re.compile(r"^#\s*([A-Z][A-Z0-9_]*)=")
 
 
 def _parse_env_example(*, include_commented: bool = True) -> set[str]:
     """Parse ``.env.example`` and return the set of declared variable names.
 
     With ``include_commented=True`` (default), we also pick up variables
-    documented as commented-out templates such as ``***REMOVED*** QDRANT_API_KEY=``,
+    documented as commented-out templates such as ``# QDRANT_API_KEY=``,
     because operators discover the variable via the comment itself.
     """
     text = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
@@ -362,9 +362,9 @@ def _parse_env_example(*, include_commented: bool = True) -> set[str]:
     return keys
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
 def test_no_env_vars_used_in_code_missing_from_env_example() -> None:
@@ -414,11 +414,11 @@ def test_env_example_is_split_into_sections() -> None:
 
     Drift here means the file became a flat dump and operator discoverability
     suffered. The marker we look for is the canonical
-    ``***REMOVED*** ==============================================================================``
+    ``# ==============================================================================``
     block at the top of each section.
     """
     text = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
-    section_markers = text.count("***REMOVED*** " + "=" * 78)
+    section_markers = text.count("# " + "=" * 78)
     assert section_markers >= 10, (
         f"Expected at least 10 section header lines (5 sections × 2 lines each)"
         f" in .env.example; got {section_markers}. The file should be grouped"

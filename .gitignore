@@ -1,12 +1,12 @@
-***REMOVED*** Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-***REMOVED*** C extensions
+# C extensions
 *.so
 
-***REMOVED*** Distribution / packaging
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -28,15 +28,15 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-***REMOVED*** PyInstaller
+# PyInstaller
 *.manifest
 *.spec
 
-***REMOVED*** Installer logs
+# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
-***REMOVED*** Unit test / coverage reports
+# Unit test / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -51,53 +51,53 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-***REMOVED*** Translations
+# Translations
 *.mo
 *.pot
 
-***REMOVED*** Django stuff:
+# Django stuff:
 *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-***REMOVED*** Flask stuff:
+# Flask stuff:
 instance/
 .webassets-cache
 
-***REMOVED*** Scrapy stuff:
+# Scrapy stuff:
 .scrapy
 
-***REMOVED*** Sphinx documentation
+# Sphinx documentation
 docs/_build/
 
-***REMOVED*** PyBuilder
+# PyBuilder
 target/
 
-***REMOVED*** Jupyter Notebook
+# Jupyter Notebook
 .ipynb_checkpoints
 
-***REMOVED*** IPython
+# IPython
 profile_default/
 ipython_config.py
 
-***REMOVED*** pyenv
+# pyenv
 .python-version
 
-***REMOVED*** pipenv
+# pipenv
 Pipfile.lock
 
-***REMOVED*** PEP 582
+# PEP 582
 __pypackages__/
 
-***REMOVED*** Celery stuff
+# Celery stuff
 celerybeat-schedule
 celerybeat.pid
 
-***REMOVED*** SageMath parsed files
+# SageMath parsed files
 *.sage.py
 
-***REMOVED*** Environments
+# Environments
 .env
 .mcp.json
 .venv
@@ -108,25 +108,25 @@ ENV/
 env.bak/
 venv.bak/
 
-***REMOVED*** Spyder project settings
+# Spyder project settings
 .spyderproject
 .spyproject
 
-***REMOVED*** Rope project settings
+# Rope project settings
 .ropeproject
 
-***REMOVED*** mkdocs documentation
+# mkdocs documentation
 /site
 
-***REMOVED*** mypy
+# mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
-***REMOVED*** Pyre type checker
+# Pyre type checker
 .pyre/
 
-***REMOVED*** IDE
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -134,7 +134,7 @@ dmypy.json
 *~
 .DS_Store
 
-***REMOVED*** Project specific
+# Project specific
 logs/
 data/embeddings/
 data/evaluation/
@@ -144,7 +144,7 @@ evaluation/evaluation/
 *.tar.gz
 *.backup
 
-***REMOVED*** Sensitive files
+# Sensitive files
 .env
 .env.*
 .env.local
@@ -154,7 +154,7 @@ evaluation/evaluation/
 credentials.json
 secrets.yaml
 
-***REMOVED*** Temporary files
+# Temporary files
 tmp/
 tmp/e2e/
 temp/
@@ -165,34 +165,34 @@ uv-*.lock
 node-compile-cache/
 pytest-of-user/
 
-***REMOVED*** Demo data files (but keep README)
+# Demo data files (but keep README)
 data/demo/*.csv
 data/demo/*.docx
 data/demo/*.pdf
 data/demo/*.xlsx
 
-***REMOVED*** MLflow
+# MLflow
 mlruns/
 .mlflow
 
-***REMOVED*** Langfuse
+# Langfuse
 langfuse_logs/
 
-***REMOVED*** Qdrant
+# Qdrant
 qdrant_storage/
 
-***REMOVED*** Telethon (E2E)
+# Telethon (E2E)
 *.session
 *.session-journal
 .e2e_auth_hash.json
 .telethon/
 
-***REMOVED*** Pre-commit
+# Pre-commit
 .pre-commit-config.yaml~
 *.docx
 *.pdf
 
-***REMOVED*** BGE-M3 models cache
+# BGE-M3 models cache
 services/bge-m3-api/models/
 *.pt
 *.bin
@@ -215,62 +215,62 @@ CLAUDE.md
 !mini_app/frontend/src/AGENTS.override.md
 !scripts/lib/
 
-***REMOVED*** Internal dev tools & AI agent configs
+# Internal dev tools & AI agent configs
 .claude/rules/
 .claude/cache/
 .claude/prompts/
 docs/audits/
 docs/archive/
 
-***REMOVED*** Build artifacts & test outputs
+# Build artifacts & test outputs
 test_output*.txt
 coverage.json
 .test_durations
 =*
 
-***REMOVED*** k8s secrets (never commit)
+# k8s secrets (never commit)
 k8s/secrets/*
 !k8s/secrets/README.md
 !k8s/secrets/.env.example
 
-***REMOVED*** Validation reports (generated, not committed)
+# Validation reports (generated, not committed)
 !docs/reports/
 docs/reports/*
 
 
-***REMOVED*** Baseline (legacy file-based approach)
+# Baseline (legacy file-based approach)
 tests/baseline/.current_baseline
 
-***REMOVED*** Claude worker prompts (session-specific, not reusable)
+# Claude worker prompts (session-specific, not reusable)
 .claude/prompts/
 
-***REMOVED*** Disabled workflows (temporary backups)
+# Disabled workflows (temporary backups)
 .github/workflows.disabled/
 
-***REMOVED*** Exported evaluation datasets (generated, not committed)
+# Exported evaluation datasets (generated, not committed)
 datasets/*.jsonl
 
-***REMOVED*** agent-mux config (contains env var references)
+# agent-mux config (contains env var references)
 mcp-clusters.yaml
 
-***REMOVED*** Worker artifacts (generated, not committed)
+# Worker artifacts (generated, not committed)
 docs/artifacts/*.md
 docs/artifacts/**/*.md
 !docs/artifacts/.gitkeep
 
-***REMOVED*** Generated dated SDK/audit/roadmap snapshots (do not commit)
+# Generated dated SDK/audit/roadmap snapshots (do not commit)
 docs/SDK_*_20*.md
 
-***REMOVED*** Claude plugin skills (installed per-machine, not committed)
+# Claude plugin skills (installed per-machine, not committed)
 .claude/skills/
-***REMOVED*** Claude settings (per-machine hooks/statusline)
+# Claude settings (per-machine hooks/statusline)
 .claude/settings.json
-***REMOVED*** Claude hooks (per-machine)
+# Claude hooks (per-machine)
 .claude/hooks/
 .grepai/
 .signals/
 
-***REMOVED*** Internal AI/orchestration tool directories
+# Internal AI/orchestration tool directories
 docs/superpowers/
 .planning/
 rag-small-to-big-research.md
@@ -284,7 +284,7 @@ opencode.json
 projects/
 tmp.*
 
-***REMOVED*** Removed from public repo (VPS-specific, internal tooling)
+# Removed from public repo (VPS-specific, internal tooling)
 deploy/
 compose.vps.yml
 renovate.json
@@ -299,7 +299,7 @@ scripts/deploy-vps.sh
 scripts/qdrant_backup.sh
 scripts/qdrant_restore.sh
 
-***REMOVED*** Additional public-repo hardening
+# Additional public-repo hardening
 .direnv/
 .envrc
 *.pem
@@ -316,11 +316,11 @@ scripts/qdrant_restore.sh
 **/.nyc_output/
 **/.vite/
 
-***REMOVED*** OS files
+# OS files
 .DS_Store
 Thumbs.db
 
-***REMOVED*** Editor swap/backup files
+# Editor swap/backup files
 *.swp
 *.swo
 *~

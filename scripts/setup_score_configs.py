@@ -1,5 +1,5 @@
-***REMOVED***!/usr/bin/env python3
-"""Setup Langfuse Score Configs for typed scoring (***REMOVED***753).
+#!/usr/bin/env python3
+"""Setup Langfuse Score Configs for typed scoring (#753).
 
 Creates Score Configs in Langfuse for structured, typed scoring of RAG pipeline traces.
 Idempotent: checks existing configs before creating new ones.
@@ -23,9 +23,9 @@ from langfuse.api.commons.types.score_config_data_type import ScoreConfigDataTyp
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Score Config definitions
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Score Config definitions
+# ---------------------------------------------------------------------------
 
 SCORE_CONFIGS: list[dict[str, Any]] = [
     {

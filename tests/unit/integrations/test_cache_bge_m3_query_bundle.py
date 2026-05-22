@@ -39,7 +39,7 @@ async def test_get_bge_m3_query_bundle_returns_none_for_incomplete_payload() -> 
     cache = CacheLayerManager(redis_url="redis://localhost:6379")
     fake = FakeEmbeddingsCache()
     cache.embed_cache = fake
-    ***REMOVED*** Store a malformed entry directly (missing colbert in metadata)
+    # Store a malformed entry directly (missing colbert in metadata)
     key_material = make_bge_m3_query_bundle_key_material("some-key")
     fake.data[(key_material, BGE_M3_QUERY_BUNDLE_MODEL_NAME)] = {
         "embedding": [0.1],
@@ -88,9 +88,9 @@ async def test_store_uses_bundle_model_by_default_not_returned_by_default_get() 
     )
 
     await cache.store_bge_m3_query_bundle("query", bundle)
-    ***REMOVED*** Default get uses default model, should miss
+    # Default get uses default model, should miss
     hit_default = await cache.get_bge_m3_query_bundle("query")
-    ***REMOVED*** Explicit get with matching model should hit
+    # Explicit get with matching model should hit
     hit_matching = await cache.get_bge_m3_query_bundle("query", model="other-model")
 
     assert hit_default is None
@@ -144,11 +144,11 @@ async def test_store_uses_explicit_override_when_provided() -> None:
     )
 
     await cache.store_bge_m3_query_bundle("query", bundle, model="override-model")
-    ***REMOVED*** Get with override model should hit
+    # Get with override model should hit
     hit_override = await cache.get_bge_m3_query_bundle("query", model="override-model")
-    ***REMOVED*** Get with bundle's original model should miss
+    # Get with bundle's original model should miss
     hit_original = await cache.get_bge_m3_query_bundle("query", model="BAAI/bge-m3")
-    ***REMOVED*** Default get should also miss
+    # Default get should also miss
     hit_default = await cache.get_bge_m3_query_bundle("query")
 
     assert hit_override == bundle

@@ -1,4 +1,4 @@
-"""Contract: global pytest ``--dist`` default must align with the local fast gate (***REMOVED***1796).
+"""Contract: global pytest ``--dist`` default must align with the local fast gate (#1796).
 
 `pyproject.toml` previously hard-coded ``--dist=loadscope`` in the global
 ``[tool.pytest.ini_options].addopts`` block. The canonical local fast-gate
@@ -36,7 +36,7 @@ def _read_global_addopts() -> str:
     in pyproject.toml, and we want to preserve every flag verbatim.
     """
     text = PYPROJECT.read_text(encoding="utf-8")
-    ***REMOVED*** Match `addopts = """..."""` inside [tool.pytest.ini_options].
+    # Match `addopts = """..."""` inside [tool.pytest.ini_options].
     section = re.search(
         r"\[tool\.pytest\.ini_options\](?P<body>.*?)(?:\n\[|\Z)",
         text,
@@ -62,18 +62,18 @@ def _extract_dist_flags(addopts_text: str) -> list[str]:
     for tok in tokens:
         if tok.startswith("--dist="):
             values.append(tok.split("=", 1)[1])
-        elif tok == "--dist":  ***REMOVED*** space-separated form
-            ***REMOVED*** Defer to next token; xdist supports both shapes
+        elif tok == "--dist":  # space-separated form
+            # Defer to next token; xdist supports both shapes
             values.append("__SPACE_SEPARATED__")
     return values
 
 
 def test_global_pytest_dist_is_worksteal_or_unset() -> None:
-    """Global ``--dist`` must be ``worksteal`` (or absent) — never ``loadscope`` (***REMOVED***1796)."""
+    """Global ``--dist`` must be ``worksteal`` (or absent) — never ``loadscope`` (#1796)."""
     addopts = _read_global_addopts()
     dist_values = _extract_dist_flags(addopts)
     if not dist_values:
-        ***REMOVED*** Acceptable: no global default; every xdist target is explicit.
+        # Acceptable: no global default; every xdist target is explicit.
         return
     assert dist_values == ["worksteal"], (
         "Global pytest addopts in pyproject.toml must use --dist=worksteal "
@@ -100,7 +100,7 @@ def test_makefile_default_parallel_args_is_worksteal() -> None:
 
 
 def test_loadscope_experiment_target_still_exists() -> None:
-    """The opt-in ``test-unit-loadscope`` target must remain available (***REMOVED***1796)."""
+    """The opt-in ``test-unit-loadscope`` target must remain available (#1796)."""
     text = MAKEFILE.read_text(encoding="utf-8")
     assert re.search(r"^test-unit-loadscope:", text, re.MULTILINE), (
         "Removing 'test-unit-loadscope' would erase the explicit loadscope "

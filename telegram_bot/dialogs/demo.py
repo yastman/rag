@@ -1,4 +1,4 @@
-"""Demo apartment search dialog — aiogram-dialog scaffold (***REMOVED***907)."""
+"""Demo apartment search dialog — aiogram-dialog scaffold (#907)."""
 
 from __future__ import annotations
 
@@ -25,9 +25,9 @@ from telegram_bot.services.catalog_session import CATALOG_RUNTIME_DATA_KEY, buil
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Getters
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Getters
+# ---------------------------------------------------------------------------
 
 
 async def intro_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -99,9 +99,9 @@ async def results_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[s
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Core search (stores results in dialog_data, then switches state)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Core search (stores results in dialog_data, then switches state)
+# ---------------------------------------------------------------------------
 
 
 async def _dialog_search(query: str, message: Message, manager: DialogManager) -> None:
@@ -131,10 +131,10 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
         await manager.switch_to(DemoSG.results)
         return
 
-    ***REMOVED*** Build filters from extraction
+    # Build filters from extraction
     filters = extraction.hard.to_filters_dict() or None
 
-    ***REMOVED*** Scroll (payload-only, sorted by price)
+    # Scroll (payload-only, sorted by price)
     _PAGE_SIZE = 10
     results, total_count, next_start, page_ids = await apartments_service.scroll_with_filters(
         filters=filters,
@@ -200,9 +200,9 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
     await activate_catalog_state(dialog_manager=manager, state=CatalogSG.results)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Input handlers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Input handlers
+# ---------------------------------------------------------------------------
 
 
 async def on_text_input(message: Message, _widget: MessageInput, manager: DialogManager) -> None:
@@ -232,7 +232,7 @@ async def on_example_selected(
     """Handle example button click — run search with selected example text."""
     if callback.message is None:
         return
-    await _dialog_search(item_id, callback.message, manager)  ***REMOVED*** type: ignore[arg-type]
+    await _dialog_search(item_id, callback.message, manager)  # type: ignore[arg-type]
 
 
 async def on_new_search(
@@ -244,13 +244,13 @@ async def on_new_search(
     await manager.switch_to(DemoSG.intro)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Dialog definition
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Dialog definition
+# ---------------------------------------------------------------------------
 
 
 demo_dialog = Dialog(
-    ***REMOVED*** Window 1: query input
+    # Window 1: query input
     Window(
         Format("{prompt}"),
         Column(
@@ -267,7 +267,7 @@ demo_dialog = Dialog(
         getter=intro_getter,
         state=DemoSG.intro,
     ),
-    ***REMOVED*** Window 2: results display
+    # Window 2: results display
     Window(
         Format("{results_text}"),
         Button(Format("🔍 Новый запрос"), id="new_search", on_click=on_new_search),

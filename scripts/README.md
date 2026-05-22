@@ -1,8 +1,8 @@
-***REMOVED*** scripts/
+# scripts/
 
 Automation, indexing, benchmarking, validation, and maintenance scripts.
 
-***REMOVED******REMOVED*** Categories
+## Categories
 
 | Category | Scripts | Purpose |
 |----------|---------|---------|
@@ -17,7 +17,7 @@ Automation, indexing, benchmarking, validation, and maintenance scripts.
 | **Alerting** | `langfuse_alert.py`, `langfuse_triage.py` | Langfuse monitoring and triage |
 | **CRM / Seeding** | `kommo_seed.py`, `update_advisor_prompts.py` | CRM seeding and prompt updates |
 
-***REMOVED******REMOVED*** Usage
+## Usage
 
 Most scripts are self-contained and run with `uv run` or directly:
 
@@ -25,7 +25,7 @@ Most scripts are self-contained and run with `uv run` or directly:
 uv run python scripts/setup_qdrant_collection.py
 ```
 
-***REMOVED******REMOVED*** Related
+## Related
 
 - [`docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local commands and validation ladder
 - [`docs/INGESTION.md`](../docs/INGESTION.md) — Unified ingestion runbook

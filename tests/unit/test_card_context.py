@@ -1,4 +1,4 @@
-"""Tests for card action context messages (Task 7, ***REMOVED***937)."""
+"""Tests for card action context messages (Task 7, #937)."""
 
 from __future__ import annotations
 

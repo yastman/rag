@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/qdrant_writer.py
+# src/ingestion/unified/qdrant_writer.py
 """Qdrant writer with payload contract and replace semantics."""
 
 import json as _json
@@ -25,10 +25,10 @@ from src.retrieval.topic_classifier import classify_chunk_topic, classify_doc_ty
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Namespace for deterministic UUID generation
+# Namespace for deterministic UUID generation
 NAMESPACE_GDRIVE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
-***REMOVED*** Keep request bodies below Qdrant's 32MB JSON limit with safety headroom.
+# Keep request bodies below Qdrant's 32MB JSON limit with safety headroom.
 QDRANT_UPSERT_MAX_REQUEST_BYTES = 28 * 1024 * 1024
 
 
@@ -68,14 +68,14 @@ class QdrantHybridWriter:
         bge_m3_concurrency: int = 1,
         use_local_embeddings: bool = False,
     ):
-        ***REMOVED*** Qdrant client
+        # Qdrant client
         self.client = QdrantClient(
             url=qdrant_url,
             api_key=qdrant_api_key,
             timeout=120,
         )
 
-        ***REMOVED*** BGE-M3 HTTP client (unified SDK layer)
+        # BGE-M3 HTTP client (unified SDK layer)
         from src.services.bge_m3_client import BGEM3SyncClient
 
         self.bge_m3_url = bge_m3_url or "http://localhost:8000"
@@ -87,7 +87,7 @@ class QdrantHybridWriter:
         logger.info("QdrantHybridWriter BGE-M3 URL: %s", self.bge_m3_url)
         logger.info("QdrantHybridWriter BGE-M3 timeout: %ss", bge_m3_timeout)
 
-        ***REMOVED*** Dense embeddings: local BGE-M3 or Voyage API
+        # Dense embeddings: local BGE-M3 or Voyage API
         self.use_local_embeddings = use_local_embeddings
         self.voyage = None
 
@@ -99,8 +99,8 @@ class QdrantHybridWriter:
         else:
             if not voyage_api_key:
                 raise ValueError("voyage_api_key is required when use_local_embeddings=False")
-            ***REMOVED*** Lazy import (***REMOVED***1773): voyageai is an optional extra and must not
-            ***REMOVED*** be imported by the default ingestion path.
+            # Lazy import (#1773): voyageai is an optional extra and must not
+            # be imported by the default ingestion path.
             from src.services.voyage import VoyageService
 
             self.voyage = VoyageService(
@@ -157,25 +157,25 @@ class QdrantHybridWriter:
         2. seq_no from docling
         3. Fallback: chunk_{index}
         """
-        ***REMOVED*** Check for docling metadata
+        # Check for docling metadata
         extra = getattr(chunk, "extra_metadata", {}) or {}
         docling_meta = extra.get("docling_meta", {})
 
-        ***REMOVED*** Priority 1: Page + offset from docling
+        # Priority 1: Page + offset from docling
         if "page" in docling_meta or "page_start" in docling_meta:
             page = docling_meta.get("page") or docling_meta.get("page_start", 0)
             offset = docling_meta.get("offset", index)
             return f"page_{page}_offset_{offset}"
 
-        ***REMOVED*** Priority 2: seq_no from docling
+        # Priority 2: seq_no from docling
         if hasattr(chunk, "extra_metadata") and extra.get("chunk_order") is not None:
             return f"seq_{extra['chunk_order']}"
 
-        ***REMOVED*** Priority 3: Use order if available
+        # Priority 3: Use order if available
         if hasattr(chunk, "order") and chunk.order is not None:
             return f"order_{chunk.order}"
 
-        ***REMOVED*** Fallback
+        # Fallback
         return f"chunk_{index}"
 
     def _embed_documents_local(self, texts: list[str]) -> list[list[float]]:
@@ -189,8 +189,8 @@ class QdrantHybridWriter:
         """
         if not texts:
             return []
-        ***REMOVED*** Semaphore covers entire call including internal batching.
-        ***REMOVED*** bge_m3_concurrency defaults to 1; CocoIndex runs sequentially.
+        # Semaphore covers entire call including internal batching.
+        # bge_m3_concurrency defaults to 1; CocoIndex runs sequentially.
         with self._dense_semaphore:
             result = self._bge_client.encode_dense(texts)
         return result.vectors
@@ -249,24 +249,24 @@ class QdrantHybridWriter:
         extra = getattr(chunk, "extra_metadata", {}) or {}
 
         metadata = {
-            ***REMOVED*** Identity (required for small-to-big)
+            # Identity (required for small-to-big)
             "file_id": file_id,
-            "doc_id": file_id,  ***REMOVED*** Same as file_id for small-to-big compatibility
-            ***REMOVED*** Order (required for small-to-big sorting)
+            "doc_id": file_id,  # Same as file_id for small-to-big compatibility
+            # Order (required for small-to-big sorting)
             "order": order,
-            "chunk_order": order,  ***REMOVED*** Alias
-            ***REMOVED*** Source (required for citations)
+            "chunk_order": order,  # Alias
+            # Source (required for citations)
             "source": source_path,
             "file_name": getattr(chunk, "document_name", file_metadata.get("file_name")),
-            ***REMOVED*** Chunk position
+            # Chunk position
             "chunk_id": getattr(chunk, "chunk_id", order),
             "chunk_location": chunk_location,
-            ***REMOVED*** Document structure
+            # Document structure
             "section": getattr(chunk, "section", None),
             "headings": extra.get("headings", []),
-            ***REMOVED*** Page info
+            # Page info
             "page_range": list(chunk.page_range) if getattr(chunk, "page_range", None) else None,
-            ***REMOVED*** File info
+            # File info
             "mime_type": file_metadata.get("mime_type"),
             "modified_time": file_metadata.get("modified_time"),
             "content_hash": file_metadata.get("content_hash"),
@@ -280,13 +280,13 @@ class QdrantHybridWriter:
         metadata["source_type"] = self._infer_source_type(source_path, file_metadata)
         metadata["audience"] = self._infer_audience(source_path, getattr(chunk, "text", ""))
 
-        ***REMOVED*** Clean None values
+        # Clean None values
         metadata = {k: v for k, v in metadata.items() if v is not None}
 
         return {
             "page_content": chunk.text,
             "metadata": metadata,
-            "file_id": file_id,  ***REMOVED*** Flat for fast delete
+            "file_id": file_id,  # Flat for fast delete
         }
 
     @staticmethod
@@ -326,7 +326,7 @@ class QdrantHybridWriter:
 
         total_upserted = 0
         batch: list[PointStruct] = []
-        batch_bytes = 2  ***REMOVED*** JSON array brackets
+        batch_bytes = 2  # JSON array brackets
         batch_index = 1
 
         for point in points:
@@ -384,7 +384,7 @@ class QdrantHybridWriter:
             status="started",
             metadata={"collection": collection_name},
         )
-        ***REMOVED*** Count before delete
+        # Count before delete
         count_result = self.client.count(
             collection_name=collection_name,
             count_filter=Filter(
@@ -394,7 +394,7 @@ class QdrantHybridWriter:
         count = count_result.count
 
         if count > 0:
-            ***REMOVED*** Delete by metadata.file_id (canonical SDK shape: wrap Filter in FilterSelector)
+            # Delete by metadata.file_id (canonical SDK shape: wrap Filter in FilterSelector)
             self.client.delete(
                 collection_name=collection_name,
                 points_selector=FilterSelector(
@@ -426,7 +426,7 @@ class QdrantHybridWriter:
         file_metadata: dict[str, Any],
         collection_name: str,
     ) -> WriteStats:
-        """Upsert chunks with atomic replace semantics (***REMOVED***1602).
+        """Upsert chunks with atomic replace semantics (#1602).
 
         1. Generate embeddings and build replacement points first.
         2. Upsert replacement points with deterministic IDs (overwrites the
@@ -454,11 +454,11 @@ class QdrantHybridWriter:
             return stats
 
         try:
-            ***REMOVED*** Step 1: Extract texts
+            # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            ***REMOVED*** Step 2: Generate embeddings (local BGE-M3 or Voyage API).
-            ***REMOVED*** Any failure here exits via `except` BEFORE any destructive call.
+            # Step 2: Generate embeddings (local BGE-M3 or Voyage API).
+            # Any failure here exits via `except` BEFORE any destructive call.
             if self.use_local_embeddings:
                 dense_embeddings = self._embed_documents_local(texts)
             else:
@@ -468,7 +468,7 @@ class QdrantHybridWriter:
             sparse_embeddings = self._embed_sparse(texts)
             colbert_embeddings = self._embed_colbert(texts) if self.use_local_embeddings else []
 
-            ***REMOVED*** Step 3: Build points
+            # Step 3: Build points
             points: list[PointStruct] = []
             new_ids: list[str] = []
             for i, (chunk, dense_vec, sparse_emb) in enumerate(
@@ -495,17 +495,17 @@ class QdrantHybridWriter:
                 points.append(point)
                 new_ids.append(point_id)
 
-            ***REMOVED*** Step 4: Upsert replacement points first (deterministic IDs
-            ***REMOVED*** overwrite same-location points, so readers always see a valid
-            ***REMOVED*** version of the document during the swap).
+            # Step 4: Upsert replacement points first (deterministic IDs
+            # overwrite same-location points, so readers always see a valid
+            # version of the document during the swap).
             stats.points_upserted = self._upsert_points_in_batches(
                 collection_name=collection_name,
                 points=points,
                 source_path=source_path,
             )
 
-            ***REMOVED*** Step 5: Sweep stale orphans (old points for this file_id that
-            ***REMOVED*** are not part of the new batch). Safe because Step 4 succeeded.
+            # Step 5: Sweep stale orphans (old points for this file_id that
+            # are not part of the new batch). Safe because Step 4 succeeded.
             stats.points_deleted = self._delete_stale_points_sync(
                 file_id=file_id,
                 collection_name=collection_name,
@@ -543,7 +543,7 @@ class QdrantHybridWriter:
 
         Uses sync Qdrant client directly.
         """
-        ***REMOVED*** Qdrant client is already sync
+        # Qdrant client is already sync
         count_result = self.client.count(
             collection_name=collection_name,
             count_filter=Filter(
@@ -578,7 +578,7 @@ class QdrantHybridWriter:
         file_metadata: dict[str, Any],
         collection_name: str,
     ) -> WriteStats:
-        """Sync atomic-replace counterpart of ``upsert_chunks`` (***REMOVED***1602).
+        """Sync atomic-replace counterpart of ``upsert_chunks`` (#1602).
 
         Build replacement points first, upsert them with deterministic IDs,
         and only delete stale orphan IDs after the upsert succeeds. If any
@@ -590,11 +590,11 @@ class QdrantHybridWriter:
             return stats
 
         try:
-            ***REMOVED*** Step 1: Extract texts
+            # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            ***REMOVED*** Step 2: Generate embeddings — single hybrid call when local BGE-M3.
-            ***REMOVED*** Any failure here exits via `except` BEFORE any destructive call.
+            # Step 2: Generate embeddings — single hybrid call when local BGE-M3.
+            # Any failure here exits via `except` BEFORE any destructive call.
             all_dense_embeddings: list[list[float]]
             if self.use_local_embeddings:
                 hybrid_result = self._bge_client.encode_hybrid(texts)
@@ -620,7 +620,7 @@ class QdrantHybridWriter:
                 sparse_embeddings = self._embed_sparse(texts)
                 colbert_embeddings = []
 
-            ***REMOVED*** Step 3: Build points
+            # Step 3: Build points
             points: list[PointStruct] = []
             new_ids: list[str] = []
             for i, (chunk, dense_vec, sparse_emb) in enumerate(
@@ -647,14 +647,14 @@ class QdrantHybridWriter:
                 points.append(point)
                 new_ids.append(point_id)
 
-            ***REMOVED*** Step 4: Upsert replacement points first.
+            # Step 4: Upsert replacement points first.
             stats.points_upserted = self._upsert_points_in_batches(
                 collection_name=collection_name,
                 points=points,
                 source_path=source_path,
             )
 
-            ***REMOVED*** Step 5: Now safe to sweep stale orphan IDs.
+            # Step 5: Now safe to sweep stale orphan IDs.
             stats.points_deleted = self._delete_stale_points_sync(
                 file_id=file_id,
                 collection_name=collection_name,
@@ -682,7 +682,7 @@ class QdrantHybridWriter:
         """Delete points that belong to ``file_id`` but are not in ``new_ids``.
 
         This is the post-upsert sweep half of the atomic-replace pattern from
-        ***REMOVED***1602: by the time we run, replacement points are already live in the
+        #1602: by the time we run, replacement points are already live in the
         collection (Step 4 of ``upsert_chunks_sync``), so we only need to drop
         whichever historical chunk IDs no longer participate in the file.
 

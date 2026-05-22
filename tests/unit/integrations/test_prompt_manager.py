@@ -119,7 +119,7 @@ class TestGetPrompt:
 
         assert first == "fallback"
         assert second == "fallback"
-        ***REMOVED*** 2nd call should use local missing-cache and skip Langfuse call.
+        # 2nd call should use local missing-cache and skip Langfuse call.
         assert mock_client.get_prompt.call_count == 1
 
     def test_transient_failure_is_temporarily_cached(self):
@@ -132,7 +132,7 @@ class TestGetPrompt:
 
         assert first == "fallback"
         assert second == "fallback"
-        ***REMOVED*** 2nd call should use local transient-cache and skip Langfuse call.
+        # 2nd call should use local transient-cache and skip Langfuse call.
         assert mock_client.get_prompt.call_count == 1
 
     def test_transient_failure_cache_expires(self):
@@ -143,7 +143,7 @@ class TestGetPrompt:
             get_prompt("generate", fallback="fallback", cache_ttl=0)
             get_prompt("generate", fallback="fallback", cache_ttl=0)
 
-        ***REMOVED*** TTL=0 means cache expires immediately; both calls hit SDK.
+        # TTL=0 means cache expires immediately; both calls hit SDK.
         assert mock_client.get_prompt.call_count == 2
 
     def test_no_manual_api_probe_for_missing_prompt(self):
@@ -179,7 +179,7 @@ class TestGetPrompt:
 
     def test_successful_fetch_clears_transient_failure_cache(self):
         mock_client = MagicMock()
-        ***REMOVED*** First call fails transiently and is cached; second SDK call succeeds after cache clear.
+        # First call fails transiently and is cached; second SDK call succeeds after cache clear.
         mock_prompt = MagicMock()
         mock_prompt.compile.return_value = "langfuse prompt"
         mock_client.get_prompt.side_effect = [
@@ -188,13 +188,13 @@ class TestGetPrompt:
         ]
 
         with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            ***REMOVED*** First call caches transient failure
+            # First call caches transient failure
             assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
-            ***REMOVED*** Second call uses cache
+            # Second call uses cache
             assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
-            ***REMOVED*** Manually expire cache to simulate retry
+            # Manually expire cache to simulate retry
             _transient_failures_until.clear()
-            ***REMOVED*** Third call succeeds and should clear caches
+            # Third call succeeds and should clear caches
             assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "langfuse prompt"
 
         assert mock_client.get_prompt.call_count == 2
@@ -211,11 +211,11 @@ class TestGetPrompt:
         ]
 
         with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            ***REMOVED*** First call caches 404
+            # First call caches 404
             assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "fallback"
-            ***REMOVED*** Manually expire cache to simulate retry
+            # Manually expire cache to simulate retry
             _missing_prompts_until.clear()
-            ***REMOVED*** Second call succeeds and should clear caches
+            # Second call succeeds and should clear caches
             assert get_prompt("my-prompt", fallback="fallback", cache_ttl=60) == "langfuse prompt"
 
         assert mock_client.get_prompt.call_count == 2
@@ -308,10 +308,10 @@ class TestResetClient:
         assert "some-prompt" not in _transient_failures_until
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** get_prompt_with_object — exposes raw Langfuse Prompt object alongside text
-***REMOVED*** (***REMOVED***1666: Link Prompt Management entries to LLM generations)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# get_prompt_with_object — exposes raw Langfuse Prompt object alongside text
+# (#1666: Link Prompt Management entries to LLM generations)
+# ---------------------------------------------------------------------------
 
 
 from telegram_bot.integrations.prompt_manager import get_prompt_with_object
@@ -409,6 +409,6 @@ class TestGetPromptWithObject:
         with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
             result = get_prompt("my-prompt", fallback="fallback")
 
-        ***REMOVED*** Must still be a plain string, not a tuple — backwards-compat guard.
+        # Must still be a plain string, not a tuple — backwards-compat guard.
         assert isinstance(result, str)
         assert result == "compiled"

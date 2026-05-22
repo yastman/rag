@@ -52,7 +52,7 @@ class _ReasoningStreamChunk:
     """Mock streaming chunk where content arrives via reasoning fields (Cerebras gpt-oss-120b).
 
     LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
-    (issues ***REMOVED***9578, ***REMOVED***15690) — delta.content is None/empty while reasoning tokens
+    (issues #9578, #15690) — delta.content is None/empty while reasoning tokens
     appear in delta.reasoning_content (LiteLLM standardized) or delta.reasoning
     (raw Cerebras).
     """
@@ -63,7 +63,7 @@ class _ReasoningStreamChunk:
         reasoning_content: str | None = None,
         reasoning: str | None = None,
     ):
-        delta = MagicMock(spec=[])  ***REMOVED*** spec=[] prevents auto-attribute creation
+        delta = MagicMock(spec=[])  # spec=[] prevents auto-attribute creation
         delta.content = None
         delta.reasoning_content = reasoning_content
         delta.reasoning = reasoning
@@ -535,7 +535,7 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
     stream = _AsyncStream([_StreamChunk("Часть 1 "), _StreamChunk("Часть 2")])
 
     async def _delayed_stream_create(*_args, **_kwargs):
-        await asyncio.sleep(0.05)  ***REMOVED*** emulate provider wait before first stream chunk
+        await asyncio.sleep(0.05)  # emulate provider wait before first stream chunk
         return stream
 
     client.chat.completions.create = AsyncMock(side_effect=_delayed_stream_create)
@@ -571,7 +571,7 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
 
 @pytest.mark.asyncio
 async def test_generate_response_non_streaming_has_ttft_ms() -> None:
-    """Non-streaming path must report ttft_ms > 0 from LLM call wall time (***REMOVED***571)."""
+    """Non-streaming path must report ttft_ms > 0 from LLM call wall time (#571)."""
     config, _client = _make_non_streaming_config(answer="Ответ без стриминга")
     lf = MagicMock()
 
@@ -582,17 +582,17 @@ async def test_generate_response_non_streaming_has_ttft_ms() -> None:
         lf_client=lf,
     )
 
-    ***REMOVED*** ttft_ms must be populated (non-zero) in non-streaming mode
+    # ttft_ms must be populated (non-zero) in non-streaming mode
     assert result["llm_ttft_ms"] > 0, "ttft_ms should be > 0 in non-streaming mode"
-    ***REMOVED*** llm_decode_ms is None for non-streaming (no decode/prefill distinction)
+    # llm_decode_ms is None for non-streaming (no decode/prefill distinction)
     assert result["llm_decode_ms"] is None
-    ***REMOVED*** streaming_enabled must be False
+    # streaming_enabled must be False
     assert result["streaming_enabled"] is False
 
 
 @pytest.mark.asyncio
 async def test_generate_response_non_streaming_computes_tps_from_usage() -> None:
-    """Non-streaming path computes llm_tps when completion_tokens available (***REMOVED***571)."""
+    """Non-streaming path computes llm_tps when completion_tokens available (#571)."""
     mock_choice = MagicMock()
     mock_choice.message.content = "Ответ с 10 токенами"
     mock_response = MagicMock()
@@ -628,10 +628,10 @@ async def test_generate_response_non_streaming_computes_tps_from_usage() -> None
     )
 
     assert result["llm_ttft_ms"] > 0
-    ***REMOVED*** TPS = completion_tokens / (ttft_ms / 1000)
+    # TPS = completion_tokens / (ttft_ms / 1000)
     assert result["llm_tps"] is not None
     assert result["llm_tps"] > 0
-    ***REMOVED*** decode_ms is None for non-streaming
+    # decode_ms is None for non-streaming
     assert result["llm_decode_ms"] is None
     lf.update_current_generation.assert_any_call(
         model="gpt-4o-mini",
@@ -681,9 +681,9 @@ async def test_generate_response_streaming_updates_generation_usage_details() ->
 
 @pytest.mark.asyncio
 async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
-    """Non-streaming path sets llm_tps=None when usage is not available (***REMOVED***571)."""
+    """Non-streaming path sets llm_tps=None when usage is not available (#571)."""
     config, _client = _make_non_streaming_config(answer="Ответ")
-    ***REMOVED*** usage=None set in _make_non_streaming_config already
+    # usage=None set in _make_non_streaming_config already
     lf = MagicMock()
 
     result = await generate_response(
@@ -693,7 +693,7 @@ async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
         lf_client=lf,
     )
 
-    ***REMOVED*** No usage → no TPS, fallback to llm_tps_unavailable score
+    # No usage → no TPS, fallback to llm_tps_unavailable score
     assert result["llm_tps"] is None
     assert result["llm_decode_ms"] is None
 
@@ -913,21 +913,21 @@ async def test_streaming_answer_failure_degrades_gracefully() -> None:
         raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
     )
 
-    ***REMOVED*** Stream ran successfully — no non-streaming recovery needed
+    # Stream ran successfully — no non-streaming recovery needed
     assert result["response"] == "Ответ несмотря на ошибку доставки"
     assert result["llm_stream_recovery"] is False
-    ***REMOVED*** Final message was never delivered, downstream sender must deliver it
+    # Final message was never delivered, downstream sender must deliver it
     assert result["response_sent"] is False
-    ***REMOVED*** LLM was called exactly once (streaming path, no separate fallback call)
+    # LLM was called exactly once (streaming path, no separate fallback call)
     assert client.chat.completions.create.await_count == 1
 
 
 @pytest.mark.asyncio
 async def test_stream_failure_raises_and_triggers_fallback() -> None:
-    """LLM stream exception propagates from gather → triggers non-streaming fallback (***REMOVED***683)."""
+    """LLM stream exception propagates from gather → triggers non-streaming fallback (#683)."""
     config, client = _make_non_streaming_config(answer="Нестриминговый fallback")
     config.streaming_enabled = True
-    ***REMOVED*** First call (stream=True) raises; second call (non-streaming fallback) succeeds
+    # First call (stream=True) raises; second call (non-streaming fallback) succeeds
     mock_fallback_response = MagicMock()
     mock_fallback_response.choices = [MagicMock()]
     mock_fallback_response.choices[0].message.content = "Нестриминговый fallback"
@@ -1054,21 +1054,21 @@ async def test_partial_stream_recovery_edits_existing_message_instead_of_sending
 
 @pytest.mark.asyncio
 async def test_ttft_drift_warn_ms_config() -> None:
-    """TTFT drift warning threshold is read from config.ttft_drift_warn_ms (***REMOVED***675)."""
+    """TTFT drift warning threshold is read from config.ttft_drift_warn_ms (#675)."""
     from telegram_bot.graph.config import GraphConfig
 
-    ***REMOVED*** Default value
+    # Default value
     gc = GraphConfig()
     assert gc.ttft_drift_warn_ms == 500
 
-    ***REMOVED*** Reads from env
+    # Reads from env
     gc_env = GraphConfig.from_env()
     assert isinstance(gc_env.ttft_drift_warn_ms, int)
 
-    ***REMOVED*** Low threshold (0) triggers warning for any drift
+    # Low threshold (0) triggers warning for any drift
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True
-    config.ttft_drift_warn_ms = 0  ***REMOVED*** any drift triggers warning
+    config.ttft_drift_warn_ms = 0  # any drift triggers warning
 
     stream = _AsyncStream([_StreamChunk("Ответ")])
 
@@ -1142,17 +1142,17 @@ async def test_streaming_uses_send_message_draft() -> None:
     assert result["response"] == "Часть 1 Часть 2"
     assert result["response_sent"] is True
     assert result["sent_message"] == {"chat_id": 555, "message_id": 777}
-    ***REMOVED*** Должен вызвать send_message_draft, а НЕ edit_text
+    # Должен вызвать send_message_draft, а НЕ edit_text
     bot.send_message_draft.assert_called()
-    ***REMOVED*** Финальный ответ через message.answer (не edit_text)
+    # Финальный ответ через message.answer (не edit_text)
     message.answer.assert_called_once()
     call_kwargs = message.answer.call_args
     assert "Часть 1 Часть 2" in str(call_kwargs)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ***REMOVED***1666 — link Langfuse Prompts to generations via langfuse_prompt= kwarg
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# #1666 — link Langfuse Prompts to generations via langfuse_prompt= kwarg
+# ---------------------------------------------------------------------------
 
 
 class _FakePrompt:
@@ -1171,7 +1171,7 @@ class _FakePrompt:
 async def test_generate_response_forwards_langfuse_prompt_kwarg_when_prompt_object_available() -> (
     None
 ):
-    """The raw Langfuse Prompt object must be forwarded as ``langfuse_prompt=`` (***REMOVED***1666)."""
+    """The raw Langfuse Prompt object must be forwarded as ``langfuse_prompt=`` (#1666)."""
     config, client = _make_non_streaming_config(answer="Ответ модели")
     lf = MagicMock()
     fake_prompt = _FakePrompt(text="Ассистент по недвижимость")
@@ -1195,7 +1195,7 @@ async def test_generate_response_forwards_langfuse_prompt_kwarg_when_prompt_obje
 
 @pytest.mark.asyncio
 async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is_none() -> None:
-    """No ``langfuse_prompt`` must be sent when prompt fell back to a hardcoded string (***REMOVED***1666)."""
+    """No ``langfuse_prompt`` must be sent when prompt fell back to a hardcoded string (#1666)."""
     config, client = _make_non_streaming_config(answer="Ответ")
     lf = MagicMock()
 
@@ -1218,7 +1218,7 @@ async def test_generate_response_does_not_forward_langfuse_prompt_when_object_is
 
 @pytest.mark.asyncio
 async def test_generate_response_links_prompt_via_update_current_generation() -> None:
-    """When a Prompt object is available, ``update_current_generation`` is called with it (***REMOVED***1666).
+    """When a Prompt object is available, ``update_current_generation`` is called with it (#1666).
 
     Belt-and-braces backup for plain OpenAI clients (auto_trace=False) where the
     helper strips the ``langfuse_prompt=`` kwarg.
@@ -1242,13 +1242,13 @@ async def test_generate_response_links_prompt_via_update_current_generation() ->
     update_calls = [
         c for c in lf.update_current_generation.call_args_list if "prompt" in (c.kwargs or {})
     ]
-    assert update_calls, "Expected update_current_generation(prompt=...) for ***REMOVED***1666 linking"
+    assert update_calls, "Expected update_current_generation(prompt=...) for #1666 linking"
     assert update_calls[0].kwargs["prompt"] is fake_prompt
 
 
 @pytest.mark.asyncio
 async def test_generate_response_does_not_link_prompt_via_update_when_object_is_none() -> None:
-    """When prompt fell back to hardcoded string, no ``prompt=`` kwarg is sent (***REMOVED***1666)."""
+    """When prompt fell back to hardcoded string, no ``prompt=`` kwarg is sent (#1666)."""
     config, _ = _make_non_streaming_config(answer="Ответ")
     lf = MagicMock()
 

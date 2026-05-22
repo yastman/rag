@@ -79,9 +79,9 @@ def _make_state(current_state=None, data=None):
     return state
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestHandleMenuButton
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestHandleMenuButton
+# ---------------------------------------------------------------------------
 
 
 class TestHandleMenuButton:
@@ -215,9 +215,9 @@ class TestHandleMenuButton:
         state.clear.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestHandleServiceCallback
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestHandleServiceCallback
+# ---------------------------------------------------------------------------
 
 
 class TestHandleServiceCallback:
@@ -307,9 +307,9 @@ class TestHandleServiceCallback:
         callback.message.delete.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestHandleCtaCallback
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestHandleCtaCallback
+# ---------------------------------------------------------------------------
 
 
 class TestHandleCtaCallback:
@@ -392,9 +392,9 @@ class TestHandleCtaCallback:
         callback.answer.assert_awaited_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestHandleApartmentFastPath
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestHandleApartmentFastPath
+# ---------------------------------------------------------------------------
 
 
 class TestHandleApartmentFastPath:

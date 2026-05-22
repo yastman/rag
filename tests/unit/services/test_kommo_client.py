@@ -1,4 +1,4 @@
-"""Tests for KommoClient async httpx adapter (***REMOVED***413)."""
+"""Tests for KommoClient async httpx adapter (#413)."""
 
 from __future__ import annotations
 
@@ -119,7 +119,7 @@ async def test_upsert_contact_find_existing(kommo_client, httpx_mock):
     assert contact.id == 456
 
 
-***REMOVED*** --- URL normalization (***REMOVED***411) ---
+# --- URL normalization (#411) ---
 
 
 def test_subdomain_plain(mock_token_store):
@@ -131,7 +131,7 @@ def test_subdomain_plain(mock_token_store):
 
 
 def test_subdomain_with_kommo_suffix(mock_token_store):
-    """Subdomain with .kommo.com suffix doesn't produce double domain (***REMOVED***411)."""
+    """Subdomain with .kommo.com suffix doesn't produce double domain (#411)."""
     from telegram_bot.services.kommo_client import KommoClient
 
     client = KommoClient(subdomain="linhminhphung1.kommo.com", token_store=mock_token_store)
@@ -146,7 +146,7 @@ def test_subdomain_with_dots(mock_token_store):
     assert client._base_url == "https://api-c.kommo.com/api/v4"
 
 
-***REMOVED*** --- Phase 2: search_leads, get_tasks, update_contact (***REMOVED***443) ---
+# --- Phase 2: search_leads, get_tasks, update_contact (#443) ---
 
 
 async def test_search_leads_by_query(kommo_client, httpx_mock):
@@ -270,7 +270,7 @@ async def test_update_contact_with_custom_fields(kommo_client, httpx_mock):
     assert contact.id == 789
 
 
-***REMOVED*** --- Phase 3: create_task, link_contact_to_lead (***REMOVED***660) ---
+# --- Phase 3: create_task, link_contact_to_lead (#660) ---
 
 
 async def test_create_task(kommo_client, httpx_mock):
@@ -302,17 +302,17 @@ async def test_link_contact_to_lead(kommo_client, httpx_mock):
         json={},
     )
 
-    ***REMOVED*** Should complete without raising an exception
+    # Should complete without raising an exception
     await kommo_client.link_contact_to_lead(101, 456)
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Task 4: search_leads with_contacts + get_tasks entity_id filter (***REMOVED***731)
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 4: search_leads with_contacts + get_tasks entity_id filter (#731)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def test_search_leads_with_contacts_sends_with_param(kommo_client, httpx_mock):
-    """search_leads(with_contacts=True) includes 'with=contacts' in request (***REMOVED***731)."""
+    """search_leads(with_contacts=True) includes 'with=contacts' in request (#731)."""
     import re
 
     httpx_mock.add_response(
@@ -337,7 +337,7 @@ async def test_search_leads_with_contacts_sends_with_param(kommo_client, httpx_m
 
 
 async def test_search_leads_without_contacts_no_embedded(kommo_client, httpx_mock):
-    """search_leads without with_contacts returns leads with contacts=None (***REMOVED***731)."""
+    """search_leads without with_contacts returns leads with contacts=None (#731)."""
     import re
 
     httpx_mock.add_response(
@@ -351,7 +351,7 @@ async def test_search_leads_without_contacts_no_embedded(kommo_client, httpx_moc
 
 
 async def test_get_tasks_by_entity_id(kommo_client, httpx_mock):
-    """get_tasks(entity_id=...) sends filter[entity_id][] param (***REMOVED***731)."""
+    """get_tasks(entity_id=...) sends filter[entity_id][] param (#731)."""
     import re
 
     httpx_mock.add_response(
@@ -365,7 +365,7 @@ async def test_get_tasks_by_entity_id(kommo_client, httpx_mock):
     assert tasks[0].entity_id == 42
 
 
-***REMOVED*** --- upsert_contact missing-name merge behavior (***REMOVED***717) ---
+# --- upsert_contact missing-name merge behavior (#717) ---
 
 
 async def test_upsert_contact_updates_first_name_when_empty(kommo_client) -> None:
@@ -373,7 +373,7 @@ async def test_upsert_contact_updates_first_name_when_empty(kommo_client) -> Non
     from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
 
     existing_raw = {"id": 42, "first_name": None, "last_name": "Doe"}
-    kommo_client._request = AsyncMock(  ***REMOVED*** type: ignore[method-assign]
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
         return_value={"_embedded": {"contacts": [existing_raw]}}
     )
     captured: list[tuple[int, ContactUpdate]] = []
@@ -382,7 +382,7 @@ async def test_upsert_contact_updates_first_name_when_empty(kommo_client) -> Non
         captured.append((contact_id, update))
         return Contact(id=contact_id)
 
-    kommo_client.update_contact = _mock_update  ***REMOVED*** type: ignore[method-assign]
+    kommo_client.update_contact = _mock_update  # type: ignore[method-assign]
 
     await kommo_client.upsert_contact("+1234567890", ContactCreate(first_name="John"))
 
@@ -398,7 +398,7 @@ async def test_upsert_contact_updates_last_name_when_empty(kommo_client) -> None
     from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
 
     existing_raw = {"id": 7, "first_name": "Jane", "last_name": None}
-    kommo_client._request = AsyncMock(  ***REMOVED*** type: ignore[method-assign]
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
         return_value={"_embedded": {"contacts": [existing_raw]}}
     )
     captured: list[tuple[int, ContactUpdate]] = []
@@ -407,7 +407,7 @@ async def test_upsert_contact_updates_last_name_when_empty(kommo_client) -> None
         captured.append((contact_id, update))
         return Contact(id=contact_id)
 
-    kommo_client.update_contact = _mock_update  ***REMOVED*** type: ignore[method-assign]
+    kommo_client.update_contact = _mock_update  # type: ignore[method-assign]
 
     await kommo_client.upsert_contact(
         "+1234567890", ContactCreate(first_name="Jane", last_name="Smith")
@@ -425,7 +425,7 @@ async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) 
     from telegram_bot.services.kommo_models import Contact, ContactCreate, ContactUpdate
 
     existing_raw = {"id": 99, "first_name": "Alice", "last_name": "Wonder"}
-    kommo_client._request = AsyncMock(  ***REMOVED*** type: ignore[method-assign]
+    kommo_client._request = AsyncMock(  # type: ignore[method-assign]
         return_value={"_embedded": {"contacts": [existing_raw]}}
     )
     captured: list[tuple[int, ContactUpdate]] = []
@@ -434,7 +434,7 @@ async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) 
         captured.append((contact_id, update))
         return Contact(id=contact_id)
 
-    kommo_client.update_contact = _mock_update  ***REMOVED*** type: ignore[method-assign]
+    kommo_client.update_contact = _mock_update  # type: ignore[method-assign]
 
     result = await kommo_client.upsert_contact(
         "+1234567890", ContactCreate(first_name="X", last_name="Y")
@@ -444,13 +444,13 @@ async def test_upsert_contact_no_update_when_names_already_filled(kommo_client) 
     assert result.id == 99
 
 
-***REMOVED*** -----------------------------------------------------------------------------
-***REMOVED*** httpx.Auth flow contract (***REMOVED***1646)
-***REMOVED*** -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# httpx.Auth flow contract (#1646)
+# -----------------------------------------------------------------------------
 
 
 class TestKommoOAuthAuthFlow:
-    """KommoClient delegates OAuth bearer/refresh to a httpx.Auth subclass (***REMOVED***1646).
+    """KommoClient delegates OAuth bearer/refresh to a httpx.Auth subclass (#1646).
 
     Context7 baseline (/encode/httpx) recommends overriding ``async_auth_flow``
     on a subclass of ``httpx.Auth`` for multi-request authentication, including
@@ -470,7 +470,7 @@ class TestKommoOAuthAuthFlow:
         from telegram_bot.services.kommo_client import KommoClient, KommoOAuthAuth
 
         client = KommoClient(subdomain="test-co", token_store=mock_token_store)
-        ***REMOVED*** httpx exposes the auth on the AsyncClient as ``client.auth``.
+        # httpx exposes the auth on the AsyncClient as ``client.auth``.
         assert isinstance(client._client.auth, KommoOAuthAuth)
 
     async def test_async_auth_flow_sets_bearer_then_yields(self, mock_token_store) -> None:
@@ -485,7 +485,7 @@ class TestKommoOAuthAuthFlow:
         first = await flow.__anext__()
         assert first is request
         assert first.headers["Authorization"] == "Bearer test-token"
-        ***REMOVED*** Simulate 200: flow completes after the first yield.
+        # Simulate 200: flow completes after the first yield.
         ok = httpx.Response(200, request=request)
         with pytest.raises(StopAsyncIteration):
             await flow.asend(ok)
@@ -508,9 +508,9 @@ class TestKommoOAuthAuthFlow:
 
         unauthorized = httpx.Response(401, request=request)
         retry = await flow.asend(unauthorized)
-        ***REMOVED*** Same Request object re-yielded with refreshed bearer.
+        # Same Request object re-yielded with refreshed bearer.
         assert retry.headers["Authorization"] == "Bearer refreshed-token"
-        ***REMOVED*** Flow ends after retry response.
+        # Flow ends after retry response.
         ok = httpx.Response(200, request=retry)
         with pytest.raises(StopAsyncIteration):
             await flow.asend(ok)
@@ -570,15 +570,15 @@ class TestKommoOAuthAuthFlow:
         flow = auth.async_auth_flow(request)
         await flow.__anext__()
         unauthorized = httpx.Response(401, request=request)
-        ***REMOVED*** Flow must terminate without re-yielding when refresh is impossible.
+        # Flow must terminate without re-yielding when refresh is impossible.
         with pytest.raises(StopAsyncIteration):
             await flow.asend(unauthorized)
 
 
 class TestKommoClientRequestNoLongerHandles401:
-    """AST: ``KommoClient._request`` no longer carries the manual 401 branch (***REMOVED***1646).
+    """AST: ``KommoClient._request`` no longer carries the manual 401 branch (#1646).
 
-    Forbids regressing to the pre-***REMOVED***1646 manual ``if response.status_code == 401:``
+    Forbids regressing to the pre-#1646 manual ``if response.status_code == 401:``
     refresh-and-retry block that duplicated httpx.Auth's responsibility.
     """
 
@@ -594,7 +594,7 @@ class TestKommoClientRequestNoLongerHandles401:
 
         bad: list[int] = []
         for node in ast.walk(tree):
-            ***REMOVED*** Look for `response.status_code == 401` comparisons in the body.
+            # Look for `response.status_code == 401` comparisons in the body.
             if not isinstance(node, ast.Compare):
                 continue
             left = node.left
@@ -606,6 +606,6 @@ class TestKommoClientRequestNoLongerHandles401:
 
         assert not bad, (
             "KommoClient._request must not check 401 inline; that is the "
-            "responsibility of KommoOAuthAuth.async_auth_flow (***REMOVED***1646). "
+            "responsibility of KommoOAuthAuth.async_auth_flow (#1646). "
             f"Offending lines: {bad}"
         )

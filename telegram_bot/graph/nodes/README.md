@@ -1,13 +1,13 @@
-***REMOVED*** Nodes
+# Nodes
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 telegram_bot/graph/nodes
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - __init__.py
 - cache.py
 - classify.py
@@ -20,5 +20,5 @@ telegram_bot/graph/nodes
 - rewrite.py
 - transcribe.py
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Index services.yaml content into Qdrant for retrieval."""
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ import argparse
 import os
 from pathlib import Path
 
-import yaml  ***REMOVED*** type: ignore[import-untyped]
+import yaml  # type: ignore[import-untyped]
 
 from src.ingestion.chunker import Chunk
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter

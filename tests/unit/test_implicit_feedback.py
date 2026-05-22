@@ -1,4 +1,4 @@
-"""Tests for implicit retry detection via embedding similarity (***REMOVED***756)."""
+"""Tests for implicit retry detection via embedding similarity (#756)."""
 
 import math
 
@@ -34,10 +34,10 @@ class TestIsReformulation:
         from telegram_bot.implicit_feedback import is_reformulation
 
         current = _make_vec(4, 1.0)
-        ***REMOVED*** A nearly orthogonal vector will have similarity ~0
+        # A nearly orthogonal vector will have similarity ~0
         previous = [1.0, 0.0, 0.0, 0.0]
-        ***REMOVED*** current is [0.5, 0.5, 0.5, 0.5], previous is [1, 0, 0, 0]
-        ***REMOVED*** cosine = 0.5, which is < 0.7 threshold
+        # current is [0.5, 0.5, 0.5, 0.5], previous is [1, 0, 0, 0]
+        # cosine = 0.5, which is < 0.7 threshold
         result = is_reformulation(current, previous, time_delta_seconds=30.0)
         assert result is False
 
@@ -73,9 +73,9 @@ class TestIsReformulation:
 
         from telegram_bot.implicit_feedback import is_reformulation
 
-        ***REMOVED*** Create two vectors with cosine similarity ~0.65 (below threshold)
-        ***REMOVED*** vec_a = [1, 0], vec_b = [cos(49.5°), sin(49.5°)]
-        angle = math.radians(49.5)  ***REMOVED*** cosine ~0.648
+        # Create two vectors with cosine similarity ~0.65 (below threshold)
+        # vec_a = [1, 0], vec_b = [cos(49.5°), sin(49.5°)]
+        angle = math.radians(49.5)  # cosine ~0.648
         current = [1.0, 0.0]
         previous = [math.cos(angle), math.sin(angle)]
         result = is_reformulation(current, previous, time_delta_seconds=30.0)
@@ -87,7 +87,7 @@ class TestIsReformulation:
 
         from telegram_bot.implicit_feedback import is_reformulation
 
-        angle = math.radians(44.0)  ***REMOVED*** cosine ~0.719 (above 0.7)
+        angle = math.radians(44.0)  # cosine ~0.719 (above 0.7)
         current = [1.0, 0.0]
         previous = [math.cos(angle), math.sin(angle)]
         result = is_reformulation(current, previous, time_delta_seconds=30.0)
@@ -111,12 +111,12 @@ class TestIsReformulation:
         """
         from telegram_bot.implicit_feedback import is_reformulation
 
-        ***REMOVED*** Near-identical vectors → would be a reformulation if time window were valid
+        # Near-identical vectors → would be a reformulation if time window were valid
         current = _make_vec()
         previous = _make_vec()
-        ***REMOVED*** Negative delta: previous query was timestamped 5s in the future
+        # Negative delta: previous query was timestamped 5s in the future
         result = is_reformulation(current, previous, time_delta_seconds=-5.0)
-        ***REMOVED*** A future timestamp is outside the valid [0, max_time_seconds) window → False
+        # A future timestamp is outside the valid [0, max_time_seconds) window → False
         assert result is False
 
 

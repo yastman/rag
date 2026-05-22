@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/flow.py
+# src/ingestion/unified/flow.py
 """CocoIndex flow for unified ingestion pipeline.
 
 This module is intentionally minimal:
@@ -21,7 +21,7 @@ from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.manifest import GDriveManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
-    QdrantHybridTargetConnector,  ***REMOVED*** noqa: F401 - registers the connector
+    QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
     QdrantHybridTargetSpec,
 )
 
@@ -49,7 +49,7 @@ def get_mime_type(relative_path: str) -> str:
     return MIME_TYPES.get(ext, "application/octet-stream")
 
 
-***REMOVED*** Global manifest instance, initialised in build_flow().
+# Global manifest instance, initialised in build_flow().
 _manifest: GDriveManifest | None = None
 
 
@@ -81,7 +81,7 @@ def basename_from_filename(filename: str) -> str:
     return Path(filename).name
 
 
-***REMOVED*** Global to store sync_dir for abs_path computation
+# Global to store sync_dir for abs_path computation
 _current_sync_dir: str = ""
 
 
@@ -92,15 +92,15 @@ def abs_path_from_filename(filename: str) -> str:
 
 
 def _flow_name_for(config: UnifiedConfig) -> str:
-    ***REMOVED*** Keep short to stay under 64 char limit for full flow name.
-    ***REMOVED*** Use hash suffix for uniqueness across collections.
+    # Keep short to stay under 64 char limit for full flow name.
+    # Use hash suffix for uniqueness across collections.
     suffix = hashlib.sha256(config.collection_name.encode()).hexdigest()[:6]
     return f"ingest_{suffix}"
 
 
 def _app_namespace_for(config: UnifiedConfig) -> str:
-    ***REMOVED*** CocoIndex full name = "{app_namespace}.{flow_name}" must be <= 64 chars.
-    ***REMOVED*** Keep namespace short.
+    # CocoIndex full name = "{app_namespace}.{flow_name}" must be <= 64 chars.
+    # Keep namespace short.
     return "unified"
 
 
@@ -111,12 +111,12 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
     if config is None:
         config = UnifiedConfig()
 
-    ***REMOVED*** Initialise the manifest in a writable directory (MANIFEST_DIR or sync_dir fallback).
+    # Initialise the manifest in a writable directory (MANIFEST_DIR or sync_dir fallback).
     manifest_dir = config.effective_manifest_dir()
     manifest_dir.mkdir(parents=True, exist_ok=True)
     _manifest = GDriveManifest(manifest_dir)
 
-    ***REMOVED*** Init CocoIndex with explicit database settings (do not rely on env vars).
+    # Init CocoIndex with explicit database settings (do not rely on env vars).
     cocoindex.init(
         setting.Settings(
             database=setting.DatabaseConnectionSpec(url=config.database_url),
@@ -139,7 +139,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
             "**/*.doc",
             "**/*.xlsx",
             "**/*.pptx",
-            ***REMOVED*** For dev/e2e
+            # For dev/e2e
             "**/*.md",
             "**/*.txt",
             "**/*.html",
@@ -154,7 +154,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
             "**/~$*",
         ]
 
-        ***REMOVED*** Source: LocalFile with refresh safety net (60s for dev, can increase for prod)
+        # Source: LocalFile with refresh safety net (60s for dev, can increase for prod)
         data_scope["files"] = flow_builder.add_source(
             cocoindex.sources.LocalFile(
                 path=sync_dir,
@@ -168,7 +168,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
         collector = data_scope.add_collector()
 
         with data_scope["files"].row() as f:
-            ***REMOVED*** Manifest-based file_id: uses content hash for stable identity
+            # Manifest-based file_id: uses content hash for stable identity
             f["file_id"] = f["filename"].transform(file_id_from_content, f["content"])
             f["mime_type"] = f["filename"].transform(mime_type_from_filename)
             f["file_size"] = f["content"].transform(file_size_from_bytes)

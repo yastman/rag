@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_state_manager_sync.py
+# tests/unit/ingestion/test_state_manager_sync.py
 """Tests for sync methods in UnifiedStateManager."""
 
 import asyncio

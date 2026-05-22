@@ -1,4 +1,4 @@
-"""Tests for CRM tools with config-based context DI (***REMOVED***413)."""
+"""Tests for CRM tools with config-based context DI (#413)."""
 
 from __future__ import annotations
 
@@ -154,7 +154,7 @@ async def test_crm_tool_without_kommo_returns_error():
     assert "недоступн" in result.lower() or "crm" in result.lower()
 
 
-***REMOVED*** --- Task 1: Happy path tests for 5 untested tools ---
+# --- Task 1: Happy path tests for 5 untested tools ---
 
 
 async def test_crm_update_lead(bot_context, mock_kommo):
@@ -172,7 +172,7 @@ async def test_crm_update_lead(bot_context, mock_kommo):
     assert "1" in result
     mock_kommo.update_lead.assert_called_once()
     args = mock_kommo.update_lead.call_args
-    assert args[0][0] == 1  ***REMOVED*** deal_id
+    assert args[0][0] == 1  # deal_id
     lead_update = args[0][1]
     assert lead_update.name == "Updated Deal"
     assert lead_update.budget == 75000
@@ -257,7 +257,7 @@ async def test_crm_get_contacts_empty(bot_context, mock_kommo):
     assert "не найдены" in result.lower()
 
 
-***REMOVED*** --- Task 2: Error path tests ---
+# --- Task 2: Error path tests ---
 
 
 async def test_crm_get_deal_error(bot_context, mock_kommo):
@@ -365,7 +365,7 @@ async def test_crm_get_contacts_error(bot_context, mock_kommo):
     assert "Ошибка" in result
 
 
-***REMOVED*** --- Task 3: Edge case tests ---
+# --- Task 3: Edge case tests ---
 
 
 async def test_crm_tool_no_bot_context():
@@ -395,7 +395,7 @@ async def test_crm_get_contacts_truncation(bot_context, mock_kommo):
     assert "User10" not in result
 
 
-***REMOVED*** --- Phase 2: 4 new CRM tools (***REMOVED***443) ---
+# --- Phase 2: 4 new CRM tools (#443) ---
 
 
 async def test_crm_search_leads(bot_context, mock_kommo):
@@ -481,7 +481,7 @@ async def test_crm_get_my_tasks(bot_context, mock_kommo):
     result = await crm_get_my_tasks.ainvoke({}, config=_make_config(bot_context))
     assert "Call back client" in result
     assert "Send docs" in result
-    ***REMOVED*** task with complete_till=1000000000 (past) should be marked overdue
+    # task with complete_till=1000000000 (past) should be marked overdue
     assert "ПРОСРОЧЕНО" in result
     mock_kommo.get_tasks.assert_called_once_with(responsible_user_id=42, is_completed=False)
 
@@ -609,7 +609,7 @@ class TestCrmCreateLeadSearchSummary:
             result = await crm_create_lead.ainvoke({"name": "Test lead"}, config=config)
 
         assert "Сделка создана" in result
-        ***REMOVED*** Нота с самари должна быть добавлена
+        # Нота с самари должна быть добавлена
         mock_kommo.add_note.assert_called_once()
         note_text = mock_kommo.add_note.call_args[0][2]
         assert "двушка у моря" in note_text

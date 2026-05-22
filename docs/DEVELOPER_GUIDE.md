@@ -1,10 +1,10 @@
-***REMOVED*** Developer Guide: Extending the Platform
+# Developer Guide: Extending the Platform
 
 This guide explains how to add new pipeline nodes, agent tools, query types, and ingestion sources to the system.
 
-***REMOVED******REMOVED*** Adding a New LangGraph Node
+## Adding a New LangGraph Node
 
-***REMOVED******REMOVED******REMOVED*** When to Add a Node
+### When to Add a Node
 
 Add a new node when:
 
@@ -15,9 +15,9 @@ Add a new node when:
 
 For simple transformations within existing logic, prefer inline functions.
 
-***REMOVED******REMOVED******REMOVED*** Step-by-Step
+### Step-by-Step
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** 1. Create the Node File
+#### 1. Create the Node File
 
 Create `telegram_bot/graph/nodes/your_node.py`:
 
@@ -59,20 +59,20 @@ async def your_node(
 
     return {
         "your_field": result,
-        ***REMOVED*** Optional: add to trace
+        # Optional: add to trace
         "trace_context": {"your_node_output": result},
     }
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** 2. Add State Fields
+#### 2. Add State Fields
 
 If your node adds new state fields, update `telegram_bot/graph/state.py`:
 
 ```python
 class RAGState(TypedDict):
-    ***REMOVED*** ... existing fields ...
+    # ... existing fields ...
 
-    ***REMOVED*** Your new field
+    # Your new field
     your_field: str | None
 ```
 
@@ -87,7 +87,7 @@ Key existing state fields:
 | `cache_hit` | bool | Cache hit flag |
 | `latency_stages` | dict | Per-stage timing |
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** 3. Register in Graph Builder
+#### 3. Register in Graph Builder
 
 In `telegram_bot/graph/graph.py`:
 
@@ -95,13 +95,13 @@ In `telegram_bot/graph/graph.py`:
 from .nodes.your_node import your_node
 
 def build_graph(...) -> CompiledGraph:
-    ***REMOVED*** ... existing code ...
+    # ... existing code ...
 
     graph.add_node("your_node", your_node)
 
-    ***REMOVED*** Add edges
+    # Add edges
     graph.add_edge("existing_node", "your_node")
-    ***REMOVED*** OR conditional edge:
+    # OR conditional edge:
     graph.add_conditional_edges(
         "existing_node",
         route_your_node,
@@ -114,7 +114,7 @@ def build_graph(...) -> CompiledGraph:
     return graph.compile(...)
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** 4. Add Route Function (if conditional)
+#### 4. Add Route Function (if conditional)
 
 ```python
 def route_your_node(state: RAGState) -> str:
@@ -124,17 +124,17 @@ def route_your_node(state: RAGState) -> str:
     return "other_node"
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** 5. Update GraphContext
+#### 5. Update GraphContext
 
 If your node introduces a new dependency, update `telegram_bot/graph/context.py`:
 
 ```python
 class GraphContext(TypedDict):
-    ***REMOVED*** ... existing fields ...
+    # ... existing fields ...
     your_service: YourServiceType
 ```
 
-***REMOVED******REMOVED******REMOVED*** Node Template
+### Node Template
 
 ```python
 """Node description."""
@@ -161,14 +161,14 @@ async def {node_name}_node(
     Returns:
         State updates to merge
     """
-    ***REMOVED*** 1. Extract inputs from state
-    ***REMOVED*** 2. Do work (use runtime.context for dependencies)
-    ***REMOVED*** 3. Return state updates
+    # 1. Extract inputs from state
+    # 2. Do work (use runtime.context for dependencies)
+    # 3. Return state updates
     dependency = runtime.context.get("dependency")
     return {"output_field": "value"}
 ```
 
-***REMOVED******REMOVED******REMOVED*** Checklist
+### Checklist
 
 - [ ] Create node file in `telegram_bot/graph/nodes/`
 - [ ] Add `@observe` decorator with unique name
@@ -181,10 +181,10 @@ async def {node_name}_node(
 - [ ] Add unit test in `tests/unit/telegram_bot/graph/`
 - [ ] Run `make check` and `make test-unit`
 
-***REMOVED******REMOVED******REMOVED*** Example: Adding a Sentiment Node
+### Example: Adding a Sentiment Node
 
 ```python
-***REMOVED*** telegram_bot/graph/nodes/sentiment.py
+# telegram_bot/graph/nodes/sentiment.py
 @observe(name="node-sentiment", capture_input=False, capture_output=False)
 async def sentiment_node(
     state: dict[str, Any],
@@ -205,7 +205,7 @@ graph.add_edge("classify", "sentiment")
 graph.add_edge("sentiment", "guard")
 ```
 
-***REMOVED******REMOVED******REMOVED*** Code Locations
+### Code Locations
 
 | File | Purpose |
 |------|---------|
@@ -215,9 +215,9 @@ graph.add_edge("sentiment", "guard")
 | `telegram_bot/observability.py` | @observe decorator |
 | `tests/unit/telegram_bot/graph/` | Node tests |
 
-***REMOVED******REMOVED*** Adding a New Agent Tool
+## Adding a New Agent Tool
 
-***REMOVED******REMOVED******REMOVED*** 1. Create the Tool
+### 1. Create the Tool
 
 In `telegram_bot/agents/`:
 
@@ -241,11 +241,11 @@ async def my_tool(query: str, ctx: BotContext) -> str:
     Returns:
         Tool result as string
     """
-    ***REMOVED*** Tool implementation
+    # Tool implementation
     return "result string"
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Register in create_bot_agent()
+### 2. Register in create_bot_agent()
 
 In `telegram_bot/agents/agent.py`:
 
@@ -253,9 +253,9 @@ In `telegram_bot/agents/agent.py`:
 from telegram_bot.agents.my_tool import my_tool
 
 def create_bot_agent(model, tools: list, context_schema, checkpointer=None):
-    ***REMOVED*** ... existing code ...
+    # ... existing code ...
 
-    ***REMOVED*** Add your tool
+    # Add your tool
     all_tools = [*base_tools, my_tool]
 
     agent = create_agent(
@@ -267,7 +267,7 @@ def create_bot_agent(model, tools: list, context_schema, checkpointer=None):
     return agent
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Role-Gated Tools
+### 3. Role-Gated Tools
 
 If the tool should only be available to certain roles:
 
@@ -275,51 +275,51 @@ If the tool should only be available to certain roles:
 from telegram_bot.agents.manager_tools import build_tools_for_role
 
 def get_all_tools(ctx: BotContext) -> list:
-    tools = [rag_search, history_search]  ***REMOVED*** Base tools
+    tools = [rag_search, history_search]  # Base tools
 
-    ***REMOVED*** Add role-specific tools
+    # Add role-specific tools
     if ctx.role == "manager":
         tools.append(my_manager_only_tool)
 
     return tools
 ```
 
-***REMOVED******REMOVED*** Adding a New Query Type
+## Adding a New Query Type
 
-***REMOVED******REMOVED******REMOVED*** 1. Define the Type
+### 1. Define the Type
 
 In `telegram_bot/graph/nodes/classify.py` or query classification logic:
 
 ```python
-***REMOVED*** Add to query type enum/mapping
+# Add to query type enum/mapping
 QUERY_TYPES = ["CHITCHAT", "OFF_TOPIC", "SIMPLE", "GENERAL", "FAQ", "ENTITY", "STRUCTURED", "COMPLEX", "MY_NEW_TYPE"]
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Handle in Classification
+### 2. Handle in Classification
 
 Update the classification logic to assign your new type based on query characteristics.
 
-***REMOVED******REMOVED******REMOVED*** 3. Update Cache Thresholds
+### 3. Update Cache Thresholds
 
 In `telegram_bot/integrations/cache.py`:
 
 ```python
 self.cache_thresholds = cache_thresholds or {
-    ***REMOVED*** ... existing types ...
-    "MY_NEW_TYPE": 0.08,  ***REMOVED*** Appropriate threshold
+    # ... existing types ...
+    "MY_NEW_TYPE": 0.08,  # Appropriate threshold
 }
 ```
 
-***REMOVED******REMOVED******REMOVED*** 4. Handle in Pipeline Routing
+### 4. Handle in Pipeline Routing
 
 In `telegram_bot/pipelines/client.py` or routing logic:
 
 ```python
-***REMOVED*** Determine if query type affects pipeline behavior
+# Determine if query type affects pipeline behavior
 _PIPELINE_STORE_TYPES = {"FAQ", "GENERAL", "ENTITY", "MY_NEW_TYPE"}
 ```
 
-***REMOVED******REMOVED*** Adding a New Ingestion Source
+## Adding a New Ingestion Source
 
 The ingestion pipeline lives in `src/ingestion/unified/` and uses CocoIndex flows for orchestration with Docling for document parsing.
 
@@ -331,11 +331,11 @@ To add a new source:
 
 For the full ingestion architecture (flow structure, parsing, chunking, vector upsert/delete, and troubleshooting), see [INGESTION.md](INGESTION.md).
 
-***REMOVED******REMOVED*** Dependencies and Dependency Injection
+## Dependencies and Dependency Injection
 
 Nodes receive dependencies through `runtime.context`, which provides a typed `GraphContext` dictionary.
 
-***REMOVED******REMOVED******REMOVED*** Available Dependencies
+### Available Dependencies
 
 | Dependency | How to Access | Purpose |
 |------------|---------------|---------|
@@ -346,18 +346,18 @@ Nodes receive dependencies through `runtime.context`, which provides a typed `Gr
 | `reranker` | `runtime.context["reranker"]` | Optional reranker hook; ColBERT runs server-side through Qdrant in normal runtime |
 | `message` | `runtime.context["message"]` | aiogram Message (voice path only) |
 
-***REMOVED******REMOVED******REMOVED*** Adding New Dependencies
+### Adding New Dependencies
 
 1. Define in `GraphContext` (`telegram_bot/graph/context.py`)
 2. Pass to `build_graph()` in `PropertyBot.__init__()`
 3. Nodes access via `runtime.context["your_dependency"]`
 
-***REMOVED******REMOVED*** Testing New Nodes and Tools
+## Testing New Nodes and Tools
 
-***REMOVED******REMOVED******REMOVED*** Unit Test Pattern
+### Unit Test Pattern
 
 ```python
-***REMOVED*** tests/unit/telegram_bot/graph/test_your_node.py
+# tests/unit/telegram_bot/graph/test_your_node.py
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -382,10 +382,10 @@ async def test_your_node(mock_state, mock_runtime):
     assert "your_field" in result
 ```
 
-***REMOVED******REMOVED******REMOVED*** Integration Test Pattern
+### Integration Test Pattern
 
 ```python
-***REMOVED*** tests/integration/test_graph_paths.py
+# tests/integration/test_graph_paths.py
 @pytest.mark.asyncio
 async def test_node_in_graph():
     graph = build_graph(...)
@@ -394,7 +394,7 @@ async def test_node_in_graph():
     assert result.get("field_name") == expected
 ```
 
-***REMOVED******REMOVED******REMOVED*** Testing Checklist
+### Testing Checklist
 
 - [ ] Unit test covers the happy path
 - [ ] Unit test covers error/empty-input cases
@@ -402,7 +402,7 @@ async def test_node_in_graph():
 - [ ] `make check` passes (Ruff lint + MyPy)
 - [ ] `make test-unit` passes
 
-***REMOVED******REMOVED*** Best Practices
+## Best Practices
 
 1. **Always return a dict** -- nodes must return fields to update in state
 2. **Use `@observe`** -- add Langfuse tracing for observability

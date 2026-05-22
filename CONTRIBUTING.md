@@ -1,46 +1,46 @@
-***REMOVED*** Contributing
+# Contributing
 
 Thank you for your interest in contributing.
 
-***REMOVED******REMOVED*** Getting Started
+## Getting Started
 
 - Read [`README.md`](README.md) for project overview.
 - Follow [`docs/ONBOARDING.md`](docs/ONBOARDING.md) for the full onboarding guide.
 - See [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) for day-to-day development workflow.
 
-***REMOVED******REMOVED*** Development Workflow
+## Development Workflow
 
 1. Create a branch from `dev` for your changes.
 2. Make focused changes with clear commit messages.
 3. Run the local verification ladder before pushing:
 
 ```bash
-make pre-push          ***REMOVED*** lint + format-check
-make check             ***REMOVED*** alias: lint + type-check
+make pre-push          # lint + format-check
+make check             # alias: lint + type-check
 uv run pytest tests/unit -q
 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
 ```
 
 4. Open a pull request against `dev`.
 
-***REMOVED******REMOVED*** What Not to Commit
+## What Not to Commit
 
 - `.env` or any file containing real credentials
 - generated artifacts, logs, or local session data
 - Real datasets, personal recordings, or client exports
 - Production deploy scripts or VPS/SSH keys
 
-***REMOVED******REMOVED*** Code of Conduct
+## Code of Conduct
 
 This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
-***REMOVED******REMOVED*** Safe Boundaries
+## Safe Boundaries
 
 - Do not run production or CRM write flows without maintainer approval.
 - Use fake/demo credentials for local development and testing.
 - Treat Telegram, Kommo, Langfuse, LiveKit, and cloud credentials as external secrets.
 
-***REMOVED******REMOVED*** Questions
+## Questions
 
 - For general questions, open a public discussion or issue.
 - For security concerns, see [`SECURITY.md`](SECURITY.md).

@@ -1,4 +1,4 @@
-***REMOVED*** VPS Google Drive Ingestion Recovery
+# VPS Google Drive Ingestion Recovery
 
 Use this VPS-only runbook when `gdrive_documents_bge` exists but stays empty,
 or when ingestion reports `No input data`.
@@ -8,7 +8,7 @@ or when ingestion reports `No input data`.
 > Replace these with your actual deployment paths. For local development, use
 > [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md) instead.
 
-***REMOVED******REMOVED*** Expected Contract
+## Expected Contract
 
 The production path is:
 
@@ -18,12 +18,12 @@ Google Drive -> rclone sync on host -> GDRIVE_SYNC_DIR -> /data/drive-sync in co
 
 If the host sync directory is missing or empty, Qdrant may still have a valid collection with `0 points`.
 
-***REMOVED******REMOVED*** 1. Check Host Environment
+## 1. Check Host Environment
 
 Confirm required variables are present without printing secret-bearing files:
 
 ```bash
-for file in .env /etc/<project>/rclone-sync.env; do  ***REMOVED*** deployment-specific path; replace with your actual path
+for file in .env /etc/<project>/rclone-sync.env; do  # deployment-specific path; replace with your actual path
   sudo test -r "$file" && echo "$file: present" || echo "$file: MISSING"
 done
 
@@ -38,7 +38,7 @@ The paths in `.env`, cron env, and Compose must point to the same host files.
 If you need to compare actual values during an incident, do it in a private
 shell and redact paths/tokens from notes and tickets.
 
-***REMOVED******REMOVED*** 2. Verify The Host Sync Directory
+## 2. Verify The Host Sync Directory
 
 ```bash
 ls -la "$GDRIVE_SYNC_DIR"
@@ -50,7 +50,7 @@ Failure modes:
 - Path exists but is empty: rclone is not syncing data.
 - Path contains only manifest/log files: remote or allowlist is wrong.
 
-***REMOVED******REMOVED*** 3. Verify rclone Directly
+## 3. Verify rclone Directly
 
 ```bash
 rclone ls "$RCLONE_REMOTE" --config "$RCLONE_CONFIG_FILE"
@@ -61,7 +61,7 @@ tail -100 /var/log/<project>/rclone-manifest.log
 
 If `rclone ls` fails, fix credentials, folder sharing, or `root_folder_id` before touching ingestion.
 
-***REMOVED******REMOVED*** 4. Verify The Container Mount
+## 4. Verify The Container Mount
 
 ```bash
 docker compose exec ingestion sh -lc 'ls -la /data/drive-sync && find /data/drive-sync -maxdepth 2 -type f | head -50'
@@ -71,7 +71,7 @@ Interpretation:
 - Host path has files, container path empty: bind mount contract is broken.
 - Both host and container are empty: sync is the root cause.
 
-***REMOVED******REMOVED*** 5. Verify Preflight And Bootstrap
+## 5. Verify Preflight And Bootstrap
 
 ```bash
 make ingest-unified-preflight
@@ -81,7 +81,7 @@ make ingest-unified-status
 
 `preflight` should now fail early if `GDRIVE_SYNC_DIR` is missing or invalid.
 
-***REMOVED******REMOVED*** 6. Verify Qdrant From The Correct Network
+## 6. Verify Qdrant From The Correct Network
 
 If `localhost:6333` on the VPS host is not published, query Qdrant from Docker instead:
 
@@ -92,7 +92,7 @@ docker compose exec qdrant curl -fsS http://localhost:6333/collections/gdrive_do
 
 Do not treat a missing host port as proof that the collection is absent.
 
-***REMOVED******REMOVED*** 7. Re-run Ingestion
+## 7. Re-run Ingestion
 
 Once the sync directory is populated:
 
@@ -108,7 +108,7 @@ Then verify point counts:
 docker compose exec qdrant curl -fsS http://localhost:6333/collections/gdrive_documents_bge
 ```
 
-***REMOVED******REMOVED*** Fast Diagnosis Matrix
+## Fast Diagnosis Matrix
 
 | Symptom | Likely Cause | First Check |
 |---------|--------------|-------------|

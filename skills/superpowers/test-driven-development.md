@@ -1,4 +1,4 @@
-***REMOVED*** Skill: test-driven-development
+# Skill: test-driven-development
 
 Use for features, bug fixes, refactors, and behavior changes.
 

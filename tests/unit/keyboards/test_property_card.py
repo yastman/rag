@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/keyboards/test_property_card.py
+# tests/unit/keyboards/test_property_card.py
 """Tests for property card rendering."""
 
 import pytest
@@ -30,9 +30,9 @@ def test_build_card_buttons():
 
     kb = build_card_buttons(property_id="p1")
     assert isinstance(kb, InlineKeyboardMarkup)
-    ***REMOVED*** Row 1: 2 buttons (favorite + manager)
+    # Row 1: 2 buttons (favorite + manager)
     assert len(kb.inline_keyboard[0]) == 2
-    ***REMOVED*** Row 2: 1 button (viewing)
+    # Row 2: 1 button (viewing)
     assert len(kb.inline_keyboard[1]) == 1
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "card:viewing:p1" in callbacks
@@ -46,9 +46,9 @@ def test_build_card_buttons_default_not_favorited():
 
     kb = build_card_buttons(property_id="p1")
     assert isinstance(kb, InlineKeyboardMarkup)
-    ***REMOVED*** Row 1: 2 buttons (favorite + manager)
+    # Row 1: 2 buttons (favorite + manager)
     assert len(kb.inline_keyboard[0]) == 2
-    ***REMOVED*** Row 2: 1 button (viewing)
+    # Row 2: 1 button (viewing)
     assert len(kb.inline_keyboard[1]) == 1
     assert len(kb.inline_keyboard) == 2
 
@@ -66,7 +66,7 @@ def test_build_card_buttons_favorited():
     assert "fav:add:p1" not in callbacks
 
 
-***REMOVED*** --- Task 10: Redesigned card buttons layout ---
+# --- Task 10: Redesigned card buttons layout ---
 
 
 class TestCardButtonsRedesign:
@@ -74,8 +74,8 @@ class TestCardButtonsRedesign:
         """Раскладка: [В избранное][Менеджеру] + [На осмотр]."""
         kb = build_card_buttons("apt-1")
         assert len(kb.inline_keyboard) == 2
-        assert len(kb.inline_keyboard[0]) == 2  ***REMOVED*** избранное + менеджер
-        assert len(kb.inline_keyboard[1]) == 1  ***REMOVED*** осмотр
+        assert len(kb.inline_keyboard[0]) == 2  # избранное + менеджер
+        assert len(kb.inline_keyboard[1]) == 1  # осмотр
 
     def test_first_row_favorite_then_manager(self):
         kb = build_card_buttons("apt-1")
@@ -87,7 +87,7 @@ class TestCardButtonsRedesign:
         assert "На осмотр" in kb.inline_keyboard[1][0].text
 
 
-***REMOVED*** --- Task 11: build_results_footer removed ---
+# --- Task 11: build_results_footer removed ---
 
 
 class TestOldFooterRemoved:
@@ -100,7 +100,7 @@ class TestOldFooterRemoved:
         )
 
 
-***REMOVED*** --- format_promotion_card ---
+# --- format_promotion_card ---
 
 
 class TestPromotionCard:
@@ -171,7 +171,7 @@ class TestPromotionCard:
         assert "-0%" in card
 
 
-***REMOVED*** --- Edge-case regression tests ---
+# --- Edge-case regression tests ---
 
 
 def test_format_property_card_zero_price():
@@ -188,7 +188,7 @@ def test_format_property_card_zero_price():
     assert "0" in card
 
 
-***REMOVED*** --- send_property_card (Task 14 DRY) ---
+# --- send_property_card (Task 14 DRY) ---
 
 
 @pytest.mark.asyncio

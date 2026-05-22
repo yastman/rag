@@ -21,7 +21,7 @@ from sentence_transformers import SentenceTransformer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Global model instance
+# Global model instance
 model: SentenceTransformer | None = None
 MODEL_NAME = "deepvk/USER2-base"
 EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "pytorch").lower()
@@ -67,7 +67,7 @@ def _load_model() -> SentenceTransformer:
 
     if EMBEDDING_BACKEND == "onnx":
         try:
-            import onnxruntime  ***REMOVED*** noqa: F401
+            import onnxruntime  # noqa: F401
 
             logger.info(f"Loading {MODEL_NAME} with ONNX backend...")
             m = SentenceTransformer(MODEL_NAME, backend="onnx")

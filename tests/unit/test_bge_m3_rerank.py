@@ -29,8 +29,8 @@ def bge_rerank_app():
         mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
         yield
-        ***REMOVED*** Clean up cached service imports (not mocks — real modules imported
-        ***REMOVED*** via syspath_prepend that shouldn't leak to other test files).
+        # Clean up cached service imports (not mocks — real modules imported
+        # via syspath_prepend that shouldn't leak to other test files).
         for mod in ("app", "config"):
             sys.modules.pop(mod, None)
 
@@ -42,7 +42,7 @@ class TestRerankEndpoint:
         """Test RerankRequest validates input."""
         from app import RerankRequest
 
-        ***REMOVED*** Valid request
+        # Valid request
         req = RerankRequest(
             query="test query",
             documents=["doc1", "doc2"],
@@ -66,7 +66,7 @@ class TestRerankEndpoint:
         """Test MaxSim scoring function."""
         from app import compute_maxsim_scores
 
-        ***REMOVED*** Mock ColBERT vectors: query (2 tokens x 4 dim), doc (3 tokens x 4 dim)
+        # Mock ColBERT vectors: query (2 tokens x 4 dim), doc (3 tokens x 4 dim)
         query_vecs = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], dtype=np.float32)
         doc_vecs = [
             np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=np.float32),
@@ -75,7 +75,7 @@ class TestRerankEndpoint:
 
         scores = compute_maxsim_scores(query_vecs, doc_vecs)
 
-        ***REMOVED*** Doc 0: token0 matches perfectly (1.0), token1 no match (0.0) → sum=1.0
-        ***REMOVED*** Doc 1: token0 no match (0.0), token1 matches (1.0) → sum=1.0
+        # Doc 0: token0 matches perfectly (1.0), token1 no match (0.0) → sum=1.0
+        # Doc 1: token0 no match (0.0), token1 matches (1.0) → sum=1.0
         assert len(scores) == 2
         assert all(isinstance(s, float) for s in scores)

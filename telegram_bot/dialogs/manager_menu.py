@@ -27,7 +27,7 @@ from .states import (
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Maps button widget_id -> query text sent to agent
+# Maps button widget_id -> query text sent to agent
 _BUTTON_QUERIES: dict[str, str] = {
     "mgr_search": "Поиск по базе знаний",
 }
@@ -88,7 +88,7 @@ manager_menu_dialog = Dialog(
     Window(
         Format("{greeting}"),
         Column(
-            ***REMOVED*** 4 CRM entity categories
+            # 4 CRM entity categories
             Start(
                 Format("{btn_leads}"),
                 id="mgr_leads",
@@ -109,7 +109,7 @@ manager_menu_dialog = Dialog(
                 id="mgr_note",
                 state=CreateNoteSG.text,
             ),
-            ***REMOVED*** 3 tools
+            # 3 tools
             Start(
                 Format("{btn_ai_advisor}"),
                 id="mgr_ai_advisor",

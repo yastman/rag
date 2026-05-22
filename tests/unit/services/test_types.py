@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/services/test_types.py
+# tests/unit/services/test_types.py
 """Tests for telegram_bot/services/types.py — PipelineResult frozen dataclass."""
 
 import dataclasses
@@ -78,29 +78,29 @@ class TestPipelineResultImmutability:
 
         result = PipelineResult(answer="original")
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
-            result.answer = "modified"  ***REMOVED*** type: ignore[misc]
+            result.answer = "modified"  # type: ignore[misc]
 
     def test_frozen_cannot_set_needs_agent(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
-            result.needs_agent = True  ***REMOVED*** type: ignore[misc]
+            result.needs_agent = True  # type: ignore[misc]
 
     def test_frozen_cannot_set_cache_hit(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
-            result.cache_hit = True  ***REMOVED*** type: ignore[misc]
+            result.cache_hit = True  # type: ignore[misc]
 
     def test_frozen_cannot_add_new_attribute(self):
         from telegram_bot.services.types import PipelineResult
 
         result = PipelineResult()
-        ***REMOVED*** slots=True prevents __dict__, so assignment raises TypeError or FrozenInstanceError
+        # slots=True prevents __dict__, so assignment raises TypeError or FrozenInstanceError
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
-            result.new_field = "value"  ***REMOVED*** type: ignore[attr-defined]
+            result.new_field = "value"  # type: ignore[attr-defined]
 
     def test_is_dataclass(self):
         from telegram_bot.services.types import PipelineResult

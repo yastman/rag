@@ -46,10 +46,10 @@ def _create_voyage_client(api_key: str):
     return voyageai.Client(api_key=api_key)
 
 
-***REMOVED*** Voyage AI is loaded lazily (***REMOVED***1773): the package is an optional extra and
-***REMOVED*** must not be imported at module load time. We retry on transient Voyage SDK
-***REMOVED*** errors by exception class name so the retry decorators do not need
-***REMOVED*** `voyageai.error.*` imports.
+# Voyage AI is loaded lazily (#1773): the package is an optional extra and
+# must not be imported at module load time. We retry on transient Voyage SDK
+# errors by exception class name so the retry decorators do not need
+# `voyageai.error.*` imports.
 _VOYAGE_RETRYABLE_ERRORS = frozenset({"RateLimitError", "ServiceUnavailableError", "Timeout"})
 
 
@@ -86,10 +86,10 @@ class ContextualizedEmbeddingService:
 
     Example:
         >>> service = ContextualizedEmbeddingService(api_key="...")
-        >>> ***REMOVED*** Document with 3 chunks
+        >>> # Document with 3 chunks
         >>> doc_chunks = [["intro", "body", "conclusion"]]
         >>> result = await service.embed_documents(doc_chunks)
-        >>> ***REMOVED*** result.embeddings has 3 vectors, one per chunk
+        >>> # result.embeddings has 3 vectors, one per chunk
 
     Best practices:
         - Chunks should NOT overlap (different from standard RAG chunking)
@@ -97,16 +97,16 @@ class ContextualizedEmbeddingService:
         - Keep documents under 32K tokens
     """
 
-    ***REMOVED*** Model name for contextualized embeddings
+    # Model name for contextualized embeddings
     MODEL_NAME = "voyage-context-3"
 
-    ***REMOVED*** API limits
+    # API limits
     MAX_DOCUMENTS_PER_REQUEST = 1000
     MAX_CHUNKS_PER_REQUEST = 16000
     MAX_TOKENS_PER_DOCUMENT = 32000
     MAX_TOTAL_TOKENS = 120000
 
-    ***REMOVED*** Supported output dimensions (Matryoshka)
+    # Supported output dimensions (Matryoshka)
     SUPPORTED_DIMS = (2048, 1024, 512, 256)
     DEFAULT_DIM = 1024
 
@@ -172,10 +172,10 @@ class ContextualizedEmbeddingService:
         Raises:
             ValueError: If input exceeds API limits
         """
-        ***REMOVED*** Validate inputs
+        # Validate inputs
         self._validate_inputs(document_chunks)
 
-        ***REMOVED*** Update Langfuse with input metadata
+        # Update Langfuse with input metadata
         total_chunks = sum(len(doc) for doc in document_chunks)
         get_client().update_current_generation(
             model=self.MODEL_NAME,
@@ -192,7 +192,7 @@ class ContextualizedEmbeddingService:
                 embeddings=[], total_tokens=0, chunks_per_document=[]
             )
 
-        ***REMOVED*** Call Voyage API
+        # Call Voyage API
         response = await asyncio.to_thread(
             self._client.contextualized_embed,
             inputs=document_chunks,
@@ -202,18 +202,18 @@ class ContextualizedEmbeddingService:
             output_dtype=self._output_dtype,
         )
 
-        ***REMOVED*** Flatten embeddings from results
+        # Flatten embeddings from results
         all_embeddings: list[list[float]] = []
         chunks_per_doc: list[int] = []
 
         for result in response.results:
-            all_embeddings.extend(result.embeddings)  ***REMOVED*** type: ignore[arg-type]
+            all_embeddings.extend(result.embeddings)  # type: ignore[arg-type]
             chunks_per_doc.append(len(result.embeddings))
 
-        ***REMOVED*** Get token usage
+        # Get token usage
         total_tokens = getattr(response, "total_tokens", 0)
 
-        ***REMOVED*** Update Langfuse with output metadata
+        # Update Langfuse with output metadata
         get_client().update_current_generation(
             usage_details={"input": total_tokens},
             output={
@@ -252,14 +252,14 @@ class ContextualizedEmbeddingService:
         Returns:
             Single embedding vector
         """
-        ***REMOVED*** Update Langfuse with input metadata
+        # Update Langfuse with input metadata
         get_client().update_current_generation(
             model=self.MODEL_NAME,
             input={"query": query[:200], "output_dimension": self._output_dimension},
             metadata={"model": self.MODEL_NAME},
         )
 
-        ***REMOVED*** Wrap query in expected format: [[query]]
+        # Wrap query in expected format: [[query]]
         response = await asyncio.to_thread(
             self._client.contextualized_embed,
             inputs=[[query]],
@@ -269,10 +269,10 @@ class ContextualizedEmbeddingService:
             output_dtype=self._output_dtype,
         )
 
-        embedding: list[float] = response.results[0].embeddings[0]  ***REMOVED*** type: ignore[assignment]
+        embedding: list[float] = response.results[0].embeddings[0]  # type: ignore[assignment]
         total_tokens = getattr(response, "total_tokens", 0)
 
-        ***REMOVED*** Update Langfuse with output metadata
+        # Update Langfuse with output metadata
         get_client().update_current_generation(
             usage_details={"input": total_tokens},
             output={"dimensions": len(embedding)},
@@ -299,11 +299,11 @@ class ContextualizedEmbeddingService:
         Returns:
             List of embedding vectors (one per query)
         """
-        ***REMOVED*** Validate inputs
+        # Validate inputs
         if not queries:
             return []
 
-        ***REMOVED*** Update Langfuse with input metadata
+        # Update Langfuse with input metadata
         get_client().update_current_generation(
             model=self.MODEL_NAME,
             input={
@@ -313,7 +313,7 @@ class ContextualizedEmbeddingService:
             metadata={"model": self.MODEL_NAME},
         )
 
-        ***REMOVED*** Wrap each query in its own list: [["q1"], ["q2"], ...]
+        # Wrap each query in its own list: [["q1"], ["q2"], ...]
         inputs = [[q] for q in queries]
 
         response = await asyncio.to_thread(
@@ -327,11 +327,11 @@ class ContextualizedEmbeddingService:
 
         embeddings: list[list[float]] = [
             [float(value) for value in result.embeddings[0]]
-            for result in response.results  ***REMOVED*** type: ignore[misc]
+            for result in response.results  # type: ignore[misc]
         ]
         total_tokens = getattr(response, "total_tokens", 0)
 
-        ***REMOVED*** Update Langfuse with output metadata
+        # Update Langfuse with output metadata
         get_client().update_current_generation(
             usage_details={"input": total_tokens},
             output={
@@ -366,7 +366,7 @@ class ContextualizedEmbeddingService:
         if total_chunks > self.MAX_CHUNKS_PER_REQUEST:
             raise ValueError(f"Too many chunks: {total_chunks} > {self.MAX_CHUNKS_PER_REQUEST}")
 
-    ***REMOVED*** Sync wrappers for compatibility
+    # Sync wrappers for compatibility
 
     def embed_documents_sync(
         self,

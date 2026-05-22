@@ -1,4 +1,4 @@
-***REMOVED*** Runbook: Redis Cache Degradation
+# Runbook: Redis Cache Degradation
 
 > **Owner:** Retrieval & Cache subsystems
 > **Last verified:** 2026-05-12
@@ -9,14 +9,14 @@
 
 Use this runbook when Redis cache issues affect RAG performance.
 
-***REMOVED******REMOVED*** Symptoms
+## Symptoms
 
 - Semantic cache not working (all queries miss)
 - High latency despite cache hits
 - Cache commands timing out
 - `Redis connection refused` errors
 
-***REMOVED******REMOVED*** Service / Container Map
+## Service / Container Map
 
 | Compose service | Typical container names |
 |---|---|
@@ -32,7 +32,7 @@ Use this runbook when Redis cache issues affect RAG performance.
 | `redis` app-cache | Cache service used by bot runtime, cache manager, and LangGraph |
 | `redis-langfuse` | Langfuse internal telemetry cache/storage |
 
-***REMOVED******REMOVED*** Cache Tiers in the App
+## Cache Tiers in the App
 
 - RedisVL **SemanticCache**: `sem:v8:bge1024`
 - RedisVL **EmbeddingsCache**: `embeddings:v5` (dense vectors and BGE-M3 query-bundle payload)
@@ -40,24 +40,24 @@ Use this runbook when Redis cache issues affect RAG performance.
 
 BGE-M3 query-bundle optimization uses **RedisVL EmbeddingsCache** for dense vectors and stores sparse/ColBERT parts as metadata in the same payload. It is still an app-level cache optimization; retrieval remains in Qdrant.
 
-***REMOVED******REMOVED*** Fast-Path Diagnosis (read-only)
+## Fast-Path Diagnosis (read-only)
 
 Run these commands before deciding whether the issue is a service failure or an application bug.
 
-***REMOVED******REMOVED******REMOVED*** 1. Container health and reachability
+### 1. Container health and reachability
 
 ```bash
-***REMOVED*** Check service status with deterministic CI env (read-only, no local .env required)
+# Check service status with deterministic CI env (read-only, no local .env required)
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps redis
 
-***REMOVED*** Test Redis connection from inside the container
+# Test Redis connection from inside the container
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'
 ```
 
 Expected: `PONG`.
 If this fails, treat as **service failure** (container down, network partition, or auth misconfiguration at the Compose level).
 
-***REMOVED******REMOVED******REMOVED*** 1b. Verify container/runtime version before conclusions
+### 1b. Verify container/runtime version before conclusions
 
 ```bash
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" INFO server | grep "^redis_version"'
@@ -66,10 +66,10 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 
 Run both commands independently and compare output before concluding a cache failure is app-Redis-specific.
 
-***REMOVED******REMOVED******REMOVED*** 2. Read-only keyspace and memory inspection
+### 2. Read-only keyspace and memory inspection
 
 ```bash
-***REMOVED*** Check key count and memory without scanning all keys
+# Check key count and memory without scanning all keys
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" DBSIZE'
 
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" INFO memory'
@@ -80,7 +80,7 @@ Look for:
 - `maxmemory` — verify against the `redis` service definition in [`compose.yml`](../../compose.yml) and dev overrides in [`compose.dev.yml`](../../compose.dev.yml); canonical values are in [`DOCKER.md`](../../DOCKER.md)
 - `evicted_keys` > 0 — confirms aggressive eviction due to memory pressure
 
-***REMOVED******REMOVED******REMOVED*** 3. Logs (read-only)
+### 3. Logs (read-only)
 
 ```bash
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml logs redis --tail=200
@@ -91,7 +91,7 @@ Check for:
 - Auth failures (`WRONGPASS`)
 - Persistence errors (`Can't save in background`)
 
-***REMOVED******REMOVED*** Service Failure vs App Bug
+## Service Failure vs App Bug
 
 | Observation | Interpretation | Next step |
 |---|---|---|
@@ -103,7 +103,7 @@ Check for:
 | High latency **with** cache hits | App bug | Profile embedding or rerank tiers; latency may be upstream of Redis |
 | Only specific tiers miss (e.g. `search` hits, `semantic` misses) | App bug | Inspect tier-specific TTLs and `distance_threshold` in source |
 
-***REMOVED******REMOVED******REMOVED*** Cache Smoke Validation (for cache-hit health)
+### Cache Smoke Validation (for cache-hit health)
 
 Use a canonical query twice, once with a cleared cache and once immediately after:
 
@@ -114,7 +114,7 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
    - no new LLM generation spans for the same response path.
    - no new `results_count=0` / `no_results=1` score-like writes.
 
-***REMOVED******REMOVED*** Source Paths
+## Source Paths
 
 | Component | Path |
 |---|---|
@@ -123,7 +123,7 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
 | Dev overrides (ports, memory, password) | [`compose.dev.yml`](../../compose.dev.yml) |
 | CI env fixture (deterministic interpolation) | [`tests/fixtures/compose.ci.env`](../../tests/fixtures/compose.ci.env) |
 
-***REMOVED******REMOVED*** Logs and Artifacts
+## Logs and Artifacts
 
 | Artifact | Location / command |
 |---|---|
@@ -132,11 +132,11 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
 | Bot cache metrics | Exposed via bot `/stats` command or Langfuse spans tagged `cache-semantic-check` |
 | Memory trend | `INFO memory` sampled over time; sudden spikes correlate with ingestion batch writes |
 
-***REMOVED******REMOVED*** Remediation
+## Remediation
 
 > ⚠️ **Caution:** Commands in this section mutate state. Run only after fast-path diagnosis confirms the issue is not an app bug.
 
-***REMOVED******REMOVED******REMOVED*** Redis Connection Refused
+### Redis Connection Refused
 
 1. Check if the Redis container is running:
    ```bash
@@ -153,7 +153,7 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -h redis -a "$REDIS_PASSWORD" ping'
    ```
 
-***REMOVED******REMOVED******REMOVED*** Local `REDIS_PASSWORD` Drift After `.env` Change
+### Local `REDIS_PASSWORD` Drift After `.env` Change
 
 When local bot preflight reports auth failures (`invalid username-password pair`, `WRONGPASS`, `NOAUTH`), your running Redis container may still use the previous password.
 
@@ -166,7 +166,7 @@ When local bot preflight reports auth failures (`invalid username-password pair`
    make test-bot-health
    ```
 
-***REMOVED******REMOVED******REMOVED*** Cache Corruption or Version Drift
+### Cache Corruption or Version Drift
 
 If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_CACHE_VERSION`:
 
@@ -189,7 +189,7 @@ If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_C
 
 > **Avoid `KEYS *`** in production or large keyspaces. The `CacheLayerManager.clear_by_tier()` and `clear_semantic_cache()` methods use `SCAN` iteratively instead.
 
-***REMOVED******REMOVED******REMOVED*** Memory Issues
+### Memory Issues
 
 1. Check memory usage:
    ```bash
@@ -201,7 +201,7 @@ If cache data appears corrupted or keys use an old `CACHE_VERSION` / `SEMANTIC_C
    - Reducing exact-cache TTLs in `telegram_bot/integrations/cache.py` (`DEFAULT_TTLS`)
    - Clearing old cache entries via tiered `clear_by_tier()`
 
-***REMOVED******REMOVED*** Impact on Users
+## Impact on Users
 
 When Redis is down:
 - **Semantic cache unavailable** — queries still work but no cache hits
@@ -210,14 +210,14 @@ When Redis is down:
 
 The system degrades gracefully — users still get responses, just without cache benefits.
 
-***REMOVED******REMOVED*** Prevention
+## Prevention
 
 - Monitor Redis memory: `redis-cli INFO memory`
 - Set up alerting for `Redis connection refused` errors
 - Regular cache health checks via `/stats` command
 - Keep `compose.yml` and `compose.dev.yml` memory limits within host capacity
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [Qdrant Troubleshooting](QDRANT_TROUBLESHOOTING.md)
 - [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md)

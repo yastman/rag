@@ -1,11 +1,11 @@
-***REMOVED*** Unit E2E Adapter Test Index
+# Unit E2E Adapter Test Index
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Unit tests that validate end-to-end contracts and adapter behavior without
 running the full external-service E2E suite.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 - `test_passthrough_judge.py`
 - `test_langfuse_trace_validator.py`
@@ -16,6 +16,6 @@ running the full external-service E2E suite.
 - `test_corpus_e2e_config.py`
 - `test_qdrant_preflight.py`
 
-***REMOVED******REMOVED*** Parent
+## Parent
 
 - [Tests](../../README.md)

@@ -18,9 +18,9 @@ from telegram_bot.preflight import (
 from telegram_bot.startup_status import StartupReport
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_config(**overrides) -> MagicMock:
@@ -41,9 +41,9 @@ def _make_config(**overrides) -> MagicMock:
     return cfg
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** PreflightError
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# PreflightError
+# ===========================================================================
 
 
 class TestPreflightError:
@@ -91,9 +91,9 @@ class TestColbertCoverageWarnThreshold:
         assert value == pytest.approx(0.87)
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** _check_redis_deep
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# _check_redis_deep
+# ===========================================================================
 
 
 class TestCheckRedisDeep:
@@ -252,9 +252,9 @@ class TestPostgresRemediation:
         assert "compose.yml:compose.dev.yml" in caplog.text
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** _verify_cache_synthetic
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# _verify_cache_synthetic
+# ===========================================================================
 
 
 class TestVerifyCacheSynthetic:
@@ -327,9 +327,9 @@ class TestVerifyCacheSynthetic:
         assert any("delete returned 0" in e for e in errors)
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** _check_single_dep
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# _check_single_dep
+# ===========================================================================
 
 
 class TestCheckSingleDep:
@@ -520,9 +520,9 @@ class TestCheckSingleDep:
         assert result is False
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** check_dependencies (orchestrator)
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# check_dependencies (orchestrator)
+# ===========================================================================
 
 
 class TestCheckDependencies:
@@ -585,7 +585,7 @@ class TestCheckDependencies:
             results = await check_dependencies(config)
 
         assert results["langfuse"] is False
-        ***REMOVED*** No PreflightError raised — optional deps don't block
+        # No PreflightError raised — optional deps don't block
 
     async def test_retry_logic_first_fail_second_pass(self):
         """Test that tenacity retry in _check_critical_with_retry eventually passes."""
@@ -594,7 +594,7 @@ class TestCheckDependencies:
 
         async def fake_check(name, cfg, client):
             call_counts[name] = call_counts.get(name, 0) + 1
-            ***REMOVED*** qdrant fails first attempt, passes second
+            # qdrant fails first attempt, passes second
             return not (name == "qdrant" and call_counts[name] < 2)
 
         with (
@@ -604,7 +604,7 @@ class TestCheckDependencies:
             results = await check_dependencies(config)
 
         assert results["qdrant"] is True
-        assert call_counts["qdrant"] == 2  ***REMOVED*** retried once
+        assert call_counts["qdrant"] == 2  # retried once
 
     async def test_redis_cache_skipped_when_redis_fails(self):
         config = _make_config()
@@ -639,14 +639,14 @@ class TestCheckDependencies:
         assert "bge_m3" in exc_info.value.failed_deps
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** PostgreSQL preflight check
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# PostgreSQL preflight check
+# ===========================================================================
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** Qdrant vector name validation
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# Qdrant vector name validation
+# ===========================================================================
 
 
 class TestQdrantVectorValidation:
@@ -788,9 +788,9 @@ class TestQdrantVectorValidation:
             assert result is False
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** Qdrant preflight client config
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# Qdrant preflight client config
+# ===========================================================================
 
 
 class TestQdrantPreflightClient:
@@ -882,9 +882,9 @@ class TestPostgresOptionalBehavior:
         assert results["postgres"] is False
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** Qdrant preflight: auto-create missing collection
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# Qdrant preflight: auto-create missing collection
+# ===========================================================================
 
 
 class TestQdrantPreflightEnsureCollection:

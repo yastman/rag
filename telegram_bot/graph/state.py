@@ -44,7 +44,7 @@ class RAGState(TypedDict):
     score_improved: bool
     retrieval_backend_error: bool
     retrieval_error_type: str | None
-    ***REMOVED*** Embedding resilience (***REMOVED***210)
+    # Embedding resilience (#210)
     embedding_error: bool
     embedding_error_type: str | None
     rewrite_provider_model: str
@@ -53,7 +53,7 @@ class RAGState(TypedDict):
     llm_response_duration_ms: float
     llm_stream_only_ttft_ms: float | None
     llm_ttft_drift_ms: float | None
-    ***REMOVED*** Latency breakdown (***REMOVED***147)
+    # Latency breakdown (#147)
     llm_decode_ms: float | None
     llm_tps: float | None
     llm_queue_ms: float | None
@@ -62,38 +62,38 @@ class RAGState(TypedDict):
     llm_timeout: bool
     llm_stream_recovery: bool
     streaming_enabled: bool
-    ***REMOVED*** Response length control (***REMOVED***129)
+    # Response length control (#129)
     response_style: str
     response_difficulty: str
     response_style_reasoning: str
     answer_words: int
     answer_chars: int
     answer_to_question_ratio: float
-    ***REMOVED*** Voice transcription (***REMOVED***151)
+    # Voice transcription (#151)
     voice_audio: bytes | None
     voice_duration_s: float | None
     stt_text: str | None
     stt_duration_ms: float | None
-    input_type: str  ***REMOVED*** "text" or "voice"
-    ***REMOVED*** LLM-as-a-Judge evaluation context
+    input_type: str  # "text" or "voice"
+    # LLM-as-a-Judge evaluation context
     retrieved_context: list[dict[str, Any]]
-    ***REMOVED*** Source attribution (***REMOVED***225)
+    # Source attribution (#225)
     show_sources: bool
     sources_count: int
-    ***REMOVED*** Content filtering (***REMOVED***227)
+    # Content filtering (#227)
     guard_blocked: bool
     guard_reason: str | None
-    ***REMOVED*** User feedback (***REMOVED***229)
+    # User feedback (#229)
     trace_id: str
-    sent_message: dict[str, int] | None  ***REMOVED*** {"chat_id": int, "message_id": int}
-    ***REMOVED*** Prompt injection defense (***REMOVED***226)
+    sent_message: dict[str, int] | None  # {"chat_id": int, "message_id": int}
+    # Prompt injection defense (#226)
     injection_detected: bool
     injection_risk_score: float
     injection_pattern: str | None
-    ***REMOVED*** Call limits (***REMOVED***374)
+    # Call limits (#374)
     llm_call_count: int
     max_llm_calls: int
-    ***REMOVED*** End-to-end latency alignment (pre-agent + pipeline)
+    # End-to-end latency alignment (pre-agent + pipeline)
     pre_agent_ms: float
     e2e_latency_ms: float
 
@@ -131,7 +131,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "score_improved": True,
         "retrieval_backend_error": False,
         "retrieval_error_type": None,
-        ***REMOVED*** Embedding resilience (***REMOVED***210)
+        # Embedding resilience (#210)
         "embedding_error": False,
         "embedding_error_type": None,
         "rewrite_provider_model": "",
@@ -140,7 +140,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_response_duration_ms": 0.0,
         "llm_stream_only_ttft_ms": None,
         "llm_ttft_drift_ms": None,
-        ***REMOVED*** Latency breakdown (***REMOVED***147)
+        # Latency breakdown (#147)
         "llm_decode_ms": None,
         "llm_tps": None,
         "llm_queue_ms": None,
@@ -149,38 +149,38 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_timeout": False,
         "llm_stream_recovery": False,
         "streaming_enabled": False,
-        ***REMOVED*** Response length control (***REMOVED***129)
+        # Response length control (#129)
         "response_style": "",
         "response_difficulty": "",
         "response_style_reasoning": "",
         "answer_words": 0,
         "answer_chars": 0,
         "answer_to_question_ratio": 0.0,
-        ***REMOVED*** Voice transcription (***REMOVED***151)
+        # Voice transcription (#151)
         "voice_audio": None,
         "voice_duration_s": None,
         "stt_text": None,
         "stt_duration_ms": None,
         "input_type": "text",
-        ***REMOVED*** LLM-as-a-Judge evaluation context
+        # LLM-as-a-Judge evaluation context
         "retrieved_context": [],
-        ***REMOVED*** Source attribution (***REMOVED***225)
+        # Source attribution (#225)
         "show_sources": False,
         "sources_count": 0,
-        ***REMOVED*** Content filtering (***REMOVED***227)
+        # Content filtering (#227)
         "guard_blocked": False,
         "guard_reason": None,
-        ***REMOVED*** User feedback (***REMOVED***229)
+        # User feedback (#229)
         "trace_id": "",
         "sent_message": None,
-        ***REMOVED*** Prompt injection defense (***REMOVED***226)
+        # Prompt injection defense (#226)
         "injection_detected": False,
         "injection_risk_score": 0.0,
         "injection_pattern": None,
-        ***REMOVED*** Call limits (***REMOVED***374)
+        # Call limits (#374)
         "llm_call_count": 0,
         "max_llm_calls": 5,
-        ***REMOVED*** End-to-end latency alignment
+        # End-to-end latency alignment
         "pre_agent_ms": 0.0,
         "e2e_latency_ms": 0.0,
     }

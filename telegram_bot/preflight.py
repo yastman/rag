@@ -20,12 +20,12 @@ from .startup_status import DependencyCheckResult, StartupReport, StartupSeverit
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Retry settings for critical deps
+# Retry settings for critical deps
 CRITICAL_RETRIES = 3
-CRITICAL_RETRY_DELAY = 5.0  ***REMOVED*** seconds
+CRITICAL_RETRY_DELAY = 5.0  # seconds
 _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
 
-***REMOVED*** BGE-M3 dense vector dimensionality (used when auto-creating missing collections)
+# BGE-M3 dense vector dimensionality (used when auto-creating missing collections)
 _BGEM3_DENSE_DIM = 1024
 _REDIS_AUTH_FAILURE_HINT = (
     "Redis auth failed: .env REDIS_PASSWORD may not match the running Redis container password. "
@@ -68,8 +68,8 @@ def _read_colbert_coverage_warn_threshold() -> float:
 
 COLBERT_COVERAGE_WARN_THRESHOLD = _read_colbert_coverage_warn_threshold()
 
-***REMOVED*** Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
-***REMOVED*** Used for synthetic write/read/ttl/delete verification at startup.
+# Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
+# Used for synthetic write/read/ttl/delete verification at startup.
 CACHE_KEY_PREFIXES = [
     "sparse:",
     "search:",
@@ -83,9 +83,9 @@ class DepLevel(StrEnum):
     OPTIONAL = "OPTIONAL"
 
 
-***REMOVED*** Dependency classification:
-***REMOVED***   CRITICAL — bot cannot function, fail startup after retries
-***REMOVED***   OPTIONAL — bot can degrade gracefully, warn and continue
+# Dependency classification:
+#   CRITICAL — bot cannot function, fail startup after retries
+#   OPTIONAL — bot can degrade gracefully, warn and continue
 DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "redis": DepLevel.CRITICAL,
     "redis_cache": DepLevel.CRITICAL,
@@ -165,13 +165,13 @@ async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
     details: dict[str, str] = {}
     r = aioredis.from_url(redis_url, decode_responses=True)
     try:
-        ***REMOVED*** 1. PING
+        # 1. PING
         ping_result = r.ping()
         if inspect.isawaitable(ping_result):
             await ping_result
         details["ping"] = "ok"
 
-        ***REMOVED*** 2. INFO — memory / clients
+        # 2. INFO — memory / clients
         info_memory = await r.info("memory")
         info_clients = await r.info("clients")
         info_server = await r.info("server")
@@ -194,7 +194,7 @@ async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
             connected,
         )
 
-        ***REMOVED*** 3. Eviction policy check
+        # 3. Eviction policy check
         if max_policy == "noeviction":
             logger.warning(
                 "Preflight WARN: maxmemory_policy is 'noeviction' "
@@ -202,7 +202,7 @@ async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
             )
             details["policy_warning"] = "noeviction detected — should be volatile-lfu"
 
-        ***REMOVED*** 4. Keyspace — at least db0 should have keys
+        # 4. Keyspace — at least db0 should have keys
         info_keyspace = await r.info("keyspace")
         db0 = info_keyspace.get("db0")
         if db0:
@@ -229,7 +229,7 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
     """
     errors: list[str] = []
     r = aioredis.from_url(redis_url, decode_responses=True)
-    test_ttl = 30  ***REMOVED*** seconds — short-lived test keys
+    test_ttl = 30  # seconds — short-lived test keys
 
     try:
         for prefix in CACHE_KEY_PREFIXES:
@@ -237,10 +237,10 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
             test_value = "preflight_ok"
 
             try:
-                ***REMOVED*** Write with TTL
+                # Write with TTL
                 await r.setex(test_key, test_ttl, test_value)
 
-                ***REMOVED*** Read back
+                # Read back
                 got = await r.get(test_key)
                 if got != test_value:
                     errors.append(
@@ -248,19 +248,19 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
                     )
                     continue
 
-                ***REMOVED*** Check TTL is set
+                # Check TTL is set
                 remaining = await r.ttl(test_key)
                 if remaining <= 0:
                     errors.append(f"{prefix} TTL not set (ttl={remaining})")
                     continue
 
-                ***REMOVED*** Delete
+                # Delete
                 deleted = await r.delete(test_key)
                 if deleted != 1:
                     errors.append(f"{prefix} delete returned {deleted} (expected 1)")
                     continue
 
-                ***REMOVED*** Confirm deletion
+                # Confirm deletion
                 after = await r.get(test_key)
                 if after is not None:
                     errors.append(f"{prefix} key still exists after delete")
@@ -268,7 +268,7 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
 
             except Exception as exc:
                 errors.append(f"{prefix} error: {_redact_redis_credentials(str(exc))}")
-                ***REMOVED*** Best-effort cleanup
+                # Best-effort cleanup
                 with contextlib.suppress(Exception):
                     await r.delete(test_key)
 
@@ -379,7 +379,7 @@ async def _check_single_dep(
                 info.points_count,
             )
 
-            ***REMOVED*** Validate expected vector configs (***REMOVED***570)
+            # Validate expected vector configs (#570)
             dense_vectors = info.config.params.vectors
             sparse_vectors = info.config.params.sparse_vectors or {}
             dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
@@ -452,7 +452,7 @@ async def _check_single_dep(
         if resp.status_code != 200:
             logger.error("Preflight FAIL: BGE-M3 repo-local health contract — %s", resp.status_code)
             return False
-        ***REMOVED*** Warm encode to verify the repo-local model service is actually ready to serve embeddings.
+        # Warm encode to verify the repo-local model service is actually ready to serve embeddings.
         warmup_resp = await client.post(
             f"{config.bge_m3_url}/encode/dense",
             json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
@@ -495,7 +495,7 @@ async def _check_single_dep(
             return False
 
     if name == "litellm":
-        ***REMOVED*** Health endpoint is at proxy root, not under /v1
+        # Health endpoint is at proxy root, not under /v1
         base = config.llm_base_url.rstrip("/").removesuffix("/v1")
         resp = await client.get(f"{base}/health/readiness")
         if resp.status_code != 200:
@@ -564,14 +564,14 @@ async def check_dependencies(
     results: dict[str, bool] = {}
     timeout = httpx.Timeout(10.0)
 
-    ***REMOVED*** Order matters: redis_cache depends on redis
+    # Order matters: redis_cache depends on redis
     dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "litellm", "langfuse"]
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for dep_name in dep_order:
             level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
 
-            ***REMOVED*** redis_cache depends on redis — skip if redis failed
+            # redis_cache depends on redis — skip if redis failed
             if dep_name == "redis_cache" and not results.get("redis"):
                 results["redis_cache"] = False
                 logger.warning("Preflight SKIP: Redis cache verify (Redis unreachable)")
@@ -580,14 +580,14 @@ async def check_dependencies(
             if level == DepLevel.CRITICAL:
                 results[dep_name] = await _check_critical_with_retry(dep_name, config, client)
             else:
-                ***REMOVED*** Single attempt for optional deps
+                # Single attempt for optional deps
                 try:
                     results[dep_name] = await _check_single_dep(dep_name, config, client)
                 except Exception as e:
                     logger.warning("Preflight WARN: %s [OPTIONAL] — %s", dep_name, e)
                     results[dep_name] = False
 
-    ***REMOVED*** Log per-dependency status
+    # Log per-dependency status
     for dep_name, passed in results.items():
         level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
         status = "OK" if passed else "FAIL"
@@ -602,7 +602,7 @@ async def check_dependencies(
         else:
             logger.info(report.render())
 
-    ***REMOVED*** Enforce critical deps
+    # Enforce critical deps
     critical_failures = [
         name
         for name, passed in results.items()

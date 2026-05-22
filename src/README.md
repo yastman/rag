@@ -1,12 +1,12 @@
-***REMOVED*** src/
+# src/
 
 Shared domain, retrieval, ingestion, and API code for the contextual RAG system.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Contains all non-transport logic: document ingestion, vector search, model contextualization, evaluation, and the standalone RAG API. `telegram_bot/` imports from here; most of `src/` stays Telegram-agnostic. `src/api/` is an adapter that intentionally reuses the Telegram LangGraph pipeline (via `telegram_bot.graph.graph.build_graph()`) until that pipeline is extracted into a shared location.
 
-***REMOVED******REMOVED*** Entrypoints
+## Entrypoints
 
 | Surface | Entrypoint | Role |
 |---------|------------|------|
@@ -17,7 +17,7 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | Voice | `src.voice.agent` | LiveKit voice agent (deferred) |
 | Evaluation | `src.evaluation.smoke_test` | Smoke tests and RAG quality evaluation |
 
-***REMOVED******REMOVED*** Directory Guide
+## Directory Guide
 
 | Directory | Concern |
 |-----------|---------|
@@ -34,13 +34,13 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 | `utils/` | Shared helpers |
 | `voice/` | LiveKit voice agent and SIP setup (deferred by default) |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - **Shared/domain `src/` modules should stay Telegram-agnostic.** `src/api/` is an explicit adapter exception: it reuses the Telegram LangGraph pipeline (graph, state, observability, scoring) until that pipeline is extracted into a shared location.
 - **Ingestion determinism and resumability** are owned by `src/ingestion/` and `src/ingestion/unified/`. Do not change manifest identity, hashing, or collection semantics without careful review.
 - **LangGraph state contracts** are defined in `telegram_bot/graph/state.py`; `src/api/` reuses the same pipeline but does not redefine state shapes.
 
-***REMOVED******REMOVED*** Related Runtime Services
+## Related Runtime Services
 
 - **Qdrant** — vector database (used by retrieval, ingestion, and history)
 - **PostgreSQL** — CocoIndex state for unified ingestion
@@ -50,14 +50,14 @@ Contains all non-transport logic: document ingestion, vector search, model conte
 - **Langfuse** — tracing and evaluation (optional)
 - **LiveKit** — voice infrastructure (deferred/off by default)
 
-***REMOVED******REMOVED*** Focused Checks
+## Focused Checks
 
 ```bash
 make check
 pytest src/retrieval/ src/ingestion/unified/ src/api/
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../telegram_bot/README.md`](../telegram_bot/README.md) — Telegram transport layer
 - [`../DOCKER.md`](../DOCKER.md) — Docker orchestration and service dependencies

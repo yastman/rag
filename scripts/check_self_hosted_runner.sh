@@ -1,25 +1,25 @@
-***REMOVED***!/usr/bin/env bash
-***REMOVED*** scripts/check_self_hosted_runner.sh
-***REMOVED***
-***REMOVED*** Diagnostic for the self-hosted GitHub Actions runner that
-***REMOVED*** .github/workflows/nightly-heavy.yml depends on.
-***REMOVED***
-***REMOVED*** Closes ***REMOVED***1531: nightly-heavy.yml uses `runs-on: self-hosted` (no labels).
-***REMOVED*** If no runner is registered + online, the nightly heavy-tier job will
-***REMOVED*** queue forever and silently miss its 02:30 UTC schedule.
-***REMOVED***
-***REMOVED*** This script is operator-runnable. It does not mutate anything.
-***REMOVED***
-***REMOVED*** Usage:
-***REMOVED***   scripts/check_self_hosted_runner.sh             ***REMOVED*** check current repo (auto-detect)
-***REMOVED***   scripts/check_self_hosted_runner.sh --owner X --repo Y
-***REMOVED***   OWNER=X REPO=Y scripts/check_self_hosted_runner.sh
-***REMOVED***   scripts/check_self_hosted_runner.sh --help
-***REMOVED***
-***REMOVED*** Exit codes:
-***REMOVED***   0  at least one runner is registered AND online
-***REMOVED***   1  no runner registered, or all registered runners are offline
-***REMOVED***   2  invalid arguments / missing prerequisites (gh, jq)
+#!/usr/bin/env bash
+# scripts/check_self_hosted_runner.sh
+#
+# Diagnostic for the self-hosted GitHub Actions runner that
+# .github/workflows/nightly-heavy.yml depends on.
+#
+# Closes #1531: nightly-heavy.yml uses `runs-on: self-hosted` (no labels).
+# If no runner is registered + online, the nightly heavy-tier job will
+# queue forever and silently miss its 02:30 UTC schedule.
+#
+# This script is operator-runnable. It does not mutate anything.
+#
+# Usage:
+#   scripts/check_self_hosted_runner.sh             # check current repo (auto-detect)
+#   scripts/check_self_hosted_runner.sh --owner X --repo Y
+#   OWNER=X REPO=Y scripts/check_self_hosted_runner.sh
+#   scripts/check_self_hosted_runner.sh --help
+#
+# Exit codes:
+#   0  at least one runner is registered AND online
+#   1  no runner registered, or all registered runners are offline
+#   2  invalid arguments / missing prerequisites (gh, jq)
 
 set -euo pipefail
 
@@ -82,19 +82,19 @@ CHECKLIST
 OWNER="${OWNER:-}"
 REPO="${REPO:-}"
 
-while [[ $***REMOVED*** -gt 0 ]]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
       usage
       exit 0
       ;;
     --owner)
-      [[ $***REMOVED*** -ge 2 ]] || { err "--owner requires a value"; exit 2; }
+      [[ $# -ge 2 ]] || { err "--owner requires a value"; exit 2; }
       OWNER="$2"
       shift 2
       ;;
     --repo)
-      [[ $***REMOVED*** -ge 2 ]] || { err "--repo requires a value"; exit 2; }
+      [[ $# -ge 2 ]] || { err "--repo requires a value"; exit 2; }
       REPO="$2"
       shift 2
       ;;
@@ -106,7 +106,7 @@ while [[ $***REMOVED*** -gt 0 ]]; do
   esac
 done
 
-***REMOVED*** Prerequisite checks.
+# Prerequisite checks.
 if ! command -v gh >/dev/null 2>&1; then
   err "GitHub CLI ('gh') is required but not on PATH"
   exit 2
@@ -116,7 +116,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 2
 fi
 
-***REMOVED*** Auto-detect owner/repo via gh if not provided.
+# Auto-detect owner/repo via gh if not provided.
 if [[ -z "${OWNER}" || -z "${REPO}" ]]; then
   if gh_view="$(gh repo view --json owner,name 2>/dev/null)"; then
     [[ -z "${OWNER}" ]] && OWNER="$(printf '%s' "${gh_view}" | jq -r '.owner.login')"
@@ -131,8 +131,8 @@ fi
 
 printf 'Checking self-hosted runners for %s/%s ...\n' "${OWNER}" "${REPO}"
 
-***REMOVED*** Query the runners API. If the call itself fails (auth, scope, network),
-***REMOVED*** treat it as a hard failure (exit 1) so the nightly-heavy gate stays red.
+# Query the runners API. If the call itself fails (auth, scope, network),
+# treat it as a hard failure (exit 1) so the nightly-heavy gate stays red.
 if ! runners_json="$(gh api \
   "repos/${OWNER}/${REPO}/actions/runners" \
   --jq '.runners // []' 2>&1)"; then
@@ -151,7 +151,7 @@ if [[ "${count}" -eq 0 ]]; then
   exit 1
 fi
 
-***REMOVED*** Pretty summary of every runner: name, status, OS, labels, busy.
+# Pretty summary of every runner: name, status, OS, labels, busy.
 printf '%s\n' "${runners_json}" \
   | jq '.[] | {name, status, os, labels: [.labels[].name], busy}'
 

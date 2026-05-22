@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Global singleton (type: CrossEncoder when loaded)
+# Global singleton (type: CrossEncoder when loaded)
 _cross_encoder: Any | None = None
 
 
@@ -61,7 +61,7 @@ def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") 
     else:
         logger.debug("Using existing cross-encoder instance")
 
-    ***REMOVED*** cast is safe: _cross_encoder is always set to CrossEncoder when not None
+    # cast is safe: _cross_encoder is always set to CrossEncoder when not None
     return cast("CrossEncoder", _cross_encoder)
 
 
@@ -94,26 +94,26 @@ def rerank_results(
     if not results or len(results) == 0:
         return results
 
-    ***REMOVED*** Get cross-encoder model
+    # Get cross-encoder model
     model = get_cross_encoder()
 
-    ***REMOVED*** Prepare query-document pairs for top_k results using the SDK input alias.
+    # Prepare query-document pairs for top_k results using the SDK input alias.
     pairs: list[PairInput] = [(query, str(result["text"])) for result in results[:top_k]]
 
-    ***REMOVED*** Score with cross-encoder (returns relevance scores)
+    # Score with cross-encoder (returns relevance scores)
     try:
         scores = model.predict(pairs)
 
-        ***REMOVED*** Update scores and sort by cross-encoder score
+        # Update scores and sort by cross-encoder score
         for i, score in enumerate(scores):
             results[i]["original_score"] = results[i]["score"]
             results[i]["rerank_score"] = float(score)
-            results[i]["score"] = float(score)  ***REMOVED*** Replace with rerank score
+            results[i]["score"] = float(score)  # Replace with rerank score
 
-        ***REMOVED*** Sort by rerank score (descending)
+        # Sort by rerank score (descending)
         reranked = sorted(results[:top_k], key=lambda x: x["rerank_score"], reverse=True)
 
-        ***REMOVED*** Append remaining results unchanged
+        # Append remaining results unchanged
         reranked.extend(results[top_k:])
 
         logger.info(f"Reranked top {top_k} results with cross-encoder")
@@ -132,7 +132,7 @@ def rerank_results(
 
     except Exception as e:
         logger.error(f"Reranking error: {e}", exc_info=True)
-        ***REMOVED*** Return original results on error
+        # Return original results on error
         return results
 
 

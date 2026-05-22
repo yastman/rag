@@ -1,18 +1,18 @@
-***REMOVED*** security/
+# security/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Security guardrails for production RAG deployment.
 Owns source-level security helpers under `src/security/`.
 Currently provides PII redaction before sensitive data reaches logs or traces.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 | File | Purpose |
 |------|---------|
 | `pii_redaction.py` | PII redaction for Ukrainian data (passport, tax ID, phone, email, Telegram user ID) |
 
-***REMOVED******REMOVED*** What it does
+## What it does
 
 `PIIRedactor` detects and replaces sensitive patterns in query strings before logging:
 
@@ -24,7 +24,7 @@ Currently provides PII redaction before sensitive data reaches logs or traces.
 
 The class also provides `mask()` for recursive redaction in dicts and lists.
 
-***REMOVED******REMOVED*** Usage
+## Usage
 
 ```python
 from src.security.pii_redaction import PIIRedactor
@@ -33,19 +33,19 @@ redactor = PIIRedactor()
 redacted, meta = redactor.redact_query("Паспорт АА123456")
 ```
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Redacts **before** logging to Langfuse/MLflow; original query is still used for search accuracy
 - Does not perform authentication or authorization
 - Does not own Telegram middleware policy; see [`../../telegram_bot/middlewares/`](../../telegram_bot/middlewares/)
 
-***REMOVED******REMOVED*** Focused checks
+## Focused checks
 
 ```bash
 uv run pytest tests/unit/security/ -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`docs/ERROR_RESPONSES.md`](../../docs/ERROR_RESPONSES.md) — Error taxonomy
 - [`telegram_bot/middlewares/`](../../telegram_bot/middlewares/) — Request middleware

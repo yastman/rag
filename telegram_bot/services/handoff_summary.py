@@ -51,10 +51,10 @@ async def generate_handoff_summary(
             )
         resp = await llm.chat.completions.create(
             model=model,
-            messages=messages,  ***REMOVED*** type: ignore[arg-type]
+            messages=messages,  # type: ignore[arg-type]
             max_tokens=300,
             temperature=0.3,
-            name="handoff-summary",  ***REMOVED*** type: ignore[call-overload]
+            name="handoff-summary",  # type: ignore[call-overload]
         )
         content = resp.choices[0].message.content
         return content.strip() if content else None

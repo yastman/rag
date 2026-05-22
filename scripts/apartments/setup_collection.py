@@ -54,20 +54,20 @@ def create_apartments_collection(client: QdrantClient) -> None:
 def create_payload_indexes(client: QdrantClient) -> None:
     """Create indexes for apartment payload fields (top-level, no metadata. prefix)."""
     indexes = {
-        ***REMOVED*** Keyword (facets + exact match)
+        # Keyword (facets + exact match)
         "complex_name": "keyword",
         "city": "keyword",
         "section": "keyword",
         "apartment_number": "keyword",
         "view_primary": "keyword",
         "view_tags": "keyword",
-        ***REMOVED*** Integer (lookup + range)
+        # Integer (lookup + range)
         "rooms": models.PayloadSchemaType.INTEGER,
         "floor": models.PayloadSchemaType.INTEGER,
-        ***REMOVED*** Float (range + order_by)
+        # Float (range + order_by)
         "price_eur": models.PayloadSchemaType.FLOAT,
         "area_m2": models.PayloadSchemaType.FLOAT,
-        ***REMOVED*** Bool
+        # Bool
         "is_furnished": models.PayloadSchemaType.BOOL,
         "is_promotion": models.PayloadSchemaType.BOOL,
     }

@@ -1,14 +1,14 @@
-***REMOVED*** Photos
+# Photos
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 telegram_bot/static/photos
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - demo
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

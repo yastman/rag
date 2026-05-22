@@ -1,11 +1,11 @@
-"""Tests for CRM Contacts dialogs: CreateContactWizard, ContactsMenu, SearchContacts (***REMOVED***697)."""
+"""Tests for CRM Contacts dialogs: CreateContactWizard, ContactsMenu, SearchContacts (#697)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 
-***REMOVED*** --- ContactsMenuSG states ---
+# --- ContactsMenuSG states ---
 
 
 def test_contacts_menu_sg_has_main():
@@ -15,7 +15,7 @@ def test_contacts_menu_sg_has_main():
     assert hasattr(ContactsMenuSG, "main")
 
 
-***REMOVED*** --- SearchContactsSG states ---
+# --- SearchContactsSG states ---
 
 
 def test_search_contacts_sg_has_query_and_results():
@@ -26,7 +26,7 @@ def test_search_contacts_sg_has_query_and_results():
     assert hasattr(SearchContactsSG, "results")
 
 
-***REMOVED*** --- Dialog objects ---
+# --- Dialog objects ---
 
 
 def test_contacts_menu_dialog_is_dialog():
@@ -91,7 +91,7 @@ def test_search_contacts_dialog_has_query_and_results_windows():
     assert SearchContactsSG.results in states
 
 
-***REMOVED*** --- Getters ---
+# --- Getters ---
 
 
 async def test_get_contacts_menu_data_returns_required_keys():
@@ -172,7 +172,7 @@ async def test_get_search_contacts_results_with_mock_kommo():
     assert "Ivan" in result["results_text"]
 
 
-***REMOVED*** --- Wizard step handlers ---
+# --- Wizard step handlers ---
 
 
 async def test_on_first_name_entered_saves_and_advances():
@@ -254,7 +254,7 @@ async def test_on_email_skip_advances_to_summary_without_email():
     dm.switch_to.assert_called_once_with(CreateContactSG.summary)
 
 
-***REMOVED*** --- Contact confirm handler ---
+# --- Contact confirm handler ---
 
 
 async def test_on_contact_confirm_calls_upsert_contact():
@@ -308,7 +308,7 @@ async def test_on_contact_confirm_no_kommo_shows_error():
     dm.done.assert_not_called()
 
 
-***REMOVED*** --- Search query handler ---
+# --- Search query handler ---
 
 
 async def test_on_search_contacts_query_saves_and_switches():

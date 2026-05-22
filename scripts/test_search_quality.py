@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Test search quality after m=0 optimization."""
 
 import asyncio
@@ -42,7 +42,7 @@ async def test_search():
     for query, expected_in_result in TEST_QUERIES:
         emb = await get_embeddings(query)
 
-        ***REMOVED*** Hybrid search with ColBERT reranking
+        # Hybrid search with ColBERT reranking
         results = client.query_points(
             collection_name=COLLECTION,
             prefetch=[

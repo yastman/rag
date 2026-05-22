@@ -1,4 +1,4 @@
-"""History sub-graph nodes — guard, retrieve, grade, rewrite, summarize (***REMOVED***408, ***REMOVED***432).
+"""History sub-graph nodes — guard, retrieve, grade, rewrite, summarize (#408, #432).
 
 Each node follows the LangGraph pattern: async function(state, **deps) → partial state update.
 All nodes decorated with @observe() for Langfuse tracing.
@@ -16,7 +16,7 @@ from telegram_bot.observability import get_client, observe
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** --- Blocked response for history guard ---
+# --- Blocked response for history guard ---
 
 _HISTORY_BLOCKED_RESPONSE = (
     "Извините, ваш запрос не может быть обработан.\n\n"
@@ -24,7 +24,7 @@ _HISTORY_BLOCKED_RESPONSE = (
 )
 
 
-***REMOVED*** --- Guard ---
+# --- Guard ---
 
 
 @observe(name="history-guard")
@@ -33,7 +33,7 @@ async def history_guard_node(
     *,
     guard_mode: str = "hard",
 ) -> dict[str, Any]:
-    """LangGraph node: detect prompt injection in history search queries (***REMOVED***432).
+    """LangGraph node: detect prompt injection in history search queries (#432).
 
     Reuses detect_injection() regex heuristics from the main RAG guard.
     Adapts HistoryState (query field) instead of RAGState (messages field).
@@ -76,7 +76,7 @@ async def history_guard_node(
             result["guard_reason"] = "injection"
             result["summary"] = _HISTORY_BLOCKED_RESPONSE
         elif guard_mode == "soft":
-            ***REMOVED*** Flag but don't block — continue to retrieve (matches main guard behavior)
+            # Flag but don't block — continue to retrieve (matches main guard behavior)
             result["guard_reason"] = "injection"
     else:
         lf.update_current_span(output={"injection_detected": False, "risk_score": 0.0})
@@ -95,7 +95,7 @@ def route_history_guard(state: dict[str, Any]) -> str:
     return "retrieve"
 
 
-***REMOVED*** --- Retrieve ---
+# --- Retrieve ---
 
 _HISTORY_RETRIEVE_LIMIT = 10
 
@@ -150,7 +150,7 @@ async def history_retrieve_node(
     }
 
 
-***REMOVED*** --- Grade ---
+# --- Grade ---
 
 _HISTORY_RELEVANCE_THRESHOLD = 0.7
 
@@ -165,7 +165,7 @@ async def history_grade_node(
 
     Filters out results below threshold and marks overall relevance.
     When no results pass the threshold, returns an empty list so the
-    summarize node can emit a "nothing found" message (see ***REMOVED***433).
+    summarize node can emit a "nothing found" message (see #433).
     """
     t0 = time.perf_counter()
     results = state.get("results", [])
@@ -190,13 +190,13 @@ async def history_grade_node(
     )
 
     return {
-        "results": relevant,  ***REMOVED*** empty if none pass threshold — summarize handles this (***REMOVED***433)
+        "results": relevant,  # empty if none pass threshold — summarize handles this (#433)
         "results_relevant": is_relevant,
         "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
     }
 
 
-***REMOVED*** --- Rewrite ---
+# --- Rewrite ---
 
 _HISTORY_REWRITE_PROMPT = (
     "Пользователь ищет информацию в своей истории диалогов.\n"
@@ -235,7 +235,7 @@ async def history_rewrite_node(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=64,
-            name="history-rewrite-query",  ***REMOVED*** type: ignore[call-overload]
+            name="history-rewrite-query",  # type: ignore[call-overload]
         )
         rewritten = (response.choices[0].message.content or "").strip()
         if not rewritten or rewritten == original_query:
@@ -264,7 +264,7 @@ async def history_rewrite_node(
     }
 
 
-***REMOVED*** --- Routing ---
+# --- Routing ---
 
 
 def route_history_grade(state: dict[str, Any]) -> str:
@@ -276,7 +276,7 @@ def route_history_grade(state: dict[str, Any]) -> str:
     return "rewrite"
 
 
-***REMOVED*** --- Summarize ---
+# --- Summarize ---
 
 _HISTORY_SUMMARIZE_PROMPT = (
     "Ты — помощник, который анализирует историю предыдущих диалогов пользователя.\n\n"
@@ -300,7 +300,7 @@ def _format_history_context(results: list[dict[str, Any]]) -> str:
         ts = str(r.get("timestamp", ""))[:16].replace("T", " ")
         q = r.get("query", "")
         resp = r.get("response", "")
-        ***REMOVED*** Truncate long responses for prompt budget
+        # Truncate long responses for prompt budget
         if len(resp) > 500:
             resp = resp[:500] + "..."
         lines.append(f"[{i}] ({ts}) Q: {q}\n    A: {resp}")
@@ -361,7 +361,7 @@ async def history_summarize_node(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=512,
-            name="history-summarize",  ***REMOVED*** type: ignore[call-overload]
+            name="history-summarize",  # type: ignore[call-overload]
         )
         summary = (response.choices[0].message.content or "").strip()
         if not summary:
@@ -391,18 +391,18 @@ async def history_summarize_node(
     }
 
 
-***REMOVED*** --- Langfuse Scores ---
+# --- Langfuse Scores ---
 
 
 def write_history_scores(lf: Any, result: dict[str, Any], *, trace_id: str = "") -> None:
-    """Write history sub-graph scores with explicit trace_id (***REMOVED***435).
+    """Write history sub-graph scores with explicit trace_id (#435).
 
     Scores:
         history_results_count (NUMERIC): Number of retrieved results.
         history_relevance (NUMERIC): 1.0 if relevant, 0.0 if not.
         history_rewrite_count (NUMERIC): Number of query rewrites.
         history_latency_ms (NUMERIC): Total sub-graph wall time (ms).
-        history_cache_hit (NUMERIC): 1.0 if semantic cache was hit, 0.0 if not (***REMOVED***464).
+        history_cache_hit (NUMERIC): 1.0 if semantic cache was hit, 0.0 if not (#464).
     """
     if not trace_id:
         trace_id = lf.get_current_trace_id()

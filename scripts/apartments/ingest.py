@@ -25,18 +25,18 @@ def ingest(csv_path: str, qdrant_url: str, bge_url: str) -> None:
     client = QdrantClient(url=qdrant_url)
     bge = BGEM3SyncClient(base_url=bge_url)
 
-    ***REMOVED*** Read CSV
+    # Read CSV
     with open(csv_path) as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
     print(f"Loaded {len(rows)} apartments from {csv_path}")
 
-    ***REMOVED*** Convert to records
+    # Convert to records
     records = [ApartmentRecord.from_raw(row) for row in rows]
     descriptions = [r.to_description() for r in records]
 
-    ***REMOVED*** Embed in batches
+    # Embed in batches
     all_dense, all_sparse, all_colbert = [], [], []
     for i in range(0, len(descriptions), BATCH_SIZE):
         batch = descriptions[i : i + BATCH_SIZE]
@@ -46,7 +46,7 @@ def ingest(csv_path: str, qdrant_url: str, bge_url: str) -> None:
         all_colbert.extend(result.colbert_vecs or [])
         print(f"  Embedded {min(i + BATCH_SIZE, len(descriptions))}/{len(descriptions)}")
 
-    ***REMOVED*** Build points
+    # Build points
     points = []
     for rec, dense, sparse, colbert in zip(
         records, all_dense, all_sparse, all_colbert, strict=True
@@ -67,7 +67,7 @@ def ingest(csv_path: str, qdrant_url: str, bge_url: str) -> None:
             )
         )
 
-    ***REMOVED*** Upsert in batches
+    # Upsert in batches
     for i in range(0, len(points), 100):
         batch = points[i : i + 100]
         client.upsert(collection_name=COLLECTION, points=batch)

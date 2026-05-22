@@ -20,37 +20,37 @@ class TestValidationQueries:
     """Test query set definitions."""
 
     def test_property_queries_count(self):
-        assert len(PROPERTY_QUERIES) == 14  ***REMOVED*** 6 simple + 8 complex
+        assert len(PROPERTY_QUERIES) == 14  # 6 simple + 8 complex
 
     def test_legal_queries_count(self):
-        assert len(LEGAL_QUERIES) == 10  ***REMOVED*** 5 hard + 5 medium/easy
+        assert len(LEGAL_QUERIES) == 10  # 5 hard + 5 medium/easy
 
     def test_edge_case_queries_count(self):
         assert len(EDGE_CASE_QUERIES) == 3
 
     def test_gdrive_bge_queries_count(self):
-        assert len(GDRIVE_BGE_QUERIES) == 30  ***REMOVED*** 10 easy + 10 medium + 10 hard
+        assert len(GDRIVE_BGE_QUERIES) == 30  # 10 easy + 10 medium + 10 hard
 
     def test_get_queries_for_legal(self):
         queries = get_queries_for_collection("legal_documents")
-        ***REMOVED*** 10 legal + 3 edge cases
+        # 10 legal + 3 edge cases
         assert len(queries) == 13
         assert all(isinstance(q, ValidationQuery) for q in queries)
 
     def test_get_queries_for_property(self):
         queries = get_queries_for_collection("contextual_bulgaria_voyage")
-        ***REMOVED*** 14 property + 3 edge cases
+        # 14 property + 3 edge cases
         assert len(queries) == 17
 
     def test_get_queries_for_gdrive_bge(self):
         queries = get_queries_for_collection("gdrive_documents_bge")
-        ***REMOVED*** 30 gdrive_bge + 3 edge cases
+        # 30 gdrive_bge + 3 edge cases
         assert len(queries) == 33
         assert all(isinstance(q, ValidationQuery) for q in queries)
 
     def test_get_queries_unknown_collection(self):
         queries = get_queries_for_collection("nonexistent")
-        ***REMOVED*** Only edge cases
+        # Only edge cases
         assert len(queries) == 3
 
     def test_warmup_queries_subset(self):
@@ -63,7 +63,7 @@ class TestValidationQueries:
         cold = get_queries_for_collection("legal_documents")
         cache = get_cache_hit_queries(cold, count=10)
         assert len(cache) <= 10
-        ***REMOVED*** All cache queries should be from cold set
+        # All cache queries should be from cold set
         for q in cache:
             assert q in cold
 

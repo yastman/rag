@@ -1,13 +1,13 @@
-***REMOVED*** Litellm
+# Litellm
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 docker/litellm
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - config.yaml
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

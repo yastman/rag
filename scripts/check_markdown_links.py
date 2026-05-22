@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Check Markdown relative links and exit nonzero on missing targets.
 
 Checks at least README.md, DOCKER.md, AGENTS.md, all docs/**/*.md,
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 
-***REMOVED*** Directories to skip
+# Directories to skip
 SKIP_DIRS = {
     ".git",
     ".venv",
@@ -33,7 +33,7 @@ SKIP_DIRS = {
     ".worktrees",
 }
 
-***REMOVED*** Markdown link regex: [text](url)
+# Markdown link regex: [text](url)
 LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 
 
@@ -47,15 +47,15 @@ def is_skipped_link(url: str) -> bool:
         return True
     if url.startswith(("http://", "https://", "ftp://", "mailto:")):
         return True
-    return bool(url.startswith("***REMOVED***"))
+    return bool(url.startswith("#"))
 
 
 def resolve_link(source_file: Path, url: str) -> Path:
     """Resolve a relative URL against its source file, stripping any fragment."""
-    ***REMOVED*** Strip fragment
-    if "***REMOVED***" in url:
-        url = url.split("***REMOVED***", 1)[0]
-    ***REMOVED*** Strip query string (rare in md but possible)
+    # Strip fragment
+    if "#" in url:
+        url = url.split("#", 1)[0]
+    # Strip query string (rare in md but possible)
     if "?" in url:
         url = url.split("?", 1)[0]
     if not url:
@@ -68,18 +68,18 @@ def collect_markdown_files(root: Path) -> list[Path]:
     """Collect markdown files to check."""
     files = set()
 
-    ***REMOVED*** Always include these root files if they exist
+    # Always include these root files if they exist
     for name in ("README.md", "DOCKER.md", "AGENTS.md"):
         p = root / name
         if p.exists():
             files.add(p.resolve())
 
-    ***REMOVED*** All docs/**/*.md
+    # All docs/**/*.md
     for p in (root / "docs").rglob("*.md"):
         if not should_skip_dir(p):
             files.add(p.resolve())
 
-    ***REMOVED*** Folder README.md files
+    # Folder README.md files
     for p in root.rglob("README.md"):
         if not should_skip_dir(p):
             files.add(p.resolve())
@@ -105,13 +105,13 @@ def check_links(root: Path) -> list[tuple[Path, int, str, Path]]:
         in_fenced_code = False
         for line_no, line in enumerate(text.splitlines(), start=1):
             stripped = line.strip()
-            ***REMOVED*** Toggle fenced code block state
+            # Toggle fenced code block state
             if stripped.startswith("```"):
                 in_fenced_code = not in_fenced_code
                 continue
             if in_fenced_code:
                 continue
-            ***REMOVED*** Remove inline code before matching links
+            # Remove inline code before matching links
             clean_line = strip_inline_code(line)
             for match in LINK_RE.finditer(clean_line):
                 url = match.group(2).strip()

@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_state_manager_async.py
+# tests/unit/ingestion/test_state_manager_async.py
 """Tests for async methods in UnifiedStateManager."""
 
 from __future__ import annotations
@@ -177,10 +177,10 @@ class TestUpsertState:
         await manager.upsert_state(sample_state)
 
         args = mock_pool.execute.call_args[0]
-        ***REMOVED*** file_id, source_path, file_name, mime_type, file_size, modified_time,
-        ***REMOVED*** content_hash, parser_version, chunker_version, embedding_model,
-        ***REMOVED*** chunk_count, collection_name, pipeline_version, status, error_message,
-        ***REMOVED*** retry_count, retry_after, indexed_at = 18 params
+        # file_id, source_path, file_name, mime_type, file_size, modified_time,
+        # content_hash, parser_version, chunker_version, embedding_model,
+        # chunk_count, collection_name, pipeline_version, status, error_message,
+        # retry_count, retry_after, indexed_at = 18 params
         assert args[1] == "abc123"
         assert args[2] == "/docs/test.pdf"
         assert args[3] == "test.pdf"
@@ -452,7 +452,7 @@ class TestClose:
         assert mgr._pool is None
 
     async def test_does_not_close_external_pool(self, manager, mock_pool):
-        ***REMOVED*** pool was injected, so _owns_pool = False
+        # pool was injected, so _owns_pool = False
         await manager.close()
 
         mock_pool.close.assert_not_called()

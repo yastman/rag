@@ -1,4 +1,4 @@
-***REMOVED*** Portfolio
+# Portfolio
 
 This directory contains portfolio and resume-oriented project summaries. These
 files are presentation artifacts, not canonical engineering docs.

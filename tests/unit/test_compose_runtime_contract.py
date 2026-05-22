@@ -1,4 +1,4 @@
-"""Regression checks for compose runtime contracts behind issue ***REMOVED***1074."""
+"""Regression checks for compose runtime contracts behind issue #1074."""
 
 from __future__ import annotations
 
@@ -68,5 +68,5 @@ def test_clickhouse_command_has_no_invalid_listen_host_flag() -> None:
 
     assert "--listen_host=0.0.0.0" not in str(command), (
         "compose.yml: clickhouse --listen_host=0.0.0.0 is not a valid CLI flag in ClickHouse 26.3.9 "
-        "and causes a crash-loop (issue ***REMOVED***1340). Remove it and rely on the image default config."
+        "and causes a crash-loop (issue #1340). Remove it and rely on the image default config."
     )

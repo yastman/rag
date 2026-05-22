@@ -1,7 +1,7 @@
-***REMOVED*** tests/contract/test_processing_fingerprint_contract.py
+# tests/contract/test_processing_fingerprint_contract.py
 """Contract tests for processing fingerprint comparison in UnifiedStateManager.
 
-Issue ***REMOVED***1604: should_process must compare not only content_hash but also
+Issue #1604: should_process must compare not only content_hash but also
 embedding_model and pipeline_version, so that re-embedding with a new model
 or pipeline version triggers reprocessing even when file bytes did not change.
 
@@ -37,9 +37,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 STATE_MANAGER_PATH = REPO_ROOT / "src" / "ingestion" / "unified" / "state_manager.py"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Static AST contract: signatures include fingerprint parameters
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Static AST contract: signatures include fingerprint parameters
+# ---------------------------------------------------------------------------
 
 
 def _arg_names(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
@@ -78,7 +78,7 @@ class TestStaticContract:
         assert func is not None, "should_process_sync must exist in state_manager.py"
         assert _has_fingerprint_params(func), (
             "should_process_sync must accept embedding_model + pipeline_version "
-            "(or processing_fingerprint). Issue ***REMOVED***1604."
+            "(or processing_fingerprint). Issue #1604."
         )
 
     def test_should_process_async_accepts_fingerprint_params(self) -> None:
@@ -87,7 +87,7 @@ class TestStaticContract:
         assert func is not None, "should_process must exist in state_manager.py"
         assert _has_fingerprint_params(func), (
             "should_process (async) must accept embedding_model + pipeline_version "
-            "(or processing_fingerprint). Issue ***REMOVED***1604."
+            "(or processing_fingerprint). Issue #1604."
         )
 
     def test_should_reprocess_helper_exists(self) -> None:
@@ -96,12 +96,12 @@ class TestStaticContract:
         func = _find_function(tree, "_should_reprocess")
         assert func is not None, (
             "Module-level `_should_reprocess(state, content_hash, embedding_model, "
-            "pipeline_version)` helper must exist. Issue ***REMOVED***1604."
+            "pipeline_version)` helper must exist. Issue #1604."
         )
         names = _arg_names(func)
         for required in ("state", "content_hash", "embedding_model", "pipeline_version"):
             assert required in names, (
-                f"_should_reprocess must accept '{required}' parameter. Issue ***REMOVED***1604."
+                f"_should_reprocess must accept '{required}' parameter. Issue #1604."
             )
 
     def test_runtime_signatures_match_ast(self) -> None:
@@ -113,13 +113,13 @@ class TestStaticContract:
             matches_pair = {"embedding_model", "pipeline_version"}.issubset(params)
             matches_fp = "processing_fingerprint" in params
             assert matches_pair or matches_fp, (
-                f"{name}: signature must accept fingerprint params (issue ***REMOVED***1604), got {params}"
+                f"{name}: signature must accept fingerprint params (issue #1604), got {params}"
             )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Behavioral contract: _should_reprocess helper
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Behavioral contract: _should_reprocess helper
+# ---------------------------------------------------------------------------
 
 
 def _indexed_state(
@@ -194,7 +194,7 @@ class TestShouldReprocessHelper:
         """When embedding_model/pipeline_version are None, the helper falls back
         to legacy hash-only comparison (backward compatibility)."""
         state = _indexed_state(embedding_model="voyage-4-large", pipeline_version="v3.2.1")
-        ***REMOVED*** Legacy callers pass None for fingerprint pieces — should match on hash only.
+        # Legacy callers pass None for fingerprint pieces — should match on hash only.
         assert (
             _should_reprocess(
                 state,
@@ -251,9 +251,9 @@ class TestShouldReprocessHelper:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Integration-ish: should_process_sync routes through the helper
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Integration-ish: should_process_sync routes through the helper
+# ---------------------------------------------------------------------------
 
 
 class TestShouldProcessSyncFingerprintIntegration:
@@ -340,11 +340,11 @@ class TestShouldProcessSyncFingerprintIntegration:
         monkeypatch.setattr(UnifiedStateManager, "get_state", _fake_get_state)
         mgr = UnifiedStateManager(database_url="postgres://localhost/test")
 
-        ***REMOVED*** Legacy call: should still skip when hash matches.
+        # Legacy call: should still skip when hash matches.
         assert mgr.should_process_sync("f1", "h") is False
-        ***REMOVED*** Legacy call with different hash: still reprocesses.
+        # Legacy call with different hash: still reprocesses.
         assert mgr.should_process_sync("f1", "different") is True
 
 
-if __name__ == "__main__":  ***REMOVED*** pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

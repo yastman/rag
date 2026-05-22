@@ -1,4 +1,4 @@
-"""Tests for agent streaming via astream (***REMOVED***413)."""
+"""Tests for agent streaming via astream (#413)."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ async def test_streaming_default_is_true():
     assert gc.streaming_enabled is True
 
 
-***REMOVED*** --- BotContext.response_sent coordination tests (***REMOVED***428) ---
+# --- BotContext.response_sent coordination tests (#428) ---
 
 
 async def test_bot_context_has_response_sent_field():
-    """BotContext has response_sent field defaulting to False (***REMOVED***428)."""
+    """BotContext has response_sent field defaulting to False (#428)."""
     from unittest.mock import MagicMock
 
     from telegram_bot.agents.context import BotContext
@@ -48,7 +48,7 @@ async def test_bot_context_has_response_sent_field():
 
 
 async def test_bot_context_response_sent_mutable():
-    """BotContext.response_sent is mutable so streaming tools can set it (***REMOVED***428)."""
+    """BotContext.response_sent is mutable so streaming tools can set it (#428)."""
     from unittest.mock import MagicMock
 
     from telegram_bot.agents.context import BotContext

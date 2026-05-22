@@ -1,17 +1,17 @@
-***REMOVED*** Documentation Maintenance Guide
+# Documentation Maintenance Guide
 
 **Scope:** How agents and workers should create, update, and review documentation after code, config, or runtime changes.
-**Related:** ***REMOVED***1396
+**Related:** #1396
 
 ---
 
-***REMOVED******REMOVED*** 1. Purpose
+## 1. Purpose
 
 Docs are part of the production surface. Stale docs waste agent time, mislead reviewers, and increase the blast radius of every config change. This guide defines the minimum maintenance contract for the repo.
 
 ---
 
-***REMOVED******REMOVED*** 2. Docs Lookup Order
+## 2. Docs Lookup Order
 
 When answering questions or writing documentation, use this order. Do not skip layers without a reason.
 
@@ -27,7 +27,7 @@ When answering questions or writing documentation, use this order. Do not skip l
 
 ---
 
-***REMOVED******REMOVED*** 3. Canonical Owners (One Source of Truth per Fact)
+## 3. Canonical Owners (One Source of Truth per Fact)
 
 | Fact | Canonical Doc | Do Not Duplicate In |
 |---|---|---|
@@ -45,7 +45,7 @@ Folder READMEs are **indexes**, not second sources of truth. They may summarize 
 
 ---
 
-***REMOVED******REMOVED*** 4. Impact Gate (When Must Docs Be Updated?)
+## 4. Impact Gate (When Must Docs Be Updated?)
 
 Before finishing any task that changes code, config, tests, runtime behavior, public commands, service boundaries, API routes, Docker/Compose files, env vars, dependencies, or user-visible workflow, ask:
 
@@ -63,9 +63,9 @@ Do not finish code/config/runtime work without either updating docs or explicitl
 
 ---
 
-***REMOVED******REMOVED*** 5. Agent / Worker Update Rules
+## 5. Agent / Worker Update Rules
 
-***REMOVED******REMOVED******REMOVED*** 5.1 Before Editing Docs
+### 5.1 Before Editing Docs
 
 Inspect the code/config that owns the fact:
 
@@ -76,7 +76,7 @@ Inspect the code/config that owns the fact:
 
 Do not preserve stale text just because it was already documented. **Code/config wins** unless the task is explicitly to change the contract.
 
-***REMOVED******REMOVED******REMOVED*** 5.2 README Index Contract
+### 5.2 README Index Contract
 
 Every maintained folder README should be concise and scannable:
 
@@ -89,7 +89,7 @@ Every maintained folder README should be concise and scannable:
 
 Use **relative links**. Never write absolute local paths such as `/home/USER/...`.
 
-***REMOVED******REMOVED******REMOVED*** 5.3 Docker Docs Contract
+### 5.3 Docker Docs Contract
 
 - `DOCKER.md` owns service/profile/project-name/env/port truth.
 - `docs/LOCAL-DEVELOPMENT.md` owns the day-to-day local sequence.
@@ -104,7 +104,7 @@ COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.e
 make check
 ```
 
-***REMOVED******REMOVED******REMOVED*** 5.4 Audit and Plan Docs
+### 5.4 Audit and Plan Docs
 
 - New validation reports and audit summaries go in `docs/reports/` with a `YYYY-MM-DD-` prefix when they are intended for active review.
 - Historical audit artifacts should not remain in the public docs tree after follow-up is complete.
@@ -114,7 +114,7 @@ make check
 
 ---
 
-***REMOVED******REMOVED*** 6. Review Traps
+## 6. Review Traps
 
 Block or fix docs that contain any of the following:
 
@@ -131,19 +131,19 @@ Block or fix docs that contain any of the following:
 
 ---
 
-***REMOVED******REMOVED*** 7. Verification for Doc Changes
+## 7. Verification for Doc Changes
 
 Run these checks before claiming a docs task is complete:
 
 ```bash
-***REMOVED*** 1. No trailing whitespace or conflict markers
+# 1. No trailing whitespace or conflict markers
 git diff --check
 
-***REMOVED*** 2. Changed files are only the intended docs
+# 2. Changed files are only the intended docs
 git diff --name-only
 
-***REMOVED*** 3. Markdown relative-link existence check (example for this repo)
-***REMOVED*** Python one-liner: scan for relative links and assert the path exists
+# 3. Markdown relative-link existence check (example for this repo)
+# Python one-liner: scan for relative links and assert the path exists
 python3 -c "
 import re, sys
 from pathlib import Path
@@ -154,7 +154,7 @@ for f in files:
     text = f.read_text()
     for m in re.finditer(r'\]\(([^)]+)\)', text):
         link = m.group(1)
-        if link.startswith('http') or link.startswith('***REMOVED***'):
+        if link.startswith('http') or link.startswith('#'):
             continue
         target = (f.parent / link).resolve()
         if not target.exists():
@@ -181,27 +181,27 @@ If `make check` is required by the worker prompt, run it. If the task is docs-on
 
 ---
 
-***REMOVED******REMOVED*** 8. Fast Doc Search Recipes
+## 8. Fast Doc Search Recipes
 
 Add or preserve these recipes in folder READMEs and runbook indexes:
 
 ```bash
-***REMOVED*** Cross-cutting code search by topic
+# Cross-cutting code search by topic
 rg -n "Langfuse|trace|score|observation" docs/runbooks docs/audits telegram_bot src scripts
 rg -n "Redis|cache|semantic cache|redis-cli" docs/runbooks telegram_bot src tests
 rg -n "Qdrant|collection|vector|ColBERT|hybrid" docs/runbooks src telegram_bot tests
 rg -n "LiteLLM|proxy|master_key|provider" docs/ README.md compose*.yml
 
-***REMOVED*** Find all folder READMEs and AGENTS overrides
+# Find all folder READMEs and AGENTS overrides
 find . -maxdepth 3 \( -name 'README.md' -o -name 'AGENTS.override.md' \) | sort
 
-***REMOVED*** Find duplicate source-of-truth phrases
+# Find duplicate source-of-truth phrases
 rg -n -i "source of truth|canonical" docs/ README.md DOCKER.md AGENTS.md
 ```
 
 ---
 
-***REMOVED******REMOVED*** 9. Summary Checklist for Workers
+## 9. Summary Checklist for Workers
 
 Before finishing any PR that touches docs:
 

@@ -1,14 +1,14 @@
-***REMOVED*** Local Development
+# Local Development
 
 Canonical local setup and verification flow.
 
-***REMOVED******REMOVED*** Prerequisites
+## Prerequisites
 
 - Python `3.12` recommended (`>=3.11` supported)
 - `uv`
 - Docker + Docker Compose v2
 
-***REMOVED******REMOVED*** 1. Bootstrap Workspace
+## 1. Bootstrap Workspace
 
 ```bash
 uv sync
@@ -55,25 +55,25 @@ Langfuse local development:
 - Traced dev services use the same local keys, so a fresh local Langfuse database should accept OTLP ingestion after `langfuse` is recreated.
 - If `bot` logs show OTLP `401` / `No key found for public key`, recreate `langfuse`, `langfuse-worker`, and the traced service with the same env file, then confirm the local Langfuse DB has an organization, project, and API key before debugging application tracing.
 
-***REMOVED******REMOVED*** 2. Start Services
+## 2. Start Services
 
 ```bash
-***REMOVED*** Core services (default compose set)
+# Core services (default compose set)
 make docker-up
 
-***REMOVED*** Bot runtime
+# Bot runtime
 make docker-bot-up
 
-***REMOVED*** Optional profiles
+# Optional profiles
 make docker-ml-up
 make docker-ingest-up
 make monitoring-up
 
-***REMOVED*** Voice is intentionally off by default; start separately when needed:
-***REMOVED*** make docker-voice-up
+# Voice is intentionally off by default; start separately when needed:
+# make docker-voice-up
 ```
 
-***REMOVED******REMOVED*** 3. Validate Runtime
+## 3. Validate Runtime
 
 ```bash
 make docker-ps
@@ -115,31 +115,31 @@ make test-bot-health
 
 The authoritative startup preflight still lives in [`telegram_bot/preflight.py`](../telegram_bot/preflight.py) and runs when you start the bot. That runtime preflight also keeps the repo-local BGE-M3 health and warmup contract, because BGE-M3 is not a generic upstream SDK probe in this repo.
 
-***REMOVED******REMOVED*** 4. Development Gates
+## 4. Development Gates
 
 Git hooks and push gates are static guardrails only: lint, formatting, type
 checks, and repository policy checks. They should not run pytest suites. Run
 tests explicitly as local validation on the development machine.
 
-***REMOVED******REMOVED******REMOVED*** Pre-push gate
+### Pre-push gate
 
 The `make pre-push` target is the recommended gate before pushing:
 
 ```bash
-make pre-push          ***REMOVED*** lint + format-check
+make pre-push          # lint + format-check
 ```
 
 This runs expanded lint (covering `src/` and `telegram_bot/` to match CI),
 and format verification. Run `make check` when you also need the current
 lint + MyPy gate; it may surface known baseline type drift until that is fixed.
 
-***REMOVED******REMOVED******REMOVED*** Hooks and uv environments
+### Hooks and uv environments
 
 Pre-commit hooks use their own isolated virtualenvs managed by the pre-commit
 framework. They do NOT use the project `.venv` created by `uv sync`. This means
 hooks can run even if your project venv is in an inconsistent state.
 
-***REMOVED******REMOVED******REMOVED*** Hooks in OpenCode worker worktrees
+### Hooks in OpenCode worker worktrees
 
 Each worktree needs its own hook installation. After creating a new worktree,
 run:
@@ -150,12 +150,12 @@ make setup-hooks
 
 This installs both pre-commit and pre-push hooks for that worktree.
 
-***REMOVED******REMOVED******REMOVED*** fail_fast behavior
+### fail_fast behavior
 
 The hook configuration sets `fail_fast: true`. This ensures hooks stop on the
 first failure and do not mutate unrelated files in a dirty checkout.
 
-***REMOVED******REMOVED******REMOVED*** Local release gate
+### Local release gate
 
 ```bash
 make check
@@ -176,7 +176,7 @@ make test
 make test-full
 ```
 
-***REMOVED******REMOVED******REMOVED*** Heavy test gate (`make test-full`)
+### Heavy test gate (`make test-full`)
 
 `make test-full` runs the entire test suite (all tiers) and is intended as a
 **manual** pre-merge validation step, not a routine development loop command.
@@ -221,7 +221,7 @@ If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
 lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 ```
 
-***REMOVED******REMOVED*** 5. Production Deployment (VPS)
+## 5. Production Deployment (VPS)
 
 The recommended production flow is:
 
@@ -235,26 +235,26 @@ The VPS default runtime (`compose.yml:compose.vps.yml`) starts only the RAG
 chatbot core: `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `litellm`,
 and `bot`. Mini app, Docling, ingestion, and self-hosted Langfuse are
 optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
-[cleanup commands](../DOCKER.md***REMOVED***vps-cleanup).
+[cleanup commands](../DOCKER.md#vps-cleanup).
 
-***REMOVED******REMOVED*** 6. Python Runtime Note
+## 6. Python Runtime Note
 
 Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
 
-***REMOVED******REMOVED*** 7. Running Components Without Docker Wrapper
+## 7. Running Components Without Docker Wrapper
 
 ```bash
-***REMOVED*** Telegram bot
+# Telegram bot
 uv run python -m telegram_bot.main
 
-***REMOVED*** Unified ingestion
+# Unified ingestion
 uv run python -m src.ingestion.unified.cli
 
-***REMOVED*** RAG API
+# RAG API
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
 
-***REMOVED******REMOVED*** 8. Minimal Stack (Fast Iteration)
+## 8. Minimal Stack (Fast Iteration)
 
 Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
 
@@ -283,7 +283,7 @@ make local-ps
 make local-down
 ```
 
-***REMOVED******REMOVED*** 9. E2E Core Trace Gate (***REMOVED***1307)
+## 9. E2E Core Trace Gate (#1307)
 
 Required core Telethon trace scenarios with Langfuse validation:
 
@@ -296,7 +296,7 @@ make e2e-test-traces-core
 
 Keep `make bot` running in another terminal while the E2E command executes. Use `make run-bot` only when you do not need the tee'd `logs/bot-run.log` evidence.
 
-***REMOVED******REMOVED*** 10. Runtime env in worktrees
+## 10. Runtime env in worktrees
 
 Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the main checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
 
@@ -305,7 +305,7 @@ Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the 
 - For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
 - Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
 
-***REMOVED******REMOVED*** 11. Common Issues
+## 11. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.

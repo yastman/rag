@@ -132,7 +132,7 @@ class TestMetricsLogger:
             with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
-                ***REMOVED*** Log multiple queries
+                # Log multiple queries
                 logger.log_query("q1", "hybrid", 400.0, 1.0)
                 logger.log_query("q2", "hybrid", 500.0, 1.0)
                 logger.log_query("q3", "baseline", 300.0, 0.0)
@@ -150,11 +150,11 @@ class TestMetricsLogger:
 
                 logger.log_query("q1", "hybrid", 400.0, 1.0)
 
-                ***REMOVED*** Check that a log file was created
+                # Check that a log file was created
                 log_files = list(Path(tmpdir).glob("metrics_*.jsonl"))
                 assert len(log_files) == 1
 
-                ***REMOVED*** Verify content
+                # Verify content
                 content = log_files[0].read_text()
                 assert "hybrid" in content
 
@@ -183,7 +183,7 @@ class TestMetricsLogger:
             with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
-                ***REMOVED*** Log 10 queries for percentile calculation
+                # Log 10 queries for percentile calculation
                 for i in range(10):
                     logger.log_query(f"q{i}", "hybrid", 400.0 + i * 10, 1.0)
 
@@ -218,13 +218,13 @@ class TestSLOTracking:
             with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
-                ***REMOVED*** Log queries with poor latency
+                # Log queries with poor latency
                 for i in range(10):
-                    logger.log_query(f"q{i}", "slow_engine", 2000.0, 1.0)  ***REMOVED*** Very slow
+                    logger.log_query(f"q{i}", "slow_engine", 2000.0, 1.0)  # Very slow
 
                 violations = logger._count_slo_violations("slow_engine")
 
-                assert violations >= 1  ***REMOVED*** At least latency SLO violated
+                assert violations >= 1  # At least latency SLO violated
 
 
 class TestAnomalyDetection:
@@ -238,10 +238,10 @@ class TestAnomalyDetection:
             with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
-                ***REMOVED*** Log query with anomalous latency (> p99 threshold)
+                # Log query with anomalous latency (> p99 threshold)
                 logger.log_query("q1", "hybrid", 5000.0, 1.0)
 
-                ***REMOVED*** Check anomaly log exists
+                # Check anomaly log exists
                 anomaly_log = Path(tmpdir) / "anomalies.log"
                 assert anomaly_log.exists()
                 assert "LATENCY ANOMALY" in anomaly_log.read_text()
@@ -253,13 +253,13 @@ class TestAnomalyDetection:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
-                ***REMOVED*** Override threshold to trigger anomaly
+                # Override threshold to trigger anomaly
                 logger.slo_thresholds["precision_at_1_min"] = 1.0
 
-                ***REMOVED*** Log query with low precision
+                # Log query with low precision
                 logger.log_query("q1", "hybrid", 400.0, 0.5)
 
-                ***REMOVED*** Check anomaly log exists
+                # Check anomaly log exists
                 anomaly_log = Path(tmpdir) / "anomalies.log"
                 assert anomaly_log.exists()
                 assert "QUALITY ANOMALY" in anomaly_log.read_text()
@@ -272,10 +272,10 @@ class TestAnomalyDetection:
             with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
-                ***REMOVED*** Log query with zero results
+                # Log query with zero results
                 logger.log_query("q1", "hybrid", 400.0, 0.0, num_results=0)
 
-                ***REMOVED*** Check anomaly log
+                # Check anomaly log
                 anomaly_log = Path(tmpdir) / "anomalies.log"
                 assert anomaly_log.exists()
                 assert "ZERO RESULTS" in anomaly_log.read_text()

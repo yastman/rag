@@ -1,4 +1,4 @@
-"""Tests for KommoClient.update_lead_score (***REMOVED***384)."""
+"""Tests for KommoClient.update_lead_score (#384)."""
 
 from __future__ import annotations
 
@@ -45,9 +45,9 @@ class TestUpdateLeadScore:
 
             assert result["id"] == 5001
             call_args = mock_req.call_args
-            ***REMOVED*** Verify PATCH method
+            # Verify PATCH method
             assert call_args[0][0] == "PATCH"
-            ***REMOVED*** Verify idempotency key header
+            # Verify idempotency key header
             headers = call_args[1].get("headers", {})
             assert headers.get("X-Idempotency-Key") == "lead-score:11:chat-1:74"
 

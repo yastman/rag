@@ -59,7 +59,7 @@ class TestCreateCommandsRouter:
     def test_router_has_all_command_handlers_registered(self, mock_bot):
         """Router registers handlers for all 9 commands."""
         router = create_commands_router(mock_bot)
-        ***REMOVED*** Check message handlers count (9 command handlers)
+        # Check message handlers count (9 command handlers)
         assert len(router.message.handlers) == 9
 
 

@@ -66,7 +66,7 @@ class TestChunkingStrategy:
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class TestDocumentChunkerFixedSize:
-    """Test fixed-size chunking strategy (deprecated — see ***REMOVED***780)."""
+    """Test fixed-size chunking strategy (deprecated — see #780)."""
 
     def test_fixed_size_basic(self):
         """Test basic fixed-size chunking."""
@@ -76,7 +76,7 @@ class TestDocumentChunkerFixedSize:
             strategy=ChunkingStrategy.FIXED_SIZE,
         )
 
-        text = "A" * 200  ***REMOVED*** 200 characters
+        text = "A" * 200  # 200 characters
         chunks = chunker.chunk_text(text, "test.pdf", "1")
 
         assert len(chunks) >= 2
@@ -94,8 +94,8 @@ class TestDocumentChunkerFixedSize:
         text = "A" * 150
         chunks = chunker.chunk_text(text, "test.pdf", "1")
 
-        ***REMOVED*** With 100 chunk size and 50 overlap, step is 50
-        ***REMOVED*** For 150 chars, we should get multiple chunks
+        # With 100 chunk size and 50 overlap, step is 50
+        # For 150 chars, we should get multiple chunks
         assert len(chunks) >= 2
 
     def test_fixed_size_small_text(self):
@@ -151,7 +151,7 @@ class TestDocumentChunkerSemantic:
         chunks = chunker.chunk_text(text, "criminal_code.pdf", "1")
 
         assert len(chunks) >= 1
-        ***REMOVED*** Check that chunks preserve structure
+        # Check that chunks preserve structure
         assert any("Стаття" in c.text for c in chunks)
 
     def test_semantic_chapters(self):
@@ -190,7 +190,7 @@ class TestDocumentChunkerSemantic:
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class TestDocumentChunkerSlidingWindow:
-    """Test sliding window chunking strategy (deprecated — see ***REMOVED***780)."""
+    """Test sliding window chunking strategy (deprecated — see #780)."""
 
     def test_sliding_window_basic(self):
         """Test basic sliding window chunking."""
@@ -203,7 +203,7 @@ class TestDocumentChunkerSlidingWindow:
         text = "A" * 200
         chunks = chunker.chunk_text(text, "test.pdf", "1")
 
-        assert len(chunks) >= 3  ***REMOVED*** 200 chars, step=50, should get 4 windows
+        assert len(chunks) >= 3  # 200 chars, step=50, should get 4 windows
 
     def test_sliding_window_overlap_content(self):
         """Test that sliding windows actually overlap."""
@@ -213,14 +213,14 @@ class TestDocumentChunkerSlidingWindow:
             strategy=ChunkingStrategy.SLIDING_WINDOW,
         )
 
-        text = "0123456789ABCDEFGHIJ"  ***REMOVED*** 20 chars
+        text = "0123456789ABCDEFGHIJ"  # 20 chars
         chunks = chunker.chunk_text(text, "test.pdf", "1")
 
-        ***REMOVED*** First chunk: 0-9, Second chunk: 5-14, etc.
+        # First chunk: 0-9, Second chunk: 5-14, etc.
         assert len(chunks) >= 3
-        ***REMOVED*** Check overlap exists
+        # Check overlap exists
         if len(chunks) >= 2:
-            ***REMOVED*** Characters 5-9 should be in both first and second chunk
+            # Characters 5-9 should be in both first and second chunk
             assert "56789" in chunks[0].text
             assert "56789" in chunks[1].text
 

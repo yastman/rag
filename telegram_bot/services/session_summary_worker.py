@@ -1,4 +1,4 @@
-"""Session summary worker: detect idle sessions, generate summary, write to Kommo (***REMOVED***445).
+"""Session summary worker: detect idle sessions, generate summary, write to Kommo (#445).
 
 Polls Redis for ``session:last_active:{user_id}`` keys older than ``idle_timeout_min``.
 Generates summary via LLM, writes to Kommo as note (if available).
@@ -58,7 +58,7 @@ class SessionSummaryWorker:
     async def start(self) -> None:
         """Start the background polling using APScheduler.
 
-        Logs a warning when ``history_source`` is not wired (***REMOVED***1599) — the
+        Logs a warning when ``history_source`` is not wired (#1599) — the
         worker would otherwise start, scan idle sessions, and silently delete
         keys without ever generating a summary, which looked like the feature
         was running while it was actually a no-op.
@@ -78,7 +78,7 @@ class SessionSummaryWorker:
             logger.warning(
                 "SessionSummaryWorker started without history_source — idle "
                 "sessions will be detected but summaries will NOT be generated "
-                "until a real history retriever is wired. See issue ***REMOVED***1599."
+                "until a real history retriever is wired. See issue #1599."
             )
             lf = get_client()
             if lf is not None:
@@ -106,7 +106,7 @@ class SessionSummaryWorker:
         """Scan Redis for idle sessions and process them.
 
         Streams SCAN pages and processes idle keys incrementally, capped by
-        ``max_sessions_per_cycle`` (***REMOVED***1608). Excess work is deferred to the
+        ``max_sessions_per_cycle`` (#1608). Excess work is deferred to the
         next worker tick so a large idle-user batch cannot trigger an
         unbounded burst of Redis reads, history fetches, LLM calls, and
         Kommo writes in a single cycle.
@@ -149,8 +149,8 @@ class SessionSummaryWorker:
                 if now - last_active < threshold:
                     continue
 
-                ***REMOVED*** Reserve a processing slot only after we know the key is idle —
-                ***REMOVED*** active sessions do not count toward the per-cycle cap.
+                # Reserve a processing slot only after we know the key is idle —
+                # active sessions do not count toward the per-cycle cap.
                 scanned += 1
 
                 user_id = (
@@ -198,7 +198,7 @@ class SessionSummaryWorker:
 
         Delegates to the constructor-injected ``history_source`` callable when
         wired. Returns ``[]`` when no source is configured (worker is a no-op
-        in that mode — see ***REMOVED***1599 for the contract). Subclasses may still
+        in that mode — see #1599 for the contract). Subclasses may still
         override this method directly for tests.
         """
         if self._history_source is not None:
@@ -216,7 +216,7 @@ class SessionSummaryWorker:
     async def _generate_summary(self, history: list[dict[str, str]]) -> str:
         """Generate a summary of the conversation via LLM.
 
-        Wrapped in ``@observe`` (***REMOVED***1662) so the auto-traced generation produced
+        Wrapped in ``@observe`` (#1662) so the auto-traced generation produced
         by ``langfuse.openai`` becomes a child of a named ``session-summary-llm``
         span instead of a flat child of the outer ``session-summary-check``
         span. Curated ``update_current_span`` payloads avoid leaking full
@@ -224,8 +224,8 @@ class SessionSummaryWorker:
 
         On LLM failure the span is recorded at ``level="ERROR"`` with a
         truncated ``status_message`` and the exception is re-raised; the outer
-        ``_run_loop`` already swallows worker-cycle errors (***REMOVED***1662 plan step 4).
-        Placeholder fallback for empty history is owned by ``***REMOVED***1599``/``***REMOVED***1608``
+        ``_run_loop`` already swallows worker-cycle errors (#1662 plan step 4).
+        Placeholder fallback for empty history is owned by ``#1599``/``#1608``
         and is intentionally not modified here.
         """
         lf = get_client()
@@ -270,7 +270,7 @@ class SessionSummaryWorker:
         """Log the summary and write to Kommo if available."""
         logger.info("Session summary for user %s: %s", user_id, summary[:100])
         if self._kommo:
-            ***REMOVED*** TODO: resolve lead_id from user_id via lead scoring store (***REMOVED***445)
+            # TODO: resolve lead_id from user_id via lead scoring store (#445)
             lead_id: int | None = None
             if lead_id:
                 try:

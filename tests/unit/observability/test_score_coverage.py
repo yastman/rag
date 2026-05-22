@@ -1,7 +1,7 @@
 """Score coverage contract — parametrized verification of each score name and type.
 
 Verifies scoring.py covers all documented scores:
-  - 13 core RAG scores (write_langfuse_scores) — hyde_used removed (***REMOVED***754)
+  - 13 core RAG scores (write_langfuse_scores) — hyde_used removed (#754)
   - Always-written supplementary scores (BOOLEAN/CATEGORICAL)
   - 4 history scores (write_history_scores)
   - 4 CRM tool scores (write_crm_scores)
@@ -63,9 +63,9 @@ def all_rag_scores() -> dict[str, dict]:
     return {c.kwargs["name"]: c.kwargs for c in lf.create_score.call_args_list}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Core RAG scores (14) — documented table in observability.md
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Core RAG scores (14) — documented table in observability.md
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -90,9 +90,9 @@ def test_core_rag_score_is_written(score_name: str, all_rag_scores: dict) -> Non
     assert score_name in all_rag_scores, f"Core RAG score '{score_name}' not written"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Core RAG scores — numeric value type
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Core RAG scores — numeric value type
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -119,9 +119,9 @@ def test_core_rag_score_value_is_numeric(score_name: str, all_rag_scores: dict) 
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** BOOLEAN scores — must carry data_type="BOOLEAN"
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# BOOLEAN scores — must carry data_type="BOOLEAN"
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -146,9 +146,9 @@ def test_boolean_score_has_boolean_data_type(score_name: str, all_rag_scores: di
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CATEGORICAL scores
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CATEGORICAL scores
+# ---------------------------------------------------------------------------
 
 
 def test_input_type_is_categorical(all_rag_scores: dict) -> None:
@@ -169,9 +169,9 @@ def test_input_type_voice_for_voice_result() -> None:
     assert scores["input_type"]["value"] == "voice"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** memory_messages_count — always written
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# memory_messages_count — always written
+# ---------------------------------------------------------------------------
 
 
 def test_memory_messages_count_always_written(all_rag_scores: dict) -> None:
@@ -179,17 +179,17 @@ def test_memory_messages_count_always_written(all_rag_scores: dict) -> None:
 
 
 def test_memory_messages_count_value_matches_messages(all_rag_scores: dict) -> None:
-    ***REMOVED*** _FULL_RESULT has 2 messages
+    # _FULL_RESULT has 2 messages
     assert all_rag_scores["memory_messages_count"]["value"] == 2.0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Streaming path scores — llm_decode_ms, llm_tps when available
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Streaming path scores — llm_decode_ms, llm_tps when available
+# ---------------------------------------------------------------------------
 
 
 def test_llm_decode_ms_written_when_available(all_rag_scores: dict) -> None:
-    ***REMOVED*** _FULL_RESULT has llm_decode_ms=300.0
+    # _FULL_RESULT has llm_decode_ms=300.0
     assert "llm_decode_ms" in all_rag_scores
     assert all_rag_scores["llm_decode_ms"]["value"] == 300.0
 
@@ -213,9 +213,9 @@ def test_llm_decode_unavailable_written_when_none() -> None:
     assert "llm_tps_unavailable" in scores
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** History scores (4) — write_history_scores
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# History scores (4) — write_history_scores
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -254,9 +254,9 @@ def test_history_search_latency_is_numeric(history_scores: dict) -> None:
     assert isinstance(val, float)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CRM scores (4) — write_crm_scores
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CRM scores (4) — write_crm_scores
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -280,12 +280,12 @@ def crm_scores() -> dict[str, dict]:
 def test_crm_score_is_written(score_name: str, crm_scores: dict) -> None:
     """Each CRM score name must be written (parametrized for individual failure messages)."""
     assert score_name in crm_scores, f"CRM score '{score_name}' not written"
-    ***REMOVED*** Type/schema contracts are in test_trace_contracts.py::TestWriteCrmScoresContract
+    # Type/schema contracts are in test_trace_contracts.py::TestWriteCrmScoresContract
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Supervisor scores — verify names appear as string literals in bot.py
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Supervisor scores — verify names appear as string literals in bot.py
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -308,13 +308,13 @@ def test_supervisor_score_name_in_bot_source(score_name: str) -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Response-length control scores — conditional on enforced policy
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Response-length control scores — conditional on enforced policy
+# ---------------------------------------------------------------------------
 
 
 def test_response_style_applied_written_for_enforced_policy(all_rag_scores: dict) -> None:
-    ***REMOVED*** _FULL_RESULT has response_policy_mode="enforced", response_style="balanced"
+    # _FULL_RESULT has response_policy_mode="enforced", response_style="balanced"
     assert "response_style_applied" in all_rag_scores
 
 
@@ -328,13 +328,13 @@ def test_response_style_applied_not_written_for_shadow_policy() -> None:
     assert "response_style_applied" not in scores
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Source attribution scores — conditional on sources_count > 0
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Source attribution scores — conditional on sources_count > 0
+# ---------------------------------------------------------------------------
 
 
 def test_sources_shown_boolean_written_when_sources_present(all_rag_scores: dict) -> None:
-    ***REMOVED*** _FULL_RESULT has sources_count=3
+    # _FULL_RESULT has sources_count=3
     assert "sources_shown" in all_rag_scores
     assert all_rag_scores["sources_shown"]["data_type"] == "BOOLEAN"
     assert all_rag_scores["sources_shown"]["value"] == 1

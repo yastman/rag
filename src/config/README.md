@@ -1,12 +1,12 @@
-***REMOVED*** config/
+# config/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Central configuration for the RAG pipeline: settings, constants, and Qdrant policy.
 Owns core `src` RAG settings, enum constants, defaults, and collection naming policy.
 Loads local settings from constructor arguments, environment variables, and defaults.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 | File | Purpose |
 |------|---------|
@@ -15,34 +15,34 @@ Loads local settings from constructor arguments, environment variables, and defa
 | [`constants.py`](./constants.py) | Enums (`SearchEngine`, `APIProvider`, `ModelName`) and dataclasses |
 | [`qdrant_policy.py`](./qdrant_policy.py) | Collection-level Qdrant configuration rules |
 
-***REMOVED******REMOVED*** Usage
+## Usage
 
 ```python
 from src.config import Settings, APIProvider, SearchEngine
 
 settings = Settings()
-print(settings.qdrant_url)  ***REMOVED*** http://localhost:6333
+print(settings.qdrant_url)  # http://localhost:6333
 
-***REMOVED*** Override via constructor
+# Override via constructor
 settings = Settings(
     api_provider=APIProvider.OPENAI,
     qdrant_url="https://qdrant.example.com"
 )
 ```
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Does not own Telegram bot settings; see `telegram_bot/config.py`.
 - Does not own Docker Compose, service ports, or secret policy; see [`../../DOCKER.md`](../../DOCKER.md).
 - Keeps Qdrant collection naming policy here so callers do not duplicate suffix rules.
 
-***REMOVED******REMOVED*** Focused checks
+## Focused checks
 
 ```bash
 uv run pytest tests/unit/config/ -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`.env.example`](../../.env.example) — Environment variables template
 - [`src/core/pipeline.py`](../core/pipeline.py) — Uses `Settings` for pipeline config

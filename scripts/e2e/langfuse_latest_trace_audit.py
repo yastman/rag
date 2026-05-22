@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess  ***REMOVED*** nosec B404
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -22,7 +22,7 @@ from typing import Any
 
 from langfuse import Langfuse
 
-***REMOVED*** Reuse contracts from the validator module to stay consistent.
+# Reuse contracts from the validator module to stay consistent.
 from scripts.e2e.langfuse_trace_validator import (
     SCENARIO_CONTRACTS,
     SCORE_NAMES,
@@ -104,27 +104,27 @@ def _compute_branch_observations(
     no_results = _as_bool(score_values.get("no_results"))
     rerank_applied = _as_bool(score_values.get("rerank_applied"))
 
-    ***REMOVED*** Conservative default: treat missing query_type as non-chitchat.
+    # Conservative default: treat missing query_type as non-chitchat.
     is_chitchat = (query_type == 0.0) if query_type is not None else False
 
     if not is_chitchat:
         additional |= {"node-cache-check"}
 
     if not is_chitchat and semantic_hit is False:
-        ***REMOVED*** Retrieval path: cache miss -> retrieve -> grade
+        # Retrieval path: cache miss -> retrieve -> grade
         additional |= {"node-retrieve", "node-grade"}
 
         if rerank_applied is True:
             additional |= {"node-rerank"}
 
         if (llm_used is True) and (no_results is False) and ((results_count or 0) > 0):
-            ***REMOVED*** Generation path: generate -> cache-store -> respond
+            # Generation path: generate -> cache-store -> respond
             additional |= {"node-generate", "node-cache-store", "node-respond"}
 
     return additional
 
 
-***REMOVED*** Sanitized key safelist for root input/output — never report raw payloads or secrets.
+# Sanitized key safelist for root input/output — never report raw payloads or secrets.
 _ALLOWED_ROOT_KEYS = {
     "content_type",
     "query_preview",
@@ -147,7 +147,7 @@ def sanitize_trace(raw: object) -> AuditTrace:
     if isinstance(raw, dict):
         data = raw
     else:
-        ***REMOVED*** Object-like (SDK model)
+        # Object-like (SDK model)
         data = {
             "id": getattr(raw, "id", None),
             "name": getattr(raw, "name", None),
@@ -188,7 +188,7 @@ def sanitize_trace(raw: object) -> AuditTrace:
             score_value = getattr(score, "value", None) if hasattr(score, "value") else None
         if score_name:
             score_names.append(score_name)
-        ***REMOVED*** Only capture sanitized numeric/boolean values; never capture strings or raw payloads.
+        # Only capture sanitized numeric/boolean values; never capture strings or raw payloads.
         if score_name and isinstance(score_value, (int, float, bool)):
             score_values[score_name] = score_value
 
@@ -222,7 +222,7 @@ def _check_trace_coverage(trace: AuditTrace) -> TraceCoverage:
             scenario_kind=None,
             ok=True,
         )
-    ***REMOVED*** Choose the contract that best matches this trace.
+    # Choose the contract that best matches this trace.
     scenario_kind = None
     required_observations: set[str] = set()
     required_scores: set[str] = set(SCORE_NAMES)
@@ -237,11 +237,11 @@ def _check_trace_coverage(trace: AuditTrace) -> TraceCoverage:
             break
 
     if scenario_kind is None:
-        ***REMOVED*** Unknown trace — treat as app trace with base requirements only.
+        # Unknown trace — treat as app trace with base requirements only.
         scenario_kind = "unknown"
         required_observations = {"telegram-rag-query", "telegram-rag-supervisor"}
 
-    ***REMOVED*** Branch-aware required child observations for known scenarios (mirrors validator logic).
+    # Branch-aware required child observations for known scenarios (mirrors validator logic).
     if scenario_kind != "unknown":
         required_observations |= _compute_branch_observations(trace.score_values)
 
@@ -293,11 +293,11 @@ def _fetch_traces_via_cli(
         cmd += ["--session-id", session_id]
 
     env = os.environ.copy()
-    ***REMOVED*** Ensure LANGFUSE_HOST is honoured
+    # Ensure LANGFUSE_HOST is honoured
     if os.getenv("LANGFUSE_BASE_URL") and not os.getenv("LANGFUSE_HOST"):
         env["LANGFUSE_HOST"] = os.getenv("LANGFUSE_BASE_URL", "")
 
-    result = subprocess.run(  ***REMOVED*** nosec B603
+    result = subprocess.run(  # nosec B603
         cmd,
         capture_output=True,
         text=True,
@@ -316,7 +316,7 @@ def _fetch_traces_via_cli(
         data = payload.get("data")
         if isinstance(data, list):
             return data
-        ***REMOVED*** Some CLI versions wrap differently
+        # Some CLI versions wrap differently
         return [payload] if payload.get("id") else []
     if isinstance(payload, list):
         return payload
@@ -345,7 +345,7 @@ def _fetch_traces_via_sdk(
         if isinstance(t, dict):
             out.append(t)
         else:
-            ***REMOVED*** Convert object to dict via dataclass-like fields where possible
+            # Convert object to dict via dataclass-like fields where possible
             out.append(
                 {
                     "id": getattr(t, "id", None),
@@ -378,7 +378,7 @@ def fetch_latest_traces(
         except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
             errors.append(f"CLI path failed: {exc}")
 
-    ***REMOVED*** SDK fallback
+    # SDK fallback
     if not _langfuse_is_configured():
         raise RuntimeError(
             "Langfuse is not configured (LANGFUSE_PUBLIC_KEY/SECRET_KEY missing) "
@@ -392,27 +392,27 @@ def fetch_latest_traces(
 def render_markdown(result: AuditResult) -> str:
     """Render deterministic markdown report."""
     lines: list[str] = [
-        "***REMOVED*** Langfuse Latest Trace Audit",
+        "# Langfuse Latest Trace Audit",
         "",
         f"- **Audit timestamp:** {result.timestamp}",
         f"- **Session marker:** {result.session_marker or '(none)'}",
         f"- **Artifact path:** {result.artifact_path}",
         f"- **Overall:** {'PASS' if result.ok else 'FAIL'}",
         "",
-        "***REMOVED******REMOVED*** Summary",
+        "## Summary",
         "",
         f"- **Total inspected:** {len(result.inspected)}",
         f"- **App traces:** {result.app_trace_count}",
         f"- **Proxy noise (LiteLLM):** {result.proxy_noise_count}",
         "",
-        "***REMOVED******REMOVED*** Per-Trace Coverage",
+        "## Per-Trace Coverage",
         "",
     ]
 
     for cov in result.inspected:
         trace = cov.trace
         status = "PASS" if cov.ok else "FAIL"
-        lines.append(f"***REMOVED******REMOVED******REMOVED*** {trace.name} — `{trace.trace_id}`")
+        lines.append(f"### {trace.name} — `{trace.trace_id}`")
         lines.append("")
         lines.append(f"- **Status:** {status}")
         lines.append(f"- **Scenario:** {cov.scenario_kind or 'unknown'}")
@@ -439,7 +439,7 @@ def render_markdown(result: AuditResult) -> str:
                 lines.append(f"- **Missing scores:** {', '.join(sorted(cov.missing_scores))}")
             lines.append("")
 
-    lines.append("***REMOVED******REMOVED*** Required App Coverage Check")
+    lines.append("## Required App Coverage Check")
     lines.append("")
     if result.ok:
         lines.append("All inspected app traces meet required coverage.")
@@ -486,7 +486,7 @@ def run_audit(
         if not cov.ok:
             overall_ok = False
 
-    ***REMOVED*** If there are zero app traces, the audit fails because we cannot confirm coverage.
+    # If there are zero app traces, the audit fails because we cannot confirm coverage.
     if app_trace_count == 0:
         overall_ok = False
 

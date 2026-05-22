@@ -59,7 +59,7 @@ def _get_system_prompt() -> str:
 
 
 def _get_system_prompt_with_object() -> tuple[str, Any | None]:
-    """Fetch system prompt + raw Langfuse Prompt object for ***REMOVED***1666 linking.
+    """Fetch system prompt + raw Langfuse Prompt object for #1666 linking.
 
     Returns the same compiled string as ``_get_system_prompt`` plus the raw
     Langfuse Prompt object (``None`` if Langfuse is unavailable / fallback
@@ -132,11 +132,11 @@ class ApartmentLlmExtractor:
 
         source = "hybrid" if partial_filters else "llm"
 
-        ***REMOVED*** Fetch the prompt + raw Prompt object so we can link the generation
-        ***REMOVED*** observation to Prompt Management (***REMOVED***1666). The underlying client is
-        ***REMOVED*** plain `openai.AsyncOpenAI` (not `langfuse.openai`) so the
-        ***REMOVED*** `langfuse_prompt=` kwarg path is not available; we use the
-        ***REMOVED*** `update_current_generation(prompt=...)` secondary path instead.
+        # Fetch the prompt + raw Prompt object so we can link the generation
+        # observation to Prompt Management (#1666). The underlying client is
+        # plain `openai.AsyncOpenAI` (not `langfuse.openai`) so the
+        # `langfuse_prompt=` kwarg path is not available; we use the
+        # `update_current_generation(prompt=...)` secondary path instead.
         system_prompt, prompt_obj = _get_system_prompt_with_object()
         if prompt_obj is not None:
             with contextlib.suppress(Exception):
@@ -154,12 +154,12 @@ class ApartmentLlmExtractor:
             max_retries=2,
         )
 
-        ***REMOVED*** Re-validate hard filters so bypassed test fixtures using model_construct
-        ***REMOVED*** still go through the same normalization/default contract as runtime payloads.
+        # Re-validate hard filters so bypassed test fixtures using model_construct
+        # still go through the same normalization/default contract as runtime payloads.
         hard_payload = result.hard.model_dump()
         if hard_payload.get("city") is not None and hard_payload["city"] not in _VALID_CITIES:
             hard_payload["city"] = None
         result = result.model_copy(update={"hard": HardFilters.model_validate(hard_payload)})
 
-        ***REMOVED*** Set extraction source
+        # Set extraction source
         return result.model_copy(update={"meta": result.meta.model_copy(update={"source": source})})

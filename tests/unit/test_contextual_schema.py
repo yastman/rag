@@ -36,7 +36,7 @@ class TestContextualChunk:
             text="Основной текст.",
         )
         embedding_text = chunk.text_for_embedding
-        assert "***REMOVED*** Тема" in embedding_text
+        assert "# Тема" in embedding_text
         assert "Контекст чанка." in embedding_text
         assert "Основной текст." in embedding_text
 
@@ -87,7 +87,7 @@ class TestContextualDocument:
         doc = ContextualDocument(source="video.vtt", chunks=[chunk])
         json_str = doc.to_json()
 
-        ***REMOVED*** Should be valid JSON
+        # Should be valid JSON
         parsed = json.loads(json_str)
         assert parsed["source"] == "video.vtt"
         assert parsed["total_chunks"] == 1
@@ -105,7 +105,7 @@ class TestContextualDocument:
                 "keywords": ["a"],
                 "context": "Контекст",
                 "text": "Текст",
-                "text_for_embedding": "***REMOVED*** Тема\\n\\nКонтекст\\n\\nТекст"
+                "text_for_embedding": "# Тема\\n\\nКонтекст\\n\\nТекст"
             }]
         }"""
         doc = ContextualDocument.from_json(json_str)
@@ -124,7 +124,7 @@ class TestCreateTextForEmbedding:
             context="Обсуждение цен на недвижимость.",
             text="Цены начинаются от 50000 евро.",
         )
-        assert result.startswith("***REMOVED*** Цены в Бургасе")
+        assert result.startswith("# Цены в Бургасе")
         assert "Обсуждение цен" in result
         assert "50000 евро" in result
 
@@ -135,5 +135,5 @@ class TestCreateTextForEmbedding:
             context="",
             text="Текст чанка.",
         )
-        assert "***REMOVED*** Тема" in result
+        assert "# Тема" in result
         assert "Текст чанка." in result

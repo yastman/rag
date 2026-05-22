@@ -3,6 +3,9 @@ from pathlib import Path
 import yaml
 
 
+LINT_PATHS = ("src/", "telegram_bot/", "mini_app/", "services/", "scripts/")
+
+
 def test_workflow_name_is_ci() -> None:
     """Workflow exposes the standard CI name."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -45,13 +48,18 @@ def test_validation_jobs_exist() -> None:
 def test_ruff_lint_runs() -> None:
     """Linting runs as part of CI."""
     text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "ruff check src/ telegram_bot/" in text
+    assert "ruff check" in text
+    for path in LINT_PATHS:
+        assert path in text
 
 
 def test_makefile_lint_covers_telegram_bot() -> None:
     """Makefile lint target must cover telegram_bot/ to match CI."""
     text = Path("Makefile").read_text(encoding="utf-8")
-    assert "ruff check src/ telegram_bot/" in text
+    assert "LINT_PATHS :=" in text
+    assert "ruff check $(LINT_PATHS)" in text
+    for path in LINT_PATHS:
+        assert path in text
 
 
 def test_pre_push_gate_excludes_baseline_type_check() -> None:

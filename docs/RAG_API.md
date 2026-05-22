@@ -1,4 +1,4 @@
-***REMOVED*** RAG API Contract
+# RAG API Contract
 
 FastAPI service wrapping the LangGraph pipeline for external query execution.
 
@@ -7,9 +7,9 @@ FastAPI service wrapping the LangGraph pipeline for external query execution.
 
 This page owns the request/response contract. Use [`API_REFERENCE.md`](API_REFERENCE.md) for quick curl/httpx examples.
 
-***REMOVED******REMOVED*** Endpoints
+## Endpoints
 
-***REMOVED******REMOVED******REMOVED*** `GET /health`
+### `GET /health`
 
 Readiness probe. Returns immediately without checking downstream services.
 
@@ -20,7 +20,7 @@ Readiness probe. Returns immediately without checking downstream services.
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** `POST /query`
+### `POST /query`
 
 Execute a RAG query through the full LangGraph pipeline.
 
@@ -77,7 +77,7 @@ curl -X POST http://localhost:8080/query \
 
 ---
 
-***REMOVED******REMOVED*** Error Responses
+## Error Responses
 
 | Status | Body | Cause |
 |--------|------|-------|
@@ -101,7 +101,7 @@ For 500 errors, check Langfuse traces for the corresponding `rag-api-query` trac
 
 ---
 
-***REMOVED******REMOVED*** Architecture
+## Architecture
 
 ```
 POST /query
@@ -122,7 +122,7 @@ Returns QueryResponse with context
 
 ---
 
-***REMOVED******REMOVED*** Observability
+## Observability
 
 - Trace family: `rag-api-query`
 - Langfuse scores written via `write_langfuse_scores()`
@@ -130,10 +130,10 @@ Returns QueryResponse with context
 
 ---
 
-***REMOVED******REMOVED*** Running Locally
+## Running Locally
 
 ```bash
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
-***REMOVED*** Or via make:
+# Or via make:
 make docker-voice-up
 ```

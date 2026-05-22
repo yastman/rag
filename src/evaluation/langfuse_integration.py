@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Native Langfuse v4 examples for evaluation-time RAG observability.
 
 This module intentionally demonstrates the observation-first SDK model:

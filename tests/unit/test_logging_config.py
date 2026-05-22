@@ -298,10 +298,10 @@ class TestSetupLogging:
 
             root_logger = logging.getLogger()
 
-            ***REMOVED*** Should have 2 handlers: console + file
+            # Should have 2 handlers: console + file
             assert len(root_logger.handlers) == 2
 
-            ***REMOVED*** Find file handler
+            # Find file handler
             file_handler = None
             for handler in root_logger.handlers:
                 if isinstance(handler, logging.FileHandler):
@@ -320,10 +320,10 @@ class TestSetupLogging:
         """Test that setup clears existing handlers."""
         root_logger = logging.getLogger()
 
-        ***REMOVED*** Clear any existing handlers first
+        # Clear any existing handlers first
         root_logger.handlers.clear()
 
-        ***REMOVED*** Add some handlers
+        # Add some handlers
         root_logger.addHandler(logging.StreamHandler())
         root_logger.addHandler(logging.StreamHandler())
         initial_count = len(root_logger.handlers)
@@ -331,7 +331,7 @@ class TestSetupLogging:
 
         setup_logging()
 
-        ***REMOVED*** Should have only 1 handler now (the console handler added by setup_logging)
+        # Should have only 1 handler now (the console handler added by setup_logging)
         assert len(root_logger.handlers) == 1
 
     def test_setup_logging_sets_third_party_loggers(self):
@@ -351,7 +351,7 @@ class TestSetupLogging:
         with patch("telegram_bot.logging_config.logging.info") as mock_info:
             setup_logging(level="DEBUG", json_format=False, log_file="/tmp/test.log")
 
-            ***REMOVED*** Verify info was called with configuration message
+            # Verify info was called with configuration message
             mock_info.assert_called()
             call_args = mock_info.call_args[0][0]
             assert "DEBUG" in call_args

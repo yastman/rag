@@ -22,7 +22,7 @@ from telegram_bot.observability import get_client, observe
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** --- Query type constants ---
+# --- Query type constants ---
 
 CHITCHAT = "CHITCHAT"
 OFF_TOPIC = "OFF_TOPIC"
@@ -31,79 +31,79 @@ FAQ = "FAQ"
 ENTITY = "ENTITY"
 GENERAL = "GENERAL"
 
-***REMOVED*** --- Regex patterns ---
+# --- Regex patterns ---
 
 CHITCHAT_PATTERNS = [
-    ***REMOVED*** Greetings (Russian)
+    # Greetings (Russian)
     r"^привет\b",
     r"^здравствуй",
     r"^добр(ый|ое|ая)\s+(день|утро|вечер)",
     r"^хай\b",
     r"^хелло\b",
     r"^салют\b",
-    ***REMOVED*** Greetings (English)
+    # Greetings (English)
     r"^hi\b",
     r"^hello\b",
     r"^hey\b",
     r"^good\s+(morning|afternoon|evening)",
-    ***REMOVED*** Thanks (Russian)
+    # Thanks (Russian)
     r"^спасибо\b",
     r"^благодар",
     r"^круто\b",
     r"^отлично\b",
     r"^супер\b",
-    ***REMOVED*** Thanks (English)
+    # Thanks (English)
     r"^thanks?\b",
     r"^thank you\b",
     r"^great\b",
     r"^awesome\b",
-    ***REMOVED*** Bot questions (Russian)
+    # Bot questions (Russian)
     r"^что ты (умеешь|можешь|делаешь)",
     r"^как (тебя зовут|ты работаешь)",
     r"^кто ты",
     r"^ты бот",
-    ***REMOVED*** Bot questions (English)
+    # Bot questions (English)
     r"^what (can you|do you) do",
     r"^who are you",
     r"^are you (a bot|ai)",
-    ***REMOVED*** Farewells (Russian)
+    # Farewells (Russian)
     r"^пока\b",
     r"^до свидания\b",
     r"^всего доброго\b",
-    ***REMOVED*** Farewells (English)
+    # Farewells (English)
     r"^bye\b",
     r"^goodbye\b",
     r"^see you\b",
 ]
 
 OFF_TOPIC_PATTERNS = [
-    ***REMOVED*** Programming/Tech
+    # Programming/Tech
     r"\b(python|javascript|java|код|программ|api|docker|kubernetes)\b",
     r"\b(алгоритм|функция|переменная|массив|database)\b",
-    ***REMOVED*** Medical
+    # Medical
     r"\b(лечение|болезн|врач|доктор|симптом[а-я]*|таблетк|медицин)\b",
     r"\b(диагноз|аптека|рецепт|health|doctor|medicine|грипп)\b",
-    ***REMOVED*** Legal (non-property)
+    # Legal (non-property)
     r"\b(развод|алимент|уголовн|штраф|суд[^а-я]|адвокат)\b",
-    ***REMOVED*** Cooking/Recipes
+    # Cooking/Recipes
     r"\b(рецепт|готовить|приготовить|ингредиент|блюдо|пицц)",
     r"\b(recipe|cook[^i]|food|dish)\b",
-    ***REMOVED*** Travel (non-property)
+    # Travel (non-property)
     r"\b(билет|самолёт|поезд|отел[^ьн]|гостиниц|бронирован)\b",
     r"\b(flight|ticket|hotel|booking)\b",
-    ***REMOVED*** General knowledge
+    # General knowledge
     r"\b(кто (такой|такая)|что такое|когда был|история)\b",
     r"\b(столица|президент|население)\b",
-    ***REMOVED*** Math/Science
+    # Math/Science
     r"\b(формула|уравнение|теорема|физика|химия|математика)\b",
-    ***REMOVED*** Entertainment
+    # Entertainment
     r"\b(фильм|сериал|музыка|песня|игр[аы]|movie|game[s]?|music)\b",
-    ***REMOVED*** Finance (non-property)
+    # Finance (non-property)
     r"\b(акции|биржа|криптовалюта|биткоин|инвестиц|трейдинг)\b",
     r"\b(crypto|bitcoin|stock|trading)\b",
-    ***REMOVED*** Jobs (non-property)
+    # Jobs (non-property)
     r"\b(вакансия|работа[^ть]|резюме|зарплата|job|career|salary)\b",
-    ***REMOVED*** Education
+    # Education
     r"\b(экзамен|школа|универси|курс|диплом|exam|university)\b",
 ]
 
@@ -138,14 +138,14 @@ ENTITY_PATTERNS = [
     r"жк\s+[\"«]?\w+",
 ]
 
-***REMOVED*** Pre-compile all patterns
+# Pre-compile all patterns
 _CHITCHAT_COMPILED = [re.compile(p, re.IGNORECASE) for p in CHITCHAT_PATTERNS]
 _OFF_TOPIC_COMPILED = [re.compile(p, re.IGNORECASE) for p in OFF_TOPIC_PATTERNS]
 _STRUCTURED_COMPILED = [re.compile(p, re.IGNORECASE) for p in STRUCTURED_PATTERNS]
 _FAQ_COMPILED = [re.compile(p, re.IGNORECASE) for p in FAQ_PATTERNS]
 _ENTITY_COMPILED = [re.compile(p, re.IGNORECASE) for p in ENTITY_PATTERNS]
 
-***REMOVED*** --- Canned responses ---
+# --- Canned responses ---
 
 CHITCHAT_RESPONSES: dict[str, list[str]] = {
     "greeting": [

@@ -1,4 +1,4 @@
-***REMOVED*** tests/load/chat_simulator.py
+# tests/load/chat_simulator.py
 """Realistic chat conversation simulator for load tests."""
 
 import asyncio
@@ -17,7 +17,7 @@ class Message:
     text: str
 
 
-***REMOVED*** Conversation template (6 messages per chat)
+# Conversation template (6 messages per chat)
 CONVERSATION_TEMPLATE = [
     Message(ExpectedQueryType.CHITCHAT, "Привет!"),
     Message(ExpectedQueryType.COMPLEX, "{property_query_1}"),
@@ -27,7 +27,7 @@ CONVERSATION_TEMPLATE = [
     Message(ExpectedQueryType.CHITCHAT, "Спасибо, пока!"),
 ]
 
-***REMOVED*** Property queries for template substitution
+# Property queries for template substitution
 PROPERTY_QUERIES = [
     "Найди квартиру в Солнечном берегу до 50000 евро",
     "Студии в Несебре с видом на море",

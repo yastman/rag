@@ -1,4 +1,4 @@
-***REMOVED*** tests/smoke/conftest.py
+# tests/smoke/conftest.py
 """Smoke test fixtures - require live Qdrant and Redis."""
 
 import asyncio
@@ -32,7 +32,7 @@ def require_live_services(request):
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
     redis_url = request.getfixturevalue("redis_url")
 
-    ***REMOVED*** Check Qdrant
+    # Check Qdrant
     try:
         resp = httpx.get(f"{qdrant_url}/collections", timeout=2)
         if resp.status_code != 200:
@@ -40,7 +40,7 @@ def require_live_services(request):
     except Exception:
         pytest.skip("Qdrant not available")
 
-    ***REMOVED*** Check Redis
+    # Check Redis
     async def check_redis():
         try:
             client = redis.from_url(redis_url, socket_connect_timeout=2)
@@ -60,7 +60,7 @@ async def voyage_service():
         pytest.skip("VOYAGE_API_KEY not set")
     try:
         from telegram_bot.services.voyage import VoyageService
-    except Exception as exc:  ***REMOVED*** pragma: no cover - depends on optional third-party packages
+    except Exception as exc:  # pragma: no cover - depends on optional third-party packages
         pytest.skip(f"Voyage stack unavailable in this environment: {exc}")
     return VoyageService(api_key=api_key)
 

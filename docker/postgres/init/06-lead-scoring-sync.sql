@@ -1,4 +1,4 @@
--- Lead Scoring + Kommo CRM Sync State (***REMOVED***384)
+-- Lead Scoring + Kommo CRM Sync State (#384)
 -- Depends on: 05-realestate-schema.sql (leads table)
 
 \c realestate;

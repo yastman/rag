@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import yaml  ***REMOVED*** type: ignore[import-untyped]
+import yaml  # type: ignore[import-untyped]
 
 from src.retrieval.topic_classifier import (
     DocType,

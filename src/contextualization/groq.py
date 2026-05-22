@@ -37,7 +37,7 @@ class GroqContextualizer(ContextualizeProvider):
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using Groq.
 
-        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (***REMOVED***1533),
+        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (#1533),
         which provides the shared concurrent per-chunk dispatch with per-chunk
         fallback to ``context_method="none"``.
         """
@@ -61,7 +61,7 @@ class GroqContextualizer(ContextualizeProvider):
         user_prompt = self.get_user_prompt(text, query)
 
         response = await self.client.chat.completions.create(
-            model="llama3-70b-8192",  ***REMOVED*** Groq's default fast model
+            model="llama3-70b-8192",  # Groq's default fast model
             max_tokens=256,
             temperature=self.settings.temperature,
             messages=[
@@ -70,7 +70,7 @@ class GroqContextualizer(ContextualizeProvider):
             ],
         )
 
-        ***REMOVED*** Track tokens
+        # Track tokens
         usage = getattr(response, "usage", None)
         if usage is not None:
             self.total_tokens += int(usage.total_tokens or 0)
@@ -123,5 +123,5 @@ class GroqContextualizer(ContextualizeProvider):
         """Get contextualization statistics."""
         return {
             "total_tokens": self.total_tokens,
-            "total_cost_usd": 0.0,  ***REMOVED*** Groq is free
+            "total_cost_usd": 0.0,  # Groq is free
         }

@@ -49,7 +49,7 @@ class TestEnsureCollection:
 
         mock_client.collection_exists.assert_awaited_once_with("test_history")
         mock_client.create_collection.assert_awaited_once()
-        ***REMOVED*** Verify vector config
+        # Verify vector config
         call_kwargs = mock_client.create_collection.call_args.kwargs
         assert call_kwargs["collection_name"] == "test_history"
 
@@ -70,7 +70,7 @@ class TestEnsureCollection:
         await service.ensure_collection()
         await service.ensure_collection()
 
-        ***REMOVED*** Only called once due to _ensured flag
+        # Only called once due to _ensured flag
         assert mock_client.collection_exists.await_count == 1
 
     async def test_creates_payload_indexes_when_collection_missing(self, service, mock_client):
@@ -178,7 +178,7 @@ class TestSaveTurn:
             query_embedding=embedding,
         )
 
-        ***REMOVED*** Should NOT call embeddings since we provided embedding
+        # Should NOT call embeddings since we provided embedding
         mock_embeddings.aembed_query.assert_not_called()
         point = mock_client.upsert.call_args.kwargs["points"][0]
         assert point.vector["dense"] == embedding
@@ -204,7 +204,7 @@ class TestSaveTurn:
         """save_turn does not raise on Qdrant exceptions."""
         mock_client.upsert = AsyncMock(side_effect=RuntimeError("connection lost"))
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await service.save_turn(
             user_id=1,
             session_id="s",
@@ -242,7 +242,7 @@ class TestSearchUserHistory:
 
         mock_client.query_points.assert_awaited_once()
         call_kwargs = mock_client.query_points.call_args.kwargs
-        ***REMOVED*** Verify user_id filter
+        # Verify user_id filter
         qf = call_kwargs["query_filter"]
         assert any(c.key == "metadata.user_id" for c in qf.must)
         assert len(results) == 1
@@ -297,7 +297,7 @@ class TestGetSessionTurns:
                 "input_type": "text",
             }
         }
-        mock_client.scroll = AsyncMock(return_value=([point2, point1], None))  ***REMOVED*** unordered
+        mock_client.scroll = AsyncMock(return_value=([point2, point1], None))  # unordered
 
         turns = await service.get_session_turns(user_id=100, session_id="chat-abc-20260217")
 

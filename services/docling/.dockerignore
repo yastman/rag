@@ -1,4 +1,4 @@
-***REMOVED*** Build artifacts
+# Build artifacts
 __pycache__/
 *.pyc
 *.pyo
@@ -7,25 +7,25 @@ __pycache__/
 dist/
 build/
 
-***REMOVED*** Virtual environments
+# Virtual environments
 .venv/
 venv/
 
-***REMOVED*** IDE / editor
+# IDE / editor
 .vscode/
 .idea/
 *.swp
 *.swo
 
-***REMOVED*** Git
+# Git
 .git/
 .gitignore
 
-***REMOVED*** CI / local config
+# CI / local config
 .env
 .env.*
 
-***REMOVED*** Tests / docs (not needed in docling service image)
+# Tests / docs (not needed in docling service image)
 tests/
 docs/
 *.md

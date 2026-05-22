@@ -18,9 +18,9 @@ import pytest
 import yaml
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures — minimal golden set and trajectory data
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures — minimal golden set and trajectory data
+# ---------------------------------------------------------------------------
 
 SAMPLE_GOLDEN_YAML = textwrap.dedent(
     """
@@ -84,9 +84,9 @@ def sample_examples() -> list[dict[str, Any]]:
     return yaml.safe_load(SAMPLE_GOLDEN_YAML)["examples"]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Import under test (will fail until implementation exists — RED phase)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Import under test (will fail until implementation exists — RED phase)
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -96,9 +96,9 @@ def eval_module():
     return agent_routing_eval
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: load_golden_set
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: load_golden_set
+# ---------------------------------------------------------------------------
 
 
 class TestLoadGoldenSet:
@@ -119,9 +119,9 @@ class TestLoadGoldenSet:
             eval_module.load_golden_set(tmp_path / "nonexistent.yaml")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: evaluate_blackbox
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: evaluate_blackbox
+# ---------------------------------------------------------------------------
 
 
 class TestEvaluateBlackbox:
@@ -161,7 +161,7 @@ class TestEvaluateBlackbox:
             example=example,
             actual_answer="Цена в €",
         )
-        ***REMOVED*** One of two keywords matched
+        # One of two keywords matched
         assert 0.0 < result["score"] < 1.0
 
     def test_no_keywords_always_passes(self, eval_module) -> None:
@@ -174,9 +174,9 @@ class TestEvaluateBlackbox:
         assert result["score"] == 1.0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: evaluate_trajectory
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: evaluate_trajectory
+# ---------------------------------------------------------------------------
 
 
 class TestEvaluateTrajectory:
@@ -242,13 +242,13 @@ class TestEvaluateTrajectory:
             {"tool": "apartment_search", "args": {}},
         ]
         result = eval_module.evaluate_trajectory(example=example, actual_tool_calls=actual_calls)
-        ***REMOVED*** Required tool is present, so at least partial credit
+        # Required tool is present, so at least partial credit
         assert result["score"] > 0.0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: evaluate_single_step
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: evaluate_single_step
+# ---------------------------------------------------------------------------
 
 
 class TestEvaluateSingleStep:
@@ -291,9 +291,9 @@ class TestEvaluateSingleStep:
         assert result["pass"] is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: compute_metrics
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: compute_metrics
+# ---------------------------------------------------------------------------
 
 
 class TestComputeMetrics:
@@ -351,9 +351,9 @@ class TestComputeMetrics:
         assert metrics["total"] == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test: route_from_tools
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test: route_from_tools
+# ---------------------------------------------------------------------------
 
 
 class TestRouteFromTools:

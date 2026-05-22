@@ -179,12 +179,12 @@ class TestHyDEGenerator:
 
         result = await hyde.generate_hypothetical_document("квартира")
 
-        ***REMOVED*** Should fallback to query when content is None
+        # Should fallback to query when content is None
         assert result == "квартира"
 
 
 class TestHyDEObserveInstrumentation:
-    """Tests for @observe instrumentation on HyDEGenerator (***REMOVED***1661).
+    """Tests for @observe instrumentation on HyDEGenerator (#1661).
 
     Contract: generate_hypothetical_document must be wrapped with @observe so
     nested generation observations created by langfuse.openai are parented
@@ -221,12 +221,12 @@ class TestHyDEObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
-        ***REMOVED*** Reload query_preprocessor so it picks up the no-op decorator.
+        # Reload query_preprocessor so it picks up the no-op decorator.
         sys.modules.pop("telegram_bot.services.query_preprocessor", None)
         importlib.import_module("telegram_bot.services.query_preprocessor")
 
     def test_hyde_module_imports_observe_and_get_client(self):
-        """Module wires the Langfuse decorator + client accessor (***REMOVED***1661 contract)."""
+        """Module wires the Langfuse decorator + client accessor (#1661 contract)."""
         from telegram_bot.services import query_preprocessor as qp_mod
 
         assert hasattr(qp_mod, "observe"), (
@@ -269,14 +269,14 @@ class TestHyDEObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        ***REMOVED*** Re-import to bind the no-op observe applied above.
+        # Re-import to bind the no-op observe applied above.
         from telegram_bot.services.query_preprocessor import HyDEGenerator
 
         hyde = HyDEGenerator(model="test-model")
         hyde.client = AsyncMock()
         hyde.client.chat.completions.create = AsyncMock(return_value=_mock_completion("ok"))
 
-        long_query = "квартира у моря " * 20  ***REMOVED*** > 120 chars
+        long_query = "квартира у моря " * 20  # > 120 chars
 
         await hyde.generate_hypothetical_document(long_query)
 
@@ -354,7 +354,7 @@ class TestHyDEObserveInstrumentation:
 
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
-        ***REMOVED*** Fallback semantics preserved (issue forbids changing fallback path).
+        # Fallback semantics preserved (issue forbids changing fallback path).
         assert result == "квартира у моря"
 
         error_calls = [

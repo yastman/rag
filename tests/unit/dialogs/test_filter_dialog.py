@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 from telegram_bot.dialogs.states import FilterSG
 
 
-***REMOVED*** ============================================================
-***REMOVED*** FilterSG states
-***REMOVED*** ============================================================
+# ============================================================
+# FilterSG states
+# ============================================================
 
 
 class TestFilterSGStates:
@@ -45,14 +45,14 @@ class TestFilterSGStates:
         assert hasattr(FilterSG, "promotion")
 
 
-***REMOVED*** ============================================================
-***REMOVED*** FilterDialog structure
-***REMOVED*** ============================================================
+# ============================================================
+# FilterDialog structure
+# ============================================================
 
 
 class TestFilterDialogStructure:
     def test_filter_dialog_importable(self):
-        from telegram_bot.dialogs.filter_dialog import filter_dialog  ***REMOVED*** noqa: F401
+        from telegram_bot.dialogs.filter_dialog import filter_dialog  # noqa: F401
 
     def test_filter_dialog_is_dialog(self):
         from aiogram_dialog import Dialog
@@ -94,8 +94,8 @@ class TestFilterDialogStructure:
         for window_state in filter_dialog.windows:
             state_name = window_state.state.split(":")[-1]
             if state_name == "hub":
-                continue  ***REMOVED*** hub has no Radio
-            ***REMOVED*** Walk widget tree to find Radio
+                continue  # hub has no Radio
+            # Walk widget tree to find Radio
             found_radio = False
             for widget in _iter_widgets(filter_dialog.windows[window_state]):
                 if isinstance(widget, Radio):
@@ -143,9 +143,9 @@ def _iter_kbd_widgets(widget):
             yield from _iter_kbd_widgets(w)
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Runtime trace helpers
-***REMOVED*** ============================================================
+# ============================================================
+# Runtime trace helpers
+# ============================================================
 
 
 class TestRuntimeTraceHelpers:
@@ -172,9 +172,9 @@ class TestRuntimeTraceHelpers:
         assert snapshot["dialog_data"] == {"city": "Варна"}
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Hub getter — get_hub_data
-***REMOVED*** ============================================================
+# ============================================================
+# Hub getter — get_hub_data
+# ============================================================
 
 
 class TestGetHubData:
@@ -224,9 +224,9 @@ class TestGetHubData:
         assert result["active_filters"] == "Фильтры не заданы"
 
 
-***REMOVED*** ============================================================
-***REMOVED*** on_apply — saves filters to FSMContext and closes dialog
-***REMOVED*** ============================================================
+# ============================================================
+# on_apply — saves filters to FSMContext and closes dialog
+# ============================================================
 
 
 def _make_apply_mocks(
@@ -342,9 +342,9 @@ class TestOnApply:
         )
 
 
-***REMOVED*** ============================================================
-***REMOVED*** on_reset — clears dialog_data filters
-***REMOVED*** ============================================================
+# ============================================================
+# on_reset — clears dialog_data filters
+# ============================================================
 
 
 class TestOnReset:
@@ -377,9 +377,9 @@ class TestOnReset:
         callback.message.delete.assert_not_awaited()
 
 
-***REMOVED*** ============================================================
-***REMOVED*** on_filter_dialog_start — clears stale state on reopen
-***REMOVED*** ============================================================
+# ============================================================
+# on_filter_dialog_start — clears stale state on reopen
+# ============================================================
 
 
 class TestOnFilterDialogStart:
@@ -460,9 +460,9 @@ class TestOnFilterDialogStart:
         radio_widgets["r_budget"].set_checked.assert_not_awaited()
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Getter tests — all use "any" sentinel
-***REMOVED*** ============================================================
+# ============================================================
+# Getter tests — all use "any" sentinel
+# ============================================================
 
 
 class TestFilterWindowGetters:
@@ -523,9 +523,9 @@ class TestFilterWindowGetters:
             assert first_value == "any", f"{key}: sentinel should be 'any', got '{first_value}'"
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Radio handler — item_id="any" clears filter, valid stores coerced
-***REMOVED*** ============================================================
+# ============================================================
+# Radio handler — item_id="any" clears filter, valid stores coerced
+# ============================================================
 
 
 class TestRadioHandlerAnySentinel:
@@ -580,9 +580,9 @@ class TestRadioHandlerAnySentinel:
         assert manager.dialog_data["city"] == "Бургас"
 
 
-***REMOVED*** ============================================================
-***REMOVED*** _filters_to_dialog_data — reverse mapping
-***REMOVED*** ============================================================
+# ============================================================
+# _filters_to_dialog_data — reverse mapping
+# ============================================================
 
 
 class TestFiltersToDialogData:
@@ -647,9 +647,9 @@ class TestFiltersToDialogData:
         assert result["promotion"] == "true"
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Hub displays all active filters
-***REMOVED*** ============================================================
+# ============================================================
+# Hub displays all active filters
+# ============================================================
 
 
 class TestHubDisplaysActiveFilters:
@@ -665,7 +665,7 @@ class TestHubDisplaysActiveFilters:
         assert "Варна" in text
         assert "Море" in text
         assert "60–80 m²" in text
-        ***REMOVED*** Unset filters should NOT appear
+        # Unset filters should NOT appear
         assert "Комнаты" not in text
         assert "Бюджет" not in text
         assert "Мебель" not in text

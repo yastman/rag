@@ -1,9 +1,9 @@
-***REMOVED*** tests/contract/test_smoke_test_real_module_contract.py
+# tests/contract/test_smoke_test_real_module_contract.py
 """Contract: tests/unit/evaluation/test_smoke_test.py exercises the real
 ``src.evaluation.smoke_test`` module instead of validating copied placeholder
 constants and helper logic.
 
-Closes ***REMOVED***1619.
+Closes #1619.
 
 Two failure modes the audit found:
 1. The real module had an import strategy that made it look not-importable, so
@@ -109,7 +109,7 @@ def test_unit_test_does_not_redeclare_real_constants() -> None:
 
     forbidden = {"SMOKE_QUERIES", "SLO_THRESHOLDS"}
     for node in ast.walk(tree):
-        ***REMOVED*** Class-level or module-level assignments to forbidden names.
+        # Class-level or module-level assignments to forbidden names.
         targets: list[ast.AST] = []
         if isinstance(node, ast.Assign):
             targets = list(node.targets)
@@ -121,7 +121,7 @@ def test_unit_test_does_not_redeclare_real_constants() -> None:
             if isinstance(target, ast.Name):
                 name = target.id
             elif isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name):
-                ***REMOVED*** `self.SMOKE_QUERIES = ...` is also forbidden.
+                # `self.SMOKE_QUERIES = ...` is also forbidden.
                 name = target.attr
             if name in forbidden:
                 raise AssertionError(

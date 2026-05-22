@@ -1,14 +1,14 @@
-***REMOVED*** Engineering Workflows Index
+# Engineering Workflows Index
 
 Task-oriented entrypoint for engineering process docs. Use this when the request is about how to work, validate, triage, update dependencies, or maintain docs. Route to the owning doc instead of copying its rules here.
 
-***REMOVED******REMOVED*** Start Here
+## Start Here
 
 - **Engineering folder index**: [`../engineering/README.md`](../engineering/README.md)
 - **Local setup and validation ladder**: [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md)
 - **Docs maintenance rules**: [`../engineering/docs-maintenance.md`](../engineering/docs-maintenance.md)
 
-***REMOVED******REMOVED*** Common Tasks
+## Common Tasks
 
 | Task | Start With | Then Check |
 |---|---|---|
@@ -19,20 +19,20 @@ Task-oriented entrypoint for engineering process docs. Use this when the request
 | Dependency updates | Dependency update skill when available; otherwise `Makefile` uv targets and package manifests | Current package manifests, lockfiles, and SDK registry notes |
 | Docs maintenance | [`../engineering/docs-maintenance.md`](../engineering/docs-maintenance.md) | [`../README.md`](../README.md), [`README.md`](README.md), nearest folder `README.md` |
 
-***REMOVED******REMOVED*** Fast Search
+## Fast Search
 
 ```bash
-***REMOVED*** Active engineering workflow docs
+# Active engineering workflow docs
 rg -n "validation|test-writing|issue triage|SDK|dependency|docs maintenance|process" docs/engineering/ docs/indexes/
 
-***REMOVED*** Current command and dependency surfaces
+# Current command and dependency surfaces
 rg -n "uv sync|uv lock|pytest|make check|make test|dependency|renovate" Makefile pyproject.toml .github docs/engineering/
 
-***REMOVED*** SDK lookup starts with the registry, then current code
+# SDK lookup starts with the registry, then current code
 rg -n "context7_id|triggers|gotchas|patterns" docs/engineering/sdk-registry.md
 ```
 
-***REMOVED******REMOVED*** Ownership Notes
+## Ownership Notes
 
 - Keep command ladders in [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
 - Keep test-writing rules in [`../engineering/test-writing-guide.md`](../engineering/test-writing-guide.md).

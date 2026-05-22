@@ -1,156 +1,156 @@
-***REMOVED*** Fast Doc Search
+# Fast Doc Search
 
 Quick search patterns and task-oriented lookups. Use these commands from the repo root to find the right canonical doc without browsing the tree manually.
 
-***REMOVED******REMOVED*** By Request Type
+## By Request Type
 
-***REMOVED******REMOVED******REMOVED*** "Study recent Langfuse traces"
+### "Study recent Langfuse traces"
 
 Start with the runbook, then search related code:
 
 ```bash
-***REMOVED*** Runbook
+# Runbook
 cat docs/runbooks/LANGFUSE_TRACING_GAPS.md
 
-***REMOVED*** Trace spans and scoring in source
+# Trace spans and scoring in source
 rg -n "Langfuse|trace|observation|score" telegram_bot/graph/ telegram_bot/services/ src/api/ src/evaluation/
 ```
 
-See also: [`observability-and-storage.md`](observability-and-storage.md***REMOVED***langfuse-traces)
+See also: [`observability-and-storage.md`](observability-and-storage.md#langfuse-traces)
 
-***REMOVED******REMOVED******REMOVED*** "Inspect Qdrant issues"
+### "Inspect Qdrant issues"
 
 ```bash
-***REMOVED*** Runbook
+# Runbook
 cat docs/runbooks/QDRANT_TROUBLESHOOTING.md
 
-***REMOVED*** Stack reference
+# Stack reference
 cat docs/QDRANT_STACK.md
 
-***REMOVED*** Collection policy and runtime integration
+# Collection policy and runtime integration
 rg -n "Qdrant|collection|vector" telegram_bot/services/ src/ingestion/unified/ src/config/
 ```
 
-See also: [`observability-and-storage.md`](observability-and-storage.md***REMOVED***qdrant)
+See also: [`observability-and-storage.md`](observability-and-storage.md#qdrant)
 
-***REMOVED******REMOVED******REMOVED*** "Inspect Redis/cache issues"
+### "Inspect Redis/cache issues"
 
 ```bash
-***REMOVED*** Runbook
+# Runbook
 cat docs/runbooks/REDIS_CACHE_DEGRADATION.md
 
-***REMOVED*** Cache architecture and thresholds
+# Cache architecture and thresholds
 cat docs/TROUBLESHOOTING_CACHE.md
 
-***REMOVED*** Redis integration and cache tiers
+# Redis integration and cache tiers
 rg -n "Redis|cache|redis-cli" telegram_bot/integrations/ telegram_bot/services/ src/
 ```
 
-See also: [`observability-and-storage.md`](observability-and-storage.md***REMOVED***redis-and-cache)
+See also: [`observability-and-storage.md`](observability-and-storage.md#redis-and-cache)
 
-***REMOVED******REMOVED******REMOVED*** "Understand Docker services"
+### "Understand Docker services"
 
 ```bash
-***REMOVED*** Canonical source of truth
+# Canonical source of truth
 cat DOCKER.md
 
-***REMOVED*** Service containers index
+# Service containers index
 cat services/README.md
 
-***REMOVED*** Compose validation
+# Compose validation
 make verify-compose-images
 ```
 
-See also: [`runtime-services.md`](runtime-services.md***REMOVED***docker-services)
+See also: [`runtime-services.md`](runtime-services.md#docker-services)
 
-***REMOVED******REMOVED******REMOVED*** "Understand ingestion"
+### "Understand ingestion"
 
 ```bash
-***REMOVED*** Runbook and guide
+# Runbook and guide
 cat docs/INGESTION.md
 cat docs/GDRIVE_INGESTION.md
 
-***REMOVED*** Pipeline code
+# Pipeline code
 rg -n "ingestion|cocoindex|docling" src/ingestion/unified/
 
-***REMOVED*** CLI help
+# CLI help
 uv run python -m src.ingestion.unified.cli --help
 ```
 
-See also: [`runtime-services.md`](runtime-services.md***REMOVED***ingestion)
+See also: [`runtime-services.md`](runtime-services.md#ingestion)
 
-***REMOVED******REMOVED******REMOVED*** "Understand mini app"
+### "Understand mini app"
 
 ```bash
-***REMOVED*** Mini app index
+# Mini app index
 cat mini_app/README.md
 
-***REMOVED*** Backend entrypoint and tests
+# Backend entrypoint and tests
 rg -n "mini_app" mini_app/ tests/unit/mini_app/
 ```
 
-See also: [`runtime-services.md`](runtime-services.md***REMOVED***mini-app)
+See also: [`runtime-services.md`](runtime-services.md#mini-app)
 
-***REMOVED******REMOVED******REMOVED*** "Understand Telegram bot flow"
+### "Understand Telegram bot flow"
 
 ```bash
-***REMOVED*** Bot index
+# Bot index
 cat telegram_bot/README.md
 
-***REMOVED*** LangGraph pipeline
+# LangGraph pipeline
 rg -n "build_graph|State|node" telegram_bot/graph/
 
-***REMOVED*** Bot handlers and services
+# Bot handlers and services
 rg -n "handler|middleware|pipeline" telegram_bot/handlers/ telegram_bot/services/
 ```
 
-See also: [`runtime-services.md`](runtime-services.md***REMOVED***telegram-bot)
+See also: [`runtime-services.md`](runtime-services.md#telegram-bot)
 
-***REMOVED******REMOVED******REMOVED*** "Run local bot or Telegram E2E"
+### "Run local bot or Telegram E2E"
 
 ```bash
-***REMOVED*** Local runtime index and canonical local guide
+# Local runtime index and canonical local guide
 cat docs/indexes/local-runtime.md
 cat docs/LOCAL-DEVELOPMENT.md
 
-***REMOVED*** Minimal local loop
+# Minimal local loop
 make local-up
 make test-bot-health
 make bot
 
-***REMOVED*** Telethon session and transport checks
+# Telethon session and transport checks
 uv run python -m scripts.e2e.auth --help
 uv run python -m scripts.e2e.quick_test
 ```
 
 See also: [`local-runtime.md`](local-runtime.md)
 
-***REMOVED******REMOVED******REMOVED*** "Find engineering workflow guidance"
+### "Find engineering workflow guidance"
 
 ```bash
-***REMOVED*** Task-oriented engineering workflow index
+# Task-oriented engineering workflow index
 cat docs/indexes/engineering-workflows.md
 
-***REMOVED*** Folder index with active vs historical process docs
+# Folder index with active vs historical process docs
 cat docs/engineering/README.md
 
-***REMOVED*** Search active engineering process docs
+# Search active engineering process docs
 rg -n "testing|validation|issue triage|SDK|dependency|docs maintenance|swarm" docs/engineering/ docs/indexes/
 ```
 
 See also: [`engineering-workflows.md`](engineering-workflows.md)
 
-***REMOVED******REMOVED*** General Search Commands
+## General Search Commands
 
 Search the doc tree from the repo root:
 
 ```bash
-***REMOVED*** Find all docs mentioning a keyword
+# Find all docs mentioning a keyword
 rg -n "Langfuse|LiteLLM|Redis|Qdrant|Compose|ingestion|voice|mini app|Telegram|RAG" docs/ README.md DOCKER.md AGENTS.md
 
-***REMOVED*** List all README indexes
+# List all README indexes
 find . -maxdepth 3 -name README.md | sort
 
-***REMOVED*** List runbooks
+# List runbooks
 find docs/runbooks -maxdepth 1 -name '*.md' | sort
 ```

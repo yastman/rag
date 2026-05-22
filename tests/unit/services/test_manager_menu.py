@@ -1,4 +1,4 @@
-"""Tests for manager menu rendering (***REMOVED***388)."""
+"""Tests for manager menu rendering (#388)."""
 
 from telegram_bot.services.manager_menu import render_start_menu
 

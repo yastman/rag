@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Evaluator for search engine performance.
 
@@ -54,11 +54,11 @@ class SearchEvaluator:
             "retrieved_articles": retrieved_articles[:10],
         }
 
-        ***REMOVED*** Recall@K: Is expected article in top-K results?
+        # Recall@K: Is expected article in top-K results?
         for k in k_values:
             metrics[f"recall@{k}"] = 1 if expected_article in retrieved_articles[:k] else 0
 
-        ***REMOVED*** MRR: Position of first correct result
+        # MRR: Position of first correct result
         try:
             rank = retrieved_articles.index(expected_article) + 1
             metrics["mrr"] = 1.0 / rank
@@ -67,10 +67,10 @@ class SearchEvaluator:
             metrics["mrr"] = 0.0
             metrics["rank"] = None
 
-        ***REMOVED*** NDCG@10: Normalized Discounted Cumulative Gain
+        # NDCG@10: Normalized Discounted Cumulative Gain
         metrics["ndcg@10"] = self._calculate_ndcg(expected_article, retrieved_articles[:10])
 
-        ***REMOVED*** Precision@K: Proportion of relevant results
+        # Precision@K: Proportion of relevant results
         for k in k_values:
             relevant_in_k = sum(1 for art in retrieved_articles[:k] if art == expected_article)
             metrics[f"precision@{k}"] = relevant_in_k / k
@@ -83,19 +83,19 @@ class SearchEvaluator:
 
         For our case: relevance is binary (1 if matches expected_article, 0 otherwise).
         """
-        ***REMOVED*** Relevance scores: 1 for expected article, 0 for others
+        # Relevance scores: 1 for expected article, 0 for others
         relevance = [1 if art == expected else 0 for art in retrieved]
 
-        ***REMOVED*** DCG: sum of rel_i / log2(i+1)
+        # DCG: sum of rel_i / log2(i+1)
         dcg = sum(
-            rel / np.log2(i + 2)  ***REMOVED*** i+2 because i starts from 0
+            rel / np.log2(i + 2)  # i+2 because i starts from 0
             for i, rel in enumerate(relevance)
         )
 
-        ***REMOVED*** IDCG: best possible DCG (expected article at position 1)
-        idcg = 1.0 / np.log2(2)  ***REMOVED*** 1 / log2(2) = 1.0
+        # IDCG: best possible DCG (expected article at position 1)
+        idcg = 1.0 / np.log2(2)  # 1 / log2(2) = 1.0
 
-        ***REMOVED*** NDCG
+        # NDCG
         return dcg / idcg if idcg > 0 else 0.0
 
     def evaluate_queries(
@@ -131,42 +131,42 @@ class SearchEvaluator:
             query_metrics["difficulty"] = query.get("difficulty", "unknown")
             all_results.append(query_metrics)
 
-        ***REMOVED*** Aggregate metrics
+        # Aggregate metrics
         df = pd.DataFrame(all_results)
 
         aggregated = {"total_queries": len(all_results), "metrics": {}}
 
-        ***REMOVED*** Recall@K
+        # Recall@K
         for k in k_values:
             col = f"recall@{k}"
-            if col in df.columns:  ***REMOVED*** type: ignore[index]
-                aggregated["metrics"][col] = float(df[col].mean())  ***REMOVED*** type: ignore[index]
+            if col in df.columns:  # type: ignore[index]
+                aggregated["metrics"][col] = float(df[col].mean())  # type: ignore[index]
 
-        ***REMOVED*** MRR
-        if "mrr" in df.columns:  ***REMOVED*** type: ignore[index]
-            aggregated["metrics"]["mrr"] = float(df["mrr"].mean())  ***REMOVED*** type: ignore[index]
-        ***REMOVED*** type: ignore[index]
-        ***REMOVED*** NDCG@10 ***REMOVED*** type: ignore[index]
-        if "ndcg@10" in df.columns:  ***REMOVED*** type: ignore[index]
-            aggregated["metrics"]["ndcg@10"] = float(df["ndcg@10"].mean())  ***REMOVED*** type: ignore[index]
-        ***REMOVED*** type: ignore[index]
-        ***REMOVED*** Precision@K ***REMOVED*** type: ignore[index]
-        for k in k_values:  ***REMOVED*** type: ignore[index]
-            col = f"precision@{k}"  ***REMOVED*** type: ignore[index]
-            if col in df.columns:  ***REMOVED*** type: ignore[index]
-                aggregated["metrics"][col] = float(df[col].mean())  ***REMOVED*** type: ignore[index]
-        ***REMOVED*** type: ignore[index]
-        ***REMOVED*** Failure rate: queries with no correct result in top-10 ***REMOVED*** type: ignore[index]
-        if "recall@10" in df.columns:  ***REMOVED*** type: ignore[index]
-            failure_rate = 1.0 - df["recall@10"].mean()  ***REMOVED*** type: ignore[index]
-            aggregated["metrics"]["failure_rate"] = float(failure_rate)  ***REMOVED*** type: ignore[index]
-        ***REMOVED*** type: ignore[index]
-        ***REMOVED*** By query type ***REMOVED*** type: ignore[index]
-        if "query_type" in df.columns:  ***REMOVED*** type: ignore[index]
-            aggregated["by_query_type"] = {}  ***REMOVED*** type: ignore[index]
-            for qtype in df["query_type"].unique():  ***REMOVED*** type: ignore[index]
-                subset = df[df["query_type"] == qtype]  ***REMOVED*** type: ignore[index]
-                aggregated["by_query_type"][qtype] = {  ***REMOVED*** type: ignore[index]
+        # MRR
+        if "mrr" in df.columns:  # type: ignore[index]
+            aggregated["metrics"]["mrr"] = float(df["mrr"].mean())  # type: ignore[index]
+        # type: ignore[index]
+        # NDCG@10 # type: ignore[index]
+        if "ndcg@10" in df.columns:  # type: ignore[index]
+            aggregated["metrics"]["ndcg@10"] = float(df["ndcg@10"].mean())  # type: ignore[index]
+        # type: ignore[index]
+        # Precision@K # type: ignore[index]
+        for k in k_values:  # type: ignore[index]
+            col = f"precision@{k}"  # type: ignore[index]
+            if col in df.columns:  # type: ignore[index]
+                aggregated["metrics"][col] = float(df[col].mean())  # type: ignore[index]
+        # type: ignore[index]
+        # Failure rate: queries with no correct result in top-10 # type: ignore[index]
+        if "recall@10" in df.columns:  # type: ignore[index]
+            failure_rate = 1.0 - df["recall@10"].mean()  # type: ignore[index]
+            aggregated["metrics"]["failure_rate"] = float(failure_rate)  # type: ignore[index]
+        # type: ignore[index]
+        # By query type # type: ignore[index]
+        if "query_type" in df.columns:  # type: ignore[index]
+            aggregated["by_query_type"] = {}  # type: ignore[index]
+            for qtype in df["query_type"].unique():  # type: ignore[index]
+                subset = df[df["query_type"] == qtype]  # type: ignore[index]
+                aggregated["by_query_type"][qtype] = {  # type: ignore[index]
                     "count": len(subset),
                     "recall@10": float(subset["recall@10"].mean())
                     if "recall@10" in subset.columns
@@ -177,12 +177,12 @@ class SearchEvaluator:
                     else 0,
                 }
 
-        ***REMOVED*** By difficulty
+        # By difficulty
         if "difficulty" in df.columns:
             aggregated["by_difficulty"] = {}
             for difficulty in df["difficulty"].unique():
                 subset = df[df["difficulty"] == difficulty]
-                aggregated["by_difficulty"][difficulty] = {  ***REMOVED*** type: ignore[index]
+                aggregated["by_difficulty"][difficulty] = {  # type: ignore[index]
                     "count": len(subset),
                     "recall@10": float(subset["recall@10"].mean())
                     if "recall@10" in subset.columns
@@ -193,7 +193,7 @@ class SearchEvaluator:
                     else 0,
                 }
 
-        ***REMOVED*** Detailed results
+        # Detailed results
         aggregated["detailed_results"] = all_results
 
         return aggregated
@@ -216,18 +216,18 @@ class SearchEvaluator:
             "statistical_significance": {},
         }
 
-        ***REMOVED*** Calculate improvements
+        # Calculate improvements
         for metric in baseline_results["metrics"]:
             baseline_val = baseline_results["metrics"][metric]
             hybrid_val = hybrid_results["metrics"][metric]
 
             if metric == "failure_rate":
-                ***REMOVED*** Lower is better for failure rate
+                # Lower is better for failure rate
                 improvement = (
                     (baseline_val - hybrid_val) / baseline_val * 100 if baseline_val > 0 else 0
                 )
             else:
-                ***REMOVED*** Higher is better for other metrics
+                # Higher is better for other metrics
                 improvement = (
                     (hybrid_val - baseline_val) / baseline_val * 100 if baseline_val > 0 else 0
                 )
@@ -239,7 +239,7 @@ class SearchEvaluator:
                 "relative_improvement_pct": improvement,
             }
 
-        ***REMOVED*** Statistical significance (simple paired t-test on Recall@10)
+        # Statistical significance (simple paired t-test on Recall@10)
         baseline_detailed = baseline_results.get("detailed_results", [])
         hybrid_detailed = hybrid_results.get("detailed_results", [])
 
@@ -262,15 +262,15 @@ class SearchEvaluator:
 
 
 if __name__ == "__main__":
-    ***REMOVED*** Quick test
+    # Quick test
     evaluator = SearchEvaluator("evaluation/data/ground_truth_articles.json")
 
-    ***REMOVED*** Mock data for testing
+    # Mock data for testing
     test_query = {"query": "test query", "expected_article": "185", "type": "semantic"}
 
     test_results = [
         {"point_id": 1, "article_number": "121", "score": 0.95},
-        {"point_id": 2, "article_number": "185", "score": 0.89},  ***REMOVED*** Correct at position 2
+        {"point_id": 2, "article_number": "185", "score": 0.89},  # Correct at position 2
         {"point_id": 3, "article_number": "289", "score": 0.85},
     ]
 

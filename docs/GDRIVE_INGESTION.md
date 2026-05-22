@@ -1,4 +1,4 @@
-***REMOVED*** Google Drive Ingestion Pipeline
+# Google Drive Ingestion Pipeline
 
 Canonical runtime path for knowledge-base documents:
 
@@ -15,7 +15,7 @@ Google Drive
 
 The old `gdrive_documents_scalar` and `gdrive_documents_binary` collections are no longer the active runtime path.
 
-***REMOVED******REMOVED*** Runtime Contract
+## Runtime Contract
 
 - Google Drive is copied locally first through `rclone`.
 - Unified ingestion reads only from the local sync directory.
@@ -23,9 +23,9 @@ The old `gdrive_documents_scalar` and `gdrive_documents_binary` collections are 
 - Compose now uses fail-fast bind mounting. If the host path is missing, startup fails instead of creating an empty directory.
 - The canonical target collection is `gdrive_documents_bge`.
 
-***REMOVED******REMOVED*** Quick Start
+## Quick Start
 
-***REMOVED******REMOVED******REMOVED*** 1. Install rclone
+### 1. Install rclone
 
 ```bash
 curl https://rclone.org/install.sh | sudo bash
@@ -37,7 +37,7 @@ Or:
 make rclone-install
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Prepare Google Drive access
+### 2. Prepare Google Drive access
 
 1. Create a Google Cloud service account with Drive read-only access.
 2. Download the JSON key to a secure host path (e.g. `<credentials-dir>/gdrive-service-account.json`).
@@ -54,7 +54,7 @@ service_account_file = <credentials-dir>/gdrive-service-account.json
 root_folder_id = YOUR_FOLDER_ID_HERE
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Configure environment
+### 3. Configure environment
 
 Set these variables in `.env` or the host environment:
 
@@ -71,7 +71,7 @@ Validate the remote before installing cron:
 rclone ls "$RCLONE_REMOTE" --config "$RCLONE_CONFIG_FILE"
 ```
 
-***REMOVED******REMOVED******REMOVED*** 4. Install sync scripts and cron
+### 4. Install sync scripts and cron
 
 ```bash
 make sync-drive-install
@@ -83,7 +83,7 @@ This installs:
 - `<cron-dir>/rclone-sync`
 - `<env-dir>/rclone-sync.env`
 
-***REMOVED******REMOVED******REMOVED*** 5. Seed the local mirror
+### 5. Seed the local mirror
 
 ```bash
 make sync-drive-run
@@ -92,7 +92,7 @@ make sync-drive-status
 
 Do not start ingestion until `GDRIVE_SYNC_DIR` contains the expected files.
 
-***REMOVED******REMOVED******REMOVED*** 6. Bootstrap and run ingestion
+### 6. Bootstrap and run ingestion
 
 ```bash
 make ingest-unified-preflight
@@ -106,7 +106,7 @@ For continuous mode:
 make ingest-unified-watch
 ```
 
-***REMOVED******REMOVED*** Supported File Types
+## Supported File Types
 
 The unified pipeline accepts the document formats configured in `src/ingestion/unified/config.py`.
 Typical knowledge-base inputs include `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.md`, and `.txt`.
@@ -119,14 +119,14 @@ Google Workspace files are exported by `rclone` into Office-compatible formats:
 | Google Sheets | `.xlsx` |
 | Google Slides | `.pptx` |
 
-***REMOVED******REMOVED*** Identity And Replace Semantics
+## Identity And Replace Semantics
 
 - `gdrive-manifest.sh` writes `.gdrive_manifest.json` into `GDRIVE_SYNC_DIR`.
 - The unified pipeline builds stable `file_id` values from file content and manifest metadata.
 - When a file changes, ingestion replaces all chunks for that `file_id`.
 - When a file disappears from the sync directory, ingestion deletes the corresponding Qdrant points.
 
-***REMOVED******REMOVED*** Operator Commands
+## Operator Commands
 
 | Target | Description |
 |--------|-------------|
@@ -140,7 +140,7 @@ Google Workspace files are exported by `rclone` into Office-compatible formats:
 | `make ingest-unified-status` | Show unified ingestion state |
 | `make ingest-unified-logs` | Tail ingestion container logs |
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
 | Issue | Check |
 |-------|-------|

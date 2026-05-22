@@ -1,10 +1,10 @@
-***REMOVED*** Kubernetes Secrets
+# Kubernetes Secrets
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Placeholder directory for local Kubernetes secret manifests or templates.
 Do not commit real secrets.
 
-***REMOVED******REMOVED*** Parent
+## Parent
 
 - [Kubernetes manifests](../README.md)

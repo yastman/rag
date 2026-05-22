@@ -1,10 +1,10 @@
-***REMOVED*** ADR-0006: Kommo CRM Integration
+# ADR-0006: Kommo CRM Integration
 
 **Status:** Accepted
 
 **Date:** 2026-03-01
 
-***REMOVED******REMOVED*** Context
+## Context
 
 We needed a CRM system for managing:
 - Lead capture from Telegram queries
@@ -12,11 +12,11 @@ We needed a CRM system for managing:
 - Deal/pipeline tracking
 - Follow-up task creation
 
-***REMOVED******REMOVED*** Decision
+## Decision
 
 Use **Kommo** (formerly amoCRM) as the CRM system.
 
-***REMOVED******REMOVED******REMOVED*** Why Kommo
+### Why Kommo
 
 | Factor | Kommo | Other CRMs |
 |--------|-------|------------|
@@ -25,30 +25,30 @@ Use **Kommo** (formerly amoCRM) as the CRM system.
 | Russian market | Strong presence | Varies |
 | Pricing | Competitive | Varies |
 
-***REMOVED******REMOVED******REMOVED*** Constraints
+### Constraints
 
 1. **OAuth2 authentication** — Requires server-side OAuth flow
 2. **Token management** — Long-lived tokens with refresh
 3. **Pipeline configuration** — Custom fields for lead scoring
 
-***REMOVED******REMOVED*** Consequences
+## Consequences
 
-***REMOVED******REMOVED******REMOVED*** Positive
+### Positive
 - Full CRM capabilities for lead management
 - Automatic lead capture from conversations
 - Pipeline visibility for sales team
 
-***REMOVED******REMOVED******REMOVED*** Negative
+### Negative
 - External dependency (Kommo service)
 - OAuth complexity in deployment
 - Custom field setup required
 
-***REMOVED******REMOVED*** Token Management
+## Token Management
 
 Tokens stored in Redis with auto-refresh:
 
 ```python
-***REMOVED*** Init chain
+# Init chain
 KOMMO_AUTH_CODE → exchange → tokens in Redis
                   ↓
            Check existing Redis tokens
@@ -56,7 +56,7 @@ KOMMO_AUTH_CODE → exchange → tokens in Redis
            Seed from KOMMO_ACCESS_TOKEN env (long-lived token)
 ```
 
-***REMOVED******REMOVED*** References
+## References
 
 - Kommo client: `telegram_bot/services/kommo_client.py`
 - Token store: `telegram_bot/services/kommo_token_store.py`

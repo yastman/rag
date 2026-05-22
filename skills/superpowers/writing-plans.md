@@ -1,4 +1,4 @@
-***REMOVED*** Skill: writing-plans
+# Skill: writing-plans
 
 Use for multi-step implementation, cross-module changes, architecture-heavy
 work, or work that needs sequencing before edits.

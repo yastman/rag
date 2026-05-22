@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Sync ground truth JSON to Langfuse dataset for experiments.
 
 Usage:

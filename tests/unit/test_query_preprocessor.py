@@ -40,7 +40,7 @@ class TestQueryPreprocessorTranslit:
 
 
 class TestQueryPreprocessorTranslitPrecompiled:
-    """Tests for precompiled transliteration patterns (issue ***REMOVED***1644).
+    """Tests for precompiled transliteration patterns (issue #1644).
 
     The static TRANSLIT_MAP allows pattern compilation to be hoisted out of the
     per-query hot path. These tests pin the contract:
@@ -61,8 +61,8 @@ class TestQueryPreprocessorTranslitPrecompiled:
         many times and assert no compilations were triggered.
         """
         pp = QueryPreprocessor()
-        ***REMOVED*** Warm up to defeat any lazy first-call init; subsequent calls must hit
-        ***REMOVED*** zero compilations regardless.
+        # Warm up to defeat any lazy first-call init; subsequent calls must hit
+        # zero compilations regardless.
         pp.normalize_translit("warmup Burgas")
 
         queries = [
@@ -87,11 +87,11 @@ class TestQueryPreprocessorTranslitPrecompiled:
     @pytest.mark.parametrize(
         ("latin_input", "expected_output"),
         [
-            ***REMOVED*** Cities (single-token)
+            # Cities (single-token)
             pytest.param("apartments in Burgas", "apartments in Бургас", id="burgas"),
             pytest.param("flights to Varna", "flights to Варна", id="varna"),
             pytest.param("hotel in Sofia", "hotel in София", id="sofia"),
-            ***REMOVED*** Resorts (multi-word phrase — must match as a phrase)
+            # Resorts (multi-word phrase — must match as a phrase)
             pytest.param(
                 "Sunny Beach apartments",
                 "Солнечный берег apartments",
@@ -102,7 +102,7 @@ class TestQueryPreprocessorTranslitPrecompiled:
                 "villa in Святой Влас",
                 id="sveti_vlas_phrase",
             ),
-            ***REMOVED*** Variant spellings collapse to the same Cyrillic form
+            # Variant spellings collapse to the same Cyrillic form
             pytest.param("Nessebar old town", "Несебър old town", id="nessebar_variant"),
             pytest.param("Golden Sands hotel", "Золотые пески hotel", id="golden_sands"),
         ],

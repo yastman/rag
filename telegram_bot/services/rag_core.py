@@ -20,9 +20,9 @@ from telegram_bot.services.cache_policy import is_contextual_query
 
 logger = logging.getLogger(__name__)
 
-_MAX_CONTEXT_SNIPPET = 500  ***REMOVED*** chars per doc for judge evaluation
+_MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
 
-***REMOVED*** Query types eligible for semantic cache. Shared between agent SDK and LangGraph paths.
+# Query types eligible for semantic cache. Shared between agent SDK and LangGraph paths.
 CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
 
 _REWRITE_PROMPT = (
@@ -47,9 +47,9 @@ def _is_deprecated_colbert_reranker(reranker: Any) -> bool:
     return isinstance(reranker, ColbertRerankerService)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H2: Context builder
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H2: Context builder
+# ---------------------------------------------------------------------------
 
 
 def build_retrieved_context(
@@ -77,9 +77,9 @@ def build_retrieved_context(
     return ctx
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H4: Query rewrite
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H4: Query rewrite
+# ---------------------------------------------------------------------------
 
 
 async def rewrite_query_via_llm(
@@ -111,7 +111,7 @@ async def rewrite_query_via_llm(
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=config.rewrite_max_tokens,
-        name="rewrite-query",  ***REMOVED*** type: ignore[call-overload]  ***REMOVED*** langfuse kwarg
+        name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
     )
     rewritten = (response.choices[0].message.content or "").strip()
     actual_model = getattr(response, "model", config.rewrite_model) or config.rewrite_model
@@ -121,9 +121,9 @@ async def rewrite_query_via_llm(
     return (rewritten, True, actual_model)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H3: Rerank
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H3: Rerank
+# ---------------------------------------------------------------------------
 
 
 async def perform_rerank(
@@ -177,7 +177,7 @@ async def perform_rerank(
             if cached_reranked is not None:
                 return (cached_reranked, True, True)
 
-        ***REMOVED*** May raise — callers handle error + fallback sort
+        # May raise — callers handle error + fallback sort
         doc_texts = [doc.get("text", "") for doc in documents]
         rerank_results = await reranker.rerank(query=query, documents=doc_texts, top_k=top_k)
 
@@ -193,13 +193,13 @@ async def perform_rerank(
 
         return (reranked, True, False)
 
-    ***REMOVED*** No reranker — return documents as-is; callers sort/trim as needed
+    # No reranker — return documents as-is; callers sort/trim as needed
     return (documents, False, False)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** H1: Embedding computation + semantic cache check
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# H1: Embedding computation + semantic cache check
+# ---------------------------------------------------------------------------
 
 
 async def compute_query_embedding(
@@ -239,11 +239,11 @@ async def compute_query_embedding(
     Raises:
         Exception: propagates embedding model errors to caller (adapter handles fallback).
     """
-    ***REMOVED*** Path 1: caller already has pre-computed vectors
+    # Path 1: caller already has pre-computed vectors
     if pre_computed is not None:
         return (pre_computed, pre_computed_sparse, pre_computed_colbert, False)
 
-    ***REMOVED*** Determine capabilities
+    # Determine capabilities
     _has_bundle_get = callable(
         getattr(cache, "get_bge_m3_query_bundle", None)
     ) and asyncio.iscoroutinefunction(cache.get_bge_m3_query_bundle)
@@ -254,23 +254,23 @@ async def compute_query_embedding(
         getattr(embeddings, "aembed_hybrid_with_colbert", None)
     ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
 
-    ***REMOVED*** Path 2: check bundle cache (even if embeddings lacks aembed_hybrid_with_colbert,
-    ***REMOVED*** a hit still gives us all three vectors).
+    # Path 2: check bundle cache (even if embeddings lacks aembed_hybrid_with_colbert,
+    # a hit still gives us all three vectors).
     if _has_bundle_get:
         bundle = await cache.get_bge_m3_query_bundle(query)
         if isinstance(bundle, BgeM3QueryVectorBundle) and bundle.is_complete():
             return (bundle.dense, bundle.sparse, bundle.colbert, True)
 
-    ***REMOVED*** Path 3: full bundle compute (cache miss + aembed_hybrid_with_colbert available)
+    # Path 3: full bundle compute (cache miss + aembed_hybrid_with_colbert available)
     if _has_bundle_get and _has_hybrid_colbert:
         try:
             dense, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(query)
         except (TypeError, ValueError):
-            ***REMOVED*** aembed_hybrid_with_colbert is present but doesn't return a usable
-            ***REMOVED*** 3-tuple (e.g. test mocks); fall through to legacy path.
+            # aembed_hybrid_with_colbert is present but doesn't return a usable
+            # 3-tuple (e.g. test mocks); fall through to legacy path.
             pass
         else:
-            ***REMOVED*** Store bundle if store API is available
+            # Store bundle if store API is available
             if _has_bundle_store:
                 try:
                     new_bundle = BgeM3QueryVectorBundle(
@@ -282,7 +282,7 @@ async def compute_query_embedding(
                 except Exception:
                     logger.debug("Bundle store failed (non-critical), skipping")
 
-            ***REMOVED*** Keep legacy caches populated for compatibility
+            # Keep legacy caches populated for compatibility
             try:
                 await cache.store_embedding(query, dense)
                 await cache.store_sparse_embedding(query, sparse)
@@ -291,14 +291,14 @@ async def compute_query_embedding(
 
             return (dense, sparse, colbert, False)
 
-    ***REMOVED*** Path 4: legacy dense cache
+    # Path 4: legacy dense cache
     dense = await cache.get_embedding(query)
     from_cache = dense is not None
 
     if dense is not None:
         return (dense, None, None, from_cache)
 
-    ***REMOVED*** Path 5: legacy model compute
+    # Path 5: legacy model compute
     _has_hybrid = callable(
         getattr(embeddings, "aembed_hybrid", None)
     ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)

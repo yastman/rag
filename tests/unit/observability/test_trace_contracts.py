@@ -18,7 +18,7 @@ import pytest
 
 _TRACE_ID = "trace-contract-abc"
 
-***REMOVED*** Minimal state dict that exercises all 13 core RAG scores.
+# Minimal state dict that exercises all 13 core RAG scores.
 _MINIMAL_RESULT: dict = {
     "query_type": "SIMPLE",
     "cache_hit": False,
@@ -37,7 +37,7 @@ _MINIMAL_RESULT: dict = {
     "messages": [],
 }
 
-***REMOVED*** 13 core RAG scores from observability.md § "Langfuse Scores" table (hyde_used removed ***REMOVED***754)
+# 13 core RAG scores from observability.md § "Langfuse Scores" table (hyde_used removed #754)
 _CORE_RAG_SCORES = [
     "query_type",
     "latency_total_ms",
@@ -55,9 +55,9 @@ _CORE_RAG_SCORES = [
 ]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** score() function signature contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# score() function signature contract
+# ---------------------------------------------------------------------------
 
 
 class TestScoreSignatureContract:
@@ -122,9 +122,9 @@ class TestScoreSignatureContract:
         assert lf.create_score.call_args.kwargs["trace_id"] == ""
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** write_langfuse_scores: 14 core RAG scores contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# write_langfuse_scores: 14 core RAG scores contract
+# ---------------------------------------------------------------------------
 
 
 class TestWriteLangfuseScoresContract:
@@ -199,7 +199,7 @@ class TestWriteLangfuseScoresContract:
         assert scores["semantic_cache_hit"]["value"] == 0.0
 
     def test_llm_used_when_generate_stage_present(self):
-        scores = self._written_scores(_MINIMAL_RESULT)  ***REMOVED*** has "generate" in latency_stages
+        scores = self._written_scores(_MINIMAL_RESULT)  # has "generate" in latency_stages
         assert scores["llm_used"]["value"] == 1.0
 
     def test_llm_used_zero_when_no_generate_stage(self):
@@ -224,9 +224,9 @@ class TestWriteLangfuseScoresContract:
         assert "safe_fallback_used" in scores
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** write_history_scores: 4 history scores contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# write_history_scores: 4 history scores contract
+# ---------------------------------------------------------------------------
 
 _HISTORY_SCORES_ALWAYS = [
     "history_search_count",
@@ -280,12 +280,12 @@ class TestWriteHistoryScoresContract:
         lf.create_score.assert_not_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** write_crm_scores: 4 CRM scores contract
-***REMOVED*** NOTE: Behavioural tests (tool message parsing, success/error counting, score_id pattern,
-***REMOVED***       empty trace_id skip) live in tests/unit/test_crm_scores.py.
-***REMOVED***       This class tests SCHEMA contracts only: all 4 names present, value types.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# write_crm_scores: 4 CRM scores contract
+# NOTE: Behavioural tests (tool message parsing, success/error counting, score_id pattern,
+#       empty trace_id skip) live in tests/unit/test_crm_scores.py.
+#       This class tests SCHEMA contracts only: all 4 names present, value types.
+# ---------------------------------------------------------------------------
 
 _CRM_SCORES = ["crm_tool_used", "crm_tools_count", "crm_tools_success", "crm_tools_error"]
 
@@ -339,9 +339,9 @@ class TestTracedPipelineContract:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _build_trace_metadata: shape contract (requires aiogram for bot.py import)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _build_trace_metadata: shape contract (requires aiogram for bot.py import)
+# ---------------------------------------------------------------------------
 
 
 class TestBuildTraceMetadataContract:
@@ -445,7 +445,7 @@ class TestBuildTraceMetadataContract:
 
 
 class TestVoiceLifecycleTraceContract:
-    """Voice lifecycle traces should preserve call/session/status contract (***REMOVED***609)."""
+    """Voice lifecycle traces should preserve call/session/status contract (#609)."""
 
     def test_voice_session_id_has_voice_prefix(self):
         from src.voice.observability import voice_session_id
@@ -478,8 +478,8 @@ class TestVoiceLifecycleTraceContract:
         with (
             pytest.MonkeyPatch().context() as mp,
         ):
-            mp.setattr("src.voice.observability.get_client", lambda: lf)
-            mp.setattr("src.voice.observability.propagate_attributes", lambda **_: nullcontext())
+            mp.setattr("src.observability.get_langfuse_client", lambda: lf)
+            mp.setattr("src.observability.propagate_attributes", lambda **_: nullcontext())
             update_voice_trace(call_id="call-123", status="answered")
 
         lf.create_trace_id.assert_called_once_with(seed="voice-call-123")

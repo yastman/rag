@@ -1,22 +1,22 @@
-***REMOVED*** Docker Helper Assets
+# Docker Helper Assets
 
 This directory contains configuration files, scripts, and initialization assets used by the Docker Compose runtime. It does **not** contain the Compose files themselves—see [`../compose.yml`](../compose.yml), [`../compose.dev.yml`](../compose.dev.yml), and [`../DOCKER.md`](../DOCKER.md) for service definitions and operations.
 
-***REMOVED******REMOVED*** Layout
+## Layout
 
-***REMOVED******REMOVED******REMOVED*** `litellm/`
+### `litellm/`
 
 LiteLLM Proxy configuration that defines the model routing, fallbacks, and provider aliases used by the bot and voice agent.
 
 - **`config.yaml`** — Model list (Cerebras, Groq, OpenAI), fallback chains, rate limits, and key management. Referenced as a Compose ConfigMap/volume mount.
 
-***REMOVED******REMOVED******REMOVED*** `livekit/`
+### `livekit/`
 
 LiveKit server configuration for the voice-agent path.
 
 - **`livekit.yaml`** — API keys, port bindings, and RTC settings. The `LIVEKIT_API_SECRET` is interpolated from environment at runtime.
 
-***REMOVED******REMOVED******REMOVED*** `monitoring/`
+### `monitoring/`
 
 Observability stack configuration for local/dev alerting and log aggregation.
 
@@ -29,7 +29,7 @@ Observability stack configuration for local/dev alerting and log aggregation.
   - `ingestion.yaml`
   - `extended-services.yaml`
 
-***REMOVED******REMOVED******REMOVED*** `postgres/init/`
+### `postgres/init/`
 
 Database initialization scripts executed on first Postgres startup.
 
@@ -42,23 +42,23 @@ Database initialization scripts executed on first Postgres startup.
 - **`07-nurturing-funnel-analytics.sql`** — Funnel analytics schema.
 - **`08-user-favorites.sql`** — User favorites schema.
 
-***REMOVED******REMOVED******REMOVED*** `ingestion/`
+### `ingestion/`
 
 Ingestion service wrapper assets.
 
 - **`entrypoint.sh`** — Entrypoint script for the unified ingestion container.
 
-***REMOVED******REMOVED*** Validation
+## Validation
 
 ```bash
-***REMOVED*** Verify Compose still resolves all configs correctly
+# Verify Compose still resolves all configs correctly
 COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml --compatibility config > /dev/null
 
-***REMOVED*** Check image pins match running containers
+# Check image pins match running containers
 make verify-compose-images
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../DOCKER.md`](../DOCKER.md) — Full Compose operations guide.
 - [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation.

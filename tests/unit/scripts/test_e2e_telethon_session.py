@@ -48,7 +48,7 @@ async def test_send_and_wait_targets_configured_e2e_bot_username() -> None:
     telethon_client = _FakeClient()
 
     client = E2ETelegramClient(cfg)
-    client._client = telethon_client  ***REMOVED*** inject fake connected client
+    client._client = telethon_client  # inject fake connected client
 
     _ = await client.send_and_wait("hello")
 

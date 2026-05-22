@@ -1,4 +1,4 @@
-"""Tests for NurturingScheduler (***REMOVED***390)."""
+"""Tests for NurturingScheduler (#390)."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ async def test_scheduler_stop_is_idempotent(fake_services):
     scheduler = NurturingScheduler(**fake_services)
     await scheduler.start()
     await scheduler.stop()
-    ***REMOVED*** Second stop should not raise
+    # Second stop should not raise
     await scheduler.stop()
 
 
@@ -65,7 +65,7 @@ async def test_scheduler_uses_funnel_rollup_cron_from_config(fake_services):
 
 
 class TestNurturingSchedulerObserveInstrumentation:
-    """Tests for @observe instrumentation on NurturingScheduler jobs (***REMOVED***1663).
+    """Tests for @observe instrumentation on NurturingScheduler jobs (#1663).
 
     Contract: run_nurturing_dispatch and run_funnel_rollup must be wrapped with
     @observe, propagate tags=['job', '<area>'], and on exception emit
@@ -105,7 +105,7 @@ class TestNurturingSchedulerObserveInstrumentation:
         importlib.import_module("telegram_bot.services.nurturing_scheduler")
 
     def test_nurturing_scheduler_module_imports_observe_get_client_and_propagate_attributes(self):
-        """Module wires the Langfuse decorator + helpers (***REMOVED***1663 contract)."""
+        """Module wires the Langfuse decorator + helpers (#1663 contract)."""
         from telegram_bot.services import nurturing_scheduler as ns_mod
 
         assert hasattr(ns_mod, "observe")
@@ -159,7 +159,7 @@ class TestNurturingSchedulerObserveInstrumentation:
         assert rollup_calls[0].get("capture_input") is False
         assert rollup_calls[0].get("capture_output") is False
 
-        ***REMOVED*** Ensure the existing nurturing-scheduler-tick decorator is preserved.
+        # Ensure the existing nurturing-scheduler-tick decorator is preserved.
         tick_calls = [c for c in captured if c.get("name") == "nurturing-scheduler-tick"]
         assert len(tick_calls) == 1, "Existing run_nurturing_batch @observe must be preserved"
 

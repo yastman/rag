@@ -1,4 +1,4 @@
-***REMOVED*** Docker SDK Map
+# Docker SDK Map
 
 Use this index when a task starts from a Docker service name and you need the
 project SDK/framework guidance before editing code, runtime config, or docs.
@@ -7,7 +7,7 @@ project SDK/framework guidance before editing code, runtime config, or docs.
 names, ports, env vars, and health checks. This page only maps services to the
 local SDK docs, runbooks, and Context7 refresh targets agents should use.
 
-***REMOVED******REMOVED*** Lookup Policy
+## Lookup Policy
 
 1. Start with the service row below.
 2. Read the linked local docs and the matching section in
@@ -22,7 +22,7 @@ local SDK docs, runbooks, and Context7 refresh targets agents should use.
    - `docs/runbooks/*.md` for incident diagnosis or operational recovery
    - this page when a Docker service gains or loses SDK/doc ownership
 
-***REMOVED******REMOVED*** Service Map
+## Service Map
 
 | Docker service | Primary local docs | SDK/framework docs | Context7 refresh target | Update when Context7 adds |
 |---|---|---|---|---|
@@ -50,7 +50,7 @@ local SDK docs, runbooks, and Context7 refresh targets agents should use.
 | `livekit-sip` | [`runtime-services.md`](runtime-services.md), [`../../src/voice/README.md`](../../src/voice/README.md) | LiveKit SIP runtime backing voice path | `/livekit/agents`; official LiveKit SIP docs | Trunk, dispatch, SIP URI, or media routing rules |
 | `voice-agent` | [`runtime-services.md`](runtime-services.md), [`../../src/voice/README.md`](../../src/voice/README.md) | `livekit-agents`, `openai`, `langfuse` | `/livekit/agents`, `/openai/openai-python`, `/langfuse/langfuse-python` | Agent session, STT/TTS, tool, RAG API, or tracing rules |
 
-***REMOVED******REMOVED*** Refresh Notes
+## Refresh Notes
 
 - Keep Compose service names, profiles, ports, env vars, and health checks in
   [`../../DOCKER.md`](../../DOCKER.md), not here.

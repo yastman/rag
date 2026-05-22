@@ -1,4 +1,4 @@
-"""Contract test for Mini App frontend cleanup (***REMOVED***1597).
+"""Contract test for Mini App frontend cleanup (#1597).
 
 Asserts three structural invariants on the React/Vite Mini App frontend:
 
@@ -14,7 +14,7 @@ Asserts three structural invariants on the React/Vite Mini App frontend:
    and is not declared, exported, or imported anywhere under
    ``mini_app/frontend/src/``.
 
-Refs ***REMOVED***1597.
+Refs #1597.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def test_telegram_gate_uses_vite_bot_username_env_var() -> None:
         "TelegramGate.tsx should still link to https://t.me/<bot> for the "
         "fallback CTA."
     )
-    ***REMOVED*** Template-literal interpolation: `${...}` somewhere in the file.
+    # Template-literal interpolation: `${...}` somewhere in the file.
     assert "${" in text, (
         "TelegramGate.tsx must compose the bot URL via a template literal, "
         "e.g. `https://t.me/${import.meta.env.VITE_BOT_USERNAME ?? 'your_bot'}`."
@@ -74,11 +74,11 @@ def test_package_json_does_not_depend_on_zustand() -> None:
 
     assert "zustand" not in deps, (
         "zustand is declared in dependencies but is not imported anywhere "
-        "under mini_app/frontend/src/. Remove it (***REMOVED***1597)."
+        "under mini_app/frontend/src/. Remove it (#1597)."
     )
     assert "zustand" not in dev_deps, (
         "zustand is declared in devDependencies but is not imported "
-        "anywhere under mini_app/frontend/src/. Remove it (***REMOVED***1597)."
+        "anywhere under mini_app/frontend/src/. Remove it (#1597)."
     )
 
 
@@ -87,10 +87,10 @@ def test_submit_phone_helper_is_removed() -> None:
     if not SRC_DIR.exists():
         pytest.skip(f"{SRC_DIR} not present")
 
-    ***REMOVED*** Match a definition or assignment: `submitPhone(`, `submitPhone =`,
-    ***REMOVED*** or `function submitPhone`.
+    # Match a definition or assignment: `submitPhone(`, `submitPhone =`,
+    # or `function submitPhone`.
     def_pattern = re.compile(r"\bsubmitPhone\s*[(=]|function\s+submitPhone\b")
-    ***REMOVED*** Match imports referencing the symbol.
+    # Match imports referencing the symbol.
     import_pattern = re.compile(r"import\s*\{[^}]*\bsubmitPhone\b[^}]*\}")
 
     def_offenders: list[str] = []

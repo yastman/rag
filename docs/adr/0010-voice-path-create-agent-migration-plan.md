@@ -1,12 +1,12 @@
-***REMOVED*** ADR-0010: Voice Path Migration to `create_agent` SDK — Plan
+# ADR-0010: Voice Path Migration to `create_agent` SDK — Plan
 
 **Status:** Proposed
 
 **Date:** 2026-05-22
 
-**Refs:** [***REMOVED***1535](https://github.com/yastman/rag/issues/1535)
+**Refs:** [#1535](https://github.com/yastman/rag/issues/1535)
 
-***REMOVED******REMOVED*** Context
+## Context
 
 The bot serves two RAG entrypoints with **divergent orchestrators**:
 
@@ -15,33 +15,33 @@ The bot serves two RAG entrypoints with **divergent orchestrators**:
 | Text | `Bot._handle_query_supervisor` | `langchain.agents.create_agent` (LangChain 1.x) | `telegram_bot/agents/agent.py`, `telegram_bot/agents/rag_pipeline.py` |
 | Voice | `Bot.handle_voice` | Custom 11-node `StateGraph` (`build_graph()`) | `telegram_bot/graph/graph.py`, `telegram_bot/graph/nodes/*.py` |
 
-The voice path nodes (`guard`, `classify`, `cache_check`, `retrieve`, `grade`, `rerank`, `rewrite`, `generate`, `cache_store`, `respond`, plus voice-only `transcribe`) duplicate logic that the text path already calls as a tool (`rag_search`) plus a thin pre-agent layer (`classify_query`, `detect_injection`). ADR-0003 originally documented this split as deliberate; ***REMOVED***1535 reverses that decision because the underlying assumption ("text is fast, deterministic; voice is complex, agentic") no longer holds — voice now runs a heavier graph than text, and bug fixes consistently need mirroring across both paths.
+The voice path nodes (`guard`, `classify`, `cache_check`, `retrieve`, `grade`, `rerank`, `rewrite`, `generate`, `cache_store`, `respond`, plus voice-only `transcribe`) duplicate logic that the text path already calls as a tool (`rag_search`) plus a thin pre-agent layer (`classify_query`, `detect_injection`). ADR-0003 originally documented this split as deliberate; #1535 reverses that decision because the underlying assumption ("text is fast, deterministic; voice is complex, agentic") no longer holds — voice now runs a heavier graph than text, and bug fixes consistently need mirroring across both paths.
 
 The full migration is too large for a single PR. This ADR is the **design-first** deliverable referenced by the issue's `lane:design-first` label. No production code changes ship with it.
 
-***REMOVED******REMOVED*** Decision Drivers
+## Decision Drivers
 
 - **SDK-native consolidation:** `langchain.agents.create_agent` is the canonical entrypoint; custom `StateGraph` should remain only where the SDK genuinely cannot express the topology.
 - **Middleware reuse:** the SDK exposes `before_model` / `after_model` / `wrap_model_call` hooks that match the pre/post-LLM stages already in voice (`guard`, `cache_check`, `cache_store`).
 - **Shared RAG core:** `rag_pipeline.py` and `services/rag_core.py` already encapsulate retrieve→grade→rerank→rewrite for the text `rag_search` tool. Voice can call the same code path via the same tool once orchestration is unified.
 - **Observability parity:** `@observe` spans named `node-*` (graph) vs. `cache-check`, `hybrid-retrieve`, `grade-documents`, `rerank` (pipeline) split Langfuse traces awkwardly. One naming scheme post-migration.
 
-***REMOVED******REMOVED*** Considered Options
+## Considered Options
 
-***REMOVED******REMOVED******REMOVED*** Option A — Big-bang full migration in one PR
+### Option A — Big-bang full migration in one PR
 Replace `build_graph` + all `nodes/*.py` with a single `create_agent` instance reusing `rag_search`. **Rejected:** ~600 LoC churn across `bot.py::handle_voice`, all 8 RAG nodes, voice-specific transcribe wrapper, plus state-shape regressions for ~40 keys in `RAGState`. Risk register too large for one review.
 
-***REMOVED******REMOVED******REMOVED*** Option B — Gradual middleware extraction (chosen)
+### Option B — Gradual middleware extraction (chosen)
 Split the migration across N follow-up PRs, each independently revertible. Slice 0 (this ADR) is design-only. Slice 1 extracts shared middleware helpers. Slice 2 introduces a voice-flavoured `create_agent` behind a feature flag. Slice 3 deletes `build_graph`. Each slice ships its own contract test.
 
-***REMOVED******REMOVED******REMOVED*** Option C — Status quo
-Keep dual pipelines, accept double maintenance. **Rejected:** ***REMOVED***1535 has been open since 2026-05-14; ***REMOVED***1533 documents the same dual-path pattern leaking into contextualisation logic. The cost compounds with every node-level fix.
+### Option C — Status quo
+Keep dual pipelines, accept double maintenance. **Rejected:** #1535 has been open since 2026-05-14; #1533 documents the same dual-path pattern leaking into contextualisation logic. The cost compounds with every node-level fix.
 
-***REMOVED******REMOVED*** Decision
+## Decision
 
 Adopt **Option B**: gradual migration via middleware extraction, gated by feature flag, validated on the gold set before each slice merges. This ADR's scope ends at recording the plan; topology changes ship in subsequent PRs.
 
-***REMOVED******REMOVED*** Node → Middleware/Tool Mapping
+## Node → Middleware/Tool Mapping
 
 | Voice node | Maps to | Notes |
 |---|---|---|
@@ -55,7 +55,7 @@ Adopt **Option B**: gradual migration via middleware extraction, gated by featur
 | `respond` | Post-agent step (in `handle_voice`, after `agent.ainvoke`) | Telegram delivery, source attribution, feedback keyboard. Mirrors text path; not a middleware. |
 | `summarize` | `langmem.short_term.SummarizationNode` (already SDK) | Reuse, attach as middleware or as the existing post-respond node. |
 
-***REMOVED******REMOVED*** Custom State Schema (voice-only fields)
+## Custom State Schema (voice-only fields)
 
 `AgentState` provides only `messages`. Voice needs additional fields not present in the text agent. Per Context7 evidence, custom fields are added by subclassing `AgentState` and passing the schema via `state_schema=` and the middleware's `state_schema = VoiceAgentState` attribute.
 
@@ -64,13 +64,13 @@ from typing import NotRequired
 from langchain.agents import AgentState
 
 class VoiceAgentState(AgentState):
-    ***REMOVED*** voice-only inputs
+    # voice-only inputs
     voice_audio: NotRequired[bytes]
     voice_duration_s: NotRequired[float]
     stt_text: NotRequired[str]
     stt_duration_ms: NotRequired[float]
-    input_type: NotRequired[str]            ***REMOVED*** "voice" | "text"
-    ***REMOVED*** shared with text path (currently scattered in RAGState)
+    input_type: NotRequired[str]            # "voice" | "text"
+    # shared with text path (currently scattered in RAGState)
     query_type: NotRequired[str]
     cache_hit: NotRequired[bool]
     cached_response: NotRequired[str]
@@ -85,7 +85,7 @@ class VoiceAgentState(AgentState):
 
 `NotRequired` per LangGraph backward-compatibility guidance — old checkpoints without these fields still validate.
 
-***REMOVED******REMOVED*** Migration Steps
+## Migration Steps
 
 1. **Slice 0 (this PR)** — ADR + contract test. No runtime change.
 2. **Slice 1** — Extract `injection_guard` as a `@before_model` middleware in `telegram_bot/agents/middleware/guard.py`. Wire into the **text** agent only. Voice keeps `guard_node`. New unit + contract tests.
@@ -96,7 +96,7 @@ class VoiceAgentState(AgentState):
 
 Each slice is one PR, gated by its own contract test + the gold-set eval workflow.
 
-***REMOVED******REMOVED*** Risk Register
+## Risk Register
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
@@ -107,20 +107,20 @@ Each slice is one PR, gated by its own contract test + the gold-set eval workflo
 | `rag_search` tool latency higher than direct graph retrieval | Low | Low | Shared `rag_pipeline.py` is the same code; observed text-path latency stays within voice-path budget. |
 | Whisper STT failure path differs (graph raises `ValueError("Empty transcription")`; agent path needs explicit handling) | High | Low | Voice still owns transcription as a pre-step; failure modes preserved by construction. |
 
-***REMOVED******REMOVED*** Consequences
+## Consequences
 
-***REMOVED******REMOVED******REMOVED*** Positive
+### Positive
 - Single SDK-native pipeline; bug fixes ship once.
 - Middleware reuse: `injection_guard`, `semantic_cache_check`, `semantic_cache_store` become first-class shared building blocks.
 - Langfuse trace shape converges: one set of span names regardless of input modality.
 - Future agent SDK improvements (streaming, durability, HITL) automatically benefit voice.
 
-***REMOVED******REMOVED******REMOVED*** Negative
+### Negative
 - `RAGState` union of ~40 keys collapses into a smaller `VoiceAgentState`; downstream consumers (Langfuse score writers, evaluators) need audit.
 - Multi-PR roadmap; total wall-clock time longer than a big-bang rewrite.
 - ADR-0003 is superseded; documentation needs cross-linking to avoid confusion.
 
-***REMOVED******REMOVED*** Context7 Evidence
+## Context7 Evidence
 
 Research conducted via Context7 MCP. Library IDs cited for traceability.
 
@@ -129,10 +129,10 @@ Research conducted via Context7 MCP. Library IDs cited for traceability.
 
 Snippets above are paraphrased summaries (≤ 30 consecutive words from any single source). Full code patterns are reproduced as illustrative samples in the Custom State Schema section, derived from the public docs and adapted to repo conventions. *Content was rephrased for compliance with licensing restrictions.*
 
-***REMOVED******REMOVED*** References
+## References
 
-- Issue [***REMOVED***1535](https://github.com/yastman/rag/issues/1535) — dual pipeline maintenance.
-- Issue [***REMOVED***1533](https://github.com/yastman/rag/issues/1533) — contextualisation duplication (same pattern).
+- Issue [#1535](https://github.com/yastman/rag/issues/1535) — dual pipeline maintenance.
+- Issue [#1533](https://github.com/yastman/rag/issues/1533) — contextualisation duplication (same pattern).
 - ADR-0003 — voice/text split (will be superseded by this ADR upon Acceptance).
 - `telegram_bot/agents/agent.py` — current `create_agent` factory (text path).
 - `telegram_bot/agents/rag_pipeline.py` — shared RAG core invoked from `rag_search` tool.

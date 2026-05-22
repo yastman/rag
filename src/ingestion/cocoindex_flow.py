@@ -27,9 +27,9 @@ try:
     COCOINDEX_AVAILABLE = True
 except ImportError:
     COCOINDEX_AVAILABLE = False
-    cocoindex = None  ***REMOVED*** type: ignore
-    FlowBuilder = Any  ***REMOVED*** type: ignore
-    DataScope = Any  ***REMOVED*** type: ignore
+    cocoindex = None  # type: ignore
+    FlowBuilder = Any  # type: ignore
+    DataScope = Any  # type: ignore
 
 
 logger = logging.getLogger(__name__)
@@ -39,23 +39,23 @@ logger = logging.getLogger(__name__)
 class FlowConfig:
     """Configuration for CocoIndex flows."""
 
-    ***REMOVED*** Qdrant settings
+    # Qdrant settings
     qdrant_url: str = field(
         default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
     )
     qdrant_api_key: str | None = field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
     collection_name: str = "documents"
 
-    ***REMOVED*** Chunking settings
-    chunk_size: int = 512  ***REMOVED*** Tokens per chunk
-    chunk_overlap: int = 50  ***REMOVED*** Overlap between chunks
+    # Chunking settings
+    chunk_size: int = 512  # Tokens per chunk
+    chunk_overlap: int = 50  # Overlap between chunks
 
-    ***REMOVED*** Voyage settings
+    # Voyage settings
     voyage_api_key: str | None = field(default_factory=lambda: os.getenv("VOYAGE_API_KEY"))
     voyage_model: str = "voyage-4-large"
     vector_size: int = 1024
 
-    ***REMOVED*** Refresh interval for watching directories
+    # Refresh interval for watching directories
     refresh_interval_seconds: int = 60
 
 
@@ -113,24 +113,24 @@ class VoyageEmbedFunction:
         async def _embed():
             return await self.service.embed_documents(texts)
 
-        ***REMOVED*** Run async in sync context. asyncio.get_event_loop() is deprecated
-        ***REMOVED*** in 3.12+ and raises RuntimeError without a running loop in 3.14;
-        ***REMOVED*** use get_running_loop()/asyncio.run() per ***REMOVED***1639 / Context7 cpython.
+        # Run async in sync context. asyncio.get_event_loop() is deprecated
+        # in 3.12+ and raises RuntimeError without a running loop in 3.14;
+        # use get_running_loop()/asyncio.run() per #1639 / Context7 cpython.
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
         if loop is not None and loop.is_running():
-            ***REMOVED*** Called from inside an active event loop (e.g. CocoIndex executor
-            ***REMOVED*** invokes us during async flow execution). Drop to a worker thread
-            ***REMOVED*** so we can spin up a fresh loop via asyncio.run without re-entering.
+            # Called from inside an active event loop (e.g. CocoIndex executor
+            # invokes us during async flow execution). Drop to a worker thread
+            # so we can spin up a fresh loop via asyncio.run without re-entering.
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, _embed())
                 embeddings = future.result()
         else:
-            ***REMOVED*** Called from purely sync context — own the loop for this call.
+            # Called from purely sync context — own the loop for this call.
             embeddings = asyncio.run(_embed())
 
         return [np.array(emb, dtype=np.float32) for emb in embeddings]
@@ -167,18 +167,18 @@ def create_document_flow(
         data_scope: DataScope,
     ) -> None:
         """CocoIndex flow for document ingestion."""
-        ***REMOVED*** Add source: local file directory
+        # Add source: local file directory
         data_scope["documents"] = flow_builder.add_source(
             cocoindex.sources.LocalFile(path=source_path),
             refresh_interval=timedelta(seconds=config.refresh_interval_seconds),
         )
 
-        ***REMOVED*** Create collector for output
+        # Create collector for output
         doc_embeddings = data_scope.add_collector()
 
-        ***REMOVED*** Process each document
+        # Process each document
         with data_scope["documents"].row() as doc:
-            ***REMOVED*** Split document into chunks
+            # Split document into chunks
             doc["chunks"] = doc["content"].transform(
                 cocoindex.functions.SplitRecursively(),
                 language="markdown",
@@ -186,9 +186,9 @@ def create_document_flow(
                 chunk_overlap=config.chunk_overlap,
             )
 
-            ***REMOVED*** Process each chunk
+            # Process each chunk
             with doc["chunks"].row() as chunk:
-                ***REMOVED*** Generate embedding using Voyage AI
+                # Generate embedding using Voyage AI
                 embed_fn = VoyageEmbedFunction(
                     api_key=config.voyage_api_key,
                     model=config.voyage_model,
@@ -198,7 +198,7 @@ def create_document_flow(
                     lambda texts: embed_fn(texts if isinstance(texts, list) else [texts])[0]
                 )
 
-                ***REMOVED*** Collect chunk data
+                # Collect chunk data
                 doc_embeddings.collect(
                     file_name=doc["filename"],
                     file_path=doc["path"],
@@ -207,7 +207,7 @@ def create_document_flow(
                     embedding=chunk["embedding"],
                 )
 
-        ***REMOVED*** Export to Qdrant
+        # Export to Qdrant
         parsed_qdrant_url = urlparse(config.qdrant_url)
         grpc_host = parsed_qdrant_url.hostname or "localhost"
         grpc_port = parsed_qdrant_url.port or 6333
@@ -255,7 +255,7 @@ def _run_update_all_flows_blocking(options: Any) -> None:
     def _runner() -> None:
         try:
             asyncio.run(_update())
-        except BaseException as exc:  ***REMOVED*** pragma: no cover - exercised via caller error surface
+        except BaseException as exc:  # pragma: no cover - exercised via caller error surface
             result["error"] = exc
 
     thread = threading.Thread(
@@ -291,20 +291,20 @@ def setup_and_run_flow(
     config = config or FlowConfig()
 
     try:
-        ***REMOVED*** Initialize CocoIndex
+        # Initialize CocoIndex
         cocoindex.init()
 
-        ***REMOVED*** Create and register the flow
+        # Create and register the flow
         flow_def = create_document_flow(config, source_path)
         if flow_def is None:
             return {"error": "Failed to create flow", "success": False}
 
         _flow = cocoindex.open_flow("DocumentIngestion", flow_def)
 
-        ***REMOVED*** Setup backend infrastructure
+        # Setup backend infrastructure
         cocoindex.setup_all_flows()
 
-        ***REMOVED*** Run the flow
+        # Run the flow
         if blocking:
             _run_update_all_flows_blocking(cocoindex.FlowLiveUpdaterOptions(live_mode=False))
         else:

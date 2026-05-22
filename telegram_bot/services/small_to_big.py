@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class SmallToBigMode(StrEnum):
     """Small-to-big expansion mode."""
 
-    OFF = "off"  ***REMOVED*** No expansion
-    ON = "on"  ***REMOVED*** Always expand
-    AUTO = "auto"  ***REMOVED*** Expand only for complex queries
+    OFF = "off"  # No expansion
+    ON = "on"  # Always expand
+    AUTO = "auto"  # Expand only for complex queries
 
 
 @dataclass
@@ -38,7 +38,7 @@ class ExpandedChunk:
     original_chunk: dict[str, Any]
     expanded_text: str
     neighbor_chunks: list[dict[str, Any]]
-    total_tokens_estimate: int  ***REMOVED*** Rough estimate: chars / 4
+    total_tokens_estimate: int  # Rough estimate: chars / 4
 
 
 class SmallToBigService:
@@ -109,13 +109,13 @@ class SmallToBigService:
                 logger.info(f"Stopping expansion: reached {len(expanded_results)} chunks limit")
                 break
 
-            ***REMOVED*** Get document info
+            # Get document info
             metadata = chunk.get("metadata", {})
             doc_id = metadata.get("doc_id") or metadata.get("document_name")
             chunk_order = metadata.get("chunk_order") or metadata.get("order")
 
             if doc_id is None or chunk_order is None:
-                ***REMOVED*** Can't expand without document/order info
+                # Can't expand without document/order info
                 logger.warning(f"Chunk missing doc_id or order: {metadata}")
                 expanded_results.append(
                     ExpandedChunk(
@@ -127,7 +127,7 @@ class SmallToBigService:
                 )
                 continue
 
-            ***REMOVED*** Fetch neighbor chunks
+            # Fetch neighbor chunks
             neighbors = await self._fetch_neighbors(
                 doc_id=doc_id,
                 center_order=chunk_order,
@@ -135,7 +135,7 @@ class SmallToBigService:
                 window_after=window_after,
             )
 
-            ***REMOVED*** Deduplicate if enabled
+            # Deduplicate if enabled
             if deduplicate:
                 unique_neighbors = []
                 for n in neighbors:
@@ -145,7 +145,7 @@ class SmallToBigService:
                         unique_neighbors.append(n)
                 neighbors = unique_neighbors
 
-            ***REMOVED*** Build expanded text (sorted by order)
+            # Build expanded text (sorted by order)
             all_chunks = [chunk, *neighbors]
             all_chunks.sort(
                 key=lambda c: (
@@ -157,9 +157,9 @@ class SmallToBigService:
             expanded_text = "\n\n".join(c.get("text", "") for c in all_chunks)
             tokens_estimate = len(expanded_text) // 4
 
-            ***REMOVED*** Check token limit
+            # Check token limit
             if total_tokens + tokens_estimate > self._max_context_tokens:
-                ***REMOVED*** Try without neighbors
+                # Try without neighbors
                 expanded_text = chunk.get("text", "")
                 tokens_estimate = len(expanded_text) // 4
                 neighbors = []
@@ -198,27 +198,27 @@ class SmallToBigService:
         Returns:
             List of neighbor chunks (excluding center)
         """
-        ***REMOVED*** Calculate order range
+        # Calculate order range
         order_min = max(0, center_order - window_before)
         order_max = center_order + window_after
 
         try:
-            ***REMOVED*** Build filter for same document and order range
+            # Build filter for same document and order range
             filter_conditions = models.Filter(
                 must=[
-                    ***REMOVED*** Same document
+                    # Same document
                     models.FieldCondition(
                         key="metadata.doc_id",
                         match=models.MatchValue(value=doc_id),
                     ),
-                    ***REMOVED*** Order in range (excluding center)
+                    # Order in range (excluding center)
                     models.FieldCondition(
                         key="metadata.order",
                         range=models.Range(gte=order_min, lte=order_max),
                     ),
                 ],
                 must_not=[
-                    ***REMOVED*** Exclude center chunk
+                    # Exclude center chunk
                     models.FieldCondition(
                         key="metadata.order",
                         match=models.MatchValue(value=center_order),
@@ -226,24 +226,24 @@ class SmallToBigService:
                 ],
             )
 
-            ***REMOVED*** Scroll to get all matching chunks
-            ***REMOVED*** We use scroll instead of search since we're filtering, not searching
+            # Scroll to get all matching chunks
+            # We use scroll instead of search since we're filtering, not searching
             result = await self._client.scroll(
                 collection_name=self._collection_name,
                 scroll_filter=filter_conditions,
-                limit=window_before + window_after + 1,  ***REMOVED*** Extra buffer
+                limit=window_before + window_after + 1,  # Extra buffer
                 with_payload=True,
             )
 
-            points = result[0]  ***REMOVED*** (points, next_page_offset)
+            points = result[0]  # (points, next_page_offset)
 
-            ***REMOVED*** Format results
+            # Format results
             return [
                 {
                     "id": str(p.id),
                     "text": (p.payload or {}).get("page_content", ""),
                     "metadata": (p.payload or {}).get("metadata", {}),
-                    "score": 0.0,  ***REMOVED*** Neighbors don't have search scores
+                    "score": 0.0,  # Neighbors don't have search scores
                 }
                 for p in points
             ]

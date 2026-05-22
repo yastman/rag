@@ -84,7 +84,7 @@ class TestBGEM3Embeddings:
             result = await emb.aembed_documents(["a", "b", "c"])
 
         assert len(result) == 3
-        assert call_count == 1  ***REMOVED*** single request with batch_size=2 as server hint
+        assert call_count == 1  # single request with batch_size=2 as server hint
 
 
 class TestBGEM3SparseEmbeddings:
@@ -189,7 +189,7 @@ class TestBGEM3HybridEmbeddings:
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
             await emb.aembed_hybrid("test1")
             await emb.aembed_hybrid("test2")
-            ***REMOVED*** Same BGEM3Client instance used
+            # Same BGEM3Client instance used
             assert emb._client is not None
 
     async def test_aembed_query_delegates_to_hybrid(self):
@@ -314,7 +314,7 @@ class TestBGEM3HybridRetry:
             dense, _sparse = await emb.aembed_hybrid("test")
 
         assert dense == [0.1, 0.2]
-        assert call_count == 2  ***REMOVED*** 1 fail + 1 success
+        assert call_count == 2  # 1 fail + 1 success
 
     async def test_raises_after_max_retries(self):
         """Raises original exception after all retries exhausted."""
@@ -345,7 +345,7 @@ class TestBGEM3HybridRetry:
             with pytest.raises(httpx.HTTPStatusError):
                 await emb.aembed_hybrid("test")
 
-        assert call_count == 1  ***REMOVED*** No retries
+        assert call_count == 1  # No retries
 
 
 class TestBGEM3HybridTimeout:
@@ -362,7 +362,7 @@ class TestBGEM3HybridTimeout:
     async def test_timeout_configuration(self, kwargs, expected_read, expected_connect):
         """Timeout is configured correctly (default granular or custom override)."""
         emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", **kwargs)
-        ***REMOVED*** Access internal BGEM3Client's httpx client
+        # Access internal BGEM3Client's httpx client
         client = await emb._client._get_client()
         assert client.timeout.read == expected_read
         assert client.timeout.connect == expected_connect

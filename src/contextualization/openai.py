@@ -8,12 +8,12 @@ from src.config import Settings
 from .base import ContextualizedChunk, ContextualizeProvider
 
 
-***REMOVED*** OpenAI SDK's built-in retry policy (Context7 /openai/openai-python):
-***REMOVED*** - Default max_retries=2, exponential backoff
-***REMOVED*** - Retries: connection errors, 408 Timeout, 409 Conflict, 429 Rate Limit, >=500
-***REMOVED*** OpenAI counts max_retries after the initial request. The previous Tenacity
-***REMOVED*** stop_after_attempt(4) allowed four total attempts, so max_retries=3 preserves
-***REMOVED*** that retry budget without duplicating the policy.
+# OpenAI SDK's built-in retry policy (Context7 /openai/openai-python):
+# - Default max_retries=2, exponential backoff
+# - Retries: connection errors, 408 Timeout, 409 Conflict, 429 Rate Limit, >=500
+# OpenAI counts max_retries after the initial request. The previous Tenacity
+# stop_after_attempt(4) allowed four total attempts, so max_retries=3 preserves
+# that retry budget without duplicating the policy.
 _OPENAI_MAX_RETRIES = 3
 
 
@@ -27,7 +27,7 @@ class OpenAIContextualizer(ContextualizeProvider):
     - Quality: Very good
 
     Retries are handled natively by the OpenAI SDK via the ``max_retries``
-    client parameter (***REMOVED***1651). No Tenacity decorator wraps the per-call path.
+    client parameter (#1651). No Tenacity decorator wraps the per-call path.
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
@@ -53,7 +53,7 @@ class OpenAIContextualizer(ContextualizeProvider):
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using OpenAI.
 
-        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (***REMOVED***1533),
+        Thin delegate to ``ContextualizeProvider.contextualize_batch`` (#1533),
         which provides the shared concurrent per-chunk dispatch with per-chunk
         fallback to ``context_method="none"``.
         """
@@ -87,14 +87,14 @@ class OpenAIContextualizer(ContextualizeProvider):
             ],
         )
 
-        ***REMOVED*** Track tokens and cost
+        # Track tokens and cost
         usage = response.usage
         if usage is not None:
             total_tokens = int(usage.total_tokens or 0)
             prompt_tokens = int(usage.prompt_tokens or 0)
             completion_tokens = int(usage.completion_tokens or 0)
             self.total_tokens += total_tokens
-            ***REMOVED*** OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
+            # OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
             self.total_cost += (prompt_tokens * 5 + completion_tokens * 15) / 1_000_000
 
         return ContextualizedChunk(

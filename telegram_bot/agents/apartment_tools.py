@@ -56,7 +56,7 @@ async def apartment_search(
     lf = get_client()
     lf.update_current_span(input={"query": query[:100], "rooms": rooms, "max_price": max_price_eur})
 
-    ***REMOVED*** Pipeline fallback: extract filters from query text when none provided explicitly
+    # Pipeline fallback: extract filters from query text when none provided explicitly
     _has_explicit_filters = any(
         v is not None
         for v in [
@@ -100,7 +100,7 @@ async def apartment_search(
         except Exception:
             logger.debug("Pipeline extraction in apartment_search failed", exc_info=True)
 
-    ***REMOVED*** Build filters dict
+    # Build filters dict
     filters: dict = {}
     if rooms is not None:
         filters["rooms"] = rooms
@@ -133,7 +133,7 @@ async def apartment_search(
         filters["is_furnished"] = is_furnished
 
     try:
-        ***REMOVED*** Embed query
+        # Embed query
         dense, sparse, colbert = await ctx.embeddings.aembed_hybrid_with_colbert(query)
         await ctx.cache.store_embedding(query, dense)
         await ctx.cache.store_sparse_embedding(query, sparse)
@@ -149,7 +149,7 @@ async def apartment_search(
         response = format_apartment_text(results)
         lf.update_current_span(output={"results_count": total})
 
-        ***REMOVED*** Log search filters for CRM enrichment
+        # Log search filters for CRM enrichment
         store = getattr(ctx, "search_event_store", None)
         if store:
             try:

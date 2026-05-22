@@ -85,7 +85,7 @@ class TestRetrieveNode:
 
         assert len(result["documents"]) == 3
         assert result["search_results_count"] == 3
-        ***REMOVED*** Qdrant should NOT be called — we used cache
+        # Qdrant should NOT be called — we used cache
         qdrant.hybrid_search_rrf.assert_not_awaited()
 
     async def test_cache_hit_clears_stale_backend_error_flags(self):
@@ -155,9 +155,9 @@ class TestRetrieveNode:
             _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
-        ***REMOVED*** Should NOT compute sparse — used cached
+        # Should NOT compute sparse — used cached
         sparse_embeddings.aembed_query.assert_not_awaited()
-        ***REMOVED*** Qdrant should be called with cached sparse
+        # Qdrant should be called with cached sparse
         call_kwargs = qdrant.hybrid_search_rrf.call_args[1]
         assert call_kwargs["sparse_vector"] == cached_sparse
 
@@ -243,7 +243,7 @@ class TestRetrieveNode:
 
         state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
         state["query_type"] = "GENERAL"
-        state["query_embedding"] = None  ***REMOVED*** simulates post-rewrite
+        state["query_embedding"] = None  # simulates post-rewrite
 
         call_order: list[str] = []
 
@@ -267,7 +267,7 @@ class TestRetrieveNode:
         cache.store_sparse_embedding = AsyncMock()
         cache.store_search_results = AsyncMock()
 
-        ***REMOVED*** Non-hybrid embeddings → falls through to parallel path
+        # Non-hybrid embeddings → falls through to parallel path
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(side_effect=mock_dense_embed)
 
@@ -288,10 +288,10 @@ class TestRetrieveNode:
         )
 
         assert len(result["documents"]) == 3
-        ***REMOVED*** Both embeddings should have been computed
+        # Both embeddings should have been computed
         embeddings.aembed_query.assert_awaited_once()
         sparse_embeddings.aembed_query.assert_awaited_once()
-        ***REMOVED*** Check parallel execution: sparse_start should appear before dense_end
+        # Check parallel execution: sparse_start should appear before dense_end
         assert "sparse_start" in call_order
         assert "dense_start" in call_order
 
@@ -299,7 +299,7 @@ class TestRetrieveNode:
         """After rewrite, hybrid embeddings uses single /encode/hybrid call."""
         state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
         state["query_type"] = "GENERAL"
-        state["query_embedding"] = None  ***REMOVED*** simulates post-rewrite
+        state["query_embedding"] = None  # simulates post-rewrite
 
         cache = AsyncMock()
         cache.get_embedding = AsyncMock(return_value=None)
@@ -332,7 +332,7 @@ class TestRetrieveNode:
         embeddings.aembed_hybrid.assert_awaited_once_with("rewritten query")
         cache.store_embedding.assert_awaited_once()
         cache.store_sparse_embedding.assert_awaited_once()
-        ***REMOVED*** sparse_embeddings should NOT be called — hybrid provided both
+        # sparse_embeddings should NOT be called — hybrid provided both
         sparse_embeddings.aembed_query.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -376,7 +376,7 @@ class TestRetrieveNode:
             _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
-        ***REMOVED*** Verify result includes retrieved_context for judge evaluation
+        # Verify result includes retrieved_context for judge evaluation
         assert "retrieved_context" in result
         assert len(result["retrieved_context"]) == 2
         assert result["retrieved_context"][0]["score"] == 0.9
@@ -603,7 +603,7 @@ class TestRetrieveNodeColbert:
                 {"backend_error": False, "error_type": None, "error_message": None},
             )
         )
-        mock_qdrant.hybrid_search_rrf = AsyncMock()  ***REMOVED*** should NOT be called
+        mock_qdrant.hybrid_search_rrf = AsyncMock()  # should NOT be called
 
         mock_sparse = AsyncMock()
 
@@ -694,7 +694,7 @@ class TestRetrieveNodeColbert:
 
 
 class TestRetrieveNodeEvalFields:
-    """Test eval_query/eval_docs fields for managed evaluators (***REMOVED***386)."""
+    """Test eval_query/eval_docs fields for managed evaluators (#386)."""
 
     async def test_span_includes_eval_fields(self):
         """Curated span output must include eval_ fields for Langfuse evaluators."""
@@ -729,7 +729,7 @@ class TestRetrieveNodeEvalFields:
                 _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
             )
 
-        ***REMOVED*** Find span output calls
+        # Find span output calls
         output_calls = [
             c.kwargs["output"]
             for c in mock_lf.update_current_span.call_args_list
@@ -782,13 +782,13 @@ class TestRetrieveNodeEvalFields:
 
 
 class TestRetrieveNodeBundle:
-    """Tests for BGE-M3 query vector bundle cache in retrieve_node (***REMOVED***1493)."""
+    """Tests for BGE-M3 query vector bundle cache in retrieve_node (#1493)."""
 
     async def test_bundle_cache_hit_after_rewrite(self):
         """After rewrite, retrieve_node uses bundle cache and skips BGE-M3 call."""
         state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
         state["query_type"] = "GENERAL"
-        state["query_embedding"] = None  ***REMOVED*** simulates post-rewrite
+        state["query_embedding"] = None  # simulates post-rewrite
 
         from telegram_bot.services.bge_m3_query_bundle import BgeM3QueryVectorBundle
 
@@ -919,7 +919,7 @@ class TestRetrieveNodeBundle:
         state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
         state["query_type"] = "GENERAL"
         state["query_embedding"] = None
-        state["colbert_query"] = None  ***REMOVED*** cleared after rewrite
+        state["colbert_query"] = None  # cleared after rewrite
 
         cache = AsyncMock()
         cache.get_bge_m3_query_bundle = AsyncMock(return_value=None)
@@ -953,7 +953,7 @@ class TestRetrieveNodeBundle:
             ),
         )
 
-        ***REMOVED*** Verify search results were cached under colbert profile
+        # Verify search results were cached under colbert profile
         store_call = cache.store_search_results.await_args
         profile = store_call.kwargs.get("filters") or store_call.args[1]
         assert profile["mode"] == "colbert"

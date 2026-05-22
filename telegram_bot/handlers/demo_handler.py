@@ -79,8 +79,8 @@ async def handle_demo_example(
     """Handle example button click — treat as text query."""
     await callback.answer()
     if state is None and callback_data is not None and hasattr(callback_data, "get_data"):
-        ***REMOVED*** Backward-compatible direct calls: handle_demo_example(callback, state, ...)
-        state = callback_data  ***REMOVED*** type: ignore[assignment]
+        # Backward-compatible direct calls: handle_demo_example(callback, state, ...)
+        state = callback_data  # type: ignore[assignment]
         callback_data = None
     if state is None:
         return
@@ -106,7 +106,7 @@ async def handle_demo_example(
 
     await _run_demo_search(
         query,
-        callback.message,  ***REMOVED*** type: ignore[arg-type]
+        callback.message,  # type: ignore[arg-type]
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
@@ -154,7 +154,7 @@ async def _run_demo_search(
 
     await message.answer("🔍 Ищу подходящие варианты...")
 
-    ***REMOVED*** 1. Extraction
+    # 1. Extraction
     extraction = await pipeline.extract(query)
 
     if not apartments_service:
@@ -283,9 +283,9 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
             return None
         file = await bot.get_file(message.voice.file_id)
         data = io.BytesIO()
-        await bot.download_file(file.file_path, data)  ***REMOVED*** type: ignore[arg-type]
+        await bot.download_file(file.file_path, data)  # type: ignore[arg-type]
         data.seek(0)
-        data.name = "voice.ogg"  ***REMOVED*** type: ignore[attr-defined]
+        data.name = "voice.ogg"  # type: ignore[attr-defined]
 
         client = llm if llm is not None else AsyncOpenAI()
         transcript = await client.audio.transcriptions.create(

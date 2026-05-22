@@ -1,7 +1,7 @@
-"""Services inline keyboard and CTA buttons (***REMOVED***628).
+"""Services inline keyboard and CTA buttons (#628).
 
 Keyboards are constructed with :class:`aiogram.utils.keyboard.InlineKeyboardBuilder`
-to follow the SDK convention enforced by issue ***REMOVED***1238.
+to follow the SDK convention enforced by issue #1238.
 """
 
 from __future__ import annotations
@@ -26,12 +26,12 @@ def build_services_menu(i18n: Any = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for key, svc in services.items():
         ftl_key = f"svc-{key.replace('_', '-')}-title"
-        title = (i18n.get(ftl_key) if i18n is not None else None) or svc["title"]  ***REMOVED*** type: ignore[union-attr]
+        title = (i18n.get(ftl_key) if i18n is not None else None) or svc["title"]  # type: ignore[union-attr]
         builder.button(
             text=f"{svc['emoji']} {title}",
             callback_data=svc["callback_id"],
         )
-    back_text = (i18n.get("svc-back") if i18n is not None else None) or "Назад"  ***REMOVED*** type: ignore[union-attr]
+    back_text = (i18n.get("svc-back") if i18n is not None else None) or "Назад"  # type: ignore[union-attr]
     builder.button(text=f"← {back_text}", callback_data=f"{_SVC_PREFIX}back")
     builder.adjust(1)
     return builder.as_markup()
@@ -39,13 +39,13 @@ def build_services_menu(i18n: Any = None) -> InlineKeyboardMarkup:
 
 def build_service_card_buttons(service_key: str, i18n: Any = None) -> InlineKeyboardMarkup:
     """Build CTA buttons for a service card (3 rows × 1 button)."""
-    get_offer_text = (i18n.get("svc-get-offer") if i18n is not None else None) or "Оставить заявку"  ***REMOVED*** type: ignore[union-attr]
+    get_offer_text = (i18n.get("svc-get-offer") if i18n is not None else None) or "Оставить заявку"  # type: ignore[union-attr]
     manager_text = (
         i18n.get("svc-contact-manager") if i18n is not None else None
-    ) or "Связаться с менеджером"  ***REMOVED*** type: ignore[union-attr]
+    ) or "Связаться с менеджером"  # type: ignore[union-attr]
     back_text = (
         i18n.get("svc-back-to-services") if i18n is not None else None
-    ) or "Назад к услугам"  ***REMOVED*** type: ignore[union-attr]
+    ) or "Назад к услугам"  # type: ignore[union-attr]
 
     builder = InlineKeyboardBuilder()
     builder.button(

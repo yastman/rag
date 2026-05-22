@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** Fixtures
-***REMOVED*** =============================================================================
+# =============================================================================
+# Fixtures
+# =============================================================================
 
 
 @pytest.fixture
@@ -27,9 +27,9 @@ def mock_qdrant_client():
     return mock_client
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestHybridSearchRRFQuantization - Per-call quantization A/B testing
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestHybridSearchRRFQuantization - Per-call quantization A/B testing
+# =============================================================================
 
 
 class TestHybridSearchRRFQuantization:
@@ -116,17 +116,17 @@ class TestHybridSearchRRFQuantization:
             await service.hybrid_search_rrf(
                 dense_vector=[0.1] * 1024,
                 top_k=10,
-                quantization_ignore=None,  ***REMOVED*** Default — no override
+                quantization_ignore=None,  # Default — no override
             )
 
             call_kwargs = mock_client.query_points.call_args[1]
-            ***REMOVED*** No quantization override → search_params should be None
+            # No quantization override → search_params should be None
             assert call_kwargs.get("search_params") is None
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestQdrantServiceUnit - Core functionality
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestQdrantServiceUnit - Core functionality
+# =============================================================================
 
 
 class TestQdrantServiceUnit:
@@ -178,11 +178,11 @@ class TestQdrantServiceUnit:
                 top_k=10,
             )
 
-            ***REMOVED*** Verify query_points was called
+            # Verify query_points was called
             mock_client.query_points.assert_called_once()
             call_kwargs = mock_client.query_points.call_args[1]
 
-            ***REMOVED*** Should have prefetch for dense and sparse
+            # Should have prefetch for dense and sparse
             assert "prefetch" in call_kwargs
             assert len(call_kwargs["prefetch"]) == 2
 
@@ -211,7 +211,7 @@ class TestQdrantServiceUnit:
             )
 
             call_kwargs = mock_client.query_points.call_args[1]
-            ***REMOVED*** Should have only dense prefetch
+            # Should have only dense prefetch
             assert len(call_kwargs["prefetch"]) == 1
 
     @pytest.mark.asyncio
@@ -222,7 +222,7 @@ class TestQdrantServiceUnit:
         with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
             mock_client = AsyncMock()
 
-            ***REMOVED*** Mock point
+            # Mock point
             mock_point = MagicMock()
             mock_point.id = "test-id"
             mock_point.score = 0.95

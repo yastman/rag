@@ -1,4 +1,4 @@
-"""Unit tests for bot-level Langfuse trace metadata (***REMOVED***310: supervisor-only)."""
+"""Unit tests for bot-level Langfuse trace metadata (#310: supervisor-only)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -60,7 +60,7 @@ def mock_message() -> MagicMock:
 
 
 def _mock_agent_result(**overrides):
-    """Create a standard SDK agent result dict (***REMOVED***413)."""
+    """Create a standard SDK agent result dict (#413)."""
     base = {
         "messages": [MagicMock(content="ok")],
     }
@@ -92,7 +92,7 @@ class TestHandleQueryObservability:
 
             await bot.handle_query(mock_message)
 
-        ***REMOVED*** Two calls: child/root observation updates — ***REMOVED***511
+        # Two calls: child/root observation updates — #511
         assert mock_lf.update_current_span.call_count == 2
         child_kwargs = mock_lf.update_current_span.call_args_list[0].kwargs
         assert child_kwargs["input"]["query"] == "квартиры до 100000 евро"
@@ -124,7 +124,7 @@ class TestHandleQueryObservability:
 
             await bot.handle_query(mock_message)
 
-        ***REMOVED*** Metadata is in the child span call (first call) — ***REMOVED***511
+        # Metadata is in the child span call (first call) — #511
         metadata = mock_lf.update_current_span.call_args_list[0].kwargs["metadata"]
         assert metadata["pipeline_mode"] == "sdk_agent"
         assert "pipeline_wall_ms" in metadata

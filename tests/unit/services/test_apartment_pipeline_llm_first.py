@@ -2,7 +2,7 @@
 
 The pipeline runs regex first for deterministic numeric filters, then asks the
 LLM to fill gaps, and merges the two results via ``merge_extraction_results``
-(see issue ***REMOVED***1609). When both regex and LLM participate, the merged result
+(see issue #1609). When both regex and LLM participate, the merged result
 carries ``meta.source == "hybrid"``. Regex-only / LLM-error / cache paths keep
 their original sources.
 """
@@ -48,7 +48,7 @@ class TestHybridPipeline:
     async def test_llm_participates_in_hybrid_merge(self, pipeline, mock_llm) -> None:
         """LLM is invoked for gap-fill and the merged result reports source=hybrid.
 
-        After the regex-first hybrid merge introduced in ***REMOVED***1609, the pipeline no
+        After the regex-first hybrid merge introduced in #1609, the pipeline no
         longer returns the raw LLM result: it merges regex (deterministic
         numeric floor) with the LLM result and stamps ``source="hybrid"`` via
         ``merge_extraction_results``. The test verifies that:
@@ -56,13 +56,13 @@ class TestHybridPipeline:
         * the LLM does participate (``assert_awaited_once``);
         * the merged result reports ``source == "hybrid"``;
         * regex wins for numeric fields — the regex value (``rooms=3``) is
-          preserved over the LLM's ``rooms=2``, which guards the ***REMOVED***1609 contract.
+          preserved over the LLM's ``rooms=2``, which guards the #1609 contract.
         """
         result = await pipeline.extract("двушка в солнечном береге до 100к")
         mock_llm.extract.assert_awaited_once()
         assert result.meta.source == "hybrid"
-        ***REMOVED*** Regex-wins-on-numeric: regex extracts rooms=3 from this query and
-        ***REMOVED*** must override the LLM's rooms=2 in the merged result.
+        # Regex-wins-on-numeric: regex extracts rooms=3 from this query and
+        # must override the LLM's rooms=2 in the merged result.
         assert result.hard.rooms == 3
 
     @pytest.mark.asyncio

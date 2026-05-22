@@ -116,9 +116,9 @@ def test_distribute_statuses():
     }
     result = distribute_statuses(50, statuses)
     assert len(result) == 50
-    ***REMOVED*** Check rough proportions (30% new = ~15)
+    # Check rough proportions (30% new = ~15)
     new_count = sum(1 for s in result if s == 100)
-    assert 10 <= new_count <= 20  ***REMOVED*** ~30% of 50
+    assert 10 <= new_count <= 20  # ~30% of 50
 
 
 def test_distribute_statuses_ignores_non_positive_status_ids():
@@ -161,7 +161,7 @@ def test_build_lead_data():
     lead = build_lead_data(scenario, apartment, contact_name, status_id=100, pipeline_id=1)
     assert "Premier Fort Beach" in lead["name"]
     assert "Иванов" in lead["name"]
-    assert lead["budget"] == 7500000  ***REMOVED*** price * 100 (cents)
+    assert lead["budget"] == 7500000  # price * 100 (cents)
     assert lead["pipeline_id"] == 1
     assert lead["status_id"] == 100
 
@@ -224,8 +224,8 @@ def test_render_installment_note():
     }
     ctx = {"phone": "+380", "name": "Test", "budget": 50000}
     result = render_note(template, apartment, ctx)
-    assert "5000" in result  ***REMOVED*** 10% deposit
-    assert "1250" in result  ***REMOVED*** (50000-5000)/36
+    assert "5000" in result  # 10% deposit
+    assert "1250" in result  # (50000-5000)/36
 
 
 @pytest.mark.asyncio
@@ -275,7 +275,7 @@ async def test_seed_dry_run(capsys):
     )
     assert stats["contacts_created"] == 3
     assert stats["leads_created"] == 5
-    assert stats["api_calls"] == 0  ***REMOVED*** dry-run = 0 API calls
+    assert stats["api_calls"] == 0  # dry-run = 0 API calls
 
 
 @pytest.mark.asyncio

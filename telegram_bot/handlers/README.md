@@ -1,13 +1,13 @@
-***REMOVED*** Handlers
+# Handlers
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 telegram_bot/handlers
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - __init__.py
 - crm_callbacks.py
 - demo_handler.py
@@ -17,5 +17,5 @@ telegram_bot/handlers
 - results_callbacks.py
 - service_callbacks.py
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

@@ -1,4 +1,4 @@
-"""Tests for Kommo access_token fallback seeding (***REMOVED***678)."""
+"""Tests for Kommo access_token fallback seeding (#678)."""
 
 from __future__ import annotations
 

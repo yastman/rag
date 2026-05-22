@@ -1,4 +1,4 @@
-"""CRM navigation hub dialog for managers (aiogram-dialog) — ***REMOVED***697.
+"""CRM navigation hub dialog for managers (aiogram-dialog) — #697.
 
 Refactored from action-dispatching menu to a navigation hub that routes
 to dedicated wizard dialogs for each CRM operation.

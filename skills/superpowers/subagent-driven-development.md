@@ -1,4 +1,4 @@
-***REMOVED*** Skill: subagent-driven-development
+# Skill: subagent-driven-development
 
 Use when an approved plan has independent slices that can be delegated without
 overlapping files or responsibilities.

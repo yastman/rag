@@ -13,21 +13,21 @@ load_dotenv()
 class E2EConfig:
     """Configuration for E2E testing."""
 
-    ***REMOVED*** Telegram Userbot (from my.telegram.org)
+    # Telegram Userbot (from my.telegram.org)
     telegram_api_id: int = field(default_factory=lambda: int(os.getenv("TELEGRAM_API_ID", "0")))
     telegram_api_hash: str = field(default_factory=lambda: os.getenv("TELEGRAM_API_HASH", ""))
     telegram_session: str = "e2e_tester"
 
-    ***REMOVED*** Target bot
+    # Target bot
     bot_username: str = field(
         default_factory=lambda: os.getenv("E2E_BOT_USERNAME", "@test_your_bot")
     )
 
-    ***REMOVED*** Timeouts
-    response_timeout: int = 60  ***REMOVED*** Streaming can be slow
-    between_tests_delay: float = 2.0  ***REMOVED*** Rate limiting
+    # Timeouts
+    response_timeout: int = 60  # Streaming can be slow
+    between_tests_delay: float = 2.0  # Rate limiting
 
-    ***REMOVED*** Judge provider and credentials
+    # Judge provider and credentials
     judge_provider: str = field(default_factory=lambda: os.getenv("E2E_JUDGE_PROVIDER", "litellm"))
     judge_api_key: str = field(
         default_factory=lambda: os.getenv(
@@ -47,15 +47,15 @@ class E2EConfig:
         default_factory=lambda: os.getenv("E2E_JUDGE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini"))
     )
 
-    ***REMOVED*** Thresholds
+    # Thresholds
     pass_score: float = 6.0
 
-    ***REMOVED*** Canonical Qdrant collection for current corpus
+    # Canonical Qdrant collection for current corpus
     test_collection: str = field(
         default_factory=lambda: os.getenv("E2E_COLLECTION_NAME", "gdrive_documents_bge")
     )
 
-    ***REMOVED*** Qdrant preflight configuration
+    # Qdrant preflight configuration
     qdrant_url: str = field(
         default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
     )
@@ -78,13 +78,13 @@ class E2EConfig:
         default_factory=lambda: os.getenv("E2E_QDRANT_APARTMENT_VECTORS", "dense,colbert")
     )
 
-    ***REMOVED*** Reports
+    # Reports
     reports_dir: str = "reports"
 
-    ***REMOVED*** Voice note fixture path for voice delivery scenarios
+    # Voice note fixture path for voice delivery scenarios
     voice_note_path: str = field(default_factory=lambda: os.getenv("E2E_VOICE_NOTE_PATH", ""))
 
-    ***REMOVED*** Observability validation (Langfuse)
+    # Observability validation (Langfuse)
     validate_langfuse: bool = field(
         default_factory=lambda: (
             os.getenv("E2E_VALIDATE_LANGFUSE", "0").lower() in {"1", "true", "yes"}

@@ -5,7 +5,7 @@ from telegram_bot.services.business_hours import is_business_hours
 
 
 def test_during_business_hours():
-    ***REMOVED*** Wednesday 10:30 Sofia time
+    # Wednesday 10:30 Sofia time
     dt = datetime(2026, 3, 4, 10, 30, tzinfo=ZoneInfo("Europe/Sofia"))
     assert is_business_hours(dt, start=9, end=18, tz="Europe/Sofia") is True
 
@@ -21,7 +21,7 @@ def test_after_business_hours():
 
 
 def test_weekend():
-    ***REMOVED*** Saturday 12:00 — still outside business hours (weekday only)
+    # Saturday 12:00 — still outside business hours (weekday only)
     dt = datetime(2026, 3, 7, 12, 0, tzinfo=ZoneInfo("Europe/Sofia"))
     assert is_business_hours(dt, start=9, end=18, tz="Europe/Sofia") is False
 

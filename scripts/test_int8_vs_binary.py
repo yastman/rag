@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """A/B test: INT8 (Scalar) vs Binary Quantization.
 
 Compares two collections with different quantization strategies:
@@ -60,11 +60,11 @@ class SearchMetrics:
 
 def get_collection_names(base: str) -> dict[str, str]:
     """Get collection names for different quantization types."""
-    ***REMOVED*** Strip existing suffixes
+    # Strip existing suffixes
     for suffix in ["_binary", "_scalar"]:
         base = base.removesuffix(suffix)
     return {
-        "baseline": base,  ***REMOVED*** Original (may have binary quant, but we'll use ignore=True)
+        "baseline": base,  # Original (may have binary quant, but we'll use ignore=True)
         "scalar": f"{base}_scalar",
         "binary": f"{base}_binary",
     }
@@ -158,7 +158,7 @@ async def run_ab_test(
     if oversampling_factors is None:
         oversampling_factors = [2.0, 3.0, 4.0]
 
-    ***REMOVED*** Setup
+    # Setup
     url = os.getenv("QDRANT_URL", "http://localhost:6333")
     api_key = os.getenv("QDRANT_API_KEY")
     client = AsyncQdrantClient(url=url, api_key=api_key)
@@ -166,7 +166,7 @@ async def run_ab_test(
     collections = get_collection_names(base_collection)
     print(f"Collections: {collections}")
 
-    ***REMOVED*** Check collections exist
+    # Check collections exist
     for name, coll in collections.items():
         try:
             info = await client.get_collection(coll)
@@ -177,7 +177,7 @@ async def run_ab_test(
                 print(f"  Skipping {name} collection")
                 collections[name] = None
 
-    ***REMOVED*** Load ground truth
+    # Load ground truth
     ground_truth = {}
     if ground_truth_path and ground_truth_path.exists():
         with open(ground_truth_path) as f:
@@ -185,13 +185,13 @@ async def run_ab_test(
             ground_truth = {item["query"]: item.get("relevant_ids", []) for item in gt_data}
         print(f"Loaded {len(ground_truth)} ground truth queries")
 
-    ***REMOVED*** Test queries (with embeddings)
+    # Test queries (with embeddings)
     test_queries_path = Path("scripts/test_embeddings.json")
     if test_queries_path.exists():
         with open(test_queries_path) as f:
             test_data = json.load(f)
     else:
-        ***REMOVED*** Generate test embeddings from first N points in baseline collection
+        # Generate test embeddings from first N points in baseline collection
         print("Generating test queries from collection...")
         points = await client.scroll(
             collection_name=collections["baseline"],
@@ -209,7 +209,7 @@ async def run_ab_test(
 
     print(f"Running tests with {len(test_data)} queries, k={k}, runs={num_runs}")
 
-    ***REMOVED*** Initialize metrics storage
+    # Initialize metrics storage
     metrics: dict[str, dict[float, SearchMetrics]] = {
         "scalar": {},
         "binary": {},
@@ -218,7 +218,7 @@ async def run_ab_test(
         for osf in oversampling_factors:
             metrics[quant_type][osf] = SearchMetrics(quant_type=quant_type, oversampling=osf)
 
-    ***REMOVED*** Run tests
+    # Run tests
     for run in range(num_runs):
         print(f"\n--- Run {run + 1}/{num_runs} ---")
 
@@ -230,7 +230,7 @@ async def run_ab_test(
                 print(f"  Skipping query without embedding: {query[:30]}...")
                 continue
 
-            ***REMOVED*** Get baseline results (ignore quantization)
+            # Get baseline results (ignore quantization)
             baseline_ids, _ = await search_with_quantization(
                 client,
                 collections["baseline"],
@@ -241,7 +241,7 @@ async def run_ab_test(
 
             relevant_ids = ground_truth.get(query, [])
 
-            ***REMOVED*** Test each quantization type and oversampling factor
+            # Test each quantization type and oversampling factor
             for quant_type, coll_name in [
                 ("scalar", collections["scalar"]),
                 ("binary", collections["binary"]),
@@ -273,7 +273,7 @@ async def run_ab_test(
 
     await client.close()
 
-    ***REMOVED*** Generate report
+    # Generate report
     results = {
         "config": {
             "base_collection": base_collection,
@@ -312,9 +312,9 @@ async def run_ab_test(
                 "num_samples": len(m.latencies_ms),
             }
 
-            ***REMOVED*** Calculate composite score (higher is better)
-            ***REMOVED*** Balance: 40% overlap, 30% latency (inverse), 30% precision
-            latency_score = max(0, 1 - m.avg_latency / 100)  ***REMOVED*** Normalize to 0-1
+            # Calculate composite score (higher is better)
+            # Balance: 40% overlap, 30% latency (inverse), 30% precision
+            latency_score = max(0, 1 - m.avg_latency / 100)  # Normalize to 0-1
             score = 0.4 * m.avg_overlap + 0.3 * latency_score
             if m.avg_precision:
                 score += 0.3 * m.avg_precision
@@ -360,7 +360,7 @@ async def run_ab_test(
 
     results["recommendation"] = best_config
 
-    ***REMOVED*** Save results
+    # Save results
     if output_path:
         with open(output_path, "w") as f:
             json.dump(results, f, indent=2)
@@ -435,7 +435,7 @@ Examples:
 
     args = parser.parse_args()
 
-    ***REMOVED*** Ensure output directory exists
+    # Ensure output directory exists
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -454,7 +454,7 @@ Examples:
         )
     )
 
-    ***REMOVED*** Return success if any metrics were collected
+    # Return success if any metrics were collected
     has_metrics = any(
         any(m for m in type_metrics.values())
         for type_metrics in results.get("metrics", {}).values()

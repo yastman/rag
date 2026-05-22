@@ -1,17 +1,17 @@
-***REMOVED*** Docling Document Parsing Service
+# Docling Document Parsing Service
 
 Standalone container running `docling-serve` for converting PDFs and other documents into structured markdown/HTML.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Feeds the unified ingestion pipeline with structured text extracted from uploaded or synced documents.
 
-***REMOVED******REMOVED*** Entrypoint
+## Entrypoint
 
 - **Application**: `docling-serve` (Docling CLI serve mode, configured via environment)
 - **Dockerfile**: [`Dockerfile`](Dockerfile)
 
-***REMOVED******REMOVED*** Docker
+## Docker
 
 - **Service name**: `docling`
 - **Profile**: — (default, unprofiled)
@@ -19,24 +19,24 @@ Feeds the unified ingestion pipeline with structured text extracted from uploade
 - **Local port**: `5001` (mapped in `compose.dev.yml`)
 - **Health**: `GET http://localhost:5001/health`
 
-***REMOVED******REMOVED*** Quick Start
+## Quick Start
 
 ```bash
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d docling
 curl -fsS http://localhost:5001/health
 ```
 
-***REMOVED******REMOVED*** Tests & Checks
+## Tests & Checks
 
 ```bash
-***REMOVED*** Unit tests
+# Unit tests
 uv run pytest tests/unit/test_docling*.py -v
 
-***REMOVED*** Dockerfile sync validation
+# Dockerfile sync validation
 uv run pytest tests/unit/test_dockerfile_docling_sync.py -v
 ```
 
-***REMOVED******REMOVED*** Owner Boundaries
+## Owner Boundaries
 
 - Document conversion backend (`dlparse_v2` PDF backend, accurate table mode)
 - No persistent application state; relies on `./data/docling` volume mount and `docling_cache` volume

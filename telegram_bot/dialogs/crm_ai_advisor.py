@@ -1,4 +1,4 @@
-"""AI Advisor dialog — LLM-powered manager insights (***REMOVED***731).
+"""AI Advisor dialog — LLM-powered manager insights (#731).
 
 Two actions:
 - План на день (daily_plan): Combined briefing with action plan

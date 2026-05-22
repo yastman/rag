@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Structure Parser for Ukrainian Legal Documents
 Regex-based extraction (fallback when Claude API unavailable)
@@ -7,7 +7,7 @@ Regex-based extraction (fallback when Claude API unavailable)
 import re
 
 
-***REMOVED*** Ukrainian number word to integer mapping
+# Ukrainian number word to integer mapping
 UKRAINIAN_NUMBERS = {
     "перша": 1,
     "перший": 1,
@@ -31,7 +31,7 @@ UKRAINIAN_NUMBERS = {
     "десятий": 10,
 }
 
-***REMOVED*** Roman to Arabic conversion
+# Roman to Arabic conversion
 ROMAN_NUMERALS = {
     "I": 1,
     "II": 2,
@@ -58,12 +58,12 @@ ROMAN_NUMERALS = {
 
 def roman_to_int(roman: str) -> int:
     """Convert Roman numeral to integer."""
-    return ROMAN_NUMERALS.get(roman.upper())  ***REMOVED*** type: ignore
+    return ROMAN_NUMERALS.get(roman.upper())  # type: ignore
 
 
 def ukrainian_number_to_int(word: str) -> int:
     """Convert Ukrainian number word to integer."""
-    return UKRAINIAN_NUMBERS.get(word.lower())  ***REMOVED*** type: ignore
+    return UKRAINIAN_NUMBERS.get(word.lower())  # type: ignore
 
 
 def parse_legal_structure(chunk_text: str) -> dict:
@@ -76,7 +76,7 @@ def parse_legal_structure(chunk_text: str) -> dict:
     Returns:
         Dictionary with structure metadata
     """
-    metadata = {  ***REMOVED*** type: ignore
+    metadata = {  # type: ignore
         "book": None,
         "book_number": None,
         "section": None,
@@ -88,36 +88,36 @@ def parse_legal_structure(chunk_text: str) -> dict:
         "related_articles": [],
     }
 
-    ***REMOVED*** Extract Article (Стаття)
+    # Extract Article (Стаття)
     article_patterns = [
-        r"Стаття\s+(\d+)\.\s+(.+?)(?=\n|\r|$)",  ***REMOVED*** Standard format
-        r"(?:^|\n)(\d+)\.\s+(.+?)(?=\n|\r|$)",  ***REMOVED*** Just number and title
+        r"Стаття\s+(\d+)\.\s+(.+?)(?=\n|\r|$)",  # Standard format
+        r"(?:^|\n)(\d+)\.\s+(.+?)(?=\n|\r|$)",  # Just number and title
     ]
 
     for pattern in article_patterns:
         article_match = re.search(pattern, chunk_text, re.MULTILINE)
         if article_match:
-            metadata["article_number"] = int(article_match.group(1))  ***REMOVED*** type: ignore
-            ***REMOVED*** Clean title (remove extra whitespace, newlines)
+            metadata["article_number"] = int(article_match.group(1))  # type: ignore
+            # Clean title (remove extra whitespace, newlines)
             title = article_match.group(2).strip()
             title = re.sub(r"\s+", " ", title)
-            metadata["article_title"] = title  ***REMOVED*** type: ignore
+            metadata["article_title"] = title  # type: ignore
             break
 
-    ***REMOVED*** Extract Chapter (Глава)
+    # Extract Chapter (Глава)
     chapter_patterns = [
-        r"Глава\s+(\d+)\.\s+(.+?)(?=\n|\r|$)",  ***REMOVED*** Arabic numerals
+        r"Глава\s+(\d+)\.\s+(.+?)(?=\n|\r|$)",  # Arabic numerals
     ]
 
     for pattern in chapter_patterns:
         chapter_match = re.search(pattern, chunk_text, re.MULTILINE)
         if chapter_match:
-            metadata["chapter_number"] = int(chapter_match.group(1))  ***REMOVED*** type: ignore
+            metadata["chapter_number"] = int(chapter_match.group(1))  # type: ignore
             title = chapter_match.group(2).strip()
-            metadata["chapter"] = title  ***REMOVED*** type: ignore
+            metadata["chapter"] = title  # type: ignore
             break
 
-    ***REMOVED*** Extract Section (Розділ) - Roman numerals
+    # Extract Section (Розділ) - Roman numerals
     section_patterns = [
         r"Розділ\s+([IVX]+)\.\s+(.+?)(?=\n|\r|$)",
     ]
@@ -126,12 +126,12 @@ def parse_legal_structure(chunk_text: str) -> dict:
         section_match = re.search(pattern, chunk_text, re.MULTILINE)
         if section_match:
             roman = section_match.group(1)
-            metadata["section_number"] = roman_to_int(roman)  ***REMOVED*** type: ignore
+            metadata["section_number"] = roman_to_int(roman)  # type: ignore
             title = section_match.group(2).strip()
-            metadata["section"] = title  ***REMOVED*** type: ignore
+            metadata["section"] = title  # type: ignore
             break
 
-    ***REMOVED*** Extract Book (Книга) - Ukrainian number words
+    # Extract Book (Книга) - Ukrainian number words
     book_patterns = [
         r"Книга\s+(перша|друга|третя|четверта|п\'ята|шоста)\.\s+(.+?)(?=\n|\r|$)",
     ]
@@ -140,12 +140,12 @@ def parse_legal_structure(chunk_text: str) -> dict:
         book_match = re.search(pattern, chunk_text, re.IGNORECASE | re.MULTILINE)
         if book_match:
             ukrainian_num = book_match.group(1)
-            metadata["book_number"] = ukrainian_number_to_int(ukrainian_num)  ***REMOVED*** type: ignore
+            metadata["book_number"] = ukrainian_number_to_int(ukrainian_num)  # type: ignore
             title = book_match.group(2).strip()
-            metadata["book"] = title  ***REMOVED*** type: ignore
+            metadata["book"] = title  # type: ignore
             break
 
-    ***REMOVED*** Extract related articles from text
+    # Extract related articles from text
     metadata["related_articles"] = extract_related_articles(chunk_text)
 
     return metadata
@@ -163,9 +163,9 @@ def extract_related_articles(chunk_text: str) -> list[int]:
     """
     related = []
 
-    ***REMOVED*** Pattern for article references
+    # Pattern for article references
     patterns = [
-        r"статт[іяює]\s+(\d+)",  ***REMOVED*** статті/стаття/статтею/статтею + number
+        r"статт[іяює]\s+(\d+)",  # статті/стаття/статтею/статтею + number
         r"статті\s+(\d+)",
         r"стаття\s+(\d+)",
     ]
@@ -177,7 +177,7 @@ def extract_related_articles(chunk_text: str) -> list[int]:
             if article_num not in related:
                 related.append(article_num)
 
-    ***REMOVED*** Sort and return
+    # Sort and return
     return sorted(related)
 
 
@@ -248,9 +248,9 @@ def add_graph_edges(metadata: dict) -> dict:
     return metadata
 
 
-***REMOVED*** Example usage
+# Example usage
 if __name__ == "__main__":
-    ***REMOVED*** Test cases
+    # Test cases
     test_cases = [
         {
             "name": "Full structure",
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         print(test["text"][:200] + "..." if len(test["text"]) > 200 else test["text"])
         print()
 
-        ***REMOVED*** Parse structure
+        # Parse structure
         metadata = parse_legal_structure(test["text"])
         metadata = add_graph_edges(metadata)
 
@@ -301,7 +301,7 @@ if __name__ == "__main__":
         for key, value in metadata.items():
             print(f"  {key}: {value}")
 
-        ***REMOVED*** Generate contextual prefix
+        # Generate contextual prefix
         context = extract_contextual_prefix(metadata)
         print("\nContextual Prefix:")
         print(context)

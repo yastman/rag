@@ -97,8 +97,8 @@ class I18nMiddleware(BaseMiddleware):
         locale_loaded_from_storage = False
 
         if user is not None:
-            ***REMOVED*** Resolve locale from the persisted user record when available.
-            ***REMOVED*** This keeps message and callback flows on the same language path.
+            # Resolve locale from the persisted user record when available.
+            # This keeps message and callback flows on the same language path.
             if self._user_service is not None:
                 try:
                     stored_user = await self._user_service.get_or_create(
@@ -112,7 +112,7 @@ class I18nMiddleware(BaseMiddleware):
                 except Exception:
                     logger.debug("Failed to get locale for user %s", user.id, exc_info=True)
 
-            ***REMOVED*** Fallback: detect from Telegram language_code
+            # Fallback: detect from Telegram language_code
             if (
                 not locale_loaded_from_storage
                 and locale == self._default_locale

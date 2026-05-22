@@ -4,7 +4,7 @@ Generates structured summaries from Q&A dialog turns using LLM.
 
 Compatibility:
     - ``responses.parse`` (Responses API) requires langfuse >= 3.2.4 (fix:
-      langfuse-python***REMOVED***1292, merged 2025-08-12) and openai >= 1.37.0.
+      langfuse-python#1292, merged 2025-08-12) and openai >= 1.37.0.
     - Older versions expose the attribute but fail at runtime; the guard
       below detects this and forces the ``beta.chat.completions.parse``
       fallback automatically.
@@ -21,8 +21,8 @@ from telegram_bot.observability import observe
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Module-level flag: when True, skip responses.parse even if the attribute
-***REMOVED*** exists on the client.  Set by check_responses_parse_compat() at startup.
+# Module-level flag: when True, skip responses.parse even if the attribute
+# exists on the client.  Set by check_responses_parse_compat() at startup.
 _force_chat_completions_fallback: bool = False
 _compat_checked: bool = False
 
@@ -96,8 +96,8 @@ def check_responses_parse_compat(llm: Any) -> bool:
         )
         return False
 
-    ***REMOVED*** Extra guard: some langfuse wrappers (< 3.2.4) expose the attribute but
-    ***REMOVED*** the underlying object is not callable or raises TypeError on invocation.
+    # Extra guard: some langfuse wrappers (< 3.2.4) expose the attribute but
+    # the underlying object is not callable or raises TypeError on invocation.
     parse_attr = getattr(llm.responses, "parse", None)
     if not callable(parse_attr):
         _force_chat_completions_fallback = True
@@ -157,8 +157,8 @@ async def generate_summary(
         if newline_idx > 0:
             dialog = dialog[newline_idx + 1 :]
 
-    ***REMOVED*** Determine whether to attempt the Responses API path.
-    ***REMOVED*** Skipped when: (a) preflight set the fallback flag, or (b) attribute missing.
+    # Determine whether to attempt the Responses API path.
+    # Skipped when: (a) preflight set the fallback flag, or (b) attribute missing.
     use_responses = (
         not _force_chat_completions_fallback
         and hasattr(llm, "responses")
@@ -167,7 +167,7 @@ async def generate_summary(
 
     if use_responses:
         try:
-            response = await llm.responses.parse(  ***REMOVED*** type: ignore[attr-defined]
+            response = await llm.responses.parse(  # type: ignore[attr-defined]
                 model=model,
                 input=[
                     {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
@@ -178,17 +178,17 @@ async def generate_summary(
             )
             return getattr(response, "output_parsed", None)
         except Exception:
-            ***REMOVED*** Graceful degradation: responses.parse failed at runtime
-            ***REMOVED*** (e.g. langfuse wrapper incompatibility).  Fall through to
-            ***REMOVED*** beta.chat.completions.parse instead of returning None.
+            # Graceful degradation: responses.parse failed at runtime
+            # (e.g. langfuse wrapper incompatibility).  Fall through to
+            # beta.chat.completions.parse instead of returning None.
             logger.warning(
                 "responses.parse raised at runtime — falling back to beta.chat.completions.parse",
                 exc_info=True,
             )
 
-    ***REMOVED*** Fallback: beta.chat.completions.parse (stable across all langfuse versions)
+    # Fallback: beta.chat.completions.parse (stable across all langfuse versions)
     try:
-        completion = await llm.beta.chat.completions.parse(  ***REMOVED*** type: ignore[attr-defined]
+        completion = await llm.beta.chat.completions.parse(  # type: ignore[attr-defined]
             model=model,
             messages=[
                 {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},

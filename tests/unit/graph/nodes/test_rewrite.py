@@ -61,7 +61,7 @@ class TestRewriteNodeSuccess:
     async def test_increments_rewrite_count_on_subsequent_calls(self):
         """rewrite_count accumulates across multiple rewrites."""
         state = _state_with_query()
-        state["rewrite_count"] = 1  ***REMOVED*** already rewritten once
+        state["rewrite_count"] = 1  # already rewritten once
 
         with patch(
             "telegram_bot.graph.nodes.rewrite.rewrite_query_via_llm", new_callable=AsyncMock
@@ -74,7 +74,7 @@ class TestRewriteNodeSuccess:
     async def test_resets_query_embedding(self):
         """After rewrite, query_embedding must be None to force re-embedding."""
         state = _state_with_query()
-        state["query_embedding"] = [0.1] * 1024  ***REMOVED*** stale from previous retrieval
+        state["query_embedding"] = [0.1] * 1024  # stale from previous retrieval
 
         with patch(
             "telegram_bot.graph.nodes.rewrite.rewrite_query_via_llm", new_callable=AsyncMock
@@ -259,7 +259,7 @@ class TestRewriteNodeMaxRetries:
 
         assert result1["rewrite_count"] == 1
 
-        ***REMOVED*** Second rewrite attempt
+        # Second rewrite attempt
         state["rewrite_count"] = result1["rewrite_count"]
         state["messages"] = result1["messages"]
 
@@ -278,7 +278,7 @@ class TestRewriteNodeMaxRetries:
         with patch(
             "telegram_bot.graph.nodes.rewrite.rewrite_query_via_llm", new_callable=AsyncMock
         ) as mock_rewrite:
-            ***REMOVED*** LLM decides rewrite wasn't effective
+            # LLM decides rewrite wasn't effective
             mock_rewrite.return_value = ("already optimal query", False, "gpt-4o-mini")
             result = await rewrite_node(state, _make_runtime(llm=MagicMock()))
 
@@ -332,5 +332,5 @@ class TestRewriteNodeLatency:
             result = await rewrite_node(state, _make_runtime(llm=MagicMock()))
 
         assert "rewrite" in result["latency_stages"]
-        assert result["latency_stages"]["retrieve"] == 0.1  ***REMOVED*** existing preserved
+        assert result["latency_stages"]["retrieve"] == 0.1  # existing preserved
         assert result["latency_stages"]["rewrite"] > 0

@@ -1,4 +1,4 @@
-"""E2E smoke test for manager flow (***REMOVED***402).
+"""E2E smoke test for manager flow (#402).
 
 Verifies: manager role -> menu -> CRM tools -> hot lead notification path.
 No Docker required — uses mocked services.
@@ -101,13 +101,13 @@ class TestToolGating:
         base = [MagicMock(name="rag_search"), MagicMock(name="direct_response")]
         manager = [MagicMock(name="crm_tool_1"), MagicMock(name="crm_tool_2")]
         tools = build_tools_for_role(role="manager", base_tools=base, manager_tools=manager)
-        assert len(tools) == 4  ***REMOVED*** base(2) + manager(2)
+        assert len(tools) == 4  # base(2) + manager(2)
 
     def test_build_tools_for_client(self):
         base = [MagicMock(name="rag_search"), MagicMock(name="direct_response")]
         manager = [MagicMock(name="crm_tool_1")]
         tools = build_tools_for_role(role="client", base_tools=base, manager_tools=manager)
-        assert len(tools) == 2  ***REMOVED*** base only
+        assert len(tools) == 2  # base only
 
 
 class TestHotLeadNotifierExists:

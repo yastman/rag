@@ -1,11 +1,11 @@
-***REMOVED*** Test Writing Guide
+# Test Writing Guide
 
-***REMOVED******REMOVED*** Goal
+## Goal
 - Keep tests fast, deterministic, and aligned with repository lane contracts.
 - Prefer minimal, behavior-focused checks over broad snapshot-like assertions.
 - Avoid duplicate ownership: one behavior should have one canonical test owner.
 
-***REMOVED******REMOVED*** Test Placement
+## Test Placement
 - `tests/unit/` for isolated logic with mocks/fakes, no live service dependency.
 - `tests/unit/e2e_adapters/` for unit checks around E2E helper code (config/adapters/validators), still unit lane.
 - `tests/integration/` for service-aware paths and real component interaction.
@@ -16,13 +16,13 @@ E2E naming contract:
 - Real end-to-end tests belong to `tests/e2e/` only.
 - Do not add live/runtime E2E flows under `tests/unit/**`.
 
-***REMOVED******REMOVED*** Naming And Structure
+## Naming And Structure
 - File: `test_<feature>.py`
 - Test: `test_<behavior>_<expected_outcome>()`
 - Use Arrange/Act/Assert structure inside each test.
 - Use descriptive fixture names and keep fixture scope as narrow as possible.
 
-***REMOVED******REMOVED*** Markers And Lane Contract
+## Markers And Lane Contract
 - Valid markers are defined in `pyproject.toml` (`unit`, `integration`, `slow`, `chaos`, `load`, `e2e`, `smoke`, `benchmark`, `requires_extras`, etc.).
 - Mark tests with the smallest correct marker set.
 - Do not move heavy/live scenarios into the local fast lane.
@@ -30,19 +30,19 @@ E2E naming contract:
   - `make test-unit`
   - `make test`
 
-***REMOVED******REMOVED*** Reliability Rules
+## Reliability Rules
 - Mock external APIs and non-deterministic boundaries in unit tests.
 - Freeze or control time/random inputs when behavior depends on them.
 - Avoid sleep-based timing assertions; assert explicit state transitions instead.
 - For credential-dependent live paths, prefer explicit skip gates over flaky failures.
 
-***REMOVED******REMOVED*** Anti-Duplication Rules
+## Anti-Duplication Rules
 - Before adding a test, search for existing coverage:
   - `rg -n "<function_or_behavior>" tests/`
 - If coverage exists, extend the canonical file instead of creating a second owner.
 - Remove low-signal duplicates that repeat identical behavior checks without adding new risk coverage.
 
-***REMOVED******REMOVED*** Minimal Verification For Test Changes
+## Minimal Verification For Test Changes
 - Focused run for touched files first:
   - `uv run pytest <path/to/test_file.py> -q`
 - Then run repository baseline:
@@ -50,7 +50,7 @@ E2E naming contract:
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 - If skipping a relevant check, document it explicitly in the report.
 
-***REMOVED******REMOVED*** References
+## References
 - `AGENTS.md`
 - `tests/README.md`
 - `Makefile`

@@ -1,4 +1,4 @@
-"""Regression guard for telegram_bot/setup_qdrant_indexes.py (***REMOVED***1401).
+"""Regression guard for telegram_bot/setup_qdrant_indexes.py (#1401).
 
 Pins the canonical schema for the document/CSV pipeline:
 

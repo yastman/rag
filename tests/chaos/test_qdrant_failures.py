@@ -70,8 +70,8 @@ class TestQdrantRecovery:
             call_count += 1
             if call_count <= 2:
                 raise TimeoutError("Transient timeout")
-            ***REMOVED*** Third call succeeds. Use payload keys consumed by
-            ***REMOVED*** QdrantService._format_results: page_content + metadata.
+            # Third call succeeds. Use payload keys consumed by
+            # QdrantService._format_results: page_content + metadata.
             mock_result = MagicMock()
             mock_point = MagicMock()
             mock_point.id = "1"
@@ -86,7 +86,7 @@ class TestQdrantRecovery:
         mock_client.query_points = mock_query
         service._client = mock_client
 
-        ***REMOVED*** First two calls fail
+        # First two calls fail
         for _ in range(2):
             results = await service.hybrid_search_rrf(
                 dense_vector=[0.1] * 1024,
@@ -94,8 +94,8 @@ class TestQdrantRecovery:
             )
             assert results == []
 
-        ***REMOVED*** Third call must surface the recovered point — assert the actual
-        ***REMOVED*** contract, not just `len(results) >= 0` which trivially passes.
+        # Third call must surface the recovered point — assert the actual
+        # contract, not just `len(results) >= 0` which trivially passes.
         results = await service.hybrid_search_rrf(
             dense_vector=[0.1] * 1024,
             top_k=10,

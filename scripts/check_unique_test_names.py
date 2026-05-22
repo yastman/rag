@@ -1,5 +1,5 @@
-***REMOVED***!/usr/bin/env python3
-"""Ratchet check for duplicate test function names across the test suite (***REMOVED***1539).
+#!/usr/bin/env python3
+"""Ratchet check for duplicate test function names across the test suite (#1539).
 
 pytest-xdist routes tests across workers and may silently merge or skip
 identically-named tests living in different files. This script walks
@@ -7,8 +7,8 @@ identically-named tests living in different files. This script walks
 known-allowlist of pre-existing duplicates is gradually shrunk by hand.
 
 Usage:
-    python scripts/check_unique_test_names.py            ***REMOVED*** check
-    python scripts/check_unique_test_names.py --regenerate  ***REMOVED*** regenerate allowlist
+    python scripts/check_unique_test_names.py            # check
+    python scripts/check_unique_test_names.py --regenerate  # regenerate allowlist
 
 The check is wired into the test suite via
 ``tests/contract/test_no_new_duplicate_test_names.py``.
@@ -111,11 +111,11 @@ def main() -> int:
         print(
             f"OK: {len(current)} known duplicate test names; no new duplicates introduced. "
             f"Existing duplicates are tracked in {ALLOWLIST_PATH.relative_to(REPO_ROOT)} "
-            "and should be renamed incrementally (see ***REMOVED***1539).",
+            "and should be renamed incrementally (see #1539).",
         )
         return 0
 
-    print("FAIL: new duplicate test function names detected (***REMOVED***1539 ratchet).", file=sys.stderr)
+    print("FAIL: new duplicate test function names detected (#1539 ratchet).", file=sys.stderr)
     if new_dupes:
         print("\nNew duplicate names (must be renamed):", file=sys.stderr)
         for name, files in sorted(new_dupes.items()):

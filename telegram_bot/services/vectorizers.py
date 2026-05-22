@@ -1,4 +1,4 @@
-***REMOVED*** telegram_bot/services/vectorizers.py
+# telegram_bot/services/vectorizers.py
 """Custom vectorizers for semantic cache.
 
 UserBaseVectorizer: Local Russian embedding model (deepvk/USER-base).
@@ -24,7 +24,7 @@ class UserBaseVectorizer(BaseVectorizer):
     Advantages over Voyage API:
     - Zero API cost (local)
     - Lower latency (~5ms vs ~30ms)
-    - Best Russian semantic matching (ruMTEB ***REMOVED***1)
+    - Best Russian semantic matching (ruMTEB #1)
     - On-premise (privacy)
     """
 
@@ -33,10 +33,10 @@ class UserBaseVectorizer(BaseVectorizer):
     base_url: str = "http://localhost:8003"
     timeout: float = 5.0
 
-    ***REMOVED*** Pydantic config to allow arbitrary types (for httpx client)
+    # Pydantic config to allow arbitrary types (for httpx client)
     model_config = {"arbitrary_types_allowed": True}
 
-    ***REMOVED*** Private attributes (not Pydantic fields)
+    # Private attributes (not Pydantic fields)
     _sync_client: httpx.Client | None = None
     _async_client: httpx.AsyncClient | None = None
 
@@ -188,7 +188,7 @@ class BgeM3CacheVectorizer(BaseVectorizer):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    _bge_client: Any = None  ***REMOVED*** BGEM3Client, lazy-init
+    _bge_client: Any = None  # BGEM3Client, lazy-init
 
     def __init__(self, base_url: str = "http://bge-m3:8000", **kwargs: Any):
         super().__init__(base_url=base_url, **kwargs)

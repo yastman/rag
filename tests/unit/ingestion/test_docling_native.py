@@ -12,7 +12,7 @@ def test_native_docling_adapter_preserves_ingestion_contract(tmp_path: Path) -> 
 
     class _FakeDocument:
         def export_to_markdown(self) -> str:
-            return "***REMOVED*** Overview\n\nIntro block.\n\n***REMOVED******REMOVED*** Details\n\nSecond block.\n"
+            return "# Overview\n\nIntro block.\n\n## Details\n\nSecond block.\n"
 
     class _FakeResult:
         document = _FakeDocument()
@@ -23,7 +23,7 @@ def test_native_docling_adapter_preserves_ingestion_contract(tmp_path: Path) -> 
             return _FakeResult()
 
     file_path = tmp_path / "sample.md"
-    file_path.write_text("***REMOVED*** Placeholder\n", encoding="utf-8")
+    file_path.write_text("# Placeholder\n", encoding="utf-8")
 
     adapter = NativeDoclingAdapter(max_tokens=80, converter=_FakeConverter())
     docling_chunks = adapter.chunk_file_sync(file_path)

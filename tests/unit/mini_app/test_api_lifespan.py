@@ -1,4 +1,4 @@
-"""Tests for mini_app.api lifespan + Redis dependency wiring (***REMOVED***1645).
+"""Tests for mini_app.api lifespan + Redis dependency wiring (#1645).
 
 The previous implementation kept a module-level lazy ``_redis_client``
 global and an ``_get_redis()`` factory called from each request handler.
@@ -36,7 +36,7 @@ pytest.importorskip("fastapi")
 
 
 def test_module_no_longer_exposes_module_level_redis_global() -> None:
-    """``_redis_client`` module global must be removed (***REMOVED***1645)."""
+    """``_redis_client`` module global must be removed (#1645)."""
     from mini_app import api as mod
 
     assert not hasattr(mod, "_redis_client"), (
@@ -67,7 +67,7 @@ def test_app_uses_lifespan_for_lifecycle() -> None:
     """FastAPI app must be constructed with the lifespan context manager."""
     from mini_app import api as mod
 
-    ***REMOVED*** FastAPI stores the lifespan on ``app.router.lifespan_context``.
+    # FastAPI stores the lifespan on ``app.router.lifespan_context``.
     lifespan_ctx = getattr(mod.app.router, "lifespan_context", None)
     assert lifespan_ctx is not None, "FastAPI(lifespan=...) wiring missing"
 
@@ -84,7 +84,7 @@ async def test_lifespan_opens_and_closes_redis() -> None:
             assert mod.app.state.redis is fake_client
             mock_factory.assert_called_once()
 
-        ***REMOVED*** Lifespan exit closes the client exactly once.
+        # Lifespan exit closes the client exactly once.
         fake_client.aclose.assert_awaited_once()
 
 
@@ -116,7 +116,7 @@ def test_start_expert_handler_uses_depends_get_redis() -> None:
         if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and node.name == "start_expert"
     )
 
-    ***REMOVED*** Search default values + annotations for a Depends(get_redis) call.
+    # Search default values + annotations for a Depends(get_redis) call.
     uses_depends_get_redis = False
     for default in list(func_def.args.defaults) + list(func_def.args.kw_defaults):
         if default is None:
@@ -125,17 +125,17 @@ def test_start_expert_handler_uses_depends_get_redis() -> None:
             func = default.func
             name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
             if name == "Depends":
-                ***REMOVED*** Confirm the dependency target is get_redis.
+                # Confirm the dependency target is get_redis.
                 target = ast.unparse(default.args[0]) if default.args else ""
                 if "get_redis" in target:
                     uses_depends_get_redis = True
 
-    ***REMOVED*** Defensively forbid the legacy lazy lookup inside the body.
+    # Defensively forbid the legacy lazy lookup inside the body.
     body_source = ast.unparse(func_def)
     assert "_get_redis(" not in body_source, (
         "start_expert must not call legacy _get_redis(); use Depends(get_redis)"
     )
     assert uses_depends_get_redis, (
         "start_expert must declare a Redis parameter via Depends(get_redis) "
-        "for FastAPI-native dependency injection (***REMOVED***1645)"
+        "for FastAPI-native dependency injection (#1645)"
     )

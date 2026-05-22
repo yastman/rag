@@ -9,13 +9,13 @@ from pathlib import Path
 import pytest
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Sample catalog text: 2 records from Messambria Fort Beach, 1 from Premier
-***REMOVED*** Format: complex header, then pipe-separated rows
-***REMOVED*** Columns: section | apt_num | rooms | floor_label | area_m2 | view_raw |
-***REMOVED***          price_eur | price_bgn | furnished | floor_plan | photo | old_price
-***REMOVED*** old_price "-" → not on promotion; a number → is_promotion=True
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Sample catalog text: 2 records from Messambria Fort Beach, 1 from Premier
+# Format: complex header, then pipe-separated rows
+# Columns: section | apt_num | rooms | floor_label | area_m2 | view_raw |
+#          price_eur | price_bgn | furnished | floor_plan | photo | old_price
+# old_price "-" → not on promotion; a number → is_promotion=True
+# ---------------------------------------------------------------------------
 
 SAMPLE_TEXT = """\
 Messambria Fort Beach
@@ -54,15 +54,15 @@ class TestParseCatalogText:
         from scripts.apartments.parse_catalog import parse_catalog_text
 
         records = parse_catalog_text(SAMPLE_TEXT)
-        assert records[0]["is_furnished"] == "True"  ***REMOVED*** yes → True
-        assert records[1]["is_furnished"] == "False"  ***REMOVED*** no → False
+        assert records[0]["is_furnished"] == "True"  # yes → True
+        assert records[1]["is_furnished"] == "False"  # no → False
 
     def test_photo_detection(self) -> None:
         from scripts.apartments.parse_catalog import parse_catalog_text
 
         records = parse_catalog_text(SAMPLE_TEXT)
-        assert records[0]["has_photo"] == "False"  ***REMOVED*** no
-        assert records[1]["has_photo"] == "True"  ***REMOVED*** yes
+        assert records[0]["has_photo"] == "False"  # no
+        assert records[1]["has_photo"] == "True"  # yes
 
     def test_ground_floor_label(self) -> None:
         from scripts.apartments.parse_catalog import parse_catalog_text
@@ -74,10 +74,10 @@ class TestParseCatalogText:
         from scripts.apartments.parse_catalog import parse_catalog_text
 
         records = parse_catalog_text(SAMPLE_TEXT)
-        ***REMOVED*** B-2 has old_price=90000 → promotion
+        # B-2 has old_price=90000 → promotion
         assert records[1]["is_promotion"] == "True"
         assert float(records[1]["old_price_eur"]) == pytest.approx(90000.0)
-        ***REMOVED*** A-1 has old_price=- → no promotion
+        # A-1 has old_price=- → no promotion
         assert records[0]["is_promotion"] == "False"
         assert records[0]["old_price_eur"] == ""
 
@@ -112,7 +112,7 @@ class TestWriteCsv:
 
         text = output.read_text()
         reader = csv.DictReader(io.StringIO(text))
-        list(reader)  ***REMOVED*** consume rows
+        list(reader)  # consume rows
         assert "is_promotion" in (reader.fieldnames or [])
         assert "old_price_eur" in (reader.fieldnames or [])
 

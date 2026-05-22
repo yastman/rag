@@ -5,7 +5,7 @@
   ],
   "packageRules": [
     {
-      "description": "livekit/livekit-server: prefer semver release tags (v<major>.<minor>...) over commit-SHA-like tags so compose.yml clearly identifies the deployed release. See ***REMOVED***1339.",
+      "description": "livekit/livekit-server: prefer semver release tags (v<major>.<minor>...) over commit-SHA-like tags so compose.yml clearly identifies the deployed release. See #1339.",
       "matchDatasources": [
         "docker"
       ],

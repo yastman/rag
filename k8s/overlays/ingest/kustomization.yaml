@@ -6,7 +6,7 @@ namespace: rag
 resources:
   - ../../base/namespace.yaml
   - ../../base/configmaps/postgres-init.yaml
-  ***REMOVED*** Databases
+  # Databases
   - ../../base/postgres/pvc.yaml
   - ../../base/postgres/deployment.yaml
   - ../../base/postgres/service.yaml
@@ -16,13 +16,13 @@ resources:
   - ../../base/qdrant/pvc.yaml
   - ../../base/qdrant/deployment.yaml
   - ../../base/qdrant/service.yaml
-  ***REMOVED*** ML + Document Processing
+  # ML + Document Processing
   - ../../base/docling/pvc.yaml
   - ../../base/docling/deployment.yaml
   - ../../base/docling/service.yaml
   - ../../base/bge-m3/deployment.yaml
   - ../../base/bge-m3/service.yaml
-  ***REMOVED*** Ingestion
+  # Ingestion
   - ../../base/ingestion/pvc.yaml
   - ../../base/ingestion/deployment.yaml
 

@@ -31,7 +31,7 @@ class TestBuildApartmentFilter:
     def test_view_tags_match_any(self) -> None:
         f = _build_apartment_filter({"view_tags": ["sea", "pool"]})
         assert f is not None
-        ***REMOVED*** Should use MatchAny, not MatchValue
+        # Should use MatchAny, not MatchValue
         condition = f.must[0]
         assert hasattr(condition, "match")
 
@@ -41,7 +41,7 @@ class TestBuildApartmentFilter:
 
     def test_no_metadata_prefix(self) -> None:
         f = _build_apartment_filter({"rooms": 2})
-        ***REMOVED*** Key should be "rooms" not "metadata.rooms"
+        # Key should be "rooms" not "metadata.rooms"
         assert f.must[0].key == "rooms"
 
     def test_build_filter_is_furnished_true(self) -> None:
@@ -70,7 +70,7 @@ class TestBuildApartmentFilter:
         f = _build_apartment_filter({"is_furnished": True, "price_eur": {"gte": 50000}})
         assert f is not None
         assert len(f.must) == 2
-        ***REMOVED*** Bool condition should use MatchValue, not Range
+        # Bool condition should use MatchValue, not Range
         for cond in f.must:
             if cond.key == "is_furnished":
                 assert cond.match is not None
@@ -290,13 +290,13 @@ class TestScrollWithFilters:
         mock_qdrant.collection_name = "apartments"
         svc = ApartmentsService(mock_qdrant)
 
-        ***REMOVED*** Page 1
+        # Page 1
         r1, _total, start1, ids1 = await svc.scroll_with_filters(limit=2)
         assert len(r1) == 2
         assert start1 == 50000.0
         assert ids1 == ["a1", "a2"]
 
-        ***REMOVED*** Page 2 — start_from=50000, exclude a2 (boundary)
+        # Page 2 — start_from=50000, exclude a2 (boundary)
         r2, _, start2, _ids2 = await svc.scroll_with_filters(
             limit=2,
             start_from=start1,
@@ -305,7 +305,7 @@ class TestScrollWithFilters:
         assert len(r2) == 2
         assert start2 == 70000.0
 
-        ***REMOVED*** Page 3
+        # Page 3
         r3, _, _start3, _ids3 = await svc.scroll_with_filters(
             limit=2,
             start_from=start2,
@@ -354,10 +354,10 @@ class TestSearchWithFiltersQueryShape:
         )
 
         call_kwargs = mock_qdrant.client.query_points.call_args.kwargs
-        ***REMOVED*** Outer query uses colbert vectors
+        # Outer query uses colbert vectors
         assert call_kwargs["using"] == "colbert"
         assert call_kwargs["query"] == [[0.1, 0.2], [0.3, 0.4]]
-        ***REMOVED*** Inner prefetch uses RrfQuery
+        # Inner prefetch uses RrfQuery
         prefetch_list = call_kwargs["prefetch"]
         assert len(prefetch_list) == 1
         rrf_prefetch = prefetch_list[0]

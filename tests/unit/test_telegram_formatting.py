@@ -13,7 +13,7 @@ from telegram_bot.services.telegram_formatting import (
 class TestRecordLangfuseResponseOutput:
     def test_no_op_when_client_is_none(self):
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=None):
-            ***REMOVED*** Should not raise
+            # Should not raise
             record_langfuse_response_output("answer", 2)
 
     def test_builds_safe_output_payload(self):
@@ -90,7 +90,7 @@ class TestRecordLangfuseResponseOutput:
         mock_lf.update_current_span = MagicMock(side_effect=RuntimeError("span error"))
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
-            ***REMOVED*** Should not raise
+            # Should not raise
             record_langfuse_response_output("answer", 1)
 
     def test_preview_truncated_to_safe_limit(self):
@@ -103,7 +103,7 @@ class TestRecordLangfuseResponseOutput:
 
         call_args = mock_lf.set_current_trace_io.call_args.kwargs
         output = call_args["output"]
-        ***REMOVED*** _preview limit is 240 chars; redactor may append a short suffix
+        # _preview limit is 240 chars; redactor may append a short suffix
         assert len(output["answer_preview"]) <= 260
         assert output["answer_len"] == 2000
         assert output["chunks_count"] == 1
@@ -154,7 +154,7 @@ class TestSendHtmlMessagesLangfuse:
             result = await send_html_messages(message, long_text)
 
         assert result is True
-        ***REMOVED*** Should be called with the number of chunks > 1
+        # Should be called with the number of chunks > 1
         call_args = mock_record.call_args
         assert call_args[0][0] == long_text
         assert call_args[0][1] > 1
@@ -178,7 +178,7 @@ class TestSendHtmlMessagesLangfuse:
             "telegram_bot.services.telegram_formatting.record_langfuse_response_output",
             side_effect=RuntimeError("langfuse down"),
         ) as mock_record:
-            ***REMOVED*** Should not raise
+            # Should not raise
             result = await send_html_messages(message, "Hello")
 
         assert result is True

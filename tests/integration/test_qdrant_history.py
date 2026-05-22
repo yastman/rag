@@ -17,7 +17,7 @@ from qdrant_client import AsyncQdrantClient
 from telegram_bot.services.history_service import HistoryService
 
 
-***REMOVED*** Use unique collection name to avoid conflicts
+# Use unique collection name to avoid conflicts
 TEST_COLLECTION = "test_history_integration"
 
 
@@ -38,7 +38,7 @@ async def qdrant_client():
     try:
         yield client
     finally:
-        ***REMOVED*** Cleanup: delete test collection
+        # Cleanup: delete test collection
         with contextlib.suppress(Exception):
             await client.delete_collection(TEST_COLLECTION)
         await client.close()
@@ -86,7 +86,7 @@ class TestQdrantHistoryIntegration:
 
     async def test_cross_user_isolation(self, service, mock_embeddings):
         """User A cannot retrieve user B records."""
-        ***REMOVED*** User A saves
+        # User A saves
         await service.save_turn(
             user_id=200,
             session_id="session-a",
@@ -96,7 +96,7 @@ class TestQdrantHistoryIntegration:
             query_embedding=[0.2] * 1024,
         )
 
-        ***REMOVED*** User B saves
+        # User B saves
         await service.save_turn(
             user_id=300,
             session_id="session-b",
@@ -106,12 +106,12 @@ class TestQdrantHistoryIntegration:
             query_embedding=[0.3] * 1024,
         )
 
-        ***REMOVED*** User A searches — should NOT see user B data
+        # User A searches — should NOT see user B data
         results_a = await service.search_user_history(user_id=200, query="квартира", limit=10)
         user_ids_a = {r.get("query", "") for r in results_a}
         assert "квартира пользователя Б" not in user_ids_a
 
-        ***REMOVED*** User B searches — should NOT see user A data
+        # User B searches — should NOT see user A data
         results_b = await service.search_user_history(user_id=300, query="квартира", limit=10)
         user_ids_b = {r.get("query", "") for r in results_b}
         assert "квартира пользователя А" not in user_ids_b

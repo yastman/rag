@@ -17,17 +17,17 @@ import yaml
 
 CONTRACT_PATH = Path(__file__).resolve().parent.parent / "observability" / "trace_contract.yaml"
 
-***REMOVED*** Directories to scan for @observe decorators (production code only)
+# Directories to scan for @observe decorators (production code only)
 _SCAN_DIRS = [
     Path(__file__).resolve().parent.parent.parent / "telegram_bot",
     Path(__file__).resolve().parent.parent.parent / "src",
     Path(__file__).resolve().parent.parent.parent / "services",
 ]
-***REMOVED*** Exclude non-production code from the undocumented-spans check
+# Exclude non-production code from the undocumented-spans check
 _EXCLUDE_PATTERNS = ["src/evaluation", ".venv/"]
 
-***REMOVED*** 13 core RAG scores from tests/unit/observability/test_trace_contracts.py::_CORE_RAG_SCORES
-***REMOVED*** (hyde_used removed in ***REMOVED***754 — was a stub, HyDE not implemented)
+# 13 core RAG scores from tests/unit/observability/test_trace_contracts.py::_CORE_RAG_SCORES
+# (hyde_used removed in #754 — was a stub, HyDE not implemented)
 _CORE_RAG_SCORES = [
     "query_type",
     "latency_total_ms",
@@ -78,9 +78,9 @@ def collect_observe_names(
     return names
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** a) Contract YAML exists and is parseable
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# a) Contract YAML exists and is parseable
+# ---------------------------------------------------------------------------
 
 
 def test_contract_yaml_exists():
@@ -93,9 +93,9 @@ def test_contract_yaml_exists():
     assert "coverage_tiers" in data
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** b) required_families is non-empty
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# b) required_families is non-empty
+# ---------------------------------------------------------------------------
 
 
 def test_required_families_non_empty(required_families):
@@ -103,9 +103,9 @@ def test_required_families_non_empty(required_families):
     assert len(required_families) >= 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** b2) coverage_tiers entries are non-empty strings
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# b2) coverage_tiers entries are non-empty strings
+# ---------------------------------------------------------------------------
 
 
 def test_coverage_tiers_entries_are_non_empty_strings(coverage_tiers):
@@ -119,9 +119,9 @@ def test_coverage_tiers_entries_are_non_empty_strings(coverage_tiers):
             )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** c) All required families have a matching @observe(name=...) decorator
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# c) All required families have a matching @observe(name=...) decorator
+# ---------------------------------------------------------------------------
 
 
 def test_all_required_families_have_observe_decorator(required_families):
@@ -133,9 +133,9 @@ def test_all_required_families_have_observe_decorator(required_families):
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** d) All contract spans exist somewhere in the codebase
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# d) All contract spans exist somewhere in the codebase
+# ---------------------------------------------------------------------------
 
 
 def test_all_contract_spans_exist_in_codebase(all_contract_spans):
@@ -153,14 +153,14 @@ def test_retrieval_stage_family_spans_exist() -> None:
     assert "retrieval.relax" in code_spans
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** e) No undocumented @observe spans (reverse check)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# e) No undocumented @observe spans (reverse check)
+# ---------------------------------------------------------------------------
 
 
 def test_no_undocumented_observe_spans(all_contract_spans, required_families):
     code_spans = collect_observe_names(_SCAN_DIRS, exclude_patterns=_EXCLUDE_PATTERNS)
-    ***REMOVED*** Contract covers both the spans section and the required_families entries
+    # Contract covers both the spans section and the required_families entries
     documented = set(all_contract_spans) | set(required_families)
     undocumented = code_spans - documented
     assert not undocumented, (
@@ -170,9 +170,9 @@ def test_no_undocumented_observe_spans(all_contract_spans, required_families):
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** f) Score keys are non-empty
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# f) Score keys are non-empty
+# ---------------------------------------------------------------------------
 
 
 def test_score_keys_non_empty(score_keys):
@@ -180,9 +180,9 @@ def test_score_keys_non_empty(score_keys):
     assert len(score_keys) >= 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** g) core_rag scores in contract match the scoring module constant
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# g) core_rag scores in contract match the scoring module constant
+# ---------------------------------------------------------------------------
 
 
 def test_core_rag_scores_match_scoring_module(trace_contract):

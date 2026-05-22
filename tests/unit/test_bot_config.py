@@ -128,7 +128,7 @@ class TestBotConfigQuantization:
 
 
 class TestBotConfigHistory:
-    """Tests for BotConfig history search settings (***REMOVED***433)."""
+    """Tests for BotConfig history search settings (#433)."""
 
     def test_history_relevance_threshold_default(self):
         """Default history_relevance_threshold is 0.7."""

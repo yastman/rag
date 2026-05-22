@@ -1,13 +1,13 @@
-***REMOVED*** Init
+# Init
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 docker/postgres/init
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - 00-init-databases.sql
 - 02-cocoindex.sql
 - 03-unified-ingestion-alter.sql
@@ -17,5 +17,5 @@ docker/postgres/init
 - 07-nurturing-funnel-analytics.sql
 - 08-user-favorites.sql
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

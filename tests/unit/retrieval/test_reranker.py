@@ -26,7 +26,7 @@ class TestGetCrossEncoder:
         result1 = reranker.get_cross_encoder()
         result2 = reranker.get_cross_encoder()
 
-        ***REMOVED*** Should only create once
+        # Should only create once
         mock_cross_encoder["class"].assert_called_once()
         assert result1 is result2
 
@@ -48,7 +48,7 @@ class TestRerankResults:
 
     def test_rerank_results_success(self, reranker, mock_cross_encoder):
         """Test successful reranking of results."""
-        ***REMOVED*** Return scores: first result is worst, third is best
+        # Return scores: first result is worst, third is best
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.3, 0.5, 0.9])
 
         results = [
@@ -59,18 +59,18 @@ class TestRerankResults:
 
         reranked = reranker.rerank_results("test query", results, top_k=3)
 
-        ***REMOVED*** Should be sorted by rerank score (descending)
-        assert reranked[0]["text"] == "Doc 3"  ***REMOVED*** Score 0.9
-        assert reranked[1]["text"] == "Doc 2"  ***REMOVED*** Score 0.5
-        assert reranked[2]["text"] == "Doc 1"  ***REMOVED*** Score 0.3
+        # Should be sorted by rerank score (descending)
+        assert reranked[0]["text"] == "Doc 3"  # Score 0.9
+        assert reranked[1]["text"] == "Doc 2"  # Score 0.5
+        assert reranked[2]["text"] == "Doc 1"  # Score 0.3
 
-        ***REMOVED*** Verify scores were updated
+        # Verify scores were updated
         assert reranked[0]["rerank_score"] == 0.9
         assert reranked[0]["original_score"] == 0.6
 
     def test_rerank_results_preserves_remaining(self, reranker, mock_cross_encoder):
         """Test that results beyond top_k are preserved unchanged."""
-        mock_cross_encoder["encoder"].predict.return_value = np.array([0.5, 0.8])  ***REMOVED*** Only for top 2
+        mock_cross_encoder["encoder"].predict.return_value = np.array([0.5, 0.8])  # Only for top 2
 
         results = [
             {"text": "Doc 1", "score": 0.9},
@@ -81,10 +81,10 @@ class TestRerankResults:
 
         reranked = reranker.rerank_results("query", results, top_k=2)
 
-        ***REMOVED*** First 2 should be reranked
+        # First 2 should be reranked
         assert len(reranked) == 4
 
-        ***REMOVED*** Last 2 should be unchanged (appended after reranked)
+        # Last 2 should be unchanged (appended after reranked)
         assert reranked[2]["text"] == "Doc 3"
         assert reranked[3]["text"] == "Doc 4"
         assert "rerank_score" not in reranked[2]
@@ -101,7 +101,7 @@ class TestRerankResults:
 
         reranker.rerank_results("my query", results, top_k=2)
 
-        ***REMOVED*** Verify pairs passed to predict
+        # Verify pairs passed to predict
         mock_cross_encoder["encoder"].predict.assert_called_once()
         pairs = mock_cross_encoder["encoder"].predict.call_args[0][0]
         assert pairs == [("my query", "First document"), ("my query", "Second document")]
@@ -117,7 +117,7 @@ class TestRerankResults:
 
         reranked = reranker.rerank_results("query", results, top_k=2)
 
-        ***REMOVED*** Should return original results unchanged
+        # Should return original results unchanged
         assert reranked == results
         assert "rerank_score" not in reranked[0]
 
@@ -129,7 +129,7 @@ class TestRerankResults:
 
         reranker.rerank_results("query", results)
 
-        ***REMOVED*** Should have created 5 pairs
+        # Should have created 5 pairs
         pairs = mock_cross_encoder["encoder"].predict.call_args[0][0]
         assert len(pairs) == 5
 
@@ -144,21 +144,21 @@ class TestRerankResults:
 
         reranked = reranker.rerank_results("query", results, top_k=5)
 
-        ***REMOVED*** Should work fine with fewer results
+        # Should work fine with fewer results
         assert len(reranked) == 2
         assert reranked[0]["rerank_score"] == 0.8
         assert reranked[1]["rerank_score"] == 0.6
 
     def test_rerank_results_score_conversion_to_float(self, reranker, mock_cross_encoder):
         """Test that scores are converted to float."""
-        ***REMOVED*** Return numpy-like values (simulating numpy array output)
+        # Return numpy-like values (simulating numpy array output)
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.75])
 
         results = [{"text": "Doc", "score": 0.5}]
 
         reranked = reranker.rerank_results("query", results, top_k=1)
 
-        ***REMOVED*** Score should be Python float
+        # Score should be Python float
         assert isinstance(reranked[0]["score"], float)
         assert isinstance(reranked[0]["rerank_score"], float)
 
@@ -170,7 +170,7 @@ class TestClearCrossEncoder:
         """Test clearing when no encoder exists."""
         reranker._cross_encoder = None
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         reranker.clear_cross_encoder()
 
         assert reranker._cross_encoder is None
@@ -179,7 +179,7 @@ class TestClearCrossEncoder:
         """Test clearing existing encoder."""
         reranker._cross_encoder = mock_cross_encoder["encoder"]
 
-        ***REMOVED*** Avoid collecting unrelated global objects under strict warning mode.
+        # Avoid collecting unrelated global objects under strict warning mode.
         with patch("gc.collect", return_value=0):
             reranker.clear_cross_encoder()
 
@@ -195,7 +195,7 @@ class TestClearCrossEncoder:
         encoder1 = reranker.get_cross_encoder()
         assert encoder1 == mock_encoder1
 
-        ***REMOVED*** Avoid collecting unrelated global objects under strict warning mode.
+        # Avoid collecting unrelated global objects under strict warning mode.
         with patch("gc.collect", return_value=0):
             reranker.clear_cross_encoder()
 

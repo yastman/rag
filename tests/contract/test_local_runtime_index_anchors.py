@@ -1,9 +1,9 @@
-"""Contract: ``docs/indexes/local-runtime.md`` anchors must point at real headings (***REMOVED***1612).
+"""Contract: ``docs/indexes/local-runtime.md`` anchors must point at real headings (#1612).
 
 The runtime index links to ``docs/LOCAL-DEVELOPMENT.md`` using GitHub-style
 slugified anchors. When section numbers in LOCAL-DEVELOPMENT.md change, the
-index links go stale silently. This contract slugifies every ``***REMOVED******REMOVED***`` heading
-in LOCAL-DEVELOPMENT.md and asserts that every ``LOCAL-DEVELOPMENT.md***REMOVED***anchor``
+index links go stale silently. This contract slugifies every ``##`` heading
+in LOCAL-DEVELOPMENT.md and asserts that every ``LOCAL-DEVELOPMENT.md#anchor``
 link in the runtime index resolves to one of those slugs.
 """
 
@@ -19,7 +19,7 @@ LOCAL_DEV = REPO_ROOT / "docs" / "LOCAL-DEVELOPMENT.md"
 
 
 _LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-_HEADING_RE = re.compile(r"^(***REMOVED***{1,6})\s+(.+?)\s*$", re.MULTILINE)
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 
 
 def _github_slugify(heading_text: str) -> str:
@@ -42,10 +42,10 @@ def _collect_local_dev_links(index_text: str) -> list[str]:
     targets = []
     for match in _LINK_RE.finditer(index_text):
         href = match.group(1)
-        if "LOCAL-DEVELOPMENT.md***REMOVED***" not in href:
+        if "LOCAL-DEVELOPMENT.md#" not in href:
             continue
-        ***REMOVED*** Split on '***REMOVED***' once; we only care about the fragment part.
-        fragment = href.split("***REMOVED***", 1)[1]
+        # Split on '#' once; we only care about the fragment part.
+        fragment = href.split("#", 1)[1]
         targets.append(fragment)
     return targets
 
@@ -60,7 +60,7 @@ def test_runtime_index_local_dev_anchors_resolve() -> None:
 
     missing = sorted({frag for frag in fragments if frag not in anchors})
     if missing:
-        ***REMOVED*** Surface a few candidate slugs to make fixing the link obvious.
+        # Surface a few candidate slugs to make fixing the link obvious.
         candidates = sorted(a for a in anchors if "minimal" in a or "common" in a or "issues" in a)
         raise AssertionError(
             "Runtime index links point to anchors that do not exist in "

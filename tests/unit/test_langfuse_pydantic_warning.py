@@ -1,4 +1,4 @@
-"""Contract tests for Issue ***REMOVED***1381: suppress Langfuse Pydantic V1 warning.
+"""Contract tests for Issue #1381: suppress Langfuse Pydantic V1 warning.
 
 Langfuse SDK 4.3.x emits a ``UserWarning`` on every import under
 Python 3.14 because its internal compat shim still touches
@@ -22,9 +22,9 @@ from __future__ import annotations
 import warnings
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Filter helper contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Filter helper contract
+# ---------------------------------------------------------------------------
 
 
 def test_install_langfuse_warning_filters_is_exposed() -> None:
@@ -33,7 +33,7 @@ def test_install_langfuse_warning_filters_is_exposed() -> None:
 
     assert hasattr(observability, "_install_langfuse_warning_filters"), (
         "telegram_bot.observability must expose `_install_langfuse_warning_filters` "
-        "so the suppression target is documented and testable (issue ***REMOVED***1381)."
+        "so the suppression target is documented and testable (issue #1381)."
     )
 
 
@@ -45,7 +45,7 @@ def test_filter_suppresses_pydantic_v1_warning() -> None:
         warnings.resetwarnings()
         warnings.simplefilter("always")
         _install_langfuse_warning_filters()
-        ***REMOVED*** Replay the exact warning Langfuse emits at import time.
+        # Replay the exact warning Langfuse emits at import time.
         warnings.warn(
             "Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.",
             UserWarning,
@@ -54,7 +54,7 @@ def test_filter_suppresses_pydantic_v1_warning() -> None:
 
     pydantic_warnings = [w for w in captured if "Core Pydantic V1" in str(w.message)]
     assert not pydantic_warnings, (
-        "issue ***REMOVED***1381: Langfuse Pydantic V1 UserWarning must be suppressed; "
+        "issue #1381: Langfuse Pydantic V1 UserWarning must be suppressed; "
         f"saw: {[str(w.message) for w in pydantic_warnings]!r}"
     )
 
@@ -67,9 +67,9 @@ def test_filter_does_not_swallow_unrelated_warnings() -> None:
         warnings.resetwarnings()
         warnings.simplefilter("always")
         _install_langfuse_warning_filters()
-        ***REMOVED*** Unrelated UserWarning must still surface.
+        # Unrelated UserWarning must still surface.
         warnings.warn("totally unrelated warning", UserWarning, stacklevel=1)
-        ***REMOVED*** DeprecationWarning must still surface.
+        # DeprecationWarning must still surface.
         warnings.warn("totally unrelated deprecation", DeprecationWarning, stacklevel=1)
 
     user_msgs = [str(w.message) for w in captured if w.category is UserWarning]
@@ -93,21 +93,21 @@ def test_filter_runs_at_module_import() -> None:
     import importlib
     import sys
 
-    ***REMOVED*** Reset filter state so we observe the import-time side effect cleanly.
+    # Reset filter state so we observe the import-time side effect cleanly.
     with warnings.catch_warnings():
         warnings.resetwarnings()
-        ***REMOVED*** Force re-import so module-level code runs again.
+        # Force re-import so module-level code runs again.
         sys.modules.pop("telegram_bot.observability", None)
         sys.modules.pop("src.observability", None)
         importlib.import_module("telegram_bot.observability")
 
-        ***REMOVED*** Each entry in warnings.filters is a 5-tuple:
-        ***REMOVED*** (action, message-regex, category, module-regex, lineno).
+        # Each entry in warnings.filters is a 5-tuple:
+        # (action, message-regex, category, module-regex, lineno).
         pydantic_filters = [
             f for f in warnings.filters if f[1] is not None and "Pydantic V1" in f[1].pattern
         ]
         assert pydantic_filters, (
-            "issue ***REMOVED***1381: importing telegram_bot.observability must install a "
+            "issue #1381: importing telegram_bot.observability must install a "
             "warnings filter targeting the Langfuse Pydantic V1 message"
         )
         actions = {f[0] for f in pydantic_filters}
@@ -119,16 +119,16 @@ def test_filter_runs_at_module_import() -> None:
 
 def test_no_blanket_userwarning_filter_added() -> None:
     """The fix must not blanket-ignore *all* UserWarnings."""
-    from telegram_bot import observability  ***REMOVED*** noqa: F401
+    from telegram_bot import observability  # noqa: F401
 
-    ***REMOVED*** Look for any UserWarning filter without a message regex — that would be
-    ***REMOVED*** a blanket suppression and would hide unrelated warnings.
+    # Look for any UserWarning filter without a message regex — that would be
+    # a blanket suppression and would hide unrelated warnings.
     blanket = [
         f
         for f in warnings.filters
         if f[0] == "ignore" and f[2] is UserWarning and (f[1] is None or f[1].pattern in {".*", ""})
     ]
     assert not blanket, (
-        "issue ***REMOVED***1381: filter must target the specific Langfuse Pydantic V1 "
+        "issue #1381: filter must target the specific Langfuse Pydantic V1 "
         f"message, not blanket-ignore UserWarning. Found: {blanket!r}"
     )

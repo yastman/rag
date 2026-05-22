@@ -1,4 +1,4 @@
-"""Tests for SessionSummaryWorker (***REMOVED***445 Task 5)."""
+"""Tests for SessionSummaryWorker (#445 Task 5)."""
 
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,7 +22,7 @@ def worker():
         llm=MagicMock(),
         kommo_client=None,
         idle_timeout_min=30,
-        poll_interval_sec=10,  ***REMOVED*** fast for tests
+        poll_interval_sec=10,  # fast for tests
     )
 
 
@@ -95,7 +95,7 @@ async def test_skip_short_conversations(worker):
         ]
     )
     count = await worker._check_idle_sessions()
-    assert count == 0  ***REMOVED*** < 2 messages, skip
+    assert count == 0  # < 2 messages, skip
 
 
 async def test_graceful_stop_during_processing(worker):
@@ -107,7 +107,7 @@ async def test_graceful_stop_during_processing(worker):
         mock_scheduler_cls.return_value = mock_scheduler
         await worker.start()
         assert worker._scheduler is mock_scheduler
-        ***REMOVED*** stop() must complete without hanging
+        # stop() must complete without hanging
         await worker.stop()
         mock_scheduler.shutdown.assert_called_once_with(wait=False)
         assert worker._scheduler is None
@@ -116,7 +116,7 @@ async def test_graceful_stop_during_processing(worker):
 async def test_recent_session_not_processed(worker):
     """Session active 5 min ago should not be processed (under 30 min threshold)."""
     worker._redis.scan = AsyncMock(return_value=(0, [b"session:last_active:789"]))
-    ***REMOVED*** 5 minutes ago — under idle_timeout_min=30
+    # 5 minutes ago — under idle_timeout_min=30
     worker._redis.get = AsyncMock(return_value=str(time.time() - 300).encode())
     worker._generate_summary = AsyncMock()
     count = await worker._check_idle_sessions()
@@ -139,7 +139,7 @@ async def test_kommo_write_skipped_without_lead_id(worker):
     )
     worker._generate_summary = AsyncMock(return_value="Budget 80k EUR client")
     await worker._check_idle_sessions()
-    ***REMOVED*** lead_id not yet resolved — add_note should NOT be called
+    # lead_id not yet resolved — add_note should NOT be called
     mock_kommo.add_note.assert_not_called()
 
 
@@ -155,14 +155,14 @@ async def test_none_redis_key_skipped(worker):
 
 async def test_scan_multi_page_cursor_accumulation(worker):
     """SCAN loop accumulates keys across multiple pages (cursor non-zero then zero)."""
-    ***REMOVED*** First page returns cursor=5 (more pages), second page returns cursor=0 (done)
+    # First page returns cursor=5 (more pages), second page returns cursor=0 (done)
     worker._redis.scan = AsyncMock(
         side_effect=[
             (5, [b"session:last_active:101"]),
             (0, [b"session:last_active:102"]),
         ]
     )
-    ***REMOVED*** Both keys are old enough to process
+    # Both keys are old enough to process
     worker._redis.get = AsyncMock(return_value=str(time.time() - 2000).encode())
     worker._redis.delete = AsyncMock()
     worker._get_conversation_history = AsyncMock(
@@ -173,13 +173,13 @@ async def test_scan_multi_page_cursor_accumulation(worker):
     )
     worker._generate_summary = AsyncMock(return_value="summary")
     count = await worker._check_idle_sessions()
-    ***REMOVED*** Both keys from both pages should be processed
+    # Both keys from both pages should be processed
     assert count == 2
     assert worker._redis.scan.call_count == 2
 
 
 class TestSessionSummaryWorkerObserveInstrumentation:
-    """Tests for @observe instrumentation on SessionSummaryWorker._generate_summary (***REMOVED***1662).
+    """Tests for @observe instrumentation on SessionSummaryWorker._generate_summary (#1662).
 
     Contract: ``_generate_summary`` must be wrapped with
     ``@observe(name="session-summary-llm", capture_input=False, capture_output=False)``
@@ -190,7 +190,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
     text must NOT appear in span fields. On LLM failure the span is recorded
     at ERROR level with a truncated ``status_message`` and the exception is
     re-raised (the outer ``_run_loop`` already swallows worker-cycle errors,
-    see ***REMOVED***1662 Implementation Plan step 4).
+    see #1662 Implementation Plan step 4).
     """
 
     @staticmethod
@@ -221,12 +221,12 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             return decorator
 
         monkeypatch.setattr(observability_mod, "observe", fake_observe)
-        ***REMOVED*** Reload session_summary_worker so it picks up the no-op decorator.
+        # Reload session_summary_worker so it picks up the no-op decorator.
         sys.modules.pop("telegram_bot.services.session_summary_worker", None)
         importlib.import_module("telegram_bot.services.session_summary_worker")
 
     def test_session_summary_worker_module_imports_observe_and_get_client(self):
-        """Module wires the Langfuse decorator + client accessor (***REMOVED***1662 contract)."""
+        """Module wires the Langfuse decorator + client accessor (#1662 contract)."""
         from telegram_bot.services import session_summary_worker as ssw_mod
 
         assert hasattr(ssw_mod, "observe"), (
@@ -247,7 +247,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             @observe(name="session-summary-llm",
                      capture_input=False, capture_output=False)
         which mirrors the ``nurturing-llm-generate`` pattern referenced in
-        issue ***REMOVED***1662 SDK Baseline.
+        issue #1662 SDK Baseline.
         """
         import importlib
         import sys
@@ -268,10 +268,10 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         sys.modules.pop("telegram_bot.services.session_summary_worker", None)
         importlib.import_module("telegram_bot.services.session_summary_worker")
 
-        ***REMOVED*** The module already applies @observe to _check_idle_sessions
-        ***REMOVED*** (name="session-summary-check"). After this issue ships, an additional
-        ***REMOVED*** @observe(name="session-summary-llm", ...) must also be present on
-        ***REMOVED*** _generate_summary.
+        # The module already applies @observe to _check_idle_sessions
+        # (name="session-summary-check"). After this issue ships, an additional
+        # @observe(name="session-summary-llm", ...) must also be present on
+        # _generate_summary.
         llm_calls = [c for c in captured_calls if c.get("name") == "session-summary-llm"]
         assert len(llm_calls) == 1, (
             "Expected exactly one @observe(name='session-summary-llm', ...) on "
@@ -287,7 +287,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        ***REMOVED*** Re-import to bind the no-op observe applied above.
+        # Re-import to bind the no-op observe applied above.
         from telegram_bot.services.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(
@@ -320,12 +320,12 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert captured_input.get("history_turns") == len(history)
         assert captured_input.get("model") == "claude-haiku-4-5"
 
-        ***REMOVED*** Forbidden: no full history content in span input.
+        # Forbidden: no full history content in span input.
         rendered = str(captured_input)
         for msg in history:
             assert msg["content"] not in rendered, (
                 "Full conversation message content must not appear in span input "
-                "(issue ***REMOVED***1662 Forbidden section)"
+                "(issue #1662 Forbidden section)"
             )
 
     async def test_output_payload_is_curated_summary_len_and_preview(self, monkeypatch):
@@ -341,7 +341,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
             "и инфраструктурой рядом. Готов рассмотреть вторичку и новостройки. "
             "Следующий шаг: отправить три варианта в Святом Власе на этой неделе."
         )
-        assert len(long_summary) > 200  ***REMOVED*** sanity: must exceed preview cap
+        assert len(long_summary) > 200  # sanity: must exceed preview cap
 
         worker = SessionSummaryWorker(
             redis=AsyncMock(),
@@ -355,7 +355,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         ]
 
         result = await worker._generate_summary(history)
-        assert result == long_summary  ***REMOVED*** behavior unchanged on success path
+        assert result == long_summary  # behavior unchanged on success path
 
         output_calls = [
             c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
@@ -370,9 +370,9 @@ class TestSessionSummaryWorkerObserveInstrumentation:
         assert isinstance(preview, str)
         assert len(preview) <= 120, f"summary_preview must be <=120 chars, got {len(preview)}"
 
-        ***REMOVED*** Forbidden: full summary text must not appear in span output.
+        # Forbidden: full summary text must not appear in span output.
         assert long_summary not in str(captured_output), (
-            "Full summary text must not appear in span output (issue ***REMOVED***1662 Forbidden section)"
+            "Full summary text must not appear in span output (issue #1662 Forbidden section)"
         )
 
     async def test_generate_summary_works_when_langfuse_client_is_none(self, monkeypatch):
@@ -401,7 +401,7 @@ class TestSessionSummaryWorkerObserveInstrumentation:
     async def test_session_summary_worker_exception_path_records_error_level_and_reraises(self, monkeypatch):
         """On LLM exception: span level=ERROR with status_message, then re-raise.
 
-        Per issue ***REMOVED***1662 Implementation Plan step 4: record ERROR span and
+        Per issue #1662 Implementation Plan step 4: record ERROR span and
         re-raise. The outer ``_run_loop`` already swallows worker-cycle errors,
         so re-raising is safe and gives ``_check_idle_sessions`` a chance to
         observe the failure cleanly.
@@ -471,10 +471,10 @@ class TestSessionSummaryWorkerObserveInstrumentation:
 
 
 class TestPerCycleCap:
-    """Regression tests for ***REMOVED***1608: max_sessions_per_cycle backpressure.
+    """Regression tests for #1608: max_sessions_per_cycle backpressure.
 
     Before the fix, _check_idle_sessions accumulated every matching key into
-    a list and processed all of them in one tick. With ***REMOVED***1599 wiring a real
+    a list and processed all of them in one tick. With #1599 wiring a real
     history source, a large idle-user batch would trigger an unbounded
     burst of Redis reads, history fetches, LLM calls, and Kommo writes.
     """
@@ -510,10 +510,10 @@ class TestPerCycleCap:
         count = await worker._check_idle_sessions()
 
         assert count == 5
-        ***REMOVED*** Only 5 deletions, the other 15 keys are deferred to the next tick.
+        # Only 5 deletions, the other 15 keys are deferred to the next tick.
         assert worker._redis.delete.call_count == 5
-        ***REMOVED*** GET fetched the timestamp only for the 5 processed keys (cap check
-        ***REMOVED*** short-circuits before _redis.get for the rest).
+        # GET fetched the timestamp only for the 5 processed keys (cap check
+        # short-circuits before _redis.get for the rest).
         assert worker._redis.get.call_count == 5
 
     async def test_active_sessions_do_not_consume_cap_slots(self):
@@ -526,9 +526,9 @@ class TestPerCycleCap:
         from telegram_bot.services.session_summary_worker import SessionSummaryWorker
 
         keys = self._idle_keys(10)
-        active_ts = str(time.time() - 60).encode()  ***REMOVED*** 1 min ago: NOT idle
+        active_ts = str(time.time() - 60).encode()  # 1 min ago: NOT idle
         idle_ts = str(time.time() - 9999).encode()
-        ***REMOVED*** Alternate active / idle, so first 5 idle keys are at indices 1,3,5,7,9
+        # Alternate active / idle, so first 5 idle keys are at indices 1,3,5,7,9
         gets = [
             active_ts,
             idle_ts,
@@ -561,7 +561,7 @@ class TestPerCycleCap:
 
         count = await worker._check_idle_sessions()
 
-        ***REMOVED*** Cap=3 idle sessions processed; some active keys observed.
+        # Cap=3 idle sessions processed; some active keys observed.
         assert count == 3
         assert worker._redis.delete.call_count == 3
 
@@ -655,7 +655,7 @@ class TestPerCycleCap:
 
 
 class TestHistorySourceWiring:
-    """Regression tests for ***REMOVED***1599: history_source must be configurable.
+    """Regression tests for #1599: history_source must be configurable.
 
     Before this fix the worker silently no-op'd whenever it was enabled
     because ``_get_conversation_history`` was a placeholder returning ``[]``,
@@ -728,7 +728,7 @@ class TestHistorySourceWiring:
             await worker.stop()
 
         warnings = [rec for rec in caplog.records if "without history_source" in rec.getMessage()]
-        assert warnings, "Worker must log WARNING at start when history_source is not wired (***REMOVED***1599)"
+        assert warnings, "Worker must log WARNING at start when history_source is not wired (#1599)"
 
     async def test_start_does_not_warn_when_history_source_present(self, caplog):
         """A wired worker must not log the no-op warning."""

@@ -1,4 +1,4 @@
-"""Handoff qualification dialog (aiogram-dialog) — ***REMOVED***730."""
+"""Handoff qualification dialog (aiogram-dialog) — #730."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .states import HandoffSG
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ── Goal options ─────────────────────────────────────────────────
+# ── Goal options ─────────────────────────────────────────────────
 
 _GOAL_OPTIONS: list[tuple[str, str]] = [
     ("🏠 Подбор недвижимости", "search"),
@@ -40,7 +40,7 @@ def _resolve_i18n_context(
     return i18n, locale
 
 
-***REMOVED*** ── Getters ──────────────────────────────────────────────────────
+# ── Getters ──────────────────────────────────────────────────────
 
 
 async def _goal_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
@@ -81,7 +81,7 @@ async def _contact_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[
     }
 
 
-***REMOVED*** ── Handlers ─────────────────────────────────────────────────────
+# ── Handlers ─────────────────────────────────────────────────────
 
 
 async def _on_goal_selected(
@@ -105,7 +105,7 @@ async def _on_contact_chat(
     goal = manager.dialog_data.get("goal") or start_data.get("goal", "")
     qualification = {"goal": goal, "contact": "chat"}
 
-    ***REMOVED*** Grab refs BEFORE done() destroys dialog context.
+    # Grab refs BEFORE done() destroys dialog context.
     property_bot = manager.middleware_data.get("property_bot")
     state = manager.middleware_data.get("state")
     msg = callback.message
@@ -120,11 +120,11 @@ async def _on_contact_chat(
             with contextlib.suppress(Exception):
                 i18n = hub.get_translator_by_locale(locale)
 
-    ***REMOVED*** Tell aiogram-dialog NOT to touch the message after done().
+    # Tell aiogram-dialog NOT to touch the message after done().
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
 
-    ***REMOVED*** Replace dialog message with status text (removes inline buttons).
+    # Replace dialog message with status text (removes inline buttons).
     if msg and hasattr(msg, "edit_text"):
         with contextlib.suppress(Exception):
             connecting_text = (
@@ -155,15 +155,15 @@ async def _on_contact_phone(
     manager: DialogManager,
 ) -> None:
     """Complete qualification with phone — start phone collection."""
-    ***REMOVED*** Grab refs BEFORE done() destroys dialog context.
+    # Grab refs BEFORE done() destroys dialog context.
     state = manager.middleware_data.get("state")
     msg = callback.message
 
-    ***REMOVED*** Tell aiogram-dialog NOT to touch the message after done().
+    # Tell aiogram-dialog NOT to touch the message after done().
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
 
-    ***REMOVED*** Remove inline keyboard message — phone_collector sends its own prompt.
+    # Remove inline keyboard message — phone_collector sends its own prompt.
     if msg and hasattr(msg, "delete"):
         with contextlib.suppress(Exception):
             await msg.delete()
@@ -177,7 +177,7 @@ async def _on_contact_phone(
     await start_phone_collection(callback, state, service_key="manager")
 
 
-***REMOVED*** ── Dialog ───────────────────────────────────────────────────────
+# ── Dialog ───────────────────────────────────────────────────────
 
 handoff_dialog = Dialog(
     Window(

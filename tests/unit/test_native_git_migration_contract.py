@@ -1,4 +1,4 @@
-"""Contract locks for the native-git script migration (closes ***REMOVED***1726 partial).
+"""Contract locks for the native-git script migration (closes #1726 partial).
 
 The audit in ``docs/engineering/script-native-migration-matrix.md`` made
 two destructive decisions that are easy to regress accidentally:
@@ -43,7 +43,7 @@ def _make_target_body(target: str) -> str:
     return match.group(1)
 
 
-***REMOVED*** ------------- Archive contract ------------------------------------------------
+# ------------- Archive contract ------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -67,7 +67,7 @@ def test_audited_script_archived(active_path: Path, archived_name: str) -> None:
     )
 
 
-***REMOVED*** ------------- git-hygiene target uses native git --------------------------------
+# ------------- git-hygiene target uses native git --------------------------------
 
 
 def test_git_hygiene_target_uses_native_git() -> None:
@@ -124,7 +124,7 @@ def test_git_hygiene_fix_target_uses_native_git() -> None:
     assert "scripts/repo_cleanup" not in body
 
 
-***REMOVED*** ------------- Audit-kept scripts stay wired -------------------------------------
+# ------------- Audit-kept scripts stay wired -------------------------------------
 
 
 def test_pr_hygiene_target_invokes_pr_queue_audit() -> None:
@@ -145,7 +145,7 @@ def test_issue_hygiene_target_invokes_issue_queue_audit() -> None:
     assert (SCRIPTS / "issue_queue_audit.py").exists()
 
 
-***REMOVED*** ------------- Migration matrix structural contract ------------------------------
+# ------------- Migration matrix structural contract ------------------------------
 
 
 def test_migration_matrix_documents_decisions_for_audited_scripts() -> None:
@@ -165,7 +165,7 @@ def test_migration_matrix_documents_decisions_for_audited_scripts() -> None:
     assert "scripts/repo_cleanup.sh" in matrix
     assert "scripts/pr_queue_audit.py" in matrix
     assert "scripts/issue_queue_audit.py" in matrix
-    ***REMOVED*** Decision keywords surface in the matrix body.
+    # Decision keywords surface in the matrix body.
     assert "archived" in matrix.lower(), (
         "migration matrix lost the 'archived' decision keyword for "
         "scripts/git_hygiene.py / scripts/repo_cleanup.sh"

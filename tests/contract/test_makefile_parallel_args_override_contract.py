@@ -1,6 +1,6 @@
 """Contract: fast pytest Makefile targets must honour $(PYTEST_PARALLEL_ARGS).
 
-Background (issue ***REMOVED***1794)
+Background (issue #1794)
 ------------------------
 On memory-constrained WSL2/Docker Desktop hosts (~8 GiB) the local fast
 gate killed pytest-xdist workers with `Error 137` because the Makefile
@@ -41,8 +41,8 @@ MAKEFILE = REPO_ROOT / "Makefile"
 
 PARALLEL_VAR = "$(PYTEST_PARALLEL_ARGS)"
 
-***REMOVED*** Targets that must consume $(PYTEST_PARALLEL_ARGS) so a local override
-***REMOVED*** (`-n 2 --dist=worksteal`) flows through.
+# Targets that must consume $(PYTEST_PARALLEL_ARGS) so a local override
+# (`-n 2 --dist=worksteal`) flows through.
 OVERRIDABLE_TARGETS = (
     "test",
     "test-unit",
@@ -113,7 +113,7 @@ def test_target_does_not_hardcode_worker_flags(target: str) -> None:
     text = _read_makefile_text()
     recipe = _extract_recipe(text, target)
     invocation = _pytest_invocation(recipe)
-    ***REMOVED*** Strip the variable itself before scanning for raw flags.
+    # Strip the variable itself before scanning for raw flags.
     scrubbed = invocation.replace(PARALLEL_VAR, "")
     assert " -n " not in f" {scrubbed} ", (
         f"Target `{target}` still hard-codes `-n` outside of "
@@ -157,5 +157,5 @@ def test_loadscope_target_remains_explicit() -> None:
     invocation = _pytest_invocation(recipe)
     assert "--dist=loadscope" in invocation, (
         "test-unit-loadscope is the documented loadscope experiment lane "
-        "and must keep `--dist=loadscope` explicit even after ***REMOVED***1794."
+        "and must keep `--dist=loadscope` explicit even after #1794."
     )

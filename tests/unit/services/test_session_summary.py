@@ -30,7 +30,7 @@ def _make_summary(**overrides: object) -> SessionSummary:
         "sentiment": "neutral",
     }
     defaults.update(overrides)
-    return SessionSummary(**defaults)  ***REMOVED*** type: ignore[arg-type]
+    return SessionSummary(**defaults)  # type: ignore[arg-type]
 
 
 def _make_responses_llm(
@@ -53,7 +53,7 @@ def _make_fallback_llm(
     side_effect: Exception | None = None,
 ) -> MagicMock:
     """Build a MagicMock LLM with only beta.chat.completions.parse (no responses)."""
-    mock_llm = MagicMock(spec=[])  ***REMOVED*** no 'responses' attribute
+    mock_llm = MagicMock(spec=[])  # no 'responses' attribute
     mock_message = MagicMock()
     mock_message.parsed = summary
     mock_choice = MagicMock()
@@ -78,9 +78,9 @@ def _reset_compat_flags():
     ss_module._compat_checked = False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** SessionSummary Pydantic model
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# SessionSummary Pydantic model
+# ---------------------------------------------------------------------------
 
 
 class TestSessionSummaryModel:
@@ -113,9 +113,9 @@ class TestSessionSummaryModel:
             assert summary.sentiment == sentiment
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_turns_for_prompt
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_turns_for_prompt
+# ---------------------------------------------------------------------------
 
 
 class TestFormatTurnsForPrompt:
@@ -148,9 +148,9 @@ class TestFormatTurnsForPrompt:
         assert format_turns_for_prompt([]) == ""
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** check_responses_parse_compat  (compatibility guard)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# check_responses_parse_compat  (compatibility guard)
+# ---------------------------------------------------------------------------
 
 
 class TestCheckResponsesParseCompat:
@@ -169,7 +169,7 @@ class TestCheckResponsesParseCompat:
 
     def test_returns_false_when_responses_missing(self):
         """Compat check fails when llm has no 'responses' attribute."""
-        mock_llm = MagicMock(spec=[])  ***REMOVED*** no responses
+        mock_llm = MagicMock(spec=[])  # no responses
 
         result = check_responses_parse_compat(mock_llm)
 
@@ -179,7 +179,7 @@ class TestCheckResponsesParseCompat:
     def test_returns_false_when_parse_missing(self):
         """Compat check fails when responses exists but has no 'parse'."""
         mock_llm = MagicMock()
-        mock_llm.responses = MagicMock(spec=[])  ***REMOVED*** no parse attribute
+        mock_llm.responses = MagicMock(spec=[])  # no parse attribute
 
         result = check_responses_parse_compat(mock_llm)
 
@@ -189,7 +189,7 @@ class TestCheckResponsesParseCompat:
     def test_returns_false_when_parse_not_callable(self):
         """Compat check fails when responses.parse is not callable (langfuse < 3.2.4)."""
         mock_llm = MagicMock()
-        mock_llm.responses.parse = "not_a_function"  ***REMOVED*** exists but not callable
+        mock_llm.responses.parse = "not_a_function"  # exists but not callable
 
         result = check_responses_parse_compat(mock_llm)
 
@@ -205,15 +205,15 @@ class TestCheckResponsesParseCompat:
         assert ss_module._compat_checked is True
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** generate_summary  (both code paths + graceful degradation)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# generate_summary  (both code paths + graceful degradation)
+# ---------------------------------------------------------------------------
 
 
 class TestGenerateSummary:
     """Test generate_summary() with mocked LLM."""
 
-    ***REMOVED*** --- responses.parse path (happy path) ---
+    # --- responses.parse path (happy path) ---
 
     async def test_responses_parse_works_uses_it(self):
         """Test 1: responses.parse available and works -- uses it."""
@@ -262,7 +262,7 @@ class TestGenerateSummary:
 
         assert result is None
 
-    ***REMOVED*** --- fallback: beta.chat.completions.parse path ---
+    # --- fallback: beta.chat.completions.parse path ---
 
     async def test_fallback_when_responses_unavailable(self):
         """Test 2: responses.parse unavailable -- fallback works without crash."""
@@ -285,12 +285,12 @@ class TestGenerateSummary:
 
         assert result is None
 
-    ***REMOVED*** --- graceful degradation: responses.parse raises at runtime ---
+    # --- graceful degradation: responses.parse raises at runtime ---
 
     async def test_responses_parse_error_degrades_to_fallback(self):
         """Test 3: responses.parse raises error -- graceful degradation to fallback."""
         expected = _make_summary(brief="Degraded OK.")
-        ***REMOVED*** Build an LLM that has responses.parse (raises) AND beta fallback (works)
+        # Build an LLM that has responses.parse (raises) AND beta fallback (works)
         mock_llm = AsyncMock()
         mock_llm.responses.parse = AsyncMock(side_effect=TypeError("wrapper bug"))
 
@@ -305,7 +305,7 @@ class TestGenerateSummary:
         result = await generate_summary(turns=_SINGLE_TURN, llm=mock_llm)
 
         assert result == expected
-        ***REMOVED*** Both should have been called: responses.parse tried first, then fallback
+        # Both should have been called: responses.parse tried first, then fallback
         mock_llm.responses.parse.assert_awaited_once()
         mock_llm.beta.chat.completions.parse.assert_awaited_once()
 
@@ -321,14 +321,14 @@ class TestGenerateSummary:
 
         assert result is None
 
-    ***REMOVED*** --- forced fallback via _force_chat_completions_fallback flag ---
+    # --- forced fallback via _force_chat_completions_fallback flag ---
 
     async def test_forced_fallback_skips_responses_parse(self):
         """When compat guard sets _force_chat_completions_fallback, responses.parse is skipped."""
         ss_module._force_chat_completions_fallback = True
 
         expected = _make_summary(brief="Forced fallback.")
-        ***REMOVED*** LLM that has responses.parse but it should NOT be called
+        # LLM that has responses.parse but it should NOT be called
         mock_llm = AsyncMock()
         mock_llm.responses.parse = AsyncMock(side_effect=AssertionError("should not be called"))
 
@@ -350,19 +350,19 @@ class TestGenerateSummary:
         """End-to-end: compat check detects missing responses -> generate uses fallback."""
         mock_llm = _make_fallback_llm(summary=_make_summary(brief="E2E fallback."))
 
-        ***REMOVED*** Run compat check -- should set _force_chat_completions_fallback
+        # Run compat check -- should set _force_chat_completions_fallback
         result_compat = check_responses_parse_compat(mock_llm)
         assert result_compat is False
         assert ss_module._force_chat_completions_fallback is True
 
-        ***REMOVED*** Now generate should use fallback path
+        # Now generate should use fallback path
         result = await generate_summary(turns=_SINGLE_TURN, llm=mock_llm)
         assert result is not None
         assert result.brief == "E2E fallback."
 
     async def test_returns_none_on_llm_error(self):
         """generate_summary returns None when responses.parse raises and no fallback."""
-        ***REMOVED*** LLM with responses.parse that errors + fallback that also errors
+        # LLM with responses.parse that errors + fallback that also errors
         mock_llm = AsyncMock()
         mock_llm.responses.parse = AsyncMock(side_effect=RuntimeError("API error"))
         mock_llm.beta.chat.completions.parse = AsyncMock(side_effect=RuntimeError("also broken"))
@@ -372,9 +372,9 @@ class TestGenerateSummary:
         assert result is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _trim_turns_for_summary
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _trim_turns_for_summary
+# ---------------------------------------------------------------------------
 
 
 class TestTrimTurnsForSummary:
@@ -411,9 +411,9 @@ class TestTrimTurnsForSummary:
         assert len(result) == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_summary_as_note
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_summary_as_note
+# ---------------------------------------------------------------------------
 
 
 class TestFormatSummaryAsNote:
@@ -447,5 +447,5 @@ class TestFormatSummaryAsNote:
         note = format_summary_as_note(summary)
 
         assert "Короткий разговор." in note
-        ***REMOVED*** No budget section when None
+        # No budget section when None
         assert "Бюджет" not in note

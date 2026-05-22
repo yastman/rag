@@ -1,4 +1,4 @@
-***REMOVED*** telegram_bot/config/services.yaml
+# telegram_bot/config/services.yaml
 services:
   passive_income:
     emoji: "💰"

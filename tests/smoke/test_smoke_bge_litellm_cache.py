@@ -1,4 +1,4 @@
-"""Additional smoke checks for critical service endpoints (***REMOVED***553)."""
+"""Additional smoke checks for critical service endpoints (#553)."""
 
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ async def test_qdrant_hybrid_search_execution(require_live_services, qdrant_serv
     """Qdrant hybrid search path executes without transport/shape errors."""
     try:
         info = await qdrant_service.client.get_collection(qdrant_service.collection_name)
-    except Exception as exc:  ***REMOVED*** pragma: no cover - environment dependent
+    except Exception as exc:  # pragma: no cover - environment dependent
         pytest.skip(f"Collection unavailable: {exc}")
 
     try:

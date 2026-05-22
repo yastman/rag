@@ -159,7 +159,7 @@ data:
     CREATE INDEX IF NOT EXISTS idx_funnel_events_created ON funnel_events(created_at DESC);
 
   06-lead-scoring-sync.sql: |
-    -- Lead Scoring + Kommo CRM Sync State (***REMOVED***384)
+    -- Lead Scoring + Kommo CRM Sync State (#384)
     -- Depends on: 05-realestate-schema.sql (leads table)
 
     \c realestate;
@@ -201,7 +201,7 @@ data:
         ON lead_scores (score_band, sync_status, updated_at DESC);
 
   07-nurturing-funnel-analytics.sql: |
-    -- Nurturing Jobs + Funnel Analytics (***REMOVED***390)
+    -- Nurturing Jobs + Funnel Analytics (#390)
     -- Depends on: 05-realestate-schema.sql (funnel_events), 06-lead-scoring-sync.sql (lead_scores)
 
     \c realestate;
@@ -244,7 +244,7 @@ data:
     CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending
         ON nurturing_jobs (status, scheduled_for ASC);
 
-    -- Add stage_name to funnel_events (***REMOVED***387 dependency — needed by analytics queries)
+    -- Add stage_name to funnel_events (#387 dependency — needed by analytics queries)
     ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_funnel_events_created_stage

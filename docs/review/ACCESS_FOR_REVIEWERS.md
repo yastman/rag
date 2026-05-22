@@ -1,4 +1,4 @@
-***REMOVED*** Access For Reviewers
+# Access For Reviewers
 
 Use this file for technical review, portfolio review, hiring evaluation, or
 getting oriented as a new contributor.
@@ -7,7 +7,7 @@ getting oriented as a new contributor.
 > `docs/review/PROJECT_GUIDE.md`, before running any commands or inspecting
 > code folders.
 
-***REMOVED******REMOVED*** Recommended Review Path
+## Recommended Review Path
 
 If you have 10 minutes:
 
@@ -26,7 +26,7 @@ If you have more time:
 - Review `docs/RAG_QUALITY_SCORES.md`.
 - Review `tests/unit/`, `tests/contract/`, and `tests/eval/`.
 
-***REMOVED******REMOVED*** Safe Commands
+## Safe Commands
 
 These commands are intended for local review and should not call production
 systems when the environment is configured safely. Approximate run times on a
@@ -42,7 +42,7 @@ modern laptop:
 For a narrower first pass, prefer focused tests around the subsystem being
 reviewed, then `make check`.
 
-***REMOVED******REMOVED*** Do Not Run Without Coordination
+## Do Not Run Without Coordination
 
 - production deploy scripts
 - real Kommo CRM write flows
@@ -51,7 +51,7 @@ reviewed, then `make check`.
 - destructive Docker or database cleanup commands
 - ingestion against real production documents
 
-***REMOVED******REMOVED*** Environment Rules
+## Environment Rules
 
 - Use `.env.example` as the public contract.
 - Do not request or inspect production `.env` files for code review.
@@ -61,13 +61,13 @@ reviewed, then `make check`.
 - If you are a public contributor, open an issue before attempting any change
   that touches secrets, deploy scripts, or production endpoints.
 
-***REMOVED******REMOVED*** Branch Context
+## Branch Context
 
 - `dev` is the active integration branch; `main` lags behind and is used for
   stable snapshots. Reviewers inspecting recent work should look at `dev` and
   open PRs against it.
 
-***REMOVED******REMOVED*** What To Look At For Senior-Level Review
+## What To Look At For Senior-Level Review
 
 - State and routing contracts in `telegram_bot/graph/`.
 - SDK/native API usage in `telegram_bot/integrations/` and `telegram_bot/services/`.
@@ -78,7 +78,7 @@ reviewed, then `make check`.
 - Runtime contract and healthchecks in Compose files.
 - Evaluation and observability wiring in Langfuse-related scripts/tests.
 
-***REMOVED******REMOVED*** Known Limitations To Keep In Mind
+## Known Limitations To Keep In Mind
 
 - k3s manifests are partial and should not be treated as full Compose parity.
 - local/dev monitoring exists through Loki/Alertmanager; production monitoring

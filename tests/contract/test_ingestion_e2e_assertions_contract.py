@@ -1,4 +1,4 @@
-"""Contract: ingestion E2E success-path tests must not accept errors or no-ops (***REMOVED***1629).
+"""Contract: ingestion E2E success-path tests must not accept errors or no-ops (#1629).
 
 Three success-path assertions in
 ``tests/integration/test_ingestion_e2e.py`` previously passed when the
@@ -26,9 +26,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TARGET = REPO_ROOT / "tests" / "integration" / "test_ingestion_e2e.py"
 
-***REMOVED*** Tests known to be negative-path / graceful-failure assertions; they MAY
-***REMOVED*** accept an "error" key. Everything else under TestIngestion*E2E is treated
-***REMOVED*** as a success-path test.
+# Tests known to be negative-path / graceful-failure assertions; they MAY
+# accept an "error" key. Everything else under TestIngestion*E2E is treated
+# as a success-path test.
 NEGATIVE_TESTS: frozenset[str] = frozenset(
     {
         "test_ingest_gdrive_without_credentials_fails_gracefully",
@@ -74,7 +74,7 @@ def test_ingestion_e2e_assertions_target_file_exists() -> None:
 
 
 def test_success_path_assertions_require_positive_points() -> None:
-    """``test_ingest_directory_creates_nodes`` must require ``points_count > 0`` (***REMOVED***1629)."""
+    """``test_ingest_directory_creates_nodes`` must require ``points_count > 0`` (#1629)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     func = next(
         f for f in _iter_test_methods(tree) if f.name == "test_ingest_directory_creates_nodes"
@@ -97,7 +97,7 @@ def test_success_path_assertions_require_positive_points() -> None:
 
 
 def test_success_path_assertions_forbid_error_key_acceptance() -> None:
-    """Success-path tests must assert ``error not in ...`` instead of allowing it (***REMOVED***1629)."""
+    """Success-path tests must assert ``error not in ...`` instead of allowing it (#1629)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
 
     violations: list[str] = []
@@ -105,7 +105,7 @@ def test_success_path_assertions_forbid_error_key_acceptance() -> None:
         if func.name in NEGATIVE_TESTS:
             continue
         for src in _assert_sources(func):
-            ***REMOVED*** Bug pattern: "name" in X or "error" in X — accepts error as success.
+            # Bug pattern: "name" in X or "error" in X — accepts error as success.
             if (
                 "'error' in" in src.replace('"', "'")
                 and "'name' in" in src.replace('"', "'")
@@ -121,7 +121,7 @@ def test_success_path_assertions_forbid_error_key_acceptance() -> None:
 
 
 def test_success_path_assertions_require_no_error_key() -> None:
-    """The success-path tests must positively assert ``"error" not in <stats>`` (***REMOVED***1629)."""
+    """The success-path tests must positively assert ``"error" not in <stats>`` (#1629)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     expected_to_assert_no_error = {
         "test_ingest_directory_creates_nodes",
@@ -133,7 +133,7 @@ def test_success_path_assertions_require_no_error_key() -> None:
         if func.name not in expected_to_assert_no_error:
             continue
         sources = _assert_sources(func)
-        ***REMOVED*** Accept either '"error" not in stats' or "error" not in collection_stats.
+        # Accept either '"error" not in stats' or "error" not in collection_stats.
         has_no_error = any(
             "'error' not in" in src.replace('"', "'") for src in sources
         )
@@ -190,7 +190,7 @@ def test_get_ingestion_status_uses_seeded_test_collection() -> None:
 
 
 def test_negative_test_kept_intact() -> None:
-    """Negative-path test must still exist and still check graceful failure (***REMOVED***1629)."""
+    """Negative-path test must still exist and still check graceful failure (#1629)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     names = {f.name for f in _iter_test_methods(tree)}
     assert (

@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_unified_manifest.py
+# tests/unit/ingestion/test_unified_manifest.py
 """Tests for unified manifest: content-hash → stable UUID identity."""
 
 import json
@@ -41,12 +41,12 @@ class TestComputeContentHash:
         content = "Кримінальний кодекс України — §42".encode()
         h = compute_content_hash_from_bytes(content)
         assert len(h) == 16
-        ***REMOVED*** Deterministic
+        # Deterministic
         assert h == compute_content_hash_from_bytes(content)
 
     def test_large_content(self):
         """Large input still produces 16-char hash."""
-        content = b"x" * 10_000_000  ***REMOVED*** 10 MB
+        content = b"x" * 10_000_000  # 10 MB
         h = compute_content_hash_from_bytes(content)
         assert len(h) == 16
 
@@ -64,7 +64,7 @@ class TestGDriveManifest:
         """Create a fresh manifest instance."""
         return GDriveManifest(manifest_dir)
 
-    ***REMOVED*** --- Load / Save ---
+    # --- Load / Save ---
 
     def test_fresh_manifest_no_file(self, manifest: GDriveManifest):
         """New manifest with no file on disk starts empty."""
@@ -103,13 +103,13 @@ class TestGDriveManifest:
         assert "key_to_id" in data
         assert "path_to_hash" in data
 
-    ***REMOVED*** --- get_or_create_id: 3 identity paths ---
+    # --- get_or_create_id: 3 identity paths ---
 
     def test_new_file_generates_id(self, manifest: GDriveManifest):
         """New file (unseen hash + path) generates a fresh file_id."""
         file_id = manifest.get_or_create_id("docs/new.pdf", "hash_new")
         assert isinstance(file_id, str)
-        assert len(file_id) == 16  ***REMOVED*** uuid4().hex[:16]
+        assert len(file_id) == 16  # uuid4().hex[:16]
 
     def test_exact_match_returns_same_id(self, manifest: GDriveManifest):
         """Same path + same hash → same file_id (exact match)."""
@@ -120,11 +120,11 @@ class TestGDriveManifest:
     def test_renamed_file_reuses_id(self, manifest: GDriveManifest):
         """Same content hash: old path removed, new path appears → reuses file_id (rename-stable).
 
-        Updated for ***REMOVED***1603 copy-detection: a rename is only detected when the
+        Updated for #1603 copy-detection: a rename is only detected when the
         original path is *no longer active* (i.e., ``remove()`` was called).
         """
         id_original = manifest.get_or_create_id("old/path.pdf", "hash_content")
-        ***REMOVED*** Simulate the file being removed from its original location (rename/move)
+        # Simulate the file being removed from its original location (rename/move)
         manifest.remove("old/path.pdf")
         id_renamed = manifest.get_or_create_id("new/path.pdf", "hash_content")
         assert id_original == id_renamed
@@ -146,7 +146,7 @@ class TestGDriveManifest:
         manifest.get_or_create_id("docs/a.pdf", "hash_a")
         assert manifest._path_to_hash["docs/a.pdf"] == "hash_a"
 
-    ***REMOVED*** --- remove ---
+    # --- remove ---
 
     def test_remove_path(self, manifest: GDriveManifest):
         """remove() deletes path_to_hash entry but keeps hash_to_id."""
@@ -154,14 +154,14 @@ class TestGDriveManifest:
         manifest.remove("docs/a.pdf")
 
         assert "docs/a.pdf" not in manifest._path_to_hash
-        ***REMOVED*** hash_to_id preserved for future reuse
+        # hash_to_id preserved for future reuse
         assert manifest._hash_to_id["hash_a"] == file_id
 
     def test_remove_nonexistent_path_is_noop(self, manifest: GDriveManifest):
         """remove() on unknown path does nothing."""
-        manifest.remove("nonexistent.pdf")  ***REMOVED*** Should not raise
+        manifest.remove("nonexistent.pdf")  # Should not raise
 
-    ***REMOVED*** --- Migration ---
+    # --- Migration ---
 
     def test_migration_backfills_hash_to_id(self, manifest_dir: Path):
         """Legacy manifest (key_to_id only) gets hash_to_id backfilled."""
@@ -191,21 +191,21 @@ class TestGDriveManifest:
         manifest_path.write_text(json.dumps(data), encoding="utf-8")
 
         m = GDriveManifest(manifest_dir)
-        ***REMOVED*** hash_to_id was already populated → no overwrite
+        # hash_to_id was already populated → no overwrite
         assert m._hash_to_id["hash_aaa"] == "id_current"
 
     def test_rename_after_reload_still_stable(self, manifest_dir: Path):
         """File identity survives manifest reload + rename.
 
-        Updated for ***REMOVED***1603 copy-detection: ``remove()`` must be called for the
+        Updated for #1603 copy-detection: ``remove()`` must be called for the
         original path before the new path is registered, to signal a rename.
         """
         m1 = GDriveManifest(manifest_dir)
         original_id = m1.get_or_create_id("old/name.pdf", "hash_x")
-        ***REMOVED*** Simulate removal of old path before rename appears
+        # Simulate removal of old path before rename appears
         m1.remove("old/name.pdf")
 
-        ***REMOVED*** Reload from disk (simulates restart)
+        # Reload from disk (simulates restart)
         m2 = GDriveManifest(manifest_dir)
         renamed_id = m2.get_or_create_id("new/name.pdf", "hash_x")
 

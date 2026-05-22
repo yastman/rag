@@ -1,4 +1,4 @@
-***REMOVED*** Main menu
+# Main menu
 hello = Hi, { $name }! I'm a real estate assistant for Bulgaria.
 menu-search = Find property
 menu-favorites = My selections
@@ -6,24 +6,24 @@ menu-faq = Useful info
 menu-settings = Settings
 menu-manager = Contact manager
 
-***REMOVED*** Settings
+# Settings
 settings-title = Settings
 settings-language = Language
 settings-notifications = Notifications
 settings-notifications-on = On
 settings-notifications-off = Off
 
-***REMOVED*** Languages
+# Languages
 lang-ru = Русский
 lang-en = English
 lang-uk = Українська
 
-***REMOVED*** Navigation
+# Navigation
 back = Back
 close = Close
 main-menu = 🏠 Main menu
 
-***REMOVED*** Funnel
+# Funnel
 funnel-what-looking = What are you looking for?
 funnel-buy-apartment = Buy an apartment
 funnel-buy-house = Buy a house
@@ -48,17 +48,17 @@ funnel-results-empty = No matching properties found. Try changing your criteria.
 funnel-booking = Book a viewing
 funnel-subscribe = Subscribe to updates
 
-***REMOVED*** Commands
+# Commands
 cmd-help = Ask questions about real estate or use the menu.
 cmd-clear-done = Chat history cleared.
 
-***REMOVED*** Client menu (new buttons)
+# Client menu (new buttons)
 menu-catalog = Property catalog
 menu-booking = Book a viewing
 menu-mortgage = Calculate mortgage
 menu-my-leads = My applications
 
-***REMOVED*** Manager menu (root CRM hub)
+# Manager menu (root CRM hub)
 mgr-hello = 📊 CRM — Hi, { $name }!
 mgr-leads = 📋 Deals
 mgr-contacts = 👤 Contacts
@@ -68,7 +68,7 @@ mgr-ai-advisor = 🤖 AI Advisor
 mgr-search = 🔍 Search knowledge base
 mgr-settings = ⚙️ Settings
 
-***REMOVED*** CRM submenu
+# CRM submenu
 crm-title = CRM
 crm-create-deal = Create deal
 crm-create-contact = Create contact
@@ -76,7 +76,7 @@ crm-add-note = Add note
 crm-create-task = Create task
 crm-pipelines = Pipelines
 
-***REMOVED*** CRM Hub (navigation menu) — ***REMOVED***697
+# CRM Hub (navigation menu) — #697
 crm-hub-title = CRM — Manager Dashboard
 crm-hub-btn-leads = 📋 Deals
 crm-hub-btn-contacts = 👤 Contacts
@@ -86,7 +86,7 @@ crm-hub-btn-note = 📝 Note
 crm-hub-btn-ai-advisor = 🤖 AI Advisor
 crm-hub-btn-back = ← Back
 
-***REMOVED*** CRM Deals (Leads) — ***REMOVED***697
+# CRM Deals (Leads) — #697
 crm-leads-title = 📋 Deals
 crm-leads-btn-create = ➕ Create Deal
 crm-leads-btn-my-leads = 🗂 My Deals
@@ -99,7 +99,7 @@ crm-leads-btn-edit-name = ✏️ Edit name
 crm-leads-search-prompt = Enter text to search deals:
 crm-leads-empty = No deals found
 
-***REMOVED*** CRM Contacts — ***REMOVED***697
+# CRM Contacts — #697
 crm-contacts-title = 👤 Contacts
 crm-contacts-btn-create = ➕ Create Contact
 crm-contacts-btn-search = 🔍 Search
@@ -112,7 +112,7 @@ crm-contacts-btn-edit-name = ✏️ Edit name
 crm-contacts-search-prompt = Enter name or phone to search contacts:
 crm-contacts-empty = No contacts found
 
-***REMOVED*** CRM Tasks — ***REMOVED***697
+# CRM Tasks — #697
 crm-tasks-title-create = ✅ Create Task
 crm-tasks-step1 = Step 1/5: Enter task description:
 crm-tasks-step2 = Step 2/5: Select task type:
@@ -125,25 +125,25 @@ crm-tasks-filter-all = All tasks
 crm-tasks-filter-today = Today
 crm-tasks-filter-overdue = Overdue
 
-***REMOVED*** CRM Notes — ***REMOVED***697
+# CRM Notes — #697
 crm-notes-title = 📝 Create Note
 crm-notes-step1 = Step 1/4: Enter note text:
 crm-notes-step2 = Step 2/4: Link note to?
 crm-notes-btn-confirm = ✅ Save
 
-***REMOVED*** CRM AI Advisor — ***REMOVED***697
+# CRM AI Advisor — #697
 crm-advisor-title = 🤖 AI Advisor
 crm-advisor-loading = Analyzing data...
 crm-advisor-btn-back = ← Back to advisor menu
 crm-advisor-btn-cancel = ← CRM
 
-***REMOVED*** CRM navigation and common buttons — ***REMOVED***697
+# CRM navigation and common buttons — #697
 crm-btn-back = ← Back
 crm-btn-cancel = Cancel
 crm-btn-close = Close
 crm-btn-skip = Skip
 
-***REMOVED*** CRM errors — ***REMOVED***697
+# CRM errors — #697
 crm-error-no-crm = ⚠️ CRM unavailable.
 crm-error-note-empty = ⚠️ Note text cannot be empty.
 crm-error-task-empty = ⚠️ Task text cannot be empty.
@@ -152,7 +152,7 @@ crm-error-create-task = ⚠️ Error creating task.
 crm-error-complete-task = ⚠️ Error completing task.
 crm-error-postpone-task = ⚠️ Error postponing task.
 
-***REMOVED*** Client ReplyKeyboard (***REMOVED***660)
+# Client ReplyKeyboard (#660)
 kb-search = 🏠 Find Apartment
 kb-services = 🔑 Services
 kb-viewing = 📅 Book a Viewing
@@ -161,7 +161,7 @@ kb-ask = 💬 Ask a Question
 kb-bookmarks = 📌 My Bookmarks
 kb-demo = 🎯 Demo
 
-***REMOVED*** Welcome (***REMOVED***660)
+# Welcome (#660)
 welcome-text =
     Hi, { $name }! 👋
 
@@ -186,7 +186,7 @@ ask-costs = 💰 How much does the transaction cost?
 ask-vnzh = 📋 How to get a residence permit in Bulgaria?
 ask-installment = 💳 What are the installment terms?
 
-***REMOVED*** Funnel steps (***REMOVED***660)
+# Funnel steps (#660)
 funnel-step-rooms = Choose the number of rooms:
 funnel-rooms-studio = Studio
 funnel-rooms-1bed = 1 bedroom
@@ -203,7 +203,7 @@ funnel-step-refine = Would you like to refine your search?
 funnel-show-results = 🔍 Show options
 funnel-refine-more = ⚙️ Refine more
 
-***REMOVED*** Results (***REMOVED***660)
+# Results (#660)
 results-shown = Showing { $shown } of { $total } options
 results-show-more = 🔄 Show more
 results-show-more-remaining = 🔄 Show more ({ $remaining } left)
@@ -219,33 +219,33 @@ results-no-results =
     Unfortunately, no results match your criteria.
     Try adjusting your search parameters.
 
-***REMOVED*** Phone (***REMOVED***660)
+# Phone (#660)
 phone-prompt = Enter your phone number:
 phone-invalid = Please enter a valid phone number. Example: +359 88 123 4567
 phone-success = Thank you! A manager will contact you shortly.
 
-***REMOVED*** Promotions (***REMOVED***660)
+# Promotions (#660)
 promotions-title = 🎁 Current promotions
 promotions-empty = No active promotions at the moment.
 
-***REMOVED*** Bookmarks (***REMOVED***660)
+# Bookmarks (#660)
 bookmarks-title = 📌 Your bookmarks ({ $count }):
 bookmarks-empty =
     📌 You have no bookmarks yet.
     Press «🏠 Find Apartments» to find a property.
 bookmarks-remove = 🗑 Remove
 
-***REMOVED*** Services (***REMOVED***660)
+# Services (#660)
 services-menu-text = Choose a service to learn more:
 
-***REMOVED*** Services — titles
+# Services — titles
 svc-passive-income-title = Passive Income
 svc-online-deals-title = Online Deals
 svc-vnzh-title = Residence Permit
 svc-installment-title = Installment Plan
 svc-infotour-title = Info Tour
 
-***REMOVED*** Services — card text
+# Services — card text
 svc-passive-income-card =
     Passive Income — we manage your property
 
@@ -287,13 +287,13 @@ svc-infotour-card =
     Now is the best time to combine leisure with business —
     relax and choose seaside property.
 
-***REMOVED*** Services — buttons
+# Services — buttons
 svc-back = Back
 svc-get-offer = Submit Request
 svc-contact-manager = Contact Manager
 svc-back-to-services = Back to Services
 
-***REMOVED*** ── Handoff (Forum Topics) ──────────────────────────────────────
+# ── Handoff (Forum Topics) ──────────────────────────────────────
 handoff-qual-prompt = 📋 What topic are you interested in?
 handoff-goal-search = 🏠 Property search
 handoff-goal-services = 🔑 Services

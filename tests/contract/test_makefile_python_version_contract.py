@@ -1,7 +1,7 @@
-***REMOVED*** tests/contract/test_makefile_python_version_contract.py
+# tests/contract/test_makefile_python_version_contract.py
 """Contract: Makefile pytest targets must route through a pinned Python runtime.
 
-Closes ***REMOVED***1792.
+Closes #1792.
 
 Problem reproduced: running ``uv run pytest`` without ``--python`` could select
 CPython 3.14 on WSL/Linux hosts where multiple interpreters are available.
@@ -25,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
 
-***REMOVED*** Fast targets that must use the pinned runtime.
+# Fast targets that must use the pinned runtime.
 FAST_TARGETS = [
     "test-unit",
     "test-unit-loadscope",
@@ -44,7 +44,7 @@ def _read_makefile() -> str:
 def test_python_version_variable_defined() -> None:
     """``PYTHON_VERSION ?= 3.12`` must be present in the Makefile."""
     src = _read_makefile()
-    ***REMOVED*** Accept either bare assignment or the default-override form.
+    # Accept either bare assignment or the default-override form.
     assert re.search(r"PYTHON_VERSION\s*\?=\s*3\.12", src), (
         "Makefile must define PYTHON_VERSION ?= 3.12 so local pytest targets "
         "can be overridden without editing the file."
@@ -67,13 +67,13 @@ def _target_body(src: str, target: str) -> str:
     Returns the block from the target header up to (but not including) the
     next non-indented line.
     """
-    ***REMOVED*** Find the target header line.
+    # Find the target header line.
     pattern = re.compile(r"^" + re.escape(target) + r"\s*:", re.MULTILINE)
     m = pattern.search(src)
     if m is None:
         return ""
     start = m.start()
-    ***REMOVED*** Recipe lines are indented with a tab; collect until a non-tab line.
+    # Recipe lines are indented with a tab; collect until a non-tab line.
     body_lines = []
     for line in src[start:].splitlines()[1:]:
         if line.startswith("\t") or line.strip() == "":
@@ -90,11 +90,11 @@ def test_fast_targets_use_pinned_python() -> None:
     ``uv run --python $(PYTHON_VERSION) python -m pytest`` patterns.
     """
     src = _read_makefile()
-    ***REMOVED*** Pattern: uv run --python <something> ... pytest
+    # Pattern: uv run --python <something> ... pytest
     pinned_pattern = re.compile(
         r"uv run\s+--python\s+\$\(PYTHON_VERSION\)"
     )
-    ***REMOVED*** Bare uv run pytest (NOT pinned) — to detect violations.
+    # Bare uv run pytest (NOT pinned) — to detect violations.
     bare_pattern = re.compile(r"\buv run pytest\b")
 
     failures = []

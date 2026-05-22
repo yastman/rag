@@ -1,8 +1,8 @@
-***REMOVED*** tests/contract/test_legacy_ingestion_removed_contract.py
-"""Contract: legacy ingestion modules listed in ***REMOVED***1532 must be removed and
+# tests/contract/test_legacy_ingestion_removed_contract.py
+"""Contract: legacy ingestion modules listed in #1532 must be removed and
 their per-file Ruff ignores must be cleaned from ``pyproject.toml``.
 
-Issue ***REMOVED***1532 (https://github.com/yastman/rag/issues/1532) lists three legacy
+Issue #1532 (https://github.com/yastman/rag/issues/1532) lists three legacy
 files claimed to be "replaced by the unified pipeline" (`src/ingestion/unified/`):
 
     - src/ingestion/docling_client.py
@@ -16,7 +16,7 @@ Audit (2026-05-21) — actual repository state:
 
     | File | Status |
     |------|--------|
-    | ``src/ingestion/gdrive_flow.py`` | Already removed (see ***REMOVED***1793). |
+    | ``src/ingestion/gdrive_flow.py`` | Already removed (see #1793). |
     | ``src/ingestion/docling_client.py`` | **STILL LIVE.** Imported by `src/ingestion/docling_native.py` (`NativeDoclingAdapter` subclasses `DoclingClient`) and by `src/ingestion/unified/targets/qdrant_hybrid_target.py` (the unified pipeline itself uses `DoclingClient` / `DoclingConfig`). |
     | ``src/ingestion/service.py`` | **STILL LIVE.** Imported by `telegram_bot/services/ingestion_cocoindex.py`, which re-exports `IngestionService`, `IngestionStats`, `ingest_from_directory`, `ingest_from_gdrive`, `get_ingestion_status` as the bot's CLI entrypoint (`python -m telegram_bot.services.ingestion_cocoindex`). |
 
@@ -38,8 +38,8 @@ This contract test therefore enforces three layers:
     the `xfail` markers must be removed.
 
 Cross-refs:
-    - ***REMOVED***1532 — original issue.
-    - ***REMOVED***1793 — already removed `gdrive_flow.py` and orphaned tests.
+    - #1532 — original issue.
+    - #1793 — already removed `gdrive_flow.py` and orphaned tests.
     - `tests/contract/test_no_deprecated_gdrive_ingestion.py` — sibling
       contract for the gdrive_flow / gdrive_indexer surface.
 """
@@ -63,15 +63,15 @@ LEGACY_MODULES: tuple[str, ...] = (
     "src/ingestion/service.py",
 )
 
-***REMOVED*** Module names (importable form) used by the AST walker below.
+# Module names (importable form) used by the AST walker below.
 LEGACY_DOTTED_MODULES: tuple[str, ...] = (
     "src.ingestion.docling_client",
     "src.ingestion.gdrive_flow",
     "src.ingestion.service",
 )
 
-***REMOVED*** Roots scanned for runtime imports of the legacy modules. Tests are excluded
-***REMOVED*** (each test file may be migrated/removed independently).
+# Roots scanned for runtime imports of the legacy modules. Tests are excluded
+# (each test file may be migrated/removed independently).
 RUNTIME_ROOTS: tuple[str, ...] = (
     "src",
     "telegram_bot",
@@ -95,7 +95,7 @@ def test_legacy_ingestion_module_is_absent(module_path: str) -> None:
             "callers to the unified pipeline first, then drop this xfail."
         )
     assert not target.exists(), (
-        f"{module_path} still exists; ***REMOVED***1532 requires it to be removed "
+        f"{module_path} still exists; #1532 requires it to be removed "
         "(replaced by src/ingestion/unified/)."
     )
 
@@ -131,11 +131,11 @@ def _iter_runtime_python_files() -> Iterator[Path]:
         if not root.exists():
             continue
         for py_file in root.rglob("*.py"):
-            ***REMOVED*** Skip vendored or virtualenv stuff, just in case.
+            # Skip vendored or virtualenv stuff, just in case.
             parts = py_file.parts
             if any(p in {".venv", "venv", "__pycache__"} for p in parts):
                 continue
-            ***REMOVED*** Skip files that are themselves tests.
+            # Skip files that are themselves tests.
             if py_file.name.startswith("test_") or py_file.name.endswith("_test.py"):
                 continue
             yield py_file
@@ -165,9 +165,9 @@ def _module_imports_legacy(py_file: Path) -> set[str]:
     return hits
 
 
-***REMOVED*** Files that the audit identified as live runtime callers. Each one is xfail'd
-***REMOVED*** with the precise reason so the contract documents *why* the assertion can't
-***REMOVED*** pass yet.
+# Files that the audit identified as live runtime callers. Each one is xfail'd
+# with the precise reason so the contract documents *why* the assertion can't
+# pass yet.
 KNOWN_LIVE_CALLERS: dict[str, str] = {
     "src/ingestion/docling_native.py": (
         "NativeDoclingAdapter subclasses DoclingClient and reuses DoclingChunk "
@@ -176,7 +176,7 @@ KNOWN_LIVE_CALLERS: dict[str, str] = {
     "src/ingestion/unified/targets/qdrant_hybrid_target.py": (
         "QdrantHybridTargetConnector — the *unified* pipeline target itself — "
         "imports DoclingClient and DoclingConfig directly. The premise of "
-        "***REMOVED***1532 (\"replaced by unified pipeline\") does not hold for this file."
+        "#1532 (\"replaced by unified pipeline\") does not hold for this file."
     ),
     "telegram_bot/services/ingestion_cocoindex.py": (
         "Telegram bot CLI entrypoint re-exports IngestionService, "
@@ -184,11 +184,11 @@ KNOWN_LIVE_CALLERS: dict[str, str] = {
         "get_ingestion_status from src.ingestion.service. Wired into the "
         "Makefile via `python -m telegram_bot.services.ingestion_cocoindex`."
     ),
-    ***REMOVED*** The package __init__ self-references its own deprecation shims via
-    ***REMOVED*** string targets; those go through importlib at attribute-access time and
-    ***REMOVED*** are not real `import` statements, but they still pin the legacy modules
-    ***REMOVED*** as part of the public deprecated surface (see _DEPRECATED_EXPORTS in
-    ***REMOVED*** src/ingestion/__init__.py).
+    # The package __init__ self-references its own deprecation shims via
+    # string targets; those go through importlib at attribute-access time and
+    # are not real `import` statements, but they still pin the legacy modules
+    # as part of the public deprecated surface (see _DEPRECATED_EXPORTS in
+    # src/ingestion/__init__.py).
     "src/ingestion/__init__.py": (
         "src.ingestion declares deprecation shims pointing at "
         "src.ingestion.docling_client and src.ingestion.service in "
@@ -231,28 +231,28 @@ def test_no_runtime_imports_of_legacy_ingestion_modules() -> None:
             "in this contract test with a clear migration note."
         )
 
-    ***REMOVED*** If we got here, every violation was an already-documented live caller.
+    # If we got here, every violation was an already-documented live caller.
     if findings:
         pytest.xfail(
             "Documented live callers still import legacy ingestion modules. "
             "These are tracked in KNOWN_LIVE_CALLERS in this contract test "
             "and must be migrated to the unified pipeline before the legacy "
-            "modules can be deleted (***REMOVED***1532). Current callers:\n"
+            "modules can be deleted (#1532). Current callers:\n"
             + "\n".join(
                 f"  {rel}: {KNOWN_LIVE_CALLERS[rel]}" for rel in sorted(findings)
             )
         )
 
 
-***REMOVED*** Keep a separate, structural assertion that is independent of the imports
-***REMOVED*** walker above: the existing contract guard for the gdrive_flow surface
-***REMOVED*** already asserts deletion, so re-asserting here would be redundant. We
-***REMOVED*** intentionally don't duplicate it — see
-***REMOVED*** tests/contract/test_no_deprecated_gdrive_ingestion.py for the gdrive_flow
-***REMOVED*** regression guard.
+# Keep a separate, structural assertion that is independent of the imports
+# walker above: the existing contract guard for the gdrive_flow surface
+# already asserts deletion, so re-asserting here would be redundant. We
+# intentionally don't duplicate it — see
+# tests/contract/test_no_deprecated_gdrive_ingestion.py for the gdrive_flow
+# regression guard.
 
 
-_ISSUE_LINK_RE = re.compile(r"***REMOVED***1532")
+_ISSUE_LINK_RE = re.compile(r"#1532")
 
 
 def test_contract_links_to_issue() -> None:

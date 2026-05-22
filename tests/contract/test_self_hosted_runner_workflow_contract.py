@@ -1,4 +1,4 @@
-"""Contract: self-hosted runner verification artifacts for nightly-heavy.yml (***REMOVED***1531).
+"""Contract: self-hosted runner verification artifacts for nightly-heavy.yml (#1531).
 
 The ``.github/workflows/nightly-heavy.yml`` workflow runs heavy-tier tests
 (``requires_extras``/``load``/``chaos``/``e2e``/``benchmark``) on a
@@ -76,14 +76,14 @@ def test_runbook_exists() -> None:
     assert RUNBOOK.exists(), (
         f"Expected runbook {RUNBOOK.relative_to(REPO_ROOT)} to document "
         "self-hosted runner registration, resources, and failure modes "
-        "(***REMOVED***1531)."
+        "(#1531)."
     )
 
 
 def test_diagnostic_script_exists() -> None:
     assert SCRIPT.exists(), (
         f"Expected diagnostic script {SCRIPT.relative_to(REPO_ROOT)} to "
-        "exist so operators can verify runner health (***REMOVED***1531)."
+        "exist so operators can verify runner health (#1531)."
     )
 
 
@@ -104,16 +104,16 @@ def test_diagnostic_script_has_safe_bash_header() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     lines = text.splitlines()
     assert lines, "diagnostic script is empty"
-    assert lines[0] == "***REMOVED***!/usr/bin/env bash", (
+    assert lines[0] == "#!/usr/bin/env bash", (
         f"first line of {SCRIPT.relative_to(REPO_ROOT)} must be "
-        f"'***REMOVED***!/usr/bin/env bash'; got {lines[0]!r}"
+        f"'#!/usr/bin/env bash'; got {lines[0]!r}"
     )
-    ***REMOVED*** set -euo pipefail must appear before any logic; allow comments/blank
-    ***REMOVED*** lines between the shebang and the set call.
+    # set -euo pipefail must appear before any logic; allow comments/blank
+    # lines between the shebang and the set call.
     head_lines = []
     for line in lines[1:30]:
         stripped = line.strip()
-        if not stripped or stripped.startswith("***REMOVED***"):
+        if not stripped or stripped.startswith("#"):
             head_lines.append(stripped)
             continue
         head_lines.append(stripped)
@@ -179,7 +179,7 @@ def test_script_references_workflow() -> None:
 def test_runbook_documents_resource_requirements() -> None:
     """Runbook must mention the heavy-tier markers so resource sizing is grounded."""
     text = RUNBOOK.read_text(encoding="utf-8").lower()
-    ***REMOVED*** The workflow runs the union of these pytest markers.
+    # The workflow runs the union of these pytest markers.
     for marker in ("requires_extras", "load", "chaos", "e2e", "benchmark"):
         assert marker in text, (
             f"runbook must document the '{marker}' heavy-tier marker so "
@@ -190,7 +190,7 @@ def test_runbook_documents_resource_requirements() -> None:
 def test_runbook_documents_disable_procedure() -> None:
     """Runbook must explain how to mute/disable the workflow during maintenance."""
     text = RUNBOOK.read_text(encoding="utf-8").lower()
-    ***REMOVED*** Accept any of the standard mute mechanisms.
+    # Accept any of the standard mute mechanisms.
     assert any(
         token in text
         for token in ("workflow_dispatch", "disable", "mute", "comment out")

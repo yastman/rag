@@ -130,19 +130,19 @@ async def test_deeplink_success_creates_topic_and_triggers_rag(mock_config):
     ):
         await bot._handle_deeplink_start(msg, "test-uuid")
 
-    ***REMOVED*** Topic created for the right expert
+    # Topic created for the right expert
     bot._topic_manager.get_or_create_topic.assert_called_once_with(
         chat_id=msg.chat.id,
         expert_id="consultant",
         expert_name="Консультант",
         expert_emoji="👷",
     )
-    ***REMOVED*** User message echoed in topic
+    # User message echoed in topic
     bot.bot.send_message.assert_called_once()
     send_kwargs = bot.bot.send_message.call_args.kwargs
     assert send_kwargs["message_thread_id"] == 42
     assert "Подбери квартиру" in send_kwargs["text"]
-    ***REMOVED*** RAG pipeline triggered
+    # RAG pipeline triggered
     bot.handle_query.assert_called_once()
 
 
@@ -166,9 +166,9 @@ async def test_deeplink_no_message_skips_rag(mock_config):
     ):
         await bot._handle_deeplink_start(msg, "test-uuid")
 
-    ***REMOVED*** Topic created
+    # Topic created
     bot._topic_manager.get_or_create_topic.assert_called_once()
-    ***REMOVED*** No message echo, no RAG
+    # No message echo, no RAG
     bot.bot.send_message.assert_not_called()
     bot.handle_query.assert_not_called()
 
@@ -217,9 +217,9 @@ async def test_pubsub_process_miniapp_start_no_message(mock_config):
     bot._deeplink_redis.getdel = AsyncMock(return_value=None)
     bot._topic_manager = AsyncMock()
 
-    ***REMOVED*** Pub/sub path: no message object
+    # Pub/sub path: no message object
     await bot._process_miniapp_start(chat_id=123, uuid_str="expired-uuid")
-    ***REMOVED*** Should not raise — just logs warning
+    # Should not raise — just logs warning
 
 
 @pytest.mark.asyncio
@@ -242,7 +242,7 @@ async def test_pubsub_success_calls_run_miniapp_rag(mock_config):
     ):
         await bot._process_miniapp_start(chat_id=123, uuid_str="test-uuid")
 
-    ***REMOVED*** Pub/sub path → _run_miniapp_rag, NOT handle_query
+    # Pub/sub path → _run_miniapp_rag, NOT handle_query
     bot._run_miniapp_rag.assert_called_once_with(123, 42, "Подбери квартиру")
     bot.handle_query.assert_not_called()
 
@@ -257,11 +257,11 @@ async def test_stale_topic_invalidate_and_recreate(mock_config):
     bot._deeplink_redis = AsyncMock()
     bot._deeplink_redis.getdel = AsyncMock(return_value=payload)
     bot._topic_manager = AsyncMock()
-    ***REMOVED*** First call returns stale topic 42, second returns new topic 99
+    # First call returns stale topic 42, second returns new topic 99
     bot._topic_manager.get_or_create_topic = AsyncMock(side_effect=[42, 99])
     bot._topic_manager.invalidate_topic = AsyncMock()
     bot.bot = AsyncMock()
-    ***REMOVED*** First send_message raises (stale topic), second succeeds
+    # First send_message raises (stale topic), second succeeds
     bot.bot.send_message = AsyncMock(
         side_effect=[TelegramBadRequest(method=MagicMock(), message="Bad Request"), None]
     )
@@ -274,10 +274,10 @@ async def test_stale_topic_invalidate_and_recreate(mock_config):
     ):
         await bot._process_miniapp_start(chat_id=123, uuid_str="test-uuid")
 
-    ***REMOVED*** Topic invalidated and recreated
+    # Topic invalidated and recreated
     bot._topic_manager.invalidate_topic.assert_called_once_with(123, "consultant")
     assert bot._topic_manager.get_or_create_topic.call_count == 2
-    ***REMOVED*** RAG called with new topic
+    # RAG called with new topic
     bot._run_miniapp_rag.assert_called_once_with(123, 99, "test")
 
 
@@ -301,7 +301,7 @@ async def test_run_miniapp_rag_success(mock_config):
     ):
         await bot._run_miniapp_rag(chat_id=123, topic_id=42, user_message="тест")
 
-    ***REMOVED*** Answer sent to correct topic thread
+    # Answer sent to correct topic thread
     bot.bot.send_message.assert_called_once()
     call_kwargs = bot.bot.send_message.call_args.kwargs
     assert call_kwargs["chat_id"] == 123
@@ -351,9 +351,9 @@ async def test_subscriber_not_started_without_topic_manager(mock_config):
     bot._deeplink_redis = None
     bot._miniapp_subscriber_task = None
 
-    ***REMOVED*** _process_miniapp_start should silently return
+    # _process_miniapp_start should silently return
     await bot._process_miniapp_start(chat_id=123, uuid_str="test-uuid")
-    ***REMOVED*** No crash, no task created
+    # No crash, no task created
     assert bot._miniapp_subscriber_task is None
 
 
@@ -379,17 +379,17 @@ async def test_subscriber_loop_invalid_message(mock_config):
     bot._process_miniapp_start = AsyncMock()
 
     async def mock_listen():
-        yield {"type": "subscribe", "data": None}  ***REMOVED*** subscription confirmation
-        yield {"type": "message", "data": "not-valid-json{{{"}  ***REMOVED*** invalid
+        yield {"type": "subscribe", "data": None}  # subscription confirmation
+        yield {"type": "message", "data": "not-valid-json{{{"}  # invalid
         yield {"type": "message", "data": json.dumps({"uuid": "abc", "user_id": 123})}
-        raise asyncio.CancelledError  ***REMOVED*** stop loop
+        raise asyncio.CancelledError  # stop loop
 
     mock_redis, _mock_pubsub = _make_mock_pubsub(mock_listen)
 
     with patch("redis.asyncio.from_url", return_value=mock_redis):
         await bot._miniapp_subscriber_loop()
 
-    ***REMOVED*** Only valid message processed
+    # Only valid message processed
     bot._process_miniapp_start.assert_called_once_with(chat_id=123, uuid_str="abc")
 
 
@@ -400,15 +400,15 @@ async def test_subscriber_loop_crash_logged(mock_config):
 
     async def mock_listen():
         raise ConnectionError("Redis gone")
-        yield  ***REMOVED*** make it a generator
+        yield  # make it a generator
 
     mock_redis, mock_pubsub = _make_mock_pubsub(mock_listen)
 
     with patch("redis.asyncio.from_url", return_value=mock_redis):
-        ***REMOVED*** Should not raise — exception caught and logged
+        # Should not raise — exception caught and logged
         await bot._miniapp_subscriber_loop()
 
-    ***REMOVED*** Cleanup called
+    # Cleanup called
     mock_pubsub.unsubscribe.assert_called_once_with("miniapp:start")
     mock_redis.aclose.assert_called_once()
 

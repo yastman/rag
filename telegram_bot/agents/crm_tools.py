@@ -1,9 +1,9 @@
-"""CRM tools for Kommo API — 8 tools with config-based context DI (***REMOVED***413).
+"""CRM tools for Kommo API — 8 tools with config-based context DI (#413).
 
 All tools check ctx.kommo_client is not None before proceeding.
 Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 (SDK-native ``runtime.context`` with ``configurable["bot_context"]``
-back-compat — see ***REMOVED***1252).
+back-compat — see #1252).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def _get_ctx(config: RunnableConfig):
     return get_bot_context(None, config)
 
 
-***REMOVED*** --- READ tools ---
+# --- READ tools ---
 
 
 @tool
@@ -89,7 +89,7 @@ async def crm_get_contacts(query: str, config: RunnableConfig) -> str:
         return f"Ошибка при поиске контактов: {e}"
 
 
-***REMOVED*** --- WRITE tools ---
+# --- WRITE tools ---
 
 
 @tool
@@ -123,7 +123,7 @@ async def crm_create_lead(
             LeadCreate(name=name, budget=budget, pipeline_id=pipeline_id)
         )
 
-        ***REMOVED*** Auto-enrich: add search summary note if search history exists
+        # Auto-enrich: add search summary note if search history exists
         ctx = _get_ctx(config)
         store = getattr(ctx, "search_event_store", None) if ctx else None
         if store:

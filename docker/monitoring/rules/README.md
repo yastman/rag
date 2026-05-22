@@ -1,17 +1,17 @@
-***REMOVED*** Rules
+# Rules
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 docker/monitoring/rules
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - extended-services.yaml
 - infrastructure.yaml
 - ingestion.yaml
 - telegram-bot.yaml
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

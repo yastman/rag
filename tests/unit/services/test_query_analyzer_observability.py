@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/services/test_query_analyzer_observability.py
+# tests/unit/services/test_query_analyzer_observability.py
 """Unit tests for QueryAnalyzer Langfuse observability (OpenAI SDK).
 
 With the OpenAI SDK migration, Langfuse auto-tracing is handled by the

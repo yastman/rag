@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/handlers/test_phone_collector.py
+# tests/unit/handlers/test_phone_collector.py
 """Tests for phone collection flow."""
 
 from types import SimpleNamespace
@@ -18,11 +18,11 @@ from telegram_bot.keyboards.phone_keyboard import normalize_phone, validate_phon
 def test_validate_phone_valid():
     assert validate_phone("+380501234567") is True
     assert validate_phone("+359896759292") is True
-    ***REMOVED*** "0501234567" was accepted by the old digit-count regex (^\\+?\\d{7,15}$)
-    ***REMOVED*** but is ambiguous without a country code: phonenumbers.is_valid_number
-    ***REMOVED*** rejects it because national-only numbers are not E.164-resolvable for
-    ***REMOVED*** the default BG region. Callers must supply an international format.
-    assert validate_phone("0501234567") is False  ***REMOVED*** national-only, no country code
+    # "0501234567" was accepted by the old digit-count regex (^\\+?\\d{7,15}$)
+    # but is ambiguous without a country code: phonenumbers.is_valid_number
+    # rejects it because national-only numbers are not E.164-resolvable for
+    # the default BG region. Callers must supply an international format.
+    assert validate_phone("0501234567") is False  # national-only, no country code
 
 
 def test_validate_phone_invalid():
@@ -31,7 +31,7 @@ def test_validate_phone_invalid():
     assert validate_phone("123") is False
 
 
-***REMOVED*** --- normalize_phone tests (Task 3: phonenumbers validation) ---
+# --- normalize_phone tests (Task 3: phonenumbers validation) ---
 
 
 def test_normalize_phone_returns_e164_for_valid_international():
@@ -73,7 +73,7 @@ def test_create_phone_router_returns_fresh_instance():
     assert router_b.name == "phone_collector"
 
 
-***REMOVED*** --- build_display_name tests ---
+# --- build_display_name tests ---
 
 
 def test_build_display_name_first_last():
@@ -95,7 +95,7 @@ def test_build_display_name_phone():
     assert build_display_name(None, "+380501234567") == "+380501234567"
 
 
-***REMOVED*** --- _build_custom_fields tests ---
+# --- _build_custom_fields tests ---
 
 
 def test_build_custom_fields_with_explicit_field_ids():
@@ -146,7 +146,7 @@ def test_build_custom_fields_zero_field_ids_returns_empty():
     assert fields == []
 
 
-***REMOVED*** --- _build_note_text tests ---
+# --- _build_note_text tests ---
 
 
 def test_build_note_text_basic():
@@ -188,7 +188,7 @@ def test_build_note_text_with_viewing_objects():
     assert "55,000" in text or "55000" in text
 
 
-***REMOVED*** --- CRM integration tests ---
+# --- CRM integration tests ---
 
 import telegram_bot.handlers.phone_collector as mod
 
@@ -380,7 +380,7 @@ async def test_on_phone_received_zero_responsible_id_normalized_to_none():
     assert lead_arg.responsible_user_id is None
 
 
-***REMOVED*** --- BotConfig injection tests (new API, RED first) ---
+# --- BotConfig injection tests (new API, RED first) ---
 
 
 def test_build_custom_fields_with_explicit_ids():
@@ -448,7 +448,7 @@ async def test_on_phone_received_uses_bot_config_for_pipeline_ids():
     assert lead_arg.responsible_user_id == 88
 
 
-***REMOVED*** --- Task 4: normalize_phone in on_phone_received ---
+# --- Task 4: normalize_phone in on_phone_received ---
 
 
 async def test_on_phone_received_passes_phone_to_contact_create():
@@ -471,8 +471,8 @@ async def test_on_phone_received_passes_phone_to_contact_create():
         await mod.on_phone_received(message, state, kommo_client=mock_kommo)
 
     upsert_call = mock_kommo.upsert_contact.call_args
-    contact_create_arg = upsert_call[0][1]  ***REMOVED*** second positional arg is ContactCreate
-    ***REMOVED*** phone must be passed so upsert_contact can put it in custom_fields_values
+    contact_create_arg = upsert_call[0][1]  # second positional arg is ContactCreate
+    # phone must be passed so upsert_contact can put it in custom_fields_values
     assert contact_create_arg.phone == "+380501234567"
 
 
@@ -486,7 +486,7 @@ async def test_on_phone_received_normalizes_phone_to_e164():
     state.get_data.return_value = {"service_key": "viewing", "viewing_objects": []}
 
     message = AsyncMock()
-    ***REMOVED*** Phone with spaces/dashes — normalize_phone should clean it to E164
+    # Phone with spaces/dashes — normalize_phone should clean it to E164
     message.text = "+38 050 123-45-67"
     message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
 
@@ -497,8 +497,8 @@ async def test_on_phone_received_normalizes_phone_to_e164():
         await mod.on_phone_received(message, state, kommo_client=mock_kommo)
 
     upsert_call = mock_kommo.upsert_contact.call_args
-    phone_arg = upsert_call[0][0]  ***REMOVED*** first positional arg is phone string
-    assert phone_arg == "+380501234567"  ***REMOVED*** E164 normalized
+    phone_arg = upsert_call[0][0]  # first positional arg is phone string
+    assert phone_arg == "+380501234567"  # E164 normalized
 
 
 async def test_on_phone_received_rejects_fake_phone_even_if_regex_matches():
@@ -520,7 +520,7 @@ async def test_phone_error_message_shows_format_mask():
     """Fallback error message should show format examples, not raw phone numbers."""
     state = AsyncMock()
     message = AsyncMock()
-    ***REMOVED*** Use a phone-like string (5+ digits) that fails validate_phone
+    # Use a phone-like string (5+ digits) that fails validate_phone
     message.text = "+11111111111"
     message.from_user = SimpleNamespace(id=1, first_name="Test", last_name=None, username=None)
 
@@ -531,7 +531,7 @@ async def test_phone_error_message_shows_format_mask():
     assert "+380501234567" not in call_text
 
 
-***REMOVED*** --- Reply keyboard and contact handler tests ---
+# --- Reply keyboard and contact handler tests ---
 
 
 async def test_start_phone_collection_sends_reply_keyboard():
@@ -580,7 +580,7 @@ async def test_on_phone_received_non_phone_text_exits_fsm():
 def test_create_phone_router_has_contact_handler():
     """Router must handle ContentType.CONTACT in waiting_phone state."""
     router = create_phone_router()
-    ***REMOVED*** Router should have at least 2 message handlers (text + contact)
+    # Router should have at least 2 message handlers (text + contact)
     assert len(router.message.handlers) >= 2
 
 
@@ -624,7 +624,7 @@ async def test_on_phone_contact_no_contact_asks_manual_input():
     assert "вручную" in message.answer.call_args[0][0].lower()
 
 
-***REMOVED*** --- start_phone_collection prompt text tests ---
+# --- start_phone_collection prompt text tests ---
 
 
 async def test_start_phone_collection_prompt_text():
@@ -650,7 +650,7 @@ async def test_start_phone_collection_prompt_text():
     assert "введите номер вручную" in text
 
 
-***REMOVED*** --- Phone cancel handling tests ---
+# --- Phone cancel handling tests ---
 
 
 async def test_on_phone_received_cancel_clears_state_and_sends_message():

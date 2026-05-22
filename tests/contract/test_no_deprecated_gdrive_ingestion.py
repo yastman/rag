@@ -1,14 +1,14 @@
-***REMOVED*** tests/contract/test_no_deprecated_gdrive_ingestion.py
+# tests/contract/test_no_deprecated_gdrive_ingestion.py
 """Contract: deprecated GDrive ingestion modules and their orphaned tests must
 be absent from the repository.
 
-Closes ***REMOVED***1793.
+Closes #1793.
 
 Evidence from the audit:
 - ``src/ingestion/gdrive_indexer.py`` was marked DEPRECATED: Use unified
   ingestion pipeline instead (``src.ingestion.unified``).
 - ``src/ingestion/gdrive_flow.py`` — same deprecation notice.
-- Both modules depended on ``voyageai`` being present. After ***REMOVED***1773 made
+- Both modules depended on ``voyageai`` being present. After #1773 made
   ``voyageai`` an optional extra, the tests were collection-breaking in the
   default environment and were guarded with ``pytest.importorskip("voyageai")``.
 - The unified ingestion pipeline (``src.ingestion.unified``) already provides
@@ -90,7 +90,7 @@ def test_no_runtime_import_of_deprecated_gdrive_modules() -> None:
     violations = []
     for src_root in ("src", "telegram_bot"):
         for py_file in (REPO_ROOT / src_root).rglob("*.py"):
-            ***REMOVED*** Skip test files — they have their own deletion contracts above.
+            # Skip test files — they have their own deletion contracts above.
             if "test_" in py_file.name:
                 continue
             text = py_file.read_text(encoding="utf-8")

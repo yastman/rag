@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/evaluation/test_search_engines_eval.py
+# tests/unit/evaluation/test_search_engines_eval.py
 """Tests for src/evaluation/search_engines.py (evaluation module)."""
 
 from unittest.mock import MagicMock, patch
@@ -107,8 +107,8 @@ class TestSearchEngineBase:
         mock_settings = MagicMock()
         mock_settings_cls.return_value = mock_settings
 
-        ***REMOVED*** SearchEngine is abstract, so we test via concrete implementation
-        ***REMOVED*** Just verify the import works
+        # SearchEngine is abstract, so we test via concrete implementation
+        # Just verify the import works
         assert SearchEngine is not None
 
     @patch("src.evaluation.search_engines.QdrantClient")
@@ -120,7 +120,7 @@ class TestSearchEngineBase:
         mock_settings = MagicMock()
         mock_settings_cls.return_value = mock_settings
 
-        ***REMOVED*** Create mock model
+        # Create mock model
         mock_model = MagicMock()
 
         engine = BaselineSearchEngine("test_collection", mock_model)
@@ -208,7 +208,7 @@ class TestBaselineSearchEngine:
         mock_model = MagicMock()
         mock_model.encode.return_value = {"dense_vecs": np.array([0.1, 0.2, 0.3])}
 
-        ***REMOVED*** Create mock search result using SDK point format
+        # Create mock search result using SDK point format
         mock_point = MagicMock()
         mock_point.id = 1
         mock_point.score = 0.95
@@ -371,7 +371,7 @@ class TestHybridSearchEngine:
         engine = HybridSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        ***REMOVED*** Verify query_points was called with RrfQuery
+        # Verify query_points was called with RrfQuery
         call_kwargs = mock_client.query_points.call_args[1]
         query = call_kwargs["query"]
         assert isinstance(query, models.RrfQuery)
@@ -389,7 +389,7 @@ class TestHybridSearchEngine:
         mock_settings_cls.return_value = mock_settings
 
         mock_model = MagicMock()
-        ***REMOVED*** Create mock scipy-like sparse object
+        # Create mock scipy-like sparse object
         mock_sparse = MagicMock()
         mock_sparse.indices = np.array([100, 200, 300])
         mock_sparse.values = np.array([0.5, 0.8, 0.3])
@@ -409,7 +409,7 @@ class TestHybridSearchEngine:
         engine = HybridSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        ***REMOVED*** Should not raise exception
+        # Should not raise exception
         mock_client.query_points.assert_called_once()
 
     @patch("src.evaluation.search_engines.QdrantClient")
@@ -492,14 +492,14 @@ class TestHybridDBSFColBERTSearchEngine:
         engine = HybridDBSFColBERTSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        ***REMOVED*** Verify query_points was called
+        # Verify query_points was called
         mock_client.query_points.assert_called_once()
         call_kwargs = mock_client.query_points.call_args[1]
 
-        ***REMOVED*** Verify uses colbert for reranking
+        # Verify uses colbert for reranking
         assert call_kwargs["using"] == "colbert"
 
-        ***REMOVED*** Verify nested prefetch with DBSF fusion
+        # Verify nested prefetch with DBSF fusion
         prefetch = call_kwargs["prefetch"]
         assert len(prefetch) == 1
         inner_prefetch = prefetch[0]
@@ -584,7 +584,7 @@ class TestHybridRRFColBERTSearchEngine:
 
         call_kwargs = mock_client.query_points.call_args[1]
 
-        ***REMOVED*** Verify nested prefetch with RRF fusion
+        # Verify nested prefetch with RRF fusion
         prefetch = call_kwargs["prefetch"]
         assert len(prefetch) == 1
         inner_prefetch = prefetch[0]

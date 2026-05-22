@@ -1,4 +1,4 @@
-"""Tests for NurturingService (***REMOVED***390)."""
+"""Tests for NurturingService (#390)."""
 
 from __future__ import annotations
 

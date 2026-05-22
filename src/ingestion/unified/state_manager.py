@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/state_manager.py
+# src/ingestion/unified/state_manager.py
 """State manager using existing Postgres ingestion_state table."""
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ class _SyncContext:
         self._runner: asyncio.Runner | None = None
 
     def __enter__(self) -> Self:
-        ***REMOVED*** Reset pool from any previous loop before creating new runner
-        ***REMOVED*** This ensures pool will be created fresh in the new runner's loop
+        # Reset pool from any previous loop before creating new runner
+        # This ensures pool will be created fresh in the new runner's loop
         self._manager._pool = None
 
         self._runner = asyncio.Runner()
@@ -39,7 +39,7 @@ class _SyncContext:
         return self
 
     def __exit__(self, *args) -> None:
-        ***REMOVED*** Close pool before closing runner
+        # Close pool before closing runner
         runner = self._runner
         if self._manager._pool is not None:
             with contextlib.suppress(Exception):
@@ -95,7 +95,7 @@ def _should_reprocess(
         matches.
 
     The fingerprint pieces are optional: callers that don't yet pass them get
-    legacy hash-only behavior (backward compatibility — see issue ***REMOVED***1604).
+    legacy hash-only behavior (backward compatibility — see issue #1604).
 
     This helper does NOT encode DLQ / backoff gating; that lives in the parent
     `should_process` method.
@@ -103,10 +103,10 @@ def _should_reprocess(
     if state is None:
         return True
     if state.status != "indexed":
-        ***REMOVED*** The fingerprint comparison is meaningful only for an already-indexed
-        ***REMOVED*** state. Anything else (pending, processing, error, deleted) is not
-        ***REMOVED*** "up-to-date", so the file needs reprocessing as far as fingerprint
-        ***REMOVED*** logic is concerned.
+        # The fingerprint comparison is meaningful only for an already-indexed
+        # state. Anything else (pending, processing, error, deleted) is not
+        # "up-to-date", so the file needs reprocessing as far as fingerprint
+        # logic is concerned.
         return True
 
     if state.content_hash != content_hash:
@@ -129,7 +129,7 @@ class UnifiedStateManager:
         self._pool = pool
         self._database_url = database_url
         self._owns_pool = pool is None
-        ***REMOVED*** Tables are in public schema of cocoindex database
+        # Tables are in public schema of cocoindex database
         self._table = self._safe_identifier("ingestion_state")
         self._dlq_table = self._safe_identifier("ingestion_dead_letter")
 
@@ -236,7 +236,7 @@ class UnifiedStateManager:
 
     async def mark_error(self, file_id: str, error: str) -> None:
         pool = await self._get_pool()
-        ***REMOVED*** Exponential backoff: 1min, 5min, 30min
+        # Exponential backoff: 1min, 5min, 30min
         await pool.execute(
             """
             UPDATE ingestion_state
@@ -248,7 +248,7 @@ class UnifiedStateManager:
             WHERE file_id = $1
             """,
             file_id,
-            error[:1000],  ***REMOVED*** Truncate error message
+            error[:1000],  # Truncate error message
         )
 
     async def mark_deleted(self, file_id: str) -> None:
@@ -277,18 +277,18 @@ class UnifiedStateManager:
 
         When `embedding_model` / `pipeline_version` are None (legacy callers),
         only `content_hash` is compared — preserving the previous behavior.
-        See issue ***REMOVED***1604.
+        See issue #1604.
         """
         state = await self.get_state(file_id)
         if state is None:
-            return True  ***REMOVED*** New file
+            return True  # New file
         if state.status == "indexed" and not _should_reprocess(
             state, content_hash, embedding_model, pipeline_version
         ):
-            return False  ***REMOVED*** Unchanged content AND matching processing fingerprint
+            return False  # Unchanged content AND matching processing fingerprint
         if state.status == "error" and state.retry_after and state.retry_after > datetime.now(UTC):
-            return False  ***REMOVED*** Still in backoff
-        ***REMOVED*** Exceeded retries means file is in DLQ
+            return False  # Still in backoff
+        # Exceeded retries means file is in DLQ
         return state.retry_count < 3
 
     async def get_all_indexed_file_ids(self) -> set[str]:
@@ -332,17 +332,17 @@ class UnifiedStateManager:
             return 0
         return int(row["count"])
 
-    ***REMOVED*** =========================================================================
-    ***REMOVED*** SYNC METHODS (for CocoIndex target connector)
-    ***REMOVED*** =========================================================================
-    ***REMOVED*** These wrap async methods using asyncio.Runner (Python 3.11+).
-    ***REMOVED*** Runner maintains a single event loop across calls, allowing asyncpg pool reuse.
-    ***REMOVED***
-    ***REMOVED*** Usage pattern:
-    ***REMOVED***   with state_manager.sync_context():
-    ***REMOVED***       state_manager.should_process_sync(...)
-    ***REMOVED***       state_manager.mark_indexed_sync(...)
-    ***REMOVED***   ***REMOVED*** Pool is closed when context exits
+    # =========================================================================
+    # SYNC METHODS (for CocoIndex target connector)
+    # =========================================================================
+    # These wrap async methods using asyncio.Runner (Python 3.11+).
+    # Runner maintains a single event loop across calls, allowing asyncpg pool reuse.
+    #
+    # Usage pattern:
+    #   with state_manager.sync_context():
+    #       state_manager.should_process_sync(...)
+    #       state_manager.mark_indexed_sync(...)
+    #   # Pool is closed when context exits
 
     _runner: asyncio.Runner | None = None
 
@@ -366,12 +366,12 @@ class UnifiedStateManager:
         Otherwise creates a fresh loop per call (less efficient).
         """
         if self._runner is not None:
-            ***REMOVED*** Inside sync_context - reuse runner
+            # Inside sync_context - reuse runner
             return self._runner.run(coro)
 
-        ***REMOVED*** Standalone call - create fresh loop (backwards compatible)
+        # Standalone call - create fresh loop (backwards compatible)
         if self._pool is not None:
-            self._pool = None  ***REMOVED*** Reset to avoid loop mismatch
+            self._pool = None  # Reset to avoid loop mismatch
 
         loop = asyncio.new_event_loop()
         try:
@@ -396,7 +396,7 @@ class UnifiedStateManager:
         """Sync version of should_process().
 
         Accepts optional `embedding_model` / `pipeline_version` to detect
-        fingerprint-stale state (issue ***REMOVED***1604). Passing None preserves the
+        fingerprint-stale state (issue #1604). Passing None preserves the
         legacy hash-only comparison for backward compatibility.
         """
         return self._run_sync(

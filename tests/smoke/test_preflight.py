@@ -1,4 +1,4 @@
-***REMOVED*** tests/smoke/test_preflight.py
+# tests/smoke/test_preflight.py
 """Pre-flight checks for Qdrant and Redis configuration.
 
 These tests verify that production features are actually enabled,
@@ -141,7 +141,7 @@ class TestPreflightRedis:
                 last_error = exc
                 await client.aclose()
                 continue
-            except Exception as exc:  ***REMOVED*** pragma: no cover - environment dependent
+            except Exception as exc:  # pragma: no cover - environment dependent
                 last_error = exc
                 await client.aclose()
                 continue
@@ -176,9 +176,9 @@ class TestPreflightRedis:
         require_index = os.getenv("REQUIRE_REDIS_FT_INDEX", "0") == "1"
 
         try:
-            ***REMOVED*** List all FT indexes
+            # List all FT indexes
             indexes = await redis_client.execute_command("FT._LIST")
-            ***REMOVED*** Check for any rag/llm cache index
+            # Check for any rag/llm cache index
             has_cache_index = any("cache" in idx.lower() or "rag" in idx.lower() for idx in indexes)
             if not has_cache_index:
                 if require_index:
@@ -239,7 +239,7 @@ class TestPreflightReport:
             "status": "unknown",
         }
 
-        ***REMOVED*** Qdrant info
+        # Qdrant info
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(f"{qdrant_url}/collections/{collection_name}", timeout=5)
@@ -262,7 +262,7 @@ class TestPreflightReport:
         except Exception as e:
             report["qdrant"]["error"] = str(e)
 
-        ***REMOVED*** Redis info
+        # Redis info
         redis_connected = False
         for url in _redis_url_candidates():
             try:
@@ -288,10 +288,10 @@ class TestPreflightReport:
         if not redis_connected and "Authentication required" in report["redis"].get("error", ""):
             pytest.skip("Redis requires authentication (set REDIS_PASSWORD)")
 
-        ***REMOVED*** Overall status
+        # Overall status
         quant_cfg = report["qdrant"].get("quantization_config") or {}
         qdrant_ok = report["qdrant"].get("status") == "green" and (
-            not quant_cfg  ***REMOVED*** no quantization configured is OK in dev
+            not quant_cfg  # no quantization configured is OK in dev
             or (quant_cfg.get("binary") or {}).get("always_ram")
         )
         redis_ok = report["redis"].get("maxmemory", 0) > 0 and report["redis"].get(
@@ -299,7 +299,7 @@ class TestPreflightReport:
         ) in ("allkeys-lfu", "volatile-lfu")
         report["status"] = "PASS" if (qdrant_ok and redis_ok) else "FAIL"
 
-        ***REMOVED*** Save report
+        # Save report
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
         report_path = REPORTS_DIR / "preflight.json"
         with open(report_path, "w") as f:

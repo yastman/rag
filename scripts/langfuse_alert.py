@@ -1,5 +1,5 @@
-***REMOVED***!/usr/bin/env python3
-"""Langfuse alert script: hourly Tier-1 alerts + morning digest (***REMOVED***758).
+#!/usr/bin/env python3
+"""Langfuse alert script: hourly Tier-1 alerts + morning digest (#758).
 
 Modes:
   --mode hourly   Check last hour: dislike rate > 15%, faithfulness < 0.5 → Telegram alert
@@ -35,17 +35,17 @@ from langfuse import Langfuse
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Alert thresholds
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Alert thresholds
+# ---------------------------------------------------------------------------
 
-DISLIKE_RATE_THRESHOLD = 0.15  ***REMOVED*** Tier 1: > 15% dislike
-FAITHFULNESS_THRESHOLD = 0.5  ***REMOVED*** Tier 1: < 0.5 faithfulness
-MIN_SAMPLES = 20  ***REMOVED*** Minimum samples required before triggering
+DISLIKE_RATE_THRESHOLD = 0.15  # Tier 1: > 15% dislike
+FAITHFULNESS_THRESHOLD = 0.5  # Tier 1: < 0.5 faithfulness
+MIN_SAMPLES = 20  # Minimum samples required before triggering
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Metrics query helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Metrics query helpers
+# ---------------------------------------------------------------------------
 
 
 def build_metrics_query(
@@ -164,9 +164,9 @@ def get_top_dislike_reasons(
         return []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Dislike rate computation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Dislike rate computation
+# ---------------------------------------------------------------------------
 
 
 def compute_dislike_rate(metrics: dict[str, Any]) -> tuple[float, int]:
@@ -191,9 +191,9 @@ def compute_dislike_rate(metrics: dict[str, Any]) -> tuple[float, int]:
     return 1.0 - float(avg_like), count
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Alert checking
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Alert checking
+# ---------------------------------------------------------------------------
 
 
 def check_hourly_alerts(
@@ -218,7 +218,7 @@ def check_hourly_alerts(
     """
     alerts: list[dict[str, Any]] = []
 
-    ***REMOVED*** Tier 1: Dislike rate
+    # Tier 1: Dislike rate
     dislike_rate, count = compute_dislike_rate(user_feedback_metrics)
     if count >= min_samples and dislike_rate > dislike_threshold:
         alerts.append(
@@ -231,7 +231,7 @@ def check_hourly_alerts(
             }
         )
 
-    ***REMOVED*** Tier 1: Faithfulness
+    # Tier 1: Faithfulness
     faith_avg = faithfulness_metrics.get("value_avg")
     faith_raw = faithfulness_metrics.get("count_count", 0)
     faith_count = int(faith_raw) if faith_raw else 0
@@ -253,9 +253,9 @@ def check_hourly_alerts(
     return alerts
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Message formatting
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Message formatting
+# ---------------------------------------------------------------------------
 
 
 def format_alert_message(alert: dict[str, Any]) -> str:
@@ -361,9 +361,9 @@ def format_digest_message(
     return "\n".join(lines)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Telegram delivery
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Telegram delivery
+# ---------------------------------------------------------------------------
 
 
 def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
@@ -394,9 +394,9 @@ def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
         return False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Main entry points
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Main entry points
+# ---------------------------------------------------------------------------
 
 
 def run_hourly(lf: Langfuse, token: str, chat_id: str, hours: int = 1) -> int:
@@ -464,7 +464,7 @@ def run_digest(lf: Langfuse, token: str, chat_id: str, hours: int = 24) -> bool:
 def main() -> None:
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Langfuse alert script (***REMOVED***758)")
+    parser = argparse.ArgumentParser(description="Langfuse alert script (#758)")
     parser.add_argument(
         "--mode",
         choices=["hourly", "digest"],
@@ -479,12 +479,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    ***REMOVED*** Resolve lookback window
+    # Resolve lookback window
     hours = args.hours
     if hours is None:
         hours = 1 if args.mode == "hourly" else 24
 
-    ***REMOVED*** Required env vars (see .env.example: ALERTING section)
+    # Required env vars (see .env.example: ALERTING section)
     token = os.environ.get("TELEGRAM_ALERTING_BOT_TOKEN", "")
     chat_id = os.environ.get("TELEGRAM_ALERTING_CHAT_ID", "")
 
@@ -504,7 +504,7 @@ def main() -> None:
         if args.mode == "hourly":
             alert_count = run_hourly(lf, token, chat_id, hours=hours)
             if alert_count > 0:
-                sys.exit(2)  ***REMOVED*** Non-zero exit for monitoring systems
+                sys.exit(2)  # Non-zero exit for monitoring systems
         else:
             sent = run_digest(lf, token, chat_id, hours=hours)
             if not sent:

@@ -1,8 +1,8 @@
-***REMOVED*** Project Stack
+# Project Stack
 
 Current stack snapshot for this repository as of 2026-05-07.
 
-***REMOVED******REMOVED*** Runtime And Tooling
+## Runtime And Tooling
 
 | Area | Stack |
 | --- | --- |
@@ -12,7 +12,7 @@ Current stack snapshot for this repository as of 2026-05-07.
 | Primary orchestration | Docker Compose v2 (`compose.yml` + `compose.dev.yml`) |
 | Kubernetes path | Partial k3s + Kustomize overlays (`k8s/overlays/*`) for core/bot/ingest/full subsets |
 
-***REMOVED******REMOVED*** Core Application Components
+## Core Application Components
 
 | Component | Path | Role |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Current stack snapshot for this repository as of 2026-05-07.
 | Unified ingestion | `src/ingestion/unified/` | CocoIndex flow + Docling + Qdrant writer + state manager |
 | Retrieval/evaluation | `src/retrieval/`, `src/evaluation/` | Search variants, metrics, offline eval |
 
-***REMOVED******REMOVED*** Data And Infra Services
+## Data And Infra Services
 
 | Service | Purpose |
 | --- | --- |
@@ -37,7 +37,7 @@ Current stack snapshot for this repository as of 2026-05-07.
 | Langfuse + ClickHouse + MinIO + redis-langfuse | Tracing/analytics |
 | Loki + Promtail + Alertmanager | Log-based monitoring and alerting |
 
-***REMOVED******REMOVED*** Deployment Surfaces
+## Deployment Surfaces
 
 - Local dev: `compose.yml:compose.dev.yml` via `make docker-up` / `make docker-bot-up` / `make docker-full-up`
 - Minimal local: same `compose.yml:compose.dev.yml` via `make local-up` / `make local-down`
@@ -45,7 +45,7 @@ Current stack snapshot for this repository as of 2026-05-07.
 
 Docker Compose is the primary local and VPS runtime. The k3s/Kustomize manifests are maintained as a partial deployment path for core services and selected bot/ingestion stacks; they do not claim full parity with the Compose service set.
 
-***REMOVED******REMOVED*** Canonical Operations Docs
+## Canonical Operations Docs
 
 - `docs/PIPELINE_OVERVIEW.md`
 - `docs/LOCAL-DEVELOPMENT.md`

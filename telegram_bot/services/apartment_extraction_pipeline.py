@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _CACHE_PREFIX = "extraction:v1:"
-_CACHE_TTL = 86400  ***REMOVED*** 24h
+_CACHE_TTL = 86400  # 24h
 
 
 class ApartmentExtractionPipeline:
@@ -50,21 +50,21 @@ class ApartmentExtractionPipeline:
         ``HardFilters`` are forwarded to the LLM as ``partial_filters`` so the
         LLM only fills gaps. The two results are merged with
         :func:`merge_extraction_results` (regex wins for numeric, LLM keeps
-        soft preferences and fills missing fields). See issue ***REMOVED***1609.
+        soft preferences and fills missing fields). See issue #1609.
         """
-        ***REMOVED*** 1. Cache
+        # 1. Cache
         cached = await self._cache_get(query)
         if cached:
             return cached
 
-        ***REMOVED*** 2. Regex first — deterministic, cheap. Serves as both the numeric
-        ***REMOVED***    floor for hybrid merging AND the offline fallback if LLM fails.
+        # 2. Regex first — deterministic, cheap. Serves as both the numeric
+        #    floor for hybrid merging AND the offline fallback if LLM fails.
         parsed = self._regex.parse(query)
         regex_result = self._parsed_to_search_filters(parsed)
 
-        ***REMOVED*** 3. LLM gap-fill. Pass regex hard filters as partial_filters so the
-        ***REMOVED***    LLM does not re-extract what regex already found. Merge results
-        ***REMOVED***    so regex numeric values win.
+        # 3. LLM gap-fill. Pass regex hard filters as partial_filters so the
+        #    LLM does not re-extract what regex already found. Merge results
+        #    so regex numeric values win.
         if self._llm is not None:
             try:
                 llm_result = await self._llm.extract(
@@ -77,7 +77,7 @@ class ApartmentExtractionPipeline:
             except Exception:
                 logger.warning("LLM extraction failed, falling back to regex", exc_info=True)
 
-        ***REMOVED*** 4. Regex-only fallback (no LLM configured or LLM failed).
+        # 4. Regex-only fallback (no LLM configured or LLM failed).
         return regex_result
 
     def _parsed_to_search_filters(self, parsed: object) -> ApartmentSearchFilters:

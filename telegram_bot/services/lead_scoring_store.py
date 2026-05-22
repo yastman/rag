@@ -1,4 +1,4 @@
-"""Postgres store for lead scoring persistence and sync queue (***REMOVED***384).
+"""Postgres store for lead scoring persistence and sync queue (#384).
 
 Pool callers should configure command_timeout=30 to prevent runaway queries.
 """

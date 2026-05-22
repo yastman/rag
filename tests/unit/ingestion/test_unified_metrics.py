@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_unified_metrics.py
+# tests/unit/ingestion/test_unified_metrics.py
 """Tests for unified ingestion metrics: structured logging and timing."""
 
 import logging
@@ -81,7 +81,7 @@ class TestToStructuredLog:
         """Timestamp field is ISO 8601 string."""
         m = IngestionMetrics(file_id="f1", source_path="x.pdf")
         log = m.to_structured_log()
-        ***REMOVED*** Should parse without error
+        # Should parse without error
         datetime.fromisoformat(log["timestamp"])
 
     def test_error_message_included(self):
@@ -127,7 +127,7 @@ class TestTimedOperation:
         m = IngestionMetrics(file_id="f1", source_path="x.pdf")
         with timed_operation(m, "nonexistent"):
             pass
-        ***REMOVED*** No crash, no attr set
+        # No crash, no attr set
 
     def test_timing_on_exception(self, monkeypatch: pytest.MonkeyPatch):
         """Duration is still recorded even if the block raises."""

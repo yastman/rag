@@ -1,6 +1,6 @@
 """Contract: no parallel metrics registry, no new rolling p50/p95 stores.
 
-Issue ***REMOVED***1648's "Forbidden" list binds the SDK-native observability
+Issue #1648's "Forbidden" list binds the SDK-native observability
 migration:
 
   * No new custom metrics registry. Production code must use the
@@ -18,7 +18,7 @@ This contract test scans production paths and fails on either
 violation. The metrics module that holds the deprecated facade is on a
 shrinking allowlist that disappears when slice 4/4 lands.
 
-Refs ***REMOVED***1648.
+Refs #1648.
 """
 
 from __future__ import annotations
@@ -38,49 +38,49 @@ SCAN_DIRS = [
     REPO_ROOT / "services",
 ]
 
-***REMOVED*** Allowlist for the deprecated rolling-window p50/p95 surface that this
-***REMOVED*** slice (***REMOVED***1648 slice 2/4) keeps as a backward-compat facade. Slice 4/4
-***REMOVED*** (ASGI /metrics mount) deletes the runtime rolling-window entirely;
-***REMOVED*** the allowlist must shrink, never grow.
-***REMOVED***
-***REMOVED*** Offline / reporting paths are also allowlisted — they post-process
-***REMOVED*** already-collected samples rather than maintaining a live rolling
-***REMOVED*** window in the request path. They are not in scope for ***REMOVED***1648 (which
-***REMOVED*** targets runtime observability) but the regex picks them up because
-***REMOVED*** ``p50`` / ``p95`` are convenient evaluation column names.
+# Allowlist for the deprecated rolling-window p50/p95 surface that this
+# slice (#1648 slice 2/4) keeps as a backward-compat facade. Slice 4/4
+# (ASGI /metrics mount) deletes the runtime rolling-window entirely;
+# the allowlist must shrink, never grow.
+#
+# Offline / reporting paths are also allowlisted — they post-process
+# already-collected samples rather than maintaining a live rolling
+# window in the request path. They are not in scope for #1648 (which
+# targets runtime observability) but the regex picks them up because
+# ``p50`` / ``p95`` are convenient evaluation column names.
 ROLLING_WINDOW_ALLOWLIST: frozenset[str] = frozenset(
     {
-        ***REMOVED*** Deprecated runtime facade — replaced by pipeline_latency_seconds
-        ***REMOVED*** Histogram in slice 2/4; full deletion in slice 4/4.
+        # Deprecated runtime facade — replaced by pipeline_latency_seconds
+        # Histogram in slice 2/4; full deletion in slice 4/4.
         "telegram_bot/services/metrics.py",
-        ***REMOVED*** Offline evaluation harness: computes quantiles from a list of
-        ***REMOVED*** latencies recorded during a benchmark run, then emits a
-        ***REMOVED*** Prometheus text-format dump. Not a runtime path.
+        # Offline evaluation harness: computes quantiles from a list of
+        # latencies recorded during a benchmark run, then emits a
+        # Prometheus text-format dump. Not a runtime path.
         "src/evaluation/metrics_logger.py",
-        ***REMOVED*** Reporting scripts: format Langfuse / trace dashboard payloads.
-        ***REMOVED*** They consume p50/p95 columns rather than producing rolling
-        ***REMOVED*** quantiles in the live request path.
+        # Reporting scripts: format Langfuse / trace dashboard payloads.
+        # They consume p50/p95 columns rather than producing rolling
+        # quantiles in the live request path.
         "scripts/setup_langfuse_dashboards.py",
         "scripts/validate_traces.py",
     }
 )
 
-***REMOVED*** A custom CollectorRegistry inside services/bge-m3-api would be a
-***REMOVED*** violation too, but no production file currently constructs one. If a
-***REMOVED*** vendored prometheus exposition tool ever needs an isolated registry
-***REMOVED*** for testing, add it here with an explicit reference to the issue
-***REMOVED*** tracking the exception.
+# A custom CollectorRegistry inside services/bge-m3-api would be a
+# violation too, but no production file currently constructs one. If a
+# vendored prometheus exposition tool ever needs an isolated registry
+# for testing, add it here with an explicit reference to the issue
+# tracking the exception.
 COLLECTOR_REGISTRY_ALLOWLIST: frozenset[str] = frozenset()
 
 
-***REMOVED*** Pattern matching ``CollectorRegistry(`` as a constructor call, but
-***REMOVED*** NOT references like ``prometheus_client.REGISTRY`` (the default
-***REMOVED*** instance) or imports.
+# Pattern matching ``CollectorRegistry(`` as a constructor call, but
+# NOT references like ``prometheus_client.REGISTRY`` (the default
+# instance) or imports.
 _COLLECTOR_REGISTRY_CALL = re.compile(r"\bCollectorRegistry\s*\(")
 
-***REMOVED*** Words ``p50`` / ``p95`` appearing in code (not in docstrings or
-***REMOVED*** comments) signal a custom rolling-window quantile aggregator.
-***REMOVED*** We use AST-level inspection to avoid false positives in documentation.
+# Words ``p50`` / ``p95`` appearing in code (not in docstrings or
+# comments) signal a custom rolling-window quantile aggregator.
+# We use AST-level inspection to avoid false positives in documentation.
 _QUANTILE_TOKENS = ("p50", "p95")
 
 
@@ -105,8 +105,8 @@ def _find_collector_registry_calls(source: str) -> list[int]:
     """
     offenders: list[int] = []
     for lineno, line in enumerate(source.splitlines(), start=1):
-        ***REMOVED*** Strip line-comment to avoid false positives in `***REMOVED*** explain CollectorRegistry()`.
-        code = line.split("***REMOVED***", 1)[0]
+        # Strip line-comment to avoid false positives in `# explain CollectorRegistry()`.
+        code = line.split("#", 1)[0]
         if _COLLECTOR_REGISTRY_CALL.search(code):
             offenders.append(lineno)
     return offenders
@@ -131,12 +131,12 @@ def _find_rolling_pxx_definitions(source: str, file_path: Path) -> list[int]:
 
     offenders: list[int] = []
     for node in ast.walk(tree):
-        ***REMOVED*** ``p50 = ...`` or ``p95 = ...``
+        # ``p50 = ...`` or ``p95 = ...``
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id in _QUANTILE_TOKENS:
                     offenders.append(node.lineno)
-        ***REMOVED*** ``{"p50": ..., "p95": ...}`` literals.
+        # ``{"p50": ..., "p95": ...}`` literals.
         if isinstance(node, ast.Dict):
             for key in node.keys:
                 if (
@@ -161,7 +161,7 @@ def test_no_custom_collector_registry_construction() -> None:
     if new_offenders:
         bullets = "\n".join(f"  {rel}:{ln}" for rel, ln in new_offenders)
         raise AssertionError(
-            "New CollectorRegistry() instantiations detected (***REMOVED***1648 slice 2/4):\n"
+            "New CollectorRegistry() instantiations detected (#1648 slice 2/4):\n"
             + bullets
             + "\nUse the package-wide prometheus_client.REGISTRY default. "
             "A custom registry breaks the planned ASGI /metrics ASGI mount "
@@ -187,7 +187,7 @@ def test_no_new_rolling_pxx_definitions_outside_allowlist() -> None:
     if new_offenders:
         bullets = "\n".join(f"  {rel}:{ln}" for rel, ln in new_offenders)
         raise AssertionError(
-            "New custom rolling p50/p95 definitions detected (***REMOVED***1648):\n"
+            "New custom rolling p50/p95 definitions detected (#1648):\n"
             + bullets
             + "\nUse prometheus_client.Histogram instead. See "
             "telegram_bot/services/metrics.py::pipeline_latency_seconds "
@@ -210,5 +210,5 @@ def test_rolling_pxx_finder_ignores_consumer_reads() -> None:
     assert _find_rolling_pxx_definitions(src_read, Path("dummy.py")) == []
 
     src_def = '{"p50": 1.0, "p95": 2.0}\n'
-    ***REMOVED*** Both keys live on the same dict literal line.
+    # Both keys live on the same dict literal line.
     assert _find_rolling_pxx_definitions(src_def, Path("dummy.py")) == [1, 1]

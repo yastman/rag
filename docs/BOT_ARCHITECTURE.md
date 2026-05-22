@@ -1,10 +1,10 @@
-***REMOVED*** PropertyBot Architecture
+# PropertyBot Architecture
 
 **File:** `telegram_bot/bot.py`
 
 Main Telegram bot entry point combining aiogram 3 dispatcher with LangGraph pipeline.
 
-***REMOVED******REMOVED*** High-Level Structure
+## High-Level Structure
 
 ```
 PropertyBot
@@ -15,9 +15,9 @@ PropertyBot
     └── start() — dependency preflight, service startup, and polling
 ```
 
-***REMOVED******REMOVED*** Key Classes
+## Key Classes
 
-***REMOVED******REMOVED******REMOVED*** `PropertyBot`
+### `PropertyBot`
 
 Main bot orchestrator. Initializes:
 - `Bot` instance with configured token
@@ -32,7 +32,7 @@ rg -n "class PropertyBot|def _register_handlers|async def start|async def handle
 rg -n "build_graph\\(|setup_.*middleware|include_router|callback_query|Command\\(" telegram_bot/bot.py
 ```
 
-***REMOVED******REMOVED******REMOVED*** Lazy Import Wrappers
+### Lazy Import Wrappers
 
 | Function | Wraps | Purpose |
 |----------|-------|---------|
@@ -41,7 +41,7 @@ rg -n "build_graph\\(|setup_.*middleware|include_router|callback_query|Command\\
 | `classify_query()` | `graph/nodes/classify.py:classify_query` | Query classifier for tests |
 | `detect_injection()` | `graph/nodes/guard.py:detect_injection` | Injection detector for tests |
 
-***REMOVED******REMOVED*** Helper Areas
+## Helper Areas
 
 `telegram_bot/bot.py` is large and helper names move over time. Prefer lookup recipes over line tables:
 
@@ -50,7 +50,7 @@ rg -n "def _stream|def _merge|def _split|trace_metadata|voice_error|checkpointer
 rg -n "handle_.*callback|cmd_|StateFilter|F\\.data|FeedbackCB|FavoriteCB" telegram_bot/bot.py
 ```
 
-***REMOVED******REMOVED*** Module Imports
+## Module Imports
 
 **Core aiogram:**
 - `Bot`, `Dispatcher` from aiogram
@@ -66,7 +66,7 @@ rg -n "handle_.*callback|cmd_|StateFilter|F\\.data|FeedbackCB|FavoriteCB" telegr
 - `telegram_bot.services.metrics` — PipelineMetrics
 - `telegram_bot.scoring` — compute/write scores
 
-***REMOVED******REMOVED*** Constants
+## Constants
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
@@ -78,23 +78,23 @@ rg -n "handle_.*callback|cmd_|StateFilter|F\\.data|FeedbackCB|FavoriteCB" telegr
 | `_NO_RAG_QUERY_TYPES` | `{"CHITCHAT", "OFF_TOPIC"}` | Queries bypass RAG |
 | `_AGENT_DRAFT_INTERVAL` | `0.2` | Seconds between draft updates |
 
-***REMOVED******REMOVED*** Handler Registration
+## Handler Registration
 
 `_register_handlers()` wires command handlers, voice handling, menu button handlers, callback handlers, and feature routers. The catch-all text handler is registered on a dedicated router that is included after dialog routers, so aiogram-dialog message inputs can match before general text processing.
 
-***REMOVED******REMOVED*** FSM States
+## FSM States
 
 Defined in `telegram_bot/handlers/handoff.py`:
 - `HandoffStates` — qualification flow states
 
-***REMOVED******REMOVED*** Middleware Chain
+## Middleware Chain
 
 1. `setup_error_handler` — exception → user-friendly message
 2. `setup_throttling_middleware` — rate limiting
 3. `FSMCancelMiddleware` — cancel FSM on /cancel
 4. `LangfuseContextMiddleware` — trace context injection
 
-***REMOVED******REMOVED*** Graph Integration
+## Graph Integration
 
 `PropertyBot` builds the LangGraph pipeline via `build_graph()`:
 
@@ -110,13 +110,13 @@ START → transcribe? → classify
                                          cache_store → respond
 ```
 
-***REMOVED******REMOVED*** Testing Pattern
+## Testing Pattern
 
 Lazy wrappers allow patching without importing heavy dependencies:
 
 ```python
 from telegram_bot import bot
 
-***REMOVED*** Patch for tests
+# Patch for tests
 bot.build_graph = mock_build_graph
 ```

@@ -55,10 +55,10 @@ async def main() -> int:
         async with client.conversation(BOT_USERNAME, timeout=RESPONSE_TIMEOUT) as conv:
             await conv.send_message(TEST_QUERY)
 
-            ***REMOVED*** Wait for initial response
+            # Wait for initial response
             response = await conv.get_response()
 
-            ***REMOVED*** Wait for streaming edits to finish
+            # Wait for streaming edits to finish
             await asyncio.sleep(2.0)
             try:
                 final = await conv.get_edit(timeout=10)

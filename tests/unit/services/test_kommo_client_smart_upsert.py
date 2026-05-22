@@ -97,7 +97,7 @@ async def test_upsert_new_contact_sends_phone_in_custom_fields(kommo_client, htt
     body = json.loads(post_req.content)
     contact_payload = body[0]
 
-    ***REMOVED*** phone must appear in custom_fields_values, not as top-level field
+    # phone must appear in custom_fields_values, not as top-level field
     assert "phone" not in contact_payload
     cfv = contact_payload.get("custom_fields_values", [])
     phone_field = next((f for f in cfv if f.get("field_code") == "PHONE"), None)

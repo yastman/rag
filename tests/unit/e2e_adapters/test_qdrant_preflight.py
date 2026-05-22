@@ -145,7 +145,7 @@ class TestRunQdrantPreflight:
             mock_client = MockClient.return_value
             mock_client.collection_exists.return_value = True
             info = _make_info(points_count=5, vector_names=["dense", "colbert"])
-            ***REMOVED*** Attach a payload schema that must NOT leak into output
+            # Attach a payload schema that must NOT leak into output
             info.config.params.payload_schema = {"secret_field": "secret_value"}
             mock_client.get_collection.return_value = info
 

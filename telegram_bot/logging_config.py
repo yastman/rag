@@ -35,11 +35,11 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
-        ***REMOVED*** Add exception info if present
+        # Add exception info if present
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
-        ***REMOVED*** Add extra fields from record
+        # Add extra fields from record
         if hasattr(record, "user_id"):
             log_data["user_id"] = record.user_id
         if hasattr(record, "query"):
@@ -67,20 +67,20 @@ def setup_logging(
         json_format: Use JSON format (True) or plain text (False)
         log_file: Optional file path to write logs to
     """
-    ***REMOVED*** Get root logger
+    # Get root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
-    ***REMOVED*** Remove existing handlers
+    # Remove existing handlers
     for handler in list(root_logger.handlers):
         handler.close()
         root_logger.removeHandler(handler)
 
-    ***REMOVED*** Create console handler
+    # Create console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
 
-    ***REMOVED*** Set formatter
+    # Set formatter
     formatter: logging.Formatter
     if json_format:
         formatter = JSONFormatter()
@@ -90,14 +90,14 @@ def setup_logging(
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    ***REMOVED*** Add file handler if specified
+    # Add file handler if specified
     if log_file:
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
-    ***REMOVED*** Set third-party loggers to WARNING to reduce noise
+    # Set third-party loggers to WARNING to reduce noise
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("aiogram").setLevel(logging.INFO)

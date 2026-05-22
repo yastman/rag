@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Search engines for evaluation:
 1. BaselineSearchEngine - Dense-only (BGE-M3 dense vectors)
@@ -21,7 +21,7 @@ from src.retrieval.search_engine_shared import (
 from src.utils.serialization import convert_to_python_types
 
 
-***REMOVED*** Load Qdrant config without failing module import in test environments.
+# Load Qdrant config without failing module import in test environments.
 try:
     _settings = Settings()
     QDRANT_URL = _settings.qdrant_url
@@ -41,7 +41,7 @@ def _qdrant_api_key() -> str:
     return QDRANT_API_KEY or ""
 
 
-***REMOVED*** Load constants
+# Load constants
 HNSW_EF_HIGH_PRECISION = HSNWParameters.EF_HIGH_PRECISION
 SCORE_THRESHOLD_HYBRID = ThresholdValues.HYBRID
 RETRIEVAL_LIMIT_STAGE1 = RetrievalStages.STAGE1_CANDIDATES
@@ -95,7 +95,7 @@ class BaselineSearchEngine(SearchEngine):
 
         Uses BGE-M3 dense embeddings (1024D INT8) for simple similarity search.
         """
-        ***REMOVED*** Generate dense embedding for query
+        # Generate dense embedding for query
         query_embedding = self.embedding_model.encode(
             query, return_dense=True, return_sparse=False, return_colbert_vecs=False
         )
@@ -148,7 +148,7 @@ class HybridSearchEngine(SearchEngine):
         2. Sparse BM25 search
         3. RRF combines both result sets
         """
-        ***REMOVED*** Generate all embeddings for query
+        # Generate all embeddings for query
         query_embeddings = self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
@@ -156,11 +156,11 @@ class HybridSearchEngine(SearchEngine):
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
         sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
 
-        ***REMOVED*** Build hybrid search with RRF using query API
-        ***REMOVED*** ``using="bm42"`` matches the sparse vector registered by the
-        ***REMOVED*** unified ingestion pipeline (src/ingestion/unified/cli.py). Querying
-        ***REMOVED*** with ``using="sparse"`` produces "Not existing vector name" gRPC
-        ***REMOVED*** errors against the canonical collection — see issue ***REMOVED***1083.
+        # Build hybrid search with RRF using query API
+        # ``using="bm42"`` matches the sparse vector registered by the
+        # unified ingestion pipeline (src/ingestion/unified/cli.py). Querying
+        # with ``using="sparse"`` produces "Not existing vector name" gRPC
+        # errors against the canonical collection — see issue #1083.
         prefetch = [
             models.Prefetch(query=dense_vector, using="dense", limit=100),
             models.Prefetch(query=sparse_vector, using="bm42", limit=100),
@@ -203,7 +203,7 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
         super().__init__(collection_name)
         self.embedding_model = embedding_model
 
-        ***REMOVED*** Use config parameters from module level
+        # Use config parameters from module level
         self.score_threshold = SCORE_THRESHOLD_HYBRID
         self.hnsw_ef = HNSW_EF_HIGH_PRECISION
         self.stage1_limit = RETRIEVAL_LIMIT_STAGE1
@@ -221,7 +221,7 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
         Returns:
             List of dicts with keys: point_id, score, article_number, text
         """
-        ***REMOVED*** Generate all embeddings for query
+        # Generate all embeddings for query
         query_embeddings = self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
@@ -230,12 +230,12 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
         sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
         colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
-        ***REMOVED*** Build 3-stage query with DBSF fusion + ColBERT reranking
+        # Build 3-stage query with DBSF fusion + ColBERT reranking
         dbsf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
-                ***REMOVED*** See issue ***REMOVED***1083: sparse vector name must match the
-                ***REMOVED*** ingestion schema (``bm42``).
+                # See issue #1083: sparse vector name must match the
+                # ingestion schema (``bm42``).
                 models.Prefetch(query=sparse_vector, using="bm42", limit=self.stage1_limit),
             ],
             query=models.FusionQuery(fusion=models.Fusion.DBSF),
@@ -283,7 +283,7 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
         super().__init__(collection_name)
         self.embedding_model = embedding_model
 
-        ***REMOVED*** Use config parameters from module level
+        # Use config parameters from module level
         self.score_threshold = SCORE_THRESHOLD_HYBRID
         self.hnsw_ef = HNSW_EF_HIGH_PRECISION
         self.stage1_limit = RETRIEVAL_LIMIT_STAGE1
@@ -301,7 +301,7 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
         Returns:
             List of dicts with keys: point_id, score, article_number, text
         """
-        ***REMOVED*** Generate all embeddings for query
+        # Generate all embeddings for query
         query_embeddings = self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
@@ -310,12 +310,12 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
         sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
         colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
-        ***REMOVED*** Build 3-stage query with RRF fusion + ColBERT reranking
+        # Build 3-stage query with RRF fusion + ColBERT reranking
         rrf_prefetch = models.Prefetch(
             prefetch=[
                 models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
-                ***REMOVED*** See issue ***REMOVED***1083: sparse vector name must match the
-                ***REMOVED*** ingestion schema (``bm42``).
+                # See issue #1083: sparse vector name must match the
+                # ingestion schema (``bm42``).
                 models.Prefetch(query=sparse_vector, using="bm42", limit=self.stage1_limit),
             ],
             query=models.RrfQuery(rrf=models.Rrf(k=self.rrf_k)),
@@ -369,7 +369,7 @@ def create_search_engine(engine_type: str, collection_name: str, embedding_model
 
 
 if __name__ == "__main__":
-    ***REMOVED*** Quick test
+    # Quick test
     from FlagEmbedding import BGEM3FlagModel
 
     print("Loading BGE-M3 model...")

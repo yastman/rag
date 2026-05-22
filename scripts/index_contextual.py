@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Index contextual JSON files into Qdrant.
 
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config import Settings
@@ -32,11 +32,11 @@ async def index_file(
     """Index a single contextual JSON file."""
     print(f"\nIndexing: {json_path.name}")
 
-    ***REMOVED*** Load chunks from JSON
+    # Load chunks from JSON
     chunks = load_contextual_json(str(json_path))
     print(f"  Loaded {len(chunks)} chunks")
 
-    ***REMOVED*** Index chunks
+    # Index chunks
     stats = await indexer.index_chunks(chunks, collection_name)
 
     return {
@@ -53,26 +53,26 @@ async def main(args: argparse.Namespace) -> int:
     print("Contextual Retrieval Indexer")
     print("=" * 60)
 
-    ***REMOVED*** Initialize
+    # Initialize
     settings = Settings()
     indexer = DocumentIndexer(settings)
 
     collection_name = args.collection or settings.collection_name
     print(f"\nCollection: {collection_name}")
 
-    ***REMOVED*** Create collection if needed
+    # Create collection if needed
     if args.recreate:
         print(f"Recreating collection: {collection_name}")
     await indexer.create_collection(collection_name, recreate=args.recreate)
 
-    ***REMOVED*** Find JSON files
+    # Find JSON files
     input_path = Path(args.input)
     if input_path.is_file():
         json_files = [input_path]
     elif input_path.is_dir():
         json_files = list(input_path.glob("*.json"))
     else:
-        ***REMOVED*** Glob pattern
+        # Glob pattern
         json_files = list(Path(".").glob(args.input))
 
     if not json_files:
@@ -81,7 +81,7 @@ async def main(args: argparse.Namespace) -> int:
 
     print(f"Found {len(json_files)} JSON file(s)")
 
-    ***REMOVED*** Index each file
+    # Index each file
     results = []
     for json_path in json_files:
         try:
@@ -96,7 +96,7 @@ async def main(args: argparse.Namespace) -> int:
                 }
             )
 
-    ***REMOVED*** Print summary
+    # Print summary
     print("\n" + "=" * 60)
     print("Summary")
     print("=" * 60)
@@ -112,7 +112,7 @@ async def main(args: argparse.Namespace) -> int:
 
     print(f"\nTotal: {total_indexed} indexed, {total_failed} failed")
 
-    ***REMOVED*** Print collection stats
+    # Print collection stats
     stats = await indexer.get_collection_stats(collection_name)
     if stats:
         print(f"\nCollection '{collection_name}': {stats.get('points_count', 0)} total points")

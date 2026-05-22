@@ -165,7 +165,7 @@ class TestBaselineSearchEngine:
         engine = BaselineSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5)
 
-        ***REMOVED*** Check that query_points was called with default threshold 0.5
+        # Check that query_points was called with default threshold 0.5
         call_kwargs = mock_client.query_points.call_args[1]
         assert call_kwargs["score_threshold"] == 0.5
 
@@ -197,7 +197,7 @@ class TestBaselineSearchEngine:
         mock_settings.collection_name = "test"
         mock_settings_cls.return_value = mock_settings
 
-        ***REMOVED*** Create mock search result
+        # Create mock search result
         mock_result = MagicMock()
         mock_result.payload = {
             "metadata": {"article_number": "115"},
@@ -252,7 +252,7 @@ class TestHybridRRFSearchEngine:
         engine = HybridRRFSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5)
 
-        ***REMOVED*** Should call dense-only query_points when pre-computed embedding provided
+        # Should call dense-only query_points when pre-computed embedding provided
         mock_client.query_points.assert_called_once()
         call_kwargs = mock_client.query_points.call_args[1]
         assert call_kwargs["using"] == "dense"
@@ -269,7 +269,7 @@ class TestHybridRRFSearchEngine:
         mock_settings.get_collection_name.return_value = "test_collection"
         mock_settings_cls.return_value = mock_settings
 
-        ***REMOVED*** Mock embedding model
+        # Mock embedding model
         mock_model = MagicMock()
         mock_model.encode.return_value = {
             "dense_vecs": np.array([0.1, 0.2, 0.3]),
@@ -277,7 +277,7 @@ class TestHybridRRFSearchEngine:
         }
         mock_bge.return_value = mock_model
 
-        ***REMOVED*** Mock query_points response
+        # Mock query_points response
         mock_point = MagicMock()
         mock_point.payload = {
             "metadata": {"article_number": "115"},
@@ -294,15 +294,15 @@ class TestHybridRRFSearchEngine:
         engine = HybridRRFSearchEngine(mock_settings)
         results = engine.search("test query", top_k=5)
 
-        ***REMOVED*** Verify query_points was called (not httpx)
+        # Verify query_points was called (not httpx)
         mock_client.query_points.assert_called_once()
         call_kwargs = mock_client.query_points.call_args[1]
 
-        ***REMOVED*** Verify prefetch structure
+        # Verify prefetch structure
         assert "prefetch" in call_kwargs
         assert call_kwargs["collection_name"] == "test_collection"
 
-        ***REMOVED*** Verify results
+        # Verify results
         assert len(results) == 1
         assert results[0].article_number == "115"
         assert results[0].score == 0.95
@@ -342,7 +342,7 @@ class TestHybridRRFColBERTSearchEngine:
         engine = HybridRRFColBERTSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5)
 
-        ***REMOVED*** Should call dense-only query_points when pre-computed embedding provided
+        # Should call dense-only query_points when pre-computed embedding provided
         mock_client.query_points.assert_called_once()
         call_kwargs = mock_client.query_points.call_args[1]
         assert call_kwargs["using"] == "dense"
@@ -358,7 +358,7 @@ class TestHybridRRFColBERTSearchEngine:
         mock_settings.collection_name = "test_collection"
         mock_settings_cls.return_value = mock_settings
 
-        ***REMOVED*** Mock embedding model with ColBERT vectors
+        # Mock embedding model with ColBERT vectors
         mock_model = MagicMock()
         mock_model.encode.return_value = {
             "dense_vecs": np.array([0.1, 0.2, 0.3]),
@@ -367,7 +367,7 @@ class TestHybridRRFColBERTSearchEngine:
         }
         mock_bge.return_value = mock_model
 
-        ***REMOVED*** Mock query_points response
+        # Mock query_points response
         mock_point = MagicMock()
         mock_point.payload = {
             "article_number": "115",
@@ -384,13 +384,13 @@ class TestHybridRRFColBERTSearchEngine:
         engine = HybridRRFColBERTSearchEngine(mock_settings)
         results = engine.search("test query", top_k=5)
 
-        ***REMOVED*** Verify query_points was called with nested prefetch
+        # Verify query_points was called with nested prefetch
         mock_client.query_points.assert_called_once()
         call_kwargs = mock_client.query_points.call_args[1]
 
-        ***REMOVED*** Verify nested prefetch structure (outer prefetch contains inner prefetch with RRF)
+        # Verify nested prefetch structure (outer prefetch contains inner prefetch with RRF)
         assert "prefetch" in call_kwargs
-        assert call_kwargs["using"] == "colbert"  ***REMOVED*** Final stage uses ColBERT
+        assert call_kwargs["using"] == "colbert"  # Final stage uses ColBERT
 
         assert len(results) == 1
         assert results[0].score == 0.95
@@ -445,11 +445,11 @@ class TestDBSFColBERTSearchEngine:
         engine = DBSFColBERTSearchEngine(mock_settings)
         engine.search("test query", top_k=5)
 
-        ***REMOVED*** Verify query_points was called with DBSF fusion
+        # Verify query_points was called with DBSF fusion
         mock_client.query_points.assert_called_once()
         call_kwargs = mock_client.query_points.call_args[1]
 
-        ***REMOVED*** Verify nested prefetch with DBSF fusion
+        # Verify nested prefetch with DBSF fusion
         assert "prefetch" in call_kwargs
         assert call_kwargs["using"] == "colbert"
 
@@ -590,7 +590,7 @@ class TestSparseVectorConversion:
 
     def test_convert_lexical_weights_to_sparse_vector(self):
         """Test converting BGE-M3 lexical weights to Qdrant SparseVector."""
-        ***REMOVED*** BGE-M3 returns dict with string keys
+        # BGE-M3 returns dict with string keys
         lexical_weights = {"123": 0.5, "456": 0.8, "789": 0.3}
 
         sparse = lexical_weights_to_sparse(lexical_weights)

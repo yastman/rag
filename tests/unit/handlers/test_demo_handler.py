@@ -200,7 +200,7 @@ class TestDemoVoiceFlow:
         ):
             await handle_demo_search_voice(message, state, pipeline=None)
 
-        ***REMOVED*** First call: "🎤 Распознаю голос...", second: "📝 Распознано: ..."
+        # First call: "🎤 Распознаю голос...", second: "📝 Распознано: ..."
         calls = message.answer.await_args_list
         assert any("Распознано" in str(c) and transcribed in str(c) for c in calls)
 
@@ -255,7 +255,7 @@ class TestDemoVoiceFlow:
         from telegram_bot.handlers.demo_handler import create_demo_router
 
         router = create_demo_router()
-        ***REMOVED*** Check that handle_demo_search_voice is registered
+        # Check that handle_demo_search_voice is registered
         handler_names = [h.callback.__name__ for h in router.message.handlers]
         assert "handle_demo_search_voice" in handler_names, (
             "Demo router must register handle_demo_search_voice"
@@ -318,13 +318,13 @@ class TestHandleVoiceStateFilter:
         Regression test for: voice in demo went to RAG instead of apartment search.
         """
 
-        ***REMOVED*** Inspect _register_handlers source to find the voice registration
+        # Inspect _register_handlers source to find the voice registration
         import inspect
 
         from telegram_bot.bot import PropertyBot
 
         source = inspect.getsource(PropertyBot._register_handlers)
-        ***REMOVED*** Must have StateFilter(None) alongside F.voice
+        # Must have StateFilter(None) alongside F.voice
         assert "StateFilter(None)" in source and "F.voice" in source, (
             "handle_voice must be registered with StateFilter(None) "
             "to prevent intercepting voice during FSM states (e.g. DemoStates.waiting_query)"

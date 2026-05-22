@@ -27,11 +27,11 @@ class TestContextualPipeline:
             ],
         )
 
-        ***REMOVED*** Save
+        # Save
         json_file = tmp_path / "test.json"
         doc.save(str(json_file))
 
-        ***REMOVED*** Load
+        # Load
         loaded = ContextualDocument.load(str(json_file))
 
         assert loaded.source == "test.vtt"
@@ -60,7 +60,7 @@ class TestContextualPipeline:
             ],
         )
 
-        ***REMOVED*** Save and load via function
+        # Save and load via function
         json_file = tmp_path / "video.json"
         doc.save(str(json_file))
         chunks = load_contextual_json(str(json_file))
@@ -68,8 +68,8 @@ class TestContextualPipeline:
         assert len(chunks) == 2
         assert all(isinstance(c, Chunk) for c in chunks)
 
-        ***REMOVED*** Check first chunk
-        assert "***REMOVED*** Цены" in chunks[0].text
+        # Check first chunk
+        assert "# Цены" in chunks[0].text
         assert chunks[0].extra_metadata["topic"] == "Цены"
         assert chunks[0].document_name == "video.vtt"
 
@@ -85,9 +85,9 @@ class TestContextualPipeline:
 
         text = chunk.text_for_embedding
 
-        ***REMOVED*** Should be Markdown format
+        # Should be Markdown format
         lines = text.split("\n")
-        assert lines[0] == "***REMOVED*** Недвижимость в Болгарии"
+        assert lines[0] == "# Недвижимость в Болгарии"
         assert "Этот фрагмент из видео" in text
         assert "Покупка апартамента" in text
 
@@ -108,11 +108,11 @@ class TestContextualPipeline:
 
         chunks = load_contextual_chunks(doc)
 
-        ***REMOVED*** text_for_embedding used for vectorization
-        assert "***REMOVED*** Тема" in chunks[0].text
+        # text_for_embedding used for vectorization
+        assert "# Тема" in chunks[0].text
         assert "Контекст для embedding" in chunks[0].text
 
-        ***REMOVED*** Original text preserved for display
+        # Original text preserved for display
         assert chunks[0].extra_metadata["original_text"] == "Оригинальный текст для отображения."
 
 
@@ -132,7 +132,7 @@ class TestExampleJson:
       "keywords": ["Болгария", "недвижимость", "покупка"],
       "context": "Вступительная часть видео о покупке недвижимости.",
       "text": "Покупка апартамента в Болгарии возле моря.",
-      "text_for_embedding": "***REMOVED*** Введение\\n\\nВступительная часть\\n\\nПокупка апартамента"
+      "text_for_embedding": "# Введение\\n\\nВступительная часть\\n\\nПокупка апартамента"
     },
     {
       "chunk_id": 2,
@@ -140,7 +140,7 @@ class TestExampleJson:
       "keywords": ["цены", "евро", "Бургас"],
       "context": "Обсуждение цен на квартиры в разных городах.",
       "text": "В Бургасе цены начинаются от 50000 евро.",
-      "text_for_embedding": "***REMOVED*** Цены\\n\\nОбсуждение цен\\n\\nВ Бургасе цены"
+      "text_for_embedding": "# Цены\\n\\nОбсуждение цен\\n\\nВ Бургасе цены"
     }
   ]
 }"""

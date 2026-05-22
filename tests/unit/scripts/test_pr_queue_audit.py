@@ -34,7 +34,7 @@ def pq():
     return _load_module()
 
 
-***REMOVED*** Reference "now" used across age computations so tests are deterministic.
+# Reference "now" used across age computations so tests are deterministic.
 NOW = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
 
 
@@ -72,9 +72,9 @@ def _pr(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bucket classification
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bucket classification
+# ---------------------------------------------------------------------------
 
 
 def test_ready_pr(pq) -> None:
@@ -136,9 +136,9 @@ def test_no_review_policy_with_no_ci_data(pq) -> None:
     assert out.bucket == "ready"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Stale flag
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Stale flag
+# ---------------------------------------------------------------------------
 
 
 def test_stale_flag_set_for_old_prs(pq) -> None:
@@ -152,9 +152,9 @@ def test_stale_flag_off_for_fresh_prs(pq) -> None:
     assert out.is_stale is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Severity reduction over rollup
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Severity reduction over rollup
+# ---------------------------------------------------------------------------
 
 
 def test_ci_state_picks_worst_check_first(pq) -> None:
@@ -169,9 +169,9 @@ def test_ci_state_picks_worst_check_first(pq) -> None:
     assert out.bucket == "ci-failing"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Aggregate: summarise + filter
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Aggregate: summarise + filter
+# ---------------------------------------------------------------------------
 
 
 def test_summarise_counts_per_bucket(pq) -> None:
@@ -179,7 +179,7 @@ def test_summarise_counts_per_bucket(pq) -> None:
         _pr(number=1, mergeable="CONFLICTING"),
         _pr(number=2, rollup_state="FAILURE"),
         _pr(number=3, review_decision="APPROVED"),
-        _pr(number=4, days_old=30),  ***REMOVED*** stale + ready
+        _pr(number=4, days_old=30),  # stale + ready
     ]
     classified = pq.build_report(raw, stale_days=14, now=NOW)
     counts = pq.summarise(classified)
@@ -200,9 +200,9 @@ def test_filter_bucket_returns_only_match(pq) -> None:
     assert [p.number for p in only_conflicts] == [1]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** fetch_open_prs uses gh CLI through the runner
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# fetch_open_prs uses gh CLI through the runner
+# ---------------------------------------------------------------------------
 
 
 def test_fetch_open_prs_invokes_gh_with_correct_args(pq) -> None:

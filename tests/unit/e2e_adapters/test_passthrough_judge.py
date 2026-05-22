@@ -161,7 +161,7 @@ def test_passthrough_judge_passes_with_filter_evidence() -> None:
     assert evidence["price_max"] is True
 
 
-***REMOVED*** ── price filter evidence: currency-only rejection ──────────────────────
+# ── price filter evidence: currency-only rejection ──────────────────────
 
 
 def test_price_evidence_fails_currency_only_text() -> None:

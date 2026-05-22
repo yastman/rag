@@ -1,7 +1,7 @@
-"""Mini App Langfuse trace coverage (***REMOVED***1658).
+"""Mini App Langfuse trace coverage (#1658).
 
 Regression locks: every Mini App entry point that hits the bot/CRM funnel
-must emit a named, propagated, PII-safe Langfuse trace. Before ***REMOVED***1658 the
+must emit a named, propagated, PII-safe Langfuse trace. Before #1658 the
 Mini App had zero trace coverage — leads created via Mini App and the
 Kommo upsert/create-lead pair were invisible in Langfuse, and the funnel
 `Mini App -> /start q_<expert> -> Telegram dialog -> CRM` could not be
@@ -37,14 +37,14 @@ from mini_app.phone import PhoneRequest, submit_phone
 
 
 def _stub_init_data(user_id: int) -> dict:
-    """Synthetic SDK-validated initData for tests that bypass auth (***REMOVED***1595)."""
+    """Synthetic SDK-validated initData for tests that bypass auth (#1595)."""
     return {"user": {"id": user_id, "first_name": "Test"}, "auth_date": "0"}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helper: a fixture that records `propagate_attributes(...)` invocations
-***REMOVED*** without breaking the surrounding `@observe`-decorated function.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helper: a fixture that records `propagate_attributes(...)` invocations
+# without breaking the surrounding `@observe`-decorated function.
+# ---------------------------------------------------------------------------
 
 
 def _make_propagate_recorder() -> tuple[MagicMock, MagicMock]:
@@ -60,34 +60,34 @@ def _make_propagate_recorder() -> tuple[MagicMock, MagicMock]:
     return mock_cm, mock_factory
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 1. @observe decorators are applied — static lock so a future revert can't
-***REMOVED***    silently drop tracing.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 1. @observe decorators are applied — static lock so a future revert can't
+#    silently drop tracing.
+# ---------------------------------------------------------------------------
 
 
 class TestMiniAppObserveCoverage:
     """`@observe` must wrap every Mini App entry point on the funnel path."""
 
     def test_start_expert_handler_is_observed(self):
-        ***REMOVED*** `@observe` (or its langfuse-disabled stub) wraps the coroutine and
-        ***REMOVED*** leaves `__wrapped__` accessible. We accept either marker, mirroring
-        ***REMOVED*** tests/unit/services/test_voyage_observability.py.
+        # `@observe` (or its langfuse-disabled stub) wraps the coroutine and
+        # leaves `__wrapped__` accessible. We accept either marker, mirroring
+        # tests/unit/services/test_voyage_observability.py.
         fn = api_mod.start_expert
         assert hasattr(fn, "__wrapped__") or hasattr(fn, "_langfuse_observation"), (
-            "mini_app.api.start_expert must be wrapped with @observe (***REMOVED***1658)."
+            "mini_app.api.start_expert must be wrapped with @observe (#1658)."
         )
 
     def test_phone_handler_is_observed(self):
         fn = api_mod.phone
         assert hasattr(fn, "__wrapped__") or hasattr(fn, "_langfuse_observation"), (
-            "mini_app.api.phone must be wrapped with @observe (***REMOVED***1658)."
+            "mini_app.api.phone must be wrapped with @observe (#1658)."
         )
 
     def test_submit_phone_is_observed(self):
         fn = phone_mod.submit_phone
         assert hasattr(fn, "__wrapped__") or hasattr(fn, "_langfuse_observation"), (
-            "mini_app.phone.submit_phone must be wrapped with @observe (***REMOVED***1658)."
+            "mini_app.phone.submit_phone must be wrapped with @observe (#1658)."
         )
 
     def test_observability_symbols_imported_in_api(self):
@@ -98,28 +98,28 @@ class TestMiniAppObserveCoverage:
         """
         import mini_app.api as mod
 
-        assert hasattr(mod, "observe"), "mini_app.api must import `observe` (***REMOVED***1658)"
+        assert hasattr(mod, "observe"), "mini_app.api must import `observe` (#1658)"
         assert hasattr(mod, "propagate_attributes"), (
-            "mini_app.api must import `propagate_attributes` (***REMOVED***1658)"
+            "mini_app.api must import `propagate_attributes` (#1658)"
         )
 
     def test_observability_symbols_imported_in_phone(self):
         import mini_app.phone as mod
 
-        assert hasattr(mod, "observe"), "mini_app.phone must import `observe` (***REMOVED***1658)"
+        assert hasattr(mod, "observe"), "mini_app.phone must import `observe` (#1658)"
         assert hasattr(mod, "get_client"), (
-            "mini_app.phone must import `get_client` for ERROR-level span updates (***REMOVED***1658)"
+            "mini_app.phone must import `get_client` for ERROR-level span updates (#1658)"
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 2. `propagate_attributes` is called with the funnel-grouping session_id
-***REMOVED***    `miniapp-{user_id}` and SDK-shaped tags / user_id.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 2. `propagate_attributes` is called with the funnel-grouping session_id
+#    `miniapp-{user_id}` and SDK-shaped tags / user_id.
+# ---------------------------------------------------------------------------
 
 
 class TestPropagateAttributesContract:
-    """Funnel must be reconstructable in Langfuse Sessions UI (***REMOVED***1658)."""
+    """Funnel must be reconstructable in Langfuse Sessions UI (#1658)."""
 
     @pytest.mark.asyncio
     async def test_start_expert_propagates_session_user_tags(self):
@@ -131,7 +131,7 @@ class TestPropagateAttributesContract:
         async def _override_redis():
             return mock_redis
 
-        ***REMOVED*** FastAPI dependency override avoids the real Redis connection.
+        # FastAPI dependency override avoids the real Redis connection.
         app.dependency_overrides[api_mod.get_redis] = _override_redis
         app.dependency_overrides[get_validated_init_data] = lambda: _stub_init_data(42)
 
@@ -154,7 +154,7 @@ class TestPropagateAttributesContract:
                             "query_id": "q-1",
                         },
                     )
-            ***REMOVED*** Body of the endpoint succeeded, so propagate_attributes was reached.
+            # Body of the endpoint succeeded, so propagate_attributes was reached.
             assert resp.status_code == 200, resp.text
         finally:
             app.dependency_overrides.pop(api_mod.get_redis, None)
@@ -212,13 +212,13 @@ class TestPropagateAttributesContract:
         assert "viewing_consultant" in tags, "source must appear as a tag for funnel filtering"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 3. Kommo failure inside submit_phone must surface as a Langfuse ERROR span.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. Kommo failure inside submit_phone must surface as a Langfuse ERROR span.
+# ---------------------------------------------------------------------------
 
 
 class TestKommoFailureSpan:
-    """CRM outages must be visible in Langfuse, not just as logs (***REMOVED***1658)."""
+    """CRM outages must be visible in Langfuse, not just as logs (#1658)."""
 
     @pytest.mark.asyncio
     async def test_kommo_failure_marks_span_error(self):
@@ -275,7 +275,7 @@ class TestKommoFailureSpan:
 
     @pytest.mark.asyncio
     async def test_no_phone_or_name_in_curated_output(self):
-        """Curated `update_current_span(output=...)` MUST NOT contain PII (***REMOVED***1658)."""
+        """Curated `update_current_span(output=...)` MUST NOT contain PII (#1658)."""
         mock_kommo = MagicMock()
         mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
         mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
@@ -307,15 +307,15 @@ class TestKommoFailureSpan:
             )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 4. Sanity: capture_input/output flags on @observe are False everywhere on
-***REMOVED***    the Mini App funnel path. AST-based check works whether or not Langfuse
-***REMOVED***    is installed in the test env, so the contract cannot drift silently.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 4. Sanity: capture_input/output flags on @observe are False everywhere on
+#    the Mini App funnel path. AST-based check works whether or not Langfuse
+#    is installed in the test env, so the contract cannot drift silently.
+# ---------------------------------------------------------------------------
 
 
 class TestObserveCaptureFlags:
-    """`@observe(..., capture_input=False, capture_output=False)` per ***REMOVED***1658."""
+    """`@observe(..., capture_input=False, capture_output=False)` per #1658."""
 
     @staticmethod
     def _observe_decorator_kwargs(module_path: str, func_name: str) -> dict[str, str]:
@@ -363,13 +363,13 @@ class TestObserveCaptureFlags:
         repo_root = Path(__file__).resolve().parents[3]
         kwargs = self._observe_decorator_kwargs(str(repo_root / module), func_name)
         assert kwargs.get("capture_input") == "False", (
-            f"{module}::{func_name} must use `@observe(..., capture_input=False)` (***REMOVED***1658). "
+            f"{module}::{func_name} must use `@observe(..., capture_input=False)` (#1658). "
             f"Found: {kwargs}"
         )
         assert kwargs.get("capture_output") == "False", (
-            f"{module}::{func_name} must use `@observe(..., capture_output=False)` (***REMOVED***1658). "
+            f"{module}::{func_name} must use `@observe(..., capture_output=False)` (#1658). "
             f"Found: {kwargs}"
         )
         assert "name" in kwargs and kwargs["name"].startswith("'miniapp-"), (
-            f"{module}::{func_name} must use a `miniapp-*` span name (***REMOVED***1658). Found: {kwargs}"
+            f"{module}::{func_name} must use a `miniapp-*` span name (#1658). Found: {kwargs}"
         )

@@ -1,4 +1,4 @@
-"""Static Docker/Compose validation tests (***REMOVED***1243).
+"""Static Docker/Compose validation tests (#1243).
 
 These tests validate Docker/Compose configuration without starting live services.
 Docker availability is checked at runtime; tests skip gracefully when absent.
@@ -25,9 +25,9 @@ DOCKERFILES = [
     "mini_app/frontend/Dockerfile",
 ]
 
-***REMOVED*** Images that import telegram_bot.observability (which imports langfuse) must not
-***REMOVED*** use Python 3.14 because langfuse SDK exercises Pydantic v1 compatibility code
-***REMOVED*** that is incompatible with Python 3.14.
+# Images that import telegram_bot.observability (which imports langfuse) must not
+# use Python 3.14 because langfuse SDK exercises Pydantic v1 compatibility code
+# that is incompatible with Python 3.14.
 _LANGFUSE_RUNTIME_DOCKERFILES = [
     "telegram_bot/Dockerfile",
     "mini_app/Dockerfile",
@@ -84,7 +84,7 @@ def test_compose_dev_config_renders() -> None:
 
 
 def test_compose_dev_config_renders_with_full_profile() -> None:
-    """Profile-gated services must not fail merely because required env vars are unset (***REMOVED***1341)."""
+    """Profile-gated services must not fail merely because required env vars are unset (#1341)."""
     result = _run_docker_command(
         [
             "docker",
@@ -110,7 +110,7 @@ def test_compose_dev_config_renders_with_full_profile() -> None:
 def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
     """Langfuse SDK uses Pydantic v1 compatibility that crashes under Python 3.14.
 
-    Regression test for ***REMOVED***1307: bot and mini-app-api containers fail to start
+    Regression test for #1307: bot and mini-app-api containers fail to start
     because `from langfuse import Langfuse` raises
     `pydantic.v1.errors.ConfigError` on Python 3.14.
     """
@@ -125,7 +125,7 @@ def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
 
 @pytest.mark.parametrize("dockerfile", _LANGFUSE_RUNTIME_DOCKERFILES)
 def test_langfuse_dockerfile_uses_python313(dockerfile: str) -> None:
-    """Langfuse-importing app images must use Python 3.13 runtime (***REMOVED***1346-***REMOVED***1348).
+    """Langfuse-importing app images must use Python 3.13 runtime (#1346-#1348).
 
     Docker runtime is pinned to 3.13 while repo native dev may still use
     a local uv environment with a different Python version.
@@ -157,7 +157,7 @@ def test_mini_app_frontend_nginx_runtime_paths_use_tmp() -> None:
 
 
 def test_voice_agent_healthcheck_does_not_use_rag_api_port() -> None:
-    """voice-agent healthcheck must not reference port 8080 to avoid confusion with rag-api (***REMOVED***1510)."""
+    """voice-agent healthcheck must not reference port 8080 to avoid confusion with rag-api (#1510)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
@@ -169,7 +169,7 @@ def test_voice_agent_healthcheck_does_not_use_rag_api_port() -> None:
 
 
 def test_voice_agent_has_otel_service_name() -> None:
-    """voice-agent must set a stable OTEL_SERVICE_NAME default like other Langfuse-instrumented services (***REMOVED***1510)."""
+    """voice-agent must set a stable OTEL_SERVICE_NAME default like other Langfuse-instrumented services (#1510)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
@@ -182,7 +182,7 @@ def test_voice_agent_has_otel_service_name() -> None:
 
 
 def test_mini_app_api_depends_on_postgres() -> None:
-    """mini-app-api uses REALESTATE_DATABASE_URL and must declare a postgres dependency (***REMOVED***1510)."""
+    """mini-app-api uses REALESTATE_DATABASE_URL and must declare a postgres dependency (#1510)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
@@ -192,22 +192,22 @@ def test_mini_app_api_depends_on_postgres() -> None:
 
 
 def test_docling_read_only_has_explanatory_comment() -> None:
-    """docling overrides read_only: false and must have an explanatory comment like litellm (***REMOVED***1510)."""
+    """docling overrides read_only: false and must have an explanatory comment like litellm (#1510)."""
     text = COMPOSE_FILE.read_text()
-    ***REMOVED*** Find the docling service block by locating the next service at the same indent
+    # Find the docling service block by locating the next service at the same indent
     docling_start = text.find("  docling:")
     assert docling_start != -1, "docling service not found in compose.yml"
-    ***REMOVED*** Services are separated by a blank line followed by "  <service-name>:" at column 0
+    # Services are separated by a blank line followed by "  <service-name>:" at column 0
     next_service = text.find("\n\n  ", docling_start + 1)
     block = text[docling_start : next_service if next_service != -1 else None]
     assert "read_only: false" in block, "docling must set read_only: false"
-    ***REMOVED*** The comment should appear before read_only: false in the same block
+    # The comment should appear before read_only: false in the same block
     lines = block.splitlines()
     for i, line in enumerate(lines):
         if "read_only: false" in line:
-            ***REMOVED*** Check preceding 2 lines for a comment
+            # Check preceding 2 lines for a comment
             preceding = "\n".join(lines[max(0, i - 2) : i])
-            assert "***REMOVED***" in preceding, (
+            assert "#" in preceding, (
                 "docling read_only: false must have an explanatory comment nearby"
             )
             break
@@ -216,12 +216,12 @@ def test_docling_read_only_has_explanatory_comment() -> None:
 
 
 def test_qdrant_stack_doc_matches_compose_version() -> None:
-    """docs/QDRANT_STACK.md must reference the same Qdrant version as compose.yml (***REMOVED***1510)."""
+    """docs/QDRANT_STACK.md must reference the same Qdrant version as compose.yml (#1510)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
     qdrant_image = compose["services"]["qdrant"]["image"]
-    ***REMOVED*** Extract tag from image string, e.g. qdrant/qdrant:v1.18.0@sha256:...
+    # Extract tag from image string, e.g. qdrant/qdrant:v1.18.0@sha256:...
     tag = qdrant_image.split(":")[1].split("@")[0]
 
     doc_text = QDRANT_STACK_DOC.read_text()
@@ -230,7 +230,7 @@ def test_qdrant_stack_doc_matches_compose_version() -> None:
     )
 
 
-***REMOVED*** ── voice-agent healthcheck runtime safety (***REMOVED***1510) ─────────────────────────
+# ── voice-agent healthcheck runtime safety (#1510) ─────────────────────────
 
 
 def test_voice_agent_compose_healthcheck_is_runtime_safe() -> None:
@@ -253,7 +253,7 @@ def test_voice_agent_compose_healthcheck_is_runtime_safe() -> None:
 
 
 def test_voice_dockerfile_healthcheck_does_not_use_localhost_8080() -> None:
-    """src/voice/Dockerfile must not reference localhost:8080/health (***REMOVED***1510)."""
+    """src/voice/Dockerfile must not reference localhost:8080/health (#1510)."""
     dockerfile = Path("src/voice/Dockerfile").read_text()
     assert "localhost:8080/health" not in dockerfile, (
         "src/voice/Dockerfile healthcheck must not reference localhost:8080 (rag-api endpoint)"
@@ -264,7 +264,7 @@ def test_voice_dockerfile_healthcheck_does_not_use_localhost_8080() -> None:
 
 
 def test_voice_dockerfile_healthcheck_is_self_match_safe() -> None:
-    """src/voice/Dockerfile HEALTHCHECK must not contain the process needle literally (***REMOVED***1510)."""
+    """src/voice/Dockerfile HEALTHCHECK must not contain the process needle literally (#1510)."""
     dockerfile = Path("src/voice/Dockerfile").read_text()
     healthcheck = dockerfile.split("HEALTHCHECK", 1)[1].split("\n\nCMD", 1)[0]
     assert "python" in healthcheck, (

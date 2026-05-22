@@ -1,5 +1,5 @@
-***REMOVED*** tests/contract/test_manifest_no_content_hash_collapse_contract.py
-"""Contract test: get_or_create_id must use copy-vs-rename detection (***REMOVED***1603).
+# tests/contract/test_manifest_no_content_hash_collapse_contract.py
+"""Contract test: get_or_create_id must use copy-vs-rename detection (#1603).
 
 AST-based check that the implementation of ``GDriveManifest.get_or_create_id``
 in ``manifest.py``:
@@ -7,7 +7,7 @@ in ``manifest.py``:
    reuse a file_id — i.e., the active-paths set is consulted (Option B
    copy-detection).
 2. Does NOT unconditionally reuse ``hash_to_id[content_hash]`` when the hash
-   was seen before (the pre-***REMOVED***1603 bug was a bare ``elif content_hash in
+   was seen before (the pre-#1603 bug was a bare ``elif content_hash in
    self._hash_to_id`` that always returned the stored id without checking
    active paths).
 
@@ -79,7 +79,7 @@ class TestManifestNoCopyCollapse:
         assert "_path_to_hash" in source, (
             f"'{_FUNCTION_NAME}' does not reference '_path_to_hash'. "
             "The function must consult active paths to distinguish copies from "
-            "renames (Option B, ***REMOVED***1603).  If the implementation changed the "
+            "renames (Option B, #1603).  If the implementation changed the "
             "attribute name, update this contract."
         )
 
@@ -94,19 +94,19 @@ class TestManifestNoCopyCollapse:
         fn = _get_function_ast()
         assert fn is not None
 
-        ***REMOVED*** Walk the AST looking for any reference to _path_to_hash inside the
-        ***REMOVED*** branch that handles the elif-content_hash-in-_hash_to_id case.
-        ***REMOVED*** A simpler proxy: verify the function body contains at least one
-        ***REMOVED*** comprehension or loop that iterates _path_to_hash items/values.
+        # Walk the AST looking for any reference to _path_to_hash inside the
+        # branch that handles the elif-content_hash-in-_hash_to_id case.
+        # A simpler proxy: verify the function body contains at least one
+        # comprehension or loop that iterates _path_to_hash items/values.
 
         source = _get_function_source()
         assert source
 
-        ***REMOVED*** The implementation must iterate _path_to_hash to find active paths.
-        ***REMOVED*** Accept any of the common patterns:
-        ***REMOVED***   {p for p, h in self._path_to_hash.items() if h == content_hash}
-        ***REMOVED***   for p, h in self._path_to_hash.items(): ...
-        ***REMOVED***   self._path_to_hash.values() / .items()
+        # The implementation must iterate _path_to_hash to find active paths.
+        # Accept any of the common patterns:
+        #   {p for p, h in self._path_to_hash.items() if h == content_hash}
+        #   for p, h in self._path_to_hash.items(): ...
+        #   self._path_to_hash.values() / .items()
         iteration_patterns = [
             "_path_to_hash.items()",
             "_path_to_hash.values()",
@@ -114,7 +114,7 @@ class TestManifestNoCopyCollapse:
         ]
         assert any(pat in source for pat in iteration_patterns), (
             f"'{_FUNCTION_NAME}' does not iterate _path_to_hash to determine "
-            "active paths for a given hash.  Copy-detection (Option B, ***REMOVED***1603) "
+            "active paths for a given hash.  Copy-detection (Option B, #1603) "
             "requires building the set of currently active paths for the hash "
             "before deciding whether to reuse or generate a new file_id."
         )
@@ -122,9 +122,9 @@ class TestManifestNoCopyCollapse:
     def test_no_unconditional_hash_reuse(self) -> None:
         """get_or_create_id must not unconditionally reuse hash_to_id.
 
-        The pre-***REMOVED***1603 bug was:
+        The pre-#1603 bug was:
             elif content_hash in self._hash_to_id:
-                file_id = self._hash_to_id[content_hash]   ***REMOVED*** ← always returned old id
+                file_id = self._hash_to_id[content_hash]   # ← always returned old id
                 self._key_to_id[composite_key] = file_id
 
         The fix adds a conditional: only reuse if active_paths_for_hash is
@@ -139,26 +139,26 @@ class TestManifestNoCopyCollapse:
         fn = _get_function_ast()
         assert fn is not None
 
-        ***REMOVED*** Find the elif branch body (IfExp or If node with content_hash test)
+        # Find the elif branch body (IfExp or If node with content_hash test)
         for node in ast.walk(fn):
             if not isinstance(node, ast.If):
                 continue
 
-            ***REMOVED*** Look for: if/elif ... content_hash in self._hash_to_id ...
+            # Look for: if/elif ... content_hash in self._hash_to_id ...
             test_src = ast.unparse(node.test) if hasattr(ast, "unparse") else ""
             if "_hash_to_id" not in test_src:
                 continue
 
-            ***REMOVED*** This is the elif content_hash in self._hash_to_id branch.
-            ***REMOVED*** Its body must NOT start with a simple assignment
-            ***REMOVED*** file_id = self._hash_to_id[content_hash].
+            # This is the elif content_hash in self._hash_to_id branch.
+            # Its body must NOT start with a simple assignment
+            # file_id = self._hash_to_id[content_hash].
             body = node.body
             if not body:
                 continue
 
             first_stmt = body[0]
             if isinstance(first_stmt, ast.Assign):
-                ***REMOVED*** Check if it's file_id = self._hash_to_id[...]
+                # Check if it's file_id = self._hash_to_id[...]
                 rhs = first_stmt.value
                 if (
                     isinstance(rhs, ast.Subscript)
@@ -169,8 +169,8 @@ class TestManifestNoCopyCollapse:
                         "Regression detected: the elif-content_hash branch "
                         "immediately assigns file_id = self._hash_to_id[...] "
                         "without first checking active paths. "
-                        "This is the pre-***REMOVED***1603 bug pattern.  Add copy-detection "
+                        "This is the pre-#1603 bug pattern.  Add copy-detection "
                         "logic (active_paths_for_hash check) before the assignment."
                     )
-            ***REMOVED*** Branch body starts with something else → OK
+            # Branch body starts with something else → OK
             break

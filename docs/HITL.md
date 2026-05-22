@@ -1,8 +1,8 @@
-***REMOVED*** Human-in-the-Loop (HITL) for CRM Operations
+# Human-in-the-Loop (HITL) for CRM Operations
 
 The bot uses LangGraph's `interrupt()` mechanism to pause execution and request user confirmation before executing CRM write operations.
 
-***REMOVED******REMOVED*** Overview
+## Overview
 
 HITL enables the bot to:
 - Pause before destructive or important CRM operations
@@ -10,7 +10,7 @@ HITL enables the bot to:
 - Let users approve or cancel the operation
 - Resume or cancel the graph based on user decision
 
-***REMOVED******REMOVED*** How HITL Works
+## How HITL Works
 
 ```
 User Request → Agent decides to call CRM tool
@@ -28,7 +28,7 @@ User Request → Agent decides to call CRM tool
               Graph resumes, tool executes or is skipped
 ```
 
-***REMOVED******REMOVED*** CRM Operations Covered by HITL
+## CRM Operations Covered by HITL
 
 | Tool | Operation | Preview |
 |------|-----------|---------|
@@ -37,7 +37,7 @@ User Request → Agent decides to call CRM tool
 | `crm_upsert_contact` | Create/update contact | Contact name, phone |
 | `crm_update_contact` | Update contact | Contact ID, new values |
 
-***REMOVED******REMOVED*** User Experience
+## User Experience
 
 When HITL triggers, the user sees:
 
@@ -47,14 +47,14 @@ When HITL triggers, the user sees:
 
 2. **Preview text** showing what will happen:
    ```
-   Создать сделку:           ***REMOVED*** "Create deal:"
+   Создать сделку:           # "Create deal:"
      name: Test Deal
      budget: 50000
    ```
 
-***REMOVED******REMOVED*** Implementation Details
+## Implementation Details
 
-***REMOVED******REMOVED******REMOVED*** hitl_guard Function
+### hitl_guard Function
 
 Located in `telegram_bot/agents/hitl.py`:
 
@@ -71,38 +71,38 @@ def hitl_guard(tool_name: str, preview: str, args: dict) -> dict:
     })
 ```
 
-***REMOVED******REMOVED******REMOVED*** HITL Flow in CRM Tools
+### HITL Flow in CRM Tools
 
 ```python
-***REMOVED*** In crm_create_lead tool
+# In crm_create_lead tool
 preview = format_hitl_preview("crm_create_lead", args)
 result = hitl_guard("crm_create_lead", preview, args)
 
 if result["action"] == "cancel":
-    return "Операция отменена"  ***REMOVED*** "Operation cancelled"
+    return "Операция отменена"  # "Operation cancelled"
 
-***REMOVED*** Proceed with CRM call
+# Proceed with CRM call
 ...
 ```
 
-***REMOVED******REMOVED******REMOVED*** Bot Resume Handling
+### Bot Resume Handling
 
 In `telegram_bot/bot.py`:
 
 ```python
-***REMOVED*** When user clicks inline keyboard:
+# When user clicks inline keyboard:
 if callback_data == "hitl_approve":
     agent_command = Command(resume={"action": "approve"})
 elif callback_data == "hitl_cancel":
     agent_command = Command(resume={"action": "cancel"})
 
-***REMOVED*** Resume graph with command
+# Resume graph with command
 await graph.ainvoke(None, config={"command": agent_command})
 ```
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
-***REMOVED******REMOVED******REMOVED*** Interrupt State Lost (Bot Restart)
+### Interrupt State Lost (Bot Restart)
 
 If the bot restarts while awaiting HITL confirmation:
 1. The interrupt state is stored in the LangGraph checkpointer
@@ -110,7 +110,7 @@ If the bot restarts while awaiting HITL confirmation:
 3. The user will see the confirmation message again
 4. If the state is truly lost, the user should start a new query
 
-***REMOVED******REMOVED******REMOVED*** Recovery Steps
+### Recovery Steps
 
 If a user is stuck waiting for confirmation:
 
@@ -120,7 +120,7 @@ If a user is stuck waiting for confirmation:
    redis-cli -p 6379 KEYS "*interrupt*"
    ```
 
-***REMOVED******REMOVED******REMOVED*** Debugging HITL
+### Debugging HITL
 
 To trace HITL flow in Langfuse:
 
@@ -128,12 +128,12 @@ To trace HITL flow in Langfuse:
 2. Check input fields: `tool`, `preview`, `args`
 3. Check for `__interrupt__` in state
 
-***REMOVED******REMOVED*** Configuration
+## Configuration
 
 HITL is enabled by default for all CRM write tools. No configuration required.
 
-***REMOVED******REMOVED*** Related Documentation
+## Related Documentation
 
 - [HITL CRM Flow](HITL_CRM_FLOW.md)
-- [LangGraph Interrupt](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/***REMOVED***interrupt)
+- [LangGraph Interrupt](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/#interrupt)
 - Bot source: `telegram_bot/agents/hitl.py`

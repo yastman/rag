@@ -15,7 +15,7 @@ def _make_runtime(**ctx) -> Runtime:
     return Runtime(context=ctx)
 
 
-***REMOVED*** --- grade_node tests ---
+# --- grade_node tests ---
 
 
 class TestGradeNode:
@@ -57,7 +57,7 @@ class TestGradeNodeRRFScores:
 
         state = make_initial_state(user_id=1, session_id="s", query="квартиры")
         state["documents"] = [
-            {"score": 0.016, "text": "doc1"},  ***REMOVED*** RRF rank 1: 1/61 ≈ 0.016
+            {"score": 0.016, "text": "doc1"},  # RRF rank 1: 1/61 ≈ 0.016
             {"score": 0.015, "text": "doc2"},
             {"score": 0.014, "text": "doc3"},
         ]
@@ -110,10 +110,10 @@ class TestGradeNodeRRFScores:
         state["documents"] = [{"score": 0.008, "text": "doc1"}]
         with patch.dict("os.environ", {"RELEVANCE_THRESHOLD_RRF": "0.01"}):
             result = await grade_node(state)
-        assert result["documents_relevant"] is False  ***REMOVED*** 0.008 < 0.01
+        assert result["documents_relevant"] is False  # 0.008 < 0.01
 
 
-***REMOVED*** --- rerank_node tests ---
+# --- rerank_node tests ---
 
 
 class TestRerankNode:
@@ -155,7 +155,7 @@ class TestRerankNode:
         result = await rerank_node(state, _make_runtime(reranker=None), top_k=2)
         assert result["rerank_applied"] is False
         assert len(result["documents"]) == 2
-        ***REMOVED*** Sorted by score desc: B(0.5), C(0.4)
+        # Sorted by score desc: B(0.5), C(0.4)
         assert result["documents"][0]["text"] == "doc B"
         assert result["documents"][1]["text"] == "doc C"
 
@@ -212,7 +212,7 @@ class TestRerankNode:
         mock_reranker.rerank.assert_not_awaited()
 
 
-***REMOVED*** --- rewrite_node tests ---
+# --- rewrite_node tests ---
 
 
 def _make_mock_llm(content: str = "rewritten query") -> MagicMock:
@@ -251,7 +251,7 @@ class TestRewriteNode:
         mock_llm = _make_mock_llm("rewritten query")
 
         result = await rewrite_node(state, _make_runtime(llm=mock_llm))
-        ***REMOVED*** Should return messages list with a HumanMessage
+        # Should return messages list with a HumanMessage
         assert len(result["messages"]) == 1
         msg = result["messages"][0]
         assert msg.content == "rewritten query"
@@ -286,7 +286,7 @@ class TestRewriteNode:
         """When LLM returns empty content, rewrite_effective=False."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
 
-        mock_llm = _make_mock_llm("")  ***REMOVED*** empty content after strip
+        mock_llm = _make_mock_llm("")  # empty content after strip
 
         state = make_initial_state(user_id=1, session_id="s", query="тест")
         result = await rewrite_node(state, _make_runtime(llm=mock_llm))
@@ -298,7 +298,7 @@ class TestRewriteNode:
         """When LLM returns the same text as original, rewrite_effective=False."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
 
-        mock_llm = _make_mock_llm("тест")  ***REMOVED*** same as original query
+        mock_llm = _make_mock_llm("тест")  # same as original query
 
         state = make_initial_state(user_id=1, session_id="s", query="тест")
         result = await rewrite_node(state, _make_runtime(llm=mock_llm))
@@ -331,7 +331,7 @@ class TestRewriteNode:
         assert result["rewrite_count"] == 1
 
 
-***REMOVED*** --- grade_node score_improved tests ---
+# --- grade_node score_improved tests ---
 
 
 class TestGradeNodeScoreImproved:
@@ -341,7 +341,7 @@ class TestGradeNodeScoreImproved:
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["documents"] = [{"text": "doc", "score": 0.003}]
-        ***REMOVED*** grade_confidence starts at 0.0
+        # grade_confidence starts at 0.0
         result = await grade_node(state)
         assert result["score_improved"] is True
 
@@ -350,8 +350,8 @@ class TestGradeNodeScoreImproved:
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["grade_confidence"] = 0.003  ***REMOVED*** previous top score
-        state["documents"] = [{"text": "doc", "score": 0.005}]  ***REMOVED*** delta = 0.002 > 0.001
+        state["grade_confidence"] = 0.003  # previous top score
+        state["documents"] = [{"text": "doc", "score": 0.005}]  # delta = 0.002 > 0.001
         result = await grade_node(state)
         assert result["score_improved"] is True
 
@@ -360,8 +360,8 @@ class TestGradeNodeScoreImproved:
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["grade_confidence"] = 0.004  ***REMOVED*** previous top score
-        state["documents"] = [{"text": "doc", "score": 0.0045}]  ***REMOVED*** delta = 0.0005 < 0.001
+        state["grade_confidence"] = 0.004  # previous top score
+        state["documents"] = [{"text": "doc", "score": 0.0045}]  # delta = 0.0005 < 0.001
         result = await grade_node(state)
         assert result["score_improved"] is False
 
@@ -371,7 +371,7 @@ class TestGradeNodeScoreImproved:
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["grade_confidence"] = 0.006
-        state["documents"] = [{"text": "doc", "score": 0.004}]  ***REMOVED*** worse
+        state["documents"] = [{"text": "doc", "score": 0.004}]  # worse
         result = await grade_node(state)
         assert result["score_improved"] is False
 

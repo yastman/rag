@@ -7,9 +7,9 @@ import pytest
 from src.contextualization.base import ContextualizedChunk, ContextualizeProvider
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestContextualizedChunkCreation
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestContextualizedChunkCreation
+# =============================================================================
 
 
 class TestContextualizedChunkCreation:
@@ -133,9 +133,9 @@ class TestContextualizedChunkCreation:
             assert chunk.context_method == method
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestContextualizedChunkFullText
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestContextualizedChunkFullText
+# =============================================================================
 
 
 class TestContextualizedChunkFullText:
@@ -188,9 +188,9 @@ class TestContextualizedChunkFullText:
             contextual_summary="Summary",
             article_number="Art 1",
         )
-        ***REMOVED*** Should be accessible without calling ()
+        # Should be accessible without calling ()
         assert isinstance(chunk.full_text, str)
-        ***REMOVED*** Verify it's a property
+        # Verify it's a property
         assert isinstance(type(chunk).full_text, property)
 
     def test_full_text_with_unicode(self):
@@ -204,9 +204,9 @@ class TestContextualizedChunkFullText:
         assert chunk.full_text == expected
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestContextualizedChunkToDict
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestContextualizedChunkToDict
+# =============================================================================
 
 
 class TestContextualizedChunkToDict:
@@ -299,7 +299,7 @@ class TestContextualizedChunkToDict:
             section="Sec A",
         )
         result = chunk.to_dict()
-        ***REMOVED*** Should not raise
+        # Should not raise
         json_str = json.dumps(result)
         assert isinstance(json_str, str)
 
@@ -318,9 +318,9 @@ class TestContextualizedChunkToDict:
         assert result["chapter"] == "Розділ II"
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestContextualizedChunkEdgeCases
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestContextualizedChunkEdgeCases
+# =============================================================================
 
 
 class TestContextualizedChunkEdgeCases:
@@ -356,7 +356,7 @@ class TestContextualizedChunkEdgeCases:
             article_number="Art 1",
         )
         assert len(chunk.original_text) == 100000
-        assert len(chunk.full_text) == 100000 * 2 + 2  ***REMOVED*** two texts + "\n\n"
+        assert len(chunk.full_text) == 100000 * 2 + 2  # two texts + "\n\n"
 
     def test_chunk_equality(self):
         """Test that two chunks with same values are equal (dataclass)."""
@@ -393,9 +393,9 @@ class TestContextualizedChunkEdgeCases:
         assert chunk1 != chunk2
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestContextualizeProviderInterface
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestContextualizeProviderInterface
+# =============================================================================
 
 
 class TestContextualizeProviderInterface:
@@ -443,20 +443,20 @@ class TestContextualizeProviderInterface:
                     article_number=article_number,
                 )
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         provider = CompleteProvider()
         assert isinstance(provider, ContextualizeProvider)
 
     def test_get_system_prompt_is_static(self):
         """Test that get_system_prompt is a static method."""
-        ***REMOVED*** Should be callable on the class without instance
+        # Should be callable on the class without instance
         result = ContextualizeProvider.get_system_prompt()
         assert isinstance(result, str)
 
     def test_get_system_prompt_content(self):
         """Test that get_system_prompt returns expected content."""
         prompt = ContextualizeProvider.get_system_prompt()
-        ***REMOVED*** Check for key phrases in the prompt
+        # Check for key phrases in the prompt
         assert "legal document analyzer" in prompt.lower()
         assert "ukrainian" in prompt.lower()
         assert "summary" in prompt.lower()
@@ -464,7 +464,7 @@ class TestContextualizeProviderInterface:
 
     def test_get_user_prompt_is_static(self):
         """Test that get_user_prompt is a static method."""
-        ***REMOVED*** Should be callable on the class without instance
+        # Should be callable on the class without instance
         result = ContextualizeProvider.get_user_prompt("Test text")
         assert isinstance(result, str)
 
@@ -488,7 +488,7 @@ class TestContextualizeProviderInterface:
         """Test get_user_prompt with empty query string."""
         text = "Sample legal text"
         prompt = ContextualizeProvider.get_user_prompt(text, "")
-        ***REMOVED*** Empty query should still append the query section
+        # Empty query should still append the query section
         assert text in prompt
 
     def test_get_user_prompt_with_none_query(self):
@@ -496,13 +496,13 @@ class TestContextualizeProviderInterface:
         text = "Sample legal text"
         prompt = ContextualizeProvider.get_user_prompt(text, None)
         assert text in prompt
-        ***REMOVED*** Should not include query section when None
+        # Should not include query section when None
         assert "searching for" not in prompt.lower()
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestContextualizeProviderImplementation
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestContextualizeProviderImplementation
+# =============================================================================
 
 
 class TestContextualizeProviderImplementation:
@@ -596,16 +596,16 @@ class TestContextualizeProviderImplementation:
 
     async def test_inheritance_preserves_static_methods(self, mock_provider):
         """Test that static methods are inherited correctly."""
-        ***REMOVED*** Should be accessible on instance
+        # Should be accessible on instance
         system_prompt = mock_provider.get_system_prompt()
         user_prompt = mock_provider.get_user_prompt("text", "query")
         assert isinstance(system_prompt, str)
         assert isinstance(user_prompt, str)
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestStaticPromptMethods
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestStaticPromptMethods
+# =============================================================================
 
 
 class TestStaticPromptMethods:

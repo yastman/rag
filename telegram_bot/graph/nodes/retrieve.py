@@ -96,7 +96,7 @@ async def retrieve_node(
     retrieval_filters = state.get("filters")
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
 
-    ***REMOVED*** Curated span metadata (replaces auto-captured full state)
+    # Curated span metadata (replaces auto-captured full state)
     lf = get_client()
     lf.update_current_span(
         input={
@@ -113,9 +113,9 @@ async def retrieve_node(
     dense_vector = state.get("query_embedding")
     sparse_vector: Any = None
 
-    ***REMOVED*** After rewrite, query_embedding is None — re-embed the rewritten query
+    # After rewrite, query_embedding is None — re-embed the rewritten query
     if dense_vector is None and embeddings is not None:
-        ***REMOVED*** Check bundle cache first (avoids redundant BGE-M3 calls ***REMOVED***1493)
+        # Check bundle cache first (avoids redundant BGE-M3 calls #1493)
         _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
         bundle = None
         if _has_bundle_cache:
@@ -139,14 +139,14 @@ async def retrieve_node(
             if dense_vector is None:
                 sparse_cached = await cache.get_sparse_embedding(query)
                 if sparse_cached is not None:
-                    ***REMOVED*** Dense miss, sparse cached → just compute dense
+                    # Dense miss, sparse cached → just compute dense
                     dense_vector = await embeddings.aembed_query(query)
                     await cache.store_embedding(query, dense_vector)
                     sparse_vector = sparse_cached
                 elif callable(
                     getattr(embeddings, "aembed_hybrid_with_colbert", None)
                 ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
-                    ***REMOVED*** Full bundle: single call for dense + sparse + ColBERT
+                    # Full bundle: single call for dense + sparse + ColBERT
                     (
                         dense_vector,
                         sparse_vector,
@@ -154,7 +154,7 @@ async def retrieve_node(
                     ) = await embeddings.aembed_hybrid_with_colbert(query)
                     await cache.store_embedding(query, dense_vector)
                     await cache.store_sparse_embedding(query, sparse_vector)
-                    ***REMOVED*** Store full bundle for future requests (***REMOVED***1493)
+                    # Store full bundle for future requests (#1493)
                     if (
                         _has_bundle_cache
                         and dense_vector is not None
@@ -179,12 +179,12 @@ async def retrieve_node(
                 elif callable(
                     getattr(embeddings, "aembed_hybrid", None)
                 ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
-                    ***REMOVED*** Hybrid: single call for both dense + sparse
+                    # Hybrid: single call for both dense + sparse
                     dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
                     await cache.store_embedding(query, dense_vector)
                     await cache.store_sparse_embedding(query, sparse_vector)
                 else:
-                    ***REMOVED*** Fallback: parallel dense + sparse (old path)
+                    # Fallback: parallel dense + sparse (old path)
                     async def _get_dense() -> list[float]:
                         vec: list[float] = await embeddings.aembed_query(query)
                         await cache.store_embedding(query, vec)
@@ -200,7 +200,7 @@ async def retrieve_node(
     if not dense_vector:
         dense_vector = []
 
-    ***REMOVED*** Build search cache profile AFTER re-embed so colbert_query is accurate (***REMOVED***1493)
+    # Build search cache profile AFTER re-embed so colbert_query is accurate (#1493)
     search_cache_profile = _build_search_cache_profile(
         needs_coverage=needs_coverage,
         use_colbert=bool(colbert_query and _has_colbert_search),
@@ -210,7 +210,7 @@ async def retrieve_node(
 
     start = time.perf_counter()
 
-    ***REMOVED*** Step 1: Check search cache
+    # Step 1: Check search cache
     cached_results = await cache.get_search_results(dense_vector, search_cache_profile)
     if cached_results is not None:
         if needs_coverage:
@@ -229,7 +229,7 @@ async def retrieve_node(
                 "distinct_doc_count": distinct_doc_count,
                 "coverage_grouping_applied": needs_coverage,
                 "duration_ms": round(latency * 1000, 1),
-                ***REMOVED*** Full data for Langfuse managed evaluators (***REMOVED***386)
+                # Full data for Langfuse managed evaluators (#386)
                 "eval_query": query[:2000],
                 "eval_docs": "\n\n".join(
                     f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
@@ -243,21 +243,21 @@ async def retrieve_node(
             "search_cache_hit": True,
             "rerank_applied": False,
             "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
-            ***REMOVED*** Clear stale backend-error markers from previous turns/branches.
+            # Clear stale backend-error markers from previous turns/branches.
             "retrieval_backend_error": False,
             "retrieval_error_type": None,
             "retrieved_context": _build_retrieved_context(cached_results),
             "needs_coverage": needs_coverage,
         }
 
-    ***REMOVED*** Step 2: Get sparse embedding (cached or compute)
+    # Step 2: Get sparse embedding (cached or compute)
     if sparse_vector is None:
         sparse_vector = await cache.get_sparse_embedding(query)
         if sparse_vector is None:
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    ***REMOVED*** Step 3: Hybrid search via Qdrant SDK
+    # Step 3: Hybrid search via Qdrant SDK
     if needs_coverage:
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
@@ -271,7 +271,7 @@ async def retrieve_node(
         )
         rerank_applied = False
     elif colbert_query and _has_colbert_search:
-        ***REMOVED*** 3-stage: dense+sparse -> RRF -> ColBERT MaxSim (server-side)
+        # 3-stage: dense+sparse -> RRF -> ColBERT MaxSim (server-side)
         qdrant_result = await qdrant.hybrid_search_rrf_colbert(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -282,7 +282,7 @@ async def retrieve_node(
         )
         rerank_applied = True
     else:
-        ***REMOVED*** 2-stage fallback: dense+sparse -> RRF
+        # 2-stage fallback: dense+sparse -> RRF
         qdrant_result = await qdrant.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -294,14 +294,14 @@ async def retrieve_node(
     if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
         results, search_meta = qdrant_result
     else:
-        ***REMOVED*** Backward compatibility: some mocks/adapters still return only result list.
+        # Backward compatibility: some mocks/adapters still return only result list.
         results = qdrant_result
         search_meta = {"backend_error": False, "error_type": None, "error_message": None}
 
     if needs_coverage and results:
         results = cap_results_per_doc(results, max_per_doc=2)
 
-    ***REMOVED*** Step 4: Cache results (only on successful backend response)
+    # Step 4: Cache results (only on successful backend response)
     if results and not search_meta.get("backend_error", False):
         await cache.store_search_results(dense_vector, search_cache_profile, results)
 
@@ -325,7 +325,7 @@ async def retrieve_node(
             "retrieval_backend_error": search_meta.get("backend_error", False),
             "retrieval_error_type": search_meta.get("error_type"),
             "duration_ms": round(latency * 1000, 1),
-            ***REMOVED*** Full data for Langfuse managed evaluators (***REMOVED***386)
+            # Full data for Langfuse managed evaluators (#386)
             "eval_query": query[:2000],
             "eval_docs": "\n\n".join(
                 f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
@@ -345,7 +345,7 @@ async def retrieve_node(
         "retrieved_context": _build_retrieved_context(results),
         "needs_coverage": needs_coverage,
     }
-    ***REMOVED*** Persist re-computed embedding for downstream nodes (grade, cache_store)
+    # Persist re-computed embedding for downstream nodes (grade, cache_store)
     if state.get("query_embedding") is None and dense_vector:
         update["query_embedding"] = dense_vector
     return update

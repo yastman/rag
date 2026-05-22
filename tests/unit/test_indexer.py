@@ -104,7 +104,7 @@ class TestCreateCollection:
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        mock_client.get_collection.return_value = MagicMock()  ***REMOVED*** Collection exists
+        mock_client.get_collection.return_value = MagicMock()  # Collection exists
         mock_qdrant.return_value = mock_client
 
         indexer = DocumentIndexer(mock_settings)
@@ -124,7 +124,7 @@ class TestCreateCollection:
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        mock_client.get_collection.return_value = MagicMock()  ***REMOVED*** Collection exists
+        mock_client.get_collection.return_value = MagicMock()  # Collection exists
         mock_qdrant.return_value = mock_client
 
         indexer = DocumentIndexer(mock_settings)
@@ -153,13 +153,13 @@ class TestCreatePayloadIndexes:
         indexer = DocumentIndexer(mock_settings)
         indexer._create_payload_indexes("test_collection")
 
-        ***REMOVED*** Should create keyword indexes for text fields
+        # Should create keyword indexes for text fields
         keyword_calls = [
             call
             for call in mock_client.create_payload_index.call_args_list
             if call[1].get("field_schema") == "keyword"
         ]
-        assert len(keyword_calls) >= 4  ***REMOVED*** article_number, document_name, city, source_type
+        assert len(keyword_calls) >= 4  # article_number, document_name, city, source_type
 
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
@@ -176,13 +176,13 @@ class TestCreatePayloadIndexes:
         indexer = DocumentIndexer(mock_settings)
         indexer._create_payload_indexes("test_collection")
 
-        ***REMOVED*** Should create integer indexes for numeric fields
+        # Should create integer indexes for numeric fields
         integer_calls = [
             call
             for call in mock_client.create_payload_index.call_args_list
             if call[1].get("field_schema") == "integer"
         ]
-        ***REMOVED*** order, price, rooms, area, floor, floors, distance_to_sea, bathrooms
+        # order, price, rooms, area, floor, floors, distance_to_sea, bathrooms
         assert len(integer_calls) == 8
 
     @patch("src.ingestion.indexer.get_bge_m3_model")
@@ -200,7 +200,7 @@ class TestCreatePayloadIndexes:
         indexer = DocumentIndexer(mock_settings)
         indexer._create_payload_indexes("test_collection")
 
-        ***REMOVED*** Should create bool indexes for furnished, year_round
+        # Should create bool indexes for furnished, year_round
         bool_calls = [
             call
             for call in mock_client.create_payload_index.call_args_list
@@ -231,7 +231,7 @@ class TestIndexChunks:
 
         indexer = DocumentIndexer(mock_settings)
 
-        ***REMOVED*** Mock _index_batch to avoid actual embedding
+        # Mock _index_batch to avoid actual embedding
         with patch.object(indexer, "_index_batch"):
             chunks = [
                 Chunk(text="Text 1", chunk_id=0, document_name="doc.pdf", article_number="1"),
@@ -258,7 +258,7 @@ class TestGetCollectionStats:
 
         mock_info = MagicMock()
         mock_info.points_count = 100
-        mock_info.vectors_count = 300  ***REMOVED*** 3 vectors per point
+        mock_info.vectors_count = 300  # 3 vectors per point
         mock_info.indexed_vectors_count = 300
 
         mock_client = MagicMock()
@@ -306,12 +306,12 @@ class TestCreatePayloadIndexesError:
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        ***REMOVED*** Make create_payload_index fail
+        # Make create_payload_index fail
         mock_client.create_payload_index.side_effect = Exception("Index creation failed")
         mock_qdrant.return_value = mock_client
 
         indexer = DocumentIndexer(mock_settings)
-        ***REMOVED*** Should not raise, just print warning
+        # Should not raise, just print warning
         indexer._create_payload_indexes("test_collection")
 
         captured = capsys.readouterr()
@@ -341,7 +341,7 @@ class TestIndexBatch:
 
         indexer = DocumentIndexer(mock_settings)
 
-        ***REMOVED*** Mock embedding output
+        # Mock embedding output
         mock_dense = np.array([0.1] * 1024)
         mock_colbert = np.array([[0.1] * 1024])
         mock_lexical = {1: 0.5, 2: 0.3}
@@ -370,7 +370,7 @@ class TestIndexBatch:
 
             await indexer._index_batch(chunks, "test_collection")
 
-            ***REMOVED*** Should have called upsert
+            # Should have called upsert
             mock_client.upsert.assert_called_once()
             assert indexer.stats.indexed_chunks == 1
 
@@ -400,7 +400,7 @@ class TestIndexBatch:
 
         indexer = DocumentIndexer(mock_settings)
 
-        ***REMOVED*** Mock embedding output
+        # Mock embedding output
         mock_dense = np.array([0.1] * 1024)
         mock_colbert = np.array([[0.1] * 1024])
         mock_lexical = {1: 0.5, 2: 0.3}
@@ -425,7 +425,7 @@ class TestIndexBatch:
 
             await indexer._index_batch(chunks, "test_collection")
 
-            ***REMOVED*** Should have recorded failure
+            # Should have recorded failure
             assert indexer.stats.failed_chunks == 1
             assert indexer.stats.indexed_chunks == 0
 
@@ -498,7 +498,7 @@ class TestEmbedTexts:
         assert "lexical_weights" in result[0]
         assert "colbert_vecs" in result[0]
 
-        ***REMOVED*** Verify model.encode was called correctly
+        # Verify model.encode was called correctly
         mock_model.encode.assert_called_once()
         call_args = mock_model.encode.call_args
         assert call_args[0][0] == ["text 1", "text 2"]

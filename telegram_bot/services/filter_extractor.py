@@ -26,52 +26,52 @@ class FilterExtractor(BaseFilterExtractor):
         """
         filters: dict[str, Any] = {}
 
-        ***REMOVED*** Price filters
+        # Price filters
         price_filter = self._extract_price(query)
         if price_filter:
             filters["price"] = price_filter
 
-        ***REMOVED*** Rooms filter
+        # Rooms filter
         rooms = self._extract_rooms(query)
         if rooms:
             filters["rooms"] = rooms
 
-        ***REMOVED*** City filter
+        # City filter
         city = self._extract_city(query)
         if city:
             filters["city"] = city
 
-        ***REMOVED*** Area filter
+        # Area filter
         area_filter = self._extract_area(query)
         if area_filter:
             filters["area"] = area_filter
 
-        ***REMOVED*** Floor filter
+        # Floor filter
         floor = self._extract_floor(query)
         if floor:
             filters["floor"] = floor
 
-        ***REMOVED*** Distance to sea filter
+        # Distance to sea filter
         distance_filter = self._extract_distance_to_sea(query)
         if distance_filter:
             filters["distance_to_sea"] = distance_filter
 
-        ***REMOVED*** Maintenance cost filter
+        # Maintenance cost filter
         maintenance_filter = self._extract_maintenance(query)
         if maintenance_filter:
             filters["maintenance"] = maintenance_filter
 
-        ***REMOVED*** Bathrooms filter
+        # Bathrooms filter
         bathrooms = self._extract_bathrooms(query)
         if bathrooms:
             filters["bathrooms"] = bathrooms
 
-        ***REMOVED*** Furnished filter (canonical key for document/CSV pipeline; ***REMOVED***1401)
+        # Furnished filter (canonical key for document/CSV pipeline; #1401)
         furnished = self._extract_furnished(query)
         if furnished is not None:
             filters["furnished"] = furnished
 
-        ***REMOVED*** Year-round filter
+        # Year-round filter
         year_round = self._extract_year_round(query)
         if year_round:
             filters["year_round"] = year_round
@@ -82,7 +82,7 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract price filter from query."""
         query_lower = query.lower()
 
-        ***REMOVED*** Range FIRST: "от 80000 до 150000" (must check before single patterns)
+        # Range FIRST: "от 80000 до 150000" (must check before single patterns)
         range_pattern = r"от\s+(\d+[\s\d]*к?)\s+до\s+(\d+[\s\d]*к?)"
         match = re.search(range_pattern, query_lower)
         if match:
@@ -91,7 +91,7 @@ class FilterExtractor(BaseFilterExtractor):
             if min_price and max_price:
                 return {"gte": min_price, "lte": max_price}
 
-        ***REMOVED*** "дешевле 100000", "до 100к", "< 100000"
+        # "дешевле 100000", "до 100к", "< 100000"
         patterns_lt = [
             r"дешевле\s+(\d+[\s\d]*к?)",
             r"до\s+(\d+[\s\d]*к?)",
@@ -107,7 +107,7 @@ class FilterExtractor(BaseFilterExtractor):
                 if price:
                     return {"lt": price}
 
-        ***REMOVED*** "дороже 100000", "от 100000", "> 100000"
+        # "дороже 100000", "от 100000", "> 100000"
         patterns_gt = [
             r"дороже\s+(\d+[\s\d]*к?)",
             r"от\s+(\d+[\s\d]*к?)",
@@ -128,14 +128,14 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract number of rooms."""
         query_lower = query.lower()
 
-        ***REMOVED*** "3 комнаты", "трехкомнатная", "3-комнатная"
+        # "3 комнаты", "трехкомнатная", "3-комнатная"
         patterns = [
             r"(\d+)[\s-]*комнат",
             r"(одно|дву|трех|четырех|пяти)комнатн",
             r"студия",
         ]
 
-        ***REMOVED*** Number mapping
+        # Number mapping
         num_map = {
             "одно": 1,
             "дву": 2,
@@ -149,10 +149,10 @@ class FilterExtractor(BaseFilterExtractor):
             match = re.search(pattern, query_lower)
             if match:
                 rooms_str = match.group(1) if match.lastindex else match.group(0)
-                ***REMOVED*** Try to parse as number
+                # Try to parse as number
                 if rooms_str.isdigit():
                     return int(rooms_str)
-                ***REMOVED*** Try word mapping
+                # Try word mapping
                 for word, num in num_map.items():
                     if word in rooms_str:
                         return num
@@ -167,17 +167,17 @@ class FilterExtractor(BaseFilterExtractor):
         canonical city as their full form. Without alias-aware matching the
         pre-agent semantic-cache filter signature could omit ``city`` for
         morphologically inflected queries and let cache reuse cross
-        locations (***REMOVED***1607).
+        locations (#1607).
         """
         query_lower = query.lower()
 
-        ***REMOVED*** Aliases first (longest match wins)
+        # Aliases first (longest match wins)
         for alias in APARTMENT_CITY_ALIASES_SORTED:
             if alias in query_lower:
                 return APARTMENT_CITY_ALIASES[alias]
 
-        ***REMOVED*** Canonical name fallback (covers cities without alias entries:
-        ***REMOVED*** Несебр, Бургас, Варна, София, Поморие, Созополь).
+        # Canonical name fallback (covers cities without alias entries:
+        # Несебр, Бургас, Варна, София, Поморие, Созополь).
         for city in APARTMENT_CITY_NAMES:
             if city.lower() in query_lower:
                 return city
@@ -188,7 +188,7 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract area filter."""
         query_lower = query.lower()
 
-        ***REMOVED*** "больше 50 м2", "от 60 кв.м"
+        # "больше 50 м2", "от 60 кв.м"
         patterns = [
             r"больше\s+(\d+)\s*(?:м|кв)",
             r"от\s+(\d+)\s*(?:м|кв)",
@@ -210,7 +210,7 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract floor filter."""
         query_lower = query.lower()
 
-        ***REMOVED*** "4 этаж", "на 4 этаже", "только 4 этажа"
+        # "4 этаж", "на 4 этаже", "только 4 этажа"
         patterns = [
             r"(\d+)\s*этаж",
             r"на\s+(\d+)",
@@ -227,13 +227,13 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract distance to sea filter from query."""
         query_lower = query.lower()
 
-        ***REMOVED*** Check "pervaya liniya" and "u morya" first (fixed pattern matching)
+        # Check "pervaya liniya" and "u morya" first (fixed pattern matching)
         if re.search(r"первая\s+линия", query_lower):
             return {"lte": 200}
         if re.search(r"у\s+моря", query_lower):
             return {"lte": 200}
 
-        ***REMOVED*** "до 500м до моря", "не дальше 600м", "в 400м от моря"
+        # "до 500м до моря", "не дальше 600м", "в 400м от моря"
         patterns = [
             r"до\s+(\d+)\s*(?:м|метр).*?(?:до\s+)?(?:моря|пляжа)",
             r"не\s+дальше\s+(\d+)\s*(?:м|метр)",
@@ -256,7 +256,7 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract maintenance cost filter from query."""
         query_lower = query.lower()
 
-        ***REMOVED*** "поддержка до 10 евро", "такса меньше 15"
+        # "поддержка до 10 евро", "такса меньше 15"
         patterns = [
             r"(?:поддержка|такса).*?(?:до|меньше)\s+(\d+)",
             r"(?:до|меньше)\s+(\d+).*?(?:поддержка|такса)",
@@ -280,12 +280,12 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract number of bathrooms from query."""
         query_lower = query.lower()
 
-        ***REMOVED*** "2 санузла", "два санузла", "один санузел"
-        ***REMOVED*** Note: санузел (nom.) vs санузла/санузлов (gen.) - different stems
+        # "2 санузла", "два санузла", "один санузел"
+        # Note: санузел (nom.) vs санузла/санузлов (gen.) - different stems
         patterns = [
             r"(\d+)\s*санузл",
-            r"(один|два|три)\s+санузл",  ***REMOVED*** word form + санузла/санузлов
-            r"(один|два|три)\s+санузел",  ***REMOVED*** word form + санузел (nominative)
+            r"(один|два|три)\s+санузл",  # word form + санузла/санузлов
+            r"(один|два|три)\s+санузел",  # word form + санузел (nominative)
         ]
 
         num_map = {"один": 1, "два": 2, "три": 3}
@@ -308,15 +308,15 @@ class FilterExtractor(BaseFilterExtractor):
         "обставлен"), ``False`` for explicit negative phrasing ("без мебели",
         "немеблирован"), and ``None`` when furniture is not mentioned. The
         returned bool maps directly to ``metadata.furnished`` BOOL on the
-        document/CSV Qdrant collection (see docs/QDRANT_STACK.md, ***REMOVED***1401).
+        document/CSV Qdrant collection (see docs/QDRANT_STACK.md, #1401).
 
         Negative patterns are checked first so "без мебели" is not also
         matched by the substring "мебель".
         """
         query_lower = query.lower()
 
-        ***REMOVED*** Negative phrasing must be checked before positive (the substring
-        ***REMOVED*** "мебел" overlaps with "без мебели").
+        # Negative phrasing must be checked before positive (the substring
+        # "мебел" overlaps with "без мебели").
         negative_patterns = [
             r"без\s+мебели",
             r"немеблирован",
@@ -341,7 +341,7 @@ class FilterExtractor(BaseFilterExtractor):
         """Extract year-round requirement from query."""
         query_lower = query.lower()
 
-        ***REMOVED*** "круглогодичная", "круглый год"
+        # "круглогодичная", "круглый год"
         patterns = [
             r"круглогодичн",
             r"круглый\s+год",

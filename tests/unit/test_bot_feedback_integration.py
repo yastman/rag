@@ -56,9 +56,9 @@ def _make_callback(data="fb:done"):
     return callback
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestHandleFeedback
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestHandleFeedback
+# ---------------------------------------------------------------------------
 
 
 class TestHandleFeedback:
@@ -90,7 +90,7 @@ class TestHandleFeedback:
 
         callback.answer.assert_awaited_once_with()
         callback.message.edit_reply_markup.assert_awaited_once()
-        ***REMOVED*** Verify the keyboard passed is a dislike reason keyboard (3 rows)
+        # Verify the keyboard passed is a dislike reason keyboard (3 rows)
         markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
         assert len(markup.inline_keyboard) == 3
 
@@ -167,18 +167,18 @@ class TestHandleFeedback:
         with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
             await bot.handle_feedback(callback, callback_data=None)
 
-        ***REMOVED*** Score should NOT be written (shows reason keyboard instead)
+        # Score should NOT be written (shows reason keyboard instead)
         mock_lf.create_score.assert_not_called()
         callback.answer.assert_awaited_once_with()
         callback.message.edit_reply_markup.assert_awaited_once()
         markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
-        ***REMOVED*** Dislike reason keyboard has 3 rows of 2 buttons
+        # Dislike reason keyboard has 3 rows of 2 buttons
         assert len(markup.inline_keyboard) == 3
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** TestHandleHitlCallback
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# TestHandleHitlCallback
+# ---------------------------------------------------------------------------
 
 
 class TestHandleHitlCallback:

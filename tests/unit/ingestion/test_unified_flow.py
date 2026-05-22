@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/ingestion/test_unified_flow.py
+# tests/unit/ingestion/test_unified_flow.py
 """Tests for unified ingestion flow module (CocoIndex orchestration)."""
 
 import hashlib
@@ -106,7 +106,7 @@ class TestFlowNameFor:
         name = _flow_name_for(config)
         suffix = name.split("_", 1)[1]
         assert len(suffix) == 6
-        int(suffix, 16)  ***REMOVED*** Should not raise — valid hex
+        int(suffix, 16)  # Should not raise — valid hex
 
 
 class TestAppNamespaceFor:
@@ -420,7 +420,7 @@ class TestRunWatch:
         mock_updater.wait.side_effect = KeyboardInterrupt
         mock_updater_cls.return_value = mock_updater
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         run_watch()
 
         mock_flow.close.assert_called_once()

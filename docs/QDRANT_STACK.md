@@ -1,15 +1,15 @@
-***REMOVED*** Qdrant Stack
+# Qdrant Stack
 
 Current Qdrant setup used by bot and ingestion flows.
 
-***REMOVED******REMOVED*** Version And Endpoints
+## Version And Endpoints
 
 - Compose image: `qdrant/qdrant:v1.18.0` (pinned by digest in compose files)
 - Python SDK: `qdrant-client>=1.17.0` (v1.17+ adds weighted RRF, relevance feedback)
 - HTTP: `http://localhost:6333`
 - gRPC: `localhost:6334`
 
-***REMOVED******REMOVED*** Primary Collections
+## Primary Collections
 
 - Default runtime collection: `gdrive_documents_bge`
 - Alias: `gdrive_documents_bge_active` → `gdrive_documents_bge` (blue/green cutover ready)
@@ -17,7 +17,7 @@ Current Qdrant setup used by bot and ingestion flows.
 - Conversation history collection: `conversation_history` (payload under `metadata.user_id` / `metadata.session_id`; created on-demand by `telegram_bot/services/history_service.py`)
 - Additional collections may exist for evaluation or legacy flows.
 
-***REMOVED******REMOVED*** Collection Naming Policy
+## Collection Naming Policy
 
 Defined in `src/config/qdrant_policy.py` (`resolve_collection_name`):
 
@@ -31,7 +31,7 @@ Rules:
 - Any existing `_binary` or `_scalar` suffix is stripped from the base name before applying the new mode suffix.
 - This prevents double suffixes like `gdrive_documents_bge_scalar_binary`.
 
-***REMOVED******REMOVED*** Vector Schema (Unified Bootstrap)
+## Vector Schema (Unified Bootstrap)
 
 Collection bootstrap (`src/ingestion/unified/cli.py bootstrap`) creates:
 
@@ -39,11 +39,11 @@ Collection bootstrap (`src/ingestion/unified/cli.py bootstrap`) creates:
 - Multivector rerank field: name `colbert`, size `1024`, MaxSim comparator
 - Sparse vector: name `bm42`, IDF modifier
 
-***REMOVED******REMOVED*** Payload-Index Contract Matrix
+## Payload-Index Contract Matrix
 
 The table below shows which payload indexes each origin creates, their Qdrant schema type, and where they are used in filters or queries.
 
-***REMOVED******REMOVED******REMOVED*** Legend
+### Legend
 
 - **Origin:**
   - `unified` — `src/ingestion/unified/cli.py bootstrap`
@@ -55,7 +55,7 @@ The table below shows which payload indexes each origin creates, their Qdrant sc
 - **Type:** Qdrant `PayloadSchemaType` (`keyword`, `integer`, `float`, `bool`)
 - **Runtime use:** Where the field is actively referenced in filters, `group_by`, or `order_by`
 
-***REMOVED******REMOVED******REMOVED*** Unified / Legacy / Ensure (document chunking)
+### Unified / Legacy / Ensure (document chunking)
 
 | Field | Type | unified | legacy | ensure | Runtime use |
 |-------|------|:-------:|:------:|:------:|-------------|
@@ -74,7 +74,7 @@ The table below shows which payload indexes each origin creates, their Qdrant sc
 | `metadata.order` | `integer` | ✓ | ✓ | ✓ | `small_to_big` `order_by` for neighbor chunks |
 | `metadata.chunk_id` | `integer` | ✓ | ✓ | ✓ | — |
 
-***REMOVED******REMOVED******REMOVED*** Scalar / Binary (quantized evaluation collections)
+### Scalar / Binary (quantized evaluation collections)
 
 | Field | Type | scalar | binary | Runtime use |
 |-------|------|:------:|:------:|-------------|
@@ -104,7 +104,7 @@ The table below shows which payload indexes each origin creates, their Qdrant sc
 | `metadata.furnished` | `bool` | — | ✓ | Structured catalog exact match (bool) |
 | `metadata.year_round` | `bool` | — | ✓ | Structured catalog exact match (bool) |
 
-***REMOVED******REMOVED******REMOVED*** Structured Catalog / CSV-only indexes
+### Structured Catalog / CSV-only indexes
 
 Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`. These fields are populated by structured CSV ingestion and used by the catalog search pipeline.
 
@@ -129,7 +129,7 @@ Created by `telegram_bot/setup_qdrant_indexes.py` and `src/ingestion/indexer.py`
 - `metadata.area` is `float` in `setup_qdrant_indexes.py` but `integer` in `indexer.py`, `setup_scalar_collection.py`, and `setup_binary_collection.py`.
 - `metadata.maintenance` (float) is only created by `setup_qdrant_indexes.py`; none of the scalar/binary/indexer scripts index it.
 
-***REMOVED******REMOVED******REMOVED*** Furnished status (issue ***REMOVED***1401)
+### Furnished status (issue #1401)
 
 The `furnished`/`furniture`/`is_furnished` schema is split deliberately by collection. There is no single canonical name across the system, but each lane is internally consistent end-to-end:
 
@@ -139,9 +139,9 @@ The `furnished`/`furniture`/`is_furnished` schema is split deliberately by colle
 
 **Migration note for existing deployments.** The legacy `metadata.furniture` KEYWORD index that older deployments may have created has zero data hits, because the chunker has always written `metadata.furnished` BOOL. It is safe to leave in place or to remove via `client.delete_payload_index(collection_name, 'metadata.furniture')` at any time. Re-running `telegram_bot/setup_qdrant_indexes.py` against an existing collection is idempotent: it logs "Index already exists, skipping" for pre-existing fields and creates `metadata.furnished` BOOL only if absent. No payload backfill is required.
 
-***REMOVED******REMOVED*** Other Qdrant Collections
+## Other Qdrant Collections
 
-***REMOVED******REMOVED******REMOVED*** `apartments` (standalone apartment collection)
+### `apartments` (standalone apartment collection)
 
 Created by `scripts/apartments/setup_collection.py`.
 
@@ -160,7 +160,7 @@ Created by `scripts/apartments/setup_collection.py`.
 | `is_furnished` | `bool` | Uses `models.PayloadSchemaType.BOOL` |
 | `is_promotion` | `bool` | Uses `models.PayloadSchemaType.BOOL` |
 
-***REMOVED******REMOVED******REMOVED*** `conversation_history`
+### `conversation_history`
 
 Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collection`).
 
@@ -169,11 +169,11 @@ Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collect
 - Payload indexes ensured by `ensure_collection`: `metadata.user_id` (integer),
   `metadata.session_id` (keyword), and `metadata.deal_id` (integer).
 
-***REMOVED******REMOVED*** SQL Index Navigation (Postgres Init Drift)
+## SQL Index Navigation (Postgres Init Drift)
 
 `k8s/base/configmaps/postgres-init.yaml` only embeds `00-init-databases.sql`, `02-cocoindex.sql`, and `03-unified-ingestion-alter.sql`. `docker/postgres/init/` additionally contains `04-voice-schema.sql`, `05-realestate-schema.sql`, `06-lead-scoring-sync.sql`, `07-nurturing-funnel-analytics.sql`, and `08-user-favorites.sql`. The K8s init ConfigMap is missing scripts 04–08, which means voice transcripts, real-estate users/leads, lead scoring, nurturing analytics, and user favorites tables will not be created in K8s-deployed Postgres unless they are provisioned separately.
 
-***REMOVED******REMOVED*** Runtime-Required vs Legacy-Only Fields
+## Runtime-Required vs Legacy-Only Fields
 
 **Runtime-required** (bot and unified ingestion depend on these):
 - `file_id` (flat) — fast delete
@@ -189,7 +189,7 @@ Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collect
 **Best-effort / classifier-populated** (unified ingestion writes these, but bot does not filter on them today):
 - `metadata.topic`, `metadata.doc_type`, `metadata.jurisdiction`, `metadata.audience`, `metadata.language`, `metadata.source_type`
 
-***REMOVED******REMOVED*** Bot Fallback Behavior
+## Bot Fallback Behavior
 
 `telegram_bot/services/qdrant.py` (`QdrantService.ensure_collection()`):
 
@@ -200,7 +200,7 @@ Created on-demand by `telegram_bot/services/history_service.py` (`ensure_collect
 
 All three steps are non-blocking: failures are logged as warnings and do not prevent startup.
 
-***REMOVED******REMOVED*** Strict Mode
+## Strict Mode
 
 Collection-level guardrails applied at bot startup via `QdrantService._apply_strict_mode()`:
 
@@ -213,13 +213,13 @@ Collection-level guardrails applied at bot startup via `QdrantService._apply_str
 
 Non-blocking: warns on failure, does not prevent startup.
 
-***REMOVED******REMOVED*** Aliases
+## Aliases
 
 `QdrantService._ensure_alias()` creates `{collection}_active` alias on startup.
 Pattern enables zero-downtime blue/green cutover: atomically swap alias to new collection
 via `update_collection_aliases()` without bot restart.
 
-***REMOVED******REMOVED*** ColBERT Observability (Runtime Metrics)
+## ColBERT Observability (Runtime Metrics)
 
 Structured log metrics emitted to the logger with `extra={"metric_name": ..., "value": 1}`:
 
@@ -232,44 +232,44 @@ Structured log metrics emitted to the logger with `extra={"metric_name": ..., "v
 
 Preflight also logs ColBERT point-level coverage: `"Preflight Qdrant: colbert coverage %.2f%% (%d/%d)"` — warn threshold `COLBERT_COVERAGE_WARN_THRESHOLD = 0.995`.
 
-***REMOVED******REMOVED*** Setup And Validation
+## Setup And Validation
 
 ```bash
-***REMOVED*** Create ingestion-ready collection if missing
+# Create ingestion-ready collection if missing
 uv run python -m src.ingestion.unified.cli bootstrap
 
-***REMOVED*** Fail-fast guard: require ColBERT in existing/new runtime schema
+# Fail-fast guard: require ColBERT in existing/new runtime schema
 uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
 
-***REMOVED*** Validate vector schema (fail if colbert missing)
+# Validate vector schema (fail if colbert missing)
 uv run python -m src.ingestion.unified.cli schema-check --require-colbert
 
-***REMOVED*** Check point-level ColBERT coverage (>=99.5% recommended, 100% target)
+# Check point-level ColBERT coverage (>=99.5% recommended, 100% target)
 uv run python -m src.ingestion.unified.cli coverage-check --min-ratio 0.995
 
-***REMOVED*** Backfill missing point-level ColBERT vectors
+# Backfill missing point-level ColBERT vectors
 uv run python -m src.ingestion.unified.cli backfill-colbert --batch-size 32 --resume
 
-***REMOVED*** Dry-run sample before writes
+# Dry-run sample before writes
 uv run python -m src.ingestion.unified.cli backfill-colbert --dry-run --limit 1000
-***REMOVED*** Check collection
+# Check collection
 curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python3 -m json.tool
 
-***REMOVED*** Check service readiness
+# Check service readiness
 curl -fsS http://localhost:6333/readyz
 ```
 
-***REMOVED******REMOVED*** Feature Decisions (2026-02-24)
+## Feature Decisions (2026-02-24)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **FormulaQuery** (exp_decay freshness boost) | Implemented, not wired | `search_with_score_boosting()` ready; wire when product needs freshness ranking. See ***REMOVED***590. |
-| **ACORN** (filtered search optimization) | SDK available, evaluation-only | In search benchmark engines; connect to production when filtered recall needs improvement. See ***REMOVED***590. |
+| **FormulaQuery** (exp_decay freshness boost) | Implemented, not wired | `search_with_score_boosting()` ready; wire when product needs freshness ranking. See #590. |
+| **ACORN** (filtered search optimization) | SDK available, evaluation-only | In search benchmark engines; connect to production when filtered recall needs improvement. See #590. |
 | **Strict Mode** | Active at startup | `QdrantService._apply_strict_mode()` — non-blocking warn on error. |
 | **Aliases** | Active at startup | `QdrantService._ensure_alias()` — non-blocking warn on error. |
 | **ColBERT preflight coverage** | Active | Warns if coverage < 99.5%; see `preflight.py`. |
 
-***REMOVED******REMOVED*** Backups
+## Backups
 
 ```bash
 make qdrant-backup
@@ -277,13 +277,13 @@ make qdrant-backup
 
 Snapshots are created via `scripts/qdrant_snapshot.py`.
 
-***REMOVED******REMOVED*** Runtime Integration Points
+## Runtime Integration Points
 
 - Bot retrieval: `telegram_bot/services/qdrant.py`
 - Unified ingestion writes: `src/ingestion/unified/qdrant_writer.py`
 - Ingestion target connector: `src/ingestion/unified/targets/qdrant_hybrid_target.py`
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
 - Empty retrieval results: verify `QDRANT_COLLECTION` matches existing collection.
 - Ingestion writes fail: run `src.ingestion.unified.cli preflight` to confirm reachability.

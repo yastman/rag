@@ -1,14 +1,14 @@
-***REMOVED*** Ingestion
+# Ingestion
 
 This project currently uses a unified CocoIndex-based ingestion pipeline as the primary path.
 
-***REMOVED******REMOVED*** Primary Runtime
+## Primary Runtime
 
 - Package: `src/ingestion/unified/`
 - CLI entrypoint: `python -m src.ingestion.unified.cli`
 - Pipeline version in code: `v3.2.1`
 
-***REMOVED******REMOVED*** What The Pipeline Does
+## What The Pipeline Does
 
 1. Reads files from `GDRIVE_SYNC_DIR` (LocalFile source).
 2. Computes stable file identity via manifest/content hash.
@@ -19,28 +19,28 @@ This project currently uses a unified CocoIndex-based ingestion pipeline as the 
 5. Upserts/deletes points in Qdrant.
 6. Tracks file state/retries/DLQ in PostgreSQL.
 
-***REMOVED******REMOVED*** Core Commands
+## Core Commands
 
 ```bash
-***REMOVED*** Validate dependencies, env, and source directory
+# Validate dependencies, env, and source directory
 make ingest-unified-preflight
 
-***REMOVED*** Create or validate the runtime collection schema
+# Create or validate the runtime collection schema
 make ingest-unified-bootstrap
 
-***REMOVED*** One-shot run
+# One-shot run
 make ingest-unified
 
-***REMOVED*** Continuous watch mode
+# Continuous watch mode
 make ingest-unified-watch
 
-***REMOVED*** State/DLQ status
+# State/DLQ status
 make ingest-unified-status
 
-***REMOVED*** Reprocess files in error state
+# Reprocess files in error state
 make ingest-unified-reprocess
 
-***REMOVED*** Container logs
+# Container logs
 make ingest-unified-logs
 ```
 
@@ -54,7 +54,7 @@ uv run python -m src.ingestion.unified.cli status
 uv run python -m src.ingestion.unified.cli reprocess --errors
 ```
 
-***REMOVED******REMOVED*** Langfuse Trace Contract
+## Langfuse Trace Contract
 
 - CLI root spans:
   - `ingestion-cli-run`
@@ -71,7 +71,7 @@ Validate coverage together with API/voice traces:
 make validate-traces-fast
 ```
 
-***REMOVED******REMOVED*** Required Environment Variables
+## Required Environment Variables
 
 - `INGESTION_DATABASE_URL`
 - `QDRANT_URL`
@@ -88,7 +88,7 @@ Commonly used:
 - `BGE_M3_CONCURRENCY`
 - `MANIFEST_DIR`
 
-***REMOVED******REMOVED*** Docker Service
+## Docker Service
 
 `compose.yml` + `compose.dev.yml` include the `ingestion` service under profile `ingest`.
 
@@ -100,7 +100,7 @@ make ingest-unified-logs
 The service mounts `GDRIVE_SYNC_DIR` into `/data/drive-sync` with fail-fast bind-mount semantics.
 If the host path is missing, `docker compose` now fails instead of silently creating an empty directory.
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
 - `preflight` fails on Qdrant: confirm collection exists or run `bootstrap`.
 - `preflight` fails on sync dir: confirm `GDRIVE_SYNC_DIR` exists, is a directory, and contains supported files.

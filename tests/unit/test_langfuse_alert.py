@@ -21,9 +21,9 @@ def _load_module():
     return module
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** compute_dislike_rate
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# compute_dislike_rate
+# ---------------------------------------------------------------------------
 
 
 def test_compute_dislike_rate_from_avg_like():
@@ -58,15 +58,15 @@ def test_compute_dislike_rate_zero_count():
     assert count == 0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** check_hourly_alerts — Tier 1
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# check_hourly_alerts — Tier 1
+# ---------------------------------------------------------------------------
 
 
 def test_check_hourly_alerts_fires_on_high_dislike_rate():
     """Dislike rate > 15% with >= 20 samples triggers Tier 1 alert."""
     module = _load_module()
-    ***REMOVED*** avg_like=0.8 → 20% dislike, 25 samples
+    # avg_like=0.8 → 20% dislike, 25 samples
     feedback_metrics = {"value_avg": 0.8, "count_count": 25.0}
     faith_metrics = {"value_avg": 0.7, "count_count": 25.0}
 
@@ -81,7 +81,7 @@ def test_check_hourly_alerts_fires_on_high_dislike_rate():
 def test_check_hourly_alerts_not_fired_below_dislike_threshold():
     """Dislike rate <= 15% does not trigger alert."""
     module = _load_module()
-    ***REMOVED*** avg_like=0.9 → 10% dislike, 30 samples
+    # avg_like=0.9 → 10% dislike, 30 samples
     feedback_metrics = {"value_avg": 0.9, "count_count": 30.0}
     faith_metrics = {"value_avg": 0.7, "count_count": 30.0}
 
@@ -93,7 +93,7 @@ def test_check_hourly_alerts_not_fired_below_dislike_threshold():
 def test_check_hourly_alerts_not_fired_insufficient_samples():
     """Dislike rate > 15% but < 20 samples does NOT trigger alert."""
     module = _load_module()
-    ***REMOVED*** avg_like=0.7 → 30% dislike but only 5 samples
+    # avg_like=0.7 → 30% dislike but only 5 samples
     feedback_metrics = {"value_avg": 0.7, "count_count": 5.0}
     faith_metrics = {"value_avg": 0.7, "count_count": 5.0}
 
@@ -129,8 +129,8 @@ def test_check_hourly_alerts_not_fired_on_good_metrics():
 def test_check_hourly_alerts_both_tiers_fire():
     """Both dislike rate and faithfulness can fire simultaneously."""
     module = _load_module()
-    feedback_metrics = {"value_avg": 0.7, "count_count": 30.0}  ***REMOVED*** 30% dislike
-    faith_metrics = {"value_avg": 0.3, "count_count": 30.0}  ***REMOVED*** 0.3 faithfulness
+    feedback_metrics = {"value_avg": 0.7, "count_count": 30.0}  # 30% dislike
+    faith_metrics = {"value_avg": 0.3, "count_count": 30.0}  # 0.3 faithfulness
 
     alerts = module.check_hourly_alerts(feedback_metrics, faith_metrics)
     assert len(alerts) == 2
@@ -145,9 +145,9 @@ def test_check_hourly_alerts_no_data_no_alert():
     assert alerts == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_alert_message
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_alert_message
+# ---------------------------------------------------------------------------
 
 
 def test_format_alert_message_dislike_contains_key_info():
@@ -190,9 +190,9 @@ def test_format_alert_message_is_non_empty_string():
     assert len(msg) > 10
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_digest_message
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_digest_message
+# ---------------------------------------------------------------------------
 
 
 def test_format_digest_message_includes_dislike_rate():
@@ -207,7 +207,7 @@ def test_format_digest_message_includes_dislike_rate():
     msg = module.format_digest_message(
         feedback_metrics, faith_metrics, latency_metrics, cache_metrics, top_reasons
     )
-    ***REMOVED*** 15% dislike (1 - 0.85)
+    # 15% dislike (1 - 0.85)
     assert "15%" in msg or "0.15" in msg
 
 
@@ -262,9 +262,9 @@ def test_format_digest_message_handles_empty_data():
     assert len(msg) > 0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** send_telegram_message
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# send_telegram_message
+# ---------------------------------------------------------------------------
 
 
 def test_send_telegram_message_success():
@@ -330,9 +330,9 @@ def test_send_telegram_message_posts_correct_url():
     assert "sendMessage" in url
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** build_metrics_query
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# build_metrics_query
+# ---------------------------------------------------------------------------
 
 
 def test_build_metrics_query_returns_valid_json():
@@ -401,9 +401,9 @@ def test_build_metrics_query_p95_aggregation():
     assert "p95" in aggregations
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** get_top_dislike_reasons
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# get_top_dislike_reasons
+# ---------------------------------------------------------------------------
 
 
 def test_get_top_dislike_reasons_returns_sorted_list():
@@ -474,25 +474,25 @@ def test_get_top_dislike_reasons_limits_to_top_n():
     assert len(result) <= 3
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** check_hourly_alerts — min_samples guard on faithfulness
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# check_hourly_alerts — min_samples guard on faithfulness
+# ---------------------------------------------------------------------------
 
 
 def test_check_hourly_alerts_faithfulness_not_fired_insufficient_samples():
     """Low faithfulness but < 20 samples does NOT trigger alert."""
     module = _load_module()
     feedback_metrics = {"value_avg": 0.95, "count_count": 5.0}
-    faith_metrics = {"value_avg": 0.3, "count_count": 5.0}  ***REMOVED*** below 0.5 but only 5 samples
+    faith_metrics = {"value_avg": 0.3, "count_count": 5.0}  # below 0.5 but only 5 samples
 
     alerts = module.check_hourly_alerts(feedback_metrics, faith_metrics)
     faith_alerts = [a for a in alerts if a["type"] == "judge_faithfulness"]
     assert faith_alerts == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_hourly / run_digest integration (mocked Langfuse + Telegram)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_hourly / run_digest integration (mocked Langfuse + Telegram)
+# ---------------------------------------------------------------------------
 
 
 def _make_mock_lf(feedback_avg: float = 0.95, faith_avg: float = 0.8, count: float = 30.0):
@@ -504,7 +504,7 @@ def _make_mock_lf(feedback_avg: float = 0.95, faith_avg: float = 0.8, count: flo
         name_filter = next(
             (f["value"] for f in q.get("filters", []) if f["column"] == "name"), None
         )
-        ***REMOVED*** Use dicts so query_score_metrics takes the isinstance(row, dict) branch
+        # Use dicts so query_score_metrics takes the isinstance(row, dict) branch
         if name_filter == "user_feedback":
             row: dict = {"value_avg": feedback_avg, "count_count": count}
         elif name_filter == "judge_faithfulness":
@@ -535,7 +535,7 @@ def test_run_hourly_returns_zero_when_no_alerts():
 def test_run_hourly_returns_alert_count_and_sends_message():
     """run_hourly returns alert count and sends Telegram message when dislike > 15%."""
     module = _load_module()
-    ***REMOVED*** avg_like=0.7 → 30% dislike, 30 samples
+    # avg_like=0.7 → 30% dislike, 30 samples
     mock_lf = _make_mock_lf(feedback_avg=0.7, faith_avg=0.8, count=30.0)
 
     mock_response = MagicMock()

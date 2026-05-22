@@ -1,10 +1,10 @@
-***REMOVED*** ADR-0001: ColBERT Reranking over Other Approaches
+# ADR-0001: ColBERT Reranking over Other Approaches
 
 **Status:** Accepted
 
 **Date:** 2026-01-15
 
-***REMOVED******REMOVED*** Context
+## Context
 
 The RAG pipeline needed a reranking solution to improve document retrieval quality. We evaluated several approaches:
 
@@ -13,18 +13,18 @@ The RAG pipeline needed a reranking solution to improve document retrieval quali
 3. **ColBERT reranking** — Late interaction with maxsim operation
 4. **No reranking** — Direct RRF scores
 
-***REMOVED******REMOVED*** Decision
+## Decision
 
 We chose **ColBERT reranking** (via BGE-M3 model) as the default reranker.
 
-***REMOVED******REMOVED******REMOVED*** Why ColBERT
+### Why ColBERT
 
 1. **BGE-M3 native** — The project already uses BGE-M3 for embeddings; ColBERT vectors come from the same model
 2. **Efficiency** — Pre-computed ColBERT vectors enable fast retrieval without full cross-encoder overhead
 3. **Quality** — Late interaction captures fine-grained semantic matching better than bi-encoder approaches
 4. **Server-side reranking** — Qdrant supports nested prefetch with ColBERT, reducing client-server round trips
 
-***REMOVED******REMOVED******REMOVED*** Why Not Others
+### Why Not Others
 
 | Approach | Reason Rejected |
 |----------|----------------|
@@ -32,19 +32,19 @@ We chose **ColBERT reranking** (via BGE-M3 model) as the default reranker.
 | Cross-encoder | Too slow for real-time queries; requires separate model |
 | No reranking | RRF alone insufficient for complex queries |
 
-***REMOVED******REMOVED*** Consequences
+## Consequences
 
-***REMOVED******REMOVED******REMOVED*** Positive
+### Positive
 - Improved retrieval quality for complex queries
 - Single model for embeddings + reranking (BGE-M3)
 - Qdrant ColBERT prefetch support
 
-***REMOVED******REMOVED******REMOVED*** Negative
+### Negative
 - Additional storage for ColBERT vectors (~2x embedding storage)
 - Latency addition when reranking triggered (typically 50-200ms)
 - `RERANK_PROVIDER` configuration complexity
 
-***REMOVED******REMOVED*** Implementation
+## Implementation
 
 - Current runtime keeps the legacy client-side reranker service deprecated; `PropertyBot` and the RAG API set the reranker hook to `None`.
 - `RERANK_PROVIDER=colbert` selects the server-side Qdrant ColBERT path when ColBERT query vectors and the collection schema are available.
@@ -52,7 +52,7 @@ We chose **ColBERT reranking** (via BGE-M3 model) as the default reranker.
 - If ColBERT vectors are missing, empty, or erroring, `QdrantService.hybrid_search_rrf_colbert()` falls back to plain hybrid RRF and records fallback metadata.
 - `telegram_bot/graph/nodes/rerank.py` remains an optional graph stage, but the active ColBERT implementation is server-side Qdrant reranking during retrieval rather than a separate client-side reranker service.
 
-***REMOVED******REMOVED*** References
+## References
 
 - [ColBERT Paper](https://arxiv.org/abs/2004.12832)
 - [BGE-M3 Model](https://huggingface.co/BAAI/bge-m3)

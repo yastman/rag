@@ -10,12 +10,12 @@ from aiogram import BaseMiddleware, Dispatcher
 from aiogram.dispatcher.flags import get_flag
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from aiogram.utils.callback_answer import CallbackAnswerMiddleware
-from cachetools import TTLCache  ***REMOVED*** type: ignore[import-untyped]
+from cachetools import TTLCache  # type: ignore[import-untyped]
 
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Defaults when no rate_limit flag is set on the handler
+# Defaults when no rate_limit flag is set on the handler
 _DEFAULT_MESSAGE_RATE = 1.0
 _DEFAULT_CALLBACK_RATE = 0.3
 _DEFAULT_KEY = "default"
@@ -50,9 +50,9 @@ class ThrottlingMiddleware(BaseMiddleware):
         self.default_rate = default_rate
         logger.info(f"ThrottlingMiddleware initialized: default_rate={default_rate}s")
 
-    ***REMOVED*** ------------------------------------------------------------------
-    ***REMOVED*** Internal helpers
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
     def _get_cache(self, rate: float) -> TTLCache[Any, None]:
         """Return (or lazily create) a TTLCache for the given *rate*."""
@@ -62,7 +62,7 @@ class ThrottlingMiddleware(BaseMiddleware):
             self._caches[rate] = cache
         return cache
 
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
 
     async def __call__(
         self,
@@ -77,11 +77,11 @@ class ThrottlingMiddleware(BaseMiddleware):
 
         user_id = user.id
 
-        ***REMOVED*** Skip throttling for admins
+        # Skip throttling for admins
         if user_id in self.admin_ids:
             return await handler(event, data)
 
-        ***REMOVED*** Resolve rate & key from handler flag or defaults
+        # Resolve rate & key from handler flag or defaults
         rate_config: dict[str, Any] | None = get_flag(data, "rate_limit")
 
         if rate_config is not None:
@@ -97,7 +97,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         cache = self._get_cache(rate)
         cache_key = (user_id, key)
 
-        ***REMOVED*** Check if user is throttled
+        # Check if user is throttled
         if cache_key in cache:
             logger.warning(f"User {user_id} throttled (key={key}, rate={rate}s)")
 
@@ -108,7 +108,7 @@ class ThrottlingMiddleware(BaseMiddleware):
 
             return None
 
-        ***REMOVED*** Add to cache
+        # Add to cache
         cache[cache_key] = None
         return await handler(event, data)
 
@@ -129,6 +129,6 @@ def setup_throttling_middleware(
     middleware = ThrottlingMiddleware(default_rate=default_rate, admin_ids=admin_ids)
     dp.message.middleware.register(middleware)
     dp.callback_query.middleware.register(middleware)
-    ***REMOVED*** Auto-answer callbacks (pre=True) to dismiss Telegram "loading" spinner immediately
+    # Auto-answer callbacks (pre=True) to dismiss Telegram "loading" spinner immediately
     dp.callback_query.middleware.register(CallbackAnswerMiddleware(pre=True))
     logger.info("Throttling middleware registered")

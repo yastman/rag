@@ -16,11 +16,11 @@ class ContextualizedChunk:
     """Chunk with added context and metadata."""
 
     original_text: str
-    contextual_summary: str  ***REMOVED*** LLM-generated context
+    contextual_summary: str  # LLM-generated context
     article_number: str
     chapter: str | None = None
     section: str | None = None
-    context_method: str = "none"  ***REMOVED*** 'claude', 'openai', 'groq'
+    context_method: str = "none"  # 'claude', 'openai', 'groq'
     timestamp: datetime = field(default_factory=datetime.now)
 
     @property
@@ -108,7 +108,7 @@ class ContextualizeProvider(ABC):
         stays alive and produces a fallback ``ContextualizedChunk`` with
         ``context_method="none"`` and an empty ``contextual_summary`` at
         the failed index. Output cardinality and order match the input
-        list (***REMOVED***1656). Callers can filter on ``context_method`` to detect
+        list (#1656). Callers can filter on ``context_method`` to detect
         which chunks were skipped.
 
         Args:
@@ -121,8 +121,8 @@ class ContextualizeProvider(ABC):
             chunks are represented as fallback records, never dropped.
         """
         sem = asyncio.Semaphore(max_concurrency)
-        ***REMOVED*** Pre-allocate so each task can write to its index slot — preserves
-        ***REMOVED*** order without sorting after the fact.
+        # Pre-allocate so each task can write to its index slot — preserves
+        # order without sorting after the fact.
         results: list[ContextualizedChunk] = [
             ContextualizedChunk(
                 original_text="",

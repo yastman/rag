@@ -10,7 +10,7 @@ This test scans production code paths via AST and reports every offending
 call site. Test code (`tests/`) is intentionally excluded — historical
 fixtures may still construct naive datetimes for compatibility checks.
 
-Refs ***REMOVED***1640.
+Refs #1640.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-***REMOVED*** Production code paths that must not contain naive UTC constructors.
+# Production code paths that must not contain naive UTC constructors.
 SCAN_DIRS = [
     REPO_ROOT / "scripts",
     REPO_ROOT / "src",
@@ -30,7 +30,7 @@ SCAN_DIRS = [
     REPO_ROOT / "services",
 ]
 
-***REMOVED*** Forbidden datetime constructors (all return naive datetimes).
+# Forbidden datetime constructors (all return naive datetimes).
 FORBIDDEN_ATTRS = {"utcnow", "utcfromtimestamp"}
 
 
@@ -55,9 +55,9 @@ def _find_naive_utc_calls(source: str, file_path: Path) -> list[tuple[Path, int,
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        ***REMOVED*** Match `datetime.utcnow(...)` and `datetime.utcfromtimestamp(...)`
-        ***REMOVED*** whether `datetime` is the class or the module is irrelevant —
-        ***REMOVED*** both yield naive datetimes and are forbidden.
+        # Match `datetime.utcnow(...)` and `datetime.utcfromtimestamp(...)`
+        # whether `datetime` is the class or the module is irrelevant —
+        # both yield naive datetimes and are forbidden.
         if isinstance(func, ast.Attribute) and func.attr in FORBIDDEN_ATTRS:
             target = ast.unparse(func)
             offenders.append((file_path, node.lineno, target))
@@ -76,6 +76,6 @@ def test_no_naive_utcnow_in_production_code() -> None:
         ]
         msg = (
             "Naive UTC datetime constructors found in production code "
-            "(see ***REMOVED***1640). Replace with `datetime.now(UTC)`:\n" + "\n".join(rel)
+            "(see #1640). Replace with `datetime.now(UTC)`:\n" + "\n".join(rel)
         )
         raise AssertionError(msg)

@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/metrics.py
+# src/ingestion/unified/metrics.py
 """Structured metrics logging for unified ingestion pipeline."""
 
 import logging
@@ -20,18 +20,18 @@ class IngestionMetrics:
     source_path: str
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    ***REMOVED*** Timing
+    # Timing
     docling_duration_ms: float = 0
     voyage_duration_ms: float = 0
     qdrant_duration_ms: float = 0
     total_duration_ms: float = 0
 
-    ***REMOVED*** Counts
+    # Counts
     chunks_created: int = 0
     chunks_deleted: int = 0
 
-    ***REMOVED*** Status
-    status: str = "pending"  ***REMOVED*** pending, success, error, skipped
+    # Status
+    status: str = "pending"  # pending, success, error, skipped
     error_message: str | None = None
 
     def to_structured_log(self) -> dict[str, Any]:

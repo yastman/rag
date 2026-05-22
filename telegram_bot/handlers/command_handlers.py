@@ -40,9 +40,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Handler functions (testable standalone — pass bot explicitly)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Handler functions (testable standalone — pass bot explicitly)
+# ---------------------------------------------------------------------------
 
 
 @observe(name="cmd-start", capture_input=False, capture_output=False)
@@ -54,7 +54,7 @@ async def cmd_start_deeplink(
     """Handle /start q_<uuid> - Mini App deep link flow."""
     assert message.from_user is not None
     assert command.args is not None
-    uuid_str = command.args[2:]  ***REMOVED*** strip "q_" prefix
+    uuid_str = command.args[2:]  # strip "q_" prefix
     await bot._handle_deeplink_start(message, uuid_str)
 
 
@@ -123,7 +123,7 @@ async def cmd_clear(
 
     Closes any active aiogram-dialog stack (e.g. DemoSG apartment-search) and
     resets the FSM state so subsequent free-text questions are routed back to
-    the supervisor / RAG path. See ***REMOVED***1454.
+    the supervisor / RAG path. See #1454.
     """
     from telegram_bot.services.checkpointer_utils import (
         _delete_checkpointer_thread,
@@ -132,7 +132,7 @@ async def cmd_clear(
 
     assert message.from_user is not None
     user_id = message.from_user.id
-    ***REMOVED*** ***REMOVED***1454: drop any active aiogram-dialog stack BEFORE clearing FSM
+    # #1454: drop any active aiogram-dialog stack BEFORE clearing FSM
     dialog_reset_failed = False
     if dialog_manager is not None:
         try:
@@ -261,7 +261,7 @@ async def cmd_call(bot: PropertyBot, message: Message) -> None:
         return
 
     text = (message.text or "").strip()
-    parts = text.split(maxsplit=2)  ***REMOVED*** /call +380... description
+    parts = text.split(maxsplit=2)  # /call +380... description
     if len(parts) < 2:
         await message.answer("Использование: /call +380501234567 [описание заявки]")
         return
@@ -293,7 +293,7 @@ async def cmd_call(bot: PropertyBot, message: Message) -> None:
             room_name = f"voice-call-{uuid.uuid4().hex[:8]}"
             call_id = str(uuid.uuid4())
 
-            ***REMOVED*** 1. Dispatch voice agent to room
+            # 1. Dispatch voice agent to room
             await lk.agent_dispatch.create_dispatch(
                 api.CreateAgentDispatchRequest(
                     agent_name="voice-bot",
@@ -313,7 +313,7 @@ async def cmd_call(bot: PropertyBot, message: Message) -> None:
                 )
             )
 
-            ***REMOVED*** 2. Create SIP participant (dials the phone)
+            # 2. Create SIP participant (dials the phone)
             await lk.sip.create_sip_participant(
                 api.CreateSIPParticipantRequest(
                     room_name=room_name,
@@ -432,9 +432,9 @@ async def cmd_history(bot: PropertyBot, message: Message) -> None:
         await message.answer("\n".join(lines))
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Router factory
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Router factory
+# ---------------------------------------------------------------------------
 
 
 def create_commands_router(bot_instance: PropertyBot) -> Router:
@@ -452,7 +452,7 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
     """
     router = Router(name="commands")
 
-    ***REMOVED*** Wrap each handler to pre-fill the bot argument
+    # Wrap each handler to pre-fill the bot argument
     async def _cmd_start_deeplink(message: Message, command: CommandObject) -> None:
         await cmd_start_deeplink(bot_instance, message, command)
 
@@ -491,7 +491,7 @@ def create_commands_router(bot_instance: PropertyBot) -> Router:
     async def _cmd_clearcache(message: Message) -> None:
         await cmd_clearcache(bot_instance, message)
 
-    ***REMOVED*** Register on the router
+    # Register on the router
     router.message(CommandStart(deep_link=True, magic=F.args.startswith("q_")))(_cmd_start_deeplink)
     router.message(Command("start"))(_cmd_start)
     router.message(Command("help"))(_cmd_help)

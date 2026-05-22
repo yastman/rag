@@ -90,7 +90,7 @@ class HyDEGenerator:
         """Generate a hypothetical document that would answer the query.
 
         Wrapped in ``@observe`` so the auto-traced generation produced by
-        ``langfuse.openai`` becomes a child of a named span (***REMOVED***1661). Curated
+        ``langfuse.openai`` becomes a child of a named span (#1661). Curated
         ``update_current_span`` payloads avoid leaking full prompts/documents
         into Langfuse.
 
@@ -121,12 +121,12 @@ class HyDEGenerator:
                 ],
                 "temperature": 0.7,
                 "max_tokens": 200,
-                "name": "hyde-generate",  ***REMOVED*** langfuse kwarg
+                "name": "hyde-generate",  # langfuse kwarg
             }
             if prompt_obj is not None:
-                ***REMOVED*** Link generation observation to its Langfuse Prompt entry (***REMOVED***1666).
+                # Link generation observation to its Langfuse Prompt entry (#1666).
                 create_kwargs["langfuse_prompt"] = prompt_obj
-            response = await self.client.chat.completions.create(  ***REMOVED*** type: ignore[call-overload]
+            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
                 **create_kwargs,
             )
 
@@ -180,14 +180,14 @@ class QueryPreprocessor:
     QueryPreprocessor is rule-based and runs before QueryAnalyzer.
     """
 
-    ***REMOVED*** Transliteration map: Latin -> Cyrillic (Bulgarian cities and resorts)
+    # Transliteration map: Latin -> Cyrillic (Bulgarian cities and resorts)
     TRANSLIT_MAP = {
-        ***REMOVED*** Cities
+        # Cities
         "Burgas": "Бургас",
         "Varna": "Варна",
         "Sofia": "София",
         "Plovdiv": "Пловдив",
-        ***REMOVED*** Resorts
+        # Resorts
         "Nesebar": "Несебър",
         "Nessebar": "Несебър",
         "Sozopol": "Созопол",
@@ -210,34 +210,34 @@ class QueryPreprocessor:
         "Byala": "Бяла",
     }
 
-    ***REMOVED*** Precompiled (pattern, replacement) pairs derived from TRANSLIT_MAP.
-    ***REMOVED***
-    ***REMOVED*** The TRANSLIT_MAP is static and shared across all instances, so the
-    ***REMOVED*** compiled patterns can be hoisted out of the per-query hot path
-    ***REMOVED*** (issue ***REMOVED***1644). Each pattern preserves the original IGNORECASE flag and
-    ***REMOVED*** iteration order matches dict insertion order, so multi-word phrases
-    ***REMOVED*** like "Sunny Beach" still match before any prefix subset would.
+    # Precompiled (pattern, replacement) pairs derived from TRANSLIT_MAP.
+    #
+    # The TRANSLIT_MAP is static and shared across all instances, so the
+    # compiled patterns can be hoisted out of the per-query hot path
+    # (issue #1644). Each pattern preserves the original IGNORECASE flag and
+    # iteration order matches dict insertion order, so multi-word phrases
+    # like "Sunny Beach" still match before any prefix subset would.
     _COMPILED_TRANSLIT: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         (re.compile(re.escape(_latin), re.IGNORECASE), _cyrillic)
         for _latin, _cyrillic in TRANSLIT_MAP.items()
     )
 
-    ***REMOVED*** Patterns indicating exact search (favor sparse vectors)
+    # Patterns indicating exact search (favor sparse vectors)
     EXACT_PATTERNS = [
-        r"\bID\s*\d+",  ***REMOVED*** "ID 12345"
-        r"\b\d{5,}\b",  ***REMOVED*** Long numbers (IDs)
-        r"корпус\s*\d+",  ***REMOVED*** "корпус 5"
-        r"корпус\s*[А-Яа-яA-Za-z]",  ***REMOVED*** corpus with letter (e.g. A)
-        r"блок\s*\d+",  ***REMOVED*** "блок 3"
-        r"блок\s*[А-Яа-яA-Za-z]",  ***REMOVED*** block with letter (e.g. B)
-        r"секция\s*\d+",  ***REMOVED*** "секция 2"
-        r"этаж\s*\d+",  ***REMOVED*** "этаж 5"
-        r"ЖК\s+\w+",  ***REMOVED*** "ЖК Елените"
+        r"\bID\s*\d+",  # "ID 12345"
+        r"\b\d{5,}\b",  # Long numbers (IDs)
+        r"корпус\s*\d+",  # "корпус 5"
+        r"корпус\s*[А-Яа-яA-Za-z]",  # corpus with letter (e.g. A)
+        r"блок\s*\d+",  # "блок 3"
+        r"блок\s*[А-Яа-яA-Za-z]",  # block with letter (e.g. B)
+        r"секция\s*\d+",  # "секция 2"
+        r"этаж\s*\d+",  # "этаж 5"
+        r"ЖК\s+\w+",  # "ЖК Елените"
     ]
 
-    ***REMOVED*** Patterns requiring strict cache threshold
+    # Patterns requiring strict cache threshold
     STRICT_CACHE_PATTERNS = [
-        r"\b\d{3,}\b",  ***REMOVED*** Numbers 3+ digits
+        r"\b\d{3,}\b",  # Numbers 3+ digits
         r"корпус",
         r"блок",
         r"секция",
@@ -248,7 +248,7 @@ class QueryPreprocessor:
     def normalize_translit(self, query: str) -> str:
         """Convert Latin place names to Cyrillic for BM42 sparse search.
 
-        Uses precompiled patterns from ``_COMPILED_TRANSLIT`` (issue ***REMOVED***1644) so
+        Uses precompiled patterns from ``_COMPILED_TRANSLIT`` (issue #1644) so
         the per-query cost is just N substitutions, not N compile + N
         substitutions. Behaviour is byte-identical to the previous per-call
         ``re.compile`` implementation, including the IGNORECASE flag and

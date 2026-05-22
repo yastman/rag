@@ -154,7 +154,7 @@ class TestGroqContextualizerContextualize:
     async def test_contextualize_handles_error_gracefully(self, contextualizer, caplog):
         """Test that errors in individual chunks are handled gracefully.
 
-        After ***REMOVED***1533 the per-chunk fallback lives in ``base.contextualize_batch``
+        After #1533 the per-chunk fallback lives in ``base.contextualize_batch``
         which logs via ``logger.warning`` rather than ``print``; assert against
         ``caplog`` accordingly.
         """
@@ -180,12 +180,12 @@ class TestGroqContextualizerContextualize:
 
         assert len(results) == 3
         assert results[0].contextual_summary == "Success summary"
-        ***REMOVED*** Failed chunk should have empty summary and context_method="none"
+        # Failed chunk should have empty summary and context_method="none"
         assert results[1].contextual_summary == ""
         assert results[1].context_method == "none"
         assert results[2].contextual_summary == "Success summary"
 
-        ***REMOVED*** Base contextualize_batch logs a warning for the failed chunk
+        # Base contextualize_batch logs a warning for the failed chunk
         warning_messages = [
             r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
@@ -261,7 +261,7 @@ class TestGroqContextualizerContextualizeSingle:
         await contextualizer.contextualize_single("Text", "art_1")
 
         call_args = contextualizer.client.chat.completions.create.call_args
-        assert call_args.kwargs["temperature"] == 0.7  ***REMOVED*** From fixture settings
+        assert call_args.kwargs["temperature"] == 0.7  # From fixture settings
 
     async def test_contextualize_single_sends_correct_messages(self, contextualizer):
         """Test that correct system and user prompts are sent."""
@@ -301,16 +301,16 @@ class TestGroqContextualizerContextualizeSingle:
 
     async def test_contextualize_single_without_usage_attribute(self, contextualizer):
         """Test handling response without usage attribute."""
-        mock_response = MagicMock(spec=[])  ***REMOVED*** No attributes
+        mock_response = MagicMock(spec=[])  # No attributes
         mock_response.choices = [MagicMock(message=MagicMock(content="Summary"))]
-        ***REMOVED*** Explicitly remove usage attribute
+        # Explicitly remove usage attribute
         del mock_response.usage
         contextualizer.client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         result = await contextualizer.contextualize_single("Text", "art_1")
 
         assert result.contextual_summary == "Summary"
-        assert contextualizer.total_tokens == 0  ***REMOVED*** Not incremented
+        assert contextualizer.total_tokens == 0  # Not incremented
 
 
 class TestGroqContextualizerSync:
@@ -446,16 +446,16 @@ class TestGroqContextualizerGetStats:
 
         assert stats == {
             "total_tokens": 1500,
-            "total_cost_usd": 0.0,  ***REMOVED*** Groq is free
+            "total_cost_usd": 0.0,  # Groq is free
         }
 
     def test_get_stats_groq_is_free(self, contextualizer):
         """Test that Groq always reports zero cost."""
-        contextualizer.total_tokens = 1000000  ***REMOVED*** Even with many tokens
+        contextualizer.total_tokens = 1000000  # Even with many tokens
 
         stats = contextualizer.get_stats()
 
-        assert stats["total_cost_usd"] == 0.0  ***REMOVED*** Still free
+        assert stats["total_cost_usd"] == 0.0  # Still free
 
 
 class TestGroqContextualizerErrorHandling:
@@ -513,7 +513,7 @@ class TestGroqContextualizerErrorHandling:
     async def test_batch_continues_after_single_failure(self, contextualizer, caplog):
         """Test that batch processing continues after individual failures.
 
-        After ***REMOVED***1533 the per-chunk fallback lives in ``base.contextualize_batch``
+        After #1533 the per-chunk fallback lives in ``base.contextualize_batch``
         which logs via ``logger.warning`` rather than ``print``; assert against
         ``caplog`` accordingly.
         """
@@ -540,16 +540,16 @@ class TestGroqContextualizerErrorHandling:
             results = await contextualizer.contextualize(chunks)
 
         assert len(results) == 4
-        ***REMOVED*** Chunk 0 failed
+        # Chunk 0 failed
         assert results[0].contextual_summary == ""
         assert results[0].context_method == "none"
-        ***REMOVED*** Chunk 1 succeeded
+        # Chunk 1 succeeded
         assert results[1].contextual_summary == "Success"
         assert results[1].context_method == "groq"
-        ***REMOVED*** Chunk 2 failed
+        # Chunk 2 failed
         assert results[2].contextual_summary == ""
         assert results[2].context_method == "none"
-        ***REMOVED*** Chunk 3 succeeded
+        # Chunk 3 succeeded
         assert results[3].contextual_summary == "Success"
         assert results[3].context_method == "groq"
 

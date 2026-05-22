@@ -77,7 +77,7 @@ class TestCollectSessionMetrics:
         """Should compute p50/p95/cost/tokens from observation-level data."""
         collector, mock_client = self._make_collector(mock_langfuse_cls)
 
-        ***REMOVED*** 2 traces, each with 1 generation observation
+        # 2 traces, each with 1 generation observation
         traces = [
             self._make_trace("t1", "ci-abc-job-1", metadata={"cache_hit": False}),
             self._make_trace("t2", "ci-abc-job-1", metadata={"cache_hit": True}),
@@ -88,7 +88,7 @@ class TestCollectSessionMetrics:
         traces_page.meta.next_page = None
         mock_client.api.trace.list.return_value = traces_page
 
-        ***REMOVED*** Observations: 1s and 2s latency
+        # Observations: 1s and 2s latency
         obs1 = self._make_observation(
             start_time=datetime(2026, 2, 12, 10, 0, 0, tzinfo=UTC),
             end_time=datetime(2026, 2, 12, 10, 0, 1, tzinfo=UTC),
@@ -119,10 +119,10 @@ class TestCollectSessionMetrics:
         assert result.total_cost_usd == pytest.approx(0.03)
         assert result.llm_tokens_input == 300
         assert result.llm_tokens_output == 130
-        ***REMOVED*** p50 of [1000, 2000] = 1500ms, p95 ≈ 1950ms
+        # p50 of [1000, 2000] = 1500ms, p95 ≈ 1950ms
         assert result.llm_latency_p50_ms == pytest.approx(1500.0)
         assert result.llm_latency_p95_ms > 1800.0
-        ***REMOVED*** 1 hit, 1 miss → 50%
+        # 1 hit, 1 miss → 50%
         assert result.cache_hit_rate == pytest.approx(0.5)
         assert result.cache_hits == 1
         assert result.cache_misses == 1
@@ -140,7 +140,7 @@ class TestCollectSessionMetrics:
         traces_page.meta.next_page = None
         mock_client.api.trace.list.return_value = traces_page
 
-        ***REMOVED*** One observation with None end_time
+        # One observation with None end_time
         obs = self._make_observation(cost=0.01, input_tokens=100, output_tokens=50)
         obs.end_time = None
         obs_page = MagicMock()
@@ -151,10 +151,10 @@ class TestCollectSessionMetrics:
 
         result = collector.collect_session_metrics(session_id="s1")
 
-        ***REMOVED*** Latency should be 0 (no valid observations)
+        # Latency should be 0 (no valid observations)
         assert result.llm_latency_p50_ms == 0.0
         assert result.llm_latency_p95_ms == 0.0
-        ***REMOVED*** Cost/tokens still counted
+        # Cost/tokens still counted
         assert result.total_cost_usd == pytest.approx(0.01)
         assert result.llm_tokens_input == 100
 

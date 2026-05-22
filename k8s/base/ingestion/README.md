@@ -1,10 +1,10 @@
-***REMOVED*** Ingestion
+# Ingestion
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Kubernetes ingestion workload for the Google Drive document pipeline.
 
-***REMOVED******REMOVED*** Data Contract
+## Data Contract
 
 `deployment.yaml` mounts `drive-sync-pvc` at `/data/drive-sync` as read-only.
 That PVC must be pre-populated before scaling the ingestion deployment above
@@ -18,11 +18,11 @@ or sync data into the volume by itself.
 If the PVC is empty, ingestion can start successfully but process zero files.
 Verify the mounted volume contains supported documents before running ingestion.
 
-***REMOVED******REMOVED*** Contents
+## Contents
 
 - `deployment.yaml` — ingestion Deployment consuming `/data/drive-sync`
 - `pvc.yaml` — externally-provisioned Google Drive sync mirror PVC
 
-***REMOVED******REMOVED*** Parent
+## Parent
 
 - [..](..)

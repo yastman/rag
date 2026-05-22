@@ -1,4 +1,4 @@
-"""FSM coverage tests for ``telegram_bot.dialogs.states`` (issue ***REMOVED***1093).
+"""FSM coverage tests for ``telegram_bot.dialogs.states`` (issue #1093).
 
 These tests enforce three contracts that the dialog backlog called out:
 
@@ -32,12 +32,12 @@ from telegram_bot.dialogs import states as states_module
 DIALOGS_DIR = Path(__file__).resolve().parents[3] / "telegram_bot" / "dialogs"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 1. State enum coverage
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 1. State enum coverage
+# ---------------------------------------------------------------------------
 
 
-***REMOVED*** (StatesGroup class name, expected state attribute names) — locked from ***REMOVED***1093
+# (StatesGroup class name, expected state attribute names) — locked from #1093
 EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
     "ClientMenuSG": ("main",),
     "ManagerMenuSG": ("main",),
@@ -103,15 +103,15 @@ EXPECTED_STATE_GROUPS: dict[str, tuple[str, ...]] = {
 def test_states_group_exposes_expected_states(
     group_name: str, expected_states: tuple[str, ...]
 ) -> None:
-    """Each StatesGroup must define the documented State attributes (***REMOVED***1093)."""
+    """Each StatesGroup must define the documented State attributes (#1093)."""
     cls = getattr(states_module, group_name, None)
-    assert cls is not None, f"telegram_bot.dialogs.states must expose {group_name!r} (issue ***REMOVED***1093)."
+    assert cls is not None, f"telegram_bot.dialogs.states must expose {group_name!r} (issue #1093)."
     assert inspect.isclass(cls) and issubclass(cls, StatesGroup), (
         f"{group_name!r} must be a StatesGroup subclass."
     )
     for state_name in expected_states:
         attr = getattr(cls, state_name, None)
-        assert attr is not None, f"{group_name}.{state_name} must be defined (issue ***REMOVED***1093)."
+        assert attr is not None, f"{group_name}.{state_name} must be defined (issue #1093)."
         assert isinstance(attr, State), (
             f"{group_name}.{state_name} must be a State instance, got {type(attr)!r}."
         )
@@ -132,13 +132,13 @@ def test_no_unexpected_states_groups_are_silently_dropped() -> None:
         "New StatesGroup(s) found in telegram_bot/dialogs/states.py that are "
         f"not yet pinned by tests/unit/dialogs/test_dialogs_fsm_coverage.py: "
         f"{sorted(missing)!r}. Add their expected State names to "
-        "EXPECTED_STATE_GROUPS so transitions stay covered (***REMOVED***1093)."
+        "EXPECTED_STATE_GROUPS so transitions stay covered (#1093)."
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 2. Wizard step ordering — verify source references appear in order
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 2. Wizard step ordering — verify source references appear in order
+# ---------------------------------------------------------------------------
 
 
 def _extract_state_references(file_path: Path, group_name: str) -> list[str]:
@@ -171,8 +171,8 @@ def test_wizard_steps_appear_in_documented_order(group_name: str) -> None:
     assert file_path.exists(), f"Expected dialog file {file_path} to exist"
     refs = _extract_state_references(file_path, group_name)
 
-    ***REMOVED*** Ignore router-style references (e.g. start dialog at first step) by
-    ***REMOVED*** de-duplicating consecutive repeats and keeping first appearance only.
+    # Ignore router-style references (e.g. start dialog at first step) by
+    # de-duplicating consecutive repeats and keeping first appearance only.
     seen: list[str] = []
     for ref in refs:
         if ref in seen:
@@ -188,9 +188,9 @@ def test_wizard_steps_appear_in_documented_order(group_name: str) -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 3. No dead states — every declared State must be referenced by a dialog
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. No dead states — every declared State must be referenced by a dialog
+# ---------------------------------------------------------------------------
 
 
 def _all_dialog_files() -> list[Path]:
@@ -204,7 +204,7 @@ def _all_production_files() -> list[Path]:
     in ``telegram_bot/handlers/crm_callbacks.py``) or by the top-level bot
     module, not only by dialog windows.
     """
-    root = DIALOGS_DIR.parent  ***REMOVED*** telegram_bot/
+    root = DIALOGS_DIR.parent  # telegram_bot/
     return sorted(p for p in root.rglob("*.py") if p.name != "states.py")
 
 
@@ -214,13 +214,13 @@ def _state_is_referenced(group_name: str, state_name: str, dialog_sources: str) 
     return bool(pattern.search(dialog_sources))
 
 
-***REMOVED*** Known-dead states that pre-date ***REMOVED***1093 and are tracked separately.
-***REMOVED*** - ``SearchSG`` was superseded by ``SearchLeadsSG``/``SearchContactsSG`` in ***REMOVED***697
-***REMOVED***   but the enum is still imported by ``tests/unit/dialogs/test_crm_foundation.py``.
-***REMOVED*** - ``CrmSubmenuSG`` was kept "for backward compatibility" per its docstring and
-***REMOVED***   is superseded by ``CRMMenuSG``.
-***REMOVED*** Removing them is out of scope for ***REMOVED***1093 — flagged here so the contract is
-***REMOVED*** explicit and a future cleanup PR can drop the allowlist + the unused classes.
+# Known-dead states that pre-date #1093 and are tracked separately.
+# - ``SearchSG`` was superseded by ``SearchLeadsSG``/``SearchContactsSG`` in #697
+#   but the enum is still imported by ``tests/unit/dialogs/test_crm_foundation.py``.
+# - ``CrmSubmenuSG`` was kept "for backward compatibility" per its docstring and
+#   is superseded by ``CRMMenuSG``.
+# Removing them is out of scope for #1093 — flagged here so the contract is
+# explicit and a future cleanup PR can drop the allowlist + the unused classes.
 _EXTERNALLY_REFERENCED_ALLOWLIST: set[tuple[str, str]] = {
     ("SearchSG", "query"),
     ("SearchSG", "results"),
@@ -235,7 +235,7 @@ def test_every_declared_state_is_referenced_by_a_dialog() -> None:
     was removed. Search scope is the whole ``telegram_bot/`` package because
     a few groups (e.g. ``CrmQuickActionSG``) are still wired through raw
     aiogram FSM in ``telegram_bot/handlers/`` rather than aiogram-dialog
-    windows (see ***REMOVED***1232 for the migration roadmap).
+    windows (see #1232 for the migration roadmap).
     """
     sources = "\n".join(p.read_text(encoding="utf-8") for p in _all_production_files())
 
@@ -254,10 +254,10 @@ def test_every_declared_state_is_referenced_by_a_dialog() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 4. Transition cross-link — each multi-step wizard's terminal state must
-***REMOVED***    appear in the same file as the entry state (no cross-file accidents).
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 4. Transition cross-link — each multi-step wizard's terminal state must
+#    appear in the same file as the entry state (no cross-file accidents).
+# ---------------------------------------------------------------------------
 
 
 WIZARD_ENTRY_AND_TERMINAL: dict[str, tuple[Path, str, str]] = {

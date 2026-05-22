@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 APPLY=false
@@ -16,11 +16,11 @@ if [ "$COMPOSE_PROJECT_NAME" != "vps" ]; then
   exit 1
 fi
 
-***REMOVED*** Service and volume allowlists
+# Service and volume allowlists
 
-***REMOVED*** Single source of truth: scripts/lib/vps_noncore_services.sh (***REMOVED***1611).
+# Single source of truth: scripts/lib/vps_noncore_services.sh (#1611).
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-***REMOVED*** shellcheck source=lib/vps_noncore_services.sh
+# shellcheck source=lib/vps_noncore_services.sh
 . "${SCRIPT_DIR}/lib/vps_noncore_services.sh"
 
 removable_volumes=(
@@ -38,7 +38,7 @@ protected_volumes=(
   vps_hf_cache
 )
 
-***REMOVED*** Cross-check: no protected volume appears in removable list
+# Cross-check: no protected volume appears in removable list
 
 for protected in "${protected_volumes[@]}"; do
   for candidate in "${removable_volumes[@]}"; do
@@ -49,7 +49,7 @@ for protected in "${protected_volumes[@]}"; do
   done
 done
 
-***REMOVED*** Preflight: verify removed services are vps-noncore gated
+# Preflight: verify removed services are vps-noncore gated
 
 preflight_noncore_profiles() {
   local config_json
@@ -92,7 +92,7 @@ if [ "$APPLY" != "true" ]; then
   exit 0
 fi
 
-***REMOVED*** Apply: stop, remove containers, then remove allowlisted volumes
+# Apply: stop, remove containers, then remove allowlisted volumes
 
 docker compose stop "${VPS_NONCORE_SERVICES[@]}" || true
 docker compose rm -f "${VPS_NONCORE_SERVICES[@]}" || true

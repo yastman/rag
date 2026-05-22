@@ -21,18 +21,18 @@ class QuantizationMode(StrEnum):
 class SearchEngine(StrEnum):
     """Available search engine implementations."""
 
-    BASELINE = "baseline"  ***REMOVED*** Dense vectors only
-    HYBRID_RRF = "hybrid_rrf"  ***REMOVED*** Dense + Sparse with RRF fusion
-    HYBRID_RRF_COLBERT = "hybrid_rrf_colbert"  ***REMOVED*** Dense + Sparse + ColBERT (Variant A - BEST)
-    DBSF_COLBERT = "dbsf_colbert"  ***REMOVED*** Density-Based Semantic Fusion + ColBERT
+    BASELINE = "baseline"  # Dense vectors only
+    HYBRID_RRF = "hybrid_rrf"  # Dense + Sparse with RRF fusion
+    HYBRID_RRF_COLBERT = "hybrid_rrf_colbert"  # Dense + Sparse + ColBERT (Variant A - BEST)
+    DBSF_COLBERT = "dbsf_colbert"  # Density-Based Semantic Fusion + ColBERT
 
 
 class SmallToBigMode(StrEnum):
     """Small-to-big context expansion mode."""
 
-    OFF = "off"  ***REMOVED*** No expansion
-    ON = "on"  ***REMOVED*** Always expand
-    AUTO = "auto"  ***REMOVED*** Expand only for complex queries
+    OFF = "off"  # No expansion
+    ON = "on"  # Always expand
+    AUTO = "auto"  # Expand only for complex queries
 
 
 class AcornMode(StrEnum):
@@ -50,35 +50,35 @@ class AcornMode(StrEnum):
     - AUTO: Use ACORN only when selectivity < threshold
     """
 
-    OFF = "off"  ***REMOVED*** Never use ACORN
-    ON = "on"  ***REMOVED*** Always use ACORN with filters
-    AUTO = "auto"  ***REMOVED*** Use ACORN only with low selectivity filters
+    OFF = "off"  # Never use ACORN
+    ON = "on"  # Always use ACORN with filters
+    AUTO = "auto"  # Use ACORN only with low selectivity filters
 
 
 class APIProvider(StrEnum):
     """Available LLM API providers."""
 
-    CLAUDE = "claude"  ***REMOVED*** Anthropic Claude (recommended)
-    OPENAI = "openai"  ***REMOVED*** OpenAI GPT
-    GROQ = "groq"  ***REMOVED*** Groq LLaMA (fast)
-    ***REMOVED*** Legacy providers (deprecated)
-    Z_AI = "zai"  ***REMOVED*** Z.AI GLM (legacy, not recommended)
+    CLAUDE = "claude"  # Anthropic Claude (recommended)
+    OPENAI = "openai"  # OpenAI GPT
+    GROQ = "groq"  # Groq LLaMA (fast)
+    # Legacy providers (deprecated)
+    Z_AI = "zai"  # Z.AI GLM (legacy, not recommended)
 
 
 class ModelName(StrEnum):
     """LLM model names by provider."""
 
-    ***REMOVED*** Anthropic Claude
+    # Anthropic Claude
     CLAUDE_OPUS = "claude-3-opus-20240229"
     CLAUDE_SONNET = "claude-3-5-sonnet-20241022"
     CLAUDE_HAIKU = "claude-3-5-haiku-20241022"
 
-    ***REMOVED*** OpenAI
+    # OpenAI
     GPT_4_TURBO = "gpt-4-turbo-preview"
     GPT_4 = "gpt-4"
     GPT_35_TURBO = "gpt-3.5-turbo"
 
-    ***REMOVED*** Groq
+    # Groq
     GROQ_LLAMA3_70B = "llama3-70b-8192"
     GROQ_LLAMA3_8B = "llama3-8b-8192"
     GROQ_MIXTRAL = "mixtral-8x7b-32768"
@@ -88,47 +88,47 @@ class ModelName(StrEnum):
 class VectorDimensions:
     """Vector dimension sizes for embeddings."""
 
-    DENSE = 1024  ***REMOVED*** BGE-M3 dense vectors
-    COLBERT = 1024  ***REMOVED*** ColBERT sparse dimension
-    FULL = 1024  ***REMOVED*** Full embedding dimension
+    DENSE = 1024  # BGE-M3 dense vectors
+    COLBERT = 1024  # ColBERT sparse dimension
+    FULL = 1024  # Full embedding dimension
 
 
 @dataclass
 class ThresholdValues:
     """Score thresholds for filtering search results."""
 
-    DENSE_ONLY = 0.5  ***REMOVED*** For dense-only search
-    HYBRID = 0.3  ***REMOVED*** For DBSF fusion (more lenient)
-    COLBERT = 0.4  ***REMOVED*** For ColBERT reranking
-    MINIMUM = 0.1  ***REMOVED*** Absolute minimum for any result
+    DENSE_ONLY = 0.5  # For dense-only search
+    HYBRID = 0.3  # For DBSF fusion (more lenient)
+    COLBERT = 0.4  # For ColBERT reranking
+    MINIMUM = 0.1  # Absolute minimum for any result
 
 
 @dataclass
 class HSNWParameters:
     """HNSW (Hierarchical Navigable Small World) search parameters."""
 
-    EF_DEFAULT = 128  ***REMOVED*** Default HNSW ef parameter
-    EF_HIGH_PRECISION = 256  ***REMOVED*** Higher precision, slower
-    EF_LOW_LATENCY = 64  ***REMOVED*** Faster, lower precision
-    MAX_CONNECTIONS = 16  ***REMOVED*** Maximum connections per point
+    EF_DEFAULT = 128  # Default HNSW ef parameter
+    EF_HIGH_PRECISION = 256  # Higher precision, slower
+    EF_LOW_LATENCY = 64  # Faster, lower precision
+    MAX_CONNECTIONS = 16  # Maximum connections per point
 
 
 @dataclass
 class BatchSizes:
     """Batch processing sizes."""
 
-    QUERIES = 10  ***REMOVED*** Number of queries to batch
-    EMBEDDINGS = 32  ***REMOVED*** Number of texts to embed at once
-    DOCUMENTS = 16  ***REMOVED*** Number of documents in ingestion
-    CONTEXT = 5  ***REMOVED*** Number of chunks for contextualization
+    QUERIES = 10  # Number of queries to batch
+    EMBEDDINGS = 32  # Number of texts to embed at once
+    DOCUMENTS = 16  # Number of documents in ingestion
+    CONTEXT = 5  # Number of chunks for contextualization
 
 
 @dataclass
 class RetrievalStages:
     """Multi-stage retrieval limits."""
 
-    STAGE1_CANDIDATES = 100  ***REMOVED*** Dense+Sparse fusion candidates
-    STAGE2_FINAL = 10  ***REMOVED*** Final results after reranking
+    STAGE1_CANDIDATES = 100  # Dense+Sparse fusion candidates
+    STAGE2_FINAL = 10  # Final results after reranking
 
 
 @dataclass
@@ -144,19 +144,19 @@ class MetricValues:
 class MMRParameters:
     """Maximum Marginal Relevance parameters."""
 
-    LAMBDA = 0.5  ***REMOVED*** Balance: 1.0 (relevance) to 0.0 (diversity)
+    LAMBDA = 0.5  # Balance: 1.0 (relevance) to 0.0 (diversity)
     ENABLED = True
 
 
-***REMOVED*** Rate limiting (seconds between API calls)
+# Rate limiting (seconds between API calls)
 RATE_LIMITS = {
     APIProvider.CLAUDE: 1.2,
     APIProvider.OPENAI: 1.2,
-    APIProvider.GROQ: 0.5,  ***REMOVED*** Groq is faster
-    APIProvider.Z_AI: 1.2,  ***REMOVED*** Legacy
+    APIProvider.GROQ: 0.5,  # Groq is faster
+    APIProvider.Z_AI: 1.2,  # Legacy
 }
 
-***REMOVED*** API limits (tokens, requests/min, etc.)
+# API limits (tokens, requests/min, etc.)
 API_LIMITS = {
     APIProvider.CLAUDE: {
         "max_tokens": 4096,
@@ -175,9 +175,9 @@ API_LIMITS = {
     },
 }
 
-***REMOVED*** Default values
+# Default values
 DEFAULTS = {
-    "search_engine": SearchEngine.HYBRID_RRF_COLBERT,  ***REMOVED*** Variant A - Best performance
+    "search_engine": SearchEngine.HYBRID_RRF_COLBERT,  # Variant A - Best performance
     "api_provider": APIProvider.CLAUDE,
     "model": ModelName.CLAUDE_SONNET,
     "temperature": 0.0,
@@ -185,12 +185,12 @@ DEFAULTS = {
     "retry_backoff": 2,
 }
 
-***REMOVED*** Collection names
+# Collection names
 COLLECTIONS = {
-    "legal_documents": "legal_documents",  ***REMOVED*** Main unified collection
-    "legacy_civil": "uk_civil_code_v2",  ***REMOVED*** Deprecated
-    "legacy_contextual": "uk_civil_code_contextual_kg",  ***REMOVED*** Deprecated
+    "legal_documents": "legal_documents",  # Main unified collection
+    "legacy_civil": "uk_civil_code_v2",  # Deprecated
+    "legacy_contextual": "uk_civil_code_contextual_kg",  # Deprecated
 }
 
-***REMOVED*** Default collection
+# Default collection
 DEFAULT_COLLECTION = "legal_documents"

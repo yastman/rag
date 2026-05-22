@@ -1,6 +1,6 @@
-"""Contract: only one canonical ``pytest_collection_modifyitems`` (***REMOVED***1515 D2).
+"""Contract: only one canonical ``pytest_collection_modifyitems`` (#1515 D2).
 
-The audit in ***REMOVED***1515 (D2) found that the directory-based auto-marker hook —
+The audit in #1515 (D2) found that the directory-based auto-marker hook —
 which lives in ``tests/conftest.py`` and walks ``path_to_marker`` to attach
 ``unit``/``integration``/``smoke``/``e2e``/``chaos``/``load``/``benchmark``/
 ``contract``/``baseline`` markers based on the test's filesystem location —
@@ -16,7 +16,7 @@ Why the duplicates are a maintenance hazard:
   copies are therefore not dead code; they re-apply the same path-based
   markers to an items list the root has already marked.
 * When the root hook's ``path_to_marker`` dict learns a new lane (e.g.
-  ``contract``/``baseline`` were added in ***REMOVED***1515 B5), every drifted copy
+  ``contract``/``baseline`` were added in #1515 B5), every drifted copy
   silently keeps the old set, producing an inconsistent collection state
   depending on which conftest pytest chooses to invoke first.
 * Moving marker logic also requires updating N+1 files instead of one.
@@ -37,7 +37,7 @@ If a sub-conftest legitimately needs a tier-specific hook in the future, it
 can still define ``pytest_collection_modifyitems``; this contract just
 prevents another verbatim copy of the root's directory-based marker walk.
 
-Refs ***REMOVED***1515 (D2).
+Refs #1515 (D2).
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def _collect_definitions() -> list[tuple[Path, ast.FunctionDef | ast.AsyncFuncti
     for conftest in _iter_conftests():
         try:
             tree = ast.parse(conftest.read_text(encoding="utf-8"), filename=str(conftest))
-        except SyntaxError:  ***REMOVED*** pragma: no cover - defensive
+        except SyntaxError:  # pragma: no cover - defensive
             continue
         for func in _find_modifyitems_defs(tree):
             out.append(
@@ -123,30 +123,30 @@ def _collect_definitions() -> list[tuple[Path, ast.FunctionDef | ast.AsyncFuncti
 
 
 def test_pytest_collection_modifyitems_has_single_canonical_definition() -> None:
-    """At most one conftest may carry the auto-marker walk, and it must be root (***REMOVED***1515 D2)."""
+    """At most one conftest may carry the auto-marker walk, and it must be root (#1515 D2)."""
     definitions = _collect_definitions()
     auto_marker_locations = [rel for rel, _func, looks_auto in definitions if looks_auto]
 
-    ***REMOVED*** 1. Exactly one auto-marker walk in the entire tests/ tree.
+    # 1. Exactly one auto-marker walk in the entire tests/ tree.
     assert len(auto_marker_locations) == 1, (
         "Exactly one conftest may implement the directory-based auto-marker "
         "walk in pytest_collection_modifyitems (the root tests/conftest.py is "
-        "the single source of truth — see ***REMOVED***1515 D2). "
+        "the single source of truth — see #1515 D2). "
         f"Found {len(auto_marker_locations)} copies: "
         f"{[str(p) for p in auto_marker_locations]}"
     )
 
-    ***REMOVED*** 2. That single copy must live at tests/conftest.py.
+    # 2. That single copy must live at tests/conftest.py.
     only_location = auto_marker_locations[0]
     assert only_location == ROOT_CONFTEST_REL, (
         "The directory-based auto-marker walk must live at tests/conftest.py, "
         f"not at {only_location}. Move the path-to-marker logic back to the "
-        "root conftest (see ***REMOVED***1515 D2)."
+        "root conftest (see #1515 D2)."
     )
 
 
 def test_no_sub_conftest_duplicates_root_modifyitems() -> None:
-    """No sub-conftest may define a hook that mirrors the root auto-marker shape (***REMOVED***1515 D2)."""
+    """No sub-conftest may define a hook that mirrors the root auto-marker shape (#1515 D2)."""
     definitions = _collect_definitions()
     offenders = [
         rel
@@ -182,7 +182,7 @@ def test_root_conftest_has_canonical_modifyitems() -> None:
 @pytest.mark.parametrize(
     "src",
     [
-        ***REMOVED*** canonical body
+        # canonical body
         """
 import pytest
 from pathlib import Path
@@ -191,7 +191,7 @@ def pytest_collection_modifyitems(items):
     for item in items:
         item.add_marker(pytest.mark.unit)
 """,
-        ***REMOVED*** canonical body via async-for / nested loop
+        # canonical body via async-for / nested loop
         """
 import pytest
 
@@ -211,18 +211,18 @@ def test_helper_detects_auto_marker_pattern(src: str) -> None:
 @pytest.mark.parametrize(
     "src",
     [
-        ***REMOVED*** no items loop
+        # no items loop
         """
 def pytest_collection_modifyitems(items):
     return None
 """,
-        ***REMOVED*** loop but no add_marker
+        # loop but no add_marker
         """
 def pytest_collection_modifyitems(items):
     for i in items:
         i.user_properties.append(("k", "v"))
 """,
-        ***REMOVED*** add_marker but no loop (single targeted tweak — allowed)
+        # add_marker but no loop (single targeted tweak — allowed)
         """
 import pytest
 def pytest_collection_modifyitems(items):

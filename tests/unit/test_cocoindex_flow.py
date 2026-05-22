@@ -71,7 +71,7 @@ class TestVoyageEmbedFunction:
         func = VoyageEmbedFunction()
 
         assert func.model == "voyage-4-large"
-        assert func._service is None  ***REMOVED*** Lazy loaded
+        assert func._service is None  # Lazy loaded
 
     def test_init_custom_model(self):
         """Test initialization with custom model."""
@@ -87,13 +87,13 @@ class TestVoyageEmbedFunction:
         """Test that calling the function embeds texts."""
         func = VoyageEmbedFunction(api_key="test-key")
 
-        ***REMOVED*** Mock the VoyageService
+        # Mock the VoyageService
         mock_service = MagicMock()
         mock_service.embed_documents = AsyncMock(return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
         func._service = mock_service
 
         def _run_until_complete(coro):
-            ***REMOVED*** Test double for loop.run_until_complete that avoids leaked coroutine warnings.
+            # Test double for loop.run_until_complete that avoids leaked coroutine warnings.
             coro.close()
             return [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
@@ -130,7 +130,7 @@ class TestCreateDocumentFlow:
     def test_creates_flow_when_available(self):
         """Test flow creation when CocoIndex is available."""
         with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", True):
-            ***REMOVED*** Mock cocoindex module with proper decorator signature
+            # Mock cocoindex module with proper decorator signature
             mock_cocoindex = MagicMock()
             mock_cocoindex.flow_def = MagicMock(return_value=lambda f: f)
 
@@ -140,7 +140,7 @@ class TestCreateDocumentFlow:
                     source_path="/test/path",
                 )
 
-        ***REMOVED*** Should return the flow function (not None)
+        # Should return the flow function (not None)
         assert result is not None
 
 

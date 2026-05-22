@@ -5,7 +5,7 @@ description: >
   Routes: apartment_search | rag_search | crm_* | direct
 
 examples:
-  ***REMOVED*** ── apartment_search examples (5) ────────────────────────────────────────
+  # ── apartment_search examples (5) ────────────────────────────────────────
   - id: 1
     query: "Покажи квартиры до 150 тысяч евро в Балчике"
     route: apartment_search
@@ -68,7 +68,7 @@ examples:
     answer_keywords:
       - "мебел"
 
-  ***REMOVED*** ── rag_search examples (7) ───────────────────────────────────────────────
+  # ── rag_search examples (7) ───────────────────────────────────────────────
   - id: 6
     query: "Как оформить ВНЖ через покупку недвижимости в Болгарии?"
     route: rag_search
@@ -149,7 +149,7 @@ examples:
     answer_keywords:
       - "управляющ"
 
-  ***REMOVED*** ── crm_* examples (5) ───────────────────────────────────────────────────
+  # ── crm_* examples (5) ───────────────────────────────────────────────────
   - id: 13
     query: "Создай сделку для Алексея Петрова, бюджет 100 тысяч евро"
     route: crm_create_lead
@@ -184,7 +184,7 @@ examples:
       - "Иванов"
 
   - id: 16
-    query: "Добавь заметку к сделке ***REMOVED***42: клиент готов к встрече"
+    query: "Добавь заметку к сделке #42: клиент готов к встрече"
     route: crm_add_note
     expected_tools:
       - crm_add_note
@@ -206,7 +206,7 @@ examples:
     answer_keywords:
       - "задач"
 
-  ***REMOVED*** ── direct / chitchat examples (3) ───────────────────────────────────────
+  # ── direct / chitchat examples (3) ───────────────────────────────────────
   - id: 18
     query: "Привет!"
     route: direct

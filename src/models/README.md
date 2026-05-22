@@ -1,12 +1,12 @@
-***REMOVED*** models/
+# models/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Embedding model singletons to prevent duplicate loading (saves 4–6 GB RAM).
 Owns process-local embedding model singletons and the Voyage contextualized embedding client.
 Keeps heavy ML imports lazy so normal imports do not require local model extras.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 | File | Purpose |
 |------|---------|
@@ -14,38 +14,38 @@ Keeps heavy ML imports lazy so normal imports do not require local model extras.
 | [`embedding_model.py`](./embedding_model.py) | Singleton BGE-M3 (`FlagEmbedding`) and `SentenceTransformer` |
 | [`contextualized_embedding.py`](./contextualized_embedding.py) | Voyage AI `voyage-context-3` contextualized embeddings client (lazy-import, optional `voyage` extra) |
 
-***REMOVED******REMOVED*** Usage
+## Usage
 
 ```python
 from src.models import get_bge_m3_model, get_sentence_transformer
 
-***REMOVED*** BGE-M3 with ColBERT vectors (for hybrid search)
-model = get_bge_m3_model()  ***REMOVED*** Reuses single instance
+# BGE-M3 with ColBERT vectors (for hybrid search)
+model = get_bge_m3_model()  # Reuses single instance
 
-***REMOVED*** SentenceTransformer (for simple dense search)
+# SentenceTransformer (for simple dense search)
 st = get_sentence_transformer("BAAI/bge-m3")
 ```
 
-***REMOVED******REMOVED*** Why singletons?
+## Why singletons?
 
 - BGE-M3 consumes 4–6 GB RAM per instance
 - Loading multiple times wastes memory
 - `get_bge_m3_model()` ensures only one instance exists
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Does not own retrieval algorithms or Qdrant search behavior.
 - Does not own provider/model selection policy outside model-loading helpers.
 - Local ML dependencies are optional; install the `ml-local` extra when running real local models.
 - Voyage AI dependencies are optional; install the `voyage` extra (`uv sync --extra voyage`) for contextualized embeddings.
 
-***REMOVED******REMOVED*** Focused checks
+## Focused checks
 
 ```bash
 uv run pytest tests/unit/utils/test_embedding_model.py tests/unit/test_contextualized_embeddings.py -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`src/retrieval/`](../retrieval/) — Uses models for search
 - [`telegram_bot/services/voyage.py`](../../telegram_bot/services/voyage.py) — Voyage AI alternative

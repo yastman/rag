@@ -1,8 +1,8 @@
-"""Langfuse score-writing utilities shared by bot handler and RAG agent tool (***REMOVED***310).
+"""Langfuse score-writing utilities shared by bot handler and RAG agent tool (#310).
 
 Extracted from bot.py to avoid circular imports between bot.py and agents/rag_agent.py.
 
-All scores use create_score(trace_id=...) for explicit trace scoping (***REMOVED***435).
+All scores use create_score(trace_id=...) for explicit trace scoping (#435).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from numbers import Real
 from typing import Any
 
 
-***REMOVED*** --- Query type mapping for scores ---
+# --- Query type mapping for scores ---
 _QUERY_TYPE_SCORE = {
     "CHITCHAT": 0.0,
     "OFF_TOPIC": 0.0,
@@ -34,7 +34,7 @@ def compute_checkpointer_overhead_proxy_ms(result: dict[str, Any], ainvoke_wall_
 
 
 def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> None:
-    """Write a single score with explicit trace_id and idempotency key (***REMOVED***435)."""
+    """Write a single score with explicit trace_id and idempotency key (#435)."""
     lf.create_score(
         trace_id=trace_id,
         name=name,
@@ -47,7 +47,7 @@ def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> No
 def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     """Write Langfuse scores from graph result state.
 
-    All scores use create_score(trace_id=...) for explicit trace scoping (***REMOVED***435).
+    All scores use create_score(trace_id=...) for explicit trace scoping (#435).
 
     Args:
         lf: Langfuse client (from get_client(), may be SDK disabled client).
@@ -58,7 +58,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     if not trace_id:
         trace_id = lf.get_current_trace_id()
     if not trace_id:
-        return  ***REMOVED*** No trace context — skip scoring
+        return  # No trace context — skip scoring
 
     latency_stages = result.get("latency_stages", {})
     total_ms = result.get("pipeline_wall_ms", 0.0)
@@ -87,8 +87,8 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     for name, value in scores.items():
         score(lf, trace_id, name=name, value=value)
 
-    ***REMOVED*** --- Latency breakdown (***REMOVED***147) ---
-    ***REMOVED*** Always-written BOOLEAN flags
+    # --- Latency breakdown (#147) ---
+    # Always-written BOOLEAN flags
     score(
         lf,
         trace_id,
@@ -111,7 +111,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         data_type="BOOLEAN",
     )
 
-    ***REMOVED*** Conditional NUMERIC + paired unavailable BOOLEAN flags
+    # Conditional NUMERIC + paired unavailable BOOLEAN flags
     decode_ms = result.get("llm_decode_ms")
     if decode_ms is not None:
         score(lf, trace_id, name="llm_decode_ms", value=float(decode_ms))
@@ -130,7 +130,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     else:
         score(lf, trace_id, name="llm_queue_unavailable", value=1, data_type="BOOLEAN")
 
-    ***REMOVED*** --- Response length control (***REMOVED***129) ---
+    # --- Response length control (#129) ---
     if "answer_words" in result:
         score(lf, trace_id, name="answer_words", value=float(result["answer_words"]))
     if "answer_chars" in result:
@@ -153,7 +153,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             value=float(style_map.get(response_style, 1)),
         )
 
-    ***REMOVED*** --- Voice transcription scores (***REMOVED***151) ---
+    # --- Voice transcription scores (#151) ---
     input_type = result.get("input_type", "text")
     score(lf, trace_id, name="input_type", value=input_type, data_type="CATEGORICAL")
 
@@ -165,7 +165,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     if voice_dur is not None:
         score(lf, trace_id, name="voice_duration_s", value=float(voice_dur))
 
-    ***REMOVED*** --- Embedding resilience (***REMOVED***210) ---
+    # --- Embedding resilience (#210) ---
     score(
         lf,
         trace_id,
@@ -194,7 +194,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             value=float(bge_model_processing_ms),
         )
 
-    ***REMOVED*** --- Prompt injection defense (***REMOVED***226) ---
+    # --- Prompt injection defense (#226) ---
     score(
         lf,
         trace_id,
@@ -214,17 +214,17 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             value=str(injection_pattern),
             data_type="CATEGORICAL",
         )
-    ***REMOVED*** --- Call limits (***REMOVED***374) ---
+    # --- Call limits (#374) ---
     llm_calls = result.get("llm_call_count", 0)
     if llm_calls > 0:
         score(lf, trace_id, name="llm_calls_total", value=float(llm_calls))
 
-    ***REMOVED*** --- Conversation memory (***REMOVED***154, ***REMOVED***159) ---
+    # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
         score(lf, trace_id, name="summarize_ms", value=summarize_ms)
 
-    ***REMOVED*** Memory scores (***REMOVED***159)
+    # Memory scores (#159)
     messages = result.get("messages", [])
     score(lf, trace_id, name="memory_messages_count", value=float(len(messages)))
     score(
@@ -263,9 +263,9 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         data_type="BOOLEAN",
     )
 
-    ***REMOVED*** Checkpointer overhead proxy (***REMOVED***159) — derived metric, kept for backwards
-    ***REMOVED*** compatibility. Direct checkpointer_overhead_ms (***REMOVED***1258) is preferred when
-    ***REMOVED*** available and emitted alongside.
+    # Checkpointer overhead proxy (#159) — derived metric, kept for backwards
+    # compatibility. Direct checkpointer_overhead_ms (#1258) is preferred when
+    # available and emitted alongside.
     if "checkpointer_overhead_proxy_ms" in result:
         score(
             lf,
@@ -273,9 +273,9 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             name="checkpointer_overhead_proxy_ms",
             value=float(result["checkpointer_overhead_proxy_ms"]),
         )
-    ***REMOVED*** Direct checkpointer overhead (***REMOVED***1258) — sum of timed aput/aget/aput_writes/aget_tuple
-    ***REMOVED*** durations from InstrumentedCheckpointer. Includes only Redis I/O time, not
-    ***REMOVED*** Pregel framework or @observe decorator overhead like the proxy does.
+    # Direct checkpointer overhead (#1258) — sum of timed aput/aget/aput_writes/aget_tuple
+    # durations from InstrumentedCheckpointer. Includes only Redis I/O time, not
+    # Pregel framework or @observe decorator overhead like the proxy does.
     if "checkpointer_overhead_ms" in result:
         score(
             lf,
@@ -291,7 +291,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             value=float(result["checkpointer_op_count"]),
         )
 
-    ***REMOVED*** --- Nurturing + funnel analytics (***REMOVED***390) ---
+    # --- Nurturing + funnel analytics (#390) ---
     if "nurturing_batch_size" in result:
         score(
             lf, trace_id, name="nurturing_batch_size", value=float(result["nurturing_batch_size"])
@@ -310,7 +310,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     if "funnel_dropoff_rate" in result:
         score(lf, trace_id, name="funnel_dropoff_rate", value=float(result["funnel_dropoff_rate"]))
 
-    ***REMOVED*** --- Source attribution (***REMOVED***225) ---
+    # --- Source attribution (#225) ---
     sources_count = int(result.get("sources_count", 0) or 0)
     score(
         lf,
@@ -331,7 +331,7 @@ def write_history_scores(
     latency_ms: float = 0.0,
     backend: str = "qdrant",
 ) -> None:
-    """Write Langfuse scores for /history search results (***REMOVED***451).
+    """Write Langfuse scores for /history search results (#451).
 
     Args:
         lf: Langfuse client.
@@ -351,7 +351,7 @@ def write_history_scores(
 
 
 def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
-    """Write CRM tool usage scores from agent result messages (***REMOVED***440).
+    """Write CRM tool usage scores from agent result messages (#440).
 
     Inspects ToolMessage objects for CRM tool calls (name starts with ``crm_``),
     counts successes vs errors, and writes 4 Langfuse scores.
@@ -384,7 +384,7 @@ def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
             crm_success += 1
             continue
 
-        ***REMOVED*** Fallback for legacy/adapter messages where status is absent.
+        # Fallback for legacy/adapter messages where status is absent.
         content = getattr(msg, "content", "") or ""
         content_text = content if isinstance(content, str) else str(content)
         if (

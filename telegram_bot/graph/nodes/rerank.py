@@ -68,7 +68,7 @@ async def rerank_node(
             query, documents, cache=cache, reranker=reranker, top_k=top_k
         )
         if not rerank_applied:
-            ***REMOVED*** No reranker path: sort and trim here
+            # No reranker path: sort and trim here
             reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
     except Exception as e:
         logger.exception("rerank: ColBERT failed, falling back to score sort")

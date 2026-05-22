@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Reindex from scalar-quantized collection to binary-quantized collection.
 
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 
-***REMOVED*** Import collection setup from sibling script
+# Import collection setup from sibling script
 from setup_binary_collection import (
     collection_exists,
     create_binary_collection,
@@ -48,7 +48,7 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
         url=url,
         api_key=api_key,
-        timeout=120,  ***REMOVED*** Longer timeout for batch operations
+        timeout=120,  # Longer timeout for batch operations
     )
 
 
@@ -90,12 +90,12 @@ def reindex_to_binary(
 
     client = get_qdrant_client()
 
-    ***REMOVED*** Verify source collection exists
+    # Verify source collection exists
     if not collection_exists(client, source_collection):
         print(f"Error: Source collection '{source_collection}' does not exist")
         return stats
 
-    ***REMOVED*** Get source collection info
+    # Get source collection info
     source_info = get_source_collection_info(client, source_collection)
     print(f"\nSource collection: {source_collection}")
     print(f"  Points: {source_info.get('points_count', 'unknown')}")
@@ -103,7 +103,7 @@ def reindex_to_binary(
 
     stats.total_points = source_info.get("points_count", 0)
 
-    ***REMOVED*** Get/create target collection
+    # Get/create target collection
     target_collection = get_binary_collection_name(source_collection)
     print(f"\nTarget collection: {target_collection}")
 
@@ -115,19 +115,19 @@ def reindex_to_binary(
             print("  Collection already exists. Use --force to recreate.")
             return stats
 
-    ***REMOVED*** Create binary collection
+    # Create binary collection
     create_binary_collection(client, target_collection)
     if not skip_indexes:
         create_payload_indexes(client, target_collection)
 
-    ***REMOVED*** Scroll through source and copy to target
+    # Scroll through source and copy to target
     print(f"\nReindexing {stats.total_points} points in batches of {batch_size}...")
 
     offset: str | None = None
     batch_num = 0
 
     while True:
-        ***REMOVED*** Scroll source collection
+        # Scroll source collection
         results = client.scroll(
             collection_name=source_collection,
             limit=batch_size,
@@ -143,20 +143,20 @@ def reindex_to_binary(
 
         batch_num += 1
 
-        ***REMOVED*** Convert to PointStruct for upsert
+        # Convert to PointStruct for upsert
         try:
-            ***REMOVED*** Build points for upsert
+            # Build points for upsert
             upsert_points = []
             for point in points:
-                ***REMOVED*** Handle different vector formats
+                # Handle different vector formats
                 vectors = point.vector
 
-                ***REMOVED*** Skip if no dense vector
+                # Skip if no dense vector
                 if not vectors or "dense" not in vectors:
                     stats.failed_points += 1
                     continue
 
-                ***REMOVED*** Build point with only dense and bm42 (no colbert for Voyage)
+                # Build point with only dense and bm42 (no colbert for Voyage)
                 point_vectors = {"dense": vectors["dense"]}
                 if "bm42" in vectors:
                     point_vectors["bm42"] = vectors["bm42"]
@@ -169,7 +169,7 @@ def reindex_to_binary(
                     )
                 )
 
-            ***REMOVED*** Upsert to target collection
+            # Upsert to target collection
             if upsert_points:
                 client.upsert(
                     collection_name=target_collection,
@@ -177,7 +177,7 @@ def reindex_to_binary(
                 )
                 stats.indexed_points += len(upsert_points)
 
-            ***REMOVED*** Progress
+            # Progress
             progress_pct = (
                 (stats.indexed_points / stats.total_points * 100) if stats.total_points > 0 else 0
             )
@@ -190,14 +190,14 @@ def reindex_to_binary(
             print(f"  Error in batch {batch_num}: {e}")
             stats.failed_points += len(points)
 
-        ***REMOVED*** Next batch
+        # Next batch
         offset = next_offset
         if offset is None:
             break
 
     stats.duration_seconds = time.time() - start_time
 
-    ***REMOVED*** Print summary
+    # Print summary
     print("\n" + "=" * 60)
     print("Reindexing Complete")
     print("=" * 60)
@@ -207,7 +207,7 @@ def reindex_to_binary(
     print(f"  Duration:       {stats.duration_seconds:.2f}s")
     print(f"  Rate:           {stats.indexed_points / stats.duration_seconds:.1f} points/sec")
 
-    ***REMOVED*** Print target collection info
+    # Print target collection info
     print_collection_info(client, target_collection)
 
     return stats
@@ -271,7 +271,7 @@ Examples:
         skip_indexes=args.skip_indexes,
     )
 
-    ***REMOVED*** Return non-zero if any failures
+    # Return non-zero if any failures
     if stats.failed_points > 0:
         return 1
     if stats.indexed_points == 0:

@@ -1,4 +1,4 @@
-"""Tests for AIAdvisorService — redesigned with Langfuse prompts (***REMOVED***731)."""
+"""Tests for AIAdvisorService — redesigned with Langfuse prompts (#731)."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from telegram_bot.services.kommo_models import Lead, Task
 
 
-***REMOVED*** --- Instantiation ---
+# --- Instantiation ---
 
 
 def test_ai_advisor_service_is_importable():
     """AIAdvisorService can be imported from telegram_bot.services."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService  ***REMOVED*** noqa: F401
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService  # noqa: F401
 
 
 def test_ai_advisor_service_instantiation():
@@ -32,7 +32,7 @@ def test_ai_advisor_service_instantiation_with_cache():
     assert svc is not None
 
 
-***REMOVED*** --- Method existence ---
+# --- Method existence ---
 
 
 def test_get_daily_plan_method_exists():
@@ -49,7 +49,7 @@ def test_get_deal_and_task_tips_method_exists():
     assert hasattr(AIAdvisorService, "get_deal_and_task_tips")
 
 
-***REMOVED*** --- get_daily_plan ---
+# --- get_daily_plan ---
 
 
 @patch("telegram_bot.services.ai_advisor_service.get_prompt")
@@ -156,7 +156,7 @@ async def test_get_daily_plan_fetches_leads_tasks_and_stale() -> None:
     with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
         await svc.get_daily_plan(manager_id=5)
 
-    ***REMOVED*** search_leads and get_tasks should both be called
+    # search_leads and get_tasks should both be called
     assert kommo.search_leads.call_count >= 1
     kommo.get_tasks.assert_called()
 
@@ -219,7 +219,7 @@ async def test_get_daily_plan_stores_result_in_cache() -> None:
     kommo.get_tasks = AsyncMock(return_value=[])
 
     cache_redis = AsyncMock()
-    cache_redis.get = AsyncMock(return_value=None)  ***REMOVED*** cache miss
+    cache_redis.get = AsyncMock(return_value=None)  # cache miss
     cache_redis.setex = AsyncMock()
     cache = MagicMock()
     cache.redis = cache_redis
@@ -301,7 +301,7 @@ async def test_get_daily_plan_handles_llm_error() -> None:
     assert len(result) > 0
 
 
-***REMOVED*** --- Formatting helpers ---
+# --- Formatting helpers ---
 
 
 def test_format_budget_with_value():
@@ -329,7 +329,7 @@ def test_format_date_with_timestamp():
     """_format_date returns human-readable Russian date."""
     from telegram_bot.services.ai_advisor_service import _format_date
 
-    ***REMOVED*** 2025-03-01 00:00:00 UTC = 1740787200
+    # 2025-03-01 00:00:00 UTC = 1740787200
     result = _format_date(1740787200)
     assert "2025" in result
     assert "мар" in result.lower() or "марта" in result.lower()
@@ -369,7 +369,7 @@ def test_format_days_ago_today():
     assert "сегодня" in result.lower()
 
 
-***REMOVED*** --- _fetch_leads_text rich formatting ---
+# --- _fetch_leads_text rich formatting ---
 
 
 async def test_fetch_leads_text_formats_rich_data():
@@ -388,10 +388,10 @@ async def test_fetch_leads_text_formats_rich_data():
 
     assert "Иванов" in result
     assert "€50 000" in result
-    assert "2025" in result  ***REMOVED*** human date
+    assert "2025" in result  # human date
 
 
-***REMOVED*** --- _fetch_tasks_text rich formatting ---
+# --- _fetch_tasks_text rich formatting ---
 
 
 async def test_fetch_tasks_text_formats_rich_data():
@@ -426,7 +426,7 @@ async def test_fetch_tasks_text_formats_rich_data():
     assert "Отправить КП" in result
 
 
-***REMOVED*** --- _fetch_stale_text categorized ---
+# --- _fetch_stale_text categorized ---
 
 
 async def test_fetch_stale_text_categorizes_by_severity():
@@ -449,12 +449,12 @@ async def test_fetch_stale_text_categorizes_by_severity():
     assert "Критичный" in result
     assert "Внимание" in result
     assert "Напомнить" in result
-    ***REMOVED*** Активный (1 день) не должен быть в stale
+    # Активный (1 день) не должен быть в stale
     assert "Активный" not in result
-    assert "20" in result  ***REMOVED*** дней без активности
+    assert "20" in result  # дней без активности
 
 
-***REMOVED*** --- Fallback prompts contract-style ---
+# --- Fallback prompts contract-style ---
 
 
 def test_fallback_daily_plan_is_contract_style():
@@ -462,11 +462,11 @@ def test_fallback_daily_plan_is_contract_style():
     from telegram_bot.services.ai_advisor_service import _FALLBACK_DAILY_PLAN
 
     text = _FALLBACK_DAILY_PLAN
-    assert "недвижимост" in text.lower()  ***REMOVED*** домен
-    assert "Болгари" in text  ***REMOVED*** регион
-    assert "HTML" in text  ***REMOVED*** формат
-    assert "ПРОСРОЧЕН" in text or "просроченн" in text.lower()  ***REMOVED*** приоритизация
-    assert "{{today}}" in text  ***REMOVED*** переменная для даты
+    assert "недвижимост" in text.lower()  # домен
+    assert "Болгари" in text  # регион
+    assert "HTML" in text  # формат
+    assert "ПРОСРОЧЕН" in text or "просроченн" in text.lower()  # приоритизация
+    assert "{{today}}" in text  # переменная для даты
 
 
 def test_fallback_deal_tips_is_contract_style():
@@ -479,7 +479,7 @@ def test_fallback_deal_tips_is_contract_style():
     assert "{{today}}" in text
 
 
-***REMOVED*** --- Existing backward-compat test ---
+# --- Existing backward-compat test ---
 
 
 async def test_get_prioritized_leads_handles_llm_error() -> None:

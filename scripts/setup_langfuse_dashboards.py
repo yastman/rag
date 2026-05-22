@@ -1,5 +1,5 @@
-***REMOVED***!/usr/bin/env python3
-"""Langfuse Metrics API: LLM latency breakdown report (***REMOVED***147).
+#!/usr/bin/env python3
+"""Langfuse Metrics API: LLM latency breakdown report (#147).
 
 Queries Langfuse scores-numeric view for latency breakdown metrics
 (llm_ttft_ms, llm_decode_ms, llm_queue_ms, llm_tps, llm_timeout)
@@ -27,9 +27,9 @@ from langfuse import Langfuse
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Alert thresholds (from design doc)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Alert thresholds (from design doc)
+# ---------------------------------------------------------------------------
 
 ALERT_THRESHOLDS: dict[str, list[dict[str, Any]]] = {
     "llm_ttft_ms": [
@@ -85,7 +85,7 @@ ALERT_THRESHOLDS: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
-***REMOVED*** Scores to query and their aggregations
+# Scores to query and their aggregations
 LATENCY_SCORES = [
     "llm_ttft_ms",
     "llm_decode_ms",
@@ -148,7 +148,7 @@ def query_score_metrics(
         data = getattr(result, "data", [])
         if data and len(data) > 0:
             row = data[0]
-            ***REMOVED*** Extract values from response row
+            # Extract values from response row
             parsed: dict[str, Any] = {}
             if hasattr(row, "__dict__"):
                 for key, val in row.__dict__.items():
@@ -228,7 +228,7 @@ def format_report(
     """Format human-readable latency breakdown report."""
     lines: list[str] = []
     lines.append("=" * 60)
-    lines.append("LLM Latency Breakdown Report (***REMOVED***147)")
+    lines.append("LLM Latency Breakdown Report (#147)")
     lines.append(f"Period: {from_ts} — {to_ts}")
     lines.append("=" * 60)
     lines.append("")

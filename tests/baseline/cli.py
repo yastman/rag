@@ -99,7 +99,7 @@ def compare(baseline_tag: str, current_session: str, thresholds: str, output: st
         thresholds_path=Path(thresholds),
     )
 
-    ***REMOVED*** Fetch baseline metrics by tag
+    # Fetch baseline metrics by tag
     click.echo(f"Fetching baseline metrics (tag={baseline_tag})...")
     baseline_metrics = collector.collect_session_metrics(tag=baseline_tag)
 
@@ -117,7 +117,7 @@ def compare(baseline_tag: str, current_session: str, thresholds: str, output: st
         click.echo("Run smoke tests on main branch first to establish baseline.")
         sys.exit(0)
 
-    ***REMOVED*** Fetch current metrics by session
+    # Fetch current metrics by session
     click.echo(f"Fetching current metrics (session={current_session})...")
     current_metrics = collector.collect_session_metrics(session_id=current_session)
 
@@ -133,7 +133,7 @@ def compare(baseline_tag: str, current_session: str, thresholds: str, output: st
         click.secho(f"FAILED — no traces for session '{current_session}'", fg="red")
         sys.exit(1)
 
-    ***REMOVED*** Build snapshots from session metrics
+    # Build snapshots from session metrics
     now = datetime.now(UTC)
     baseline_snapshot = _metrics_to_snapshot(
         baseline_metrics,
@@ -148,14 +148,14 @@ def compare(baseline_tag: str, current_session: str, thresholds: str, output: st
         ts=now,
     )
 
-    ***REMOVED*** Compare
+    # Compare
     click.echo("\nComparing metrics...")
     passed, regressions = manager.compare(current_snapshot, baseline_snapshot)
 
-    ***REMOVED*** Print table
+    # Print table
     _print_comparison_table(baseline_snapshot, current_snapshot)
 
-    ***REMOVED*** Write JSON report
+    # Write JSON report
     report = {
         "status": "passed" if passed else "failed",
         "baseline_tag": baseline_tag,
@@ -279,14 +279,14 @@ def report(baseline: str | None, current: str | None, thresholds: str, hours: in
   <meta charset="UTF-8">
   <title>Baseline Report</title>
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 24px; color: ***REMOVED***222; }}
+    body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
     h1 {{ margin-bottom: 8px; }}
     table {{ border-collapse: collapse; width: 100%; margin-top: 16px; }}
-    th, td {{ border: 1px solid ***REMOVED***ddd; padding: 8px; text-align: left; }}
-    th {{ background: ***REMOVED***f3f3f3; }}
-    .pass {{ color: ***REMOVED***0a7d2c; font-weight: bold; }}
-    .fail {{ color: ***REMOVED***b00020; font-weight: bold; }}
-    code {{ background: ***REMOVED***f7f7f7; padding: 2px 4px; }}
+    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+    th {{ background: #f3f3f3; }}
+    .pass {{ color: #0a7d2c; font-weight: bold; }}
+    .fail {{ color: #b00020; font-weight: bold; }}
+    code {{ background: #f7f7f7; padding: 2px 4px; }}
   </style>
 </head>
 <body>

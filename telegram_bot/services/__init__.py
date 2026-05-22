@@ -52,7 +52,7 @@ __all__ = [
     "generate_summary",
 ]
 
-***REMOVED*** Lazy import mapping
+# Lazy import mapping
 _IMPORT_MAP = {
     "BGEM3Client": ".bge_m3_client",
     "BGEM3SyncClient": ".bge_m3_client",

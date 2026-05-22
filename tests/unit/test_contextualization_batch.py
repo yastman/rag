@@ -9,9 +9,9 @@ from src.contextualization.base import ContextualizedChunk, ContextualizeProvide
 from src.contextualization.claude import ClaudeContextualizer
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 class _SimpleContextualizer(ContextualizeProvider):
@@ -39,9 +39,9 @@ class _SimpleContextualizer(ContextualizeProvider):
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Base-class tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Base-class tests
+# ---------------------------------------------------------------------------
 
 
 class TestContextualizeBatch:
@@ -119,9 +119,9 @@ class TestContextualizeBatch:
         assert len(results) == 5
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ClaudeContextualizer tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# ClaudeContextualizer tests
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -158,7 +158,7 @@ class TestClaudeContextualizerBatch:
                 context_method="claude",
             )
 
-        claude_ctx.contextualize_single = _mock_single  ***REMOVED*** type: ignore[method-assign]
+        claude_ctx.contextualize_single = _mock_single  # type: ignore[method-assign]
         results = await claude_ctx.contextualize_batch(["a", "b", "c", "d", "e"])
         assert len(results) == 5
         assert call_count == 5
@@ -168,7 +168,7 @@ class TestClaudeContextualizerBatch:
         self, claude_ctx: ClaudeContextualizer
     ) -> None:
         async def _mock_single(text: str, article_number: str, query=None) -> ContextualizedChunk:
-            ***REMOVED*** Slowest chunk first — order must still be maintained
+            # Slowest chunk first — order must still be maintained
             delay = 0.02 if article_number == "chunk_0" else 0.001
             await asyncio.sleep(delay)
             return ContextualizedChunk(
@@ -178,7 +178,7 @@ class TestClaudeContextualizerBatch:
                 context_method="claude",
             )
 
-        claude_ctx.contextualize_single = _mock_single  ***REMOVED*** type: ignore[method-assign]
+        claude_ctx.contextualize_single = _mock_single  # type: ignore[method-assign]
         chunks = ["slow", "fast1", "fast2"]
         results = await claude_ctx.contextualize_batch(chunks)
         assert [r.original_text for r in results] == chunks
@@ -201,18 +201,18 @@ class TestClaudeContextualizerBatch:
                 context_method="claude",
             )
 
-        claude_ctx.contextualize_single = _mock_single  ***REMOVED*** type: ignore[method-assign]
+        claude_ctx.contextualize_single = _mock_single  # type: ignore[method-assign]
         await claude_ctx.contextualize_batch([f"c{i}" for i in range(10)], max_concurrency=2)
         assert peak <= 2
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Failure surfacing (***REMOVED***1656) — TaskGroup contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Failure surfacing (#1656) — TaskGroup contract
+# ---------------------------------------------------------------------------
 
 
 class TestContextualizeBatchFailureSurfacing:
-    """contextualize_batch must NOT silently drop failed chunks (***REMOVED***1656).
+    """contextualize_batch must NOT silently drop failed chunks (#1656).
 
     Previous behavior used asyncio.gather(..., return_exceptions=True) and
     filtered exceptions out, dropping the chunks entirely. New contract:
@@ -245,14 +245,14 @@ class TestContextualizeBatchFailureSurfacing:
         chunks = ["ok-0", "fail-1", "ok-2", "fail-3", "ok-4"]
         results = await _FlakyContextualizer().contextualize_batch(chunks)
 
-        ***REMOVED*** No silent drops: cardinality preserved.
+        # No silent drops: cardinality preserved.
         assert len(results) == len(chunks)
-        ***REMOVED*** Order preserved by index.
+        # Order preserved by index.
         assert [r.original_text for r in results] == chunks
-        ***REMOVED*** Failed slots carry context_method='none'; succeeded slots keep 'test'.
+        # Failed slots carry context_method='none'; succeeded slots keep 'test'.
         methods = [r.context_method for r in results]
         assert methods == ["test", "none", "test", "none", "test"]
-        ***REMOVED*** Failed slots have empty summary so downstream filtering is clear.
+        # Failed slots have empty summary so downstream filtering is clear.
         assert results[1].contextual_summary == ""
         assert results[3].contextual_summary == ""
 
@@ -268,7 +268,7 @@ class TestContextualizeBatchFailureSurfacing:
         results = await _AlwaysFails().contextualize_batch(["a", "b"])
         assert len(results) == 2
         assert all(r.context_method == "none" for r in results)
-        ***REMOVED*** Article numbers still indexed for traceability.
+        # Article numbers still indexed for traceability.
         assert results[0].article_number == "chunk_0"
         assert results[1].article_number == "chunk_1"
 
@@ -287,14 +287,14 @@ class TestContextualizeBatchFailureSurfacing:
         uses_silent_gather = False
 
         for node in ast.walk(tree):
-            ***REMOVED*** asyncio.TaskGroup() — accept attribute or name reference.
+            # asyncio.TaskGroup() — accept attribute or name reference.
             if isinstance(node, ast.Call):
                 func = node.func
                 if isinstance(func, ast.Attribute) and func.attr == "TaskGroup":
                     uses_task_group = True
                 if isinstance(func, ast.Name) and func.id == "TaskGroup":
                     uses_task_group = True
-                ***REMOVED*** asyncio.gather(..., return_exceptions=True) — forbidden silent drop.
+                # asyncio.gather(..., return_exceptions=True) — forbidden silent drop.
                 if (isinstance(func, ast.Attribute) and func.attr == "gather") or (
                     isinstance(func, ast.Name) and func.id == "gather"
                 ):
@@ -307,7 +307,7 @@ class TestContextualizeBatchFailureSurfacing:
                             uses_silent_gather = True
 
         assert uses_task_group, (
-            "contextualize_batch must use asyncio.TaskGroup for structured concurrency (***REMOVED***1656)"
+            "contextualize_batch must use asyncio.TaskGroup for structured concurrency (#1656)"
         )
         assert not uses_silent_gather, (
             "contextualize_batch must not call asyncio.gather(..., "

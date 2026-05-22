@@ -1,9 +1,9 @@
-***REMOVED*** Script Native Migration Matrix
+# Script Native Migration Matrix
 
-Audit snapshot for issue [***REMOVED***1726](https://github.com/yastman/rag/issues/1726)
-and child issue [***REMOVED***1728](https://github.com/yastman/rag/issues/1728).
+Audit snapshot for issue [#1726](https://github.com/yastman/rag/issues/1726)
+and child issue [#1728](https://github.com/yastman/rag/issues/1728).
 
-***REMOVED******REMOVED*** Migration Targets
+## Migration Targets
 
 | Script | Current Callsites | Native Replacement | Decision | Owner | Verification |
 |---|---|---|---|---|---|
@@ -12,7 +12,7 @@ and child issue [***REMOVED***1728](https://github.com/yastman/rag/issues/1728).
 | `scripts/pr_queue_audit.py` | `make pr-hygiene` | `gh pr list --json ...` plus project triage policy | keep custom audit wrapper | DevEx | existing target smoke/focused tests |
 | `scripts/issue_queue_audit.py` | `make issue-hygiene` | `gh issue list --json ...` plus project triage policy | keep custom audit wrapper | DevEx | existing target smoke/focused tests |
 
-***REMOVED******REMOVED*** Required Safety Checks
+## Required Safety Checks
 
 - Native cleanup excludes `dev`, `main`, `master`, `develop`, the current branch,
   and branches checked out in any worktree.

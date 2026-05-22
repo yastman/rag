@@ -28,6 +28,6 @@ class CallResponse(BaseModel):
 
 
 class TranscriptEntry(BaseModel):
-    role: str  ***REMOVED*** "user" | "bot"
+    role: str  # "user" | "bot"
     text: str
     timestamp_ms: int

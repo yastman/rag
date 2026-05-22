@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/services/test_apartment_models.py
+# tests/unit/services/test_apartment_models.py
 """Tests for apartment data models."""
 
 from __future__ import annotations
@@ -215,7 +215,7 @@ class TestComputeConfidence:
             (2, None, None, ["sea"], [], "MEDIUM"),
             (None, 200000.0, None, [], [], "MEDIUM"),
             (2, None, None, [], [], "MEDIUM"),
-            (None, None, None, ["sea"], [], "LOW"),  ***REMOVED*** view only, no hard/critical → LOW
+            (None, None, None, ["sea"], [], "LOW"),  # view only, no hard/critical → LOW
             (None, None, None, [], [], "LOW"),
             (2, 200000.0, "Premier", [], ["min>max"], "LOW"),
         ],

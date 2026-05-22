@@ -8,7 +8,7 @@ latency and event counts. It exports:
   (matching the legacy rolling-window keys: ``retrieve``, ``rerank``,
   ``generate``). Registered with the default ``prometheus_client.REGISTRY``
   so the planned ASGI ``/metrics`` mount in slice 4/4 can scrape it
-  without any extra wiring. (Slice 2/4 of ***REMOVED***1648.)
+  without any extra wiring. (Slice 2/4 of #1648.)
 
 * ``record_pipeline_latency(stage, seconds)`` — the canonical SDK-native
   latency recording API. New code must use this. (Slice 2/4.)
@@ -16,7 +16,7 @@ latency and event counts. It exports:
 * ``rag_pipeline_events_total`` — a module-level
   :class:`prometheus_client.Counter` with a single ``event`` label,
   replacing log-as-metric events previously emitted in
-  ``rag_pipeline.py`` and ``qdrant.py``. (Slice 3/4 of ***REMOVED***1648.)
+  ``rag_pipeline.py`` and ``qdrant.py``. (Slice 3/4 of #1648.)
 
 * ``record_pipeline_event(event, amount)`` — the canonical SDK-native
   event recording API. New code must use this. (Slice 3/4.)
@@ -39,7 +39,7 @@ Context7 baseline (``/prometheus/client_python``):
 
 Content was rephrased for compliance with licensing restrictions.
 
-Refs ***REMOVED***1648.
+Refs #1648.
 """
 
 from __future__ import annotations
@@ -57,40 +57,40 @@ from prometheus_client import Counter, Histogram
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** SDK-native module-level Histogram (***REMOVED***1648 slice 2/4).
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# SDK-native module-level Histogram (#1648 slice 2/4).
+# ---------------------------------------------------------------------------
 
-***REMOVED*** We pin the name with the ``_seconds`` suffix per Prometheus naming
-***REMOVED*** guidelines and rely on the package-wide default REGISTRY (no custom
-***REMOVED*** ``CollectorRegistry`` — see contract test in
-***REMOVED*** ``tests/contract/test_no_custom_metrics_registry_contract.py``).
+# We pin the name with the ``_seconds`` suffix per Prometheus naming
+# guidelines and rely on the package-wide default REGISTRY (no custom
+# ``CollectorRegistry`` — see contract test in
+# ``tests/contract/test_no_custom_metrics_registry_contract.py``).
 pipeline_latency_seconds: Histogram = Histogram(
     "pipeline_latency_seconds",
     "RAG pipeline stage latency in seconds (retrieve, rerank, generate, ...).",
     labelnames=("stage",),
-    ***REMOVED*** Default buckets are intentionally not overridden: they cover
-    ***REMOVED*** web/RPC latencies (5 ms .. 10 s) which match the observed
-    ***REMOVED*** distribution of every existing pipeline stage. Slice 4/4 will
-    ***REMOVED*** revisit bucket tuning once dashboards are in place.
+    # Default buckets are intentionally not overridden: they cover
+    # web/RPC latencies (5 ms .. 10 s) which match the observed
+    # distribution of every existing pipeline stage. Slice 4/4 will
+    # revisit bucket tuning once dashboards are in place.
 )
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** SDK-native module-level Counter (***REMOVED***1648 slice 3/4).
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# SDK-native module-level Counter (#1648 slice 3/4).
+# ---------------------------------------------------------------------------
 
-***REMOVED*** Single ``event`` label keeps cardinality low.  Known event values at the
-***REMOVED*** time of slice 3/4:
-***REMOVED***   colbert_rerank_attempted, topic_filter_fallback, retrieval_zero_docs,
-***REMOVED***   score_gap_confident   (from rag_pipeline.py)
-***REMOVED***   colbert_rerank_empty, colbert_fallback_to_rrf   (from qdrant.py)
-***REMOVED***
-***REMOVED*** Context7 baseline (``/prometheus/client_python``):
-***REMOVED***   Counter(name, documentation, labelnames=('label',))
-***REMOVED***   counter.labels(label='value').inc()
-***REMOVED***
-***REMOVED*** Content was rephrased for compliance with licensing restrictions.
-***REMOVED*** Refs ***REMOVED***1648.
+# Single ``event`` label keeps cardinality low.  Known event values at the
+# time of slice 3/4:
+#   colbert_rerank_attempted, topic_filter_fallback, retrieval_zero_docs,
+#   score_gap_confident   (from rag_pipeline.py)
+#   colbert_rerank_empty, colbert_fallback_to_rrf   (from qdrant.py)
+#
+# Context7 baseline (``/prometheus/client_python``):
+#   Counter(name, documentation, labelnames=('label',))
+#   counter.labels(label='value').inc()
+#
+# Content was rephrased for compliance with licensing restrictions.
+# Refs #1648.
 rag_pipeline_events_total: Counter = Counter(
     "rag_pipeline_events_total",
     "RAG pipeline event counter (cache_hit, cache_miss, colbert_rerank_attempted, etc.).",
@@ -115,12 +115,12 @@ def record_pipeline_event(event: str, amount: int = 1) -> None:
     rag_pipeline_events_total.labels(event=event).inc(amount)
 
 
-***REMOVED*** Rolling window size per stage — only used by the deprecated facade.
+# Rolling window size per stage — only used by the deprecated facade.
 _WINDOW_SIZE = 1000
 
 _DEPRECATION_MSG = (
     "PipelineMetrics rolling p50/p95 surface is deprecated; "
-    "use prometheus_client Histogram pipeline_latency_seconds (***REMOVED***1648 slice 2/4). "
+    "use prometheus_client Histogram pipeline_latency_seconds (#1648 slice 2/4). "
     "This surface is removed in slice 4/4 (ASGI /metrics mount)."
 )
 
@@ -140,15 +140,15 @@ def record_pipeline_latency(stage: str, seconds: float) -> None:
     pipeline_latency_seconds.labels(stage=stage).observe(seconds)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Backward-compat facade — preserves existing call-sites unchanged.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Backward-compat facade — preserves existing call-sites unchanged.
+# ---------------------------------------------------------------------------
 
 
 def record_counter_metric(name: str, value: int = 1) -> None:
     """Record a named counter metric through the bot metrics registry.
 
-    Slice 3/4 of ***REMOVED***1648: also increments the SDK-native
+    Slice 3/4 of #1648: also increments the SDK-native
     :data:`rag_pipeline_events_total` Counter so existing call-sites
     that have NOT yet been migrated to ``record_pipeline_event()``
     still produce Prometheus-visible signals.
@@ -161,7 +161,7 @@ def record_counter_metric(name: str, value: int = 1) -> None:
 class PipelineMetrics:
     """Singleton pipeline metrics — backward-compat facade.
 
-    Slice 2/4 of ***REMOVED***1648: ``record(stage, ms)`` now ALSO observes into
+    Slice 2/4 of #1648: ``record(stage, ms)`` now ALSO observes into
     the SDK-native :data:`pipeline_latency_seconds` Histogram. The
     in-memory rolling window is retained so the bot's admin ``/metrics``
     Telegram command (which calls :meth:`format_text`) keeps working;
@@ -177,8 +177,8 @@ class PipelineMetrics:
     Usage::
 
         metrics = PipelineMetrics.get()
-        metrics.record("rerank", 42.5)  ***REMOVED*** ms; also feeds Histogram
-        record_pipeline_latency("rerank", 0.0425)  ***REMOVED*** SDK-native, in seconds
+        metrics.record("rerank", 42.5)  # ms; also feeds Histogram
+        record_pipeline_latency("rerank", 0.0425)  # SDK-native, in seconds
     """
 
     _instance: PipelineMetrics | None = None
@@ -213,7 +213,7 @@ class PipelineMetrics:
         with cls._lock:
             cls._instance = None
 
-    ***REMOVED*** --- Recording ---
+    # --- Recording ---
 
     def record(self, stage: str, duration_ms: float) -> None:
         """Record a stage timing in milliseconds.
@@ -223,15 +223,15 @@ class PipelineMetrics:
         * SDK-native: ``pipeline_latency_seconds.labels(stage=stage).observe(duration_ms / 1000)``.
         * Legacy rolling-window: appended to the per-stage deque so
           :meth:`format_text` keeps producing output for the admin
-          ``/metrics`` command. Slice 4/4 of ***REMOVED***1648 deletes the legacy
+          ``/metrics`` command. Slice 4/4 of #1648 deletes the legacy
           path.
         """
-        ***REMOVED*** SDK-native side: convert ms → seconds and observe. Done first
-        ***REMOVED*** so a programming error in the facade dict does not lose the
-        ***REMOVED*** Prometheus signal.
+        # SDK-native side: convert ms → seconds and observe. Done first
+        # so a programming error in the facade dict does not lose the
+        # Prometheus signal.
         record_pipeline_latency(stage, duration_ms / 1000.0)
 
-        ***REMOVED*** Legacy rolling-window side (deprecated, see slice 4/4).
+        # Legacy rolling-window side (deprecated, see slice 4/4).
         with self._mu:
             if stage not in self._timings:
                 self._timings[stage] = deque(maxlen=_WINDOW_SIZE)
@@ -240,16 +240,16 @@ class PipelineMetrics:
     def inc(self, counter: str, amount: int = 1) -> None:
         """Increment a named counter.
 
-        Slice 3/4 of ***REMOVED***1648: this facade now ALSO increments the
+        Slice 3/4 of #1648: this facade now ALSO increments the
         SDK-native :data:`rag_pipeline_events_total` Counter so existing
         call-sites get Prometheus visibility without code changes.
         The in-memory ``_counters`` dict is retained for the deprecated
         admin ``/metrics`` Telegram command; it is deleted in slice 4/4.
         """
-        ***REMOVED*** SDK-native side: forward to the Counter first so a programming
-        ***REMOVED*** error in the facade dict does not silently lose the Prometheus signal.
+        # SDK-native side: forward to the Counter first so a programming
+        # error in the facade dict does not silently lose the Prometheus signal.
         record_pipeline_event(counter, amount)
-        ***REMOVED*** Legacy in-memory side (deprecated, see slice 4/4).
+        # Legacy in-memory side (deprecated, see slice 4/4).
         with self._mu:
             self._counters[counter] = self._counters.get(counter, 0) + amount
 
@@ -270,15 +270,15 @@ class PipelineMetrics:
             self._query_count += 1
             return self._query_count
 
-    ***REMOVED*** --- Retrieval (DEPRECATED) ---
+    # --- Retrieval (DEPRECATED) ---
 
     def get_stats(self) -> dict:
         """Return current p50/p95 per stage, counters, and observations.
 
-        .. deprecated:: ***REMOVED***1648 slice 2/4
+        .. deprecated:: #1648 slice 2/4
             The rolling p50/p95 surface is deprecated. Use the
             SDK-native :data:`pipeline_latency_seconds` Histogram
-            directly. Slice 4/4 of ***REMOVED***1648 (ASGI ``/metrics`` mount)
+            directly. Slice 4/4 of #1648 (ASGI ``/metrics`` mount)
             removes this method; the Telegram admin ``/metrics``
             command will be reworked to render Histogram data instead.
         """
@@ -331,14 +331,14 @@ class PipelineMetrics:
     def log_summary(self) -> None:
         """Log current stats as structured JSON.
 
-        .. deprecated:: ***REMOVED***1648 slice 2/4
+        .. deprecated:: #1648 slice 2/4
             Same migration path as :meth:`get_stats`.
         """
-        ***REMOVED*** Suppress the DeprecationWarning chain triggered by the inner
-        ***REMOVED*** get_stats() call so log_summary() — invoked from many places
-        ***REMOVED*** in the bot today — does not flood logs with deprecation
-        ***REMOVED*** frames. The warning still fires when callers reach for the
-        ***REMOVED*** data directly via get_stats() / format_text().
+        # Suppress the DeprecationWarning chain triggered by the inner
+        # get_stats() call so log_summary() — invoked from many places
+        # in the bot today — does not flood logs with deprecation
+        # frames. The warning still fires when callers reach for the
+        # data directly via get_stats() / format_text().
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             stats = self.get_stats()
@@ -347,7 +347,7 @@ class PipelineMetrics:
     def format_text(self) -> str:
         """Format stats as human-readable text for the admin ``/metrics`` command.
 
-        .. deprecated:: ***REMOVED***1648 slice 2/4
+        .. deprecated:: #1648 slice 2/4
             Same migration path as :meth:`get_stats`. Slice 4/4
             replaces this with a Prometheus exposition view.
         """

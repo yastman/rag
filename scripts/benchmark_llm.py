@@ -25,7 +25,7 @@ LITELLM_KEY = os.getenv("LITELLM_MASTER_KEY", "")
 CEREBRAS_URL = "https://api.cerebras.ai/v1"
 CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
 
-***REMOVED*** Запросы из реальных Langfuse traces (top-5 самых медленных)
+# Запросы из реальных Langfuse traces (top-5 самых медленных)
 TEST_QUERIES = [
     ("generate", "напиши мне информацию про внж?", 1024),
     ("generate", "Какие условия рассрочек?", 1024),
@@ -107,7 +107,7 @@ async def run_benchmark() -> list[dict]:
     """Run all benchmarks and return results."""
     results: list[dict] = []
 
-    ***REMOVED*** Конфигурации для тестирования
+    # Конфигурации для тестирования
     configs = [
         ("proxy/gpt-4o-mini", LITELLM_URL, LITELLM_KEY, "gpt-4o-mini"),
         ("proxy/gpt-oss-120b", LITELLM_URL, LITELLM_KEY, "gpt-oss-120b"),
@@ -165,7 +165,7 @@ def print_summary(results: list[dict]) -> None:
                 f"{r['tok_per_sec']:>6.0f} {r['content_len']:>5}"
             )
 
-    ***REMOVED*** Агрегаты по label + type
+    # Агрегаты по label + type
     print("\n" + "=" * 70)
     print("AGGREGATE (по label × type):")
     labels = sorted({r["label"] for r in results})

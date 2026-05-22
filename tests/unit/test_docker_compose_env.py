@@ -1,4 +1,4 @@
-"""Verify docker-compose bot service has CRM env vars (***REMOVED***402)."""
+"""Verify docker-compose bot service has CRM env vars (#402)."""
 
 from functools import cache
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Contract: Qdrant integration tests must not pass with empty data (***REMOVED***1631).
+"""Contract: Qdrant integration tests must not pass with empty data (#1631).
 
 Two read-path integration tests previously reported success without proving
 that anything was actually read:
@@ -39,7 +39,7 @@ HYBRID_SPARSE = REPO_ROOT / "tests" / "integration" / "test_hybrid_search_sparse
 def _function(tree: ast.AST, name: str) -> ast.FunctionDef:
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
-            return node  ***REMOVED*** type: ignore[return-value]
+            return node  # type: ignore[return-value]
     raise AssertionError(f"function '{name}' not found")
 
 
@@ -63,12 +63,12 @@ def _calls(tree: ast.AST, dotted: str) -> list[ast.Call]:
 
 
 def test_qdrant_read_skips_on_empty_collections() -> None:
-    """``test_qdrant_read`` must call ``pytest.skip`` when no collections exist (***REMOVED***1631)."""
+    """``test_qdrant_read`` must call ``pytest.skip`` when no collections exist (#1631)."""
     assert QDRANT_READ.exists(), f"missing: {QDRANT_READ}"
     tree = ast.parse(QDRANT_READ.read_text(encoding="utf-8"))
     test_func = _function(tree, "test_qdrant_read")
 
-    ***REMOVED*** Need at least two pytest.skip() calls (one for port-down, one for empty data).
+    # Need at least two pytest.skip() calls (one for port-down, one for empty data).
     skip_calls = _calls(test_func, "pytest.skip")
     assert len(skip_calls) >= 2, (
         "test_qdrant_read must skip on BOTH 'Qdrant unreachable' AND 'no data "
@@ -76,7 +76,7 @@ def test_qdrant_read_skips_on_empty_collections() -> None:
         f"{len(skip_calls)} pytest.skip(...) call(s)."
     )
 
-    ***REMOVED*** The skip messages must signal the empty-data path explicitly.
+    # The skip messages must signal the empty-data path explicitly.
     skip_messages = []
     for call in skip_calls:
         if call.args and isinstance(call.args[0], (ast.Constant, ast.JoinedStr)):
@@ -94,18 +94,18 @@ def test_qdrant_read_skips_on_empty_collections() -> None:
 
 
 def test_qdrant_read_helper_does_not_return_true_on_empty_collections() -> None:
-    """The helper must not silently succeed when ``collections.collections`` is empty (***REMOVED***1631)."""
+    """The helper must not silently succeed when ``collections.collections`` is empty (#1631)."""
     tree = ast.parse(QDRANT_READ.read_text(encoding="utf-8"))
     helper = _function(tree, "_run_qdrant_read_checks")
 
-    ***REMOVED*** Walk every `if not collections.collections:` branch and ensure the
-    ***REMOVED*** body does not unconditionally return True.
+    # Walk every `if not collections.collections:` branch and ensure the
+    # body does not unconditionally return True.
     for node in ast.walk(helper):
         if not isinstance(node, ast.If):
             continue
         try:
             test_src = ast.unparse(node.test)
-        except Exception:  ***REMOVED*** pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             continue
         if "collections.collections" not in test_src or "not " not in test_src:
             continue
@@ -124,18 +124,18 @@ def test_qdrant_read_helper_does_not_return_true_on_empty_collections() -> None:
 
 
 def test_hybrid_search_with_sparse_asserts_nonempty_results() -> None:
-    """``test_hybrid_search_with_sparse`` must assert at least one query returned hits (***REMOVED***1631)."""
+    """``test_hybrid_search_with_sparse`` must assert at least one query returned hits (#1631)."""
     assert HYBRID_SPARSE.exists(), f"missing: {HYBRID_SPARSE}"
     tree = ast.parse(HYBRID_SPARSE.read_text(encoding="utf-8"))
     test_func = _function(tree, "test_hybrid_search_with_sparse")
 
-    ***REMOVED*** Pull every Assert in the function body and inspect their condition source.
+    # Pull every Assert in the function body and inspect their condition source.
     assert_sources: list[str] = []
     for node in ast.walk(test_func):
         if isinstance(node, ast.Assert):
             try:
                 assert_sources.append(ast.unparse(node.test))
-            except Exception:  ***REMOVED*** pragma: no cover - defensive
+            except Exception:  # pragma: no cover - defensive
                 continue
 
     has_nonempty_results_assertion = any(

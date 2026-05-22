@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Microbenchmark: ACORN vs no-ACORN on filtered queries.
 
 Compares latency and recall of filtered vector search with ACORN enabled vs disabled.
@@ -27,7 +27,7 @@ from qdrant_client import QdrantClient, models
 class BenchmarkResult:
     """Result of a single benchmark run."""
 
-    mode: str  ***REMOVED*** "acorn" or "no_acorn"
+    mode: str  # "acorn" or "no_acorn"
     latencies_ms: list[float]
     result_counts: list[int]
     total_queries: int
@@ -99,7 +99,7 @@ def run_benchmark(
     latencies_ms = []
     result_counts = []
 
-    ***REMOVED*** Build search params
+    # Build search params
     if use_acorn:
         search_params = models.SearchParams(
             acorn=models.AcornSearchParams(
@@ -191,10 +191,10 @@ def main():
     print(f"Iterations: {args.iterations} per mode")
     print()
 
-    ***REMOVED*** Connect to Qdrant
+    # Connect to Qdrant
     client = QdrantClient(url=args.qdrant_url)
 
-    ***REMOVED*** Verify collection exists
+    # Verify collection exists
     try:
         info = client.get_collection(args.collection)
         print(f"Collection has {info.points_count} points")
@@ -202,7 +202,7 @@ def main():
         print(f"Error: Cannot access collection '{args.collection}': {e}")
         sys.exit(1)
 
-    ***REMOVED*** Build filter
+    # Build filter
     query_filter = models.Filter(
         must=[
             models.FieldCondition(
@@ -235,7 +235,7 @@ def main():
         top_k=args.top_k,
     )
 
-    ***REMOVED*** Print results
+    # Print results
     print()
     print("=" * 60)
     print("RESULTS")
@@ -269,7 +269,7 @@ def main():
 
     print()
 
-    ***REMOVED*** Save results
+    # Save results
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -298,7 +298,7 @@ def main():
 
     print(f"Report saved to: {output_path}")
 
-    ***REMOVED*** Return non-zero if ACORN significantly worse (> 50% latency increase with no recall improvement)
+    # Return non-zero if ACORN significantly worse (> 50% latency increase with no recall improvement)
     if latency_pct > 50 and results_diff <= 0:
         print("\nWARNING: ACORN shows significant latency increase without recall improvement")
         return 1

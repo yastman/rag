@@ -1,4 +1,4 @@
-"""Chaos tests for Redis/BGE/Kommo resilience scenarios (***REMOVED***549)."""
+"""Chaos tests for Redis/BGE/Kommo resilience scenarios (#549)."""
 
 from __future__ import annotations
 

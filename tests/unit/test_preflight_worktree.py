@@ -12,7 +12,7 @@ def test_clean_worktree_passes(tmp_path):
     with patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ""
-        ***REMOVED*** Should not raise
+        # Should not raise
         check_worktree_clean(strict=True)
 
 

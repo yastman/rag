@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Тест чтения данных из Qdrant (без индексации).
 Проверяет поиск и получение точек из существующей коллекции.
@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 
 
-***REMOVED*** Загрузить .env
+# Загрузить .env
 load_dotenv()
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -39,24 +39,24 @@ def _run_qdrant_read_checks() -> bool:
     print(f"   API Key: {'***' + QDRANT_API_KEY[-10:] if QDRANT_API_KEY else 'Не установлен'}")
 
     try:
-        ***REMOVED*** Подключение
+        # Подключение
         print("\n🔌 Подключение к Qdrant...")
         client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
         print("   ✅ Подключено!")
 
-        ***REMOVED*** Список коллекций
+        # Список коллекций
         collections = client.get_collections()
         print(f"\n📦 Коллекций: {len(collections.collections)}")
 
         if not collections.collections:
             print("   ℹ️  Нет коллекций для тестирования")
-            ***REMOVED*** Empty Qdrant is not a successful read test (***REMOVED***1631).
-            ***REMOVED*** The wrapper test skips earlier, so reaching this point during
-            ***REMOVED*** an actual run means we lost data between the skip check and
-            ***REMOVED*** the helper invocation — fail loudly.
+            # Empty Qdrant is not a successful read test (#1631).
+            # The wrapper test skips earlier, so reaching this point during
+            # an actual run means we lost data between the skip check and
+            # the helper invocation — fail loudly.
             return False
 
-        ***REMOVED*** Детали первой коллекции
+        # Детали первой коллекции
         collection_name = collections.collections[0].name
         print(f"\n🔍 Тестирование коллекции: '{collection_name}'")
 
@@ -65,7 +65,7 @@ def _run_qdrant_read_checks() -> bool:
         print(f"   Точек: {info.points_count:,}")
         print(f"   Векторов: {info.indexed_vectors_count:,}")
 
-        ***REMOVED*** Получить несколько точек
+        # Получить несколько точек
         if info.points_count > 0:
             print("\n📄 Получение примера данных (первые 3 точки)...")
 
@@ -73,7 +73,7 @@ def _run_qdrant_read_checks() -> bool:
                 collection_name=collection_name,
                 limit=3,
                 with_payload=True,
-                with_vectors=False,  ***REMOVED*** Don't load vectors (saves memory)
+                with_vectors=False,  # Don't load vectors (saves memory)
             )
 
             points, _next_page = scroll_result
@@ -84,16 +84,16 @@ def _run_qdrant_read_checks() -> bool:
                 print(f"\n   📌 Точка {i} (ID: {point.id}):")
                 payload = point.payload or {}
 
-                ***REMOVED*** Показать основные поля
+                # Показать основные поля
                 for key in ["document_name", "article_number", "chapter", "text"]:
                     if key in payload:
                         value = payload[key]
                         if key == "text":
-                            ***REMOVED*** Обрезать длинный текст
+                            # Обрезать длинный текст
                             value = value[:100] + "..." if len(value) > 100 else value
                         print(f"      {key}: {value}")
 
-        ***REMOVED*** Тест фильтрации
+        # Тест фильтрации
         print("\n🔎 Тест фильтрации (поиск по article_number)...")
 
         from qdrant_client.models import FieldCondition, Filter, MatchValue
@@ -146,8 +146,8 @@ def test_qdrant_read():
     if not _is_port_open(host, port):
         pytest.skip(f"Qdrant not running on {host}:{port}")
 
-    ***REMOVED*** Empty Qdrant is not a successful read test (***REMOVED***1631) — skip BEFORE the
-    ***REMOVED*** helper runs so absent data is reported as skipped, not green.
+    # Empty Qdrant is not a successful read test (#1631) — skip BEFORE the
+    # helper runs so absent data is reported as skipped, not green.
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
     collections = client.get_collections().collections
     if not collections:

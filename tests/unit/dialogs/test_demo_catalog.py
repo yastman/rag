@@ -1,4 +1,4 @@
-"""Tests for demo → catalog browsing transition (***REMOVED***959)."""
+"""Tests for demo → catalog browsing transition (#959)."""
 
 from __future__ import annotations
 
@@ -70,9 +70,9 @@ def _make_svc(results: list | None = None, total: int = 42) -> MagicMock:
     return svc
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 1: _dialog_search → CatalogSG
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 1: _dialog_search → CatalogSG
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -198,9 +198,9 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 2: _run_demo_search (FSM handler) → CatalogSG
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 2: _run_demo_search (FSM handler) → CatalogSG
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -244,9 +244,9 @@ async def test_handler_run_demo_search_uses_scroll() -> None:
     svc.scroll_with_filters.assert_awaited_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 3: Voice/text input → search → catalog
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 3: Voice/text input → search → catalog
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -303,9 +303,9 @@ async def test_text_input_triggers_search_and_catalog() -> None:
     svc.scroll_with_filters.assert_awaited_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 4: Catalog pagination after demo
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 4: Catalog pagination after demo
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -365,9 +365,9 @@ async def test_catalog_exit_returns_to_main_menu() -> None:
     callback.message.answer.assert_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 5: Filter extraction parametrized tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 5: Filter extraction parametrized tests
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -394,27 +394,27 @@ def test_extraction_produces_correct_filter(
         assert filters.get("rooms") == expected_value, f"rooms mismatch for '{query}'"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 6: Voice input widget exists
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 6: Voice input widget exists
+# ---------------------------------------------------------------------------
 
 
 def test_demo_dialog_has_voice_input() -> None:
     """Demo dialog must accept voice messages via on_voice_input handler."""
     from telegram_bot.dialogs.demo import demo_dialog, on_voice_input
 
-    ***REMOVED*** Verify handler exists and is used in the dialog source
+    # Verify handler exists and is used in the dialog source
     assert callable(on_voice_input), "on_voice_input handler must exist"
 
-    ***REMOVED*** Verify dialog has the intro window with DemoSG.intro state
+    # Verify dialog has the intro window with DemoSG.intro state
     from telegram_bot.dialogs.states import DemoSG
 
     assert DemoSG.intro in demo_dialog.windows, "Dialog must have intro window"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 7: Legacy demo state must be cleared so catalog keyboard doesn't loop
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 7: Legacy demo state must be cleared so catalog keyboard doesn't loop
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -465,9 +465,9 @@ async def test_dialog_demo_exit_does_not_clear_raw_fsm() -> None:
     state.set_state.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 8: Full flow integration test
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 8: Full flow integration test
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -476,7 +476,7 @@ async def test_full_demo_flow_text_to_pagination() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_more
     from telegram_bot.handlers.demo_handler import _run_demo_search
 
-    ***REMOVED*** Step 1: Initial search
+    # Step 1: Initial search
     msg = _make_message()
     state = _make_state()
 
@@ -493,7 +493,7 @@ async def test_full_demo_flow_text_to_pagination() -> None:
     assert "catalog_runtime" in state.update_data.await_args.kwargs
     assert svc.scroll_with_filters.await_count == 1
 
-    ***REMOVED*** Step 2: Show more
+    # Step 2: Show more
     state2 = _make_state(
         {
             "catalog_runtime": {

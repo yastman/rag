@@ -1,11 +1,11 @@
-"""RAG search tool — wraps async rag_pipeline (***REMOVED***442).
+"""RAG search tool — wraps async rag_pipeline (#442).
 
 Pipeline returns CONTEXT (documents, scores, latency_stages).
 Agent generates ANSWER from the returned context string.
 
 Dependencies injected via :func:`telegram_bot.agents.context.get_bot_context`
 (SDK-native ``runtime.context`` with ``configurable["bot_context"]`` back-compat
-— see ***REMOVED***1252).
+— see #1252).
 """
 
 from __future__ import annotations
@@ -93,8 +93,8 @@ async def rag_search(
         content_filter_enabled = ctx.content_filter_enabled if ctx else True
 
         if content_filter_enabled:
-            ***REMOVED*** Guard the original user text when available (***REMOVED***439), not the agent-reformulated query.
-            ***REMOVED*** Agent reformulation can sanitize malicious queries, bypassing guard detection.
+            # Guard the original user text when available (#439), not the agent-reformulated query.
+            # Agent reformulation can sanitize malicious queries, bypassing guard detection.
             original_text = ctx.original_user_query if ctx and ctx.original_user_query else query
             guard_result = await guard_node(
                 {"messages": [{"content": original_text}], "latency_stages": {}},
@@ -142,7 +142,7 @@ async def rag_search(
                 lf.update_current_span(output={"response_length": len(context)})
                 return context
 
-        ***REMOVED*** Reuse pre-computed embedding stashed by pre-agent cache check (***REMOVED***563)
+        # Reuse pre-computed embedding stashed by pre-agent cache check (#563)
         result_store = configurable.get("rag_result_store")
         pre_computed_embedding: list[float] | None = None
         pre_computed_sparse: Any = None
@@ -187,12 +187,12 @@ async def rag_search(
         result = await rag_pipeline(query, **pipeline_kwargs)
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
-        ***REMOVED*** Streaming hook (***REMOVED***428): when streaming is restored for the agent text path
-        ***REMOVED*** (i.e. the pipeline delivers the final answer directly to Telegram via
-        ***REMOVED*** generate_node with a live message object), set ctx.response_sent = True here
-        ***REMOVED*** so that _handle_query_supervisor in bot.py does not send the message again.
-        ***REMOVED*** Example: if result.get("response_sent") and ctx is not None:
-        ***REMOVED***              ctx.response_sent = True
+        # Streaming hook (#428): when streaming is restored for the agent text path
+        # (i.e. the pipeline delivers the final answer directly to Telegram via
+        # generate_node with a live message object), set ctx.response_sent = True here
+        # so that _handle_query_supervisor in bot.py does not send the message again.
+        # Example: if result.get("response_sent") and ctx is not None:
+        #              ctx.response_sent = True
 
         if guard_result:
             if guard_result.get("injection_detected"):
@@ -213,13 +213,13 @@ async def rag_search(
 
         trace_id = lf.get_current_trace_id() or ""
 
-        ***REMOVED*** Observability must stay fail-soft: scoring errors must not break user response.
+        # Observability must stay fail-soft: scoring errors must not break user response.
         try:
             write_langfuse_scores(lf, result, trace_id=trace_id)
         except Exception:
             logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
 
-        ***REMOVED*** Store full result for caller via side-channel (***REMOVED***426)
+        # Store full result for caller via side-channel (#426)
         result_store = configurable.get("rag_result_store")
         if isinstance(result_store, dict):
             result_store.update(result)

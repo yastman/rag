@@ -1,6 +1,6 @@
-"""Nurturing service: candidate selection + batch enqueue (***REMOVED***390).
+"""Nurturing service: candidate selection + batch enqueue (#390).
 
-Consumes ***REMOVED***384 lead_scores (score_band, sync_status) for targeting.
+Consumes #384 lead_scores (score_band, sync_status) for targeting.
 Uses executemany for bulk insert performance.
 """
 
@@ -59,7 +59,7 @@ class NurturingService:
         self._model = model
 
     async def _assert_384_contract(self) -> None:
-        """Fail fast if lead_scores table is missing ***REMOVED***384 columns."""
+        """Fail fast if lead_scores table is missing #384 columns."""
         row = await self._pool.fetchrow(
             """
             SELECT 1
@@ -71,7 +71,7 @@ class NurturingService:
             """
         )
         if row is None:
-            raise RuntimeError("lead_scores contract from ***REMOVED***384 is missing")
+            raise RuntimeError("lead_scores contract from #384 is missing")
 
     async def select_candidates(self, *, limit: int) -> list[_Candidate]:
         """Fetch warm/cold synced leads eligible for nurturing."""

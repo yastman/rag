@@ -1,10 +1,10 @@
-***REMOVED*** AGENTS.override.md
+# AGENTS.override.md
 
-***REMOVED******REMOVED*** Scope
+## Scope
 - Applies to `src/ingestion/unified/**`.
 - Extends root `AGENTS.md` with ingestion-specific rules.
 
-***REMOVED******REMOVED*** Local Rules
+## Local Rules
 - Keep pipeline deterministic and resumable (state tracking and manifest identity must stay stable).
 - Preserve sync-safe behavior in writer/state paths used by ingestion runtime.
 - Maintain compatibility between:
@@ -13,7 +13,7 @@
   - `state_manager.py`
   - `targets/qdrant_hybrid_target.py`
 
-***REMOVED******REMOVED*** Required Validation
+## Required Validation
 - Base checks:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
@@ -23,11 +23,11 @@
 - If flow semantics changed, run one controlled ingestion pass in dev:
   - `make ingest-unified`
 
-***REMOVED******REMOVED*** Guardrails
+## Guardrails
 - Do not silently alter collection names, manifest hashing, or file identity semantics.
 - Prefer additive config changes over breaking defaults.
 
-***REMOVED******REMOVED*** References
+## References
 - `docs/INGESTION.md`
 - `docs/LOCAL-DEVELOPMENT.md`
 - `docs/PIPELINE_OVERVIEW.md`

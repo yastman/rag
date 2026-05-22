@@ -1,10 +1,10 @@
-***REMOVED*** Virtual environments
+# Virtual environments
 venv/
 .venv/
 env/
 ENV/
 
-***REMOVED*** Python bytecode
+# Python bytecode
 __pycache__/
 *.pyc
 *.pyo
@@ -16,7 +16,7 @@ __pycache__/
 dist/
 build/
 
-***REMOVED*** Secrets and environment files
+# Secrets and environment files
 .env
 .env.*
 .env.local
@@ -27,16 +27,16 @@ build/
 credentials.json
 secrets/
 
-***REMOVED*** Git
+# Git
 .git/
 .gitignore
 .github/
 
-***REMOVED*** IDE
+# IDE
 .vscode/
 .idea/
 
-***REMOVED*** Tests and coverage
+# Tests and coverage
 .pytest_cache/
 .mypy_cache/
 .coverage
@@ -44,83 +44,83 @@ htmlcov/
 .tox/
 tests/
 
-***REMOVED*** Logs and temp
+# Logs and temp
 *.log
 .DS_Store
 tmp/
 temp/
 
-***REMOVED*** Documentation and reports
+# Documentation and reports
 docs/
 reports/
 *.md
 !README.md
 
-***REMOVED*** MLflow and experiment tracking
+# MLflow and experiment tracking
 mlruns/
 .mlflow/
 
-***REMOVED*** Data files (usually mounted as volumes)
+# Data files (usually mounted as volumes)
 data/
 qdrant_storage/
 
-***REMOVED*** Worktrees (Claude Code)
+# Worktrees (Claude Code)
 .worktrees/
 
-***REMOVED*** Ruff cache
+# Ruff cache
 .ruff_cache/
 
-***REMOVED*** Claude settings
+# Claude settings
 .claude/
 
-***REMOVED*** Scripts (not needed in container)
+# Scripts (not needed in container)
 scripts/
 
-***REMOVED*** Docker configs (not needed in image)
+# Docker configs (not needed in image)
 docker/
 !docker/ingestion/
 !docker/ingestion/entrypoint.sh
 
-***REMOVED*** Services (separate builds)
+# Services (separate builds)
 services/
 
-***REMOVED*** Benchmarks and eval data
+# Benchmarks and eval data
 benchmarks/
 evaluation/
 
-***REMOVED*** Docker compose files (not needed in image)
+# Docker compose files (not needed in image)
 docker-compose*.yml
 
-***REMOVED*** Node / frontend
+# Node / frontend
 node_modules/
 package-lock.json
 
-***REMOVED*** Logs directory
+# Logs directory
 logs/
 
-***REMOVED*** Additional caches and tool dirs
+# Additional caches and tool dirs
 .deepeval/
 .cache/
 
-***REMOVED*** Legacy code
+# Legacy code
 legacy/
 
-***REMOVED*** Coverage artifacts
+# Coverage artifacts
 coverage.json
 coverage_report_final.txt
 
-***REMOVED*** Infrastructure (not needed in app images)
+# Infrastructure (not needed in app images)
 k8s/
 drive-sync/
 
-***REMOVED*** Build/CI config (not needed in images)
+# Build/CI config (not needed in images)
 docker-bake.hcl
 release-please-config.json
 .pre-commit-config.yaml
 Makefile
 Dockerfile*
 
-***REMOVED*** Standalone scripts (not part of app)
+# Standalone scripts (not part of app)
 debug_chunks.py
 simple_index_test.py
 test_cache.py

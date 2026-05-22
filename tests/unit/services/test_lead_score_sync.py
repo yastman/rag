@@ -104,7 +104,7 @@ async def test_sync_pending_lead_scores_marks_failed_on_kommo_error() -> None:
 
 
 class TestLeadScoreSyncObserveInstrumentation:
-    """Tests for @observe instrumentation on sync_pending_lead_scores (***REMOVED***1663).
+    """Tests for @observe instrumentation on sync_pending_lead_scores (#1663).
 
     Contract: sync_pending_lead_scores must be wrapped with @observe so the
     background job emits a named Langfuse span instead of running untraced.
@@ -151,7 +151,7 @@ class TestLeadScoreSyncObserveInstrumentation:
         importlib.import_module("telegram_bot.services.lead_score_sync")
 
     def test_lead_score_sync_module_imports_observe_get_client_and_propagate_attributes(self):
-        """Module wires the Langfuse decorator + helpers (***REMOVED***1663 contract)."""
+        """Module wires the Langfuse decorator + helpers (#1663 contract)."""
         from telegram_bot.services import lead_score_sync as lss_mod
 
         assert hasattr(lss_mod, "observe"), (

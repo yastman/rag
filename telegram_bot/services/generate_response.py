@@ -50,7 +50,7 @@ class StreamingPartialDeliveryError(Exception):
 
 
 _MAX_CONTEXT_DOCS = 5
-_DRAFT_INTERVAL = 0.2  ***REMOVED*** 200ms — sendMessageDraft has no rate limit
+_DRAFT_INTERVAL = 0.2  # 200ms — sendMessageDraft has no rate limit
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
 _HISTORY_INSTRUCTION = (
@@ -139,7 +139,7 @@ def _build_system_prompt_with_config(domain: str) -> tuple[str, dict[str, Any]]:
 
 
 def _get_linkable_prompt_object(name: str, fallback: str, variables: dict[str, str]) -> Any | None:
-    """Return the raw Langfuse Prompt object (or None) for ***REMOVED***1666 generation linking.
+    """Return the raw Langfuse Prompt object (or None) for #1666 generation linking.
 
     Companion to ``get_prompt_with_config``: fetches the same prompt and returns
     only the raw object suitable for ``langfuse_prompt=`` linking. Langfuse's
@@ -345,14 +345,14 @@ async def _chat_create_with_optional_name(
 
     Some clients (plain OpenAI SDK) reject `name` and `langfuse_prompt` as
     unexpected kwargs. Langfuse-wrapped clients accept them and use them for
-    generation naming and Prompt Management linking (***REMOVED***1666) respectively.
+    generation naming and Prompt Management linking (#1666) respectively.
     """
     create_fn = llm.chat.completions.create
     if getattr(llm, "_langfuse_auto_trace", True) is False:
-        ***REMOVED*** Plain client created via GraphConfig.create_llm(auto_trace=False).
-        ***REMOVED*** Skip both Langfuse-specific kwargs to avoid a needless TypeError →
-        ***REMOVED*** retry round-trip on every call. Generation linking for these clients
-        ***REMOVED*** happens via _update_current_generation(lf_client, prompt=...) in caller.
+        # Plain client created via GraphConfig.create_llm(auto_trace=False).
+        # Skip both Langfuse-specific kwargs to avoid a needless TypeError →
+        # retry round-trip on every call. Generation linking for these clients
+        # happens via _update_current_generation(lf_client, prompt=...) in caller.
         kwargs.pop("langfuse_prompt", None)
         return await create_fn(**kwargs)
     try:
@@ -415,7 +415,7 @@ async def _generate_streaming(
         **config.get_reasoning_kwargs(),
     }
     if langfuse_prompt is not None:
-        ***REMOVED*** Link the streamed generation to its Langfuse Prompt entry (***REMOVED***1666).
+        # Link the streamed generation to its Langfuse Prompt entry (#1666).
         stream_create_kwargs["langfuse_prompt"] = langfuse_prompt
 
     stream = await _chat_create_with_optional_name(
@@ -441,10 +441,10 @@ async def _generate_streaming(
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
-            ***REMOVED*** Reasoning models (e.g. gpt-oss-120b via Cerebras) may send tokens
-            ***REMOVED*** as delta.reasoning_content or delta.reasoning instead of delta.content.
-            ***REMOVED*** LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
-            ***REMOVED*** (issues ***REMOVED***9578, ***REMOVED***15690), so we merge client-side as fallback.
+            # Reasoning models (e.g. gpt-oss-120b via Cerebras) may send tokens
+            # as delta.reasoning_content or delta.reasoning instead of delta.content.
+            # LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
+            # (issues #9578, #15690), so we merge client-side as fallback.
             text = delta.content if delta else None
             if not text:
                 text = getattr(delta, "reasoning_content", None) or getattr(
@@ -474,7 +474,7 @@ async def _generate_streaming(
                 actual_model = chunk.model
     except Exception:
         if accumulated:
-            ***REMOVED*** Draft showed partial text — try to finalize as real message
+            # Draft showed partial text — try to finalize as real message
             final_text = sanitize_response(accumulated) if sanitize_response else accumulated
             sent_msg = None
             with contextlib.suppress(Exception):
@@ -497,7 +497,7 @@ async def _generate_streaming(
     final_text = sanitize_response(accumulated) if sanitize_response else accumulated
     reply_parameters = build_reply_parameters(message, getattr(message, "text", "") or "")
 
-    ***REMOVED*** Final message — persisted in chat history
+    # Final message — persisted in chat history
     try:
         sent_msg = await message.answer(
             format_answer_html(final_text),
@@ -565,7 +565,7 @@ async def generate_response(
 ) -> dict[str, Any]:
     """Generate an LLM answer from retrieved context with optional Telegram streaming."""
     t0 = time.monotonic()
-    ***REMOVED*** Keep compatibility for injected prompt builders in tests/callers.
+    # Keep compatibility for injected prompt builders in tests/callers.
     _ = build_system_prompt
 
     if config is None:
@@ -577,7 +577,7 @@ async def generate_response(
     raw_history = raw_messages or []
     messages = select_recent_history(raw_history, _MAX_HISTORY_MESSAGES)
 
-    ***REMOVED*** Derive query from last message if caller didn't pass explicit query.
+    # Derive query from last message if caller didn't pass explicit query.
     effective_query = query
     if not effective_query and messages:
         last_msg = messages[-1]
@@ -611,7 +611,7 @@ async def generate_response(
     else:
         context = format_context(docs, effective_max_context_docs)
 
-    ***REMOVED*** Curated span metadata
+    # Curated span metadata
     _update_current_span(
         lf_client,
         input={
@@ -727,34 +727,34 @@ async def generate_response(
         style_budget = style_token_limit(style_info.style, style_info.difficulty)
         system_prompt = style_system_prompt
         max_tokens = min(style_budget, legacy_max_tokens)
-        ***REMOVED*** Style-mode prompts are built from internal templates, not Langfuse
-        ***REMOVED*** Prompt Management — there is no linkable Prompt object.
+        # Style-mode prompts are built from internal templates, not Langfuse
+        # Prompt Management — there is no linkable Prompt object.
         prompt_obj = None
     else:
         system_prompt, prompt_config = _build_system_prompt_with_config(config.domain)
         prompt_obj = _get_linkable_prompt_object(
             "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
         )
-        ***REMOVED*** Langfuse prompt config overrides: temperature, max_tokens editable in UI
+        # Langfuse prompt config overrides: temperature, max_tokens editable in UI
         if "max_tokens" in prompt_config:
             max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
         else:
             max_tokens = legacy_max_tokens
 
-    ***REMOVED*** Langfuse prompt config: temperature override (editable in UI)
+    # Langfuse prompt config: temperature override (editable in UI)
     effective_temperature: float = prompt_config.get("temperature", config.llm_temperature)
 
     system_prompt = ensure_history_instruction(system_prompt)
 
-    ***REMOVED*** Citation instruction (***REMOVED***225) — only when sources are enabled
+    # Citation instruction (#225) — only when sources are enabled
     if sources_enabled and docs:
         separator = "\n" if system_prompt.endswith("\n") else "\n\n"
         system_prompt = f"{system_prompt}{separator}{citation_instruction}"
 
-    ***REMOVED*** Build OpenAI-format messages
+    # Build OpenAI-format messages
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
-    ***REMOVED*** Add conversation history (all messages except the last user message)
+    # Add conversation history (all messages except the last user message)
     for msg in messages[:-1]:
         role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
         content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
@@ -780,7 +780,7 @@ async def generate_response(
     try:
         llm = config.create_llm(auto_trace=False)
 
-        ***REMOVED*** Streaming path: deliver directly to Telegram
+        # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
             try:
                 stream_kwargs: dict[str, Any] = {}
@@ -795,7 +795,7 @@ async def generate_response(
                         sources_enabled=sources_enabled,
                     )
                 if "langfuse_prompt" in params and prompt_obj is not None:
-                    ***REMOVED*** Link streamed generation to Langfuse Prompt entry (***REMOVED***1666).
+                    # Link streamed generation to Langfuse Prompt entry (#1666).
                     stream_kwargs["langfuse_prompt"] = prompt_obj
                 stream_result = await generate_streaming(
                     llm,
@@ -833,8 +833,8 @@ async def generate_response(
                         usage_details,
                         sent_msg,
                     ) = stream_result
-                ***REMOVED*** Placeholder send may fail in parallel mode (sent_msg=None). In that case
-                ***REMOVED*** streaming generated the text, but delivery must continue in respond path.
+                # Placeholder send may fail in parallel mode (sent_msg=None). In that case
+                # streaming generated the text, but delivery must continue in respond path.
                 response_sent = sent_msg is not None
             except Exception as stream_exc:
                 if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
@@ -913,8 +913,8 @@ async def generate_response(
                     response_sent = delivered
                 else:
                     logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
-                    ***REMOVED*** Recovery path succeeded below; keep normal-success span level.
-                    ***REMOVED*** Degraded mode is tracked via llm_stream_recovery=True.
+                    # Recovery path succeeded below; keep normal-success span level.
+                    # Degraded mode is tracked via llm_stream_recovery=True.
                     t_llm_start = time.monotonic()
                     create_kwargs = {
                         "model": config.llm_model,
@@ -945,7 +945,7 @@ async def generate_response(
                         )
                     stream_recovery = True
         else:
-            ***REMOVED*** Non-streaming path
+            # Non-streaming path
             t_llm_start = time.monotonic()
             create_kwargs = {
                 "model": config.llm_model,
@@ -955,7 +955,7 @@ async def generate_response(
                 **config.get_reasoning_kwargs(),
             }
             if prompt_obj is not None:
-                ***REMOVED*** Link the generation observation to its Langfuse Prompt entry (***REMOVED***1666).
+                # Link the generation observation to its Langfuse Prompt entry (#1666).
                 create_kwargs["langfuse_prompt"] = prompt_obj
             response_obj = await _chat_create_with_optional_name(
                 llm,
@@ -966,7 +966,7 @@ async def generate_response(
             answer = response_obj.choices[0].message.content or ""
             answer = _sanitize_response_text(answer, sources_enabled=sources_enabled)
             actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-            ***REMOVED*** For non-streaming: TTFT = entire call duration (one-shot completion)
+            # For non-streaming: TTFT = entire call duration (one-shot completion)
             ttft_ms = (t_llm_end - t_llm_start) * 1000
             usage = getattr(response_obj, "usage", None)
             if usage is not None:
@@ -997,15 +997,15 @@ async def generate_response(
         elif completion_tokens is not None:
             generation_payload["usage_details"] = {"output": int(completion_tokens)}
         if prompt_obj is not None:
-            ***REMOVED*** Link the generation observation to its Langfuse Prompt entry (***REMOVED***1666).
-            ***REMOVED*** Belt-and-braces: redundant with the langfuse_prompt= kwarg above for
-            ***REMOVED*** langfuse.openai-wrapped clients, but required for plain OpenAI clients
-            ***REMOVED*** (auto_trace=False) where the kwarg is stripped by the helper.
+            # Link the generation observation to its Langfuse Prompt entry (#1666).
+            # Belt-and-braces: redundant with the langfuse_prompt= kwarg above for
+            # langfuse.openai-wrapped clients, but required for plain OpenAI clients
+            # (auto_trace=False) where the kwarg is stripped by the helper.
             generation_payload["prompt"] = prompt_obj
         with contextlib.suppress(Exception):
             _update_current_generation(lf_client, **generation_payload)
 
-    ***REMOVED*** Build eval context for managed evaluators (***REMOVED***386)
+    # Build eval context for managed evaluators (#386)
     retrieved_ctx = retrieved_context or []
     eval_context = "\n\n".join(
         f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
@@ -1052,7 +1052,7 @@ async def generate_response(
             }
     _update_current_span(lf_client, output=span_output)
 
-    ***REMOVED*** --- Latency breakdown (***REMOVED***147) ---
+    # --- Latency breakdown (#147) ---
     streaming_was_enabled = bool(message is not None and config.streaming_enabled)
     llm_decode_ms: float | None = None
     llm_tps: float | None = None
@@ -1066,7 +1066,7 @@ async def generate_response(
         if completion_tokens is not None and llm_decode_ms > 0:
             llm_tps = completion_tokens / (llm_decode_ms / 1000)
     elif not streaming_was_enabled and ttft_ms > 0:
-        ***REMOVED*** Non-streaming: no decode/prefill distinction; compute TPS from total call time
+        # Non-streaming: no decode/prefill distinction; compute TPS from total call time
         if completion_tokens is not None and ttft_ms > 0:
             llm_tps = completion_tokens / (ttft_ms / 1000)
 
@@ -1087,7 +1087,7 @@ async def generate_response(
                     ),
                 )
 
-    ***REMOVED*** Response length metrics (***REMOVED***129)
+    # Response length metrics (#129)
     answer_words = len(answer.split())
     answer_chars = len(answer)
     question_words = style_info.word_count
@@ -1111,14 +1111,14 @@ async def generate_response(
             "llm_ttft_drift_ms": llm_ttft_drift_ms,
             "llm_call_count": current_llm_calls + 1,
             "latency_stages": {**current_latency, "generate": elapsed},
-            ***REMOVED*** Latency breakdown (***REMOVED***147)
+            # Latency breakdown (#147)
             "llm_decode_ms": llm_decode_ms,
             "llm_tps": llm_tps,
             "llm_queue_ms": llm_queue_ms,
             "llm_timeout": hard_timeout,
             "llm_stream_recovery": stream_recovery,
             "streaming_enabled": streaming_was_enabled,
-            ***REMOVED*** Response length control (***REMOVED***129)
+            # Response length control (#129)
             "response_style": style_info.style,
             "response_difficulty": style_info.difficulty,
             "response_style_reasoning": style_info.reasoning,

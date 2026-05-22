@@ -42,7 +42,7 @@ class TestContextualizedEmbeddingService:
         with pytest.raises(ValueError, match="Invalid output_dimension"):
             ContextualizedEmbeddingService(
                 api_key="test-key",
-                output_dimension=768,  ***REMOVED*** Not supported
+                output_dimension=768,  # Not supported
             )
 
     def test_supported_dimensions(self):
@@ -68,7 +68,7 @@ class TestContextualizedDocumentEmbedding:
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
         with patch("voyageai.Client") as mock_client_class:
-            ***REMOVED*** Setup mock
+            # Setup mock
             mock_client = MagicMock()
             mock_result = MagicMock()
             mock_result.embeddings = [[0.1] * 1024, [0.2] * 1024, [0.3] * 1024]
@@ -80,7 +80,7 @@ class TestContextualizedDocumentEmbedding:
 
             service = ContextualizedEmbeddingService(api_key="test-key")
 
-            ***REMOVED*** Embed document with 3 chunks
+            # Embed document with 3 chunks
             doc_chunks = [["chunk 1", "chunk 2", "chunk 3"]]
             result = await service.embed_documents(doc_chunks)
 
@@ -88,7 +88,7 @@ class TestContextualizedDocumentEmbedding:
             assert result.total_tokens == 150
             assert result.chunks_per_document == [3]
 
-            ***REMOVED*** Verify API was called correctly
+            # Verify API was called correctly
             mock_client.contextualized_embed.assert_called_once()
             call_kwargs = mock_client.contextualized_embed.call_args[1]
             assert call_kwargs["inputs"] == doc_chunks
@@ -102,7 +102,7 @@ class TestContextualizedDocumentEmbedding:
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
 
-            ***REMOVED*** Two documents: 2 chunks and 3 chunks
+            # Two documents: 2 chunks and 3 chunks
             mock_result1 = MagicMock()
             mock_result1.embeddings = [[0.1] * 1024, [0.2] * 1024]
             mock_result2 = MagicMock()
@@ -122,7 +122,7 @@ class TestContextualizedDocumentEmbedding:
             ]
             result = await service.embed_documents(doc_chunks)
 
-            assert len(result.embeddings) == 5  ***REMOVED*** 2 + 3
+            assert len(result.embeddings) == 5  # 2 + 3
             assert result.chunks_per_document == [2, 3]
 
     async def test_embed_empty_list(self):
@@ -167,7 +167,7 @@ class TestContextualizedQueryEmbedding:
             assert len(embedding) == 1024
             assert embedding[0] == 0.5
 
-            ***REMOVED*** Verify API called with query wrapped in nested list
+            # Verify API called with query wrapped in nested list
             call_kwargs = mock_client.contextualized_embed.call_args[1]
             assert call_kwargs["inputs"] == [["test query"]]
             assert call_kwargs["input_type"] == "query"
@@ -221,7 +221,7 @@ class TestContextualizedValidation:
         with patch("voyageai.Client"):
             service = ContextualizedEmbeddingService(api_key="test-key")
 
-            ***REMOVED*** Create 1001 documents (exceeds 1000 limit)
+            # Create 1001 documents (exceeds 1000 limit)
             doc_chunks = [["chunk"] for _ in range(1001)]
 
             with pytest.raises(ValueError, match="Too many documents"):
@@ -234,8 +234,8 @@ class TestContextualizedValidation:
         with patch("voyageai.Client"):
             service = ContextualizedEmbeddingService(api_key="test-key")
 
-            ***REMOVED*** Create documents with 16001 total chunks (exceeds 16000 limit)
-            ***REMOVED*** 100 documents with 161 chunks each = 16100 chunks
+            # Create documents with 16001 total chunks (exceeds 16000 limit)
+            # 100 documents with 161 chunks each = 16100 chunks
             doc_chunks = [["chunk"] * 161 for _ in range(100)]
 
             with pytest.raises(ValueError, match="Too many chunks"):
@@ -344,7 +344,7 @@ class TestContextualizedSettingsIntegration:
 
             reload(settings)
 
-            ***REMOVED*** Create fresh settings instance
+            # Create fresh settings instance
             s = settings.Settings()
 
             assert s.use_contextualized_embeddings is True

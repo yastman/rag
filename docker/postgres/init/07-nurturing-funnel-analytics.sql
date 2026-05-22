@@ -1,4 +1,4 @@
--- Nurturing Jobs + Funnel Analytics (***REMOVED***390)
+-- Nurturing Jobs + Funnel Analytics (#390)
 -- Depends on: 05-realestate-schema.sql (funnel_events), 06-lead-scoring-sync.sql (lead_scores)
 
 \c realestate;
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS scheduler_leases (
 CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending
     ON nurturing_jobs (status, scheduled_for ASC);
 
--- Add stage_name to funnel_events (***REMOVED***387 dependency — needed by analytics queries)
+-- Add stage_name to funnel_events (#387 dependency — needed by analytics queries)
 ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_funnel_events_created_stage

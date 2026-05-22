@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 _FASTAPI_SHIM_ACTIVE = False
 if importlib.util.find_spec("fastapi") is None:
-    ***REMOVED*** Minimal shim so src.api.main can be imported in core unit CI.
+    # Minimal shim so src.api.main can be imported in core unit CI.
     class _FakeJSONResponse:
         def __init__(self, *, status_code: int, content: dict) -> None:
             self.status_code = status_code
@@ -53,7 +53,7 @@ from src.api.schemas import QueryRequest, QueryResponse
 
 
 if _FASTAPI_SHIM_ACTIVE:
-    ***REMOVED*** Prevent leaking shim into other tests that intentionally importorskip fastapi.
+    # Prevent leaking shim into other tests that intentionally importorskip fastapi.
     sys.modules.pop("fastapi.responses", None)
     sys.modules.pop("fastapi", None)
 
@@ -114,11 +114,11 @@ async def test_query_writes_langfuse_scores() -> None:
     ):
         await query(QueryRequest(query="test", user_id=1))
 
-    ***REMOVED*** write_langfuse_scores must be called with (lf_client, result_state)
+    # write_langfuse_scores must be called with (lf_client, result_state)
     mock_write_scores.assert_called_once()
     call_args = mock_write_scores.call_args
-    assert call_args[0][0] is lf  ***REMOVED*** first arg: langfuse client
-    assert isinstance(call_args[0][1], dict)  ***REMOVED*** second arg: result dict
+    assert call_args[0][0] is lf  # first arg: langfuse client
+    assert isinstance(call_args[0][1], dict)  # second arg: result dict
 
 
 async def test_query_updates_current_observation_and_propagates_api_attributes() -> None:
@@ -146,15 +146,15 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
     )
     lf.update_current_span.assert_called_once()
     call_kwargs = lf.update_current_span.call_args.kwargs
-    ***REMOVED*** Safe input payload
+    # Safe input payload
     input_payload = call_kwargs["input"]
     assert isinstance(input_payload, dict)
     assert input_payload["content_type"] == "api"
     assert "query_preview" in input_payload
     assert "query_hash" in input_payload
     assert input_payload["query_len"] == 4
-    assert "test" not in input_payload  ***REMOVED*** raw text must not be present
-    ***REMOVED*** Safe output payload
+    assert "test" not in input_payload  # raw text must not be present
+    # Safe output payload
     output_payload = call_kwargs["output"]
     assert isinstance(output_payload, dict)
     assert "answer_preview" in output_payload
@@ -162,7 +162,7 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
     assert output_payload["answer_len"] == 2
     assert output_payload["chunks_count"] == 1
     assert output_payload["delivery_status"] == "sent"
-    assert "ok" not in output_payload  ***REMOVED*** raw response must not be present
+    assert "ok" not in output_payload  # raw response must not be present
     assert call_kwargs["metadata"] == {"source": "voice", "query_type": "GENERAL"}
 
 
@@ -363,7 +363,7 @@ async def test_query_returns_fallback_on_graph_recursion_error() -> None:
     assert response.query_type == "ERROR"
     assert response.documents_count == 0
     assert response.latency_ms >= 0
-    ***REMOVED*** Observability: span should still be updated and scores written
+    # Observability: span should still be updated and scores written
     lf.update_current_span.assert_called_once()
     mock_write_scores.assert_called_once()
 
@@ -389,15 +389,15 @@ async def test_query_graph_recursion_error_preserves_trace_context() -> None:
         await query(QueryRequest(query="complex", user_id=42, session_id="sess-1"))
 
     call_kwargs = lf.update_current_span.call_args.kwargs
-    ***REMOVED*** Safe input payload
+    # Safe input payload
     input_payload = call_kwargs["input"]
     assert isinstance(input_payload, dict)
     assert input_payload["content_type"] == "api"
     assert "query_preview" in input_payload
     assert "query_hash" in input_payload
     assert input_payload["query_len"] == 7
-    assert "complex" not in input_payload  ***REMOVED*** raw text must not be present
-    ***REMOVED*** Safe output payload with fallback_reason
+    assert "complex" not in input_payload  # raw text must not be present
+    # Safe output payload with fallback_reason
     output_payload = call_kwargs["output"]
     assert isinstance(output_payload, dict)
     assert "answer_preview" in output_payload
@@ -409,7 +409,7 @@ async def test_query_graph_recursion_error_preserves_trace_context() -> None:
 
 
 async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> None:
-    """Regression for ***REMOVED***1606: GraphRecursionError fallback must not crash with
+    """Regression for #1606: GraphRecursionError fallback must not crash with
     UnboundLocalError when Langfuse is disabled (get_client() returns None)."""
     from langgraph.errors import GraphRecursionError
 
@@ -427,13 +427,13 @@ async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> Non
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 
-    ***REMOVED*** Must return a valid QueryResponse with the fallback message
+    # Must return a valid QueryResponse with the fallback message
     assert isinstance(response, QueryResponse)
     assert response.query_type == "ERROR"
     assert response.documents_count == 0
     assert response.cache_hit is False
     assert response.latency_ms >= 0
-    assert response.response  ***REMOVED*** non-empty fallback message
+    assert response.response  # non-empty fallback message
     assert "лимит" in response.response.lower() or "limit" in response.response.lower()
-    ***REMOVED*** When Langfuse is disabled, scores must not be written
+    # When Langfuse is disabled, scores must not be written
     mock_write_scores.assert_not_called()

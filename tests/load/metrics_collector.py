@@ -1,4 +1,4 @@
-***REMOVED*** tests/load/metrics_collector.py
+# tests/load/metrics_collector.py
 """Metrics collection and analysis for load tests."""
 
 import json
@@ -15,20 +15,20 @@ from .thresholds import MIN_CACHE_HIT_RATE, REGRESSION_THRESHOLD, THRESHOLDS
 class LoadMetrics:
     """Collected metrics from load test run."""
 
-    ***REMOVED*** Latency samples (ms)
+    # Latency samples (ms)
     routing_latencies: list[float] = field(default_factory=list)
     cache_hit_latencies: list[float] = field(default_factory=list)
     qdrant_latencies: list[float] = field(default_factory=list)
     full_rag_latencies: list[float] = field(default_factory=list)
-    ttft_latencies: list[float] = field(default_factory=list)  ***REMOVED*** Only if streaming
+    ttft_latencies: list[float] = field(default_factory=list)  # Only if streaming
 
-    ***REMOVED*** Counters
+    # Counters
     total_requests: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
     errors: int = 0
 
-    ***REMOVED*** Redis stats snapshots
+    # Redis stats snapshots
     redis_stats_start: dict = field(default_factory=dict)
     redis_stats_end: dict = field(default_factory=dict)
     redis_stats_timeseries: list[dict] = field(default_factory=list)
@@ -83,7 +83,7 @@ class MetricsResult:
     cache_hit_p95: float
     qdrant_p95: float
     full_rag_p95: float
-    ttft_p95: float  ***REMOVED*** 0 if not measured
+    ttft_p95: float  # 0 if not measured
 
     cache_hit_rate: float
     error_rate: float
@@ -96,25 +96,25 @@ class MetricsResult:
 def analyze_metrics(
     metrics: LoadMetrics,
     baseline: dict | None = None,
-    require_ttft: bool = False,  ***REMOVED*** If True, fail when TTFT not measured
+    require_ttft: bool = False,  # If True, fail when TTFT not measured
 ) -> MetricsResult:
     """Analyze collected metrics against thresholds."""
     warnings = []
     failures = []
 
-    ***REMOVED*** Calculate p95 values
+    # Calculate p95 values
     routing_p95 = percentile(metrics.routing_latencies, 95)
     cache_hit_p95 = percentile(metrics.cache_hit_latencies, 95)
     qdrant_p95 = percentile(metrics.qdrant_latencies, 95)
     full_rag_p95 = percentile(metrics.full_rag_latencies, 95)
     ttft_p95 = percentile(metrics.ttft_latencies, 95)
 
-    ***REMOVED*** Calculate rates
+    # Calculate rates
     total_cache_ops = metrics.cache_hits + metrics.cache_misses
     cache_hit_rate = metrics.cache_hits / total_cache_ops if total_cache_ops > 0 else 0.0
     error_rate = metrics.errors / metrics.total_requests if metrics.total_requests > 0 else 0.0
 
-    ***REMOVED*** Check absolute thresholds
+    # Check absolute thresholds
     checks = [
         ("routing", routing_p95, THRESHOLDS["routing"]),
         ("cache_hit", cache_hit_p95, THRESHOLDS["cache_hit"]),
@@ -122,24 +122,24 @@ def analyze_metrics(
         ("full_rag", full_rag_p95, THRESHOLDS["full_rag"]),
     ]
 
-    ***REMOVED*** TTFT check: mandatory if require_ttft=True
+    # TTFT check: mandatory if require_ttft=True
     if require_ttft and not metrics.ttft_latencies:
         failures.append("TTFT required but not measured (streaming not used?)")
     elif metrics.ttft_latencies:
         checks.append(("ttft", ttft_p95, THRESHOLDS["ttft"]))
 
     for name, value, threshold in checks:
-        if value > 0:  ***REMOVED*** Only check if we have data
+        if value > 0:  # Only check if we have data
             if value > threshold.fail_ms:
                 failures.append(f"{name} p95 {value:.0f}ms > fail {threshold.fail_ms}ms")
             elif value > threshold.warn_ms:
                 warnings.append(f"{name} p95 {value:.0f}ms > warn {threshold.warn_ms}ms")
 
-    ***REMOVED*** Check cache hit rate (only if we have cache operations)
+    # Check cache hit rate (only if we have cache operations)
     if total_cache_ops > 0 and cache_hit_rate < MIN_CACHE_HIT_RATE:
         failures.append(f"cache hit rate {cache_hit_rate:.1%} < min {MIN_CACHE_HIT_RATE:.1%}")
 
-    ***REMOVED*** Check regression against baseline
+    # Check regression against baseline
     if baseline:
         p95_values = {
             "routing": routing_p95,
@@ -223,7 +223,7 @@ def format_report(
         ("full_rag", result.full_rag_p95, THRESHOLDS["full_rag"]),
     ]
 
-    ***REMOVED*** Only show TTFT if measured
+    # Only show TTFT if measured
     if result.ttft_p95 > 0:
         p95_checks.append(("ttft", result.ttft_p95, THRESHOLDS["ttft"]))
 

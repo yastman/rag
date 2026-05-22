@@ -1,4 +1,4 @@
-"""Contract: no stale service-level ``requirements.txt`` manifests (***REMOVED***1620).
+"""Contract: no stale service-level ``requirements.txt`` manifests (#1620).
 
 Two ``requirements.txt`` files used to live alongside ``pyproject.toml``
 files at:
@@ -42,17 +42,17 @@ def test_stale_requirements_txt_is_absent(path: Path) -> None:
             "Service runtimes use 'uv sync' against pyproject.toml/uv.lock; "
             "no caller runs 'pip install -r ...requirements.txt'. If a "
             "consumer truly needs a requirements.txt, add an automated "
-            "sync/check tying it to pyproject.toml constraints (***REMOVED***1620)."
+            "sync/check tying it to pyproject.toml constraints (#1620)."
         )
 
 
 def test_no_makefile_or_dockerfile_invokes_pip_install_dash_r() -> None:
-    """Defensive: nothing in the repo should run ``pip install -r ...txt`` (***REMOVED***1620)."""
+    """Defensive: nothing in the repo should run ``pip install -r ...txt`` (#1620)."""
     repo_root = REPO_ROOT
     suspects: list[str] = []
     for pattern in ("**/Dockerfile*", "**/Makefile", "**/*.sh", "**/*.yml", "**/*.yaml"):
         for path in repo_root.glob(pattern):
-            ***REMOVED*** Skip any auto-vendored or third-party trees
+            # Skip any auto-vendored or third-party trees
             if any(part in {".git", ".venv", "node_modules", "site"} for part in path.parts):
                 continue
             try:
@@ -65,5 +65,5 @@ def test_no_makefile_or_dockerfile_invokes_pip_install_dash_r() -> None:
     assert not suspects, (
         "Found `pip install -r requirements.txt` references. Either keep the "
         "matching requirements.txt and add a sync mechanism, or migrate the "
-        "consumer to `uv sync` (***REMOVED***1620):\n  - " + "\n  - ".join(suspects)
+        "consumer to `uv sync` (#1620):\n  - " + "\n  - ".join(suspects)
     )

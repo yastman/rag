@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Direct A/B comparison between Variant A (RRF) and Variant B (DBSF).
 Runs the same queries through both engines and compares results.
@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -24,20 +24,20 @@ def compare_engines():
     print("A/B TEST: VARIANT A (RRF) vs VARIANT B (DBSF)")
     print("=" * 80)
 
-    ***REMOVED*** Initialize settings
+    # Initialize settings
     settings = Settings()
     print("\n📋 Configuration:")
     print(f"   Qdrant URL: {settings.qdrant_url}")
     print(f"   Collection: {settings.collection_name}")
 
-    ***REMOVED*** Initialize both engines
+    # Initialize both engines
     print("\n🔧 Initializing search engines...")
     rrf_engine = HybridRRFColBERTSearchEngine(settings)
     print("   ✅ Variant A (RRF) initialized")
     dbsf_engine = DBSFColBERTSearchEngine(settings)
     print("   ✅ Variant B (DBSF) initialized")
 
-    ***REMOVED*** Test queries
+    # Test queries
     test_queries = [
         ("Стаття 121 Кримінального кодексу", "Article lookup"),
         ("Умисне вбивство з особливою жорстокістю", "Crime with qualifier"),
@@ -52,7 +52,7 @@ def compare_engines():
         print(f"   Type: {description}")
         print(f"{'=' * 80}")
 
-        ***REMOVED*** Run Variant A (RRF)
+        # Run Variant A (RRF)
         print("\n🅰️  Variant A (RRF + ColBERT):")
         try:
             start_time = time.time()
@@ -73,7 +73,7 @@ def compare_engines():
             rrf_results = []
             rrf_time = 0
 
-        ***REMOVED*** Run Variant B (DBSF)
+        # Run Variant B (DBSF)
         print("\n🅱️  Variant B (DBSF + ColBERT):")
         try:
             start_time = time.time()
@@ -94,10 +94,10 @@ def compare_engines():
             dbsf_results = []
             dbsf_time = 0
 
-        ***REMOVED*** Compare results
+        # Compare results
         print("\n📊 Comparison:")
         if rrf_results and dbsf_results:
-            ***REMOVED*** Compare top result
+            # Compare top result
             rrf_top = rrf_results[0].article_number
             dbsf_top = dbsf_results[0].article_number
             print("   Top Result:")
@@ -108,13 +108,13 @@ def compare_engines():
             else:
                 print("      ⚠️  Different top results")
 
-            ***REMOVED*** Compare ranking overlap
+            # Compare ranking overlap
             rrf_articles = {r.article_number for r in rrf_results}
             dbsf_articles = {r.article_number for r in dbsf_results}
             overlap = len(rrf_articles & dbsf_articles)
             print(f"   Overlap: {overlap}/5 articles in common")
 
-            ***REMOVED*** Compare latency
+            # Compare latency
             if abs(rrf_time - dbsf_time) < 0.1:
                 print(f"   Latency: ~Equal ({rrf_time:.3f}s vs {dbsf_time:.3f}s)")
             elif rrf_time < dbsf_time:
@@ -122,7 +122,7 @@ def compare_engines():
             else:
                 print(f"   Latency: DBSF faster ({rrf_time:.3f}s vs {dbsf_time:.3f}s)")
 
-            ***REMOVED*** Compare scores
+            # Compare scores
             print("   Score ranges:")
             rrf_min, rrf_max = min(r.score for r in rrf_results), max(r.score for r in rrf_results)
             dbsf_min, dbsf_max = (
@@ -150,18 +150,18 @@ def compare_engines():
             }
         )
 
-    ***REMOVED*** Final summary
+    # Final summary
     print(f"\n{'=' * 80}")
     print("📈 OVERALL COMPARISON SUMMARY")
     print("=" * 80)
 
-    ***REMOVED*** Count same top results
+    # Count same top results
     same_top = sum(
         1 for r in comparison_results if r["rrf"]["top_article"] == r["dbsf"]["top_article"]
     )
     print(f"\nTop Result Agreement: {same_top}/{len(test_queries)} queries")
 
-    ***REMOVED*** Average latency
+    # Average latency
     avg_rrf_time = sum(r["rrf"]["time"] for r in comparison_results) / len(comparison_results)
     avg_dbsf_time = sum(r["dbsf"]["time"] for r in comparison_results) / len(comparison_results)
     print("\nAverage Latency:")
@@ -176,7 +176,7 @@ def compare_engines():
         diff_pct = ((avg_rrf_time - avg_dbsf_time) / avg_dbsf_time) * 100
         print(f"   ✅ DBSF is {diff_pct:.1f}% faster")
 
-    ***REMOVED*** Conclusion
+    # Conclusion
     print(f"\n{'=' * 80}")
     print("🎯 CONCLUSION")
     print("=" * 80)
@@ -192,7 +192,7 @@ def compare_engines():
 
     print(f"{'=' * 80}\n")
 
-    ***REMOVED*** Save comparison results
+    # Save comparison results
     import json
 
     output_path = Path(__file__).parent / "comparison_rrf_vs_dbsf.json"

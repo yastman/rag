@@ -1,4 +1,4 @@
-"""Tests for LLM call limits in RAG pipeline (***REMOVED***374).
+"""Tests for LLM call limits in RAG pipeline (#374).
 
 3-tier protection:
 - Graph recursion_limit=15 (LangGraph built-in)
@@ -130,7 +130,7 @@ class TestRouteGradeLLMCallLimit:
             "rewrite_effective": True,
             "score_improved": True,
             "llm_call_count": 5,
-            ***REMOVED*** no max_llm_calls key
+            # no max_llm_calls key
         }
         assert route_grade(state) == "generate"
 
@@ -269,7 +269,7 @@ class TestScoringCallLimits:
         }
         write_langfuse_scores(mock_lf, result, trace_id="test-trace")
 
-        ***REMOVED*** Find call with name="llm_calls_total" (***REMOVED***435: uses create_score)
+        # Find call with name="llm_calls_total" (#435: uses create_score)
         found = any(
             c.kwargs.get("name") == "llm_calls_total" for c in mock_lf.create_score.call_args_list
         )

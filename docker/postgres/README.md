@@ -1,14 +1,14 @@
-***REMOVED*** Postgres
+# Postgres
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 docker/postgres
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - init
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

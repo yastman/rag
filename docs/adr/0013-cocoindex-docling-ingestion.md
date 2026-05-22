@@ -1,10 +1,10 @@
-***REMOVED*** ADR-0013: CocoIndex + Docling for Unified Ingestion Pipeline
+# ADR-0013: CocoIndex + Docling for Unified Ingestion Pipeline
 
 **Status:** Accepted
 
 **Date:** 2025-05-21
 
-***REMOVED******REMOVED*** Context
+## Context
 
 The platform needed deterministic document ingestion: watch a file source, parse documents, chunk, embed, upsert/delete vectors in Qdrant, and track processing state with retry and dead-letter queue (DLQ) support. We evaluated several approaches:
 
@@ -14,11 +14,11 @@ The platform needed deterministic document ingestion: watch a file source, parse
 4. **Custom file-watcher scripts** - Hand-rolled inotify/polling with manual state management
 5. **Haystack** - Pipeline framework for document processing and retrieval
 
-***REMOVED******REMOVED*** Decision
+## Decision
 
 We chose **CocoIndex** for flow orchestration and change detection combined with **Docling** for document parsing and chunking.
 
-***REMOVED******REMOVED******REMOVED*** Why CocoIndex + Docling
+### Why CocoIndex + Docling
 
 1. **Stable file identity** - Content-hash-based identity ensures consistent tracking across renames and moves
 2. **Automatic change detection** - Only re-processes modified files, reducing compute and API costs
@@ -26,7 +26,7 @@ We chose **CocoIndex** for flow orchestration and change detection combined with
 4. **Clean separation of concerns** - CocoIndex handles flow orchestration; Docling handles parsing
 5. **Retry and DLQ support** - Failed documents are tracked and can be reprocessed without re-running the full pipeline
 
-***REMOVED******REMOVED******REMOVED*** Why Not Others
+### Why Not Others
 
 | Approach | Reason Rejected |
 |----------|----------------|
@@ -35,21 +35,21 @@ We chose **CocoIndex** for flow orchestration and change detection combined with
 | Custom file-watcher scripts | No state management; fragile under restarts and partial failures |
 | Haystack | Pipeline framework but weaker at incremental updates and change detection |
 
-***REMOVED******REMOVED*** Consequences
+## Consequences
 
-***REMOVED******REMOVED******REMOVED*** Positive
+### Positive
 - Stable file identity via content-hash enables reliable upsert/delete
 - Automatic change detection: only modified files are re-processed
 - PostgreSQL state tracking with DLQ for failed documents
 - Clean separation of concerns (CocoIndex = flow, Docling = parsing)
 - CLI interface for operations: preflight, bootstrap, run, status, reprocess
 
-***REMOVED******REMOVED******REMOVED*** Negative
+### Negative
 - CocoIndex is newer with a smaller community and less documentation
 - Docling requires GPU/CPU model warmup time on first parse
 - Custom Qdrant target connector needed (not available off-the-shelf)
 
-***REMOVED******REMOVED*** Implementation
+## Implementation
 
 - `src/ingestion/unified/` - Main ingestion directory
 - CLI entry: `src.ingestion.unified.cli` with commands: `preflight`, `bootstrap`, `run`, `status`, `reprocess`
@@ -59,7 +59,7 @@ We chose **CocoIndex** for flow orchestration and change detection combined with
 - Custom `QdrantHybridTarget` connector handles vector upsert and delete operations
 - PostgreSQL tracks processing state and maintains the dead-letter queue
 
-***REMOVED******REMOVED*** References
+## References
 
 - [docs/INGESTION.md](../INGESTION.md) - Ingestion pipeline documentation
 - [docs/PIPELINE_OVERVIEW.md](../PIPELINE_OVERVIEW.md) - Pipeline overview (section 3: ingestion)

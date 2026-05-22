@@ -21,7 +21,7 @@ def test_settings_has_main_and_language():
     assert SettingsSG.language in states
 
 
-***REMOVED*** --- CRM settings expansion (***REMOVED***697 Task 10) ---
+# --- CRM settings expansion (#697 Task 10) ---
 
 
 def test_settings_has_crm_state():
@@ -136,7 +136,7 @@ async def test_language_selected_restarts_settings_root():
     manager.done.assert_not_called()
 
 
-***REMOVED*** --- get_settings_data ---
+# --- get_settings_data ---
 
 
 async def test_get_settings_data_without_i18n():
@@ -171,7 +171,7 @@ async def test_get_settings_data_with_fake_i18n():
     assert result["btn_back"] == "Back"
 
 
-***REMOVED*** --- _get_redis ---
+# --- _get_redis ---
 
 
 def test_get_redis_returns_redis():
@@ -213,7 +213,7 @@ def test_get_redis_returns_none_without_cache():
     assert _get_redis(manager) is None
 
 
-***REMOVED*** --- get_crm_settings_data ---
+# --- get_crm_settings_data ---
 
 
 async def test_get_crm_settings_data_with_mocked_redis():
@@ -237,7 +237,7 @@ async def test_get_crm_settings_data_with_mocked_redis():
     assert "09:00" in result["briefing"]
 
 
-***REMOVED*** --- CRM toggle handlers ---
+# --- CRM toggle handlers ---
 
 
 async def test_on_toggle_notifications():
@@ -288,7 +288,7 @@ async def test_on_cycle_briefing_time():
 
     redis.set.assert_called_once()
     manager.update.assert_awaited_once_with({})
-    ***REMOVED*** Default is 09:00, next should be 10:00
+    # Default is 09:00, next should be 10:00
     call_args = redis.set.call_args
     stored = __import__("json").loads(call_args.args[1])
     assert stored["briefing_time"] == "10:00"
@@ -322,7 +322,7 @@ async def test_on_toggle_card_lang():
     assert stored["card_lang"] == "en"
 
 
-***REMOVED*** --- Callback without from_user ---
+# --- Callback without from_user ---
 
 
 async def test_on_toggle_notifications_no_from_user_returns():

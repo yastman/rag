@@ -12,9 +12,9 @@ Preferred replacements (verified via Context7 /python/cpython):
 This test scans production paths (src/, scripts/, telegram_bot/, mini_app/,
 services/) for `asyncio.get_event_loop(` calls and reports every offender,
 EXCEPT a small allowlist of legacy LangChain sync-bridge wrappers tracked
-under ***REMOVED***1639 follow-up. The allowlist must shrink, never grow.
+under #1639 follow-up. The allowlist must shrink, never grow.
 
-Refs ***REMOVED***1639.
+Refs #1639.
 """
 
 from __future__ import annotations
@@ -33,10 +33,10 @@ SCAN_DIRS = [
     REPO_ROOT / "services",
 ]
 
-***REMOVED*** Frozen allowlist: legacy sync-bridge wrappers around long-lived
-***REMOVED*** httpx.AsyncClient. Removing or rewriting them requires deciding
-***REMOVED*** whether to drop sync support or build a tested sync-async boundary
-***REMOVED*** that does not break shared async resources. Tracked under ***REMOVED***1639.
+# Frozen allowlist: legacy sync-bridge wrappers around long-lived
+# httpx.AsyncClient. Removing or rewriting them requires deciding
+# whether to drop sync support or build a tested sync-async boundary
+# that does not break shared async resources. Tracked under #1639.
 ALLOWLIST: dict[str, set[int]] = {
     "telegram_bot/integrations/embeddings.py": {59, 62, 179, 182},
 }
@@ -71,7 +71,7 @@ def _format_new_offenders_message(new_offenders: list[tuple[Path, int]]) -> str:
         f"  {p.relative_to(REPO_ROOT)}:{lineno}" for p, lineno in new_offenders
     )
     return (
-        "New asyncio.get_event_loop() calls outside the allowlist (***REMOVED***1639):\n"
+        "New asyncio.get_event_loop() calls outside the allowlist (#1639):\n"
         + offender_lines
         + "\nReplace with asyncio.get_running_loop() (in async),"
         " asyncio.to_thread(...) (blocking sync work),"
@@ -81,13 +81,13 @@ def _format_new_offenders_message(new_offenders: list[tuple[Path, int]]) -> str:
 
 def _format_stale_allowlist_message(stale_allowlist: list[tuple[str, int]]) -> str:
     stale_lines = "\n".join(f"  {rel}:{lineno}" for rel, lineno in stale_allowlist)
-    return "Stale ALLOWLIST entries — remove from the dict in this test (***REMOVED***1639):\n" + stale_lines
+    return "Stale ALLOWLIST entries — remove from the dict in this test (#1639):\n" + stale_lines
 
 
 def test_no_unallowlisted_get_event_loop_calls() -> None:
     """Production code may not introduce new `asyncio.get_event_loop()` callsites.
 
-    Existing callsites listed in ALLOWLIST are tolerated until ***REMOVED***1639
+    Existing callsites listed in ALLOWLIST are tolerated until #1639
     follow-up resolves the LangChain sync-bridge question. Anything outside
     the allowlist must be migrated to get_running_loop / to_thread / Runner.
     """
@@ -102,9 +102,9 @@ def test_no_unallowlisted_get_event_loop_calls() -> None:
             if lineno not in allowed_lines:
                 new_offenders.append((path, lineno))
 
-    ***REMOVED*** Detect stale entries: allowlist points to a line that no longer
-    ***REMOVED*** has a `get_event_loop` call. Forces the allowlist to shrink as
-    ***REMOVED*** callsites are migrated.
+    # Detect stale entries: allowlist points to a line that no longer
+    # has a `get_event_loop` call. Forces the allowlist to shrink as
+    # callsites are migrated.
     for rel, allowed_lines in ALLOWLIST.items():
         py_file = REPO_ROOT / rel
         if not py_file.exists():

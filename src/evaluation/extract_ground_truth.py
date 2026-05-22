@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Extract ground truth dataset from Qdrant collection.
 Creates a mapping: article_number -> [chunk_ids]
@@ -13,7 +13,7 @@ from qdrant_client import QdrantClient
 from src.config import Settings
 
 
-***REMOVED*** Load Qdrant config without failing module import in test environments.
+# Load Qdrant config without failing module import in test environments.
 try:
     _settings = Settings()
     QDRANT_URL = _settings.qdrant_url
@@ -53,7 +53,7 @@ def extract_articles(collection_name: str) -> dict[str, list[str]]:
 
     client = _make_client()
 
-    ***REMOVED*** Get all points from collection with scroll API
+    # Get all points from collection with scroll API
     offset = None
     articles = defaultdict(list)
     total_points = 0
@@ -70,7 +70,7 @@ def extract_articles(collection_name: str) -> dict[str, list[str]]:
         if not points:
             break
 
-        ***REMOVED*** Process points
+        # Process points
         for point in points:
             payload = point.payload or {}
             article = payload.get("article_number")
@@ -83,7 +83,7 @@ def extract_articles(collection_name: str) -> dict[str, list[str]]:
                 )
                 total_points += 1
 
-        ***REMOVED*** Check if there are more points
+        # Check if there are more points
         offset = next_offset
         if offset is None:
             break
@@ -92,7 +92,7 @@ def extract_articles(collection_name: str) -> dict[str, list[str]]:
 
     print(f"\nExtracted {len(articles)} articles from {total_points} chunks")
 
-    return dict(articles)  ***REMOVED*** type: ignore[arg-type]
+    return dict(articles)  # type: ignore[arg-type]
 
 
 def print_statistics(articles: dict[str, list[str]]):
@@ -105,14 +105,14 @@ def print_statistics(articles: dict[str, list[str]]):
         print("  No articles to analyze.")
         return
 
-    ***REMOVED*** Article distribution
+    # Article distribution
     chunks_per_article = [len(chunks) for chunks in articles.values()]
     print("  Chunks per article:")
     print(f"    Min: {min(chunks_per_article)}")
     print(f"    Max: {max(chunks_per_article)}")
     print(f"    Avg: {sum(chunks_per_article) / len(chunks_per_article):.1f}")
 
-    ***REMOVED*** Sample articles
+    # Sample articles
     print("\nSample articles:")
     for article_num in sorted(articles.keys(), key=lambda x: int(x))[:5]:
         print(f"    Article {article_num}: {len(articles[article_num])} chunks")
@@ -122,13 +122,13 @@ def main():
     """Main entry point."""
     collection_name = "ukraine_criminal_code_zai_full"
 
-    ***REMOVED*** Extract articles
+    # Extract articles
     articles = extract_articles(collection_name)
 
-    ***REMOVED*** Print statistics
+    # Print statistics
     print_statistics(articles)
 
-    ***REMOVED*** Save to file (relative to project root)
+    # Save to file (relative to project root)
     data_dir = os.path.join(os.path.dirname(__file__), "data")
     os.makedirs(data_dir, exist_ok=True)
 
@@ -138,7 +138,7 @@ def main():
 
     print(f"\nSaved to: {output_file}")
 
-    ***REMOVED*** Create simplified mapping (article -> first chunk only) for quick tests
+    # Create simplified mapping (article -> first chunk only) for quick tests
     simple_mapping = {article: chunks[0]["point_id"] for article, chunks in articles.items()}
     simple_output = os.path.join(data_dir, "article_to_chunk_mapping.json")
     with open(simple_output, "w", encoding="utf-8") as f:

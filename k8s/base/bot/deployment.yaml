@@ -120,7 +120,7 @@ spec:
                   key: LANGFUSE_HOST
             - name: OTEL_SERVICE_NAME
               value: "telegram-bot"
-            ***REMOVED*** CRM — Kommo
+            # CRM — Kommo
             - name: KOMMO_ENABLED
               value: "false"
             - name: KOMMO_SUBDOMAIN
@@ -155,14 +155,14 @@ spec:
               value: "0"
             - name: KOMMO_LEAD_BAND_FIELD_ID
               value: "0"
-            ***REMOVED*** Manager
+            # Manager
             - name: MANAGER_IDS
               value: ""
             - name: MANAGER_HOT_LEAD_THRESHOLD
               value: "60"
             - name: MANAGER_HOT_LEAD_DEDUPE_SEC
               value: "3600"
-            ***REMOVED*** Real Estate DB
+            # Real Estate DB
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

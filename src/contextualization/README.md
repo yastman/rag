@@ -1,12 +1,12 @@
-***REMOVED*** contextualization/
+# contextualization/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 LLM-based context enrichment for document chunks (+2-5% Recall improvement).
 Owns contextualization provider interfaces and Claude/OpenAI/Groq implementations.
 Produces `ContextualizedChunk` objects used by RAG and ingestion paths.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 | File | Purpose |
 |------|---------|
@@ -16,7 +16,7 @@ Produces `ContextualizedChunk` objects used by RAG and ingestion paths.
 | [openai.py](./openai.py) | OpenAI GPT contextualizer |
 | [groq.py](./groq.py) | Groq LLaMA contextualizer (fast, free tier) |
 
-***REMOVED******REMOVED*** What is Contextualization?
+## What is Contextualization?
 
 Adds LLM-generated summaries to document chunks before indexing:
 
@@ -27,36 +27,36 @@ Contextualized: "Стаття 45 КК України. Звільнення ві�
 відповідальності у зв'язку з дійовим каяттям. Особа звільняється..."
 ```
 
-***REMOVED******REMOVED*** Usage
+## Usage
 
 ```python
 from src.contextualization import ClaudeContextualizer
 from src.config import APIProvider, Settings
 
-settings = Settings(api_provider=APIProvider.CLAUDE)  ***REMOVED*** Reads provider keys from env.
+settings = Settings(api_provider=APIProvider.CLAUDE)  # Reads provider keys from env.
 contextualizer = ClaudeContextualizer(settings=settings)
 enriched = await contextualizer.contextualize(["chunk text"], query="optional query")
 ```
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Does not own retrieval, ranking, or Qdrant writes.
 - Does not own embedding generation; see [`src/models/`](../models/).
 - API keys and provider selection come from [`src/config/`](../config/) or caller-provided settings.
 
-***REMOVED******REMOVED*** Performance Impact
+## Performance Impact
 
 - +2-5% improvement in Recall@1
 - +0.5-1% improvement in NDCG@10
 - Cost: ~$0.01/chunk (Claude)
 
-***REMOVED******REMOVED*** Focused checks
+## Focused checks
 
 ```bash
 uv run pytest tests/unit/contextualization/ -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [src/core/pipeline.py](../core/pipeline.py) — Uses contextualizers in RAG pipeline
 - [src/ingestion/](../ingestion/) — Document chunking before contextualization

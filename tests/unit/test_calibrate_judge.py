@@ -1,6 +1,6 @@
 """Tests for scripts/eval/calibrate_judge.py (TDD — RED first).
 
-Issue ***REMOVED***761: Judge Calibration — Score Analytics + Cohen's Kappa
+Issue #761: Judge Calibration — Score Analytics + Cohen's Kappa
 Tests: matched pairs fetching, binarization, kappa, TPR/TNR, disagreement report.
 """
 
@@ -31,9 +31,9 @@ def _make_score(trace_id: str, name: str, value: float) -> SimpleNamespace:
     return SimpleNamespace(trace_id=trace_id, name=name, value=value)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** binarize_judge
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# binarize_judge
+# ---------------------------------------------------------------------------
 
 
 class TestBinarizeJudge:
@@ -63,9 +63,9 @@ class TestBinarizeJudge:
         assert m.binarize_judge(1.0, threshold=0.75) == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** compute_kappa
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# compute_kappa
+# ---------------------------------------------------------------------------
 
 
 class TestComputeKappa:
@@ -80,10 +80,10 @@ class TestComputeKappa:
     def test_chance_agreement_returns_zero(self):
         """50/50 random agreement with uniform prior → kappa ≈ 0.0."""
         m = _load_module()
-        ***REMOVED*** balanced classes, exactly chance-level agreement
+        # balanced classes, exactly chance-level agreement
         human = [1, 1, 1, 1, 0, 0, 0, 0]
         judge = [1, 1, 0, 0, 1, 1, 0, 0]
-        ***REMOVED*** po = 4/8 = 0.5, pe = 0.5*0.5 + 0.5*0.5 = 0.5
+        # po = 4/8 = 0.5, pe = 0.5*0.5 + 0.5*0.5 = 0.5
         kappa = m.compute_kappa(human, judge)
         assert abs(kappa - 0.0) < 1e-9
 
@@ -106,11 +106,11 @@ class TestComputeKappa:
     def test_partial_agreement_returns_expected_kappa(self):
         """Known case: po=0.75, pe=0.5 → kappa=0.5."""
         m = _load_module()
-        ***REMOVED*** 6 out of 8 agree, balanced prior
-        ***REMOVED*** human: [1,1,1,1,0,0,0,0], judge: [1,1,1,0,0,0,1,0]
-        ***REMOVED*** Agreements: pos 0,1,2,4,5,7 = 6 → po = 6/8 = 0.75
-        ***REMOVED*** p_human_1 = 0.5, p_judge_1 = 0.5 → pe = 0.5
-        ***REMOVED*** kappa = (0.75 - 0.5) / 0.5 = 0.5
+        # 6 out of 8 agree, balanced prior
+        # human: [1,1,1,1,0,0,0,0], judge: [1,1,1,0,0,0,1,0]
+        # Agreements: pos 0,1,2,4,5,7 = 6 → po = 6/8 = 0.75
+        # p_human_1 = 0.5, p_judge_1 = 0.5 → pe = 0.5
+        # kappa = (0.75 - 0.5) / 0.5 = 0.5
         human = [1, 1, 1, 1, 0, 0, 0, 0]
         judge = [1, 1, 1, 0, 0, 0, 1, 0]
         kappa = m.compute_kappa(human, judge)
@@ -123,9 +123,9 @@ class TestComputeKappa:
         assert kappa == 0.0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** compute_tpr_tnr
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# compute_tpr_tnr
+# ---------------------------------------------------------------------------
 
 
 class TestComputeTprTnr:
@@ -147,7 +147,7 @@ class TestComputeTprTnr:
         """Judge passes everything → TPR=0.0 (all FN), TNR=1.0."""
         m = _load_module()
         human = [0, 0, 1, 1]
-        judge = [1, 1, 1, 1]  ***REMOVED*** judge says all good
+        judge = [1, 1, 1, 1]  # judge says all good
         tpr, tnr = m.compute_tpr_tnr(human, judge)
         assert abs(tpr - 0.0) < 1e-9
         assert abs(tnr - 1.0) < 1e-9
@@ -156,7 +156,7 @@ class TestComputeTprTnr:
         """Judge fails everything → TPR=1.0, TNR=0.0 (all FP)."""
         m = _load_module()
         human = [0, 0, 1, 1]
-        judge = [0, 0, 0, 0]  ***REMOVED*** judge says all bad
+        judge = [0, 0, 0, 0]  # judge says all bad
         tpr, tnr = m.compute_tpr_tnr(human, judge)
         assert abs(tpr - 1.0) < 1e-9
         assert abs(tnr - 0.0) < 1e-9
@@ -164,8 +164,8 @@ class TestComputeTprTnr:
     def test_partial_detection(self):
         """Known case: TPR=2/3, TNR=2/3."""
         m = _load_module()
-        ***REMOVED*** human=[0,0,1,1,0,1], judge=[0,1,1,1,0,0]
-        ***REMOVED*** TP=2 (pos 0,4), FN=1 (pos 1), TN=2 (pos 2,3), FP=1 (pos 5)
+        # human=[0,0,1,1,0,1], judge=[0,1,1,1,0,0]
+        # TP=2 (pos 0,4), FN=1 (pos 1), TN=2 (pos 2,3), FP=1 (pos 5)
         human = [0, 0, 1, 1, 0, 1]
         judge = [0, 1, 1, 1, 0, 0]
         tpr, tnr = m.compute_tpr_tnr(human, judge)
@@ -189,9 +189,9 @@ class TestComputeTprTnr:
         assert tnr == 0.0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** fetch_matched_pairs
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# fetch_matched_pairs
+# ---------------------------------------------------------------------------
 
 
 class TestFetchMatchedPairs:
@@ -204,9 +204,9 @@ class TestFetchMatchedPairs:
 
         mock_api = MagicMock()
         mock_api.score_v_2.get.side_effect = [
-            ***REMOVED*** user_feedback call
+            # user_feedback call
             SimpleNamespace(data=[uf_score], meta=_make_meta()),
-            ***REMOVED*** judge_faithfulness call
+            # judge_faithfulness call
             SimpleNamespace(data=[jf_score], meta=_make_meta()),
         ]
 
@@ -219,9 +219,9 @@ class TestFetchMatchedPairs:
         """Traces missing either score are excluded."""
         m = _load_module()
 
-        ***REMOVED*** trace-A has user_feedback only
-        ***REMOVED*** trace-B has judge_faithfulness only
-        ***REMOVED*** trace-C has both
+        # trace-A has user_feedback only
+        # trace-B has judge_faithfulness only
+        # trace-C has both
         uf_a = _make_score("trace-A", "user_feedback", 1.0)
         uf_c = _make_score("trace-C", "user_feedback", 0.0)
         jf_b = _make_score("trace-B", "judge_faithfulness", 0.5)
@@ -257,7 +257,7 @@ class TestFetchMatchedPairs:
         m = _load_module()
 
         uf1 = _make_score("trace-X", "user_feedback", 0.0)
-        uf2 = _make_score("trace-X", "user_feedback", 1.0)  ***REMOVED*** duplicate
+        uf2 = _make_score("trace-X", "user_feedback", 1.0)  # duplicate
         jf = _make_score("trace-X", "judge_faithfulness", 0.6)
 
         mock_api = MagicMock()
@@ -268,7 +268,7 @@ class TestFetchMatchedPairs:
 
         pairs = m.fetch_matched_pairs(mock_api, hours=168)
 
-        ***REMOVED*** One pair per trace
+        # One pair per trace
         assert len(pairs) == 1
 
     def test_returns_empty_when_no_overlap(self):
@@ -295,13 +295,13 @@ class TestFetchMatchedPairs:
 
         mock_api = MagicMock()
         mock_api.score_v_2.get.side_effect = [
-            ***REMOVED*** user_feedback page 1 of 2
+            # user_feedback page 1 of 2
             SimpleNamespace(data=[uf_p1], meta=_make_meta(total_pages=2, page=1)),
-            ***REMOVED*** user_feedback page 2 of 2
+            # user_feedback page 2 of 2
             SimpleNamespace(data=[uf_p2], meta=_make_meta(total_pages=2, page=2)),
-            ***REMOVED*** judge_faithfulness page 1 of 2
+            # judge_faithfulness page 1 of 2
             SimpleNamespace(data=[jf_p1], meta=_make_meta(total_pages=2, page=1)),
-            ***REMOVED*** judge_faithfulness page 2 of 2
+            # judge_faithfulness page 2 of 2
             SimpleNamespace(data=[jf_p2], meta=_make_meta(total_pages=2, page=2)),
         ]
 
@@ -310,9 +310,9 @@ class TestFetchMatchedPairs:
         assert len(pairs) == 2
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** build_disagreement_report
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# build_disagreement_report
+# ---------------------------------------------------------------------------
 
 
 class TestBuildDisagreementReport:
@@ -328,8 +328,8 @@ class TestBuildDisagreementReport:
     def test_perfect_agreement_report(self):
         """When judge perfectly matches human → kappa=1, tpr=1, tnr=1."""
         m = _load_module()
-        ***REMOVED*** user_feedback=0 (dislike) paired with judge < 0.75 → binary judge=0 (bad)
-        ***REMOVED*** user_feedback=1 (like) paired with judge >= 0.75 → binary judge=1 (good)
+        # user_feedback=0 (dislike) paired with judge < 0.75 → binary judge=0 (bad)
+        # user_feedback=1 (like) paired with judge >= 0.75 → binary judge=1 (good)
         pairs = [(0.0, 0.5), (0.0, 0.6), (1.0, 0.8), (1.0, 0.9)]
         report = m.build_disagreement_report(pairs, threshold=0.75)
 
@@ -342,7 +342,7 @@ class TestBuildDisagreementReport:
     def test_total_disagreement_report(self):
         """When judge inverts human → kappa=-1, disagreements=n_pairs."""
         m = _load_module()
-        ***REMOVED*** human=0 (dislike) → judge high (pass), human=1 (like) → judge low (fail)
+        # human=0 (dislike) → judge high (pass), human=1 (like) → judge low (fail)
         pairs = [(0.0, 0.9), (0.0, 0.8), (1.0, 0.5), (1.0, 0.4)]
         report = m.build_disagreement_report(pairs, threshold=0.75)
 
@@ -367,9 +367,9 @@ class TestBuildDisagreementReport:
         assert report["tnr"] == 0.0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_calibration — insufficient data gate
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_calibration — insufficient data gate
+# ---------------------------------------------------------------------------
 
 
 class TestRunCalibrationInsufficientData:
@@ -378,7 +378,7 @@ class TestRunCalibrationInsufficientData:
         m = _load_module()
 
         mock_api = MagicMock()
-        ***REMOVED*** Only 2 pairs returned, well below min_pairs=50
+        # Only 2 pairs returned, well below min_pairs=50
         uf = _make_score("t1", "user_feedback", 0.0)
         jf = _make_score("t1", "judge_faithfulness", 0.5)
         mock_api.score_v_2.get.side_effect = [
@@ -395,7 +395,7 @@ class TestRunCalibrationInsufficientData:
         """Does not raise when >= min_pairs matched traces found."""
         m = _load_module()
 
-        ***REMOVED*** Build 10 matching pairs (min_pairs=5 for speed)
+        # Build 10 matching pairs (min_pairs=5 for speed)
         uf_scores = [_make_score(f"t{i}", "user_feedback", float(i % 2)) for i in range(10)]
         jf_scores = [
             _make_score(f"t{i}", "judge_faithfulness", 0.8 if i % 2 == 0 else 0.4)
@@ -408,6 +408,6 @@ class TestRunCalibrationInsufficientData:
             SimpleNamespace(data=jf_scores, meta=_make_meta()),
         ]
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         report = m.run_calibration(mock_api, hours=168, threshold=0.75, min_pairs=5)
         assert report["n_pairs"] == 10

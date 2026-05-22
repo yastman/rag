@@ -1,11 +1,11 @@
-"""Tests for CRM card callback handlers (***REMOVED***697 Task 8)."""
+"""Tests for CRM card callback handlers (#697 Task 8)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
 
-***REMOVED*** --- Router creation ---
+# --- Router creation ---
 
 
 def test_create_crm_router_returns_router():
@@ -19,7 +19,7 @@ def test_create_crm_router_returns_router():
     assert router.name == "crm_callbacks"
 
 
-***REMOVED*** --- FSM states ---
+# --- FSM states ---
 
 
 def test_crm_quick_action_states_exist():
@@ -30,7 +30,7 @@ def test_crm_quick_action_states_exist():
     assert hasattr(CrmQuickActionSG, "waiting_task")
 
 
-***REMOVED*** --- Callback handlers: immediate actions ---
+# --- Callback handlers: immediate actions ---
 
 
 async def test_task_complete_calls_kommo():
@@ -97,7 +97,7 @@ async def test_task_postpone_no_kommo_answers_alert():
     assert call_kwargs.get("show_alert") is True
 
 
-***REMOVED*** --- Callback handlers: FSM-triggering ---
+# --- Callback handlers: FSM-triggering ---
 
 
 async def test_lead_note_callback_sets_fsm_state():
@@ -171,7 +171,7 @@ async def test_contact_note_callback_sets_fsm_state():
     callback.message.answer.assert_called_once()
 
 
-***REMOVED*** --- FSM message handlers ---
+# --- FSM message handlers ---
 
 
 async def test_note_text_received_calls_add_note():
@@ -273,7 +273,7 @@ async def test_task_no_kommo_sends_error_message():
     message.answer.assert_called()
 
 
-***REMOVED*** --- Task edit FSM states ---
+# --- Task edit FSM states ---
 
 
 def test_crm_quick_action_states_have_edit_states():
@@ -429,12 +429,12 @@ def test_crm_router_registers_edit_callback():
     from telegram_bot.handlers.crm_callbacks import create_crm_router
 
     router = create_crm_router()
-    ***REMOVED*** Verify router was created without errors (handlers registered)
+    # Verify router was created without errors (handlers registered)
     assert router is not None
     assert router.name == "crm_callbacks"
 
 
-***REMOVED*** --- crm_cards.py: postpone button ---
+# --- crm_cards.py: postpone button ---
 
 
 def test_format_task_card_active_task_has_postpone_button():
@@ -466,13 +466,13 @@ def test_format_task_card_completed_task_no_postpone_button():
     assert not any("postpone" in cb for cb in all_callbacks)
 
 
-***REMOVED*** --------------------------------------------------------------------------
-***REMOVED*** @observe instrumentation tests (***REMOVED***1664)
-***REMOVED*** --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# @observe instrumentation tests (#1664)
+# --------------------------------------------------------------------------
 
 
 class TestCrmCallbacksObserveInstrumentation:
-    """Tests for @observe instrumentation on CRM callback handlers (***REMOVED***1664).
+    """Tests for @observe instrumentation on CRM callback handlers (#1664).
 
     Contract: every write-side aiogram handler in
     ``telegram_bot.handlers.crm_callbacks`` must be wrapped with
@@ -487,8 +487,8 @@ class TestCrmCallbacksObserveInstrumentation:
     Forbidden list).
     """
 
-    ***REMOVED*** The 9 handlers we are instrumenting in this PR plus the 2 that were
-    ***REMOVED*** already decorated by ***REMOVED***1673 / ***REMOVED***1674 — total 11 expected spans.
+    # The 9 handlers we are instrumenting in this PR plus the 2 that were
+    # already decorated by #1673 / #1674 — total 11 expected spans.
     EXPECTED_SPAN_NAMES_NEW = {
         "crm-lead-note-prompt",
         "crm-lead-task-prompt",
@@ -538,10 +538,10 @@ class TestCrmCallbacksObserveInstrumentation:
         sys.modules.pop("telegram_bot.handlers.crm_callbacks", None)
         importlib.import_module("telegram_bot.handlers.crm_callbacks")
 
-    ***REMOVED*** ---- Decorator-application contract ------------------------------------
+    # ---- Decorator-application contract ------------------------------------
 
     def test_crm_callbacks_module_imports_observe_and_get_client(self):
-        """Module wires the Langfuse decorator + client accessor (***REMOVED***1664 contract)."""
+        """Module wires the Langfuse decorator + client accessor (#1664 contract)."""
         from telegram_bot.handlers import crm_callbacks as cb_mod
 
         assert hasattr(cb_mod, "observe"), (
@@ -565,9 +565,9 @@ class TestCrmCallbacksObserveInstrumentation:
         captured: list[dict] = []
 
         def recording_observe(*args, **kwargs):
-            ***REMOVED*** The handlers in this module always use the kwargs form
-            ***REMOVED*** (`@observe(name=..., capture_input=False, capture_output=False)`),
-            ***REMOVED*** so we only have to record kwargs.
+            # The handlers in this module always use the kwargs form
+            # (`@observe(name=..., capture_input=False, capture_output=False)`),
+            # so we only have to record kwargs.
             captured.append(dict(kwargs))
 
             def decorator(func):
@@ -583,14 +583,14 @@ class TestCrmCallbacksObserveInstrumentation:
 
         names = {entry.get("name") for entry in captured}
 
-        ***REMOVED*** All 11 expected spans (9 new + 2 existing) must be present.
+        # All 11 expected spans (9 new + 2 existing) must be present.
         missing = self.EXPECTED_SPAN_NAMES_ALL - names
         assert not missing, (
             f"Missing @observe spans on crm_callbacks handlers: {sorted(missing)}. "
             f"Captured: {sorted(n for n in names if n)}"
         )
 
-        ***REMOVED*** Each captured entry must use capture_input=False and capture_output=False.
+        # Each captured entry must use capture_input=False and capture_output=False.
         for entry in captured:
             name = entry.get("name")
             if name not in self.EXPECTED_SPAN_NAMES_ALL:
@@ -654,7 +654,7 @@ class TestCrmCallbacksObserveInstrumentation:
 
         message.answer.assert_called_once()
 
-    ***REMOVED*** ---- Behavior tests for representative new handlers --------------------
+    # ---- Behavior tests for representative new handlers --------------------
 
     async def test_on_task_text_received_records_curated_input(self, monkeypatch):
         """on_task_text_received writes a curated input payload (no PII, no raw FSM)."""
@@ -663,7 +663,7 @@ class TestCrmCallbacksObserveInstrumentation:
         self._disable_observe(monkeypatch)
         mock_lf = self._patched_lf(monkeypatch)
 
-        ***REMOVED*** Re-import after observe was monkeypatched.
+        # Re-import after observe was monkeypatched.
         from telegram_bot.handlers.crm_callbacks import on_task_text_received
 
         kommo = AsyncMock()
@@ -682,11 +682,11 @@ class TestCrmCallbacksObserveInstrumentation:
         )
         captured_input = input_calls[0]["input"]
         assert isinstance(captured_input, dict)
-        ***REMOVED*** Curated keys only: deal_id / task_id / field / action.
+        # Curated keys only: deal_id / task_id / field / action.
         assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
         assert captured_input.get("action") == "create"
         assert captured_input.get("deal_id") == 1234
-        ***REMOVED*** Forbidden values: raw text / FSM state contents must not appear.
+        # Forbidden values: raw text / FSM state contents must not appear.
         flat = str(captured_input)
         assert message.text not in flat
         assert "+380501112233" not in flat
@@ -727,7 +727,7 @@ class TestCrmCallbacksObserveInstrumentation:
 
         state = AsyncMock()
         message = AsyncMock()
-        message.text = "5"  ***REMOVED*** neither '1' nor '2'
+        message.text = "5"  # neither '1' nor '2'
 
         await on_edit_field_chosen(message, state)
 
@@ -766,7 +766,7 @@ class TestCrmCallbacksObserveInstrumentation:
         assert isinstance(captured_input, dict)
         assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
         assert captured_input.get("task_id") == 4242
-        ***REMOVED*** Raw user-supplied date string must not appear.
+        # Raw user-supplied date string must not appear.
         assert "31.12.2027 10:00" not in str(captured_input)
 
     async def test_on_edit_task_date_received_kommo_failure_records_error(self, monkeypatch):

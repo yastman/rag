@@ -51,7 +51,7 @@ class TestRerankNodeEmptyInput:
         assert result["documents"] == []
         assert result["rerank_applied"] is False
         assert result["rerank_cache_hit"] is False
-        assert result["llm_call_count"] == 1  ***REMOVED*** incremented even on early return
+        assert result["llm_call_count"] == 1  # incremented even on early return
         assert "rerank" in result["latency_stages"]
 
     async def test_empty_documents_does_not_call_perform_rerank(self):
@@ -92,7 +92,7 @@ class TestRerankNodeWithReranker:
         with patch(
             "telegram_bot.graph.nodes.rerank.perform_rerank", new_callable=AsyncMock
         ) as mock_rerank:
-            mock_rerank.return_value = (_make_docs([0.010]), True, True)  ***REMOVED*** cache_hit=True
+            mock_rerank.return_value = (_make_docs([0.010]), True, True)  # cache_hit=True
             result = await rerank_node(state, _make_runtime(reranker=MagicMock()))
 
         assert result["rerank_cache_hit"] is True
@@ -122,13 +122,13 @@ class TestRerankNodeFallback:
         with patch(
             "telegram_bot.graph.nodes.rerank.perform_rerank", new_callable=AsyncMock
         ) as mock_rerank:
-            ***REMOVED*** perform_rerank returns rerank_applied=False → node applies score-sort fallback
+            # perform_rerank returns rerank_applied=False → node applies score-sort fallback
             mock_rerank.return_value = (state["documents"], False, False)
             result = await rerank_node(state, _make_runtime(reranker=None))
 
         scores = [d["score"] for d in result["documents"]]
         assert scores == sorted(scores, reverse=True)
-        assert len(result["documents"]) <= 5  ***REMOVED*** top_k default
+        assert len(result["documents"]) <= 5  # top_k default
 
     async def test_fallback_applies_top_k_limit(self):
         """Score-sort fallback trims to top_k=5."""
@@ -159,7 +159,7 @@ class TestRerankNodeFallback:
 
         assert result["rerank_applied"] is False
         assert result["rerank_cache_hit"] is False
-        ***REMOVED*** Should be sorted by score
+        # Should be sorted by score
         scores = [d["score"] for d in result["documents"]]
         assert scores == sorted(scores, reverse=True)
 
@@ -230,7 +230,7 @@ class TestRerankNodeLatency:
             result = await rerank_node(state, _make_runtime(reranker=MagicMock()))
 
         assert "rerank" in result["latency_stages"]
-        assert result["latency_stages"]["retrieve"] == 0.1  ***REMOVED*** existing preserved
+        assert result["latency_stages"]["retrieve"] == 0.1  # existing preserved
 
     async def test_latency_stages_set_on_empty_input(self):
         state = _state_with_query()

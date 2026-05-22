@@ -24,9 +24,9 @@ from scripts.e2e.langfuse_latest_trace_audit import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -38,9 +38,9 @@ def mock_langfuse_configured():
         yield
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_trace_dict(
@@ -76,9 +76,9 @@ def _make_obs(name: str) -> dict:
     return {"name": name}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** sanitize_trace
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# sanitize_trace
+# ---------------------------------------------------------------------------
 
 
 def test_sanitize_trace_from_dict():
@@ -143,22 +143,22 @@ def test_sanitize_trace_filters_forbidden_raw_keys():
         output={"answer": "secret answer", "answer_hash": "h2"},
     )
     t = sanitize_trace(raw)
-    ***REMOVED*** Allowed sanitized keys are preserved.
+    # Allowed sanitized keys are preserved.
     assert "query_hash" in t.root_input_keys
     assert "answer_hash" in t.root_output_keys
-    ***REMOVED*** Forbidden raw keys are stripped.
+    # Forbidden raw keys are stripped.
     assert "query" not in t.root_input_keys
     assert "user" not in t.root_input_keys
     assert "chat" not in t.root_input_keys
     assert "answer" not in t.root_output_keys
-    ***REMOVED*** Ensure no raw values leak into the dataclass.
+    # Ensure no raw values leak into the dataclass.
     assert t.trace_id == "t-1"
     assert t.name == "telegram-message"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _keys_if_dict
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _keys_if_dict
+# ---------------------------------------------------------------------------
 
 
 def test_keys_if_dict_returns_sorted_keys():
@@ -174,9 +174,9 @@ def test_keys_if_dict_non_dict_returns_empty():
     assert _keys_if_dict([1, 2]) == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _check_trace_coverage
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _check_trace_coverage
+# ---------------------------------------------------------------------------
 
 
 def test_coverage_passes_for_complete_app_trace():
@@ -228,7 +228,7 @@ def test_coverage_fails_for_missing_observation():
         tags=["telegram"],
         session_id=None,
         timestamp=None,
-        observation_names=["telegram-rag-query"],  ***REMOVED*** missing supervisor
+        observation_names=["telegram-rag-query"],  # missing supervisor
         score_names=[
             "query_type",
             "latency_total_ms",
@@ -260,7 +260,7 @@ def test_coverage_fails_for_missing_score():
         session_id=None,
         timestamp=None,
         observation_names=["telegram-rag-query", "telegram-rag-supervisor"],
-        score_names=["query_type"],  ***REMOVED*** missing many
+        score_names=["query_type"],  # missing many
         root_input_keys=["query_hash"],
         root_output_keys=["answer_hash"],
         observation_count=2,
@@ -292,7 +292,7 @@ def test_coverage_fails_for_missing_root_input():
             "no_results",
             "llm_used",
         ],
-        root_input_keys=[],  ***REMOVED*** missing query_hash
+        root_input_keys=[],  # missing query_hash
         root_output_keys=["answer_hash"],
         observation_count=2,
         score_count=10,
@@ -324,7 +324,7 @@ def test_coverage_fails_for_missing_root_output():
             "llm_used",
         ],
         root_input_keys=["query_hash"],
-        root_output_keys=[],  ***REMOVED*** missing answer_hash
+        root_output_keys=[],  # missing answer_hash
         observation_count=2,
         score_count=10,
         is_proxy_noise=False,
@@ -350,14 +350,14 @@ def test_coverage_for_proxy_noise_is_not_app_coverage():
         is_proxy_noise=True,
     )
     cov = _check_trace_coverage(trace)
-    ***REMOVED*** Proxy noise is not evaluated against app coverage.
+    # Proxy noise is not evaluated against app coverage.
     assert cov.ok
     assert cov.scenario_kind is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Branch-aware required child coverage (mirrors langfuse_trace_validator.py:309-335)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Branch-aware required child coverage (mirrors langfuse_trace_validator.py:309-335)
+# ---------------------------------------------------------------------------
 
 _BASE_SCORE_NAMES = [
     "query_type",
@@ -440,9 +440,9 @@ def test_branch_unknown_trace_no_branch_expansion():
     )
     cov = _check_trace_coverage(trace)
     assert cov.scenario_kind == "unknown"
-    ***REMOVED*** Unknown traces only require base observations (telegram-rag-query + supervisor).
+    # Unknown traces only require base observations (telegram-rag-query + supervisor).
     assert "node-cache-check" not in cov.missing_observations
-    ***REMOVED*** With base observations present and all scores, it should pass.
+    # With base observations present and all scores, it should pass.
     assert cov.ok
 
 
@@ -507,7 +507,7 @@ def test_branch_semantic_cache_hit_no_retrieval_required():
         },
     )
     cov = _check_trace_coverage(trace)
-    ***REMOVED*** Cache hit: only cache-check is needed beyond base contract.
+    # Cache hit: only cache-check is needed beyond base contract.
     assert cov.ok, "semantic cache hit should not require retrieval/generation"
     assert "node-retrieve" not in cov.missing_observations
     assert "node-generate" not in cov.missing_observations
@@ -581,7 +581,7 @@ def test_branch_no_results_skips_generation():
         },
     )
     cov = _check_trace_coverage(trace)
-    ***REMOVED*** No results: generate/cache-store/respond are NOT required.
+    # No results: generate/cache-store/respond are NOT required.
     assert cov.ok, "no_results=True should not require generation path"
     assert "node-generate" not in cov.missing_observations
     assert "node-cache-store" not in cov.missing_observations
@@ -614,9 +614,9 @@ def test_branch_proxy_noise_unaffected_by_score_values():
     assert cov.scenario_kind is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** render_markdown
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# render_markdown
+# ---------------------------------------------------------------------------
 
 
 def test_render_markdown_is_deterministic():
@@ -656,7 +656,7 @@ def test_render_markdown_is_deterministic():
     assert "telegram-message" in md
     assert "FAIL" in md
     assert "telegram-rag-supervisor" in md
-    ***REMOVED*** No raw values
+    # No raw values
     assert "secret" not in md.lower()
 
 
@@ -686,7 +686,7 @@ def test_render_markdown_contains_no_raw_values():
         ok=True,
     )
     md = render_markdown(result)
-    assert "query_hash" in md  ***REMOVED*** key name is fine
+    assert "query_hash" in md  # key name is fine
     assert "answer_hash" in md
 
 
@@ -713,16 +713,16 @@ def test_render_markdown_shows_proxy_noise():
         timestamp="20260512-100000",
         session_marker=None,
         artifact_path=Path(".artifacts/latest-traces.md"),
-        ok=False,  ***REMOVED*** zero app traces = fail
+        ok=False,  # zero app traces = fail
     )
     md = render_markdown(result)
     assert "proxy noise" in md
     assert "LiteLLM" in md
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** fetch_latest_traces
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# fetch_latest_traces
+# ---------------------------------------------------------------------------
 
 
 def test_fetch_latest_traces_prefers_cli(mock_langfuse_configured):
@@ -768,9 +768,9 @@ def test_fetch_latest_traces_raises_when_both_fail():
             assert "Langfuse is not configured" in str(exc_info.value)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** run_audit
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# run_audit
+# ---------------------------------------------------------------------------
 
 
 def test_run_audit_writes_artifact(tmp_path: Path):
@@ -862,7 +862,7 @@ def test_run_audit_fails_when_coverage_missing(tmp_path: Path):
                 tags=["telegram"],
                 session_id=None,
                 timestamp=None,
-                observation_names=["telegram-rag-query"],  ***REMOVED*** missing supervisor
+                observation_names=["telegram-rag-query"],  # missing supervisor
                 score_names=["query_type"],
                 root_input_keys=["query_hash"],
                 root_output_keys=["answer_hash"],
@@ -881,9 +881,9 @@ def test_run_audit_fails_when_coverage_missing(tmp_path: Path):
     assert result.app_trace_count == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** main
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
 
 
 def test_main_returns_zero_on_pass(capsys):
@@ -946,9 +946,9 @@ def test_main_returns_one_on_runtime_error():
     assert rc == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _fetch_traces_via_cli / _fetch_traces_via_sdk integration mocks
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _fetch_traces_via_cli / _fetch_traces_via_sdk integration mocks
+# ---------------------------------------------------------------------------
 
 
 def test_fetch_via_cli_parses_json():

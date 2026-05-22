@@ -29,9 +29,9 @@ from src.security.pii_redaction import PIIRedactor
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Issue ***REMOVED***1381 — suppress the Langfuse SDK Pydantic V1 UserWarning
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Issue #1381 — suppress the Langfuse SDK Pydantic V1 UserWarning
+# ---------------------------------------------------------------------------
 
 
 def _install_langfuse_warning_filters() -> None:
@@ -55,8 +55,8 @@ def _install_langfuse_warning_filters() -> None:
     )
 
 
-***REMOVED*** Apply the filter as early as possible — before the guarded Langfuse import
-***REMOVED*** below — so the warning never reaches stderr / Loki / pytest captures.
+# Apply the filter as early as possible — before the guarded Langfuse import
+# below — so the warning never reaches stderr / Loki / pytest captures.
 _install_langfuse_warning_filters()
 
 _MAX_PII_TEXT_LENGTH = 4000
@@ -69,9 +69,9 @@ _pii_redactor = PIIRedactor()
 _langfuse_endpoint_warned = False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Guarded Langfuse SDK import (graceful degradation under Python 3.14)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Guarded Langfuse SDK import (graceful degradation under Python 3.14)
+# ---------------------------------------------------------------------------
 
 try:
     from langfuse import Langfuse
@@ -85,7 +85,7 @@ except Exception as _e:
     _LANGFUSE_AVAILABLE = False
     _LANGFUSE_IMPORT_ERROR = _e
 
-    class Langfuse:  ***REMOVED*** type: ignore[no-redef]
+    class Langfuse:  # type: ignore[no-redef]
         """Placeholder that raises the original import error on instantiation."""
 
         def __init__(self, *args, **kwargs):
@@ -101,25 +101,25 @@ except Exception as _e:
             return args[0]
         return decorator
 
-    def _real_get_client():  ***REMOVED*** type: ignore[misc]
+    def _real_get_client():  # type: ignore[misc]
         return None
 
     @contextlib.contextmanager
-    def _real_propagate(**kwargs):  ***REMOVED*** type: ignore[misc]
+    def _real_propagate(**kwargs):  # type: ignore[misc]
         yield
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Module state
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Module state
+# ---------------------------------------------------------------------------
 
 _langfuse_client: Langfuse | None = None
 _langfuse_init_attempted = False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** PII masking (always available)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# PII masking (always available)
+# ---------------------------------------------------------------------------
 
 
 def mask_pii(data: Any) -> Any:
@@ -139,9 +139,9 @@ def mask_pii(data: Any) -> Any:
     return _pii_redactor.mask(data, max_length=_MAX_PII_TEXT_LENGTH)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Public SDK exports
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Public SDK exports
+# ---------------------------------------------------------------------------
 
 observe = _real_observe
 get_client = _real_get_client
@@ -235,7 +235,7 @@ def _load_model_definitions_from_env() -> list[dict[str, Any]]:
     for idx, item in enumerate(entries):
         if not isinstance(item, dict):
             logger.warning(
-                "Skipping model definition ***REMOVED***%d: expected object, got %s", idx, type(item)
+                "Skipping model definition #%d: expected object, got %s", idx, type(item)
             )
             continue
 
@@ -243,7 +243,7 @@ def _load_model_definitions_from_env() -> list[dict[str, Any]]:
         match_pattern = str(item.get("match_pattern", "")).strip()
         if not model_name or not match_pattern:
             logger.warning(
-                "Skipping model definition ***REMOVED***%d: model_name and match_pattern are required",
+                "Skipping model definition #%d: model_name and match_pattern are required",
                 idx,
             )
             continue
@@ -407,7 +407,7 @@ def initialize_langfuse(
     if _langfuse_client is not None and not force:
         return _langfuse_client
 
-    ***REMOVED*** Return cached None without re-logging when already attempted
+    # Return cached None without re-logging when already attempted
     if _langfuse_init_attempted and _langfuse_client is None and not force:
         return None
 
@@ -431,8 +431,8 @@ def initialize_langfuse(
         _disable_otel_exporter()
         return None
 
-    ***REMOVED*** Probe endpoint reachability only when an explicit host is configured.
-    ***REMOVED*** Cloud default (no host) is assumed reachable to avoid blocking startup.
+    # Probe endpoint reachability only when an explicit host is configured.
+    # Cloud default (no host) is assumed reachable to avoid blocking startup.
     if resolved_host and not _is_endpoint_reachable(resolved_host):
         _langfuse_client = None
         _langfuse_init_attempted = True
@@ -449,7 +449,7 @@ def initialize_langfuse(
     kwargs: dict[str, Any] = {
         "public_key": resolved_public_key,
         "secret_key": resolved_secret_key,
-        "mask": mask_pii,  ***REMOVED*** type: ignore[arg-type]  ***REMOVED*** MaskFunction typing mismatch
+        "mask": mask_pii,  # type: ignore[arg-type]  # MaskFunction typing mismatch
     }
     if resolved_host:
         kwargs["host"] = resolved_host
@@ -512,3 +512,81 @@ def _reset_langfuse_client_for_tests() -> None:
     _langfuse_client = None
     _langfuse_init_attempted = False
     _langfuse_endpoint_warned = False
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle trace helpers (shared by voice and ingestion families)
+# ---------------------------------------------------------------------------
+
+
+def make_lifecycle_session_id(family: str, key: str) -> str:
+    """Build a stable trace session id for a lifecycle family.
+
+    Returns ``"{family}-{normalized_key}"`` or ``"{family}-unknown"`` when *key*
+    is empty or whitespace-only.
+    """
+    normalized = (key or "").strip().replace(" ", "-")
+    return f"{family}-{normalized or 'unknown'}"
+
+
+def update_lifecycle_trace(
+    *,
+    family: str,
+    span_name: str,
+    session_id: str,
+    user_id: str,
+    tags: list[str],
+    metadata: dict[str, Any],
+    trace_id: str | None = None,
+) -> None:
+    """Update (or create) a lifecycle trace span via Langfuse.
+
+    This is the shared core used by both the voice and ingestion families.
+    It creates a span observation and propagates trace attributes in a single
+    context block.
+    """
+    lf = get_langfuse_client()
+    if lf is None:
+        return
+
+    resolved_trace_id = trace_id or lf.create_trace_id(seed=session_id)
+
+    with (
+        lf.start_as_current_observation(
+            as_type="span",
+            name=span_name,
+            trace_context={"trace_id": resolved_trace_id},
+        ) as observation,
+        propagate_attributes(
+            session_id=session_id,
+            user_id=user_id,
+            tags=tags,
+        ),
+    ):
+        observation.update(metadata=metadata)
+
+
+async def try_update_lifecycle_trace_async(
+    *,
+    family: str,
+    span_name: str,
+    session_id: str,
+    user_id: str,
+    tags: list[str],
+    metadata: dict[str, Any],
+    trace_id: str | None = None,
+) -> None:
+    """Best-effort async wrapper around :func:`update_lifecycle_trace`.
+
+    Suppresses all exceptions so callers never fail due to tracing issues.
+    """
+    with contextlib.suppress(Exception):
+        update_lifecycle_trace(
+            family=family,
+            span_name=span_name,
+            session_id=session_id,
+            user_id=user_id,
+            tags=tags,
+            metadata=metadata,
+            trace_id=trace_id,
+        )

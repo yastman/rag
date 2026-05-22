@@ -1,4 +1,4 @@
-"""Tests for ***REMOVED***1600: bounded fan-out for fire-and-forget history saves.
+"""Tests for #1600: bounded fan-out for fire-and-forget history saves.
 
 The bot's text path used to call ``asyncio.create_task(...)`` for every
 ``_bg_save_history`` invocation with no concurrency cap and no shutdown
@@ -55,7 +55,7 @@ async def test_spawn_tracks_task_and_removes_on_completion():
     await asyncio.wait_for(completed.wait(), timeout=1.0)
     await task
 
-    ***REMOVED*** Done-callback runs in the loop's next pass; yield once so it fires.
+    # Done-callback runs in the loop's next pass; yield once so it fires.
     await asyncio.sleep(0)
     assert task not in bot._history_save_tasks
 
@@ -68,13 +68,13 @@ async def test_spawn_drops_save_at_concurrency_limit():
     async def slow_coro():
         await blocker.wait()
 
-    ***REMOVED*** Saturate the limit with two pending tasks.
+    # Saturate the limit with two pending tasks.
     t1 = bot._spawn_history_save(slow_coro(), user_id="a")
     t2 = bot._spawn_history_save(slow_coro(), user_id="b")
     assert t1 is not None and t2 is not None
     assert len(bot._history_save_tasks) == 2
 
-    ***REMOVED*** Third save must be dropped — coro is closed, no leak.
+    # Third save must be dropped — coro is closed, no leak.
     closed = False
 
     async def third_coro():
@@ -89,8 +89,8 @@ async def test_spawn_drops_save_at_concurrency_limit():
     assert result is None
     assert len(bot._history_save_tasks) == 2
 
-    ***REMOVED*** The dropped coroutine must have been .close()'d so we don't leak.
-    ***REMOVED*** Verify by trying to send into it: it should raise.
+    # The dropped coroutine must have been .close()'d so we don't leak.
+    # Verify by trying to send into it: it should raise.
     with pytest.raises((StopIteration, RuntimeError)):
         third.send(None)
 

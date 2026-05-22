@@ -1,5 +1,5 @@
-***REMOVED***!/usr/bin/env python3
-"""Auto-triage dislike traces into Langfuse Annotation Queue (Issue ***REMOVED***757).
+#!/usr/bin/env python3
+"""Auto-triage dislike traces into Langfuse Annotation Queue (Issue #757).
 
 Fetches traces with user_feedback=0 score from the last 24 hours and adds
 each trace to the "dislike-review" Annotation Queue for manual review.
@@ -29,9 +29,9 @@ SCORE_NAME = "user_feedback"
 BATCH_SIZE = 100
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Scores fetching
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Scores fetching
+# ---------------------------------------------------------------------------
 
 
 def fetch_dislike_trace_ids(api: Any, *, hours: int = 24) -> list[str]:
@@ -84,9 +84,9 @@ def fetch_dislike_trace_ids(api: Any, *, hours: int = 24) -> list[str]:
     return trace_ids
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Annotation Queue management
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Annotation Queue management
+# ---------------------------------------------------------------------------
 
 
 def get_or_create_annotation_queue(api: Any, queue_name: str) -> str:
@@ -122,7 +122,7 @@ def get_or_create_annotation_queue(api: Any, queue_name: str) -> str:
 def add_traces_to_queue(api: Any, queue_id: str, trace_ids: list[str]) -> int:
     """Add trace IDs to an annotation queue as PENDING TRACE items.
 
-    Uses objectType=TRACE (not SESSION — known Langfuse bug ***REMOVED***9571).
+    Uses objectType=TRACE (not SESSION — known Langfuse bug #9571).
 
     Args:
         api: Langfuse low-level API client (langfuse.api).
@@ -156,9 +156,9 @@ def add_traces_to_queue(api: Any, queue_id: str, trace_ids: list[str]) -> int:
     return added
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Main orchestration
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Main orchestration
+# ---------------------------------------------------------------------------
 
 
 def triage_dislike_traces(
@@ -199,9 +199,9 @@ def triage_dislike_traces(
     return {"trace_count": len(trace_ids), "added_count": added}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:

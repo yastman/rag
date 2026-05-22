@@ -3,7 +3,7 @@
 import pytest
 
 
-***REMOVED*** Skip entire module if aiogram not installed
+# Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -54,7 +54,7 @@ class TestErrorHandlerMiddleware:
         with pytest.raises(Exception, match="Test error"):
             await middleware(handler, event, data)
 
-        ***REMOVED*** Should have sent error message
+        # Should have sent error message
         event.answer.assert_called_once()
         call_args = event.answer.call_args[0][0]
         assert "ошибка" in call_args.lower()
@@ -136,15 +136,15 @@ class TestThrottlingMiddleware:
         event.answer = AsyncMock()
         data = {"event_from_user": user}
 
-        ***REMOVED*** First request
+        # First request
         result1 = await middleware(handler, event, data)
         assert result1 == "success"
 
-        ***REMOVED*** Second rapid request - should be throttled
+        # Second rapid request - should be throttled
         result2 = await middleware(handler, event, data)
         assert result2 is None
 
-        ***REMOVED*** Should have sent throttle message
+        # Should have sent throttle message
         event.answer.assert_called_once()
 
     async def test_middleware_exempts_admins(self):
@@ -154,16 +154,16 @@ class TestThrottlingMiddleware:
         handler = AsyncMock(return_value="success")
 
         user = MagicMock(spec=User)
-        user.id = 12345  ***REMOVED*** Admin
+        user.id = 12345  # Admin
 
         event = MagicMock(spec=Message)
         data = {"event_from_user": user}
 
-        ***REMOVED*** First request
+        # First request
         result1 = await middleware(handler, event, data)
         assert result1 == "success"
 
-        ***REMOVED*** Second rapid request - admin should not be throttled
+        # Second rapid request - admin should not be throttled
         result2 = await middleware(handler, event, data)
         assert result2 == "success"
 
@@ -174,7 +174,7 @@ class TestThrottlingMiddleware:
         handler = AsyncMock(return_value="success")
 
         event = MagicMock(spec=Message)
-        data = {}  ***REMOVED*** No user
+        data = {}  # No user
 
         result = await middleware(handler, event, data)
 
@@ -201,7 +201,7 @@ class TestThrottlingMiddleware:
             result1 = await middleware(handler, event, data)
             assert result1 == "success"
 
-            ***REMOVED*** Second rapid request — should be throttled
+            # Second rapid request — should be throttled
             result2 = await middleware(handler, event, data)
             assert result2 is None
 
@@ -265,7 +265,7 @@ class TestThrottlingMiddleware:
         event.answer = AsyncMock()
         data = {"event_from_user": user}
 
-        ***REMOVED*** First request with key "catalog_more"
+        # First request with key "catalog_more"
         with patch(
             "telegram_bot.middlewares.throttling.get_flag",
             return_value={"rate": 0.3, "key": "catalog_more"},
@@ -273,7 +273,7 @@ class TestThrottlingMiddleware:
             result1 = await middleware(handler, event, data)
             assert result1 == "success"
 
-        ***REMOVED*** Second request with key "catalog_filters" — should NOT be blocked
+        # Second request with key "catalog_filters" — should NOT be blocked
         with patch(
             "telegram_bot.middlewares.throttling.get_flag",
             return_value={"rate": 0.3, "key": "catalog_filters"},
@@ -337,7 +337,7 @@ class TestThrottlingMiddleware:
         event = MagicMock(spec=Message)
         data = {"event_from_user": user}
 
-        ***REMOVED*** Use rate=0.3
+        # Use rate=0.3
         with patch(
             "telegram_bot.middlewares.throttling.get_flag",
             return_value={"rate": 0.3, "key": "a"},
@@ -346,7 +346,7 @@ class TestThrottlingMiddleware:
         assert 0.3 in middleware._caches
         assert len(middleware._caches) == 1
 
-        ***REMOVED*** Use rate=0.6
+        # Use rate=0.6
         user2 = MagicMock(spec=User)
         user2.id = 99999
         data2 = {"event_from_user": user2}
@@ -373,5 +373,5 @@ class TestSetupThrottlingMiddleware:
         setup_throttling_middleware(dp, default_rate=2.0, admin_ids=[123])
 
         dp.message.middleware.register.assert_called_once()
-        ***REMOVED*** 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
         assert dp.callback_query.middleware.register.call_count == 2

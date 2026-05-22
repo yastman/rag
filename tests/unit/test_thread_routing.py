@@ -8,10 +8,10 @@ async def test_supervisor_thread_id_with_thread():
     """Thread ID should include message_thread_id when present."""
     from telegram_bot.bot import _supervisor_thread_id
 
-    ***REMOVED*** Without thread
+    # Without thread
     assert _supervisor_thread_id(123) == "tg_123"
 
-    ***REMOVED*** With thread
+    # With thread
     assert _supervisor_thread_id(123, thread_id=42) == "tg_123:42"
 
 

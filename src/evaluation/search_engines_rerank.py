@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Search engine with reranker for 2-stage retrieval:
 1. BaselineSearchEngine retrieves top-100 candidates
@@ -29,10 +29,10 @@ class RerankSearchEngine:
             embedding_model: BGE-M3 model for dense embeddings
             reranker_model_name: Cross-encoder reranker model name
         """
-        ***REMOVED*** Stage 1: Baseline retriever
+        # Stage 1: Baseline retriever
         self.baseline_engine = BaselineSearchEngine(collection_name, embedding_model)
 
-        ***REMOVED*** Stage 2: Reranker (multilingual BGE-reranker-v2-m3)
+        # Stage 2: Reranker (multilingual BGE-reranker-v2-m3)
         try:
             from FlagEmbedding import FlagReranker
         except ImportError as e:
@@ -43,7 +43,7 @@ class RerankSearchEngine:
         print(f"Loading reranker: {reranker_model_name}...")
         self.reranker = FlagReranker(
             reranker_model_name,
-            use_fp16=True,  ***REMOVED*** Faster computation
+            use_fp16=True,  # Faster computation
             devices=["cuda:0"],
         )
         print("✓ Reranker loaded successfully")
@@ -60,27 +60,27 @@ class RerankSearchEngine:
         Returns:
             List of dicts with keys: point_id, score, article_number, text
         """
-        ***REMOVED*** Stage 1: Retrieve top-100 candidates using dense search
+        # Stage 1: Retrieve top-100 candidates using dense search
         candidates = self.baseline_engine.search(query, top_k=retrieval_top_k)
 
         if not candidates:
             return []
 
-        ***REMOVED*** Stage 2: Rerank using cross-encoder
-        ***REMOVED*** Prepare pairs: [(query, passage1), (query, passage2), ...]
+        # Stage 2: Rerank using cross-encoder
+        # Prepare pairs: [(query, passage1), (query, passage2), ...]
         pairs = [[query, candidate["text"]] for candidate in candidates]
 
-        ***REMOVED*** Compute reranker scores
+        # Compute reranker scores
         rerank_scores = self.reranker.compute_score(pairs, normalize=True)
 
-        ***REMOVED*** Combine reranker scores with candidates
+        # Combine reranker scores with candidates
         for i, candidate in enumerate(candidates):
-            candidate["score"] = float(rerank_scores[i])  ***REMOVED*** Replace dense score with rerank score
+            candidate["score"] = float(rerank_scores[i])  # Replace dense score with rerank score
 
-        ***REMOVED*** Sort by rerank score and return top-K
+        # Sort by rerank score and return top-K
         candidates.sort(key=lambda x: x["score"], reverse=True)
 
-        return candidates[:top_k]  ***REMOVED*** type: ignore[no-any-return]
+        return candidates[:top_k]  # type: ignore[no-any-return]
 
 
 def create_rerank_search_engine(
@@ -101,7 +101,7 @@ def create_rerank_search_engine(
 
 
 if __name__ == "__main__":
-    ***REMOVED*** Quick test
+    # Quick test
     try:
         from FlagEmbedding import BGEM3FlagModel
     except ImportError:

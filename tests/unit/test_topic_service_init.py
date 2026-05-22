@@ -33,4 +33,4 @@ async def test_bot_has_topic_service_attr(monkeypatch):
 
         bot = PropertyBot(config)
         assert hasattr(bot, "_topic_service")
-        assert bot._topic_service is None  ***REMOVED*** Initialized in start()
+        assert bot._topic_service is None  # Initialized in start()

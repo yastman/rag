@@ -11,7 +11,7 @@ class TestLoadDeprecatedPackageExport:
 
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            ***REMOVED*** Use json.loads as a real target so the import succeeds
+            # Use json.loads as a real target so the import succeeds
             load_deprecated_package_export(
                 module_name="old.module",
                 attr_name="OldClass",

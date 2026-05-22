@@ -1,20 +1,20 @@
-***REMOVED*** Observability and Storage Index
+# Observability and Storage Index
 
 Quick orientation for Langfuse traces, Qdrant, and Redis/cache investigations. Links to runbooks and canonical docs instead of duplicating operational procedures.
 
-***REMOVED******REMOVED*** Langfuse Traces
+## Langfuse Traces
 
 Use this path when traces are missing, gaps appear, or you need to validate scoring.
 
 For terminal-first trace checks, start with `make validate-traces-fast` and the
 Langfuse tracing gaps runbook.
 
-***REMOVED******REMOVED******REMOVED*** Start Here
+### Start Here
 
 - **Runbook**: [`../runbooks/LANGFUSE_TRACING_GAPS.md`](../runbooks/LANGFUSE_TRACING_GAPS.md)
 - **Quality scoring**: [`../RAG_QUALITY_SCORES.md`](../RAG_QUALITY_SCORES.md)
 
-***REMOVED******REMOVED******REMOVED*** Common Investigations
+### Common Investigations
 
 | Question | Where to Look |
 |---|---|
@@ -23,26 +23,26 @@ Langfuse tracing gaps runbook.
 | Is scoring configured? | `src/evaluation/` and `telegram_bot/services/scoring.py` |
 | Trace validation command | `make validate-traces-fast` |
 
-***REMOVED******REMOVED******REMOVED*** Fast Search
+### Fast Search
 
 ```bash
-***REMOVED*** Langfuse spans and scoring in bot and API
+# Langfuse spans and scoring in bot and API
 rg -n "langfuse|trace|span|score|observation" telegram_bot/ src/api/ src/evaluation/
 
-***REMOVED*** Ingestion trace contract
+# Ingestion trace contract
 rg -n "ingestion-cli|ingestion-flow|ingestion-qdrant" src/ingestion/unified/
 ```
 
-***REMOVED******REMOVED*** Qdrant
+## Qdrant
 
 Use this path for collection health, vector search issues, schema drift, or missing points.
 
-***REMOVED******REMOVED******REMOVED*** Start Here
+### Start Here
 
 - **Runbook**: [`../runbooks/QDRANT_TROUBLESHOOTING.md`](../runbooks/QDRANT_TROUBLESHOOTING.md)
 - **Stack reference**: [`../QDRANT_STACK.md`](../QDRANT_STACK.md)
 
-***REMOVED******REMOVED******REMOVED*** Common Investigations
+### Common Investigations
 
 | Question | Where to Look |
 |---|---|
@@ -52,7 +52,7 @@ Use this path for collection health, vector search issues, schema drift, or miss
 | Is ColBERT coverage sufficient? | `uv run python -m src.ingestion.unified.cli coverage-check --min-ratio 0.995` |
 | Are points actually present? | `curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python3 -m json.tool` |
 
-***REMOVED******REMOVED******REMOVED*** Collections Overview
+### Collections Overview
 
 | Collection | Purpose | Owner |
 |---|---|---|
@@ -61,26 +61,26 @@ Use this path for collection health, vector search issues, schema drift, or miss
 | `apartments` | Apartment listings (top-level payload) | `scripts/apartments/setup_collection.py` |
 | `conversation_history` | User session history vectors | `telegram_bot/services/history_service.py` |
 
-***REMOVED******REMOVED******REMOVED*** Fast Search
+### Fast Search
 
 ```bash
-***REMOVED*** Qdrant runtime integration
+# Qdrant runtime integration
 rg -n "qdrant|collection|vector|hybrid|rrf|colbert" telegram_bot/services/ src/ingestion/unified/ src/retrieval/
 
-***REMOVED*** Collection policy
+# Collection policy
 rg -n "resolve_collection_name|quantization" src/config/
 ```
 
-***REMOVED******REMOVED*** Redis and Cache
+## Redis and Cache
 
 Use this path for cache degradation, eviction, latency, or semantic cache misses.
 
-***REMOVED******REMOVED******REMOVED*** Start Here
+### Start Here
 
 - **Runbook**: [`../runbooks/REDIS_CACHE_DEGRADATION.md`](../runbooks/REDIS_CACHE_DEGRADATION.md)
 - **Cache architecture**: [`../TROUBLESHOOTING_CACHE.md`](../TROUBLESHOOTING_CACHE.md)
 
-***REMOVED******REMOVED******REMOVED*** Common Investigations
+### Common Investigations
 
 | Question | Where to Look |
 |---|---|
@@ -90,7 +90,7 @@ Use this path for cache degradation, eviction, latency, or semantic cache misses
 | Why is everything a miss? | Check `grade_confidence` threshold uses RRF scale, not cosine similarity |
 | Cache version stale after model change? | Bump `CACHE_VERSION` or `SEMANTIC_CACHE_VERSION` in `integrations/cache.py` |
 
-***REMOVED******REMOVED******REMOVED*** Cache Tiers
+### Cache Tiers
 
 | Tier | Type | TTL | Purpose |
 |---|---|---|---|
@@ -101,20 +101,20 @@ Use this path for cache degradation, eviction, latency, or semantic cache misses
 | Search | Redis exact | 2 hours | Search results cache |
 | Rerank | Redis exact | 2 hours | Reranked results cache |
 
-***REMOVED******REMOVED******REMOVED*** Fast Search
+### Fast Search
 
 ```bash
-***REMOVED*** Cache implementation
+# Cache implementation
 rg -n "CacheLayerManager|SemanticCache|EmbeddingsCache" telegram_bot/integrations/cache.py
 
-***REMOVED*** Cache usage in pipelines
+# Cache usage in pipelines
 rg -n "cache|semantic|embeddings" telegram_bot/pipelines/ telegram_bot/services/
 
-***REMOVED*** Redis integration beyond cache
+# Redis integration beyond cache
 rg -n "redis|Redis" telegram_bot/integrations/ telegram_bot/services/
 ```
 
-***REMOVED******REMOVED*** LiteLLM Proxy
+## LiteLLM Proxy
 
 Use this path for LLM connection failures or proxy errors.
 
@@ -128,7 +128,7 @@ Quick check:
 curl -fsS http://localhost:4000/health
 ```
 
-***REMOVED******REMOVED*** Postgres
+## Postgres
 
 Use this path for WAL recovery or replication issues.
 

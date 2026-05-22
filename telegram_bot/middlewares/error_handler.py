@@ -91,7 +91,7 @@ async def handle_error(event: ErrorEvent) -> None:
         exc_info=exception,
     )
 
-    ***REMOVED*** Report error to Langfuse if trace is active
+    # Report error to Langfuse if trace is active
     try:
         from telegram_bot.observability import get_client
 
@@ -123,12 +123,12 @@ async def handle_error(event: ErrorEvent) -> None:
         except Exception:
             logger.warning("Failed to answer callback query in error handler", exc_info=True)
 
-    ***REMOVED*** Resolve a message to reply to, if the update carries one.
+    # Resolve a message to reply to, if the update carries one.
     message = None
     if update.message is not None:
         message = update.message
     elif callback_query is not None and callback_query.message is not None:
-        message = callback_query.message  ***REMOVED*** type: ignore[assignment]
+        message = callback_query.message  # type: ignore[assignment]
 
     if message is not None:
         await message.answer(_ERROR_TEXT)

@@ -1,13 +1,13 @@
-***REMOVED*** Alert Rules for Infrastructure Services
-***REMOVED*** Monitors Qdrant, Redis, LiteLLM, Langfuse, and other services
+# Alert Rules for Infrastructure Services
+# Monitors Qdrant, Redis, LiteLLM, Langfuse, and other services
 
 groups:
   - name: infrastructure
     interval: 1m
     rules:
-      ***REMOVED*** =============================================================================
-      ***REMOVED*** QDRANT
-      ***REMOVED*** =============================================================================
+      # =============================================================================
+      # QDRANT
+      # =============================================================================
 
       - alert: QdrantDown
         expr: |
@@ -42,9 +42,9 @@ groups:
           summary: "Slow Qdrant queries detected"
           description: "Multiple slow queries or timeouts in Qdrant"
 
-      ***REMOVED*** =============================================================================
-      ***REMOVED*** REDIS
-      ***REMOVED*** =============================================================================
+      # =============================================================================
+      # REDIS
+      # =============================================================================
 
       - alert: RedisDown
         expr: |
@@ -79,9 +79,9 @@ groups:
           summary: "Redis connection errors"
           description: "Multiple Redis connection errors detected"
 
-      ***REMOVED*** =============================================================================
-      ***REMOVED*** LITELLM
-      ***REMOVED*** =============================================================================
+      # =============================================================================
+      # LITELLM
+      # =============================================================================
 
       - alert: LiteLLMDown
         expr: |
@@ -127,9 +127,9 @@ groups:
           summary: "LiteLLM fallback triggered"
           description: "LiteLLM is using fallback models"
 
-      ***REMOVED*** =============================================================================
-      ***REMOVED*** LANGFUSE
-      ***REMOVED*** =============================================================================
+      # =============================================================================
+      # LANGFUSE
+      # =============================================================================
 
       - alert: LangfuseDown
         expr: |
@@ -164,9 +164,9 @@ groups:
           summary: "Langfuse errors detected"
           description: "Multiple errors in Langfuse logs"
 
-      ***REMOVED*** =============================================================================
-      ***REMOVED*** EMBEDDING SERVICES
-      ***REMOVED*** =============================================================================
+      # =============================================================================
+      # EMBEDDING SERVICES
+      # =============================================================================
 
       - alert: BGEServiceDown
         expr: |
@@ -201,7 +201,7 @@ groups:
           summary: "Embedding service errors"
           description: "Errors detected in embedding services"
 
-      ***REMOVED*** BGE-M3 embedding retries and failures (from bot logs, ***REMOVED***210)
+      # BGE-M3 embedding retries and failures (from bot logs, #210)
       - alert: BGEEmbedRetryFromBot
         expr: |
           count_over_time({container="dev-bot"} |= "Retrying telegram_bot.integrations.embeddings" [5m]) > 3
@@ -224,9 +224,9 @@ groups:
           summary: "BGE-M3 embedding failures in bot"
           description: "Bot embedding calls failing after all retries exhausted"
 
-      ***REMOVED*** =============================================================================
-      ***REMOVED*** DATABASE
-      ***REMOVED*** =============================================================================
+      # =============================================================================
+      # DATABASE
+      # =============================================================================
 
       - alert: PostgresDown
         expr: |

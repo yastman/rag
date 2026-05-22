@@ -17,16 +17,16 @@ class SessionMetrics:
     trace_count: int = 0
     llm_calls: int = 0
 
-    ***REMOVED*** Latency (ms) — computed from GENERATION observations
+    # Latency (ms) — computed from GENERATION observations
     llm_latency_p50_ms: float = 0.0
     llm_latency_p95_ms: float = 0.0
 
-    ***REMOVED*** Cost
+    # Cost
     total_cost_usd: float = 0.0
     llm_tokens_input: int = 0
     llm_tokens_output: int = 0
 
-    ***REMOVED*** Cache
+    # Cache
     cache_hit_rate: float = 0.0
     cache_hits: int = 0
     cache_misses: int = 0
@@ -78,7 +78,7 @@ class LangfuseMetricsCollector:
         self.redis_url = redis_url
         self.qdrant_url = qdrant_url
 
-    ***REMOVED*** ========== Per-Trace Session Metrics ==========
+    # ========== Per-Trace Session Metrics ==========
 
     def _fetch_all_traces(
         self,
@@ -142,7 +142,7 @@ class LangfuseMetricsCollector:
         cache_misses = 0
 
         for trace in traces:
-            ***REMOVED*** Cache from trace metadata
+            # Cache from trace metadata
             cache_hit = (trace.metadata or {}).get("cache_hit")
             if cache_hit is True:
                 cache_hits += 1
@@ -152,20 +152,20 @@ class LangfuseMetricsCollector:
             for obs in self._fetch_all_observations(trace_id=trace.id):
                 llm_calls += 1
 
-                ***REMOVED*** Latency (skip if timestamps missing)
+                # Latency (skip if timestamps missing)
                 if obs.start_time and obs.end_time:
                     delta = (obs.end_time - obs.start_time).total_seconds() * 1000
                     latencies_ms.append(delta)
 
-                ***REMOVED*** Cost (None → 0)
+                # Cost (None → 0)
                 total_cost += obs.calculated_total_cost or 0.0
 
-                ***REMOVED*** Tokens (None usage → 0)
+                # Tokens (None usage → 0)
                 if obs.usage:
                     total_input_tokens += obs.usage.input or 0
                     total_output_tokens += obs.usage.output or 0
 
-        ***REMOVED*** Compute percentiles
+        # Compute percentiles
         p50 = 0.0
         p95 = 0.0
         if latencies_ms:
@@ -217,7 +217,7 @@ class LangfuseMetricsCollector:
             trace_api.update(trace_id=trace_id, tags=tags)
             return
 
-        response = trace_api._client_wrapper.httpx_client.request(  ***REMOVED*** type: ignore[attr-defined]
+        response = trace_api._client_wrapper.httpx_client.request(  # type: ignore[attr-defined]
             f"api/public/traces/{trace_id}",
             method="PATCH",
             json={"tags": tags},
@@ -243,7 +243,7 @@ class LangfuseMetricsCollector:
             tagged += 1
         return tagged
 
-    ***REMOVED*** ========== Infrastructure Metrics ==========
+    # ========== Infrastructure Metrics ==========
 
     async def collect_infrastructure_metrics(self) -> dict[str, Any]:
         """Collect Redis INFO + Qdrant /metrics for baseline.
@@ -253,7 +253,7 @@ class LangfuseMetricsCollector:
         """
         metrics: dict[str, Any] = {"timestamp": datetime.now().isoformat()}
 
-        ***REMOVED*** Redis INFO stats
+        # Redis INFO stats
         if self.redis_url:
             try:
                 r = redis.from_url(self.redis_url, decode_responses=True)
@@ -277,7 +277,7 @@ class LangfuseMetricsCollector:
             except Exception as e:
                 metrics["redis"] = {"error": str(e)}
 
-        ***REMOVED*** Qdrant /metrics endpoint
+        # Qdrant /metrics endpoint
         if self.qdrant_url:
             async with httpx.AsyncClient() as client:
                 try:

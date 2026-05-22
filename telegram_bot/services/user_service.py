@@ -13,12 +13,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Locale detection from Telegram language_code
+# Locale detection from Telegram language_code
 _LOCALE_MAP = {
     "ru": "ru",
     "uk": "uk",
     "en": "en",
-    "be": "ru",  ***REMOVED*** Belarusian → Russian fallback
+    "be": "ru",  # Belarusian → Russian fallback
 }
 _DEFAULT_LOCALE = "ru"
 _SUPPORTED_LOCALES = frozenset({"ru", "en", "uk"})
@@ -28,7 +28,7 @@ def detect_locale(language_code: str | None) -> str:
     """Detect locale from Telegram API language_code."""
     if not language_code:
         return _DEFAULT_LOCALE
-    ***REMOVED*** Try exact match, then 2-char prefix
+    # Try exact match, then 2-char prefix
     code = language_code.lower().strip()
     return _LOCALE_MAP.get(code, _LOCALE_MAP.get(code[:2], _DEFAULT_LOCALE))
 
@@ -46,7 +46,7 @@ class UserService:
         first_name: str | None = None,
         language_code: str | None = None,
     ) -> User | None:
-        """Get existing user or create new one. Returns None on DB errors (***REMOVED***420)."""
+        """Get existing user or create new one. Returns None on DB errors (#420)."""
         try:
             row = await self._pool.fetchrow(
                 "SELECT * FROM users WHERE telegram_id = $1",
@@ -72,7 +72,7 @@ class UserService:
             return None
 
     async def get_role(self, *, telegram_id: int) -> str:
-        """Get user role. Returns 'client' on DB errors or unknown users (***REMOVED***420)."""
+        """Get user role. Returns 'client' on DB errors or unknown users (#420)."""
         try:
             role = await self._pool.fetchval(
                 "SELECT role FROM users WHERE telegram_id = $1",
@@ -84,7 +84,7 @@ class UserService:
             return "client"
 
     async def get_locale(self, *, telegram_id: int) -> str:
-        """Get user locale. Returns 'ru' on DB errors or unknown users (***REMOVED***420)."""
+        """Get user locale. Returns 'ru' on DB errors or unknown users (#420)."""
         try:
             locale = await self._pool.fetchval(
                 "SELECT locale FROM users WHERE telegram_id = $1",

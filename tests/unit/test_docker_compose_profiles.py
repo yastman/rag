@@ -1,4 +1,4 @@
-"""Docker compose profile/port validation tests (***REMOVED***555)."""
+"""Docker compose profile/port validation tests (#555)."""
 
 from __future__ import annotations
 
@@ -25,10 +25,10 @@ def _load_compose() -> dict:
 
 def _extract_host_port(port_mapping: str) -> str | None:
     """Extract host port from docker compose short syntax."""
-    ***REMOVED*** Examples:
-    ***REMOVED*** - "6333:6333"
-    ***REMOVED*** - "127.0.0.1:6333:6333"
-    ***REMOVED*** - "6333:6333/tcp"
+    # Examples:
+    # - "6333:6333"
+    # - "127.0.0.1:6333:6333"
+    # - "6333:6333/tcp"
     port_mapping = str(port_mapping).strip().strip('"').strip("'")
     if not port_mapping:
         return None
@@ -80,7 +80,7 @@ def test_compose_has_no_duplicate_host_ports():
 
     for service_name, service in services.items():
         for port in service.get("ports", []) or []:
-            ***REMOVED*** Ignore long syntax dict mappings in this lightweight validator.
+            # Ignore long syntax dict mappings in this lightweight validator.
             if isinstance(port, dict):
                 host = port.get("published")
                 if host is None:

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-***REMOVED*** Stubs for pymupdf/docling are installed via conftest.py pytest_configure (***REMOVED***611).
+# Stubs for pymupdf/docling are installed via conftest.py pytest_configure (#611).
 from src.core.pipeline import RAGPipeline, RAGResult
 
 
@@ -150,7 +150,7 @@ class TestRAGPipelineSearch:
                                 with patch("src.core.pipeline.UniversalDocumentParser"):
                                     mock_trans.return_value = MagicMock()
 
-                                    ***REMOVED*** Mock search engine
+                                    # Mock search engine
                                     mock_se = MagicMock()
                                     mock_se.search.return_value = [
                                         MagicMock(
@@ -230,8 +230,8 @@ class TestRAGPipelineSearch:
         with patch.object(cv, "copy_context", wraps=cv.copy_context) as spy_copy_ctx:
             result = await mock_pipeline.search("test query")
 
-            ***REMOVED*** pytest-asyncio also calls copy_context for test runner setup.
-            ***REMOVED*** We verify our code path exercises it at least once.
+            # pytest-asyncio also calls copy_context for test runner setup.
+            # We verify our code path exercises it at least once.
             assert spy_copy_ctx.call_count > 0
             assert isinstance(result, RAGResult)
 
@@ -321,7 +321,7 @@ class TestRAGPipelineIndex:
                             with patch("src.core.pipeline.DocumentChunker") as mock_chk:
                                 with patch("src.core.pipeline.UniversalDocumentParser") as mock_psr:
                                     pipeline = RAGPipeline()
-                                    ***REMOVED*** Set mock instances
+                                    # Set mock instances
                                     pipeline.indexer = mock_idx.return_value
                                     pipeline.chunker = mock_chk.return_value
                                     pipeline.parser = mock_psr.return_value
@@ -329,17 +329,17 @@ class TestRAGPipelineIndex:
 
     async def test_index_documents_success(self, mock_pipeline):
         """Test successful document indexing."""
-        ***REMOVED*** Mock parser
+        # Mock parser
         mock_doc = MagicMock()
         mock_doc.content = "Test content"
         mock_doc.filename = "test.pdf"
         mock_pipeline.parser.parse_file.return_value = mock_doc
 
-        ***REMOVED*** Mock chunker
+        # Mock chunker
         mock_chunk = MagicMock()
         mock_pipeline.chunker.chunk_text.return_value = [mock_chunk]
 
-        ***REMOVED*** Mock indexer
+        # Mock indexer
         mock_stats = SimpleNamespace(
             total_chunks=1, indexed_chunks=1, failed_chunks=0, duration_seconds=0.5
         )
@@ -356,7 +356,7 @@ class TestRAGPipelineIndex:
         """Test indexing handles parser exceptions."""
         mock_pipeline.parser.parse_file.side_effect = Exception("Parse error")
 
-        ***REMOVED*** Mock indexer (empty chunks)
+        # Mock indexer (empty chunks)
         mock_stats = SimpleNamespace(
             total_chunks=0, indexed_chunks=0, failed_chunks=0, duration_seconds=0.1
         )

@@ -97,11 +97,11 @@ class TestIncrementalIngester:
             state_path=str(state_path),
         )
 
-        ***REMOVED*** First run — ingests and saves state
+        # First run — ingests and saves state
         with patch.object(ingester, "_embed_and_upsert"):
             ingester.run_incremental(dry_run=False)
 
-        ***REMOVED*** Second run — same data, nothing changed
+        # Second run — same data, nothing changed
         with patch.object(ingester, "_embed_and_upsert") as mock_embed:
             stats = ingester.run_incremental(dry_run=False)
 
@@ -121,11 +121,11 @@ class TestIncrementalIngester:
             state_path=str(state_path),
         )
 
-        ***REMOVED*** First run
+        # First run
         with patch.object(ingester, "_embed_and_upsert"):
             ingester.run_incremental(dry_run=False)
 
-        ***REMOVED*** Change price
+        # Change price
         changed_row = {**SAMPLE_ROW, "price_eur": "130000"}
         _write_csv([changed_row], csv_path)
 

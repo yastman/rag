@@ -76,9 +76,9 @@ def test_build_safe_output_payload_omits_none_optional_fields() -> None:
     assert "response" not in payload
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Regression tests for extra safety (blocker 1)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Regression tests for extra safety (blocker 1)
+# ---------------------------------------------------------------------------
 
 
 def test_build_safe_input_payload_extra_cannot_override_safe_keys() -> None:
@@ -99,12 +99,12 @@ def test_build_safe_input_payload_extra_cannot_override_safe_keys() -> None:
             "route": "bad_route",
         },
     )
-    ***REMOVED*** Core safe keys must not be overridden.
+    # Core safe keys must not be overridden.
     assert payload["content_type"] == "text"
     assert payload["query_len"] == len("hello")
     assert "raw" not in payload["query_preview"]
     assert payload["query_hash"] != "bad"
-    ***REMOVED*** Optional schema keys must not be overridden.
+    # Optional schema keys must not be overridden.
     assert payload["action"] == "original_action"
     assert payload["scenario"] == "original_scenario"
     assert payload["route"] == "original_route"
@@ -149,9 +149,9 @@ def test_build_safe_input_payload_extra_long_strings_are_bounded() -> None:
     assert len(payload["data"]) <= 240 + len("... [TRUNCATED]")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Regression test for preview redact-before-truncate (blocker 2)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Regression test for preview redact-before-truncate (blocker 2)
+# ---------------------------------------------------------------------------
 
 
 def test_preview_redacts_before_truncation_no_pii_leak_at_boundary() -> None:
@@ -161,14 +161,14 @@ def test_preview_redacts_before_truncation_no_pii_leak_at_boundary() -> None:
     the full pattern is matched and replaced.  Truncating first would split
     the pattern and leak a partial PII fragment.
     """
-    ***REMOVED*** Place a phone number so it starts before the 240-char boundary but ends
-    ***REMOVED*** after it.  Total length > 240 so truncation applies.  The phone is placed
-    ***REMOVED*** early enough that the replacement token "[PHONE]" is fully inside the
-    ***REMOVED*** 240-char window.
+    # Place a phone number so it starts before the 240-char boundary but ends
+    # after it.  Total length > 240 so truncation applies.  The phone is placed
+    # early enough that the replacement token "[PHONE]" is fully inside the
+    # 240-char window.
     prefix = "x" * 225
-    phone = "+79161234567"  ***REMOVED*** 12 chars, spans positions 225-236
+    phone = "+79161234567"  # 12 chars, spans positions 225-236
     suffix = "y" * 50
-    text = prefix + phone + suffix  ***REMOVED*** 287 chars
+    text = prefix + phone + suffix  # 287 chars
 
     payload = build_safe_input_payload(
         content_type="text",
@@ -176,10 +176,10 @@ def test_preview_redacts_before_truncation_no_pii_leak_at_boundary() -> None:
     )
 
     preview = payload["query_preview"]
-    ***REMOVED*** No raw phone digits may appear — the full phone was redacted first.
+    # No raw phone digits may appear — the full phone was redacted first.
     assert "+79161234567" not in preview
     assert "79161234567" not in preview
-    ***REMOVED*** The replacement token should be present (may be partially visible).
+    # The replacement token should be present (may be partially visible).
     assert "[PHONE]" in preview
-    ***REMOVED*** Preview is still bounded.
+    # Preview is still bounded.
     assert len(preview) <= 240 + len("... [TRUNCATED]")

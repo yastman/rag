@@ -1,7 +1,7 @@
-***REMOVED*** syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-***REMOVED*** RAG API — uv sync pattern (2026 best practices)
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
+# RAG API — uv sync pattern (2026 best practices)
 
-***REMOVED*** ====== BUILD STAGE ======
+# ====== BUILD STAGE ======
 FROM ghcr.io/astral-sh/uv:0.9-python3.13-bookworm-slim@sha256:531f855bda2c73cd6ef67d56b733b357cea384185b3022bd09f05e002cd144ca AS builder
 
 WORKDIR /app
@@ -10,13 +10,13 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 
-***REMOVED*** Deps layer (cached separately from code)
+# Deps layer (cached separately from code)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-dev --extra voice --no-install-project
 
-***REMOVED*** Code layer
+# Code layer
 COPY pyproject.toml uv.lock ./
 COPY src/ src/
 COPY telegram_bot/ telegram_bot/
@@ -24,7 +24,7 @@ COPY telegram_bot/ telegram_bot/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra voice
 
-***REMOVED*** ====== RUNTIME STAGE ======
+# ====== RUNTIME STAGE ======
 FROM python:3.13-slim-bookworm@sha256:e4fa1f978c539608a10cdf74700ac32a3f719dfc6e8b6b6001da82deb36302a2 AS runtime
 
 WORKDIR /app

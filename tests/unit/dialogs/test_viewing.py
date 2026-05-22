@@ -10,13 +10,13 @@ from telegram_bot.dialogs.states import ViewingSG
 
 def test_viewing_sg_has_date_state_only():
     assert hasattr(ViewingSG, "date")
-    ***REMOVED*** phone/summary removed — phone_collector handles phone collection
+    # phone/summary removed — phone_collector handles phone collection
     assert not hasattr(ViewingSG, "phone")
     assert not hasattr(ViewingSG, "summary")
     assert not hasattr(ViewingSG, "objects")
 
 
-***REMOVED*** --- Date options ---
+# --- Date options ---
 
 
 @pytest.mark.asyncio
@@ -34,7 +34,7 @@ async def test_get_date_options_returns_5_items():
     assert "phone" in keys
 
 
-***REMOVED*** --- Due date calculation ---
+# --- Due date calculation ---
 
 
 def test_compute_due_date_nearest():
@@ -57,7 +57,7 @@ def test_compute_due_date_unknown_defaults_7_days():
     assert abs(due - now - 7 * 86400) < 5
 
 
-***REMOVED*** --- Dialog structure ---
+# --- Dialog structure ---
 
 
 def test_viewing_dialog_exists():
@@ -77,7 +77,7 @@ def test_viewing_dialog_has_one_window():
     assert len(windows) == 1
 
 
-***REMOVED*** --- Date handler → phone_collector ---
+# --- Date handler → phone_collector ---
 
 
 @pytest.mark.asyncio
@@ -103,14 +103,14 @@ async def test_on_date_selected_closes_dialog_and_starts_phone_collector():
     ) as mock_start:
         await on_date_selected(callback, SimpleNamespace(), manager, "next_week")
 
-    ***REMOVED*** Dialog should be closed
+    # Dialog should be closed
     assert manager.show_mode == ShowMode.NO_UPDATE
     manager.done.assert_awaited_once()
 
-    ***REMOVED*** date_range saved to FSM state
+    # date_range saved to FSM state
     state.update_data.assert_awaited_once_with(date_range="next_week")
 
-    ***REMOVED*** phone_collector started with custom prompt
+    # phone_collector started with custom prompt
     mock_start.assert_awaited_once()
     call_kwargs = mock_start.await_args
     assert call_kwargs.args == (callback, state)
@@ -152,7 +152,7 @@ async def test_on_date_selected_no_state_logs_warning():
     callback.answer = AsyncMock()
 
     manager = MagicMock()
-    manager.middleware_data = {}  ***REMOVED*** no "state"
+    manager.middleware_data = {}  # no "state"
     manager.done = AsyncMock()
 
     with patch(
@@ -160,11 +160,11 @@ async def test_on_date_selected_no_state_logs_warning():
     ) as mock_start:
         await on_date_selected(callback, SimpleNamespace(), manager, "nearest")
 
-    ***REMOVED*** phone_collector should NOT be started
+    # phone_collector should NOT be started
     mock_start.assert_not_awaited()
 
 
-***REMOVED*** --- Cancel → HandoffSG ---
+# --- Cancel → HandoffSG ---
 
 
 @pytest.mark.asyncio

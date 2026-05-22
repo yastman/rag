@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """A/B test for Qdrant Binary Quantization with precision@k metric.
 
 Measures:
@@ -55,7 +55,7 @@ async def run_ab_test(
         collection_name=config.qdrant_collection,
     )
 
-    ***REMOVED*** Load ground truth if available
+    # Load ground truth if available
     ground_truth = {}
     if ground_truth_path and ground_truth_path.exists():
         with open(ground_truth_path) as f:
@@ -65,7 +65,7 @@ async def run_ab_test(
     else:
         print("No ground truth file - will measure overlap only")
 
-    ***REMOVED*** Default test queries (use ground truth keys if available)
+    # Default test queries (use ground truth keys if available)
     test_queries = (
         list(ground_truth.keys())
         if ground_truth
@@ -87,7 +87,7 @@ async def run_ab_test(
             embedding = await voyage.embed_query(query)
             relevant_ids = ground_truth.get(query, [])
 
-            ***REMOVED*** WITH quantization (default)
+            # WITH quantization (default)
             start = time.time()
             r1 = await qdrant.hybrid_search_rrf(
                 dense_vector=embedding,
@@ -97,7 +97,7 @@ async def run_ab_test(
             latency_with = time.time() - start
             ids_with = [r["id"] for r in r1]
 
-            ***REMOVED*** WITHOUT quantization (baseline)
+            # WITHOUT quantization (baseline)
             start = time.time()
             r2 = await qdrant.hybrid_search_rrf(
                 dense_vector=embedding,
@@ -107,7 +107,7 @@ async def run_ab_test(
             latency_without = time.time() - start
             ids_without = [r["id"] for r in r2]
 
-            ***REMOVED*** Calculate metrics
+            # Calculate metrics
             overlap = len(set(ids_with) & set(ids_without)) / k if k > 0 else 0
 
             results["with_quant"].append(
@@ -131,7 +131,7 @@ async def run_ab_test(
                 }
             )
 
-    ***REMOVED*** Calculate aggregated metrics
+    # Calculate aggregated metrics
     n = len(results["with_quant"])
 
     avg_latency_with = sum(r["latency"] for r in results["with_quant"]) / n
@@ -146,7 +146,7 @@ async def run_ab_test(
     avg_recall_with = sum(r["recall"] for r in results["with_quant"]) / n
     avg_recall_without = sum(r["recall"] for r in results["without_quant"]) / n
 
-    ***REMOVED*** Print results
+    # Print results
     print(f"\n{'=' * 60}")
     print(f"Quantization A/B Test Results (k={k}, runs={num_runs})")
     print(f"{'=' * 60}")
@@ -177,7 +177,7 @@ async def run_ab_test(
 
     print(f"\n{'=' * 60}")
 
-    ***REMOVED*** Thresholds check
+    # Thresholds check
     print("\n  PASS/FAIL CRITERIA:")
     checks = [
         ("Speedup >= 2x", speedup >= 2.0),

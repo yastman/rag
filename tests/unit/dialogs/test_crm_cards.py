@@ -11,9 +11,9 @@ from telegram_bot.dialogs.crm_cards import (
 from telegram_bot.services.kommo_models import Contact, Lead, Task
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_lead_card
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_lead_card
+# ---------------------------------------------------------------------------
 
 
 class TestFormatLeadCard:
@@ -23,7 +23,7 @@ class TestFormatLeadCard:
 
     def test_contains_lead_id(self) -> None:
         text, _ = format_lead_card(self._make_lead(id=42))
-        assert "***REMOVED***42" in text
+        assert "#42" in text
 
     def test_contains_lead_name(self) -> None:
         text, _ = format_lead_card(self._make_lead(name="My Deal"))
@@ -57,9 +57,9 @@ class TestFormatLeadCard:
         assert any("7" in (cb or "") for cb in all_callbacks)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_contact_card
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_contact_card
+# ---------------------------------------------------------------------------
 
 
 class TestFormatContactCard:
@@ -69,7 +69,7 @@ class TestFormatContactCard:
 
     def test_contains_contact_id(self) -> None:
         text, _ = format_contact_card(self._make_contact(id=10))
-        assert "***REMOVED***10" in text
+        assert "#10" in text
 
     def test_full_name_shown(self) -> None:
         text, _ = format_contact_card(self._make_contact(first_name="Jane", last_name="Doe"))
@@ -93,9 +93,9 @@ class TestFormatContactCard:
         assert "Создан:" in text
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** format_task_card
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# format_task_card
+# ---------------------------------------------------------------------------
 
 
 class TestFormatTaskCard:
@@ -105,7 +105,7 @@ class TestFormatTaskCard:
 
     def test_contains_task_id(self) -> None:
         text, _ = format_task_card(self._make_task(id=100))
-        assert "***REMOVED***100" in text
+        assert "#100" in text
 
     def test_incomplete_task_shows_checkbox(self) -> None:
         text, _ = format_task_card(self._make_task(is_completed=False))
@@ -143,9 +143,9 @@ class TestFormatTaskCard:
         assert len(all_buttons) == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** build_pagination_buttons
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# build_pagination_buttons
+# ---------------------------------------------------------------------------
 
 
 class TestBuildPaginationButtons:

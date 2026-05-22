@@ -1,4 +1,4 @@
-"""Contract: live E2E cache test must FAIL on missing transitions, not skip (***REMOVED***1630).
+"""Contract: live E2E cache test must FAIL on missing transitions, not skip (#1630).
 
 Once ``_require_live_stack()`` confirms the RAG API and Redis responded, the
 remainder of the test owns post-query assertions. Skipping when no
@@ -49,7 +49,7 @@ def test_e2e_cache_regression_target_file_exists() -> None:
 
 
 def test_cache_test_does_not_skip_after_queries_ran() -> None:
-    """No ``pytest.skip()`` is allowed after the cache queries have executed (***REMOVED***1630)."""
+    """No ``pytest.skip()`` is allowed after the cache queries have executed (#1630)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     func = _function(tree, "test_cache_miss_then_hit_on_repeated_query")
     skip_calls = [
@@ -66,7 +66,7 @@ def test_cache_test_does_not_skip_after_queries_ran() -> None:
 
 
 def test_cache_test_asserts_miss_and_hit_observed() -> None:
-    """Test must assert both ``hits`` and ``misses`` are positive (***REMOVED***1630)."""
+    """Test must assert both ``hits`` and ``misses`` are positive (#1630)."""
     tree = ast.parse(TARGET.read_text(encoding="utf-8"))
     func = _function(tree, "test_cache_miss_then_hit_on_repeated_query")
 

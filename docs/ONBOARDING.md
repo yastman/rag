@@ -1,10 +1,10 @@
-***REMOVED*** Developer Onboarding
+# Developer Onboarding
 
 The single new-contributor guide for the RAG Fresh project. Follow it top to bottom and you will have a working local environment, understand the pipeline, and know where to look next.
 
 ---
 
-***REMOVED******REMOVED*** Prerequisites
+## Prerequisites
 
 - [ ] **Python 3.12** (recommended) or 3.11+
 - [ ] **[uv](https://docs.astral.sh/uv/)** package manager installed
@@ -16,7 +16,7 @@ The single new-contributor guide for the RAG Fresh project. Follow it top to bot
 
 ---
 
-***REMOVED******REMOVED*** Repository Setup
+## Repository Setup
 
 - [ ] Clone and install dependencies:
 
@@ -28,7 +28,7 @@ uv sync
 
 ---
 
-***REMOVED******REMOVED*** Environment Configuration
+## Environment Configuration
 
 - [ ] Copy the environment template and fill in your keys:
 
@@ -48,7 +48,7 @@ At minimum set:
 
 ---
 
-***REMOVED******REMOVED*** Start Services
+## Start Services
 
 - [ ] Start core services and confirm health:
 
@@ -61,7 +61,7 @@ For the full service map, profile stacks, ports, and env requirements see [DOCKE
 
 ---
 
-***REMOVED******REMOVED*** Validate
+## Validate
 
 - [ ] Start the bot:
 
@@ -83,7 +83,7 @@ make test-unit
 
 ---
 
-***REMOVED******REMOVED*** Understand the Pipeline
+## Understand the Pipeline
 
 Work through these in order:
 
@@ -94,7 +94,7 @@ Work through these in order:
 
 ---
 
-***REMOVED******REMOVED*** Key Code Patterns
+## Key Code Patterns
 
 - **State management** -- use `TypedDict` for graph state, not Pydantic.
 - **Dependency injection** -- use `GraphContext` for service dependencies.
@@ -104,22 +104,22 @@ Work through these in order:
 
 ---
 
-***REMOVED******REMOVED*** Common Tasks
+## Common Tasks
 
-***REMOVED******REMOVED******REMOVED*** Run specific tests
+### Run specific tests
 
 ```bash
 uv run pytest tests/unit/telegram_bot/ -v -k "test_name"
 ```
 
-***REMOVED******REMOVED******REMOVED*** Add a new dependency
+### Add a new dependency
 
 ```bash
 uv add package_name
-***REMOVED*** Then update docs/engineering/sdk-registry.md
+# Then update docs/engineering/sdk-registry.md
 ```
 
-***REMOVED******REMOVED******REMOVED*** Run ingestion
+### Run ingestion
 
 ```bash
 make ingest-unified-preflight
@@ -129,11 +129,11 @@ make ingest-unified
 
 See [INGESTION.md](INGESTION.md) for the full ingestion workflow.
 
-***REMOVED******REMOVED******REMOVED*** Check Langfuse traces
+### Check Langfuse traces
 
 Local Langfuse runs at `http://localhost:3001` (see [DOCKER.md](../DOCKER.md) for ports and profiles).
 
-***REMOVED******REMOVED******REMOVED*** Voice agent (optional)
+### Voice agent (optional)
 
 ```bash
 make docker-voice-up
@@ -143,7 +143,7 @@ Requires additional env vars: `ELEVENLABS_API_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_
 
 ---
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
@@ -158,7 +158,7 @@ For deeper operational investigations see [runbooks/README.md](runbooks/README.m
 
 ---
 
-***REMOVED******REMOVED*** Next Steps
+## Next Steps
 
 1. Read [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md) for the full day-to-day workflow.
 2. Read [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for development conventions.

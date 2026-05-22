@@ -1,4 +1,4 @@
-***REMOVED*** tests/smoke/test_smoke_quantization.py
+# tests/smoke/test_smoke_quantization.py
 """Smoke tests for Qdrant quantization A/B testing."""
 
 import os
@@ -24,7 +24,7 @@ async def voyage_service():
         pytest.skip("VOYAGE_API_KEY not set")
     try:
         from telegram_bot.services.voyage import VoyageService
-    except Exception as exc:  ***REMOVED*** pragma: no cover - depends on optional third-party packages
+    except Exception as exc:  # pragma: no cover - depends on optional third-party packages
         pytest.skip(f"Voyage stack unavailable in this environment: {exc}")
 
     return VoyageService(api_key=api_key)
@@ -91,17 +91,17 @@ class TestSmokeQuantization:
             "Quantization latency comparison is timing-flaky on shared CI runners "
             "and produced no actionable signal under xfail(strict=False). "
             "Re-enable as a strict benchmark with a baseline + tolerance once a "
-            "dedicated benchmark host is available — see ***REMOVED***1601 follow-up."
+            "dedicated benchmark host is available — see #1601 follow-up."
         )
     )
     async def test_quantization_latency_comparison(self, voyage_service, qdrant_service):
         """Measure latency with/without quantization (5 runs each, compare p95)."""
         embedding = await voyage_service.embed_query("апартаменты с бассейном")
 
-        ***REMOVED*** Warmup
+        # Warmup
         await qdrant_service.hybrid_search_rrf(dense_vector=embedding, top_k=3)
 
-        ***REMOVED*** Measure with quantization
+        # Measure with quantization
         times_with = []
         for _ in range(5):
             start = time.time()
@@ -110,7 +110,7 @@ class TestSmokeQuantization:
             )
             times_with.append((time.time() - start) * 1000)
 
-        ***REMOVED*** Measure without quantization
+        # Measure without quantization
         times_without = []
         for _ in range(5):
             start = time.time()
@@ -122,10 +122,10 @@ class TestSmokeQuantization:
         p95_with = np.percentile(times_with, 95)
         p95_without = np.percentile(times_without, 95)
 
-        ***REMOVED*** Log results (informational)
+        # Log results (informational)
         print(f"\nQuantization p95: {p95_with:.0f}ms (with) vs {p95_without:.0f}ms (without)")
 
-        ***REMOVED*** Quantization should not be significantly slower (allow 10x margin for CI/dev)
+        # Quantization should not be significantly slower (allow 10x margin for CI/dev)
         assert p95_with <= p95_without * 10, (
             f"Quantization too slow: {p95_with:.0f}ms vs {p95_without:.0f}ms"
         )
