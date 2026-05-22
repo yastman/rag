@@ -5,7 +5,7 @@
 #
 # These services declare the `vps-noncore` profile in compose.vps.yml and are
 # stopped/removed on the minimal-runtime VPS. The list is sourced by:
-#   - scripts/test_release_health_vps.sh        (release smoke)
+#   - scripts/probe/release_health_vps.sh        (release smoke)
 #   - scripts/vps_cleanup_removed_services.sh   (cleanup, dry-run + apply)
 #
 # This file is meant to be `source`d, not executed. Do not add a shebang or
