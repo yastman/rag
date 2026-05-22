@@ -1,8 +1,12 @@
 # Pipeline Overview
 
+> This doc covers operational runtime flows (ingestion, query, voice); see [Client Pipeline](CLIENT_PIPELINE.md) for the dual-path text/voice architecture and [Pipeline Routing](PIPELINE_ROUTING.md) for voice-path StateGraph routing.
+
 Operational overview of ingestion, query, and voice flows.
 
 ## 1) Query Pipeline (Telegram Bot / API)
+
+> **Note:** The Telegram bot text path now uses the SDK-native `create_agent` (in `telegram_bot/agents/agent.py`) rather than the StateGraph described below. The StateGraph routing here documents the **voice path** only. See [Client Pipeline](CLIENT_PIPELINE.md) for the full dual-path explanation.
 
 `telegram_bot/graph/graph.py` builds a LangGraph state machine.
 

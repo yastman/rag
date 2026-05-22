@@ -1,27 +1,44 @@
 # Client Pipeline: Dual-Path Architecture
 
-The Telegram bot uses a **dual-path architecture** to route queries efficiently based on role and query complexity.
+> This doc covers the client-facing pipeline paths (text and voice); see [Pipeline Overview](PIPELINE_OVERVIEW.md) for ingestion/operational flows and [Pipeline Routing](PIPELINE_ROUTING.md) for voice-path StateGraph routing details.
+
+The Telegram bot uses a **dual-path architecture** with fundamentally different orchestration for text and voice inputs.
 
 ## Architecture Overview
 
+### Text Path vs Voice Path
+
+The two input modalities use different orchestration strategies:
+
+| Path | Orchestration | File | Entry Point | Status |
+|------|--------------|------|-------------|--------|
+| **Text** | `langchain.agents.create_agent` (SDK-native) | `telegram_bot/agents/agent.py` | `create_bot_agent()` | Production |
+| **Voice** | Raw `StateGraph(RAGState, ...)` | `telegram_bot/graph/graph.py` | `build_graph()` | Pending migration to `create_agent` (see [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) and [#1535](https://github.com/yastman/rag/issues/1535)) |
+
+The text path is fully SDK-native: it delegates routing, tool selection, and response generation to the LangChain agent SDK. The voice path still uses a hand-built LangGraph `StateGraph` with explicit nodes and conditional edges.
+
+### Text Path Sub-Routing
+
+Within the text path, there is an additional role-based sub-routing:
+
 ```
-User Query
-    │
-    ▼
+User Query (text)
+    |
+    v
 PropertyBot.handle_query()
-    │
-    ├─── [Client role + fast query] ──→ Client Direct Pipeline
-    │                                          │
-    │                                    Deterministic flow
-    │                                    (no agent loop)
-    │                                          │
-    │                                    rag_pipeline() → generate_response()
-    │                                          │
-    └─── [Manager role OR complex query] ──→ SDK Agent Pipeline
-                                               │
+    |
+    +--- [Client role + fast query] --> Client Direct Pipeline
+    |                                          |
+    |                                    Deterministic flow
+    |                                    (no agent loop)
+    |                                          |
+    |                                    rag_pipeline() -> generate_response()
+    |
+    +--- [Manager role OR complex query] --> SDK Agent Pipeline
+                                               |
                                          Full LangGraph agent
-                                               │
-                                    create_bot_agent() → tools
+                                               |
+                                    create_bot_agent() -> tools
 ```
 
 ## Path 1: Client Direct Pipeline
@@ -174,3 +191,13 @@ logger.info("SDK agent completed", extra={"tool_calls": ["rag_search", "crm_crea
 Fallback to the SDK agent path is built into `PropertyBot._handle_query()`: if
 the client direct pipeline raises, the bot logs the failure and calls the
 supervisor path. There is no separate runtime flag for this fallback.
+
+## Migration Status
+
+The voice path (`telegram_bot/graph/graph.py`) currently uses a raw LangGraph
+`StateGraph` with hand-wired nodes and conditional edges. This is planned for
+migration to the SDK-native `create_agent` pattern used by the text path.
+
+- **Migration plan:** [ADR-0010](adr/0010-voice-path-create-agent-migration-plan.md) describes the phased approach for moving the voice-path StateGraph to `create_agent`.
+- **Tracking issue:** [#1535](https://github.com/yastman/rag/issues/1535) tracks the voice-path migration work.
+- **SDK-native audit:** [#1538](https://github.com/yastman/rag/issues/1538) tracks the broader audit ensuring all paths use SDK-native orchestration.
