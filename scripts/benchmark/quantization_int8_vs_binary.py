@@ -13,9 +13,9 @@ Measures:
 Tests different oversampling factors (2.0, 3.0, 4.0) to find optimal settings.
 
 Usage:
-    python scripts/test_int8_vs_binary.py
-    python scripts/test_int8_vs_binary.py --base contextual_bulgaria_voyage
-    python scripts/test_int8_vs_binary.py --k 10 --runs 3
+    python scripts/benchmark/quantization_int8_vs_binary.py
+    python scripts/benchmark/quantization_int8_vs_binary.py --base contextual_bulgaria_voyage
+    python scripts/benchmark/quantization_int8_vs_binary.py --k 10 --runs 3
 """
 
 import argparse
