@@ -52,6 +52,8 @@ PYTEST_REQUIRES_EXTRAS_IGNORE := $(addprefix --ignore=, \
 	tests/unit/test_document_parser.py \
 	tests/unit/test_evaluator.py \
 	tests/unit/evaluation/test_ragas_evaluation.py \
+	tests/unit/api \
+	tests/unit/mini_app \
 	tests/unit/voice/test_sip_setup.py \
 	tests/unit/voice/test_voice_agent.py \
 	tests/unit/ingestion/test_cocoindex_init.py \
