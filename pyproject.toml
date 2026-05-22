@@ -107,6 +107,11 @@ ingest = [
 ]
 
 # Evaluation tools (RAGAS, dataset generation)
+# SECURITY NOTE: ragas is eval-only, not installed in production containers
+# (make install, Dockerfile.ingestion). CVE-2026-6587 (SSRF, low) is in an
+# unused multimodal module. diskcache CVE-2025-69872 (pickle, medium) is a
+# ragas transitive dep; neither is exploitable in the current configuration.
+# Monitoring for upstream patches. See docs/security/no-patch-dependency-alerts.md.
 eval = [
     "ragas>=0.4.3",
     "datasets>=3.0.0",
@@ -455,7 +460,7 @@ omit = [
     "src/evaluation/run_ab_test.py",
     "src/evaluation/smoke_test.py",
     "src/evaluation/search_engines_rerank.py",
-    "src/evaluation/evaluate_with_ragas.py",
+    "src/evaluation/ragas_evaluation.py",
     "src/evaluation/langfuse_integration.py",
     # One-off setup scripts
     "telegram_bot/setup_qdrant_indexes.py",
