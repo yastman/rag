@@ -32,6 +32,12 @@ from aiogram.types import (
 from aiogram.utils.chat_action import ChatActionSender
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from langgraph.errors import GraphRecursionError
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_none,
+)
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 
@@ -522,6 +528,16 @@ def _is_checkpointer_runtime_error(exc: Exception) -> bool:
         if "langgraph" in filename and "checkpoint" in filename:
             return True
     return False
+
+
+def _retry_on_checkpointer_runtime_error(exc: BaseException) -> bool:
+    """Tenacity retry predicate: only retry checkpointer runtime errors (#1233).
+
+    Wrapper around ``_is_checkpointer_runtime_error`` with the
+    ``retry_if_exception(predicate)`` signature: predicate receives a
+    ``BaseException`` and must return ``True`` to retry.
+    """
+    return isinstance(exc, Exception) and _is_checkpointer_runtime_error(exc)
 
 
 def _extract_stream_chunk_text(message_chunk: Any) -> str:
@@ -3495,38 +3511,48 @@ class PropertyBot:
 
             return accumulated, latest_state or {"messages": stream_messages}
 
-        try:
+        from .integrations.memory import create_fallback_checkpointer
+
+        if role in {"manager", "admin"}:
+            # Manager toolsets include write-side effects (CRM/nurturing).
+            # Retrying the full agent run can duplicate external actions —
+            # do a single attempt and propagate any error unchanged.
             return await _run_once(agent)
-        except Exception as exc:
-            if not _is_checkpointer_runtime_error(exc):
-                raise
-            if role in {"manager", "admin"}:
-                # Manager toolsets include write-side effects (CRM/nurturing).
-                # Retrying the full agent run can duplicate external actions.
-                logger.exception(
-                    "Supervisor stream failed with checkpointer runtime error; "
-                    "skip retry for role=%s to avoid duplicate side effects",
-                    role,
-                )
-                raise
+
+        # Tenacity AsyncRetrying replaces ~20 lines of manual try/except (#1233).
+        # Verified via Context7 (/jd/tenacity): before_sleep is the documented
+        # async pattern for "do something between retries" — we use it to swap
+        # to a MemorySaver-backed agent so the second attempt cannot trip the
+        # same checkpointer runtime error.
+        # Content was rephrased for compliance with licensing restrictions.
+        agent_state: dict[str, Any] = {"current": agent}
+
+        def _swap_to_memory_saver_fallback(retry_state: Any) -> None:
             logger.exception(
                 "Supervisor stream failed due to checkpointer runtime error; "
                 "retrying once with MemorySaver"
             )
+            self._agent_checkpointer = create_fallback_checkpointer()
+            agent_state["current"] = create_bot_agent(
+                model=self.config.supervisor_model,
+                tools=tools,
+                checkpointer=self._agent_checkpointer,
+                language=self.config.domain_language,
+                base_url=self.config.llm_base_url,
+                api_key=self.config.llm_api_key,
+                max_tokens=self.config.supervisor_max_tokens,
+            )
 
-        from .integrations.memory import create_fallback_checkpointer
-
-        self._agent_checkpointer = create_fallback_checkpointer()
-        fallback_agent = create_bot_agent(
-            model=self.config.supervisor_model,
-            tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=self.config.domain_language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            max_tokens=self.config.supervisor_max_tokens,
-        )
-        return await _run_once(fallback_agent)
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(2),
+            wait=wait_none(),
+            retry=retry_if_exception(_retry_on_checkpointer_runtime_error),
+            before_sleep=_swap_to_memory_saver_fallback,
+            reraise=True,
+        ):
+            with attempt:
+                return await _run_once(agent_state["current"])
+        raise AssertionError("AsyncRetrying exhausted without raising — unreachable")
 
     async def _ainvoke_supervisor_with_recovery(
         self,
@@ -3578,40 +3604,47 @@ class PropertyBot:
                 except Exception:
                     logger.warning("Agent streaming failed; falling back to ainvoke", exc_info=True)
 
-        try:
-            result: dict[str, Any] = await agent.ainvoke(payload, config=config)
+        from .integrations.memory import create_fallback_checkpointer
+
+        async def _run_once(current_agent: Any) -> dict[str, Any]:
+            result: dict[str, Any] = await current_agent.ainvoke(payload, config=config)
             return result
-        except Exception as exc:
-            if not _is_checkpointer_runtime_error(exc):
-                raise
-            if role in {"manager", "admin"}:
-                # Manager toolsets include write-side effects (CRM/nurturing).
-                # Retrying the full agent run can duplicate external actions.
-                logger.exception(
-                    "Supervisor ainvoke failed with checkpointer runtime error; "
-                    "skip retry for role=%s to avoid duplicate side effects",
-                    role,
-                )
-                raise
+
+        if role in {"manager", "admin"}:
+            # See _astream_supervisor_with_recovery: write-side roles must
+            # never retry to avoid duplicating CRM/nurturing side effects.
+            return await _run_once(agent)
+
+        # Tenacity replaces the manual try/except + fallback-agent boilerplate
+        # (#1233). Same shape as _astream_supervisor_with_recovery.
+        agent_state: dict[str, Any] = {"current": agent}
+
+        def _swap_to_memory_saver_fallback(retry_state: Any) -> None:
             logger.exception(
                 "Supervisor ainvoke failed due to checkpointer runtime error; "
                 "retrying once with MemorySaver"
             )
+            self._agent_checkpointer = create_fallback_checkpointer()
+            agent_state["current"] = create_bot_agent(
+                model=self.config.supervisor_model,
+                tools=tools,
+                checkpointer=self._agent_checkpointer,
+                language=self.config.domain_language,
+                base_url=self.config.llm_base_url,
+                api_key=self.config.llm_api_key,
+                max_tokens=self.config.supervisor_max_tokens,
+            )
 
-        from .integrations.memory import create_fallback_checkpointer
-
-        self._agent_checkpointer = create_fallback_checkpointer()
-        fallback_agent = create_bot_agent(
-            model=self.config.supervisor_model,
-            tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=self.config.domain_language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            max_tokens=self.config.supervisor_max_tokens,
-        )
-        fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
-        return fallback_result
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(2),
+            wait=wait_none(),
+            retry=retry_if_exception(_retry_on_checkpointer_runtime_error),
+            before_sleep=_swap_to_memory_saver_fallback,
+            reraise=True,
+        ):
+            with attempt:
+                return await _run_once(agent_state["current"])
+        raise AssertionError("AsyncRetrying exhausted without raising — unreachable")
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
