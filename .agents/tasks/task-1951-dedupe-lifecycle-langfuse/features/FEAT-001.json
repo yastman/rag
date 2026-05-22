@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "refactor",
   "description": "Complete the lifecycle trace helper deduplication: fix contract test failures, fix unit test patch targets, and reduce both family modules to <= 40 LOC.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1: Fix the @observe decorator requirement. The contract tests (tests/contract/test_trace_families_contract.py and tests/contract/test_span_coverage_contract.py) scan production code AST for @observe(name='voice-session', capture_input=False, capture_output=False). The old code had this on update_voice_trace. After refactoring, the span is created via lf.start_as_current_observation() in update_lifecycle_trace instead. The fix is to add @observe(name='voice-session', capture_input=False, capture_output=False) decorator back onto update_voice_trace in src/voice/observability.py. This decorator is a no-op identity wrapper when Langfuse is unavailable but satisfies the AST scanner.",
     "Step 2: Fix failing unit tests by updating patch targets. Three tests fail because they patch 'src.voice.observability.get_client' and 'src.voice.observability.propagate_attributes' which no longer exist. The actual function called is get_langfuse_client() and propagate_attributes from src.observability. Update: (a) tests/unit/voice/test_voice_observability.py::test_update_voice_trace_sets_trace_context - patch 'src.observability.get_langfuse_client' and 'src.observability.propagate_attributes'. (b) tests/unit/ingestion/test_observability.py::test_update_ingestion_trace_uses_observation_updates - patch 'src.observability.get_langfuse_client' and 'src.observability.propagate_attributes'. (c) tests/unit/observability/test_trace_contracts.py::TestVoiceLifecycleTraceContract::test_update_voice_trace_writes_answered_status - patch 'src.observability.get_langfuse_client' and 'src.observability.propagate_attributes'.",
@@ -27,5 +27,5 @@
     "wc -l src/voice/observability.py src/ingestion/unified/observability.py"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "All tests pass. Pre-existing mini_app test failures (fastapi missing) are unrelated. The from __future__ import annotations was removed from voice module to save a line while keeping ruff happy with import sorting. The observe import is used as @observe decorator on update_voice_trace. propagate_attributes was removed from both family modules since it is not used locally or re-exported to any consumer."
 }
