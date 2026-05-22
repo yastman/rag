@@ -35,6 +35,10 @@ from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 
+from . import (
+    _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
+    _bot_state_helpers,  # #1265 Slice 1 PR-1: extracted state-shape helpers
+)
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .constants import (
@@ -341,31 +345,21 @@ async def _stream_agent_to_draft(
 
 
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Read cached apartment payloads from legacy or dialog-owned state."""
-    raw_results = state_data.get("apartment_results")
-    if isinstance(raw_results, list):
-        return [item for item in raw_results if isinstance(item, dict)]
+    """Read cached apartment payloads from legacy or dialog-owned state.
 
-    runtime = state_data.get("catalog_runtime")
-    if isinstance(runtime, dict):
-        runtime_results = runtime.get("results")
-        if isinstance(runtime_results, list):
-            return [item for item in runtime_results if isinstance(item, dict)]
-
-    return []
+    Implementation lives in :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1
+    PR-1). This wrapper preserves the historical ``telegram_bot.bot`` import
+    surface for existing callers and tests.
+    """
+    return _bot_state_helpers._state_apartment_results(state_data)
 
 
 def _state_control_message_id(state_data: dict[str, Any]) -> int | None:
-    runtime = state_data.get("catalog_runtime")
-    if isinstance(runtime, dict):
-        control_message_id = runtime.get("control_message_id")
-        if isinstance(control_message_id, int):
-            return control_message_id
+    """Locate the catalog control message id (legacy or dialog-owned shape).
 
-    footer_msg_id = state_data.get("apartment_footer_msg_id")
-    if isinstance(footer_msg_id, int):
-        return footer_msg_id
-    return None
+    Re-exported from :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1 PR-1).
+    """
+    return _bot_state_helpers._state_control_message_id(state_data)
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
@@ -380,61 +374,19 @@ from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
-    """Extract current-turn messages from full checkpointer history (#507).
+    """Slice agent checkpointer history down to the current turn (#507).
 
-    Agent checkpointer returns full conversation history across turns.
-    For per-turn scoring we only need messages after the last HumanMessage.
+    Re-exported from :mod:`telegram_bot._bot_state_helpers` (#1265 Slice 1 PR-1).
     """
-    last_human_idx = -1
-    for i in range(len(messages) - 1, -1, -1):
-        if getattr(messages[i], "type", None) == "human":
-            last_human_idx = i
-            break
-    if last_human_idx < 0:
-        return messages
-    return messages[last_human_idx:]
+    return _bot_state_helpers._extract_current_turn(messages)
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
-    """Build shared metadata dict for Langfuse trace (text + voice handlers)."""
-    return {
-        "input_type": result.get("input_type", "text"),
-        "query_type": result.get("query_type", ""),
-        "topic_hint": result.get("topic_hint", ""),
-        "grounding_mode": result.get("grounding_mode", ""),
-        "grade_confidence": float(result.get("grade_confidence", 0.0) or 0.0),
-        "pipeline_wall_ms": result.get("pipeline_wall_ms"),
-        "pre_agent_ms": result.get("pre_agent_ms"),
-        "e2e_latency_ms": result.get("e2e_latency_ms"),
-        "cache_hit": result.get("cache_hit", False),
-        "search_results_count": result.get("search_results_count", 0),
-        "rerank_applied": result.get("rerank_applied", False),
-        "llm_provider_model": result.get("llm_provider_model", ""),
-        "llm_ttft_ms": result.get("llm_ttft_ms", 0.0),
-        # Response length control (#129)
-        "response_style": result.get("response_style"),
-        "response_difficulty": result.get("response_difficulty"),
-        "response_style_reasoning": result.get("response_style_reasoning"),
-        "response_policy_mode": result.get("response_policy_mode"),
-        "answer_words": result.get("answer_words"),
-        "answer_to_question_ratio": result.get("answer_to_question_ratio"),
-        "sources_count": int(result.get("sources_count", 0) or 0),
-        "grounded": result.get("grounded", True),
-        "legal_answer_safe": result.get("legal_answer_safe", True),
-        "semantic_cache_safe_reuse": result.get("semantic_cache_safe_reuse", True),
-        "safe_fallback_used": result.get("safe_fallback_used", False),
-        # Voice transcription (#151)
-        "stt_duration_ms": result.get("stt_duration_ms"),
-        # Embedding resilience (#210)
-        "embedding_error": result.get("embedding_error", False),
-        "embedding_error_type": result.get("embedding_error_type"),
-        # Conversation memory (#159)
-        "memory_messages_count": len(result.get("messages", [])),
-        "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
-        # Voice post-pipeline cleanup diagnostics (#205)
-        "pipeline_cleanup_error": result.get("pipeline_cleanup_error", False),
-        "pipeline_cleanup_error_type": result.get("pipeline_cleanup_error_type"),
-    }
+    """Build shared metadata dict for Langfuse trace (text + voice handlers).
+
+    Re-exported from :mod:`telegram_bot._bot_observability` (#1265 Slice 1 PR-2).
+    """
+    return _bot_observability._build_trace_metadata(result)
 
 
 def _write_voice_error_scores(
@@ -446,17 +398,14 @@ def _write_voice_error_scores(
 ) -> None:
     """Write minimal Langfuse scores for voice traces that exit early (error paths).
 
-    Ensures all voice traces have at least input_type and error context for dashboards.
-    Uses explicit trace_id for score isolation (#435).
+    Re-exported from :mod:`telegram_bot._bot_observability` (#1265 Slice 1 PR-2).
     """
-    if not trace_id:
-        trace_id = lf.get_current_trace_id()
-    if not trace_id:
-        return
-    score(lf, trace_id, name="input_type", value="voice", data_type="CATEGORICAL")
-    score(lf, trace_id, name="voice_error_reason", value=error_reason, data_type="CATEGORICAL")
-    if voice_duration_s is not None:
-        score(lf, trace_id, name="voice_duration_s", value=float(voice_duration_s))
+    _bot_observability._write_voice_error_scores(
+        lf,
+        trace_id=trace_id,
+        voice_duration_s=voice_duration_s,
+        error_reason=error_reason,
+    )
 
 
 def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
