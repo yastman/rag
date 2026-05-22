@@ -1,61 +1,19 @@
-"""Shared phone-normalization helpers.
+"""Re-export shim for ``src.phone_utils`` (#1948 layering fix).
 
-Single source of truth for phone validation/normalization. Used by:
-- ``telegram_bot/keyboards/phone_keyboard.py`` (bot reply-keyboard flow)
-- ``mini_app/phone.py`` (Mini App ``/api/phone`` Pydantic validator)
+The canonical home of the shared phone-normalization helpers is now
+``src/phone_utils.py`` so ``mini_app/`` and ``src/api/`` can import them
+without taking a dependency on ``telegram_bot.*`` (see #1948 layering
+contract).
 
-Closes the duplication called out in #1614 — Mini App previously redeclared a
-``_PHONE_RE = ^\\+?\\d{7,15}$`` regex that accepted impossible numbers like
-``+11111111111`` and never normalized to E.164. This module routes both
-consumers through ``phonenumbers.is_valid_number`` and E.164 formatting.
-
-This module is intentionally UI-free (no aiogram / no FastAPI) so it can be
-imported from either context without side-effects.
+This shim keeps existing bot internal callers
+(``telegram_bot/keyboards/phone_keyboard.py``) working unchanged; new code
+should import from ``src.phone_utils`` directly. The shim has no behavior
+of its own and cannot drift from the canonical implementation.
 """
 
 from __future__ import annotations
 
-import re
-
-import phonenumbers
+from src.phone_utils import normalize_phone, validate_phone
 
 
-_SEPARATORS_RE = re.compile(r"[\s\-\(\)]")
-
-
-def _strip_separators(raw: str) -> str:
-    """Remove whitespace, dashes, and parentheses commonly typed by users."""
-    return _SEPARATORS_RE.sub("", raw)
-
-
-def normalize_phone(raw: str, default_region: str = "BG") -> str | None:
-    """Parse and normalize ``raw`` to E.164 format.
-
-    Tries the supplied ``default_region`` first (Bulgaria, the primary user
-    base) and then attempts a region-less parse (which works when the input
-    is already in international ``+CC...`` form).
-
-    Returns
-    -------
-    str | None
-        E.164 string (e.g. ``"+359888123456"``) on a valid number, ``None``
-        otherwise.
-    """
-    cleaned = _strip_separators(raw)
-    for region in (default_region, None):
-        try:
-            parsed = phonenumbers.parse(cleaned, region)
-        except phonenumbers.NumberParseException:
-            continue
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-    return None
-
-
-def validate_phone(text: str, default_region: str = "BG") -> bool:
-    """Return ``True`` iff ``text`` parses to a valid phone number.
-
-    Backed by :func:`normalize_phone`, so impossible-but-digit-count-valid
-    inputs like ``+11111111111`` correctly return ``False``.
-    """
-    return normalize_phone(text, default_region=default_region) is not None
+__all__ = ["normalize_phone", "validate_phone"]
