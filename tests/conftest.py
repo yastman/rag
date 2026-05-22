@@ -10,6 +10,12 @@ import pytest
 from dotenv import load_dotenv
 
 
+# Register shared URL/collection fixtures (issue #2066). Smoke and integration
+# tiers consume `redis_url`, `qdrant_url`, `qdrant_api_key`,
+# `qdrant_collection`, `bge_m3_url`, `openai_api_key` from a single source.
+pytest_plugins = ["tests.fixtures.config"]
+
+
 # Set testing flag to prevent heavy imports in src/__init__.py
 os.environ["RAG_TESTING"] = "true"
 
