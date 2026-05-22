@@ -99,6 +99,26 @@ Worktrees show up under `requires-human` whenever they are detached, in
 `/tmp`, or dirty. None of those are auto-removed; the operator decides
 whether to commit, stash, or `git worktree remove --force` after backup.
 
+### Orphan Docker volumes from removed worktrees
+
+`git worktree remove` does not tear down Docker Compose stacks. Volumes
+created from inside a worktree (HuggingFace caches, Postgres/Qdrant/Redis
+data) survive the worktree deletion and accumulate disk usage. See
+[#1546](https://github.com/yastman/rag/issues/1546).
+
+Run a dry-run report on this host whenever you remove a worktree, or as
+part of weekly hygiene:
+
+```bash
+make docker-clean-orphan-worktree-volumes          # report only (safe)
+make docker-clean-orphan-worktree-volumes-apply    # delete orphan volumes
+```
+
+The script preserves active worktrees and the protected project prefixes
+(`dev`, `rag`, `rag-fresh`, `vps`). See
+[`scripts/cleanup_orphaned_worktree_volumes.sh`](../../scripts/cleanup_orphaned_worktree_volumes.sh)
+and [`DOCKER.md`](../../DOCKER.md#worktree-volume-cleanup).
+
 ## 2. PR queue triage
 
 ```bash
