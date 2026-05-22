@@ -68,8 +68,16 @@ def _make_message(text="test query"):
 class TestQuerySupervisorContentFilter:
     """Tests for the pre-agent content filter guard in _handle_query_supervisor."""
 
-    async def test_injection_hard_mode_blocks(self):
-        """Hard mode: detected injection sends blocked response and returns early."""
+    async def test_injection_hard_mode_blocks_in_supervisor(self):
+        """Hard mode: detected injection sends blocked response and returns early.
+
+        Renamed from ``test_injection_hard_mode_blocks`` (#1996) so the
+        ``guard_node`` test of the same name in
+        ``tests/unit/graph/test_guard_node.py`` is no longer a colliding
+        duplicate. The supervisor variant covers the *bot-level pre-agent*
+        guard call site (``_handle_query_supervisor``); the guard_node
+        variant covers the *graph node* directly.
+        """
         config = _make_config(content_filter_enabled=True, guard_mode="hard")
         bot = _create_bot(config)
         message = _make_message("DROP TABLE users;")
