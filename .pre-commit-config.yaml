@@ -156,6 +156,7 @@ repos:
     hooks:
       - id: shellcheck
         name: shellcheck
+        args: [-x]
         stages: [pre-push]
 
   # Hadolint for Dockerfile linting (Python wrapper, no Docker required)
