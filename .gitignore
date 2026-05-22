@@ -234,8 +234,12 @@ k8s/secrets/*
 !k8s/secrets/.env.example
 
 # Validation reports (generated, not committed)
+# Keep the directory + its README discoverable so operators can find the
+# index even though individual reports themselves are gitignored. Pinned by
+# tests/contract/test_public_release_hygiene_contract.py (#1565).
 !docs/reports/
 docs/reports/*
+!docs/reports/README.md
 
 
 # Baseline (legacy file-based approach)
