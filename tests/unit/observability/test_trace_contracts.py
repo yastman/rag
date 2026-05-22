@@ -478,8 +478,8 @@ class TestVoiceLifecycleTraceContract:
         with (
             pytest.MonkeyPatch().context() as mp,
         ):
-            mp.setattr("src.voice.observability.get_client", lambda: lf)
-            mp.setattr("src.voice.observability.propagate_attributes", lambda **_: nullcontext())
+            mp.setattr("src.observability.get_langfuse_client", lambda: lf)
+            mp.setattr("src.observability.propagate_attributes", lambda **_: nullcontext())
             update_voice_trace(call_id="call-123", status="answered")
 
         lf.create_trace_id.assert_called_once_with(seed="voice-call-123")
