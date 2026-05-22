@@ -6,8 +6,8 @@ import logging
 
 from pydantic import BaseModel, field_validator
 
+from src.observability import get_client, observe
 from src.phone_utils import normalize_phone
-from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)

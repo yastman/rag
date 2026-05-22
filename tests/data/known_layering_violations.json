@@ -1,10 +1,8 @@
 {
   "mini_app/api.py": [
-    "telegram_bot.observability",
     "telegram_bot.services.content_loader"
   ],
   "mini_app/phone.py": [
-    "telegram_bot.observability",
     "telegram_bot.services.kommo_client"
   ],
   "src/api/main.py": [
