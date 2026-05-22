@@ -1,6 +1,6 @@
 """Unit checks for voice-transcription E2E scenario catalog (#538)."""
 
-from scripts.e2e import test_scenarios as scenarios
+from scripts.e2e import scenarios as scenarios
 
 
 def test_voice_transcription_group_has_three_scenarios():
