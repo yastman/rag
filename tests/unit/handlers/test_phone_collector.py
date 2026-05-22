@@ -208,7 +208,7 @@ async def test_on_phone_received_creates_crm_lead():
         id=12345, first_name="Иван", last_name="Петров", username=None
     )
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {
                 "viewing": {
@@ -235,7 +235,7 @@ async def test_on_phone_received_works_without_kommo():
     message.text = "+359896759292"
     message.from_user = SimpleNamespace(id=12345, first_name="Test", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {
                 "viewing": {
@@ -264,7 +264,7 @@ async def test_on_phone_received_uses_crm_title_in_lead_name():
     message.text = "+380501234567"
     message.from_user = SimpleNamespace(id=99, first_name="Анна", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "services": {
                 "installment": {
@@ -289,7 +289,7 @@ async def test_on_phone_received_sends_personalized_success():
     message.text = "+380501234567"
     message.from_user = SimpleNamespace(id=1, first_name="X", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "services": {
                 "infotour": {
@@ -327,7 +327,7 @@ async def test_on_phone_received_none_responsible_id_does_not_break_crm():
     message.text = "+380501234567"
     message.from_user = SimpleNamespace(id=321, first_name="Иван", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {
                 "manager": {
@@ -364,7 +364,7 @@ async def test_on_phone_received_zero_responsible_id_normalized_to_none():
     message.text = "+380501234567"
     message.from_user = SimpleNamespace(id=654, first_name="Иван", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {
                 "manager": {
@@ -430,7 +430,7 @@ async def test_on_phone_received_uses_bot_config_for_pipeline_ids():
     message.text = "+380501234567"
     message.from_user = SimpleNamespace(id=99, first_name="Анна", last_name=None, username="anna")
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {
                 "viewing": {
@@ -464,7 +464,7 @@ async def test_on_phone_received_passes_phone_to_contact_create():
     message.text = "+380501234567"
     message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {"viewing": {"crm_title": "X", "phone_success": "OK"}}
         }
@@ -490,7 +490,7 @@ async def test_on_phone_received_normalizes_phone_to_e164():
     message.text = "+38 050 123-45-67"
     message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
 
-    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+    with patch("src.services.content_loader.load_services_config") as mock_cfg:
         mock_cfg.return_value = {
             "entry_points": {"viewing": {"crm_title": "X", "phone_success": "OK"}}
         }
