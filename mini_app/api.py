@@ -18,7 +18,7 @@ from mini_app.auth import validate_init_data
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
 from src.observability import get_client, observe, propagate_attributes
-from telegram_bot.services.content_loader import load_mini_app_config
+from src.services.content_loader import load_mini_app_config
 
 
 logger = logging.getLogger(__name__)
