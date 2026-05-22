@@ -23,6 +23,9 @@ resolution-markers = [
     "python_full_version < '3.12' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
 ]
 
+[options]
+prerelease-mode = "allow"
+
 [manifest]
 overrides = [{ name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.58b0" }]
 
