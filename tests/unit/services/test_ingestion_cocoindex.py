@@ -35,10 +35,9 @@ async def test_get_ingestion_status_delegates(monkeypatch) -> None:
 def test_main_without_args_exits_with_usage(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cocoindex.sys, "argv", ["ingestion_cocoindex"])
 
-    with pytest.raises(SystemExit) as exc:
-        cocoindex.main()
+    rc = cocoindex.main()
 
-    assert exc.value.code == 1
+    assert rc == 1
     output = capsys.readouterr().out
     assert "Usage:" in output
     assert "ingest-dir" in output
@@ -47,18 +46,16 @@ def test_main_without_args_exits_with_usage(monkeypatch, capsys) -> None:
 def test_main_ingest_dir_without_path_exits(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cocoindex.sys, "argv", ["ingestion_cocoindex", "ingest-dir"])
 
-    with pytest.raises(SystemExit) as exc:
-        cocoindex.main()
+    rc = cocoindex.main()
 
-    assert exc.value.code == 1
+    assert rc == 1
     assert "Directory path required" in capsys.readouterr().out
 
 
 def test_main_unknown_command_exits(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cocoindex.sys, "argv", ["ingestion_cocoindex", "bad-command"])
 
-    with pytest.raises(SystemExit) as exc:
-        cocoindex.main()
+    rc = cocoindex.main()
 
-    assert exc.value.code == 1
+    assert rc == 1
     assert "Unknown command: bad-command" in capsys.readouterr().out

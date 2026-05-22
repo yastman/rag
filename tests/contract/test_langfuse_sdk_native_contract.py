@@ -59,18 +59,21 @@ OTEL_BOOTSTRAP_ALLOWLIST: frozenset[str] = frozenset(
         "src/voice/agent.py",
         # isinstance check on the active provider during graceful
         # shutdown — imports the symbol but never constructs it.
-        "telegram_bot/observability_bootstrap.py",
+        # Lives in src/ since the observability bootstrap was unified there;
+        # telegram_bot/observability_bootstrap.py is now a thin re-export shim.
+        "src/observability_bootstrap.py",
     }
 )
 
 # Files allowed to construct ``Langfuse(...)`` directly. Frozen baseline —
 # must shrink, never grow. The production runtime singleton lives in
-# telegram_bot/observability.py; evaluation modules and CLI scripts each
-# create their own client because they run as standalone processes.
+# src/observability.py (re-exported by telegram_bot/observability.py for
+# back-compat); evaluation modules and CLI scripts each create their own
+# client because they run as standalone processes.
 LANGFUSE_CTOR_ALLOWLIST: frozenset[str] = frozenset(
     {
         # Production singleton bootstrap.
-        "telegram_bot/observability.py",
+        "src/observability.py",
         # Evaluation modules instantiate dedicated short-lived clients.
         "src/evaluation/langfuse_integration.py",
         "src/evaluation/ragas_evaluation.py",
@@ -88,6 +91,7 @@ LANGFUSE_CTOR_ALLOWLIST: frozenset[str] = frozenset(
         "scripts/setup_score_configs.py",
         "scripts/update_advisor_prompts.py",
         "scripts/validate_traces.py",
+        "scripts/validate_voice_traces.py",
     }
 )
 
@@ -258,6 +262,5 @@ def test_allowlist_entries_actually_use_pattern() -> None:
             stale.append(f"  {rel} (no Langfuse() constructor remains)")
 
     assert not stale, (
-        "Stale allowlist entries (#1648) — remove from this contract test:\n"
-        + "\n".join(stale)
+        "Stale allowlist entries (#1648) — remove from this contract test:\n" + "\n".join(stale)
     )
