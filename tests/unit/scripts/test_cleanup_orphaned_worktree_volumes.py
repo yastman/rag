@@ -79,6 +79,71 @@ def test_script_help_flag_runs_without_docker(tmp_path) -> None:
     assert "dry-run" in combined.lower(), "help output must mention dry-run"
 
 
+def test_apply_ignores_unrelated_compose_project_prefix(tmp_path) -> None:
+    """`--apply` must not delete volumes from unrelated Compose projects."""
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    removed_log = tmp_path / "removed.log"
+
+    git = fake_bin / "git"
+    git.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                "set -euo pipefail",
+                'if [[ "$*" == "worktree list --porcelain" ]]; then',
+                "  printf 'worktree /tmp/rag-fresh-wt-active\\n'",
+                "  exit 0",
+                "fi",
+                "exit 1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    git.chmod(0o755)
+
+    docker = fake_bin / "docker"
+    docker.write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env bash",
+                "set -euo pipefail",
+                'if [[ "$1 $2" == "volume ls" ]]; then',
+                "  printf 'otherproject_db\\nrag-fresh-wt-old_qdrant\\nrag-fresh-wt-active_db\\ndev_db\\n'",
+                "  exit 0",
+                "fi",
+                'if [[ "$1 $2" == "volume rm" ]]; then',
+                '  printf \'%s\\n\' "$3" >> "$REMOVED_LOG"',
+                "  exit 0",
+                "fi",
+                "exit 1",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["REMOVED_LOG"] = str(removed_log)
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT_PATH.resolve()), "--apply"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    removed = removed_log.read_text(encoding="utf-8").splitlines()
+    assert removed == ["rag-fresh-wt-old_qdrant"]
+
+
 def test_makefile_exposes_orphan_volume_cleanup_target() -> None:
     text = Path("Makefile").read_text(encoding="utf-8")
     assert "docker-clean-orphan-worktree-volumes" in text, (

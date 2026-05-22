@@ -28,7 +28,7 @@ make docker-clean-orphan-worktree-volumes
 make docker-clean-orphan-worktree-volumes-apply
 ```
 
-The script enumerates active worktrees via `git worktree list`, infers their Docker Compose project prefixes, and lists volumes whose prefix does not match any active worktree. Active worktrees and the protected prefixes (`dev`, `rag`, `rag-fresh`, `vps`) are always preserved. The default mode is dry-run; deletion requires the `-apply` target. See [`scripts/cleanup_orphaned_worktree_volumes.sh`](scripts/cleanup_orphaned_worktree_volumes.sh) and the operator runbook [`docs/engineering/repo-hygiene-runbook.md`](docs/engineering/repo-hygiene-runbook.md).
+The script enumerates active worktrees via `git worktree list`, infers their Docker Compose project prefixes, and lists `rag-fresh` worktree-like volumes whose prefix does not match any active worktree. Active worktrees, unrelated Compose project prefixes, and the protected prefixes (`dev`, `rag`, `rag-fresh`, `vps`) are always preserved. The default mode is dry-run; deletion requires the `-apply` target. See [`scripts/cleanup_orphaned_worktree_volumes.sh`](scripts/cleanup_orphaned_worktree_volumes.sh) and the operator runbook [`docs/engineering/repo-hygiene-runbook.md`](docs/engineering/repo-hygiene-runbook.md).
 
 ## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
