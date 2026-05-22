@@ -30,13 +30,13 @@ from scripts.e2e.langfuse_trace_validator import (
     validate_latest_trace,
 )
 from scripts.e2e.report_generator import ReportGenerator, TestReport, TestResult
-from scripts.e2e.telegram_client import E2ETelegramClient
-from scripts.e2e.test_scenarios import (
+from scripts.e2e.scenarios import (
     SCENARIOS,
     TestGroup,
     get_scenario_by_id,
     get_scenarios_by_group,
 )
+from scripts.e2e.telegram_client import E2ETelegramClient
 
 
 logging.basicConfig(level=logging.INFO)
