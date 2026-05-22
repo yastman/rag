@@ -77,8 +77,9 @@ Use this path for cache degradation, eviction, latency, or semantic cache misses
 
 ### Start Here
 
-- **Runbook**: [`../runbooks/REDIS_CACHE_DEGRADATION.md`](../runbooks/REDIS_CACHE_DEGRADATION.md)
-- **Cache architecture**: [`../TROUBLESHOOTING_CACHE.md`](../TROUBLESHOOTING_CACHE.md)
+- **Design & architecture**: [`../CACHE_DEGRADATION.md`](../CACHE_DEGRADATION.md) -- tiers, thresholds, degradation modes
+- **Debugging guide**: [`../TROUBLESHOOTING_CACHE.md`](../TROUBLESHOOTING_CACHE.md) -- cache misses, key inspection, monitoring
+- **Incident runbook**: [`../runbooks/REDIS_CACHE_DEGRADATION.md`](../runbooks/REDIS_CACHE_DEGRADATION.md) -- Redis service failures
 
 ### Common Investigations
 
