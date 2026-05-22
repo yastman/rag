@@ -56,8 +56,17 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 curl -fsS http://localhost:8000/health
 ```
 
-Expected: HTTP 200 with `{"status":"ok"}`.
-If this fails, treat as **service failure** (container down, OOM, or model not loaded).
+Expected: HTTP 200 with:
+```json
+{"status": "ok", "model_loaded": true, "warmed_up": true}
+```
+
+> **Note:** During cold start (up to 7 min), the endpoint returns HTTP 200 with
+> `"model_loaded": false` and `"warmed_up": false`. This means the service is
+> running but **not yet ready to serve embeddings**. Wait for `model_loaded: true`
+> before concluding the service is healthy.
+
+If this fails with a non-200 response or times out, treat as **service failure** (container down or OOM).
 
 ### 2. GPU/CPU and memory usage
 
@@ -110,7 +119,7 @@ COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env
 | Errors only in `user-base` container | Service failure (caching layer) | Restart `user-base`; bot will still function without semantic cache |
 | Bot shows "Retrying" but eventually succeeds | Transient issue | Monitor; if persistent, check BGE-M3 resource usage |
 | Bot shows "Embedding failed after retries" | Service failure or timeout | Increase `BGE_M3_TIMEOUT` or restart `bge-m3` |
-| Voyage 429 errors during ingestion | Rate limiting | Reduce `BGE_M3_CONCURRENCY` or wait; Voyage retry (6 attempts) will handle transient bursts |
+| Voyage 429 errors during ingestion | Rate limiting | Reduce ingestion batch frequency/document volume, or switch to `use_local_embeddings=True`; Voyage retry (6 attempts) will handle transient bursts |
 | Errors only after recent deployment | App bug | Check for config/code changes in embedding wrappers |
 
 ## Source Paths
@@ -216,12 +225,9 @@ The bot uses `bge_retry` (3 attempts, 0.5s initial backoff, 4s max) and retries 
 
 ### Voyage API Rate Limiting (VoyageRateLimited)
 
-1. Check current ingestion concurrency:
-   ```bash
-   grep BGE_M3_CONCURRENCY .env
-   ```
+1. Reduce the number of documents per ingestion run or increase inter-batch delay.
 
-2. Reduce batch size or concurrency if running large ingestion jobs.
+2. If running large ingestion jobs, lower the volume of documents being processed concurrently.
 
 3. The Voyage client uses tenacity with 6 retry attempts and exponential backoff. Rate-limit errors (`voyageai.error.RateLimitError`) are retried automatically. If the alert persists after retries exhaust, reduce ingestion throughput or contact Voyage AI to increase your rate limit.
 
