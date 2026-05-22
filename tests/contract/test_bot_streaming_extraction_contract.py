@@ -89,7 +89,7 @@ def test_bot_streaming_module_imports_are_clean() -> None:
 
 
 @pytest.mark.parametrize("helper", HELPERS)
-def test_helper_exposed(helper: str) -> None:
+def test_bot_streaming_helper_exposed(helper: str) -> None:
     """Each helper must be defined at module top-level."""
     tree = ast.parse(NEW_MODULE.read_text())
     names = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -110,7 +110,7 @@ def test_agent_draft_interval_constant_exposed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_new_draft_id_returns_positive_31bit_int() -> None:
+def test_bot_streaming_new_draft_id_returns_positive_31bit_int() -> None:
     """Generator must always produce a positive value within signed-int32."""
     from telegram_bot import _bot_streaming
 
@@ -264,7 +264,7 @@ async def test_stream_agent_to_draft_collects_and_finalizes() -> None:
 
 
 @pytest.mark.parametrize("helper", HELPERS)
-def test_bot_py_defines_helper_at_most_once(helper: str) -> None:
+def test_bot_py_defines_streaming_helper_at_most_once(helper: str) -> None:
     """``bot.py`` must keep at most one ``def <helper>(...)``."""
     src = BOT_PY.read_text()
     pattern = re.compile(rf"^(async\s+def|def)\s+{re.escape(helper)}\(", re.MULTILINE)
@@ -275,7 +275,7 @@ def test_bot_py_defines_helper_at_most_once(helper: str) -> None:
     )
 
 
-def test_bot_py_line_count_below_ratchet() -> None:
+def test_bot_py_streaming_line_count_below_ratchet() -> None:
     line_count = sum(1 for _ in BOT_PY.read_text().splitlines())
     assert line_count < BOT_PY_LINE_COUNT_CEILING, (
         f"bot.py line count is {line_count}; #1265 Slice 1 PR-4 ratchet "
