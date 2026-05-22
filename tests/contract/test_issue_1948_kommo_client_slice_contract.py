@@ -174,7 +174,7 @@ def test_canonical_client_exposes_public_api(name: str) -> None:
     + [("kommo_tokens", n) for n in TOKENS_PUBLIC_API]
     + [("kommo_client", n) for n in CLIENT_PUBLIC_API],
 )
-def test_telegram_bot_shim_re_exports_canonical(submodule: str, name: str) -> None:
+def test_telegram_bot_kommo_shim_re_exports_canonical(submodule: str, name: str) -> None:
     canonical = importlib.import_module(f"src.services.{submodule}")
     shim = importlib.import_module(f"telegram_bot.services.{submodule}")
     assert getattr(shim, name) is getattr(canonical, name), (
