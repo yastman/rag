@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from scripts.e2e import test_scenarios as scenarios
+from scripts.e2e import scenarios as scenarios
 from scripts.e2e.claude_judge import PassthroughJudge
 from scripts.e2e.config import E2EConfig
 
