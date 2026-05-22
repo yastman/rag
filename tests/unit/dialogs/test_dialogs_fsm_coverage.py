@@ -203,9 +203,17 @@ def _all_production_files() -> list[Path]:
     States can legitimately be wired by handler modules (e.g. raw aiogram FSM
     in ``telegram_bot/handlers/crm_callbacks.py``) or by the top-level bot
     module, not only by dialog windows.
+
+    We filter out third-party / cache directories so a stray virtualenv at
+    ``telegram_bot/.venv/`` (gitignored but easy to create accidentally with
+    ``python -m venv`` from the wrong cwd) doesn't pull ~80 MB of stdlib +
+    dep source into the regex search and time the test out.
     """
     root = DIALOGS_DIR.parent  # telegram_bot/
-    return sorted(p for p in root.rglob("*.py") if p.name != "states.py")
+    skip_parts = {".venv", "venv", "__pycache__", ".tox", "node_modules", ".mypy_cache"}
+    return sorted(
+        p for p in root.rglob("*.py") if p.name != "states.py" and skip_parts.isdisjoint(p.parts)
+    )
 
 
 def _state_is_referenced(group_name: str, state_name: str, dialog_sources: str) -> bool:
