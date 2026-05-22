@@ -36,6 +36,7 @@ from src.retrieval.topic_classifier import get_query_topic_hint
 
 from . import (
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
+    _bot_kommo,  # #1265 Slice 1 PR-6: extracted Kommo startup helpers
     _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
     _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
     _bot_state_helpers,  # #1265 Slice 1 PR-1: extracted state-shape helpers
@@ -320,26 +321,12 @@ async def _seed_kommo_access_token(
     access_token: str,
     subdomain: str,
 ) -> bool:
-    """Seed Redis with access_token from env when no auth_code and Redis empty.
-
-    Returns True if seeded, False if skipped.
-    """
-    from .services.kommo_tokens import REDIS_KEY
-
-    if not access_token:
-        return False
-    existing = await redis.hgetall(REDIS_KEY)
-    if existing:
-        return False
-    await redis.hset(
-        REDIS_KEY,
-        mapping={
-            "access_token": access_token,
-            "subdomain": subdomain,
-        },
+    """Thin wrapper — see ``_bot_kommo`` (#1265 Slice 1 PR-6)."""
+    return await _bot_kommo._seed_kommo_access_token(
+        redis=redis,
+        access_token=access_token,
+        subdomain=subdomain,
     )
-    logger.info("Kommo: seeded Redis from KOMMO_ACCESS_TOKEN (no refresh_token)")
-    return True
 
 
 class PropertyBot:
