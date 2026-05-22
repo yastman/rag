@@ -164,8 +164,13 @@ To trace HITL flow in Langfuse:
 ## Testing
 
 ```bash
-# Unit tests for handoff flow
-uv run pytest tests/unit/telegram_bot/test_handoff.py -v
+# Unit tests for HITL guard and handoff flow
+uv run pytest \
+  tests/unit/agents/test_hitl.py \
+  tests/unit/services/test_handoff_state.py \
+  tests/unit/handlers/test_handoff_integration.py \
+  tests/unit/handlers/test_handoff_qualification.py \
+  -v
 ```
 
 ## Configuration
