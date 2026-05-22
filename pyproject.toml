@@ -286,7 +286,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
 "test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
-"legacy/*.py" = ["ASYNC210"]      # Allow blocking HTTP calls in async functions (legacy code)
 # Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
 # src/ingestion/service.py removed in #1532: ASYNC240 is already in the
 # global ignore list above, so the per-file entries were redundant. The
@@ -354,7 +353,7 @@ disallow_untyped_defs = true
 # Run: bandit -r . -c pyproject.toml
 
 [tool.bandit]
-exclude_dirs = [".venv", "tests", "evaluation", "legacy", "scripts/archive", "__pycache__"]
+exclude_dirs = [".venv", "tests", "evaluation", "scripts/archive", "__pycache__"]
 skips = ["B101"]  # Skip assert_used (common in tests)
 
 # =============================================================================
@@ -367,8 +366,7 @@ skips = ["B101"]  # Skip assert_used (common in tests)
 py-version = "3.13"
 
 # Files/directories to exclude
-ignore = ["legacy", "tests", ".venv", "__pycache__"]
-ignore-patterns = [".*_old\\.py$", ".*_backup\\.py$"]
+ignore = ["tests", ".venv", "__pycache__"]
 
 [tool.pylint.messages_control]
 # Disable specific checks
@@ -410,7 +408,6 @@ addopts = """
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
-norecursedirs = ["tests/legacy"]
 timeout = 30
 markers = [
     "unit: Unit tests with mocks (fast, no external deps)",
@@ -445,7 +442,6 @@ source = ["src", "telegram_bot"]
 branch = true
 omit = [
     "*/tests/*",
-    "*/legacy/*",
     "*/__pycache__/*",
     "*/.venv/*",
     "telegram_bot/.venv/*",
