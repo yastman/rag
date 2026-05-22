@@ -2,60 +2,22 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
-_FASTAPI_SHIM_ACTIVE = False
-if importlib.util.find_spec("fastapi") is None:
-    # Minimal shim so src.api.main can be imported in core unit CI.
-    class _FakeJSONResponse:
-        def __init__(self, *, status_code: int, content: dict) -> None:
-            self.status_code = status_code
-            self.content = content
 
-    class _FakeFastAPI:
-        def __init__(self, *args, **kwargs) -> None:
-            self.state = SimpleNamespace()
-
-        def exception_handler(self, *_args, **_kwargs):
-            def _decorator(func):
-                return func
-
-            return _decorator
-
-        def get(self, *_args, **_kwargs):
-            def _decorator(func):
-                return func
-
-            return _decorator
-
-        def post(self, *_args, **_kwargs):
-            def _decorator(func):
-                return func
-
-            return _decorator
-
-    fake_fastapi = type(sys)("fastapi")
-    fake_fastapi.FastAPI = _FakeFastAPI
-    fake_fastapi_responses = type(sys)("fastapi.responses")
-    fake_fastapi_responses.JSONResponse = _FakeJSONResponse
-    sys.modules["fastapi"] = fake_fastapi
-    sys.modules["fastapi.responses"] = fake_fastapi_responses
-    _FASTAPI_SHIM_ACTIVE = True
+# FastAPI is an optional dep; the canonical fast lane (`make test-unit` after
+# `uv sync` without extras) does not install it. Skip cleanly instead of
+# installing a partial fake module into ``sys.modules`` that could leak into
+# later tests calling ``pytest.importorskip("fastapi")`` (#2009 evidence).
+pytest.importorskip("fastapi", reason="src.api.main needs FastAPI; install --extra api")
 
 from src.api.main import app, generic_error_handler, lifespan, query
 from src.api.schemas import QueryRequest, QueryResponse
-
-
-if _FASTAPI_SHIM_ACTIVE:
-    # Prevent leaking shim into other tests that intentionally importorskip fastapi.
-    sys.modules.pop("fastapi.responses", None)
-    sys.modules.pop("fastapi", None)
 
 
 def _response_content(response) -> dict:

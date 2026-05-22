@@ -1,0 +1,10 @@
+{
+  "src/api/main.py": [
+    "telegram_bot.graph.config",
+    "telegram_bot.graph.graph",
+    "telegram_bot.graph.state",
+    "telegram_bot.integrations.cache",
+    "telegram_bot.scoring",
+    "telegram_bot.services.qdrant"
+  ]
+}
