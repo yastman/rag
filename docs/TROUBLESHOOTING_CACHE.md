@@ -1,90 +1,88 @@
 # Troubleshooting: Semantic Cache
 
-The semantic cache is a multi-tier system (`CacheLayerManager` in `telegram_bot/integrations/cache.py`). This guide helps debug cache behavior.
+> **Related docs:**
+> - [Cache Degradation Behavior](CACHE_DEGRADATION.md) -- design and architecture of the 5-tier cache system
+> - [Runbook: Redis Cache Degradation](runbooks/REDIS_CACHE_DEGRADATION.md) -- incident response for Redis service failures
 
-## Cache Architecture
-
-The `CacheLayerManager` implements 5 cache tiers:
-
-| Tier | Type | TTL | Purpose |
-|------|------|-----|---------|
-| Semantic | RedisVL SemanticCache | Query-type dependent | LLM response caching |
-| Embeddings | RedisVL EmbeddingsCache | 7 days | Dense embedding cache |
-| Sparse | Redis exact | 7 days | Sparse embedding cache |
-| Search | Redis exact | 2 hours | Search results cache |
-| Rerank | Redis exact | 2 hours | Reranked results cache |
+This guide helps **debug cache behavior** when the cache is reachable but not
+performing as expected (misses, staleness, threshold confusion). For Redis
+service outages or container issues, use the
+[incident runbook](runbooks/REDIS_CACHE_DEGRADATION.md) instead.
 
 ## Common Issues
 
 ### 1. Cache Always MISS Despite Correct Query
 
-**Symptoms:** Every query results in cache miss, even repeated identical queries.
-
-**Causes and solutions:**
-
 #### RRF Scale vs Cosine Similarity Confusion
 
-The `grade_confidence` threshold uses **RRF scale** (~0.0006 to 0.016), NOT cosine similarity [0-1].
+The `grade_confidence` store guard in `pipelines/client.py` uses **RRF scale**
+(~0.0006 to 0.016), NOT cosine similarity [0-1].
 
-The store guard in `pipelines/client.py` requires:
 ```python
 grade_confidence >= config.relevance_threshold_rrf  # Default: 0.005
 ```
 
-If your threshold is set to `0.8` thinking it's cosine similarity, nothing will store.
+If your threshold is set to `0.8` thinking it is cosine similarity, nothing
+will store.
 
 **Fix:** Use RRF scale thresholds. A good starting point is `0.005`.
 
 #### Cache Key Versioning
 
-Each tier has a version prefix:
-- `sem:v8:` / index `sem:v8:bge1024` — Semantic cache
-- `embeddings:v5:` — Embeddings
-- `sparse:v5:` — Sparse embeddings
-- `search:v5:` — Search results
+Each tier has a version prefix (see [Cache Degradation Behavior](CACHE_DEGRADATION.md) for the full key structure):
 
-When models change, bump the version in `integrations/cache.py`:
+- `sem:v8:bge1024` -- Semantic cache index
+- `embeddings:v5` -- Embeddings cache index
+- `sparse:v5:` -- Sparse embeddings key prefix
+- `search:v5:` -- Search results key prefix
+- `rerank:v5:` -- Rerank results key prefix
+
+When models change, bump the version in `telegram_bot/integrations/cache.py`:
+
 ```python
-CACHE_VERSION = "v5"  # Bump to invalidate exact caches
-SEMANTIC_CACHE_VERSION = "v8"  # Bump for semantic cache
+CACHE_VERSION = "v5"            # Bump to invalidate exact caches
+SEMANTIC_CACHE_VERSION = "v8"   # Bump for semantic cache
 ```
 
-### 2. How to Verify Cache is Being Checked
+### 2. Verifying Cache Checks
 
-Check Langfuse traces for `cache-semantic-check` span:
+#### Langfuse Traces
 
-```python
-# In Langfuse UI:
-# 1. Find your trace
-# 2. Look for "cache-semantic-check" span
-# 3. Check output fields:
-#    - hit: true/false
-#    - distance: actual RRF distance (lower = better match)
-#    - threshold: configured threshold
+Look for the `cache-semantic-check` span in Langfuse:
+
+1. Find your trace
+2. Look for "cache-semantic-check" span
+3. Check output fields:
+   - `hit`: true/false
+   - `distance`: actual vector distance (lower = better match)
+   - `threshold`: configured threshold for that query type
+
+#### Bot Logs
+
+```
+# Cache hit:
+Semantic HIT (Xms, dist=Y, threshold=Z, type=T)
+
+# Cache miss:
+Semantic MISS (Xms, type=T)
+
+# Timeout:
+Semantic cache timeout
 ```
 
-Or check bot logs for cache hit/miss:
+### 3. Multi-Tier Debugging
+
+Identify which tier is causing misses using per-tier metrics:
 
 ```python
-# Cache hit log:
-logger.info("Semantic HIT (%.0fms, dist=%.3f, threshold=%.2f, type=%s)", ...)
-
-# Cache miss log:
-logger.debug("Semantic MISS (%.0fms, type=%s)", ...)
-```
-
-### 3. Multi-Tier Cache Debugging
-
-To identify which tier is causing misses:
-
-```python
-# Get per-tier metrics
 stats = cache.get_metrics()
 # Returns:
 # {
 #   "semantic": {"hits": N, "misses": N, "hit_rate": X},
 #   "embeddings": {"hits": N, "misses": N, "hit_rate": X},
-#   ...
+#   "sparse": {"hits": N, "misses": N, "hit_rate": X},
+#   "search": {"hits": N, "misses": N, "hit_rate": X},
+#   "rerank": {"hits": N, "misses": N, "hit_rate": X},
 # }
 ```
 
@@ -100,22 +98,26 @@ KEYS sem:v8:*
 # Check embedding cache
 KEYS embeddings:v5:*
 
-# Check search cache
+# Check exact cache keys
+KEYS sparse:v5:*
 KEYS search:v5:*
+KEYS rerank:v5:*
 
 # Inspect a semantic cache entry
 GET "sem:v8:bge1024:somekey"
 ```
 
-## Cache Poisoning / Staleness
+> For production or large keyspaces, prefer `SCAN` over `KEYS *`.
 
-### When Version Bump Happens
+## Cache Poisoning and Staleness
+
+### When to Bump Versions
 
 | Trigger | Action |
 |---------|--------|
-| Model version change | Bump `CACHE_VERSION` |
-| Embedding model change | Bump `CACHE_VERSION` + `SEMANTIC_CACHE_VERSION` |
-| Schema change | Bump `SEMANTIC_CACHE_VERSION` |
+| Embedding model change | Bump both `CACHE_VERSION` and `SEMANTIC_CACHE_VERSION` |
+| LLM model version change | Bump `CACHE_VERSION` |
+| Schema/filter change | Bump `SEMANTIC_CACHE_VERSION` |
 
 ### Manual Cache Clear
 
@@ -133,6 +135,9 @@ results = await cache.clear_all_caches()
 
 Or via bot command: `/clearcache`
 
+For clearing via Docker Compose commands during an incident, see the
+[incident runbook](runbooks/REDIS_CACHE_DEGRADATION.md#cache-corruption-or-version-drift).
+
 ## Cache vs Query Type Mapping
 
 ### Cacheable Query Types
@@ -147,19 +152,22 @@ _SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 
 | Query Pattern | Reason |
 |---------------|--------|
-| Contextual follow-ups ("подробнее"/"more details", "первый"/"the first one", "это"/"this", "ещё"/"more") | Different context |
-| CHITCHAT/OFF_TOPIC | Not RAG queries |
+| Contextual follow-ups ("more details", "the first one", "this") | Different context each time |
+| `CHITCHAT` / `OFF_TOPIC` | Not RAG queries |
 
 ### Cache Thresholds by Query Type
 
+> Canonical values are in [CACHE_DEGRADATION.md](CACHE_DEGRADATION.md#per-query-type-thresholds).
+> This table is duplicated here for quick reference during debugging.
+
 | Query Type | Distance Threshold | TTL |
 |------------|-------------------|-----|
-| FAQ | 0.12 | 24h |
-| ENTITY | 0.10 | 1h |
-| GENERAL | 0.08 | 1h |
-| STRUCTURED | 0.05 | 2h |
+| `FAQ` | 0.12 | 24h |
+| `ENTITY` | 0.10 | 1h |
+| `GENERAL` | 0.08 | 1h |
+| `STRUCTURED` | 0.05 | 2h |
 
-## Metrics and Monitoring
+## Monitoring
 
 ### Bot /metrics Command
 
@@ -167,7 +175,8 @@ Shows p50/p95 pipeline timing including cache performance.
 
 ### Langfuse Score: semantic_cache_hit
 
-Track over time:
+Track hit rate over time:
+
 ```sql
 SELECT
   date_trunc('hour', timestamp),

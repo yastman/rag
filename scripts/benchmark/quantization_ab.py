@@ -7,8 +7,8 @@ Measures:
 3. Precision@k: % of relevant docs in top-k (quality metric)
 
 Usage:
-    python scripts/test_quantization_ab.py
-    python scripts/test_quantization_ab.py --k 5 --runs 3
+    python scripts/benchmark/quantization_ab.py
+    python scripts/benchmark/quantization_ab.py --k 5 --runs 3
 """
 
 import argparse
