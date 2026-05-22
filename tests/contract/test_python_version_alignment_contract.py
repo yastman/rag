@@ -10,6 +10,11 @@ legal, causing false-positive or false-negative lint results.
 
 This contract ensures all version pins converge on the canonical floor of
 Python 3.12.
+
+Note: Docker runtime images (Dockerfile.ingestion, services/bge-m3-api, etc.)
+intentionally use newer Python versions (3.13/3.14) for runtime performance.
+They are excluded from this contract's scope, which covers only source-level
+config artifacts (pyproject.toml, CI workflows, pre-commit, Makefile).
 """
 
 from __future__ import annotations
@@ -49,7 +54,13 @@ def test_requires_python_is_312() -> None:
 
 
 def test_ruff_target_version_is_py312() -> None:
-    """[tool.ruff] target-version must be 'py312'."""
+    """[tool.ruff] target-version must be 'py312'.
+
+    Note: this regex matches the first occurrence of target-version in
+    pyproject.toml, which is the top-level [tool.ruff] key.  If a second
+    target-version appears (e.g. in [tool.ruff.format]), this test would
+    need updating to use tomllib for section-aware parsing.
+    """
     src = _read(PYPROJECT)
     m = re.search(r'target-version\s*=\s*"([^"]+)"', src)
     assert m is not None, "target-version not found in pyproject.toml [tool.ruff]"
@@ -143,8 +154,10 @@ def test_makefile_python_version_is_312() -> None:
 def test_search_engine_shared_parses_without_syntax_error() -> None:
     """src/retrieval/search_engine_shared.py must parse on the running Python.
 
-    This proves PEP-695 type-alias syntax (Python 3.12+) is valid and that
-    tools like vulture/bandit will not choke on it.
+    This file uses PEP-695 generic function syntax (Python 3.12+), i.e.
+    ``def f[T](...)``, which would cause a SyntaxError on Python 3.11.
+    Parsing it here proves the version floor is sufficient and that static
+    analysis tools (vulture, bandit) will not choke on it.
     """
     source = _read(SEARCH_ENGINE_SHARED)
     try:
