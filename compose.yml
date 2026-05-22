@@ -47,7 +47,7 @@ services:
 
   redis:
     <<: *security-defaults
-    image: redis:8.6.3@sha256:e628485c98f8cfe942d8b6f34d461dabf069884bf18932ccbdd9dd9af20b1acc
+    image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
@@ -530,7 +530,7 @@ services:
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
     <<: *security-defaults
-    image: redis:8.6.3@sha256:e628485c98f8cfe942d8b6f34d461dabf069884bf18932ccbdd9dd9af20b1acc
+    image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
