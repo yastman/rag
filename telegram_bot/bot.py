@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import re
-import secrets
 import socket
 import time
 from collections.abc import Coroutine
@@ -35,6 +34,7 @@ from langgraph.errors import GraphRecursionError
 
 from src.retrieval.topic_classifier import get_query_topic_hint
 
+from . import _bot_streaming
 from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .constants import (
@@ -109,7 +109,6 @@ _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
-_AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
 # Heartbeat runs every ttl/3, so a third consecutive miss can consume the full lease.
 _POLLING_LOCK_MAX_REFRESH_FAILURES = 2
 
@@ -271,17 +270,8 @@ async def _prepare_pre_agent_retrieval_vectors(
 
 
 def _new_draft_id() -> int:
-    """Generate a positive 31-bit draft id for `bot.send_message_draft`.
-
-    Bot API ``sendMessageDraft`` accepts arbitrary 32-bit positive integers
-    as the draft id; we keep the value within signed-int32 range so it
-    serialises cleanly across the aiogram client and the Bot API JSON wire
-    format. Moved here from ``services/draft_streamer.py`` (#1671) so the
-    streaming path stays SDK-only — direct ``bot.send_message_draft(...)``
-    calls plus ``agent.astream(stream_mode=[...])`` from LangGraph, no
-    custom abstraction in between.
-    """
-    return secrets.randbelow(2**31 - 1) + 1
+    """Thin wrapper — see ``_bot_streaming`` (#1265 Slice 1 PR-4)."""
+    return _bot_streaming._new_draft_id()
 
 
 async def _stream_agent_to_draft(
@@ -292,52 +282,15 @@ async def _stream_agent_to_draft(
     chat_id: int,
     thread_id: int | None = None,
 ) -> dict[str, Any]:
-    """Stream agent astream() output to Telegram via sendMessageDraft.
-
-    Uses stream_mode=["messages", "values"]:
-    - "messages": forward AIMessage content chunks from the "agent" node as drafts.
-    - "values": capture final state.
-
-    Only streams content-only chunks (not tool-call chunks). Returns final state dict.
-    """
-    import contextlib
-
-    accumulated = ""
-    last_draft = 0.0
-    final_state: dict[str, Any] = {}
-    draft_id = _new_draft_id()
-
-    async for mode, data in agent.astream(
-        payload, config=config, stream_mode=["messages", "values"]
-    ):
-        if mode == "values":
-            final_state = data
-        elif mode == "messages":
-            msg, metadata = data
-            node = metadata.get("langgraph_node", "")
-            if node != "agent":
-                continue
-            content = getattr(msg, "content", None)
-            if not content:
-                continue
-            # Skip tool-call chunks — they carry tool routing JSON, not user-facing text.
-            if getattr(msg, "tool_calls", None):
-                continue
-            accumulated += content
-            now = time.monotonic()
-            if now - last_draft >= _AGENT_DRAFT_INTERVAL:
-                draft_kwargs: dict[str, Any] = {
-                    "chat_id": chat_id,
-                    "draft_id": draft_id,
-                    "text": accumulated,
-                }
-                if thread_id is not None:
-                    draft_kwargs["message_thread_id"] = thread_id
-                with contextlib.suppress(Exception):
-                    await bot.send_message_draft(**draft_kwargs)
-                last_draft = now
-
-    return final_state
+    """Thin wrapper — see ``_bot_streaming`` (#1265 Slice 1 PR-4)."""
+    return await _bot_streaming._stream_agent_to_draft(
+        agent=agent,
+        payload=payload,
+        config=config,
+        bot=bot,
+        chat_id=chat_id,
+        thread_id=thread_id,
+    )
 
 
 def _state_apartment_results(state_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -525,30 +478,8 @@ def _is_checkpointer_runtime_error(exc: Exception) -> bool:
 
 
 def _extract_stream_chunk_text(message_chunk: Any) -> str:
-    """Extract human text from LangChain stream chunk payload."""
-    text_attr = getattr(message_chunk, "text", None)
-    if isinstance(text_attr, str) and text_attr:
-        return text_attr
-
-    content = getattr(message_chunk, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-                continue
-            if isinstance(item, dict):
-                item_text = item.get("text")
-                if isinstance(item_text, str):
-                    parts.append(item_text)
-                continue
-            item_text = getattr(item, "text", None)
-            if isinstance(item_text, str):
-                parts.append(item_text)
-        return "".join(parts)
-    return ""
+    """Thin wrapper — see ``_bot_streaming`` (#1265 Slice 1 PR-4)."""
+    return _bot_streaming._extract_stream_chunk_text(message_chunk)
 
 
 async def _seed_kommo_access_token(
