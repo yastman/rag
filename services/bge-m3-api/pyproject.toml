@@ -2,7 +2,7 @@
 name = "bge-m3-api"
 version = "1.0.0"
 description = "BGE-M3 Embeddings API - FastAPI service"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Core ML/Embeddings
     "FlagEmbedding==1.4.0",
