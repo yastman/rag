@@ -47,14 +47,6 @@
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
   ],
-  "test_config_bool_fields_parse_env_strings": [
-    "tests/unit/config/test_bot_config_settings.py",
-    "tests/unit/test_settings.py"
-  ],
-  "test_config_get_collection_name": [
-    "tests/unit/config/test_bot_config_settings.py",
-    "tests/unit/test_settings.py"
-  ],
   "test_contextualize_empty_chunks": [
     "tests/unit/contextualization/test_claude.py",
     "tests/unit/contextualization/test_groq.py",
