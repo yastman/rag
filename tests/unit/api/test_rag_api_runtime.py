@@ -72,7 +72,7 @@ async def test_query_writes_langfuse_scores() -> None:
     with (
         patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
         patch("telegram_bot.observability.get_client", return_value=lf),
-        patch("telegram_bot.scoring.write_langfuse_scores") as mock_write_scores,
+        patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         await query(QueryRequest(query="test", user_id=1))
 
@@ -316,7 +316,7 @@ async def test_query_returns_fallback_on_graph_recursion_error() -> None:
     with (
         patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
         patch("telegram_bot.observability.get_client", return_value=lf),
-        patch("telegram_bot.scoring.write_langfuse_scores") as mock_write_scores,
+        patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 
@@ -385,7 +385,7 @@ async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> Non
     with (
         patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
         patch("telegram_bot.observability.get_client", return_value=None),
-        patch("telegram_bot.scoring.write_langfuse_scores") as mock_write_scores,
+        patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
 
