@@ -98,11 +98,12 @@ def test_bot_streaming_helper_exposed(helper: str) -> None:
 
 def test_agent_draft_interval_constant_exposed() -> None:
     """``_AGENT_DRAFT_INTERVAL`` must move with the streaming helper."""
-    from telegram_bot import _bot_streaming
+    from telegram_bot import _bot_streaming, bot
 
     assert hasattr(_bot_streaming, "_AGENT_DRAFT_INTERVAL")
     assert isinstance(_bot_streaming._AGENT_DRAFT_INTERVAL, float)
     assert _bot_streaming._AGENT_DRAFT_INTERVAL > 0
+    assert bot._AGENT_DRAFT_INTERVAL == _bot_streaming._AGENT_DRAFT_INTERVAL
 
 
 # ---------------------------------------------------------------------------

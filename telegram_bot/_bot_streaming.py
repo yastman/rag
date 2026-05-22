@@ -55,6 +55,8 @@ async def _stream_agent_to_draft(
     bot: Any,
     chat_id: int,
     thread_id: int | None = None,
+    *,
+    draft_interval: float | None = None,
 ) -> dict[str, Any]:
     """Stream agent astream() output to Telegram via sendMessageDraft.
 
@@ -68,6 +70,7 @@ async def _stream_agent_to_draft(
     last_draft = 0.0
     final_state: dict[str, Any] = {}
     draft_id = _new_draft_id()
+    interval = _AGENT_DRAFT_INTERVAL if draft_interval is None else draft_interval
 
     async for mode, data in agent.astream(
         payload, config=config, stream_mode=["messages", "values"]
@@ -87,7 +90,7 @@ async def _stream_agent_to_draft(
                 continue
             accumulated += content
             now = time.monotonic()
-            if now - last_draft >= _AGENT_DRAFT_INTERVAL:
+            if now - last_draft >= interval:
                 draft_kwargs: dict[str, Any] = {
                     "chat_id": chat_id,
                     "draft_id": draft_id,
