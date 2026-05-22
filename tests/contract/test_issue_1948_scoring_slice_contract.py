@@ -83,7 +83,7 @@ def test_canonical_scoring_exists() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_canonical_does_not_import_telegram_bot() -> None:
+def test_scoring_canonical_does_not_import_telegram_bot() -> None:
     """src/scoring.py must not import from telegram_bot.* at module scope —
     that is the layering rule #1948 enforces.
     """
@@ -112,7 +112,7 @@ def test_canonical_exposes_public_api(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", PUBLIC_API)
-def test_telegram_bot_shim_re_exports_canonical(name: str) -> None:
+def test_telegram_bot_scoring_shim_re_exports_canonical(name: str) -> None:
     canonical = importlib.import_module("src.scoring")
     shim = importlib.import_module("telegram_bot.scoring")
     assert getattr(shim, name) is getattr(canonical, name), (
