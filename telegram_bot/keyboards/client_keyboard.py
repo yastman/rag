@@ -1,5 +1,5 @@
-***REMOVED*** telegram_bot/keyboards/client_keyboard.py
-"""Client persistent ReplyKeyboard (***REMOVED***628)."""
+# telegram_bot/keyboards/client_keyboard.py
+"""Client persistent ReplyKeyboard (#628)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** Fallback button text -> action ID mapping (used when i18n not available)
+# Fallback button text -> action ID mapping (used when i18n not available)
 MENU_BUTTONS: dict[str, str] = {
     "🏠 Подобрать квартиру": "search",
     "🔑 Услуги": "services",
@@ -23,10 +23,10 @@ MENU_BUTTONS: dict[str, str] = {
     "🎯 Демонстрация": "demo",
 }
 
-***REMOVED*** Reverse lookup: action_id -> button text (ru fallback)
+# Reverse lookup: action_id -> button text (ru fallback)
 ACTIONS_TO_TEXT: dict[str, str] = {v: k for k, v in MENU_BUTTONS.items()}
 
-***REMOVED*** FTL key -> action ID mapping
+# FTL key -> action ID mapping
 _ACTION_IDS: dict[str, str] = {
     "kb-search": "search",
     "kb-services": "services",
@@ -86,9 +86,9 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
     if i18n is not None:
         texts = [i18n.get(key) for key in _ACTION_IDS]
     else:
-        texts = list(MENU_BUTTONS.keys())  ***REMOVED*** fallback to hardcoded Russian
+        texts = list(MENU_BUTTONS.keys())  # fallback to hardcoded Russian
 
-    ***REMOVED*** Ensure exactly 7 buttons (pad or trim if needed)
+    # Ensure exactly 7 buttons (pad or trim if needed)
     while len(texts) < 7:
         texts.append("")
     texts = texts[:7]
@@ -98,7 +98,7 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
             [KeyboardButton(text=texts[0]), KeyboardButton(text=texts[1])],
             [KeyboardButton(text=texts[2]), KeyboardButton(text=texts[3])],
             [KeyboardButton(text=texts[4]), KeyboardButton(text=texts[5])],
-            [KeyboardButton(text=texts[6])],  ***REMOVED*** Демонстрация — отдельный ряд
+            [KeyboardButton(text=texts[6])],  # Демонстрация — отдельный ряд
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -126,5 +126,5 @@ def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
             except Exception:
                 logger.warning("Failed to parse menu button via i18n locale=%s", locale)
 
-    ***REMOVED*** Fallback: check hardcoded MENU_BUTTONS (text -> action)
+    # Fallback: check hardcoded MENU_BUTTONS (text -> action)
     return MENU_BUTTONS.get(text)

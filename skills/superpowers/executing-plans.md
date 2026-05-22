@@ -1,4 +1,4 @@
-***REMOVED*** Skill: executing-plans
+# Skill: executing-plans
 
 Use when executing an approved plan in one session.
 

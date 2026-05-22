@@ -58,12 +58,12 @@ def parse_catalog_text(text: str) -> list[dict]:
         if not line:
             continue
 
-        ***REMOVED*** Lines without '|' are complex name headers
+        # Lines without '|' are complex name headers
         if "|" not in line:
             current_complex = line
             continue
 
-        ***REMOVED*** Apartment row: split on '|'
+        # Apartment row: split on '|'
         parts = [p.strip() for p in line.split("|")]
         if len(parts) < 11:
             continue
@@ -80,7 +80,7 @@ def parse_catalog_text(text: str) -> list[dict]:
         has_floor_plan = _parse_bool_field(parts[9])
         has_photo = _parse_bool_field(parts[10])
 
-        ***REMOVED*** Promotion: column 11 is old_price ("-" = no promotion)
+        # Promotion: column 11 is old_price ("-" = no promotion)
         old_price_raw = parts[11].strip() if len(parts) > 11 else "-"
         if old_price_raw == "-" or not old_price_raw:
             is_promotion = "False"

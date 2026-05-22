@@ -1,4 +1,4 @@
-***REMOVED*** tests/smoke/test_langgraph_smoke.py
+# tests/smoke/test_langgraph_smoke.py
 """Smoke tests for LangGraph RAG pipeline.
 
 Verifies graph assembly and invocation with mocked services.
@@ -52,7 +52,7 @@ async def test_initial_state_has_required_keys():
 @pytest.mark.smoke
 async def test_full_graph_classify_to_respond():
     """E2E: mock services, full graph pipeline from classify to respond."""
-    ***REMOVED*** Cache — all async methods must be AsyncMock
+    # Cache — all async methods must be AsyncMock
     mock_cache = MagicMock()
     mock_cache.get_embedding = AsyncMock(return_value=None)
     mock_cache.store_embedding = AsyncMock()
@@ -63,17 +63,17 @@ async def test_full_graph_classify_to_respond():
     mock_cache.get_sparse_embedding = AsyncMock(return_value=None)
     mock_cache.store_sparse_embedding = AsyncMock()
 
-    ***REMOVED*** Embeddings
+    # Embeddings
     mock_embeddings = MagicMock()
     mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
 
-    ***REMOVED*** Sparse embeddings
+    # Sparse embeddings
     mock_sparse = MagicMock()
     mock_sparse.aembed_query = AsyncMock(
         return_value={"indices": [1, 5, 10], "values": [0.5, 0.3, 0.2]}
     )
 
-    ***REMOVED*** Qdrant
+    # Qdrant
     mock_qdrant = MagicMock()
     mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
@@ -85,13 +85,13 @@ async def test_full_graph_classify_to_respond():
         )
     )
 
-    ***REMOVED*** LLM mock (OpenAI SDK pattern: llm.chat.completions.create)
+    # LLM mock (OpenAI SDK pattern: llm.chat.completions.create)
     mock_llm = MagicMock()
     mock_completion = MagicMock()
     mock_completion.choices = [MagicMock(message=MagicMock(content="Найдено 2 варианта."))]
     mock_llm.chat.completions.create = AsyncMock(return_value=mock_completion)
 
-    ***REMOVED*** Telegram message for respond_node
+    # Telegram message for respond_node
     mock_message = MagicMock()
     mock_message.answer = AsyncMock()
     mock_message.chat = MagicMock()
@@ -113,7 +113,7 @@ async def test_full_graph_classify_to_respond():
         query="квартиры в Несебр до 100000 евро",
     )
 
-    ***REMOVED*** Patch generate_node's internal config to use our mock LLM
+    # Patch generate_node's internal config to use our mock LLM
     mock_gc = MagicMock()
     mock_gc.create_llm.return_value = mock_llm
     mock_gc.domain = "недвижимость"
@@ -128,6 +128,6 @@ async def test_full_graph_classify_to_respond():
         ):
             result = await graph.ainvoke(state)
 
-    ***REMOVED*** Graph should produce a response
+    # Graph should produce a response
     assert "response" in result
-    assert result["response"]  ***REMOVED*** non-empty
+    assert result["response"]  # non-empty

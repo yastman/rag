@@ -167,15 +167,15 @@ class TestComputeAggregates:
             _make_result(latency_stages={"retrieve": 0.3, "generate": 0.4}),
         ]
         agg = compute_aggregates(results)
-        ***REMOVED*** retrieve: [100ms, 300ms] → p50=200ms
+        # retrieve: [100ms, 300ms] → p50=200ms
         assert agg["cold"]["node_p50"]["retrieve"] == pytest.approx(200.0, abs=10)
         assert "generate" in agg["cold"]["node_p50"]
 
     def test_tracked_node_names_includes_voice_and_summarize(self):
-        """TRACKED_NODE_NAMES covers transcribe and summarize spans (***REMOVED***241)."""
+        """TRACKED_NODE_NAMES covers transcribe and summarize spans (#241)."""
         assert "transcribe" in TRACKED_NODE_NAMES
         assert "summarize" in TRACKED_NODE_NAMES
-        ***REMOVED*** All original 9 pipeline nodes still present
+        # All original 9 pipeline nodes still present
         for node in [
             "classify",
             "cache_check",
@@ -190,13 +190,13 @@ class TestComputeAggregates:
             assert node in TRACKED_NODE_NAMES
 
     def test_required_trace_names_include_api_voice_and_ingestion(self):
-        """Coverage gate should require API, voice, and ingestion trace families (***REMOVED***609)."""
+        """Coverage gate should require API, voice, and ingestion trace families (#609)."""
         assert "rag-api-query" in REQUIRED_TRACE_NAMES
         assert "voice-session" in REQUIRED_TRACE_NAMES
         assert "ingestion-cli-run" in REQUIRED_TRACE_NAMES
 
     def test_node_latencies_includes_transcribe(self):
-        """Transcribe node spans are tracked in aggregates (***REMOVED***241)."""
+        """Transcribe node spans are tracked in aggregates (#241)."""
         results = [
             _make_result(latency_stages={"transcribe": 0.08, "classify": 0.05}),
         ]
@@ -209,7 +209,7 @@ class TestComputeAggregates:
         assert agg == {}
 
     def test_judge_score_aggregation(self):
-        """Judge scores from managed evaluators are aggregated (***REMOVED***386)."""
+        """Judge scores from managed evaluators are aggregated (#386)."""
         results = [
             _make_result(scores={"judge_faithfulness": 0.9, "judge_answer_relevance": 0.8}),
             _make_result(scores={"judge_faithfulness": 0.7, "judge_answer_relevance": 0.6}),
@@ -221,7 +221,7 @@ class TestComputeAggregates:
         assert agg["judge_faithfulness_count"] == 3
         assert agg["judge_answer_relevance_mean"] == pytest.approx(0.7, abs=0.01)
         assert agg["judge_answer_relevance_count"] == 2
-        assert "judge_context_relevance_mean" not in agg  ***REMOVED*** no data
+        assert "judge_context_relevance_mean" not in agg  # no data
 
     def test_judge_scores_absent_no_keys(self):
         """No judge scores -> no judge keys in aggregates."""
@@ -272,7 +272,7 @@ class TestEvaluateGoNoGo:
 
         assert "generate_p50_lt_2s" in criteria, "Criterion must be named 'generate_p50_lt_2s'"
         assert "ttft_p50_lt_2s" not in criteria, "Old 'ttft_p50_lt_2s' key must not exist"
-        assert criteria["generate_p50_lt_2s"]["passed"] is True  ***REMOVED*** 1500 < 2000
+        assert criteria["generate_p50_lt_2s"]["passed"] is True  # 1500 < 2000
 
     def test_zero_errors_fails_on_observation_level_errors(self):
         aggregates = {
@@ -380,11 +380,11 @@ class TestEvaluateGoNoGo:
     def test_custom_cold_p50_threshold(self):
         """Go/No-Go uses config threshold, not hardcoded 5000."""
         agg = {"cold": {"latency_p50": 6000}, "cache_hit": {}}
-        ***REMOVED*** Default config: 5000 -> FAIL
+        # Default config: 5000 -> FAIL
         result = evaluate_go_no_go(agg, [], thresholds={"cold_p50_ms": 5000})
         assert result["cold_p50_lt_5s"]["passed"] is False
 
-        ***REMOVED*** Custom config: 7000 -> PASS
+        # Custom config: 7000 -> PASS
         result = evaluate_go_no_go(agg, [], thresholds={"cold_p50_ms": 7000})
         assert result["cold_p50_lt_5s"]["passed"] is True
 
@@ -392,11 +392,11 @@ class TestEvaluateGoNoGo:
         """Rewrite tokens threshold loaded from config, not hardcoded 96."""
         r = _make_result(phase="cold", scores={"rewrite_completion_tokens": 110.0})
         agg = {"cold": {}, "cache_hit": {}}
-        ***REMOVED*** Default: 96 -> FAIL
+        # Default: 96 -> FAIL
         result = evaluate_go_no_go(agg, [r], thresholds={"rewrite_tokens_p50": 96})
         assert result["rewrite_tokens_p50_le_96"]["passed"] is False
 
-        ***REMOVED*** Custom: 120 -> PASS
+        # Custom: 120 -> PASS
         result = evaluate_go_no_go(agg, [r], thresholds={"rewrite_tokens_p50": 120})
         assert result["rewrite_tokens_p50_le_96"]["passed"] is True
 
@@ -404,11 +404,11 @@ class TestEvaluateGoNoGo:
         """When no thresholds passed, loads from thresholds.yaml."""
         agg = {"cold": {"latency_p50": 4000}, "cache_hit": {}}
         result = evaluate_go_no_go(agg, [])
-        ***REMOVED*** Should use yaml default (5000), so 4000 passes
+        # Should use yaml default (5000), so 4000 passes
         assert result["cold_p50_lt_5s"]["passed"] is True
 
     def test_judge_criteria_pass_above_threshold(self):
-        """Judge criteria pass when mean >= threshold (***REMOVED***386)."""
+        """Judge criteria pass when mean >= threshold (#386)."""
         agg = {
             "cold": {"latency_p50": 3000, "latency_p90": 5000, "node_p50": {"generate": 1500}},
             "cache_hit": {"latency_p50": 500},
@@ -428,7 +428,7 @@ class TestEvaluateGoNoGo:
         assert criteria["judge_faithfulness_gte"]["skipped"] is False
 
     def test_judge_criteria_fail_below_threshold(self):
-        """Judge criteria fail when mean < threshold (***REMOVED***386)."""
+        """Judge criteria fail when mean < threshold (#386)."""
         agg = {
             "cold": {},
             "cache_hit": {},
@@ -441,7 +441,7 @@ class TestEvaluateGoNoGo:
         assert "0.500" in criteria["judge_faithfulness_gte"]["actual"]
 
     def test_judge_criteria_skipped_when_no_data(self):
-        """Judge criteria skipped when no judge scores available (***REMOVED***386)."""
+        """Judge criteria skipped when no judge scores available (#386)."""
         agg = {"cold": {}, "cache_hit": {}}
         criteria = evaluate_go_no_go(agg, [], orphan_rate=0.0)
 
@@ -501,15 +501,15 @@ class TestLangfusePreflight:
         monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
 
         mock_lf = MagicMock()
-        ***REMOVED*** Fail twice, succeed on third call
+        # Fail twice, succeed on third call
         mock_lf.auth_check.side_effect = [
             ConnectionError("timeout"),
             ConnectionError("timeout"),
-            True,  ***REMOVED*** success
+            True,  # success
         ]
 
         with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
-            check_langfuse_config()  ***REMOVED*** should not raise
+            check_langfuse_config()  # should not raise
 
         assert mock_lf.auth_check.call_count == 3
 
@@ -540,7 +540,7 @@ class TestRedisFlush:
         deleted = False
 
         async def fake_scan_iter(match=None, count=100):
-            ***REMOVED*** Before delete: yield keys; after delete: empty
+            # Before delete: yield keys; after delete: empty
             if not deleted:
                 yield f"key:{match}"
 
@@ -570,7 +570,7 @@ class TestRedisFlush:
         """Flush runs but keys remain -> SKIPPED."""
         mock_redis = AsyncMock()
 
-        ***REMOVED*** scan_iter always returns keys (can't delete)
+        # scan_iter always returns keys (can't delete)
         async def fake_scan_iter(match=None, count=100):
             for k in [b"remaining:1"]:
                 yield k
@@ -696,8 +696,8 @@ class TestReportAndSummary:
 class TestRedisFlushPatterns:
     """Redis flush should use active cache version for exact-cache prefixes."""
 
-    ***REMOVED*** NOTE: test_flush_uses_cache_version_prefix was removed as duplicate of
-    ***REMOVED*** TestRedisFlush.test_uses_current_cache_version_for_flush_patterns
+    # NOTE: test_flush_uses_cache_version_prefix was removed as duplicate of
+    # TestRedisFlush.test_uses_current_cache_version_for_flush_patterns
 
     def test_report_includes_streaming_ttft_section(self, tmp_path):
         """Report includes Streaming TTFT section when streaming aggregates exist."""
@@ -717,13 +717,13 @@ class TestRedisFlushPatterns:
         generate_report(run, aggregates, out)
         text = out.read_text(encoding="utf-8")
 
-        assert "***REMOVED******REMOVED*** Streaming TTFT" in text
+        assert "## Streaming TTFT" in text
         assert "| ttft p50 | 450 ms |" in text
         assert "| sample count | 5 |" in text
 
 
 class TestReportNoReferenceTrace:
-    """Issue ***REMOVED***168: reference trace c2b95d86 removed from report."""
+    """Issue #168: reference trace c2b95d86 removed from report."""
 
     def test_report_no_reference_trace_section(self, tmp_path):
         """Report should not contain Reference Trace Comparison section."""
@@ -823,7 +823,7 @@ class TestCollectionDiscovery:
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
 
-        ***REMOVED*** Exact match preferred — only one entry per base name
+        # Exact match preferred — only one entry per base name
         assert result.count("gdrive_documents_bge") == 1
         assert "gdrive_documents_bge_scalar" not in result
 
@@ -917,10 +917,10 @@ class TestFakeMessage:
         t1 = sent.t_first_edit
         assert t1 is not None
         assert sent.edit_calls_count == 1
-        assert sent.last_text_len == 7  ***REMOVED*** len("chunk 1")
+        assert sent.last_text_len == 7  # len("chunk 1")
 
         await sent.edit_text("chunk 1 more")
-        assert sent.t_first_edit == t1  ***REMOVED*** first edit unchanged
+        assert sent.t_first_edit == t1  # first edit unchanged
         assert sent.edit_calls_count == 2
         assert sent.last_text_len == 12
 
@@ -946,7 +946,7 @@ class TestFakeMessage:
 
         msg = FakeMessage()
         sent = await msg.answer("placeholder")
-        await sent.delete()  ***REMOVED*** should not raise
+        await sent.delete()  # should not raise
 
 
 class TestStreamingAggregation:
@@ -1034,7 +1034,7 @@ class TestStreamingAggregation:
 
 
 class TestAggregatesStddev:
-    """Issue ***REMOVED***168: aggregates must include latency_stddev."""
+    """Issue #168: aggregates must include latency_stddev."""
 
     def test_aggregates_include_stddev(self):
         results = [
@@ -1045,7 +1045,7 @@ class TestAggregatesStddev:
         agg = compute_aggregates(results)
         cold = agg["cold"]
         assert "latency_stddev" in cold
-        ***REMOVED*** stddev of [2000, 3000, 4000] ≈ 816.5
+        # stddev of [2000, 3000, 4000] ≈ 816.5
         assert 800 < cold["latency_stddev"] < 850
 
     def test_stddev_zero_for_single_result(self):

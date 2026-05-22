@@ -78,7 +78,7 @@ class TestParserCache:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = ParserCache(cache_dir=Path(tmpdir))
 
-            ***REMOVED*** Create a test file
+            # Create a test file
             test_file = Path(tmpdir) / "test.txt"
             test_file.write_text("content")
 
@@ -91,14 +91,14 @@ class TestParserCache:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = ParserCache(cache_dir=Path(tmpdir))
 
-            ***REMOVED*** Create a test file
+            # Create a test file
             test_file = Path(tmpdir) / "test.txt"
             test_file.write_text("original content")
 
-            ***REMOVED*** Cache some content
+            # Cache some content
             cache.set(test_file, "cached content")
 
-            ***REMOVED*** Get cached content
+            # Get cached content
             result = cache.get(test_file)
 
             assert result == "cached content"
@@ -108,16 +108,16 @@ class TestParserCache:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = ParserCache(cache_dir=Path(tmpdir))
 
-            ***REMOVED*** Create two files with same content
+            # Create two files with same content
             file1 = Path(tmpdir) / "file1.txt"
             file2 = Path(tmpdir) / "file2.txt"
             file1.write_text("same content")
             file2.write_text("same content")
 
-            ***REMOVED*** Cache file1
+            # Cache file1
             cache.set(file1, "cached")
 
-            ***REMOVED*** file2 should hit cache (same content hash)
+            # file2 should hit cache (same content hash)
             result = cache.get(file2)
             assert result == "cached"
 
@@ -156,7 +156,7 @@ class TestUniversalDocumentParser:
     def test_parser_unsupported_format(self):
         """Test ValueError for unsupported format."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            ***REMOVED*** Create file with unsupported extension
+            # Create file with unsupported extension
             test_file = Path(tmpdir) / "test.xyz"
             test_file.write_text("content")
 
@@ -191,12 +191,12 @@ class TestUniversalDocumentParser:
 
         parser = UniversalDocumentParser(use_cache=False)
 
-        ***REMOVED*** Get converter twice
+        # Get converter twice
         converter1 = parser._get_docling_converter()
         converter2 = parser._get_docling_converter()
 
         assert converter1 is converter2
-        mock_converter_cls.assert_called_once()  ***REMOVED*** Only created once
+        mock_converter_cls.assert_called_once()  # Only created once
 
 
 class TestParsePDF:
@@ -205,7 +205,7 @@ class TestParsePDF:
     @patch.object(document_parser, "pymupdf")
     def test_parse_pdf_success(self, mock_pymupdf):
         """Test successful PDF parsing."""
-        ***REMOVED*** Create mock PDF document
+        # Create mock PDF document
         mock_page = MagicMock()
         mock_page.get_text.return_value = "Page content"
 
@@ -217,7 +217,7 @@ class TestParsePDF:
         mock_pymupdf.open.return_value = mock_doc
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            ***REMOVED*** Create dummy PDF file
+            # Create dummy PDF file
             pdf_file = Path(tmpdir) / "test.pdf"
             pdf_file.write_bytes(b"%PDF-1.4")
 
@@ -250,7 +250,7 @@ class TestParsePDF:
             parser = UniversalDocumentParser(use_cache=False)
             result = parser._parse_pdf(pdf_file)
 
-            ***REMOVED*** Should use stem as title when no metadata
+            # Should use stem as title when no metadata
             assert result.title == "test"
 
 
@@ -261,7 +261,7 @@ class TestParseWithDocling:
     def test_parse_docling_success(self, mock_converter_cls):
         """Test successful Docling parsing."""
         mock_result = MagicMock()
-        mock_result.document.export_to_markdown.return_value = "***REMOVED*** Document\n\nContent"
+        mock_result.document.export_to_markdown.return_value = "# Document\n\nContent"
 
         mock_converter = MagicMock()
         mock_converter.convert.return_value = mock_result
@@ -276,7 +276,7 @@ class TestParseWithDocling:
 
             assert result.filename == "test.docx"
             assert result.title == "test"
-            assert result.content == "***REMOVED*** Document\n\nContent"
+            assert result.content == "# Document\n\nContent"
             assert result.metadata["parser"] == "docling"
             assert result.metadata["format"] == "docx"
 
@@ -304,16 +304,16 @@ class TestParseFile:
             parser = UniversalDocumentParser(use_cache=True)
             parser.cache = ParserCache(cache_dir=Path(tmpdir) / "cache")
 
-            ***REMOVED*** First call - should parse
+            # First call - should parse
             _result1 = parser.parse_file(pdf_file)
 
-            ***REMOVED*** Reset mock to verify second call uses cache
+            # Reset mock to verify second call uses cache
             mock_pymupdf.open.reset_mock()
 
-            ***REMOVED*** Second call - should use cache
+            # Second call - should use cache
             result2 = parser.parse_file(pdf_file)
 
-            ***REMOVED*** Verify second call didn't parse
+            # Verify second call didn't parse
             mock_pymupdf.open.assert_not_called()
             assert result2.metadata["source"] == "cache"
 

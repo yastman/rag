@@ -1,9 +1,9 @@
-***REMOVED*** Native Git/GitHub Hygiene
+# Native Git/GitHub Hygiene
 
 Native Git and GitHub CLI workflow for issue, PR, branch, worktree, and stash
 hygiene. This replaces the archived legacy helpers under `scripts/archive/`.
 
-***REMOVED******REMOVED*** Safety Rules
+## Safety Rules
 
 - Default base branch is `dev`; override with `REPO_BASE_BRANCH` or
   `MAIN_BRANCH` only when the target branch is explicit.
@@ -17,7 +17,7 @@ hygiene. This replaces the archived legacy helpers under `scripts/archive/`.
   `git branch -D`. Do not rely on `git branch -d`, because it checks merge
   safety against the current `HEAD`.
 
-***REMOVED******REMOVED*** Weekly Report
+## Weekly Report
 
 ```bash
 BASE_BRANCH="${REPO_BASE_BRANCH:-dev}"
@@ -36,7 +36,7 @@ git ls-files --others --exclude-standard -- \
   coverage.json 'test_output*' '*.log'
 ```
 
-***REMOVED******REMOVED*** PR And Issue Queue
+## PR And Issue Queue
 
 ```bash
 gh pr list \
@@ -57,7 +57,7 @@ Triage order:
 3. Blocked checks or conflicts.
 4. Drafts.
 
-***REMOVED******REMOVED*** Cleanup Preview
+## Cleanup Preview
 
 ```bash
 MAIN_BRANCH="${MAIN_BRANCH:-dev}"
@@ -96,7 +96,7 @@ git worktree prune --dry-run
 git stash list
 ```
 
-***REMOVED******REMOVED*** Destructive Cleanup
+## Destructive Cleanup
 
 Prefer `make repo-cleanup-force`, which keeps the safety filters in one place.
 For manual native cleanup:

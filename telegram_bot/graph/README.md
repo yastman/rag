@@ -1,10 +1,10 @@
-***REMOVED*** graph/
+# graph/
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 LangGraph runtime for the RAG pipeline: node definitions, state contracts, graph assembly, and conditional routing. Builds and executes the LangGraph pipeline used by the Telegram bot. `src/api/` reuses this pipeline until it is extracted into a shared location.
 
-***REMOVED******REMOVED*** Entrypoints
+## Entrypoints
 
 | File | Role |
 |------|------|
@@ -23,20 +23,20 @@ LangGraph runtime for the RAG pipeline: node definitions, state contracts, graph
 | [`nodes/respond.py`](./nodes/respond.py) | Final response formatting |
 | [`nodes/transcribe.py`](./nodes/transcribe.py) | Voice transcription node |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Nodes do not call Telegram transport APIs directly; they operate on `RAGState`.
 - `RAGState` field changes must be backward-compatible with existing edges and node contracts.
 - Ingestion and collection semantics are owned by `src/ingestion/`; nodes read only.
 
-***REMOVED******REMOVED*** Focused Checks
+## Focused Checks
 
 ```bash
 uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q
 uv run pytest tests/unit/ -k "graph" -q
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../README.md`](../README.md) — Telegram transport layer overview
 - [`../agents/README.md`](../agents/README.md) — Agent SDK alternative pipeline

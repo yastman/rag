@@ -1,13 +1,13 @@
-***REMOVED*** Uk
+# Uk
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 telegram_bot/locales/uk
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - messages.ftl
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

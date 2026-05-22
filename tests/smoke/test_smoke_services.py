@@ -63,7 +63,7 @@ class TestSmokeServices:
                 last_error = exc
                 await client.aclose()
                 continue
-            except Exception as exc:  ***REMOVED*** pragma: no cover - environment dependent
+            except Exception as exc:  # pragma: no cover - environment dependent
                 last_error = exc
                 await client.aclose()
                 continue
@@ -130,13 +130,13 @@ class TestSmokeServices:
         if not base_url:
             pytest.skip("LLM_BASE_URL not set (LiteLLM-targeted smoke check)")
 
-        ***REMOVED*** If custom model but no custom base_url, skip (misconfigured)
+        # If custom model but no custom base_url, skip (misconfigured)
         if model and not model.startswith("gpt") and not base_url:
             pytest.skip(f"Custom model '{model}' requires LLM_BASE_URL")
         if not model:
             model = "gpt-4o-mini"
 
-        ***REMOVED*** Skip if base_url points to a local service that isn't running
+        # Skip if base_url points to a local service that isn't running
         if "localhost" in base_url or "127.0.0.1" in base_url:
             from urllib.parse import urlparse
 

@@ -1,10 +1,10 @@
-***REMOVED*** ADR-0004: RedisVL Semantic Cache with RRF Thresholds
+# ADR-0004: RedisVL Semantic Cache with RRF Thresholds
 
 **Status:** Accepted
 
 **Date:** 2026-02-10
 
-***REMOVED******REMOVED*** Context
+## Context
 
 We needed a semantic cache that:
 - Stores query-response pairs
@@ -12,11 +12,11 @@ We needed a semantic cache that:
 - Integrates with existing Redis infrastructure
 - Supports per-query-type thresholds
 
-***REMOVED******REMOVED*** Decision
+## Decision
 
 Use **RedisVL SemanticCache** for semantic caching, with distance thresholds on **RRF scale** (not cosine similarity).
 
-***REMOVED******REMOVED******REMOVED*** Why RedisVL
+### Why RedisVL
 
 | Factor | RedisVL | External Services |
 |--------|---------|------------------|
@@ -25,7 +25,7 @@ Use **RedisVL SemanticCache** for semantic caching, with distance thresholds on 
 | Cost | Infrastructure only | Per-request pricing |
 | Control | Full | Limited |
 
-***REMOVED******REMOVED******REMOVED*** Why RRF Scale Thresholds
+### Why RRF Scale Thresholds
 
 The cache uses **Reciprocal Rank Fusion** scale for thresholds, not cosine similarity [0-1]:
 
@@ -42,7 +42,7 @@ RRF score = 1 / (k + rank), where k = 60
 - Cache store threshold must match: `>= 0.005`
 - Using cosine thresholds (e.g., 0.8) would result in no stores
 
-***REMOVED******REMOVED*** Cache Types
+## Cache Types
 
 This ADR covers the **semantic answer cache** (query → LLM response) only.
 A separate **BGE-M3 query vector bundle cache** uses RedisVL `EmbeddingsCache`
@@ -50,31 +50,31 @@ with `model_name="bge-m3-query-bundle"` to store dense embeddings alongside
 sparse and ColBERT vectors in `metadata`. Qdrant remains the retrieval
 backend; Redis is a cache/sidecar.
 
-***REMOVED******REMOVED*** Consequences
+## Consequences
 
-***REMOVED******REMOVED******REMOVED*** Positive
+### Positive
 - Fast semantic cache with Redis
 - Query-type-specific thresholds
 - No new infrastructure
 - RedisVL-native `EmbeddingsCache.metadata` design avoids custom serialization
 
-***REMOVED******REMOVED******REMOVED*** Negative
+### Negative
 - Threshold tuning required per query type
 - RRF scale vs cosine confusion (documentation critical)
 - RedisVL import adds ~7.5s to test collection
 
-***REMOVED******REMOVED*** Cache Configuration
+## Cache Configuration
 
 ```python
 cache_thresholds = {
-    "FAQ": 0.12,        ***REMOVED*** Most lenient
+    "FAQ": 0.12,        # Most lenient
     "ENTITY": 0.10,
-    "GENERAL": 0.08,   ***REMOVED*** Default
-    "STRUCTURED": 0.05, ***REMOVED*** Strictest
+    "GENERAL": 0.08,   # Default
+    "STRUCTURED": 0.05, # Strictest
 }
 ```
 
-***REMOVED******REMOVED*** References
+## References
 
 - Cache implementation: `telegram_bot/integrations/cache.py`
 - RRF formula: [CArtE SIGIR 2022](https://arxiv.org/abs/2203.10568)

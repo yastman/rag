@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Run Langfuse experiment on gold set — SDK-based.
 
 Task = HTTP POST to RAG API. Judge evaluators = Langfuse UI managed.
@@ -26,9 +26,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task: HTTP call to RAG API
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task: HTTP call to RAG API
+# ---------------------------------------------------------------------------
 
 
 def rag_task(*, item: Any, **kwargs: Any) -> dict[str, Any]:
@@ -53,9 +53,9 @@ def rag_task(*, item: Any, **kwargs: Any) -> dict[str, Any]:
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Evaluators (only retrieval_recall in code; judges → Langfuse UI)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Evaluators (only retrieval_recall in code; judges → Langfuse UI)
+# ---------------------------------------------------------------------------
 
 
 def retrieval_recall_eval(
@@ -102,9 +102,9 @@ def _git_sha() -> str:
         return "unknown"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:

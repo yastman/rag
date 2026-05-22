@@ -1,4 +1,4 @@
-***REMOVED*** src/voice/
+# src/voice/
 
 LiveKit Voice Agent — outbound calls with RAG Q&A.
 
@@ -6,16 +6,16 @@ LiveKit Voice Agent — outbound calls with RAG Q&A.
 >
 > LiveKit services (`livekit-server`, `livekit-sip`, `voice-agent`) are gated behind Docker Compose profiles (`voice`, `full`). They are **not started** in the default `docker compose up` bring-up. To enable voice, explicitly activate the profile: `docker compose --profile voice up`.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Provides a voice interface to the RAG system using LiveKit Agents. The agent handles SIP calls, transcribes speech, queries the RAG API, and synthesizes responses.
 
-***REMOVED******REMOVED*** Ownership
+## Ownership
 
 - Owns the LiveKit voice agent transport path, SIP helpers, RAG API client, schemas, and transcript storage.
 - Maintains voice-specific observability wrappers while reusing shared tracing infrastructure.
 
-***REMOVED******REMOVED*** Entrypoints
+## Entrypoints
 
 | Entrypoint | Role |
 |------------|------|
@@ -24,27 +24,27 @@ Provides a voice interface to the RAG system using LiveKit Agents. The agent han
 | [`sip_setup.py`](./sip_setup.py) | SIP trunk configuration helpers |
 | [`transcript_store.py`](./transcript_store.py) | Call transcript persistence |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - The voice agent is a **separate transport surface**. It calls the RAG API (`src/api/`) rather than embedding retrieval logic directly.
 - If LiveKit SDK is unavailable, imports degrade gracefully with stub classes.
 - Voice reuses `telegram_bot.observability` for Langfuse tracing but calls the RAG API (`src/api/`) for all retrieval and generation logic.
 
-***REMOVED******REMOVED*** Related Runtime Services
+## Related Runtime Services
 
 - **LiveKit Server** — WebRTC/media routing (`livekit-server`)
 - **LiveKit SIP** — SIP trunk bridge (`livekit-sip`)
 - **RAG API** — `src/api/main.py` (voice agent queries this)
 - **Langfuse** — voice session tracing (optional)
 
-***REMOVED******REMOVED*** Focused checks
+## Focused checks
 
 ```bash
 uv run pytest tests/unit/voice/ -q
 uv run python -c "from src.voice.agent import VoiceBot; print('ok')"
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../api/`](../api/) — RAG API that the voice agent consumes
 - [`../../DOCKER.md`](../../DOCKER.md) — Docker profiles and service orchestration

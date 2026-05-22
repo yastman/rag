@@ -34,11 +34,11 @@ class TestBuildAgentTools:
             kommo_client=None,
         )
 
-        ***REMOVED*** Should contain at least base tools + utility tools
+        # Should contain at least base tools + utility tools
         tool_names = [getattr(t, "name", str(t)) for t in tools]
         assert "rag_search" in tool_names
         assert "apartment_search" in tool_names
-        ***REMOVED*** Utility tools are appended
+        # Utility tools are appended
         assert len(tools) > 2
 
     def test_manager_role_returns_extended_tools(self, mock_config):
@@ -60,7 +60,7 @@ class TestBuildAgentTools:
         assert "rag_search" in tool_names
         assert "apartment_search" in tool_names
         assert "history_search" in tool_names
-        ***REMOVED*** Manager tools include nurturing + CRM
+        # Manager tools include nurturing + CRM
         assert len(tools) > 5
 
     def test_manager_without_history_service_omits_history_search(self, mock_config):
@@ -93,10 +93,10 @@ class TestBuildAgentTools:
         )
 
         tool_names = [getattr(t, "name", str(t)) for t in tools]
-        ***REMOVED*** CRM tools should not be present when kommo_enabled=False
+        # CRM tools should not be present when kommo_enabled=False
         crm_tools = [n for n in tool_names if "crm" in n.lower() or "kommo" in n.lower()]
-        ***REMOVED*** The only possible CRM-related is the score sync (which needs lead_scoring_store)
-        ***REMOVED*** With lead_scoring_store=None, no CRM tools at all
+        # The only possible CRM-related is the score sync (which needs lead_scoring_store)
+        # With lead_scoring_store=None, no CRM tools at all
         assert not crm_tools
 
     def test_manager_without_kommo_client_omits_crm_tools(self, mock_config):
@@ -114,7 +114,7 @@ class TestBuildAgentTools:
         )
 
         tool_names = [getattr(t, "name", str(t)) for t in tools]
-        ***REMOVED*** get_crm_tools not appended when kommo_client is None
+        # get_crm_tools not appended when kommo_client is None
         from telegram_bot.agents.crm_tools import get_crm_tools
 
         crm_tool_names = [getattr(t, "name", str(t)) for t in get_crm_tools()]

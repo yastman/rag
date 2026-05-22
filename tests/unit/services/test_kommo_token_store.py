@@ -1,4 +1,4 @@
-"""Tests for KommoTokenStore (Redis-backed OAuth2) (***REMOVED***413)."""
+"""Tests for KommoTokenStore (Redis-backed OAuth2) (#413)."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ async def test_get_valid_token_refreshes_when_expired(mock_redis):
         return_value={
             b"access_token": b"expired-token",
             b"refresh_token": b"refresh-456",
-            b"expires_at": b"1000000000",  ***REMOVED*** Past
+            b"expires_at": b"1000000000",  # Past
         }
     )
 
@@ -71,7 +71,7 @@ async def test_get_valid_token_refreshes_when_expired(mock_redis):
 
 
 async def test_force_refresh_concurrent_calls_serialized(mock_redis):
-    """Concurrent force_refresh calls must be serialized via asyncio.Lock (***REMOVED***948 bug 5).
+    """Concurrent force_refresh calls must be serialized via asyncio.Lock (#948 bug 5).
 
     Without a lock, two concurrent refreshes can interleave and both use the
     same (now-invalidated) refresh_token, causing the second to fail with 400.
@@ -85,7 +85,7 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
         return_value={
             b"access_token": b"expired-token",
             b"refresh_token": b"refresh-456",
-            b"expires_at": b"1000000000",  ***REMOVED*** Past
+            b"expires_at": b"1000000000",  # Past
         }
     )
 
@@ -119,11 +119,11 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
         mock_httpx.return_value.post = controlled_post
 
         task1 = asyncio.create_task(store.force_refresh())
-        await asyncio.sleep(0)  ***REMOVED*** Let task1 acquire lock and reach controlled_post
+        await asyncio.sleep(0)  # Let task1 acquire lock and reach controlled_post
         task2 = asyncio.create_task(store.force_refresh())
-        await asyncio.sleep(0)  ***REMOVED*** Let task2 try to acquire lock
+        await asyncio.sleep(0)  # Let task2 try to acquire lock
 
-        ***REMOVED*** With lock: task1 is in controlled_post (http_start logged), task2 waits for lock
+        # With lock: task1 is in controlled_post (http_start logged), task2 waits for lock
         assert call_log == ["http_start"], (
             "With asyncio.Lock, only one force_refresh HTTP call should be in-flight at a time. "
             f"Got call_log={call_log!r} — Lock missing in force_refresh()"
@@ -132,7 +132,7 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
         can_proceed.set()
         await asyncio.gather(task1, task2)
 
-    ***REMOVED*** Both calls completed, second one also made HTTP request after first finished
+    # Both calls completed, second one also made HTTP request after first finished
     assert "http_end" in call_log
 
 

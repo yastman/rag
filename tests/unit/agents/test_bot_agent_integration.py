@@ -1,4 +1,4 @@
-"""Tests for bot.py integration with create_agent (***REMOVED***413)."""
+"""Tests for bot.py integration with create_agent (#413)."""
 
 from __future__ import annotations
 

@@ -52,7 +52,7 @@ async def test_async_uses_system_param_not_messages(contextualizer):
     messages = call_kwargs["messages"]
     assert len(messages) == 1
     assert messages[0]["role"] == "user"
-    ***REMOVED*** User content should be a plain string, not a list containing the system prompt
+    # User content should be a plain string, not a list containing the system prompt
     user_content = messages[0]["content"]
     assert isinstance(user_content, str), "user content must be a plain string"
     assert "legal text" in user_content

@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/ingestion/test_qdrant_writer_atomic_replace.py
-"""Atomic replace semantics for QdrantHybridWriter (issue ***REMOVED***1602).
+# tests/unit/ingestion/test_qdrant_writer_atomic_replace.py
+"""Atomic replace semantics for QdrantHybridWriter (issue #1602).
 
 The bug: ``upsert_chunks_sync`` previously deleted existing points for a
 ``file_id`` BEFORE generating replacement embeddings/points and upserting them.
@@ -25,9 +25,9 @@ from qdrant_client.models import HasIdCondition
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_chunk(
@@ -47,15 +47,15 @@ def _make_chunk(
     return chunk
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Atomic-replace failure-recovery contract (***REMOVED***1602)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Atomic-replace failure-recovery contract (#1602)
+# ---------------------------------------------------------------------------
 
 
 class TestEmbeddingFailureLeavesOldPointsIntact:
     """If embedding/upsert fails, no destructive delete must have happened.
 
-    Reproduces the data-loss condition called out in ***REMOVED***1602: the writer
+    Reproduces the data-loss condition called out in #1602: the writer
     previously deleted by file_id filter before any embedding work, so any
     embedding error wiped the file from search even though no replacement
     was upserted.
@@ -76,9 +76,9 @@ class TestEmbeddingFailureLeavesOldPointsIntact:
 
         assert stats.errors is not None
         assert "Voyage API down" in stats.errors[0]
-        ***REMOVED*** The destructive delete must not have run before the failed embed
+        # The destructive delete must not have run before the failed embed
         mock_qdrant_client.delete.assert_not_called()
-        ***REMOVED*** And no upsert happened either, so points_upserted stays 0
+        # And no upsert happened either, so points_upserted stays 0
         assert stats.points_upserted == 0
         mock_qdrant_client.upsert.assert_not_called()
 
@@ -144,7 +144,7 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
     ):
         """Calls to client.upsert must precede client.delete in time."""
         call_order: list[str] = []
-        ***REMOVED*** Pretend there are stale points so a delete sweep is required after upsert
+        # Pretend there are stale points so a delete sweep is required after upsert
         mock_qdrant_client.count.return_value = MagicMock(count=2)
         mock_qdrant_client.scroll.return_value = (
             [
@@ -164,10 +164,10 @@ class TestSuccessPathOrderingIsUpsertThenDelete:
         stats = writer_voyage.upsert_chunks_sync([chunk], "file_1", "/p", {}, "col")
 
         assert stats.errors is None
-        ***REMOVED*** Upsert must come before any delete
+        # Upsert must come before any delete
         assert call_order[0] == "upsert"
-        ***REMOVED*** delete may or may not be present depending on whether stale ids exist;
-        ***REMOVED*** if it is present, every delete is strictly after the first upsert
+        # delete may or may not be present depending on whether stale ids exist;
+        # if it is present, every delete is strictly after the first upsert
         upsert_indices = [i for i, c in enumerate(call_order) if c == "upsert"]
         delete_indices = [i for i, c in enumerate(call_order) if c == "delete"]
         if delete_indices:
@@ -179,7 +179,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
 
     This is the structural guard against re-introducing the original bug.
     A whole-file ``Filter(must=[FieldCondition(metadata.file_id ...)])``
-    delete is exactly what ***REMOVED***1602 forbids — even if it runs after upsert,
+    delete is exactly what #1602 forbids — even if it runs after upsert,
     a future refactor must not blindly drop the whole file.
     """
 
@@ -188,14 +188,14 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
     ):
         """When stale chunks exist (old ids not in the new batch), delete uses HasId."""
         mock_qdrant_client.count.return_value = MagicMock(count=3)
-        ***REMOVED*** Existing stored points: 1 will be replaced (same chunk_location: order_0),
-        ***REMOVED*** 2 are stale orphans that should be swept after the upsert.
+        # Existing stored points: 1 will be replaced (same chunk_location: order_0),
+        # 2 are stale orphans that should be swept after the upsert.
         new_chunk_id = QdrantHybridWriter.generate_point_id("file_1", "order_0")
         stale_id_a = "00000000-0000-0000-0000-aaaaaaaaaaaa"
         stale_id_b = "00000000-0000-0000-0000-bbbbbbbbbbbb"
         mock_qdrant_client.scroll.return_value = (
             [
-                MagicMock(id=new_chunk_id),  ***REMOVED*** will collide with the upsert
+                MagicMock(id=new_chunk_id),  # will collide with the upsert
                 MagicMock(id=stale_id_a),
                 MagicMock(id=stale_id_b),
             ],
@@ -212,22 +212,22 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         assert stats.errors is None
         assert stats.points_upserted == 1
 
-        ***REMOVED*** Exactly one delete call, and it is restricted to the stale ids only
+        # Exactly one delete call, and it is restricted to the stale ids only
         assert mock_qdrant_client.delete.call_count == 1
         selector = mock_qdrant_client.delete.call_args.kwargs["points_selector"]
-        ***REMOVED*** Selector must reference the stale ids, not the file_id filter pattern
+        # Selector must reference the stale ids, not the file_id filter pattern
         deleted_ids: list[str] = []
         if isinstance(selector, list):
             deleted_ids = [str(x) for x in selector]
         elif hasattr(selector, "points"):
             deleted_ids = [str(x) for x in selector.points]
         else:
-            ***REMOVED*** Filter form: must be a HasIdCondition over stale ids, NOT the file_id field condition
+            # Filter form: must be a HasIdCondition over stale ids, NOT the file_id field condition
             for cond in getattr(selector, "must", []) or []:
                 if isinstance(cond, HasIdCondition):
                     deleted_ids.extend(str(x) for x in cond.has_id)
                     continue
-                ***REMOVED*** Forbid the legacy whole-file metadata.file_id selector
+                # Forbid the legacy whole-file metadata.file_id selector
                 if hasattr(cond, "key"):
                     pytest.fail(
                         "Stale-delete must not use a metadata.file_id Filter; "
@@ -235,7 +235,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
                     )
 
         assert set(deleted_ids) == {stale_id_a, stale_id_b}
-        ***REMOVED*** The new chunk id must NOT be in the delete set
+        # The new chunk id must NOT be in the delete set
         assert new_chunk_id not in deleted_ids
 
     def test_no_stale_delete_when_every_old_id_is_replaced(
@@ -243,7 +243,7 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
     ):
         """If every existing point is replaced by an upsert with the same id, skip delete."""
         mock_qdrant_client.count.return_value = MagicMock(count=2)
-        ***REMOVED*** _make_chunk(order=N) maps to chunk_location "order_N"
+        # _make_chunk(order=N) maps to chunk_location "order_N"
         new_id_0 = QdrantHybridWriter.generate_point_id("file_1", "order_0")
         new_id_1 = QdrantHybridWriter.generate_point_id("file_1", "order_1")
         mock_qdrant_client.scroll.return_value = (
@@ -263,5 +263,5 @@ class TestStaleDeleteScopeIsRestrictedToOrphanIds:
         mock_qdrant_client.delete.assert_not_called()
 
 
-***REMOVED*** Reuse fixtures from the sibling behavior test module
+# Reuse fixtures from the sibling behavior test module
 pytest_plugins = ["tests.unit.ingestion.test_qdrant_writer_behavior"]

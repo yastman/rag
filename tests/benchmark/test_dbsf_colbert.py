@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test DBSF + ColBERT multivector rerank in production code (Variant B).
 Verifies DBSFColBERTSearchEngine uses: Dense + Sparse + DBSF fusion + ColBERT rerank.
@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 import pytest
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -30,7 +30,7 @@ def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | No
     print("TEST: VARIANT B - HYBRID DBSF + COLBERT RERANK")
     print("=" * 80)
 
-    ***REMOVED*** Initialize settings and search engine
+    # Initialize settings and search engine
     settings = Settings()
     print("\n📋 Configuration:")
     print(f"   Qdrant URL: {settings.qdrant_url}")
@@ -39,7 +39,7 @@ def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | No
         f"   API Key: {'***' + settings.qdrant_api_key[-10:] if settings.qdrant_api_key else 'Not set'}"
     )
 
-    ***REMOVED*** Initialize Variant B search engine
+    # Initialize Variant B search engine
     print("\n🔧 Initializing DBSFColBERTSearchEngine (Variant B)...")
     search_engine = DBSFColBERTSearchEngine(settings)
     print("   ✅ Search engine initialized with BGE-M3 model")
@@ -48,7 +48,7 @@ def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | No
     print("      Stage 2: DBSF fusion (statistical normalization)")
     print("      Stage 3: ColBERT multivector MaxSim rerank")
 
-    ***REMOVED*** Test queries (same as Variant A for comparison)
+    # Test queries (same as Variant A for comparison)
     test_queries = [
         ("Стаття 121 Кримінального кодексу", "Article lookup with exact number"),
         ("Умисне вбивство з особливою жорстокістю", "Crime with specific qualifier"),
@@ -64,9 +64,9 @@ def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | No
         print(f"{'=' * 80}")
 
         try:
-            ***REMOVED*** Execute Variant B search (dense + sparse + DBSF + ColBERT)
+            # Execute Variant B search (dense + sparse + DBSF + ColBERT)
             results = search_engine.search(
-                query_embedding=query,  ***REMOVED*** Pass string for full pipeline
+                query_embedding=query,  # Pass string for full pipeline
                 top_k=5,
                 score_threshold=0.3,
             )
@@ -92,7 +92,7 @@ def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | No
 
             all_results[f"query_{i}"] = query_results
 
-            ***REMOVED*** Verify search method
+            # Verify search method
             if results:
                 method = results[0].metadata.get("search_method")
                 if method == "dbsf_colbert":
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     success, results = _run_dbsf_colbert()
 
     if success and results:
-        ***REMOVED*** Save results for comparison with RRF
+        # Save results for comparison with RRF
         import json
 
         output_path = Path(__file__).parent / "results_dbsf.json"

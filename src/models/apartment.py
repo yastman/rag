@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-***REMOVED*** --- View normalization ---
+# --- View normalization ---
 
 _VIEW_SYNONYMS: dict[str, str] = {
     "ultra sea panorama": "ultra_sea_panorama",
@@ -44,27 +44,27 @@ def normalize_view(raw: str) -> tuple[str, list[str]]:
     if not raw:
         return ("", [])
 
-    ***REMOVED*** Slash-separated FIRST: expand tags from all parts, use synonym for primary
+    # Slash-separated FIRST: expand tags from all parts, use synonym for primary
     if "/" in raw:
         parts = [p.strip() for p in raw.split("/")]
         all_tags: list[str] = []
         for p in parts:
             normalized = _VIEW_SYNONYMS.get(p, p.replace(" ", "_"))
             all_tags.extend(_VIEW_TAG_MAP.get(normalized, [normalized]))
-        ***REMOVED*** Use synonym for primary if the combined string is recognized
+        # Use synonym for primary if the combined string is recognized
         if raw in _VIEW_SYNONYMS:
             primary_normalized = _VIEW_SYNONYMS[raw]
         else:
             primary_normalized = _VIEW_SYNONYMS.get(parts[0], parts[0].replace(" ", "_"))
         return (primary_normalized, list(dict.fromkeys(all_tags)))
 
-    ***REMOVED*** Check exact synonym (non-slash inputs only)
+    # Check exact synonym (non-slash inputs only)
     if raw in _VIEW_SYNONYMS:
         primary = _VIEW_SYNONYMS[raw]
         tags = list(_VIEW_TAG_MAP.get(primary, [primary]))
         return (primary, tags)
 
-    ***REMOVED*** Single word or phrase
+    # Single word or phrase
     normalized = raw.replace(" ", "_")
     tags = list(_VIEW_TAG_MAP.get(normalized, [normalized]))
     return (normalized, tags)
@@ -85,7 +85,7 @@ def _parse_bool(raw: object) -> bool:
     return bool(raw)
 
 
-***REMOVED*** --- Records ---
+# --- Records ---
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,14 +195,14 @@ class ApartmentRecord:
         return f"{prefix} {body}{promo}"
 
 
-***REMOVED*** --- Query parse result ---
+# --- Query parse result ---
 
 
 @dataclass
 class ApartmentQueryParseResult:
     """Parsed apartment search query with confidence scoring."""
 
-    ***REMOVED*** Hard filters (numeric)
+    # Hard filters (numeric)
     rooms: int | None = None
     min_price_eur: float | None = None
     max_price_eur: float | None = None
@@ -212,13 +212,13 @@ class ApartmentQueryParseResult:
     max_floor: int | None = None
     is_furnished: bool | None = None
 
-    ***REMOVED*** Entity filters
+    # Entity filters
     city: str | None = None
     complex_name: str | None = None
     view_tags: list[str] = field(default_factory=list)
     section: str | None = None
 
-    ***REMOVED*** Meta
+    # Meta
     semantic_query: str = ""
     confidence: str = "LOW"
     score: int = 0
@@ -257,7 +257,7 @@ class ApartmentQueryParseResult:
         if self.complex_name is not None:
             f["complex_name"] = self.complex_name
         if self.view_tags:
-            f["view_tags"] = self.view_tags  ***REMOVED*** handled by MatchAny
+            f["view_tags"] = self.view_tags  # handled by MatchAny
         if self.section is not None:
             f["section"] = self.section
         if self.is_furnished is not None:
@@ -282,7 +282,7 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
     has_hard = False
     has_critical = False
 
-    ***REMOVED*** Hard numeric filters
+    # Hard numeric filters
     if parse_result.rooms is not None:
         score += 2
         has_hard = True
@@ -296,7 +296,7 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
         score += 1
         has_hard = True
 
-    ***REMOVED*** Critical slots: city OR complex_name
+    # Critical slots: city OR complex_name
     if getattr(parse_result, "city", None) is not None:
         score += 2
         has_critical = True
@@ -304,16 +304,16 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
         score += 2
         has_critical = True
 
-    ***REMOVED*** Secondary entity filters
+    # Secondary entity filters
     if parse_result.view_tags:
         score += 1
     if parse_result.section is not None:
         score += 1
 
-    ***REMOVED*** Track missing critical slots for LLM to fill
+    # Track missing critical slots for LLM to fill
     missing_fields: list[str] = [] if has_critical else ["city", "complex_name"]
 
-    ***REMOVED*** Confidence mapping
+    # Confidence mapping
     if has_critical and has_hard:
         confidence = "HIGH"
     elif has_critical or has_hard:
@@ -324,7 +324,7 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
     return replace(parse_result, confidence=confidence, score=score, missing_fields=missing_fields)
 
 
-***REMOVED*** --- Pydantic extraction models (hybrid pipeline) ---
+# --- Pydantic extraction models (hybrid pipeline) ---
 
 
 class HardFilters(BaseModel):
@@ -495,7 +495,7 @@ class ApartmentSearchFilters(BaseModel):
     """Полный результат extraction pipeline."""
 
     hard: HardFilters = Field(default_factory=lambda: HardFilters())
-    soft: SoftPreferences = Field(default_factory=lambda: SoftPreferences())  ***REMOVED*** type: ignore[call-arg]
+    soft: SoftPreferences = Field(default_factory=lambda: SoftPreferences())  # type: ignore[call-arg]
     meta: ExtractionMeta = Field(default_factory=lambda: ExtractionMeta())
 
     def build_semantic_query(self) -> str:

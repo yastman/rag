@@ -46,7 +46,7 @@ async def test_livekit_server_health():
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get("http://localhost:7880", timeout=5.0)
-            ***REMOVED*** LiveKit returns 200 on root
+            # LiveKit returns 200 on root
             assert resp.status_code in (200, 404)
         except httpx.ConnectError:
             pytest.skip("LiveKit server not running")

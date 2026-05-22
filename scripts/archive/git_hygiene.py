@@ -1,7 +1,7 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Archived Git hygiene report and safe cleanup tool.
 
-Retired by issue ***REMOVED***1728. Use docs/runbooks/GIT_PR_ISSUE_NATIVE.md and Makefile
+Retired by issue #1728. Use docs/runbooks/GIT_PR_ISSUE_NATIVE.md and Makefile
 native git/gh targets for active hygiene workflows.
 
 Classifies every local branch and worktree into one of three lanes:
@@ -27,10 +27,10 @@ Worktrees are also classified:
                       uncommitted changes.
 
 Usage:
-    python scripts/git_hygiene.py                    ***REMOVED*** Human-readable report
-    python scripts/git_hygiene.py --json             ***REMOVED*** Machine-readable
-    python scripts/git_hygiene.py --fix --dry-run    ***REMOVED*** Preview safe deletions
-    python scripts/git_hygiene.py --fix              ***REMOVED*** Apply safe deletions
+    python scripts/git_hygiene.py                    # Human-readable report
+    python scripts/git_hygiene.py --json             # Machine-readable
+    python scripts/git_hygiene.py --fix --dry-run    # Preview safe deletions
+    python scripts/git_hygiene.py --fix              # Apply safe deletions
 
 Exit code is non-zero whenever the report contains anything actionable
 (safe-to-delete, requires-human, dirty worktrees, transient files), so it can
@@ -58,9 +58,9 @@ BranchCategory = Literal["safe-to-delete", "protected", "requires-human"]
 WorktreeCategory = Literal["safe", "requires-human"]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Data classes
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Data classes
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -146,7 +146,7 @@ class HygieneReport:
     worktrees: list[WorktreeInfo] = field(default_factory=list)
     transient_files: list[str] = field(default_factory=list)
 
-    ***REMOVED*** ----- New, lane-aware accessors -----
+    # ----- New, lane-aware accessors -----
 
     def branches_in_category(self, category: BranchCategory) -> list[BranchInfo]:
         return [b for b in self.branches if b.category == category]
@@ -167,7 +167,7 @@ class HygieneReport:
     def stale_worktrees_info(self) -> list[WorktreeInfo]:
         return [w for w in self.worktrees if w.category != "safe"]
 
-    ***REMOVED*** ----- Backward-compatible accessors (kept for existing JSON consumers) -----
+    # ----- Backward-compatible accessors (kept for existing JSON consumers) -----
 
     @property
     def merged_branches(self) -> list[str]:
@@ -187,12 +187,12 @@ class HygieneReport:
             out.append({"path": w.path, "reason": ", ".join(w.reasons) or "unknown"})
         return out
 
-    ***REMOVED*** ----- Aggregate counters -----
+    # ----- Aggregate counters -----
 
     @property
     def total_issues(self) -> int:
-        ***REMOVED*** Protected branches are always present and not actionable, so they
-        ***REMOVED*** don't contribute to the count.
+        # Protected branches are always present and not actionable, so they
+        # don't contribute to the count.
         return (
             len(self.safe_to_delete)
             + len(self.requires_human)
@@ -202,13 +202,13 @@ class HygieneReport:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            ***REMOVED*** Backward-compat top-level keys
+            # Backward-compat top-level keys
             "merged_branches": self.merged_branches,
             "no_upstream_branches": self.no_upstream_branches,
             "stale_worktrees": self.stale_worktrees,
             "transient_files": self.transient_files,
             "total_issues": self.total_issues,
-            ***REMOVED*** New lane-aware view
+            # New lane-aware view
             "classification": {
                 "safe_to_delete": [b.to_dict() for b in self.safe_to_delete],
                 "protected": [b.to_dict() for b in self.protected],
@@ -218,9 +218,9 @@ class HygieneReport:
         }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Git helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Git helpers
+# ---------------------------------------------------------------------------
 
 
 def _run(cmd: list[str], *, check: bool = True, cwd: str | None = None) -> str:
@@ -255,7 +255,7 @@ def _is_merged_into_base(branch: str, base: str) -> bool:
         )
         if result.returncode == 0:
             return True
-        ***REMOVED*** returncode 1 == not an ancestor; >1 means ref doesn't exist, try fallback
+        # returncode 1 == not an ancestor; >1 means ref doesn't exist, try fallback
         if result.returncode == 1:
             return False
     return False
@@ -274,7 +274,7 @@ def _worktree_is_dirty(path: str) -> bool:
         check=False,
     )
     if result.returncode != 0:
-        ***REMOVED*** Treat unreachable worktree as suspicious -> dirty for safety.
+        # Treat unreachable worktree as suspicious -> dirty for safety.
         return True
     return bool(result.stdout.strip())
 
@@ -288,9 +288,9 @@ def fetch_remote_state() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Worktree discovery
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Worktree discovery
+# ---------------------------------------------------------------------------
 
 
 def collect_worktrees() -> list[WorktreeInfo]:
@@ -310,13 +310,13 @@ def collect_worktrees() -> list[WorktreeInfo]:
             return
         wt = WorktreeInfo(
             path=path,
-            branch=entry.get("branch"),  ***REMOVED*** type: ignore[arg-type]
+            branch=entry.get("branch"),  # type: ignore[arg-type]
             detached=bool(entry.get("detached", False)),
             bare=bool(entry.get("bare", False)),
             in_tmp=path.startswith("/tmp"),
             is_main=bool(entry.get("is_main", False)),
         )
-        ***REMOVED*** Bare worktrees are not real working trees; skip dirty probe.
+        # Bare worktrees are not real working trees; skip dirty probe.
         if not wt.bare:
             wt.dirty = _worktree_is_dirty(path)
         worktrees.append(wt)
@@ -341,9 +341,9 @@ def collect_worktrees() -> list[WorktreeInfo]:
     return worktrees
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Branch discovery & classification
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Branch discovery & classification
+# ---------------------------------------------------------------------------
 
 
 def collect_branches(
@@ -381,7 +381,7 @@ def collect_branches(
             is_current=(name == current),
         )
 
-        ***REMOVED*** Parse upstream tracking ([gone], [ahead 1], [ahead 1, behind 2])
+        # Parse upstream tracking ([gone], [ahead 1], [ahead 1, behind 2])
         if track == "[gone]":
             info.upstream_gone = True
         elif track:
@@ -410,7 +410,7 @@ def classify_branch(info: BranchInfo, *, base: str) -> BranchInfo:
     """Set ``info.category`` and ``info.reasons`` based on collected metadata."""
     reasons: list[str] = []
 
-    ***REMOVED*** Protected branches are not deletable regardless of state.
+    # Protected branches are not deletable regardless of state.
     if info.is_current or info.name == base or info.name in PROTECTED_NAMES:
         info.category = "protected"
         if info.is_current:
@@ -422,8 +422,8 @@ def classify_branch(info: BranchInfo, *, base: str) -> BranchInfo:
         info.reasons = reasons
         return info
 
-    ***REMOVED*** Anything below this point is deletable in principle, so collect risk
-    ***REMOVED*** signals and decide between safe-to-delete and requires-human.
+    # Anything below this point is deletable in principle, so collect risk
+    # signals and decide between safe-to-delete and requires-human.
     if info.upstream is None:
         reasons.append("no upstream")
     if info.upstream_gone:
@@ -451,9 +451,9 @@ def classify_branches(branches: list[BranchInfo], *, base: str) -> list[BranchIn
     return [classify_branch(b, base=base) for b in branches]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Transient files (unchanged)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Transient files (unchanged)
+# ---------------------------------------------------------------------------
 
 
 def find_transient_files() -> list[str]:
@@ -474,9 +474,9 @@ def find_transient_files() -> list[str]:
     return sorted(raw.splitlines()) if raw else []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Backward-compat helpers (kept so external callers/tests stay green)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Backward-compat helpers (kept so external callers/tests stay green)
+# ---------------------------------------------------------------------------
 
 
 def find_merged_branches() -> list[str]:
@@ -524,9 +524,9 @@ def find_stale_worktrees() -> list[dict[str, str]]:
     return out
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Report assembly
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Report assembly
+# ---------------------------------------------------------------------------
 
 
 def build_report() -> HygieneReport:
@@ -591,9 +591,9 @@ def print_human_report(report: HygieneReport) -> None:
     print(f"\nTotal actionable issues: {report.total_issues}")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Cleanup actions
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Cleanup actions
+# ---------------------------------------------------------------------------
 
 
 def fix_safe_branches(
@@ -622,7 +622,7 @@ def fix_safe_branches(
     return deleted
 
 
-***REMOVED*** Backward-compat shim: existing tests/code may call ``fix_merged_branches``.
+# Backward-compat shim: existing tests/code may call ``fix_merged_branches``.
 def fix_merged_branches(
     branches: list[str], *, dry_run: bool = False, quiet: bool = False
 ) -> list[str]:
@@ -634,9 +634,9 @@ def fix_merged_branches(
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:

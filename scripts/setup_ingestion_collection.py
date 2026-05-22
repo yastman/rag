@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Setup Qdrant collection and payload indexes for document ingestion pipeline.
 
 Creates a 'documents' collection optimized for the ingestion pipeline with:
@@ -9,7 +9,7 @@ Milestone J: Document Ingestion Pipeline (2026-02-02)
 
 Usage:
     python scripts/setup_ingestion_collection.py
-    python scripts/setup_ingestion_collection.py --force  ***REMOVED*** Recreate if exists
+    python scripts/setup_ingestion_collection.py --force  # Recreate if exists
     python scripts/setup_ingestion_collection.py --collection my_docs
 """
 
@@ -27,7 +27,7 @@ from qdrant_client.models import (
 
 
 COLLECTION_NAME = "documents"
-VECTOR_SIZE = 1024  ***REMOVED*** Voyage voyage-3-large / voyage-4-large
+VECTOR_SIZE = 1024  # Voyage voyage-3-large / voyage-4-large
 
 
 def get_client() -> QdrantClient:
@@ -49,7 +49,7 @@ def collection_exists(client: QdrantClient, name: str) -> bool:
 
 def setup_collection(client: QdrantClient, name: str = COLLECTION_NAME, force: bool = False):
     """Create collection with proper indexes."""
-    ***REMOVED*** Check/delete existing
+    # Check/delete existing
     if collection_exists(client, name):
         if force:
             print(f"Deleting existing collection: {name}")
@@ -59,7 +59,7 @@ def setup_collection(client: QdrantClient, name: str = COLLECTION_NAME, force: b
             print("Use --force to recreate.")
             return
 
-    ***REMOVED*** Create collection
+    # Create collection
     print(f"Creating collection: {name}")
     client.create_collection(
         collection_name=name,
@@ -70,7 +70,7 @@ def setup_collection(client: QdrantClient, name: str = COLLECTION_NAME, force: b
     )
     print(f"  Created collection: {name} ({VECTOR_SIZE}-dim, cosine)")
 
-    ***REMOVED*** Create payload indexes for fast filtering/deletion
+    # Create payload indexes for fast filtering/deletion
     indexes = [
         ("file_id", PayloadSchemaType.KEYWORD),
         ("folder_id", PayloadSchemaType.KEYWORD),
@@ -93,7 +93,7 @@ def setup_collection(client: QdrantClient, name: str = COLLECTION_NAME, force: b
             else:
                 print(f"  Warning: {field_name}: {e}")
 
-    ***REMOVED*** Print collection info
+    # Print collection info
     info = client.get_collection(name)
     print("\nCollection ready:")
     print(f"  Name: {name}")

@@ -35,9 +35,9 @@ _MINIMAL_RESULT: dict = {
 }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** SDK disabled client: all public methods must be callable without raising
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# SDK disabled client: all public methods must be callable without raising
+# ---------------------------------------------------------------------------
 
 
 class TestSdkDisabledClientResilience:
@@ -100,9 +100,9 @@ class TestSdkDisabledClientResilience:
         write_crm_scores(self._client(), [], trace_id=_TRACE_ID)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Empty trace_id: all scoring functions silently skip
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Empty trace_id: all scoring functions silently skip
+# ---------------------------------------------------------------------------
 
 
 class TestEmptyTraceIdSilentSkip:
@@ -139,13 +139,13 @@ class TestEmptyTraceIdSilentSkip:
 
         lf = MagicMock()
         lf.get_current_trace_id = MagicMock(return_value="")
-        ***REMOVED*** Must complete without raising
+        # Must complete without raising
         write_langfuse_scores(lf, _MINIMAL_RESULT, trace_id="")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _write_voice_error_scores: graceful behavior
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _write_voice_error_scores: graceful behavior
+# ---------------------------------------------------------------------------
 
 
 class TestVoiceErrorScoresResilience:
@@ -207,9 +207,9 @@ class TestVoiceErrorScoresResilience:
         lf.get_current_trace_id.assert_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Static contract: bot.py wraps scoring calls in try/except
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Static contract: bot.py wraps scoring calls in try/except
+# ---------------------------------------------------------------------------
 
 
 class TestBotScoringTryCatchContract:
@@ -226,7 +226,7 @@ class TestBotScoringTryCatchContract:
         """write_langfuse_scores must be called inside a try block in handle_voice."""
         source = self._bot_source()
         assert "write_langfuse_scores" in source
-        ***REMOVED*** Both try and write_langfuse_scores exist together in the voice handler
+        # Both try and write_langfuse_scores exist together in the voice handler
         assert "Failed to write Langfuse voice scores" in source
 
     def test_update_current_span_failure_logged_not_raised(self):
@@ -274,14 +274,14 @@ class TestBotScoringTryCatchContract:
         def _direct_has_message_answer(stmts: list) -> bool:
             """Check direct body for await message.answer() calls (not nested)."""
             for stmt in stmts:
-                ***REMOVED*** Await expression: await message.answer(...)
+                # Await expression: await message.answer(...)
                 if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Await):
                     call = stmt.value.value
                     if isinstance(call, ast.Call) and "message.answer" in ast.unparse(call.func):
                         return True
             return False
 
-        ***REMOVED*** Find except handlers whose DIRECT body contains a scoring log marker
+        # Find except handlers whose DIRECT body contains a scoring log marker
         score_handlers = []
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
@@ -292,7 +292,7 @@ class TestBotScoringTryCatchContract:
 
         assert score_handlers, "Expected at least one scoring-specific except handler in bot.py"
 
-        ***REMOVED*** Each scoring-specific handler must NOT directly call message.answer
+        # Each scoring-specific handler must NOT directly call message.answer
         for handler in score_handlers:
             assert not _direct_has_message_answer(handler.body), (
                 "Scoring error handler must not send user messages"

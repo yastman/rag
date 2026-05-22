@@ -1,4 +1,4 @@
-"""Tests for KommoTokenStoreProtocol abstraction (***REMOVED***384)."""
+"""Tests for KommoTokenStoreProtocol abstraction (#384)."""
 
 from typing import Protocol
 
@@ -16,6 +16,6 @@ def test_token_store_protocol_is_runtime_checkable():
 
 
 def test_redis_token_store_satisfies_protocol():
-    ***REMOVED*** KommoTokenStore should structurally match KommoTokenStoreProtocol
+    # KommoTokenStore should structurally match KommoTokenStoreProtocol
     assert hasattr(KommoTokenStore, "get_valid_token")
     assert hasattr(KommoTokenStore, "force_refresh")

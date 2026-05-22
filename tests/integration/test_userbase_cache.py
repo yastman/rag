@@ -1,4 +1,4 @@
-***REMOVED*** tests/integration/test_userbase_cache.py
+# tests/integration/test_userbase_cache.py
 """Integration tests for USER-base semantic cache."""
 
 import os
@@ -23,19 +23,19 @@ class TestUserBaseCacheIntegration:
             base_url=os.getenv("USER_BASE_URL", "http://localhost:8003")
         )
 
-        ***REMOVED*** Test RU paraphrases
+        # Test RU paraphrases
         query1 = "двухкомнатная квартира с видом на море"
         query2 = "двушка с морским видом"
 
         emb1 = await vectorizer.aembed(query1)
         emb2 = await vectorizer.aembed(query2)
 
-        ***REMOVED*** Cosine similarity
+        # Cosine similarity
         import numpy as np
 
         similarity = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
 
-        ***REMOVED*** Should be high for paraphrases (> 0.8)
+        # Should be high for paraphrases (> 0.8)
         assert similarity > 0.8, f"Paraphrase similarity too low: {similarity}"
 
         await vectorizer.aclose()

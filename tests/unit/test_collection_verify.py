@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/test_collection_verify.py
+# tests/unit/test_collection_verify.py
 """Tests for collection verification mode."""
 
 from unittest.mock import MagicMock
@@ -11,12 +11,12 @@ class TestCollectionVerify:
         """verify_collection should return list of missing indexes."""
         from scripts.setup_scalar_collection import verify_collection_indexes
 
-        ***REMOVED*** Mock client with partial indexes
+        # Mock client with partial indexes
         mock_client = MagicMock()
         mock_info = MagicMock()
         mock_info.payload_schema = {
             "file_id": MagicMock(data_type="keyword"),
-            ***REMOVED*** Missing: metadata.file_id, metadata.doc_id, metadata.order, etc.
+            # Missing: metadata.file_id, metadata.doc_id, metadata.order, etc.
         }
         mock_client.get_collection.return_value = mock_info
 
@@ -69,12 +69,12 @@ class TestCollectionVerify:
             "metadata.source": MagicMock(data_type="keyword"),
             "metadata.topic": MagicMock(data_type="keyword"),
             "metadata.doc_type": MagicMock(data_type="keyword"),
-            "metadata.order": MagicMock(data_type="keyword"),  ***REMOVED*** Wrong! Should be integer
+            "metadata.order": MagicMock(data_type="keyword"),  # Wrong! Should be integer
             "metadata.chunk_order": MagicMock(data_type="integer"),
         }
         mock_client.get_collection.return_value = mock_info
 
         missing = verify_collection_indexes(mock_client, "test_collection")
 
-        ***REMOVED*** Should report wrong type
+        # Should report wrong type
         assert any("metadata.order" in m and "wrong type" in m for m in missing)

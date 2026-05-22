@@ -1,12 +1,12 @@
-***REMOVED*** services/
+# services/
 
 Bot services for RAG pipeline: embeddings, search, caching, query processing, and response generation.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Pure computation and I/O wrapper modules used by Telegram handlers and the API. No Telegram transport code lives here.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 | File | Purpose |
 |------|---------|
@@ -17,35 +17,34 @@ Pure computation and I/O wrapper modules used by Telegram handlers and the API. 
 | [`query_analyzer.py`](./query_analyzer.py) | LLM-based filter extraction (price, city, rooms) from natural language |
 | [`generate_response.py`](./generate_response.py) | Canonical response generation with Langfuse prompt management |
 | [`rag_core.py`](./rag_core.py) | Shared RAG core functions (no Langfuse spans, no metrics) |
-| [`llm.py`](./llm.py) | LLM answer generation with streaming and fallback |
 | [`filter_extractor.py`](./filter_extractor.py) | Rule-based filter extraction: price ranges, rooms, city, distance to sea |
 | [`apartment_llm_extractor.py`](./apartment_llm_extractor.py) | LLM-based apartment data extraction |
 | [`ingestion_cocoindex.py`](./ingestion_cocoindex.py) | Thin wrapper around `src.ingestion.service` for bot-side ingestion commands |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - Services are **stateless** except for Redis-backed caches; they do not own conversation memory (LangGraph checkpointer does).
 - **No Telegram transport imports** in this directory. Services receive plain data and return plain data.
 - `rag_core.py` is the lowest-level shared layer: no observability, no metrics, pure computation.
 
-***REMOVED******REMOVED*** Related Runtime Services
+## Related Runtime Services
 
 - **Qdrant** — vector database queries
 - **Redis** — cache tiers and user context storage
 - **BGE-M3 / Voyage** — embedding providers (Voyage is optional: `uv sync --extra voyage`)
 - **Langfuse** — prompt management and observability (optional)
 
-***REMOVED******REMOVED*** Focused Checks
+## Focused Checks
 
 ```bash
-***REMOVED*** Unit tests for services
+# Unit tests for services
 pytest telegram_bot/services/
 
-***REMOVED*** Type-check
+# Type-check
 make check
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../AGENTS.override.md`](../AGENTS.override.md) — Bot-specific scope rules and validation
 - [`../../DOCKER.md`](../../DOCKER.md) — Docker bring-up and service dependencies

@@ -7,7 +7,7 @@ Verifies that:
   4. .env.example documents E2E_VOICE_NOTE_PATH
   5. The e2e telegram_client reads E2E_VOICE_NOTE_PATH from the environment
 
-Issue: ***REMOVED***1486 — provide voice-note fixture for Telethon trace gate
+Issue: #1486 — provide voice-note fixture for Telethon trace gate
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Repository root helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Repository root helpers
+# ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).parent.parent.parent
 _FIXTURE_PATH = _REPO_ROOT / "data" / "test" / "voice_note_sample.ogg"
@@ -28,9 +28,9 @@ _TELEGRAM_CLIENT = _REPO_ROOT / "scripts" / "e2e" / "telegram_client.py"
 _E2E_CONFIG = _REPO_ROOT / "scripts" / "e2e" / "config.py"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 1. Fixture file existence
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 1. Fixture file existence
+# ---------------------------------------------------------------------------
 
 
 def test_voice_note_fixture_exists() -> None:
@@ -41,9 +41,9 @@ def test_voice_note_fixture_exists() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 2. Fixture size: >0 and <100 000 bytes
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 2. Fixture size: >0 and <100 000 bytes
+# ---------------------------------------------------------------------------
 
 
 def test_voice_note_fixture_size() -> None:
@@ -57,9 +57,9 @@ def test_voice_note_fixture_size() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 3. Valid OGG/Opus stream, including audio packets
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3. Valid OGG/Opus stream, including audio packets
+# ---------------------------------------------------------------------------
 
 
 def _read_ogg_packets(data: bytes) -> list[bytes]:
@@ -111,9 +111,9 @@ def test_voice_note_fixture_is_decodable_ogg_opus_stream() -> None:
     ), "Fixture must include at least one Opus audio packet"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 4. .env.example documents E2E_VOICE_NOTE_PATH
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 4. .env.example documents E2E_VOICE_NOTE_PATH
+# ---------------------------------------------------------------------------
 
 
 def test_env_example_documents_e2e_voice_note_path() -> None:
@@ -126,9 +126,9 @@ def test_env_example_documents_e2e_voice_note_path() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 5. telegram_client.py / config.py reads E2E_VOICE_NOTE_PATH
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 5. telegram_client.py / config.py reads E2E_VOICE_NOTE_PATH
+# ---------------------------------------------------------------------------
 
 
 def test_e2e_config_reads_voice_note_path_env_var() -> None:
@@ -151,16 +151,16 @@ def test_telegram_client_raises_on_missing_path() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** 6. Integration smoke: env var → config → path round-trip
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 6. Integration smoke: env var → config → path round-trip
+# ---------------------------------------------------------------------------
 
 
 def test_e2e_config_voice_note_path_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
     """E2EConfig must expose the path set via E2E_VOICE_NOTE_PATH env var."""
     monkeypatch.setenv("E2E_VOICE_NOTE_PATH", str(_FIXTURE_PATH))
 
-    ***REMOVED*** Import after patching env so dataclass field_factory picks it up
+    # Import after patching env so dataclass field_factory picks it up
     import importlib
 
     import scripts.e2e.config as _cfg_mod

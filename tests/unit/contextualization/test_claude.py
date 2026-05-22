@@ -112,7 +112,7 @@ class TestClaudeContextualizerContextualize:
 
     async def test_contextualize_single_chunk(self, contextualizer):
         """Test contextualizing a single chunk."""
-        ***REMOVED*** Mock the API response
+        # Mock the API response
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Contextual summary")]
         mock_response.usage.input_tokens = 100
@@ -131,7 +131,7 @@ class TestClaudeContextualizerContextualize:
 
     async def test_contextualize_multiple_chunks(self, contextualizer):
         """Test contextualizing multiple chunks."""
-        ***REMOVED*** Mock responses for each chunk
+        # Mock responses for each chunk
         mock_responses = []
         for i in range(3):
             resp = MagicMock()
@@ -164,7 +164,7 @@ class TestClaudeContextualizerContextualize:
         results = await contextualizer.contextualize(chunks, query=query)
 
         assert len(results) == 1
-        ***REMOVED*** Verify the API was called (query is passed to contextualize_single)
+        # Verify the API was called (query is passed to contextualize_single)
         contextualizer.client.messages.create.assert_called_once()
 
     async def test_contextualize_handles_api_error_gracefully(self, contextualizer):
@@ -178,12 +178,12 @@ class TestClaudeContextualizerContextualize:
 
         assert len(results) == 1
         assert results[0].original_text == chunks[0]
-        assert results[0].contextual_summary == ""  ***REMOVED*** Fallback
-        assert results[0].context_method == "none"  ***REMOVED*** Indicates failure
+        assert results[0].contextual_summary == ""  # Fallback
+        assert results[0].context_method == "none"  # Indicates failure
 
     async def test_contextualize_partial_failure(self, contextualizer):
         """Test that partial failures don't affect successful chunks."""
-        ***REMOVED*** First call succeeds, second fails, third succeeds
+        # First call succeeds, second fails, third succeeds
         success_response = MagicMock()
         success_response.content = [MagicMock(text="Success summary")]
         success_response.usage.input_tokens = 100
@@ -202,7 +202,7 @@ class TestClaudeContextualizerContextualize:
 
         assert len(results) == 3
         assert results[0].context_method == "claude"
-        assert results[1].context_method == "none"  ***REMOVED*** Failed
+        assert results[1].context_method == "none"  # Failed
         assert results[2].context_method == "claude"
 
     async def test_contextualize_empty_chunks(self, contextualizer):
@@ -259,11 +259,11 @@ class TestClaudeContextualizerContextualizeSingle:
         await contextualizer.contextualize_single(text="Text", article_number="Art1")
 
         call_kwargs = contextualizer.client.messages.create.call_args[1]
-        ***REMOVED*** System param must be a list with cache_control
+        # System param must be a list with cache_control
         system = call_kwargs["system"]
         assert isinstance(system, list)
         assert system[0]["cache_control"] == {"type": "ephemeral"}
-        ***REMOVED*** User content must be a plain string (no cache_control there)
+        # User content must be a plain string (no cache_control there)
         user_content = call_kwargs["messages"][0]["content"]
         assert isinstance(user_content, str)
 
@@ -299,14 +299,14 @@ class TestClaudeContextualizerContextualizeSingle:
         """Test that cost estimation is tracked."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
-        mock_response.usage.input_tokens = 1000  ***REMOVED*** $5/MTok = $0.005
-        mock_response.usage.output_tokens = 100  ***REMOVED*** $15/MTok = $0.0015
+        mock_response.usage.input_tokens = 1000  # $5/MTok = $0.005
+        mock_response.usage.output_tokens = 100  # $15/MTok = $0.0015
         contextualizer.client.messages.create = AsyncMock(return_value=mock_response)
 
         initial_cost = contextualizer.total_cost
         await contextualizer.contextualize_single(text="Text", article_number="A1")
 
-        ***REMOVED*** Expected: (1000 * 5 + 100 * 15) / 1_000_000 = 0.0065
+        # Expected: (1000 * 5 + 100 * 15) / 1_000_000 = 0.0065
         expected_cost = (1000 * 5 + 100 * 15) / 1_000_000
         assert contextualizer.total_cost == pytest.approx(initial_cost + expected_cost)
 
@@ -339,7 +339,7 @@ class TestClaudeContextualizerContextualizeSingle:
 
         call_kwargs = contextualizer.client.messages.create.call_args[1]
         messages = call_kwargs["messages"]
-        ***REMOVED*** User prompt should be a plain string containing the query
+        # User prompt should be a plain string containing the query
         user_content = messages[0]["content"]
         assert isinstance(user_content, str)
         assert "What are the fines?" in user_content
@@ -462,7 +462,7 @@ class TestClaudeContextualizerGetStats:
 
         assert stats["total_tokens"] == 1500
         assert stats["total_cost_usd"] == 0.015
-        ***REMOVED*** avg = 0.015 / 1500 * 1000 = 0.01
+        # avg = 0.015 / 1500 * 1000 = 0.01
         assert stats["avg_cost_per_chunk"] == 0.01
 
     def test_get_stats_rounds_cost(self, contextualizer):
@@ -472,7 +472,7 @@ class TestClaudeContextualizerGetStats:
 
         stats = contextualizer.get_stats()
 
-        assert stats["total_cost_usd"] == 0.1235  ***REMOVED*** Rounded to 4 decimals
+        assert stats["total_cost_usd"] == 0.1235  # Rounded to 4 decimals
 
 
 class TestClaudeContextualizerPrompts:
@@ -561,13 +561,13 @@ class TestClaudeContextualizerErrorHandling:
     async def test_handles_invalid_response(self, contextualizer):
         """Test handling when response structure is unexpected."""
         mock_response = MagicMock()
-        mock_response.content = []  ***REMOVED*** Empty content
+        mock_response.content = []  # Empty content
         contextualizer.client.messages.create = AsyncMock(return_value=mock_response)
 
-        ***REMOVED*** This should raise IndexError when accessing content[0]
+        # This should raise IndexError when accessing content[0]
         results = await contextualizer.contextualize(["Text"])
 
-        ***REMOVED*** Should fall back gracefully
+        # Should fall back gracefully
         assert len(results) == 1
         assert results[0].context_method == "none"
 
@@ -607,7 +607,7 @@ class TestClaudeContextualizerBatch:
         chunks = ["Chunk A", "Chunk B", "Chunk C"]
         await contextualizer.contextualize(chunks)
 
-        ***REMOVED*** Verify sequential processing
+        # Verify sequential processing
         assert call_order == [0, 1, 2]
 
     async def test_batch_accumulates_tokens(self, contextualizer):
@@ -621,21 +621,21 @@ class TestClaudeContextualizerBatch:
         chunks = ["A", "B", "C", "D", "E"]
         await contextualizer.contextualize(chunks)
 
-        ***REMOVED*** 5 chunks * 150 tokens each = 750 total
+        # 5 chunks * 150 tokens each = 750 total
         assert contextualizer.total_tokens == 750
 
     async def test_batch_accumulates_cost(self, contextualizer):
         """Test that cost accumulates across batch processing."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Summary")]
-        mock_response.usage.input_tokens = 1000  ***REMOVED*** $0.005 per chunk
-        mock_response.usage.output_tokens = 100  ***REMOVED*** $0.0015 per chunk
+        mock_response.usage.input_tokens = 1000  # $0.005 per chunk
+        mock_response.usage.output_tokens = 100  # $0.0015 per chunk
         contextualizer.client.messages.create = AsyncMock(return_value=mock_response)
 
         chunks = ["A", "B", "C"]
         await contextualizer.contextualize(chunks)
 
-        ***REMOVED*** Per chunk: (1000*5 + 100*15) / 1M = 0.0065
-        ***REMOVED*** Total: 0.0065 * 3 = 0.0195
+        # Per chunk: (1000*5 + 100*15) / 1M = 0.0065
+        # Total: 0.0065 * 3 = 0.0195
         expected_cost = 0.0065 * 3
         assert contextualizer.total_cost == pytest.approx(expected_cost)

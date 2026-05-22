@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Configuration Snapshot for Reproducible Evaluation
 
@@ -6,12 +6,12 @@ This module captures all configuration parameters used in evaluation runs
 to ensure reproducibility across time and environments.
 
 Usage:
-    python config_snapshot.py  ***REMOVED*** Print current config and hash
+    python config_snapshot.py  # Print current config and hash
 
 Integration:
     from config_snapshot import CONFIG_SNAPSHOT, get_config_hash
 
-    ***REMOVED*** Include hash in evaluation reports
+    # Include hash in evaluation reports
     report["config_hash"] = get_config_hash()
 """
 
@@ -145,23 +145,23 @@ def get_config_summary() -> dict[str, Any]:
         Dictionary with key config parameters
     """
     return {
-        "version": CONFIG_SNAPSHOT["metadata"]["version"],  ***REMOVED*** type: ignore[index]
-        "date": CONFIG_SNAPSHOT["metadata"]["date"],  ***REMOVED*** type: ignore[index]
+        "version": CONFIG_SNAPSHOT["metadata"]["version"],  # type: ignore[index]
+        "date": CONFIG_SNAPSHOT["metadata"]["date"],  # type: ignore[index]
         "config_hash": get_config_hash(),
         "models": {
-            "embedder": CONFIG_SNAPSHOT["models"]["embedder"]["name"],  ***REMOVED*** type: ignore[index]
-            "dense_dim": CONFIG_SNAPSHOT["models"]["embedder"]["dense_dim"],  ***REMOVED*** type: ignore[index]
+            "embedder": CONFIG_SNAPSHOT["models"]["embedder"]["name"],  # type: ignore[index]
+            "dense_dim": CONFIG_SNAPSHOT["models"]["embedder"]["dense_dim"],  # type: ignore[index]
         },
         "collection": {
-            "name": CONFIG_SNAPSHOT["collection"]["name"],  ***REMOVED*** type: ignore[index]
-            "points": CONFIG_SNAPSHOT["collection"]["points_count"],  ***REMOVED*** type: ignore[index]
+            "name": CONFIG_SNAPSHOT["collection"]["name"],  # type: ignore[index]
+            "points": CONFIG_SNAPSHOT["collection"]["points_count"],  # type: ignore[index]
         },
         "best_engine": {
             "name": "dbsf_colbert",
-            "recall_at_1": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][  ***REMOVED*** type: ignore[index]
+            "recall_at_1": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][  # type: ignore[index]
                 "recall_at_1"
             ],
-            "ndcg_at_10": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][  ***REMOVED*** type: ignore[index]
+            "ndcg_at_10": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][  # type: ignore[index]
                 "ndcg_at_10"
             ],
         },
@@ -178,18 +178,18 @@ def validate_config() -> bool:
     Raises:
         ValueError: If critical parameters are missing or invalid
     """
-    ***REMOVED*** Check required keys
+    # Check required keys
     required_keys = ["metadata", "models", "search_engines", "collection", "evaluation"]
     for key in required_keys:
         if key not in CONFIG_SNAPSHOT:
             raise ValueError(f"Missing required config key: {key}")
 
-    ***REMOVED*** Validate collection points count
-    if CONFIG_SNAPSHOT["collection"]["points_count"] <= 0:  ***REMOVED*** type: ignore[index]
+    # Validate collection points count
+    if CONFIG_SNAPSHOT["collection"]["points_count"] <= 0:  # type: ignore[index]
         raise ValueError("Collection points_count must be positive")
 
-    ***REMOVED*** Validate evaluation queries
-    if CONFIG_SNAPSHOT["evaluation"]["total_queries"] <= 0:  ***REMOVED*** type: ignore[index]
+    # Validate evaluation queries
+    if CONFIG_SNAPSHOT["evaluation"]["total_queries"] <= 0:  # type: ignore[index]
         raise ValueError("Total queries must be positive")
 
     return True

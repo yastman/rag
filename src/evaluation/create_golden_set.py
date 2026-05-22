@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Create golden test set for Ukrainian legal RAG."""
 
 import json
@@ -19,9 +19,9 @@ def create_golden_test_set():
 
     queries = []
 
-    ***REMOVED*** Category 1: Direct article lookup (50 queries - easy)
+    # Category 1: Direct article lookup (50 queries - easy)
     important_articles = [
-        ***REMOVED*** Crimes against person
+        # Crimes against person
         115,
         116,
         117,
@@ -32,7 +32,7 @@ def create_golden_test_set():
         122,
         123,
         125,
-        ***REMOVED*** Crimes against property
+        # Crimes against property
         185,
         186,
         187,
@@ -41,7 +41,7 @@ def create_golden_test_set():
         191,
         192,
         193,
-        ***REMOVED*** Crimes against public safety
+        # Crimes against public safety
         255,
         256,
         257,
@@ -50,12 +50,12 @@ def create_golden_test_set():
         260,
         261,
         262,
-        ***REMOVED*** Corruption crimes
+        # Corruption crimes
         368,
         369,
         370,
         375,
-        ***REMOVED*** Economic crimes
+        # Economic crimes
         289,
         190,
         191,
@@ -63,7 +63,7 @@ def create_golden_test_set():
         193,
         194,
         195,
-        ***REMOVED*** Drug crimes
+        # Drug crimes
         307,
         308,
         309,
@@ -83,7 +83,7 @@ def create_golden_test_set():
             }
         )
 
-    ***REMOVED*** Category 2: Crime questions (40 queries - medium)
+    # Category 2: Crime questions (40 queries - medium)
     crime_queries = [
         ("Яка відповідальність за шахрайство?", [190]),
         ("Що таке розбій за УК України?", [187]),
@@ -118,7 +118,7 @@ def create_golden_test_set():
             }
         )
 
-    ***REMOVED*** Category 3: Legal concepts (30 queries - medium/hard)
+    # Category 3: Legal concepts (30 queries - medium/hard)
     concept_queries = [
         ("Які злочини проти власності передбачені?", [185, 186, 187, 189, 190]),
         ("Які є види тілесних ушкоджень?", [121, 122, 125]),
@@ -143,7 +143,7 @@ def create_golden_test_set():
             }
         )
 
-    ***REMOVED*** Category 4: Procedures (20 queries - medium)
+    # Category 4: Procedures (20 queries - medium)
     procedure_queries = [
         ("Як подати апеляцію на вирок?", [393, 394]),
         ("Що таке касаційне оскарження?", [433]),
@@ -168,7 +168,7 @@ def create_golden_test_set():
             }
         )
 
-    ***REMOVED*** Category 5: Definitions (10 queries - easy/medium)
+    # Category 5: Definitions (10 queries - easy/medium)
     definition_queries = [
         ("Що таке презумпція невинуватості?", [62]),
         ("Що таке крайня необхідність?", [39]),
@@ -193,7 +193,7 @@ def create_golden_test_set():
             }
         )
 
-    ***REMOVED*** Create test set
+    # Create test set
     test_set = {
         "version": "1.0.0",
         "created": "2025-10-30",
@@ -214,7 +214,7 @@ def create_golden_test_set():
         },
     }
 
-    ***REMOVED*** Save
+    # Save
     output_path = Path(__file__).parent.parent.parent / "tests" / "data" / "golden_test_set.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

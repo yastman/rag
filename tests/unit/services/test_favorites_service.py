@@ -1,4 +1,4 @@
-"""Unit tests for FavoritesService (***REMOVED***628)."""
+"""Unit tests for FavoritesService (#628)."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ def mock_pool() -> MagicMock:
     return pool
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _parse_jsonb
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _parse_jsonb
+# ---------------------------------------------------------------------------
 
 
 def test_parse_jsonb_from_dict() -> None:
@@ -54,9 +54,9 @@ def test_parse_jsonb_from_empty_str() -> None:
     assert result == {}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** add
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# add
+# ---------------------------------------------------------------------------
 
 
 async def test_add_sends_json_string(mock_pool: MagicMock) -> None:
@@ -72,7 +72,7 @@ async def test_add_sends_json_string(mock_pool: MagicMock) -> None:
     await svc.add(telegram_id=123, property_id="prop-42", property_data={"price": 100000})
 
     call_args = mock_pool.fetchrow.call_args[0]
-    ***REMOVED*** $3 argument must be a JSON string, not a dict
+    # $3 argument must be a JSON string, not a dict
     assert isinstance(call_args[3], str)
     assert call_args[3] == '{"price": 100000}'
 
@@ -111,9 +111,9 @@ async def test_add_duplicate_returns_none(mock_pool: MagicMock) -> None:
     assert result is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** remove
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# remove
+# ---------------------------------------------------------------------------
 
 
 async def test_remove(mock_pool: MagicMock) -> None:
@@ -135,9 +135,9 @@ async def test_remove_nonexistent(mock_pool: MagicMock) -> None:
     assert deleted is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** list
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
 
 
 async def test_list(mock_pool: MagicMock) -> None:
@@ -186,9 +186,9 @@ async def test_list_empty(mock_pool: MagicMock) -> None:
     assert favorites == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** count
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# count
+# ---------------------------------------------------------------------------
 
 
 async def test_count(mock_pool: MagicMock) -> None:
@@ -201,9 +201,9 @@ async def test_count(mock_pool: MagicMock) -> None:
     mock_pool.fetchval.assert_awaited_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** is_favorited
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# is_favorited
+# ---------------------------------------------------------------------------
 
 
 async def test_is_favorited(mock_pool: MagicMock) -> None:

@@ -12,7 +12,7 @@ def test_build_services_menu():
 
     kb = build_services_menu()
     assert isinstance(kb, InlineKeyboardMarkup)
-    ***REMOVED*** 5 services + 1 back = 6 rows
+    # 5 services + 1 back = 6 rows
     assert len(kb.inline_keyboard) == 6
 
 
@@ -54,15 +54,15 @@ def test_build_services_menu_with_i18n():
     i18n = MagicMock()
     i18n.get.return_value = "Localized"
     kb = build_services_menu(i18n=i18n)
-    for row in kb.inline_keyboard[:-1]:  ***REMOVED*** all rows except last (back)
+    for row in kb.inline_keyboard[:-1]:  # all rows except last (back)
         assert "Localized" in row[0].text
-    assert i18n.get.call_count >= 6  ***REMOVED*** 5 services + 1 back
+    assert i18n.get.call_count >= 6  # 5 services + 1 back
 
 
 def test_build_services_menu_i18n_fallback():
     """build_services_menu with i18n=None falls back to yaml."""
     kb = build_services_menu()
-    assert kb.inline_keyboard[0][0].text  ***REMOVED*** not empty
+    assert kb.inline_keyboard[0][0].text  # not empty
     assert "svc:" in kb.inline_keyboard[0][0].callback_data
 
 

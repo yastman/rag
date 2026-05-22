@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,18 +10,18 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-***REMOVED*** Safe .env parsing - reject lines that look like shell commands
+# Safe .env parsing - reject lines that look like shell commands
 while IFS= read -r line || [[ -n "$line" ]]; do
-  ***REMOVED*** skip empty lines and comments
-  [[ -z "$line" || "$line" =~ ^[[:space:]]****REMOVED*** ]] && continue
-  ***REMOVED*** Must be KEY=VALUE format
+  # skip empty lines and comments
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  # Must be KEY=VALUE format
   if [[ ! "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
     echo "Invalid .env line (not KEY=VALUE): $line" >&2
     exit 1
   fi
   key="${line%%=*}"
-  value="${line***REMOVED****=}"
-  ***REMOVED*** Strip surrounding quotes if present
+  value="${line#*=}"
+  # Strip surrounding quotes if present
   if [[ "$value" == \"*\" ]]; then
     value="${value:1:-1}"
   elif [[ "$value" == \'*\' ]]; then
@@ -38,7 +38,7 @@ if [ "${handoff_enabled}" = "true" ] && [ -z "${managers_group_id}" ]; then
   exit 1
 fi
 
-***REMOVED*** Core required vars (always needed for minimal RAG chatbot runtime)
+# Core required vars (always needed for minimal RAG chatbot runtime)
 
 core_required_vars=(
   POSTGRES_PASSWORD
@@ -93,27 +93,27 @@ require_present() {
 
 require_present "${core_required_vars[@]}"
 
-if [ "${***REMOVED***optional_profile_vars[@]}" -gt 0 ]; then
+if [ "${#optional_profile_vars[@]}" -gt 0 ]; then
   require_present "${optional_profile_vars[@]}"
 fi
 
-***REMOVED*** Minimum password complexity check (>=12 chars) for active sensitive credentials
+# Minimum password complexity check (>=12 chars) for active sensitive credentials
 for pw_var in "${core_password_vars[@]}" "${optional_password_vars[@]}"; do
   pw_value="${!pw_var:-}"
-  if [ "${***REMOVED***pw_value}" -lt 12 ]; then
-    echo "${pw_var} must be at least 12 characters long (got ${***REMOVED***pw_value})" >&2
+  if [ "${#pw_value}" -lt 12 ]; then
+    echo "${pw_var} must be at least 12 characters long (got ${#pw_value})" >&2
     exit 1
   fi
 done
 
-***REMOVED*** VPS deploy guard: project name must be vps
+# VPS deploy guard: project name must be vps
 
 if [ "${COMPOSE_PROJECT_NAME:-vps}" != "vps" ]; then
   echo "COMPOSE_PROJECT_NAME must be vps for VPS deploys" >&2
   exit 1
 fi
 
-***REMOVED*** Root disk usage deploy blocker
+# Root disk usage deploy blocker
 
 vps_disk_usage_max_percent="${VPS_DISK_USAGE_MAX_PERCENT:-90}"
 root_usage_percent="$(df -P / | awk 'NR==2 {gsub(/%/, "", $5); print $5}')"
@@ -122,6 +122,6 @@ if [ -n "$root_usage_percent" ] && [ "$root_usage_percent" -gt "$vps_disk_usage_
   exit 1
 fi
 
-***REMOVED*** Validate merged Compose config
+# Validate merged Compose config
 
 docker compose --env-file .env -f compose.yml -f compose.vps.yml config >/dev/null

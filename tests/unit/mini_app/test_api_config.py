@@ -59,7 +59,7 @@ async def test_phone_endpoint_returns_json():
 
 @pytest.mark.asyncio
 async def test_cors_headers_present():
-    """CORS middleware must respond to the configured allowed origin (***REMOVED***1595).
+    """CORS middleware must respond to the configured allowed origin (#1595).
 
     The Mini App allows ``MINI_APP_ALLOWED_ORIGIN`` (default ``https://t.me``)
     rather than the wildcard. We assert the configured origin is honoured by

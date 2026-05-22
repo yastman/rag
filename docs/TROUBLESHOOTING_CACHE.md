@@ -1,8 +1,8 @@
-***REMOVED*** Troubleshooting: Semantic Cache
+# Troubleshooting: Semantic Cache
 
 The semantic cache is a multi-tier system (`CacheLayerManager` in `telegram_bot/integrations/cache.py`). This guide helps debug cache behavior.
 
-***REMOVED******REMOVED*** Cache Architecture
+## Cache Architecture
 
 The `CacheLayerManager` implements 5 cache tiers:
 
@@ -14,28 +14,28 @@ The `CacheLayerManager` implements 5 cache tiers:
 | Search | Redis exact | 2 hours | Search results cache |
 | Rerank | Redis exact | 2 hours | Reranked results cache |
 
-***REMOVED******REMOVED*** Common Issues
+## Common Issues
 
-***REMOVED******REMOVED******REMOVED*** 1. Cache Always MISS Despite Correct Query
+### 1. Cache Always MISS Despite Correct Query
 
 **Symptoms:** Every query results in cache miss, even repeated identical queries.
 
 **Causes and solutions:**
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** RRF Scale vs Cosine Similarity Confusion
+#### RRF Scale vs Cosine Similarity Confusion
 
 The `grade_confidence` threshold uses **RRF scale** (~0.0006 to 0.016), NOT cosine similarity [0-1].
 
 The store guard in `pipelines/client.py` requires:
 ```python
-grade_confidence >= config.relevance_threshold_rrf  ***REMOVED*** Default: 0.005
+grade_confidence >= config.relevance_threshold_rrf  # Default: 0.005
 ```
 
 If your threshold is set to `0.8` thinking it's cosine similarity, nothing will store.
 
 **Fix:** Use RRF scale thresholds. A good starting point is `0.005`.
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Cache Key Versioning
+#### Cache Key Versioning
 
 Each tier has a version prefix:
 - `sem:v8:` / index `sem:v8:bge1024` — Semantic cache
@@ -45,71 +45,71 @@ Each tier has a version prefix:
 
 When models change, bump the version in `integrations/cache.py`:
 ```python
-CACHE_VERSION = "v5"  ***REMOVED*** Bump to invalidate exact caches
-SEMANTIC_CACHE_VERSION = "v8"  ***REMOVED*** Bump for semantic cache
+CACHE_VERSION = "v5"  # Bump to invalidate exact caches
+SEMANTIC_CACHE_VERSION = "v8"  # Bump for semantic cache
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. How to Verify Cache is Being Checked
+### 2. How to Verify Cache is Being Checked
 
 Check Langfuse traces for `cache-semantic-check` span:
 
 ```python
-***REMOVED*** In Langfuse UI:
-***REMOVED*** 1. Find your trace
-***REMOVED*** 2. Look for "cache-semantic-check" span
-***REMOVED*** 3. Check output fields:
-***REMOVED***    - hit: true/false
-***REMOVED***    - distance: actual RRF distance (lower = better match)
-***REMOVED***    - threshold: configured threshold
+# In Langfuse UI:
+# 1. Find your trace
+# 2. Look for "cache-semantic-check" span
+# 3. Check output fields:
+#    - hit: true/false
+#    - distance: actual RRF distance (lower = better match)
+#    - threshold: configured threshold
 ```
 
 Or check bot logs for cache hit/miss:
 
 ```python
-***REMOVED*** Cache hit log:
+# Cache hit log:
 logger.info("Semantic HIT (%.0fms, dist=%.3f, threshold=%.2f, type=%s)", ...)
 
-***REMOVED*** Cache miss log:
+# Cache miss log:
 logger.debug("Semantic MISS (%.0fms, type=%s)", ...)
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Multi-Tier Cache Debugging
+### 3. Multi-Tier Cache Debugging
 
 To identify which tier is causing misses:
 
 ```python
-***REMOVED*** Get per-tier metrics
+# Get per-tier metrics
 stats = cache.get_metrics()
-***REMOVED*** Returns:
-***REMOVED*** {
-***REMOVED***   "semantic": {"hits": N, "misses": N, "hit_rate": X},
-***REMOVED***   "embeddings": {"hits": N, "misses": N, "hit_rate": X},
-***REMOVED***   ...
-***REMOVED*** }
+# Returns:
+# {
+#   "semantic": {"hits": N, "misses": N, "hit_rate": X},
+#   "embeddings": {"hits": N, "misses": N, "hit_rate": X},
+#   ...
+# }
 ```
 
-***REMOVED******REMOVED******REMOVED*** 4. Redis Key Inspection
+### 4. Redis Key Inspection
 
 ```bash
-***REMOVED*** Connect to Redis
+# Connect to Redis
 redis-cli -p 6379 -a "$REDIS_PASSWORD"
 
-***REMOVED*** Check semantic cache keys
+# Check semantic cache keys
 KEYS sem:v8:*
 
-***REMOVED*** Check embedding cache
+# Check embedding cache
 KEYS embeddings:v5:*
 
-***REMOVED*** Check search cache
+# Check search cache
 KEYS search:v5:*
 
-***REMOVED*** Inspect a semantic cache entry
+# Inspect a semantic cache entry
 GET "sem:v8:bge1024:somekey"
 ```
 
-***REMOVED******REMOVED*** Cache Poisoning / Staleness
+## Cache Poisoning / Staleness
 
-***REMOVED******REMOVED******REMOVED*** When Version Bump Happens
+### When Version Bump Happens
 
 | Trigger | Action |
 |---------|--------|
@@ -117,25 +117,25 @@ GET "sem:v8:bge1024:somekey"
 | Embedding model change | Bump `CACHE_VERSION` + `SEMANTIC_CACHE_VERSION` |
 | Schema change | Bump `SEMANTIC_CACHE_VERSION` |
 
-***REMOVED******REMOVED******REMOVED*** Manual Cache Clear
+### Manual Cache Clear
 
 ```python
-***REMOVED*** Clear specific tier
+# Clear specific tier
 await cache.clear_by_tier("embeddings")
 
-***REMOVED*** Clear semantic cache
+# Clear semantic cache
 await cache.clear_semantic_cache()
 
-***REMOVED*** Clear all tiers
+# Clear all tiers
 results = await cache.clear_all_caches()
-***REMOVED*** Returns: {"semantic": N, "embeddings": N, "sparse": N, ...}
+# Returns: {"semantic": N, "embeddings": N, "sparse": N, ...}
 ```
 
 Or via bot command: `/clearcache`
 
-***REMOVED******REMOVED*** Cache vs Query Type Mapping
+## Cache vs Query Type Mapping
 
-***REMOVED******REMOVED******REMOVED*** Cacheable Query Types
+### Cacheable Query Types
 
 Only these types are stored in semantic cache:
 
@@ -143,14 +143,14 @@ Only these types are stored in semantic cache:
 _SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 ```
 
-***REMOVED******REMOVED******REMOVED*** Queries That Skip Cache
+### Queries That Skip Cache
 
 | Query Pattern | Reason |
 |---------------|--------|
 | Contextual follow-ups ("подробнее"/"more details", "первый"/"the first one", "это"/"this", "ещё"/"more") | Different context |
 | CHITCHAT/OFF_TOPIC | Not RAG queries |
 
-***REMOVED******REMOVED******REMOVED*** Cache Thresholds by Query Type
+### Cache Thresholds by Query Type
 
 | Query Type | Distance Threshold | TTL |
 |------------|-------------------|-----|
@@ -159,13 +159,13 @@ _SEMANTIC_CACHEABLE_QUERY_TYPES = {"FAQ", "GENERAL", "ENTITY", "STRUCTURED"}
 | GENERAL | 0.08 | 1h |
 | STRUCTURED | 0.05 | 2h |
 
-***REMOVED******REMOVED*** Metrics and Monitoring
+## Metrics and Monitoring
 
-***REMOVED******REMOVED******REMOVED*** Bot /metrics Command
+### Bot /metrics Command
 
 Shows p50/p95 pipeline timing including cache performance.
 
-***REMOVED******REMOVED******REMOVED*** Langfuse Score: semantic_cache_hit
+### Langfuse Score: semantic_cache_hit
 
 Track over time:
 ```sql
@@ -177,7 +177,7 @@ WHERE name = 'semantic_cache_hit'
 GROUP BY 1
 ```
 
-***REMOVED******REMOVED******REMOVED*** Log Indicators
+### Log Indicators
 
 | Log Message | Meaning |
 |-------------|---------|

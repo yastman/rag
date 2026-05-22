@@ -16,9 +16,9 @@ def _rt(**ctx) -> Runtime:
     return Runtime(context=ctx)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test 1: Heavy nodes use capture_input=False, capture_output=False
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test 1: Heavy nodes use capture_input=False, capture_output=False
+# ---------------------------------------------------------------------------
 
 
 class TestHeavyNodesDisableAutoCapture:
@@ -34,7 +34,7 @@ class TestHeavyNodesDisableAutoCapture:
         self.observe_calls: dict[str, dict] = {}
         original_modules: dict[str, object] = {}
 
-        ***REMOVED*** Remove cached node modules so re-import picks up our mock
+        # Remove cached node modules so re-import picks up our mock
         node_modules = [
             "telegram_bot.graph.nodes.retrieve",
             "telegram_bot.graph.nodes.generate",
@@ -55,20 +55,20 @@ class TestHeavyNodesDisableAutoCapture:
             return decorator
 
         with patch("telegram_bot.observability.observe", side_effect=fake_observe):
-            ***REMOVED*** Force re-import with our mocked observe
+            # Force re-import with our mocked observe
             for mod in node_modules:
                 importlib.import_module(mod)
-            ***REMOVED*** Trigger transcribe decorator via factory
+            # Trigger transcribe decorator via factory
             from telegram_bot.graph.nodes.transcribe import make_transcribe_node
 
             make_transcribe_node(llm=None)
             yield
 
-        ***REMOVED*** Restore original modules
+        # Restore original modules
         for mod in node_modules:
             sys.modules.pop(mod, None)
         for mod, original in original_modules.items():
-            sys.modules[mod] = original  ***REMOVED*** type: ignore[assignment]
+            sys.modules[mod] = original  # type: ignore[assignment]
 
     @pytest.mark.parametrize(
         "node_name",
@@ -88,11 +88,11 @@ class TestHeavyNodesDisableAutoCapture:
         assert kwargs.get("capture_output") is False, f"{node_name} must set capture_output=False"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test 2: Curated span payloads contain no heavy fields
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test 2: Curated span payloads contain no heavy fields
+# ---------------------------------------------------------------------------
 
-***REMOVED*** Forbidden keys — these must NEVER appear in update_current_span input/output
+# Forbidden keys — these must NEVER appear in update_current_span input/output
 _FORBIDDEN_KEYS = {"documents", "query_embedding", "sparse_embedding", "state", "messages"}
 
 
@@ -157,7 +157,7 @@ class TestCuratedSpanPayloads:
         )
         _assert_no_forbidden_keys(payloads, "node-retrieve")
 
-        ***REMOVED*** Verify expected curated keys exist in input
+        # Verify expected curated keys exist in input
         input_payload = payloads[0]
         assert "query_preview" in input_payload
         assert len(input_payload["query_preview"]) <= 120
@@ -360,7 +360,7 @@ class TestCuratedSpanPayloads:
             "response_sent": False,
             "message": None,
             "latency_stages": {},
-            ***REMOVED*** Heavy keys should not leak via curated span payloads
+            # Heavy keys should not leak via curated span payloads
             "documents": [{"text": "doc"}],
             "query_embedding": [0.1, 0.2],
             "messages": [{"role": "user", "content": "q"}],
@@ -405,7 +405,7 @@ class TestCuratedSpanPayloads:
 
         payloads = _extract_span_payloads(mock_lf)
         _assert_no_forbidden_keys(payloads, "node-rewrite")
-        ***REMOVED*** Generation metadata must be updated on success
+        # Generation metadata must be updated on success
         mock_lf.update_current_generation.assert_called_once()
         gen_kwargs = mock_lf.update_current_generation.call_args.kwargs
         assert gen_kwargs.get("model") == "gpt-4o-mini"

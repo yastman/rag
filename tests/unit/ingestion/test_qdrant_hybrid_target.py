@@ -24,9 +24,9 @@ from src.ingestion.unified.targets.qdrant_hybrid_target import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** compute_content_hash
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# compute_content_hash
+# ---------------------------------------------------------------------------
 
 
 class TestComputeContentHash:
@@ -64,9 +64,9 @@ class TestComputeContentHash:
         assert len(result) == 16
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** QdrantHybridTargetSpec
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# QdrantHybridTargetSpec
+# ---------------------------------------------------------------------------
 
 
 class TestQdrantHybridTargetSpec:
@@ -107,9 +107,9 @@ class TestQdrantHybridTargetSpec:
         assert spec.collection_name == "my_col"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** QdrantHybridTargetValues
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# QdrantHybridTargetValues
+# ---------------------------------------------------------------------------
 
 
 class TestQdrantHybridTargetValues:
@@ -125,9 +125,9 @@ class TestQdrantHybridTargetValues:
         assert val.file_size == 12345
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Connector static methods
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Connector static methods
+# ---------------------------------------------------------------------------
 
 
 class TestConnectorStatics:
@@ -146,7 +146,7 @@ class TestConnectorStatics:
 
     def test_apply_setup_change_create(self) -> None:
         spec = QdrantHybridTargetSpec()
-        ***REMOVED*** Should not raise
+        # Should not raise
         QdrantHybridTargetConnector.apply_setup_change("key", None, spec)
 
     def test_prepare_returns_spec(self) -> None:
@@ -177,7 +177,7 @@ class TestConnectorStatics:
             "mutate annotation is a string — from __future__ import annotations "
             "is likely active and CocoIndex will reject it"
         )
-        ***REMOVED*** The annotation should be a generic alias (tuple[...]) or similar.
+        # The annotation should be a generic alias (tuple[...]) or similar.
         assert hasattr(anno, "__origin__"), (
             "mutate annotation should be a concrete generic type (e.g. tuple[...])"
         )

@@ -1,4 +1,4 @@
-"""Tests for user feedback utilities (***REMOVED***229)."""
+"""Tests for user feedback utilities (#229)."""
 
 
 class TestBuildFeedbackKeyboard:
@@ -32,7 +32,7 @@ class TestBuildFeedbackKeyboard:
     def test_callback_data_within_64_bytes(self):
         from telegram_bot.feedback import build_feedback_keyboard
 
-        trace_id = "a" * 32  ***REMOVED*** max W3C Trace Context
+        trace_id = "a" * 32  # max W3C Trace Context
         kb = build_feedback_keyboard(trace_id)
         for btn in kb.inline_keyboard[0]:
             assert len(btn.callback_data.encode()) <= 64
@@ -65,7 +65,7 @@ class TestParseFeedbackCallback:
         assert parse_feedback_callback("fb:1:") is None
 
     def test_malformed_new_format_logs_warning(self, caplog):
-        """FeedbackCB.unpack failure triggers logger.warning (***REMOVED***860)."""
+        """FeedbackCB.unpack failure triggers logger.warning (#860)."""
         import logging
 
         from telegram_bot.feedback import parse_feedback_callback

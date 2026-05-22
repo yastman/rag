@@ -1,4 +1,4 @@
-"""Tests for utility tools: mortgage_calculator, daily_summary, handoff (***REMOVED***445)."""
+"""Tests for utility tools: mortgage_calculator, daily_summary, handoff (#445)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from langchain_core.runnables import RunnableConfig
 from telegram_bot.agents.context import BotContext
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_bot_context(**kwargs) -> BotContext:
@@ -40,9 +40,9 @@ def _make_config(ctx: BotContext) -> RunnableConfig:
     return RunnableConfig(configurable={"bot_context": ctx})
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Fixtures
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -85,9 +85,9 @@ def bot_context_no_managers():
     return _make_bot_context(bot=AsyncMock(), manager_ids=[])
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 1: mortgage_calculator
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 1: mortgage_calculator
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -100,7 +100,7 @@ async def test_mortgage_basic(bot_context):
         config=_make_config(bot_context),
     )
     assert "Ежемесячный платёж" in result
-    assert "579" in result  ***REMOVED*** ~579.96 EUR
+    assert "579" in result  # ~579.96 EUR
 
 
 @pytest.mark.asyncio
@@ -112,7 +112,7 @@ async def test_mortgage_zero_rate(bot_context):
         {"loan_amount": 120000, "annual_rate": 0, "term_years": 10},
         config=_make_config(bot_context),
     )
-    ***REMOVED*** 120000 / 120 = 1000 EUR/month
+    # 120000 / 120 = 1000 EUR/month
     assert "1 000" in result or "1000" in result
 
 
@@ -188,9 +188,9 @@ async def test_mortgage_rate_over_100_warning(bot_context):
     assert "100%" in result or "предупреждение" in result.lower() or "процент" in result.lower()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 2: daily_summary
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 2: daily_summary
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -265,9 +265,9 @@ async def test_daily_summary_explicit_date(bot_context_with_kommo):
     assert "summary" in result.lower() or "date" in result.lower()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Task 3: handoff
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Task 3: handoff
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

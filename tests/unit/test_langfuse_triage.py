@@ -1,6 +1,6 @@
 """Tests for scripts/langfuse_triage.py (TDD red-green-refactor).
 
-Issue ***REMOVED***757: auto-triage dislike traces → Annotation Queue "dislike-review"
+Issue #757: auto-triage dislike traces → Annotation Queue "dislike-review"
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ def _make_meta(total_pages: int = 1, page: int = 1) -> SimpleNamespace:
     return SimpleNamespace(total_pages=total_pages, page=page)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** fetch_dislike_trace_ids
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# fetch_dislike_trace_ids
+# ---------------------------------------------------------------------------
 
 
 class TestFetchDislikeTraceIds:
@@ -63,7 +63,7 @@ class TestFetchDislikeTraceIds:
         kwargs = mock_api.score_v_2.get.call_args.kwargs
         assert kwargs.get("name") == "user_feedback"
         assert kwargs.get("value") == 0
-        ***REMOVED*** v1 score.get must NOT be called
+        # v1 score.get must NOT be called
         mock_api.score.get.assert_not_called()
 
     def test_filters_by_time_window(self):
@@ -160,9 +160,9 @@ class TestFetchDislikeTraceIds:
         assert mock_api.score_v_2.get.call_count == 2
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** get_or_create_annotation_queue
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# get_or_create_annotation_queue
+# ---------------------------------------------------------------------------
 
 
 class TestGetOrCreateAnnotationQueue:
@@ -242,9 +242,9 @@ class TestGetOrCreateAnnotationQueue:
         mock_api.annotation_queues.list.assert_not_called()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** add_traces_to_queue
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# add_traces_to_queue
+# ---------------------------------------------------------------------------
 
 
 class TestAddTracesToQueue:
@@ -261,7 +261,7 @@ class TestAddTracesToQueue:
         assert mock_api.annotation_queues.create_queue_item.call_count == 3
 
     def test_item_uses_trace_object_type(self):
-        """objectType must be TRACE (not SESSION due to bug ***REMOVED***9571)."""
+        """objectType must be TRACE (not SESSION due to bug #9571)."""
         module = _load_module()
 
         mock_api = MagicMock()
@@ -311,9 +311,9 @@ class TestAddTracesToQueue:
         mock_api.annotation_queues.create_queue_item.assert_called_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** triage_dislike_traces (main orchestration)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# triage_dislike_traces (main orchestration)
+# ---------------------------------------------------------------------------
 
 
 class TestTriageDislikeTraces:
@@ -405,15 +405,15 @@ class TestTriageDislikeTraces:
             dry_run=False,
         )
 
-        ***REMOVED*** Verify list_queues was called and create_queue_item received the custom queue id
+        # Verify list_queues was called and create_queue_item received the custom queue id
         mock_api.annotation_queues.list_queues.assert_called_once()
         create_kwargs = mock_api.annotation_queues.create_queue_item.call_args.kwargs
         assert create_kwargs["queue_id"] == "q-custom"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** QUEUE_NAME constant
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# QUEUE_NAME constant
+# ---------------------------------------------------------------------------
 
 
 class TestConstants:

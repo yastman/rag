@@ -1,5 +1,5 @@
-***REMOVED*** tests/smoke/test_smoke_fixtures.py
-"""Regression locks for tests/smoke/conftest.py contracts (***REMOVED***1766).
+# tests/smoke/test_smoke_fixtures.py
+"""Regression locks for tests/smoke/conftest.py contracts (#1766).
 
 These run without live services: they verify the fixture contract itself
 and the SDK-native message access pattern, so the smoke tier does not
@@ -13,7 +13,7 @@ import pytest
 def test_redis_url_fixture_is_provided(redis_url: str) -> None:
     """Smoke conftest must expose a `redis_url` fixture.
 
-    Regression for ***REMOVED***1766: `require_live_services` and `cache_service`
+    Regression for #1766: `require_live_services` and `cache_service`
     consume `redis_url` via `request.getfixturevalue("redis_url")`. Before
     the fix, no `redis_url` fixture existed anywhere in the test tree, so
     smoke runs errored at fixture resolution.
@@ -28,10 +28,10 @@ def test_redis_url_fixture_injects_password(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
     monkeypatch.setenv("REDIS_PASSWORD", "topsecret")
 
-    ***REMOVED*** Reimport / recompute by calling the fixture function directly.
+    # Reimport / recompute by calling the fixture function directly.
     from tests.smoke.conftest import redis_url as redis_url_fixture
 
-    ***REMOVED*** Module-scoped pytest fixtures are wrapped; reach the underlying function.
+    # Module-scoped pytest fixtures are wrapped; reach the underlying function.
     func = getattr(redis_url_fixture, "__wrapped__", redis_url_fixture)
     url = func() if callable(func) else None
     assert url == "redis://:topsecret@localhost:6379", url
@@ -52,7 +52,7 @@ def test_redis_url_fixture_preserves_explicit_credentials(monkeypatch: pytest.Mo
 
 @pytest.mark.smoke
 def test_initial_state_message_uses_dot_notation() -> None:
-    """`state["messages"][0]` is a HumanMessage; access content via attribute (***REMOVED***1766).
+    """`state["messages"][0]` is a HumanMessage; access content via attribute (#1766).
 
     LangChain SDK contract (per langgraph graph-api docs): when state uses
     `add_messages`, messages are deserialized to BaseMessage objects and
@@ -66,7 +66,7 @@ def test_initial_state_message_uses_dot_notation() -> None:
     assert isinstance(state["messages"][0], HumanMessage)
     assert state["messages"][0].content == "hello"
 
-    ***REMOVED*** Subscript must remain unsupported — protect against accidental
-    ***REMOVED*** reintroduction of dict-style access in tests.
+    # Subscript must remain unsupported — protect against accidental
+    # reintroduction of dict-style access in tests.
     with pytest.raises(TypeError):
-        _ = state["messages"][0]["content"]  ***REMOVED*** type: ignore[index]
+        _ = state["messages"][0]["content"]  # type: ignore[index]

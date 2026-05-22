@@ -25,12 +25,12 @@ export function TelegramGate({ isTelegram, children }: Props) {
         padding: 32,
         fontFamily: "system-ui, sans-serif",
         textAlign: "center",
-        background: "***REMOVED***17212b",
-        color: "***REMOVED***f5f5f5",
+        background: "#17212b",
+        color: "#f5f5f5",
       }}
     >
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>Откройте в Telegram</h1>
-      <p style={{ fontSize: 16, color: "***REMOVED***708499", marginBottom: 24 }}>
+      <p style={{ fontSize: 16, color: "#708499", marginBottom: 24 }}>
         Это приложение работает только внутри Telegram.
       </p>
       <a
@@ -38,8 +38,8 @@ export function TelegramGate({ isTelegram, children }: Props) {
         style={{
           display: "inline-block",
           padding: "12px 24px",
-          background: "***REMOVED***5288c1",
-          color: "***REMOVED***fff",
+          background: "#5288c1",
+          color: "#fff",
           borderRadius: 8,
           textDecoration: "none",
           fontSize: 16,

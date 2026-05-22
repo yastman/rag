@@ -35,7 +35,7 @@ def test_frontend_build_context_ignores_local_dependency_and_build_artifacts() -
     entries = {
         line.strip()
         for line in text.splitlines()
-        if line.strip() and not line.lstrip().startswith("***REMOVED***")
+        if line.strip() and not line.lstrip().startswith("#")
     }
 
     assert "node_modules/" in entries

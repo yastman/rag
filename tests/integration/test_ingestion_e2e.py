@@ -22,24 +22,24 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def test_markdown_content() -> bytes:
     """Sample markdown content for testing."""
-    return b"""***REMOVED*** Test Document
+    return b"""# Test Document
 
-***REMOVED******REMOVED*** Introduction
+## Introduction
 
 This is a test document for the ingestion pipeline.
 It contains multiple sections to test chunking.
 
-***REMOVED******REMOVED*** Section One
+## Section One
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit.
 Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 
-***REMOVED******REMOVED*** Section Two
+## Section Two
 
 Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
 Duis aute irure dolor in reprehenderit in voluptate velit esse cillum.
 
-***REMOVED******REMOVED*** Conclusion
+## Conclusion
 
 This concludes the test document.
 """
@@ -71,7 +71,7 @@ async def _seed_ingestion_collection(tmp_path: Path, collection_name: str) -> st
 
     seed_dir = tmp_path / "seed"
     seed_dir.mkdir()
-    (seed_dir / "seed_doc.md").write_text("***REMOVED*** Seed\n\nContent for ingestion status checks.")
+    (seed_dir / "seed_doc.md").write_text("# Seed\n\nContent for ingestion status checks.")
 
     service = CocoIndexIngestionService(collection_name=collection_name)
     try:
@@ -103,21 +103,21 @@ class TestIngestionServiceE2E:
         """Test that directory ingestion creates nodes in Qdrant."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
 
-        ***REMOVED*** Create test file
+        # Create test file
         test_file = tmp_path / "test_doc.md"
-        test_file.write_text("***REMOVED*** Test\n\nThis is test content for ingestion.")
+        test_file.write_text("# Test\n\nThis is test content for ingestion.")
 
         service = CocoIndexIngestionService(collection_name=test_collection_name)
 
         try:
-            ***REMOVED*** Ingest directory
+            # Ingest directory
             stats = await service.ingest_directory(tmp_path)
 
             assert stats.total_documents >= 1
             assert stats.errors == []
 
-            ***REMOVED*** Verify collection has points (***REMOVED***1629 — success path must require
-            ***REMOVED*** actual data, not a no-op).
+            # Verify collection has points (#1629 — success path must require
+            # actual data, not a no-op).
             collection_stats = await service.get_collection_stats()
             assert "error" not in collection_stats
             assert collection_stats.get("points_count", 0) > 0
@@ -135,9 +135,9 @@ class TestIngestionServiceE2E:
         try:
             stats = await service.get_collection_stats()
 
-            ***REMOVED*** Success path: stats must describe a healthy collection. Graceful
-            ***REMOVED*** failures are covered by the dedicated negative test
-            ***REMOVED*** test_ingest_gdrive_without_credentials_fails_gracefully (***REMOVED***1629).
+            # Success path: stats must describe a healthy collection. Graceful
+            # failures are covered by the dedicated negative test
+            # test_ingest_gdrive_without_credentials_fails_gracefully (#1629).
             assert isinstance(stats, dict)
             assert "error" not in stats
             assert "name" in stats
@@ -186,7 +186,7 @@ class TestQdrantSetupScript:
         from scripts.setup_ingestion_collection import get_client
 
         client = get_client()
-        ***REMOVED*** Client should be created (connection test requires live service)
+        # Client should be created (connection test requires live service)
         assert client is not None
 
 
@@ -199,7 +199,7 @@ class TestConvenienceFunctionsE2E:
 
         status = await get_ingestion_status(seeded_ingestion_collection)
 
-        ***REMOVED*** Success path: status must describe a healthy collection (***REMOVED***1629).
+        # Success path: status must describe a healthy collection (#1629).
         assert isinstance(status, dict)
         assert "error" not in status
         assert "name" in status

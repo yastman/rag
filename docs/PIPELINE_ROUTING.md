@@ -1,8 +1,8 @@
-***REMOVED*** Pipeline Routing
+# Pipeline Routing
 
 Query routing logic through the LangGraph pipeline.
 
-***REMOVED******REMOVED*** Routing Flow
+## Routing Flow
 
 ```
 START
@@ -54,7 +54,7 @@ summarize — only if checkpointer enabled
 END
 ```
 
-***REMOVED******REMOVED*** Query Type Classification
+## Query Type Classification
 
 | Query Type | Handler | Cacheable |
 |------------|---------|-----------|
@@ -71,7 +71,7 @@ END
 rg -n "CHITCHAT|OFF_TOPIC|STRUCTURED|FAQ|ENTITY|GENERAL|def classify_query" telegram_bot/graph/nodes/classify.py
 ```
 
-***REMOVED******REMOVED*** Route Functions
+## Route Functions
 
 | Function | Location | Returns |
 |----------|----------|---------|
@@ -82,7 +82,7 @@ rg -n "CHITCHAT|OFF_TOPIC|STRUCTURED|FAQ|ENTITY|GENERAL|def classify_query" tele
 | `route_cache` | `telegram_bot/graph/edges.py` | `respond` or `retrieve` |
 | `route_grade` | `telegram_bot/graph/edges.py` | `rerank`, `rewrite`, or `generate` |
 
-***REMOVED******REMOVED*** Rewrite Loop
+## Rewrite Loop
 
 Queries that fail grade checks enter a rewrite loop:
 
@@ -93,7 +93,7 @@ retrieve → grade → fail → rewrite → retrieve (up to max_rewrite_attempts
 - `max_rewrite_attempts`: configurable (default: 1)
 - Prevents infinite loops with recursion limit
 
-***REMOVED******REMOVED*** Conditional Edges
+## Conditional Edges
 
 Edges are defined via conditional functions in `build_graph()`:
 
@@ -109,7 +109,7 @@ graph.add_conditional_edges(
 )
 ```
 
-***REMOVED******REMOVED*** Code Locations
+## Code Locations
 
 | File | Purpose |
 |------|---------|

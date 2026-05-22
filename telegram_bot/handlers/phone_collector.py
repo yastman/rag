@@ -1,5 +1,5 @@
-***REMOVED*** telegram_bot/handlers/phone_collector.py
-"""Phone collection FSM for lead capture (***REMOVED***628)."""
+# telegram_bot/handlers/phone_collector.py
+"""Phone collection FSM for lead capture (#628)."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def _build_custom_fields(
     """Build Kommo ``custom_fields_values`` for a lead.
 
     Each entry is constructed via :class:`KommoCustomField` so the API
-    payload shape is owned by Pydantic (***REMOVED***1655). ``KommoCustomField.build_simple``
+    payload shape is owned by Pydantic (#1655). ``KommoCustomField.build_simple``
     skips fields whose CRM id is unset, matching the previous guard chain.
     """
     candidates: list[KommoCustomField | None] = [
@@ -153,7 +153,7 @@ async def start_phone_collection(
         await message_or_callback.message.answer(text, reply_markup=kb)
         await message_or_callback.answer()
     else:
-        await message_or_callback.answer(text, reply_markup=kb)  ***REMOVED*** type: ignore[union-attr]
+        await message_or_callback.answer(text, reply_markup=kb)  # type: ignore[union-attr]
 
 
 @observe(name="phone-lead-capture", capture_input=False, capture_output=False)
@@ -226,7 +226,7 @@ async def _process_valid_phone(
             )
 
             lead = await kommo_client.create_lead(
-                LeadCreate(  ***REMOVED*** type: ignore[call-arg]
+                LeadCreate(  # type: ignore[call-arg]
                     name=f"{crm_title} — {display_name}",
                     pipeline_id=pipeline_id,
                     status_id=status_id,
@@ -304,7 +304,7 @@ async def on_phone_received(
 
     text = message.text or ""
 
-    ***REMOVED*** Cancel button pressed
+    # Cancel button pressed
     if is_phone_cancel(text):
         await state.clear()
         await message.answer(
@@ -313,7 +313,7 @@ async def on_phone_received(
         )
         return
 
-    ***REMOVED*** Not a phone attempt (no 5+ digits) — silently exit FSM
+    # Not a phone attempt (no 5+ digits) — silently exit FSM
     if not is_phone_attempt(text):
         await state.clear()
         await message.answer(

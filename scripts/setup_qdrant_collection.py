@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Setup Qdrant collection for local development.
 
@@ -9,7 +9,7 @@ Creates a collection with optimized vector configuration for RAG:
 
 Usage:
     python scripts/setup_qdrant_collection.py
-    python scripts/setup_qdrant_collection.py --force  ***REMOVED*** Recreate if exists
+    python scripts/setup_qdrant_collection.py --force  # Recreate if exists
     python scripts/setup_qdrant_collection.py --collection my_collection
 """
 
@@ -34,7 +34,7 @@ from qdrant_client.models import (
 )
 
 
-***REMOVED*** Vector dimensions (BGE-M3)
+# Vector dimensions (BGE-M3)
 DENSE_DIMENSION = 1024
 
 
@@ -84,43 +84,43 @@ def create_collection(client: QdrantClient, collection_name: str) -> None:
     client.create_collection(
         collection_name=collection_name,
         vectors_config={
-            ***REMOVED*** Dense vectors for semantic search (BGE-M3)
+            # Dense vectors for semantic search (BGE-M3)
             "dense": VectorParams(
                 size=DENSE_DIMENSION,
                 distance=Distance.COSINE,
                 hnsw_config=HnswConfigDiff(
-                    m=16,  ***REMOVED*** Edges per node: balance memory/quality
-                    ef_construct=200,  ***REMOVED*** Build quality (higher = better graph)
-                    on_disk=False,  ***REMOVED*** HNSW graph in RAM for fast traversal
+                    m=16,  # Edges per node: balance memory/quality
+                    ef_construct=200,  # Build quality (higher = better graph)
+                    on_disk=False,  # HNSW graph in RAM for fast traversal
                 ),
                 quantization_config=BinaryQuantization(
                     binary=BinaryQuantizationConfig(
-                        always_ram=True,  ***REMOVED*** Quantized vectors in RAM (40x faster)
+                        always_ram=True,  # Quantized vectors in RAM (40x faster)
                     )
                 ),
-                on_disk=True,  ***REMOVED*** Original vectors on disk (RAM savings + rescoring)
+                on_disk=True,  # Original vectors on disk (RAM savings + rescoring)
             ),
-            ***REMOVED*** ColBERT multivector for reranking
+            # ColBERT multivector for reranking
             "colbert": VectorParams(
                 size=DENSE_DIMENSION,
                 distance=Distance.COSINE,
                 multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
                 hnsw_config=HnswConfigDiff(
-                    m=0,  ***REMOVED*** Disable HNSW for ColBERT (only for reranking)
+                    m=0,  # Disable HNSW for ColBERT (only for reranking)
                 ),
-                on_disk=True,  ***REMOVED*** ColBERT vectors on disk (only used for rerank)
+                on_disk=True,  # ColBERT vectors on disk (only used for rerank)
             ),
         },
-        ***REMOVED*** BM42 sparse vectors (better than BM25 for short chunks)
+        # BM42 sparse vectors (better than BM25 for short chunks)
         sparse_vectors_config={
             "bm42": SparseVectorParams(
-                modifier=Modifier.IDF,  ***REMOVED*** Native IDF computation in Qdrant
+                modifier=Modifier.IDF,  # Native IDF computation in Qdrant
             )
         },
-        ***REMOVED*** Optimizer config for better bulk indexing
+        # Optimizer config for better bulk indexing
         optimizers_config=OptimizersConfigDiff(
-            indexing_threshold=20000,  ***REMOVED*** Build HNSW every 20k vectors
-            memmap_threshold=50000,  ***REMOVED*** Use mmap for segments >50k
+            indexing_threshold=20000,  # Build HNSW every 20k vectors
+            memmap_threshold=50000,  # Use mmap for segments >50k
         ),
     )
 
@@ -139,16 +139,16 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
     """
     print("Creating payload indexes...")
 
-    ***REMOVED*** Keyword indexes (exact match filtering + deletion)
+    # Keyword indexes (exact match filtering + deletion)
     keyword_fields = [
-        "file_id",  ***REMOVED*** Flat field for fast delete
-        "metadata.file_id",  ***REMOVED*** Nested field for query filtering
-        "metadata.doc_id",  ***REMOVED*** Small-to-big doc grouping
-        "metadata.source",  ***REMOVED*** Source path filtering
-        "metadata.file_name",  ***REMOVED*** Filename filtering
-        "metadata.mime_type",  ***REMOVED*** Document type filtering
-        "metadata.topic",  ***REMOVED*** Topic pre-filter routing
-        "metadata.doc_type",  ***REMOVED*** Content-layer doc type filtering
+        "file_id",  # Flat field for fast delete
+        "metadata.file_id",  # Nested field for query filtering
+        "metadata.doc_id",  # Small-to-big doc grouping
+        "metadata.source",  # Source path filtering
+        "metadata.file_name",  # Filename filtering
+        "metadata.mime_type",  # Document type filtering
+        "metadata.topic",  # Topic pre-filter routing
+        "metadata.doc_type",  # Content-layer doc type filtering
     ]
 
     for field in keyword_fields:
@@ -162,10 +162,10 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    ***REMOVED*** Integer indexes for ordering/pagination
+    # Integer indexes for ordering/pagination
     integer_fields = [
-        "metadata.order",  ***REMOVED*** Chunk ordering for small-to-big
-        "metadata.chunk_id",  ***REMOVED*** Chunk position
+        "metadata.order",  # Chunk ordering for small-to-big
+        "metadata.chunk_id",  # Chunk position
     ]
 
     for field in integer_fields:
@@ -191,7 +191,7 @@ def print_collection_info(client: QdrantClient, collection_name: str) -> None:
         print(f"  Points count:   {info.points_count}")
         print(f"  Vectors count:  {getattr(info, 'vectors_count', 'n/a')}")
 
-        ***REMOVED*** Vector config
+        # Vector config
         print("\n  Vector configurations:")
         vectors_config = info.config.params.vectors
         if isinstance(vectors_config, dict):
@@ -201,14 +201,14 @@ def print_collection_info(client: QdrantClient, collection_name: str) -> None:
         elif vectors_config is not None and hasattr(vectors_config, "size"):
             print(f"    - default: {vectors_config.size}-dim, {vectors_config.distance}")
 
-        ***REMOVED*** Sparse vectors
+        # Sparse vectors
         if info.config.params.sparse_vectors:
             print("\n  Sparse vector configurations:")
             for name, sparse_config in info.config.params.sparse_vectors.items():
                 modifier = getattr(sparse_config, "modifier", "none")
                 print(f"    - {name}: modifier={modifier}")
 
-        ***REMOVED*** Payload indexes
+        # Payload indexes
         if hasattr(info, "payload_schema") and info.payload_schema:
             print("\n  Payload indexes:")
             for field, schema in info.payload_schema.items():
@@ -239,7 +239,7 @@ def setup_collection(
     try:
         client = get_qdrant_client()
 
-        ***REMOVED*** Check connection
+        # Check connection
         try:
             client.get_collections()
             print("  Connected successfully")
@@ -247,7 +247,7 @@ def setup_collection(
             print(f"Error: Cannot connect to Qdrant: {e}")
             return False
 
-        ***REMOVED*** Handle existing collection
+        # Handle existing collection
         if collection_exists(client, collection_name):
             if force:
                 delete_collection(client, collection_name)
@@ -257,14 +257,14 @@ def setup_collection(
                 print_collection_info(client, collection_name)
                 return True
 
-        ***REMOVED*** Create collection
+        # Create collection
         create_collection(client, collection_name)
 
-        ***REMOVED*** Create payload indexes
+        # Create payload indexes
         if not skip_indexes:
             create_payload_indexes(client, collection_name)
 
-        ***REMOVED*** Print final info
+        # Print final info
         print_collection_info(client, collection_name)
 
         print("Setup completed successfully!")

@@ -12,7 +12,7 @@ class TestSetupCollectionSchemaTypes:
         """is_furnished must be indexed with models.PayloadSchemaType.BOOL, not the string 'bool'."""
         with mock.patch("scripts.apartments.setup_collection.QdrantClient") as MockClient:
             mock_client = MockClient.return_value
-            mock_client.collection_exists.return_value = True  ***REMOVED*** skip create_collection
+            mock_client.collection_exists.return_value = True  # skip create_collection
 
             from scripts.apartments.setup_collection import create_payload_indexes
 

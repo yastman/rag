@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Setup Qdrant collection with Binary Quantization.
 
@@ -8,7 +8,7 @@ Uses *_binary suffix naming convention to distinguish from scalar quantized coll
 Usage:
     python scripts/setup_binary_collection.py
     python scripts/setup_binary_collection.py --source contextual_bulgaria_voyage
-    python scripts/setup_binary_collection.py --force  ***REMOVED*** Recreate if exists
+    python scripts/setup_binary_collection.py --force  # Recreate if exists
 """
 
 import argparse
@@ -30,7 +30,7 @@ from qdrant_client.models import (
 )
 
 
-***REMOVED*** Vector dimensions (Voyage voyage-4-large)
+# Vector dimensions (Voyage voyage-4-large)
 DENSE_DIMENSION = 1024
 
 
@@ -99,33 +99,33 @@ def create_binary_collection(client: QdrantClient, collection_name: str) -> None
     client.create_collection(
         collection_name=collection_name,
         vectors_config={
-            ***REMOVED*** Dense vectors with Binary Quantization (Voyage voyage-4-large)
+            # Dense vectors with Binary Quantization (Voyage voyage-4-large)
             "dense": VectorParams(
                 size=DENSE_DIMENSION,
                 distance=Distance.COSINE,
                 hnsw_config=HnswConfigDiff(
-                    m=16,  ***REMOVED*** Edges per node: balance memory/quality
-                    ef_construct=200,  ***REMOVED*** Build quality (higher = better graph)
-                    on_disk=False,  ***REMOVED*** HNSW graph in RAM for fast traversal
+                    m=16,  # Edges per node: balance memory/quality
+                    ef_construct=200,  # Build quality (higher = better graph)
+                    on_disk=False,  # HNSW graph in RAM for fast traversal
                 ),
                 quantization_config=BinaryQuantization(
                     binary=BinaryQuantizationConfig(
-                        always_ram=True,  ***REMOVED*** Quantized vectors in RAM (40x faster)
+                        always_ram=True,  # Quantized vectors in RAM (40x faster)
                     )
                 ),
-                on_disk=True,  ***REMOVED*** Original vectors on disk (for rescoring)
+                on_disk=True,  # Original vectors on disk (for rescoring)
             ),
         },
-        ***REMOVED*** BM42 sparse vectors (better than BM25 for short chunks)
+        # BM42 sparse vectors (better than BM25 for short chunks)
         sparse_vectors_config={
             "bm42": SparseVectorParams(
-                modifier=Modifier.IDF,  ***REMOVED*** Native IDF computation in Qdrant
+                modifier=Modifier.IDF,  # Native IDF computation in Qdrant
             )
         },
-        ***REMOVED*** Optimizer config for better bulk indexing
+        # Optimizer config for better bulk indexing
         optimizers_config=OptimizersConfigDiff(
-            indexing_threshold=20000,  ***REMOVED*** Build HNSW every 20k vectors
-            memmap_threshold=50000,  ***REMOVED*** Use mmap for segments >50k
+            indexing_threshold=20000,  # Build HNSW every 20k vectors
+            memmap_threshold=50000,  # Use mmap for segments >50k
         ),
     )
 
@@ -138,12 +138,12 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
     """Create indexes on payload fields for fast filtering."""
     print("Creating payload indexes...")
 
-    ***REMOVED*** Required indexes for unified ingestion (flat for fast delete)
+    # Required indexes for unified ingestion (flat for fast delete)
     required_keyword_fields = [
-        "file_id",  ***REMOVED*** Flat, for fast delete
-        "metadata.file_id",  ***REMOVED*** In metadata
-        "metadata.doc_id",  ***REMOVED*** For small-to-big
-        "metadata.source",  ***REMOVED*** For citations
+        "file_id",  # Flat, for fast delete
+        "metadata.file_id",  # In metadata
+        "metadata.doc_id",  # For small-to-big
+        "metadata.source",  # For citations
     ]
 
     for field in required_keyword_fields:
@@ -157,10 +157,10 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    ***REMOVED*** Required integer indexes for unified ingestion (small-to-big sorting)
+    # Required integer indexes for unified ingestion (small-to-big sorting)
     required_integer_fields = [
-        "metadata.order",  ***REMOVED*** For small-to-big sorting
-        "metadata.chunk_order",  ***REMOVED*** Alias
+        "metadata.order",  # For small-to-big sorting
+        "metadata.chunk_order",  # Alias
     ]
 
     for field in required_integer_fields:
@@ -174,7 +174,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    ***REMOVED*** Keyword indexes for text filtering
+    # Keyword indexes for text filtering
     keyword_fields = [
         "metadata.document_name",
         "metadata.doc_id",
@@ -197,7 +197,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    ***REMOVED*** Integer indexes for numeric filtering (range queries)
+    # Integer indexes for numeric filtering (range queries)
     integer_fields = [
         "metadata.price",
         "metadata.rooms",
@@ -221,7 +221,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    ***REMOVED*** Boolean indexes
+    # Boolean indexes
     boolean_fields = [
         "metadata.furnished",
         "metadata.year_round",
@@ -246,14 +246,14 @@ def verify_collection_indexes(client: QdrantClient, collection_name: str) -> lis
         List of missing index names (empty if all present)
     """
     required_indexes = {
-        ***REMOVED*** Keyword indexes (required for unified ingestion)
+        # Keyword indexes (required for unified ingestion)
         "file_id": "keyword",
         "metadata.file_id": "keyword",
         "metadata.doc_id": "keyword",
         "metadata.source": "keyword",
         "metadata.topic": "keyword",
         "metadata.doc_type": "keyword",
-        ***REMOVED*** Integer indexes (required for small-to-big)
+        # Integer indexes (required for small-to-big)
         "metadata.order": "integer",
         "metadata.chunk_order": "integer",
     }
@@ -267,7 +267,7 @@ def verify_collection_indexes(client: QdrantClient, collection_name: str) -> lis
             if field not in existing:
                 missing.append(field)
             else:
-                ***REMOVED*** Check type matches
+                # Check type matches
                 actual_type = getattr(existing[field], "data_type", "unknown")
                 if actual_type != expected_type:
                     missing.append(
@@ -323,7 +323,7 @@ def print_collection_info(client: QdrantClient, collection_name: str) -> None:
         print(f"  Points count:   {info.points_count}")
         print(f"  Vectors count:  {getattr(info, 'vectors_count', 'n/a')}")
 
-        ***REMOVED*** Vector config
+        # Vector config
         print("\n  Vector configurations:")
         vectors_config = info.config.params.vectors
         if isinstance(vectors_config, dict):
@@ -341,7 +341,7 @@ def print_collection_info(client: QdrantClient, collection_name: str) -> None:
                 f"    - default: {vectors_config.size}-dim, {vectors_config.distance}, quant=none"
             )
 
-        ***REMOVED*** Sparse vectors
+        # Sparse vectors
         if info.config.params.sparse_vectors:
             print("\n  Sparse vector configurations:")
             for name, sparse_config in info.config.params.sparse_vectors.items():
@@ -373,7 +373,7 @@ def setup_binary_collection(
     try:
         client = get_qdrant_client()
 
-        ***REMOVED*** Check connection
+        # Check connection
         try:
             client.get_collections()
             print("  Connected successfully")
@@ -381,10 +381,10 @@ def setup_binary_collection(
             print(f"Error: Cannot connect to Qdrant: {e}")
             return False
 
-        ***REMOVED*** Get binary collection name
+        # Get binary collection name
         binary_collection = get_binary_collection_name(source_collection)
 
-        ***REMOVED*** Handle existing collection
+        # Handle existing collection
         if collection_exists(client, binary_collection):
             if force:
                 delete_collection(client, binary_collection)
@@ -394,14 +394,14 @@ def setup_binary_collection(
                 print_collection_info(client, binary_collection)
                 return True
 
-        ***REMOVED*** Create collection
+        # Create collection
         create_binary_collection(client, binary_collection)
 
-        ***REMOVED*** Create payload indexes
+        # Create payload indexes
         if not skip_indexes:
             create_payload_indexes(client, binary_collection)
 
-        ***REMOVED*** Print final info
+        # Print final info
         print_collection_info(client, binary_collection)
 
         print("Setup completed successfully!")
@@ -462,7 +462,7 @@ Examples:
 
     args = parser.parse_args()
 
-    ***REMOVED*** Handle verify-only mode
+    # Handle verify-only mode
     if args.verify_only:
         print("\n" + "=" * 60)
         print("Qdrant Collection Verification")

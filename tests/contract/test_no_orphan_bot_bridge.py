@@ -1,11 +1,11 @@
-"""Contract: ``mini_app.bot_bridge`` is removed and not reintroduced (***REMOVED***1615).
+"""Contract: ``mini_app.bot_bridge`` is removed and not reintroduced (#1615).
 
 The Mini App runtime start flow uses a Redis pub/sub bridge between
 ``mini_app/api.py`` and ``telegram_bot/bot.py``. ``mini_app/bot_bridge.py``
 defined a parallel direct-bot bridge (``BotBridge`` + ``set_bot_bridge`` +
 ``get_bot_bridge``) that never had a runtime caller — only the unit test
 ``tests/unit/mini_app/test_bot_bridge.py``. Two apparent integration
-surfaces with one wired to runtime is the maintenance hazard ***REMOVED***1615
+surfaces with one wired to runtime is the maintenance hazard #1615
 called out.
 
 This contract pins the cleanup:
@@ -49,12 +49,12 @@ def test_orphan_bot_bridge_files_are_absent(path: Path) -> None:
             f"'{path.relative_to(REPO_ROOT)}' has reappeared. The Mini App "
             "↔ bot integration is owned by the Redis pub/sub path "
             "(mini_app/api.py + telegram_bot/bot.py); a parallel BotBridge "
-            "module created the maintenance hazard ***REMOVED***1615 called out."
+            "module created the maintenance hazard #1615 called out."
         )
 
 
 def test_no_runtime_import_of_bot_bridge() -> None:
-    """No runtime module under mini_app/ or telegram_bot/ may import bot_bridge (***REMOVED***1615)."""
+    """No runtime module under mini_app/ or telegram_bot/ may import bot_bridge (#1615)."""
     runtime_roots = (REPO_ROOT / "mini_app", REPO_ROOT / "telegram_bot")
     offenders: list[str] = []
     for root in runtime_roots:

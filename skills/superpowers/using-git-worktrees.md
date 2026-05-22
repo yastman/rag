@@ -1,4 +1,4 @@
-***REMOVED*** Skill: using-git-worktrees
+# Skill: using-git-worktrees
 
 Use when starting implementation for any issue.
 

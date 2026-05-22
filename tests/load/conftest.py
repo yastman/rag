@@ -1,4 +1,4 @@
-***REMOVED*** tests/load/conftest.py
+# tests/load/conftest.py
 """Load test fixtures - support live/mock toggle."""
 
 import os
@@ -19,7 +19,7 @@ def load_config():
         "chat_count": int(os.getenv("LOAD_CHAT_COUNT", "30")),
         "duration_min": int(os.getenv("LOAD_DURATION_MIN", "10")),
         "use_mocks": use_mocks(),
-        "eviction_test_mb": int(os.getenv("EVICTION_TEST_MB", "10")),  ***REMOVED*** Configurable
+        "eviction_test_mb": int(os.getenv("EVICTION_TEST_MB", "10")),  # Configurable
     }
 
 

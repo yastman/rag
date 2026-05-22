@@ -1,7 +1,7 @@
-"""User feedback utilities — inline keyboard builder and callback parser (***REMOVED***229, ***REMOVED***755).
+"""User feedback utilities — inline keyboard builder and callback parser (#229, #755).
 
 Keyboards are constructed with :class:`aiogram.utils.keyboard.InlineKeyboardBuilder`
-to follow the SDK convention enforced by issue ***REMOVED***1238.
+to follow the SDK convention enforced by issue #1238.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from .callback_data import FeedbackCB, FeedbackReasonCB
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** 6 dislike reason codes → full category names (***REMOVED***755)
+# 6 dislike reason codes → full category names (#755)
 _REASON_CODES: dict[str, str] = {
     "wt": "wrong_topic",
     "mi": "missing_info",
@@ -27,7 +27,7 @@ _REASON_CODES: dict[str, str] = {
     "fm": "formatting",
 }
 
-***REMOVED*** Button labels for dislike reasons (displayed to user)
+# Button labels for dislike reasons (displayed to user)
 _REASON_LABELS: dict[str, str] = {
     "wt": "🎯 Не по теме",
     "mi": "🔍 Нет информации",
@@ -57,7 +57,7 @@ def build_feedback_keyboard(trace_id: str) -> InlineKeyboardMarkup:
 
 
 def build_dislike_reason_keyboard(trace_id: str) -> InlineKeyboardMarkup:
-    """Build inline keyboard with 6 dislike reason buttons (3 rows × 2) (***REMOVED***755).
+    """Build inline keyboard with 6 dislike reason buttons (3 rows × 2) (#755).
 
     Button order follows :data:`_REASON_CODES` insertion order, which is
     guaranteed since Python 3.7.
@@ -92,7 +92,7 @@ def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
 
     Returns (value, trace_id, reason) or None if not a feedback callback.
     """
-    ***REMOVED*** New FeedbackReasonCB format: fbr:{code}:{trace_id}
+    # New FeedbackReasonCB format: fbr:{code}:{trace_id}
     if data.startswith("fbr:"):
         try:
             reason_cb = FeedbackReasonCB.unpack(data)
@@ -107,7 +107,7 @@ def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
     if not data.startswith("fb:"):
         return None
 
-    ***REMOVED*** New FeedbackCB format: fb:{like|dislike|done}:{trace_id}
+    # New FeedbackCB format: fb:{like|dislike|done}:{trace_id}
     try:
         feedback_cb = FeedbackCB.unpack(data)
         if feedback_cb.action == "like":
@@ -120,13 +120,13 @@ def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
             return 0.0, feedback_cb.trace_id, None
         if feedback_cb.action == "done":
             return None
-        ***REMOVED*** Unknown action (legacy "1", "0") → fall through to legacy parser below
+        # Unknown action (legacy "1", "0") → fall through to legacy parser below
     except Exception:
         logger.warning("Failed to parse feedback callback %r", data, exc_info=True)
 
-    ***REMOVED*** Legacy reason callback: fb:r:{code}:{trace_id}
+    # Legacy reason callback: fb:r:{code}:{trace_id}
     if data.startswith("fb:r:"):
-        parts = data.split(":", 3)  ***REMOVED*** ["fb", "r", "code", "trace_id"]
+        parts = data.split(":", 3)  # ["fb", "r", "code", "trace_id"]
         if len(parts) != 4:
             return None
         code, trace_id = parts[2], parts[3]
@@ -136,8 +136,8 @@ def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
             return None
         return 0.0, trace_id, _REASON_CODES[code]
 
-    ***REMOVED*** Legacy like/dislike callback: fb:{0|1}:{trace_id}
-    parts = data.split(":", 2)  ***REMOVED*** ["fb", "0|1", "trace_id"]
+    # Legacy like/dislike callback: fb:{0|1}:{trace_id}
+    parts = data.split(":", 2)  # ["fb", "0|1", "trace_id"]
     if len(parts) != 3:
         return None
 

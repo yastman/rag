@@ -113,7 +113,7 @@ class TestEmbedDocuments:
         """Test basic document embedding."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_result1 = MagicMock()
         mock_result1.embeddings = [[0.1] * 1024, [0.2] * 1024]
 
@@ -128,7 +128,7 @@ class TestEmbedDocuments:
 
         service = ContextualizedEmbeddingService(api_key="test-key")
 
-        ***REMOVED*** Input: 2 documents, first with 2 chunks, second with 1 chunk
+        # Input: 2 documents, first with 2 chunks, second with 1 chunk
         document_chunks = [
             ["doc1 chunk1", "doc1 chunk2"],
             ["doc2 chunk1"],
@@ -136,12 +136,12 @@ class TestEmbedDocuments:
 
         result = await service.embed_documents(document_chunks)
 
-        ***REMOVED*** Verify embeddings
-        assert len(result.embeddings) == 3  ***REMOVED*** 2 + 1 chunks
+        # Verify embeddings
+        assert len(result.embeddings) == 3  # 2 + 1 chunks
         assert result.total_tokens == 100
         assert result.chunks_per_document == [2, 1]
 
-        ***REMOVED*** Verify API call
+        # Verify API call
         mock_voyage_client.contextualized_embed.assert_called_once()
         call_kwargs = mock_voyage_client.contextualized_embed.call_args.kwargs
         assert call_kwargs["inputs"] == document_chunks
@@ -166,7 +166,7 @@ class TestEmbedDocuments:
 
         service = ContextualizedEmbeddingService(api_key="test-key")
 
-        ***REMOVED*** Create 1001 documents (exceeds 1000 limit)
+        # Create 1001 documents (exceeds 1000 limit)
         document_chunks = [["chunk"] for _ in range(1001)]
 
         with pytest.raises(ValueError, match="Too many documents"):
@@ -178,7 +178,7 @@ class TestEmbedDocuments:
 
         service = ContextualizedEmbeddingService(api_key="test-key")
 
-        ***REMOVED*** Create document with 16001 chunks (exceeds 16000 limit)
+        # Create document with 16001 chunks (exceeds 16000 limit)
         document_chunks = [["chunk"] * 16001]
 
         with pytest.raises(ValueError, match="Too many chunks"):
@@ -192,7 +192,7 @@ class TestEmbedQuery:
         """Test basic query embedding."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_result = MagicMock()
         mock_result.embeddings = [[0.5] * 1024]
 
@@ -206,20 +206,20 @@ class TestEmbedQuery:
 
         embedding = await service.embed_query("test query")
 
-        ***REMOVED*** Verify embedding
+        # Verify embedding
         assert len(embedding) == 1024
         assert embedding == [0.5] * 1024
 
-        ***REMOVED*** Verify API call format
+        # Verify API call format
         call_kwargs = mock_voyage_client.contextualized_embed.call_args.kwargs
-        assert call_kwargs["inputs"] == [["test query"]]  ***REMOVED*** Wrapped in double list
+        assert call_kwargs["inputs"] == [["test query"]]  # Wrapped in double list
         assert call_kwargs["input_type"] == "query"
 
     async def test_embed_queries_multiple(self, mock_voyage_client, mock_langfuse):
         """Test embedding multiple queries."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_result1 = MagicMock()
         mock_result1.embeddings = [[0.1] * 1024]
 
@@ -236,12 +236,12 @@ class TestEmbedQuery:
 
         embeddings = await service.embed_queries(["query1", "query2"])
 
-        ***REMOVED*** Verify embeddings
+        # Verify embeddings
         assert len(embeddings) == 2
         assert embeddings[0] == [0.1] * 1024
         assert embeddings[1] == [0.2] * 1024
 
-        ***REMOVED*** Verify API call format
+        # Verify API call format
         call_kwargs = mock_voyage_client.contextualized_embed.call_args.kwargs
         assert call_kwargs["inputs"] == [["query1"], ["query2"]]
 
@@ -263,7 +263,7 @@ class TestSyncWrappers:
         """Test sync wrapper for embed_documents."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_result = MagicMock()
         mock_result.embeddings = [[0.1] * 1024]
 
@@ -283,7 +283,7 @@ class TestSyncWrappers:
         """Test sync wrapper for embed_query."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_result = MagicMock()
         mock_result.embeddings = [[0.5] * 1024]
 
@@ -307,7 +307,7 @@ class TestRetryLogic:
         """Test retry on RateLimitError."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** First call raises rate limit, second succeeds
+        # First call raises rate limit, second succeeds
         mock_result = MagicMock()
         mock_result.embeddings = [[0.1] * 1024]
 
@@ -324,7 +324,7 @@ class TestRetryLogic:
 
         service = ContextualizedEmbeddingService(api_key="test-key")
 
-        ***REMOVED*** Should succeed after retry
+        # Should succeed after retry
         result = await service.embed_documents([["test"]])
 
         assert len(result.embeddings) == 1
@@ -334,7 +334,7 @@ class TestRetryLogic:
         """Test retry on ServiceUnavailableError."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** First call raises service unavailable, second succeeds
+        # First call raises service unavailable, second succeeds
         mock_result = MagicMock()
         mock_result.embeddings = [[0.5] * 1024]
 
@@ -364,9 +364,9 @@ class TestOutputDtype:
         """Test int8 output data type."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
-        ***REMOVED*** Setup mock response with int8 values
+        # Setup mock response with int8 values
         mock_result = MagicMock()
-        mock_result.embeddings = [[1, 2, 3, 4] * 256]  ***REMOVED*** int8 values
+        mock_result.embeddings = [[1, 2, 3, 4] * 256]  # int8 values
 
         mock_response = MagicMock()
         mock_response.results = [mock_result]
@@ -381,7 +381,7 @@ class TestOutputDtype:
 
         await service.embed_documents([["test"]])
 
-        ***REMOVED*** Verify output_dtype is passed to API
+        # Verify output_dtype is passed to API
         call_kwargs = mock_voyage_client.contextualized_embed.call_args.kwargs
         assert call_kwargs["output_dtype"] == "int8"
 
@@ -394,15 +394,15 @@ class TestFeatureFlag:
         import importlib
         import sys
 
-        ***REMOVED*** xdist/order-safe reimport instead of reload() on potentially stale module ref
+        # xdist/order-safe reimport instead of reload() on potentially stale module ref
         sys.modules.pop("src.config.settings", None)
         settings_module = importlib.import_module("src.config.settings")
 
-        ***REMOVED*** Should default to False
+        # Should default to False
         with patch.dict("os.environ", {}, clear=True):
             settings = settings_module.Settings.__new__(settings_module.Settings)
-            ***REMOVED*** Manually call init parts we need
-            settings.use_contextualized_embeddings = False  ***REMOVED*** Default when env var not set
+            # Manually call init parts we need
+            settings.use_contextualized_embeddings = False  # Default when env var not set
 
             assert settings.use_contextualized_embeddings is False
 
@@ -419,7 +419,7 @@ class TestFeatureFlag:
         ):
             from src.config.settings import Settings
 
-            ***REMOVED*** Need to avoid API key validation for this test
+            # Need to avoid API key validation for this test
             with patch.object(Settings, "_validate_api_keys", return_value=None):
                 settings = Settings()
 

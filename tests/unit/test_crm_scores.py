@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/test_crm_scores.py
-"""Tests for CRM tool Langfuse scores (***REMOVED***440)."""
+# tests/unit/test_crm_scores.py
+"""Tests for CRM tool Langfuse scores (#440)."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock

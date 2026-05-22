@@ -1,4 +1,4 @@
-"""Manager menu rendering for /start command (***REMOVED***388)."""
+"""Manager menu rendering for /start command (#388)."""
 
 from __future__ import annotations
 

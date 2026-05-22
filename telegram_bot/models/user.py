@@ -12,7 +12,7 @@ class User:
     telegram_id: int
     id: int | None = None
     locale: str = "ru"
-    role: str = "client"  ***REMOVED*** client, manager, admin
+    role: str = "client"  # client, manager, admin
     first_name: str | None = None
     telegram_language_code: str | None = None
     notifications_enabled: bool = True
@@ -24,7 +24,7 @@ class Lead:
 
     user_id: int
     id: int | None = None
-    stage: str = "new"  ***REMOVED*** new, qualified, hot, warm, cold, converted
+    stage: str = "new"  # new, qualified, hot, warm, cold, converted
     score: int = 0
     preferences: dict = field(default_factory=dict)
     kommo_lead_id: int | None = None

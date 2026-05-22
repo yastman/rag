@@ -1,4 +1,4 @@
-"""Tests for aiogram-dialog demo dialog — getters and handler logic (***REMOVED***907)."""
+"""Tests for aiogram-dialog demo dialog — getters and handler logic (#907)."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import pytest
 from telegram_bot.dialogs.states import DemoSG
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Dialog structure
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Dialog structure
+# ---------------------------------------------------------------------------
 
 
 def test_demo_dialog_is_dialog_instance() -> None:
@@ -30,9 +30,9 @@ def test_demo_dialog_has_intro_and_results_windows() -> None:
     assert DemoSG.results in states
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** intro_getter
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# intro_getter
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -85,9 +85,9 @@ async def test_intro_getter_no_service_uses_defaults() -> None:
     assert result["examples"] == DEFAULT_EXAMPLES
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** results_getter
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# results_getter
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -152,9 +152,9 @@ async def test_results_getter_degraded_mode() -> None:
     assert "Распознано" in result["results_text"]
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** on_text_input handler
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# on_text_input handler
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -214,9 +214,9 @@ async def test_on_text_input_no_pipeline_shows_error() -> None:
     manager.switch_to.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** on_voice_input handler
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# on_voice_input handler
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -281,9 +281,9 @@ async def test_on_voice_input_failed_stt_shows_error() -> None:
     manager.switch_to.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** on_example_selected handler
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# on_example_selected handler
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

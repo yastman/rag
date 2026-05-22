@@ -13,11 +13,11 @@ class PipelineResult:
     sources: list[dict[str, str]] = field(default_factory=list)
     query_type: str = "GENERAL"
     cache_hit: bool = False
-    needs_agent: bool = False  ***REMOVED*** fallback signal for bot.py
-    agent_intent: str = ""  ***REMOVED*** set by dedicated intent gate (not classify_query)
+    needs_agent: bool = False  # fallback signal for bot.py
+    agent_intent: str = ""  # set by dedicated intent gate (not classify_query)
     latency_ms: float = 0.0
     llm_call_count: int = 0
     scores: dict[str, float] = field(default_factory=dict)
     pipeline_mode: str = "client_direct"
-    sent_message: dict[str, int] | None = None  ***REMOVED*** {"chat_id": ..., "message_id": ...}
-    response_sent: bool = False  ***REMOVED*** True if streaming already delivered
+    sent_message: dict[str, int] | None = None  # {"chat_id": ..., "message_id": ...}
+    response_sent: bool = False  # True if streaming already delivered

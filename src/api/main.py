@@ -58,9 +58,9 @@ async def lifespan(app: FastAPI):
         timeout=30,
     )
 
-    ***REMOVED*** Reranking is performed server-side by Qdrant via the ColBERT vector;
-    ***REMOVED*** there is no per-process Python reranker to construct. We log the
-    ***REMOVED*** configured path here so misconfiguration is visible at startup.
+    # Reranking is performed server-side by Qdrant via the ColBERT vector;
+    # there is no per-process Python reranker to construct. We log the
+    # configured path here so misconfiguration is visible at startup.
     if cfg.rerank_provider == "colbert":
         logger.info("Reranking via server-side Qdrant ColBERT path")
     elif cfg.rerank_provider != "none":
@@ -103,7 +103,7 @@ app = FastAPI(title="RAG API", version="0.1.0", lifespan=lifespan)
 def _resolve_trace_id() -> str:
     """Best-effort lookup of the current Langfuse trace id, with uuid fallback.
 
-    Centralised here (***REMOVED***1236) so every exception handler emits the same
+    Centralised here (#1236) so every exception handler emits the same
     ``trace_id`` envelope without duplicating the lookup logic.
     """
     try:
@@ -119,26 +119,26 @@ def _resolve_trace_id() -> str:
     return uuid.uuid4().hex
 
 
-***REMOVED*** -----------------------------------------------------------------------------
-***REMOVED*** Exception handlers (***REMOVED***1236)
-***REMOVED***
-***REMOVED*** FastAPI's documented error-handling pattern (see fastapi.tiangolo docs,
-***REMOVED*** "Handling Errors > Override the default exception handlers") is to register
-***REMOVED*** specific handlers *in addition to* a fallback ``Exception`` handler. The
-***REMOVED*** specific handlers take precedence over the blanket one, so:
-***REMOVED***
-***REMOVED***   * ``StarletteHTTPException`` keeps the proper status code and detail
-***REMOVED***     message for ``HTTPException`` raised in code as well as Starlette's
-***REMOVED***     internal HTTP errors (e.g. 404 from routing) instead of being squashed
-***REMOVED***     to ``{"error": "internal_error"}`` 500.
-***REMOVED***   * ``RequestValidationError`` keeps the 422 response shape with field-level
-***REMOVED***     errors instead of being squashed to a generic 500.
-***REMOVED***   * ``Exception`` remains the last-resort 500 fallback for genuinely
-***REMOVED***     unhandled errors.
-***REMOVED***
-***REMOVED*** All three handlers emit the same envelope shape ``{error, message, trace_id,
-***REMOVED*** recoverable, ...}`` so API clients can rely on a single error contract.
-***REMOVED*** -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Exception handlers (#1236)
+#
+# FastAPI's documented error-handling pattern (see fastapi.tiangolo docs,
+# "Handling Errors > Override the default exception handlers") is to register
+# specific handlers *in addition to* a fallback ``Exception`` handler. The
+# specific handlers take precedence over the blanket one, so:
+#
+#   * ``StarletteHTTPException`` keeps the proper status code and detail
+#     message for ``HTTPException`` raised in code as well as Starlette's
+#     internal HTTP errors (e.g. 404 from routing) instead of being squashed
+#     to ``{"error": "internal_error"}`` 500.
+#   * ``RequestValidationError`` keeps the 422 response shape with field-level
+#     errors instead of being squashed to a generic 500.
+#   * ``Exception`` remains the last-resort 500 fallback for genuinely
+#     unhandled errors.
+#
+# All three handlers emit the same envelope shape ``{error, message, trace_id,
+# recoverable, ...}`` so API clients can rely on a single error contract.
+# -----------------------------------------------------------------------------
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -150,7 +150,7 @@ async def http_exception_handler(_request: Request, exc: StarletteHTTPException)
     raised by routing/middleware.
     """
     trace_id = _resolve_trace_id()
-    ***REMOVED*** 5xx are still errors; log them. 4xx are client problems; debug-level.
+    # 5xx are still errors; log them. 4xx are client problems; debug-level.
     if exc.status_code >= 500:
         logger.error(
             "HTTPException %s in RAG API: %s",
@@ -207,7 +207,7 @@ async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
 
     This is the *last-resort* fallback. ``HTTPException`` and
     ``RequestValidationError`` are caught by their specific handlers above
-    and never reach this one (***REMOVED***1236).
+    and never reach this one (#1236).
     """
     trace_id = _resolve_trace_id()
     logger.exception("Unhandled error in RAG API", extra={"trace_id": trace_id})
@@ -229,7 +229,7 @@ async def health(deep: bool = False) -> JSONResponse:
     Default: shallow check (``{"status": "ok"}``) for liveness probes — fast,
     no external dependencies, always 200 once the process is up.
 
-    With ``?deep=true`` (***REMOVED***1236): probe every initialised dependency on
+    With ``?deep=true`` (#1236): probe every initialised dependency on
     ``app.state`` (cache, qdrant) and report their individual status. Returns
     HTTP 503 if any dependency is unhealthy so a Kubernetes readiness probe
     treats the pod as Not Ready until backends recover.
@@ -240,9 +240,9 @@ async def health(deep: bool = False) -> JSONResponse:
     components: dict[str, dict[str, Any]] = {}
     overall_ok = True
 
-    ***REMOVED*** Cache (Redis) — issue a no-op ping if available; otherwise just verify
-    ***REMOVED*** the layer was initialised. CacheLayerManager exposes .ping() in the
-    ***REMOVED*** current implementation; fall back to attribute presence if not.
+    # Cache (Redis) — issue a no-op ping if available; otherwise just verify
+    # the layer was initialised. CacheLayerManager exposes .ping() in the
+    # current implementation; fall back to attribute presence if not.
     cache = getattr(app.state, "cache", None)
     if cache is None:
         components["cache"] = {"status": "uninitialized"}
@@ -263,8 +263,8 @@ async def health(deep: bool = False) -> JSONResponse:
             components["cache"] = {"status": "error", "detail": str(exc)}
             overall_ok = False
 
-    ***REMOVED*** Qdrant — most clients expose .health() / .get_collections() async.
-    ***REMOVED*** We pick whichever method exists, prefer .health() if defined.
+    # Qdrant — most clients expose .health() / .get_collections() async.
+    # We pick whichever method exists, prefer .health() if defined.
     qdrant = getattr(app.state, "qdrant", None)
     if qdrant is None:
         components["qdrant"] = {"status": "uninitialized"}
@@ -425,14 +425,14 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
                     "query_type": result.get("query_type", ""),
                 },
             )
-        ***REMOVED*** Set wall-time fields so write_langfuse_scores reports real latency
+        # Set wall-time fields so write_langfuse_scores reports real latency
         elapsed_ms = (time.perf_counter() - start) * 1000
         result["pipeline_wall_ms"] = elapsed_ms
         result["e2e_latency_ms"] = elapsed_ms
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
 
-        ***REMOVED*** Write Langfuse scores for observability parity with bot
+        # Write Langfuse scores for observability parity with bot
         write_langfuse_scores(lf, result)
 
     return QueryResponse(

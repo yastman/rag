@@ -1,6 +1,6 @@
 """TDD tests for Telegram initData enforcement on Mini App mutation endpoints.
 
-Closes ***REMOVED***1595 — before this PR, /api/start-expert and /api/phone accepted
+Closes #1595 — before this PR, /api/start-expert and /api/phone accepted
 unauthenticated requests from any origin and trusted ``user_id`` from the
 JSON body. This test file drives the SDK-audited fix:
 
@@ -52,8 +52,8 @@ def _make_init_data(bot_token: str, user_id: int = 42, **overrides: str) -> str:
     data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
     secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     params["hash"] = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
-    ***REMOVED*** Quote in URL-safe form so parse_qsl on the receiving end recovers the
-    ***REMOVED*** exact same key/value bytes that fed the HMAC.
+    # Quote in URL-safe form so parse_qsl on the receiving end recovers the
+    # exact same key/value bytes that fed the HMAC.
     return "&".join(f"{k}={quote(v, safe='')}" for k, v in params.items())
 
 
@@ -65,9 +65,9 @@ def _make_invalid_init_data(bot_token: str, user_id: int = 42) -> str:
     return "&".join(f"{k}={v}" for k, v in parts.items())
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** /api/start-expert — auth enforcement
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# /api/start-expert — auth enforcement
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -151,7 +151,7 @@ async def test_start_expert_with_valid_init_data_succeeds_and_derives_user_id() 
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                ***REMOVED*** Body intentionally omits user_id; the SDK must derive it.
+                # Body intentionally omits user_id; the SDK must derive it.
                 resp = await client.post(
                     "/api/start-expert",
                     json={"expert_id": "consultant"},
@@ -170,9 +170,9 @@ async def test_start_expert_with_valid_init_data_succeeds_and_derives_user_id() 
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** /api/phone — auth enforcement
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# /api/phone — auth enforcement
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -204,9 +204,9 @@ async def test_phone_with_valid_init_data_succeeds() -> None:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(
                 "/api/phone",
-                ***REMOVED*** Caller-supplied user_id 12345 must be IGNORED in favour of the
-                ***REMOVED*** initData-derived value (42). We do not assert on the request
-                ***REMOVED*** body's user_id; we assert on what reached the CRM.
+                # Caller-supplied user_id 12345 must be IGNORED in favour of the
+                # initData-derived value (42). We do not assert on the request
+                # body's user_id; we assert on what reached the CRM.
                 json={
                     "phone": "+359888123456",
                     "source": "test",
@@ -218,8 +218,8 @@ async def test_phone_with_valid_init_data_succeeds() -> None:
     assert resp.status_code == 200, (
         f"Expected 200 for valid initData on /api/phone, got {resp.status_code}: {resp.text}"
     )
-    ***REMOVED*** The CRM upsert call's default name is f"Mini App User {user_id}"; verify
-    ***REMOVED*** the SDK-validated id was used rather than the spoofed body value.
+    # The CRM upsert call's default name is f"Mini App User {user_id}"; verify
+    # the SDK-validated id was used rather than the spoofed body value.
     upsert_kwargs = mock_kommo.upsert_contact.await_args.kwargs
     assert upsert_kwargs["name"] == "Mini App User 42", (
         f"submit_phone must use SDK-validated user_id (42) not body value (12345); "
@@ -227,9 +227,9 @@ async def test_phone_with_valid_init_data_succeeds() -> None:
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CORS hardening
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CORS hardening
+# ---------------------------------------------------------------------------
 
 
 def test_cors_not_wildcard_on_running_app() -> None:

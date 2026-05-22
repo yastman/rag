@@ -1,15 +1,15 @@
-***REMOVED*** RAG Quality Scores
+# RAG Quality Scores
 
 Observability metrics written to Langfuse for every query.
 
-***REMOVED******REMOVED*** Score Writing
+## Score Writing
 
 Scores are computed and written via `telegram_bot/scoring.py`:
 - `write_langfuse_scores()` — main query scores
 - `write_history_scores()` — history search scores
 - `write_crm_scores()` — CRM tool usage scores
 
-***REMOVED******REMOVED*** Main Query Scores
+## Main Query Scores
 
 | Score | Type | Description |
 |-------|------|-------------|
@@ -63,7 +63,7 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 | `sources_shown` | boolean | Sources were shown in response |
 | `sources_count` | numeric | Number of sources shown |
 
-***REMOVED******REMOVED*** History Search Scores
+## History Search Scores
 
 Written via `write_history_scores()` for `/history` searches:
 
@@ -74,7 +74,7 @@ Written via `write_history_scores()` for `/history` searches:
 | `history_search_empty` | numeric | 1 if no results, 0 otherwise |
 | `history_backend` | categorical | Search backend used |
 
-***REMOVED******REMOVED*** CRM Scores
+## CRM Scores
 
 Written via `write_crm_scores()` when CRM tools are invoked:
 
@@ -85,7 +85,7 @@ Written via `write_crm_scores()` when CRM tools are invoked:
 | `crm_tools_success` | numeric | Successful CRM operations |
 | `crm_tools_error` | numeric | Failed CRM operations |
 
-***REMOVED******REMOVED*** Query Type Weights
+## Query Type Weights
 
 | Query Type | Weight | Notes |
 |------------|--------|-------|
@@ -98,14 +98,14 @@ Written via `write_crm_scores()` when CRM tools are invoked:
 | `STRUCTURED` | 2.0 | Structured extraction |
 | `COMPLEX` | 2.0 | Complex query |
 
-***REMOVED******REMOVED*** Validation
+## Validation
 
 Required trace families validated by `make validate-traces-fast`:
 - `rag-api-query`
 - `voice-session`
 - `ingestion-cli-run`
 
-***REMOVED******REMOVED*** Code Locations
+## Code Locations
 
 | File | Purpose |
 |------|---------|

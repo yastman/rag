@@ -38,9 +38,9 @@ def test_update_voice_trace_sets_trace_context() -> None:
     mock_context.__exit__ = MagicMock(return_value=None)
 
     with (
-        patch("src.voice.observability.get_client", return_value=mock_lf),
+        patch("src.observability.get_langfuse_client", return_value=mock_lf),
         patch(
-            "src.voice.observability.propagate_attributes", return_value=mock_context
+            "src.observability.propagate_attributes", return_value=mock_context
         ) as mock_prop,
     ):
         update_voice_trace(call_id="call-42", status="completed", duration_sec=9)

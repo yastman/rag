@@ -24,13 +24,13 @@ from telegram_bot.services.content_loader import load_mini_app_config
 logger = logging.getLogger(__name__)
 
 
-_DEEPLINK_TTL = 300  ***REMOVED*** seconds
+_DEEPLINK_TTL = 300  # seconds
 
-***REMOVED*** Test-mode sentinel: when ``TELEGRAM_BOT_TOKEN`` (or legacy ``BOT_TOKEN``) is
-***REMOVED*** set to this exact value we bypass HMAC validation and inject a synthetic
-***REMOVED*** user so CI / smoke tests can exercise the mutation paths without a live
-***REMOVED*** Telegram bot. The sentinel is intentionally non-secret and obvious.
-_TEST_TOKEN_SENTINEL = "TEST"  ***REMOVED*** nosec B105 - explicit non-secret CI sentinel
+# Test-mode sentinel: when ``TELEGRAM_BOT_TOKEN`` (or legacy ``BOT_TOKEN``) is
+# set to this exact value we bypass HMAC validation and inject a synthetic
+# user so CI / smoke tests can exercise the mutation paths without a live
+# Telegram bot. The sentinel is intentionally non-secret and obvious.
+_TEST_TOKEN_SENTINEL = "TEST"  # nosec B105 - explicit non-secret CI sentinel
 
 
 @asynccontextmanager
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     (``miniapp:q:<uuid>``) and pub/sub notifications to the bot. Owning
     the connection lifecycle here (instead of a module-level lazy
     global) ensures graceful close on process shutdown and matches the
-    FastAPI-native pattern (***REMOVED***1645).
+    FastAPI-native pattern (#1645).
     """
     import redis.asyncio as aioredis
 
@@ -51,8 +51,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        ***REMOVED*** ``aioredis`` clients expose ``aclose`` in modern versions; fall back to
-        ***REMOVED*** ``close`` for older releases. Either way, the connection pool drains.
+        # ``aioredis`` clients expose ``aclose`` in modern versions; fall back to
+        # ``close`` for older releases. Either way, the connection pool drains.
         close = getattr(client, "aclose", None) or getattr(client, "close", None)
         if close is not None:
             result = close()
@@ -91,7 +91,7 @@ async def get_validated_init_data(
 ) -> dict[str, Any]:
     """FastAPI dependency: validate Telegram initData and return parsed dict.
 
-    Mounted on every Mini App mutation endpoint (***REMOVED***1595) so callers cannot
+    Mounted on every Mini App mutation endpoint (#1595) so callers cannot
     reach the Redis / CRM layer without proving they hold a fresh, signed
     initData payload from Telegram. Validation itself is delegated to the
     SDK helper :func:`mini_app.auth.validate_init_data`, which in turn
@@ -115,14 +115,14 @@ async def get_validated_init_data(
 
     bot_token = _get_bot_token()
     if not bot_token:
-        ***REMOVED*** Fail closed — no token, no validation, no auth.
+        # Fail closed — no token, no validation, no auth.
         raise HTTPException(status_code=401, detail="Server bot token not configured")
 
     if bot_token == _TEST_TOKEN_SENTINEL:
-        ***REMOVED*** CI/local-test bypass — never trips in production because the
-        ***REMOVED*** sentinel is the literal string "TEST" and not a real BotFather
-        ***REMOVED*** token. The synthetic user keeps downstream code paths exercised
-        ***REMOVED*** without requiring a live Telegram client.
+        # CI/local-test bypass — never trips in production because the
+        # sentinel is the literal string "TEST" and not a real BotFather
+        # token. The synthetic user keeps downstream code paths exercised
+        # without requiring a live Telegram client.
         return {"user": {"id": 0, "first_name": "TestUser"}, "auth_date": "0"}
 
     try:
@@ -131,15 +131,15 @@ async def get_validated_init_data(
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CORS — restrict to configured origin (***REMOVED***1595).
-***REMOVED***
-***REMOVED*** Operators set ``MINI_APP_ALLOWED_ORIGIN`` in production (e.g.
-***REMOVED*** ``https://mini-app.fortnoks.com``). The default ``https://t.me`` lets the
-***REMOVED*** stack boot in dev without configuration while still rejecting arbitrary
-***REMOVED*** cross-origin callers. An empty/whitespace-only env value is treated as
-***REMOVED*** unset and falls back to the default.
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CORS — restrict to configured origin (#1595).
+#
+# Operators set ``MINI_APP_ALLOWED_ORIGIN`` in production (e.g.
+# ``https://mini-app.fortnoks.com``). The default ``https://t.me`` lets the
+# stack boot in dev without configuration while still rejecting arbitrary
+# cross-origin callers. An empty/whitespace-only env value is treated as
+# unset and falls back to the default.
+# ---------------------------------------------------------------------------
 
 _CORS_ORIGIN = os.environ.get("MINI_APP_ALLOWED_ORIGIN", "").strip() or "https://t.me"
 
@@ -178,13 +178,13 @@ async def start_expert(
 
     The Telegram numeric user id is taken from the SDK-validated initData
     dict (``init_data["user"]["id"]``) — request body ``user_id`` is no
-    longer trusted (***REMOVED***1595). The body's optional ``message`` and
+    longer trusted (#1595). The body's optional ``message`` and
     ``query_id`` fields stay caller-supplied.
 
-    Wrapped in ``@observe`` (***REMOVED***1658) so the Mini App entry point lands as
+    Wrapped in ``@observe`` (#1658) so the Mini App entry point lands as
     a named Langfuse span.
     """
-    ***REMOVED*** Trust only the server-validated identity (***REMOVED***1595).
+    # Trust only the server-validated identity (#1595).
     user_id: int = int(init_data["user"]["id"])
 
     with propagate_attributes(
@@ -225,8 +225,8 @@ async def start_expert(
             raise HTTPException(status_code=500, detail="BOT_USERNAME not configured")
         start_link = f"https://t.me/{bot_username}?start=q_{uid}"
 
-        ***REMOVED*** Notify bot via Redis pub/sub — bot calls answerWebAppQuery + creates
-        ***REMOVED*** topic + RAG.
+        # Notify bot via Redis pub/sub — bot calls answerWebAppQuery + creates
+        # topic + RAG.
         await redis.publish(
             "miniapp:start",
             json.dumps(
@@ -238,7 +238,7 @@ async def start_expert(
             ),
         )
 
-        ***REMOVED*** Curated success metadata — no raw UUID, no full URL.
+        # Curated success metadata — no raw UUID, no full URL.
         _update_current_span(
             output={
                 "expert_id": request.expert_id,
@@ -253,7 +253,7 @@ async def start_expert(
         )
 
 
-_MAX_DATA_VALUE_LEN = 10_000  ***REMOVED*** max length for any single string value in data
+_MAX_DATA_VALUE_LEN = 10_000  # max length for any single string value in data
 
 
 class LogRequest(BaseModel):
@@ -270,9 +270,9 @@ class LogRequest(BaseModel):
 
     level: Literal["debug", "info", "warn", "error"]
     message: Annotated[str, Field(max_length=1000)]
-    ***REMOVED*** ``data`` is optional free-form context; values are already serialised to
-    ***REMOVED*** a string by the frontend (``JSON.stringify(data)``), so we cap each
-    ***REMOVED*** string value at _MAX_DATA_VALUE_LEN chars to prevent memory exhaustion.
+    # ``data`` is optional free-form context; values are already serialised to
+    # a string by the frontend (``JSON.stringify(data)``), so we cap each
+    # string value at _MAX_DATA_VALUE_LEN chars to prevent memory exhaustion.
     data: Annotated[dict | None, Field(default=None)]
 
     @field_validator("data")
@@ -288,7 +288,7 @@ class LogRequest(BaseModel):
         return v
 
 
-***REMOVED*** Mapping from frontend level strings to Python logging levels.
+# Mapping from frontend level strings to Python logging levels.
 _LEVEL_MAP: dict[str, int] = {
     "debug": logging.DEBUG,
     "info": logging.INFO,
@@ -296,10 +296,10 @@ _LEVEL_MAP: dict[str, int] = {
     "error": logging.ERROR,
 }
 
-***REMOVED*** TODO(***REMOVED***1613): Add rate-limiting via slowapi (``@limiter.limit("30/minute")``)
-***REMOVED*** once ``slowapi`` is added to the ``mini-app`` optional-dependency group.
-***REMOVED*** Tracked as a follow-up because introducing a new dependency needs a separate
-***REMOVED*** pyproject / uv-lock change that is out of scope for this security patch.
+# TODO(#1613): Add rate-limiting via slowapi (``@limiter.limit("30/minute")``)
+# once ``slowapi`` is added to the ``mini-app`` optional-dependency group.
+# Tracked as a follow-up because introducing a new dependency needs a separate
+# pyproject / uv-lock change that is out of scope for this security patch.
 
 
 @app.post("/api/log")
@@ -332,13 +332,13 @@ async def phone(
 
     ``user_id`` is overridden with the SDK-validated value from initData
     so a forged JSON body cannot attribute leads to a different Telegram
-    user (***REMOVED***1595).
+    user (#1595).
     """
     from fastapi.responses import JSONResponse
 
     user_id: int = int(init_data["user"]["id"])
-    ***REMOVED*** Recreate the request with the verified user_id; submit_phone's
-    ***REMOVED*** signature stays unchanged.
+    # Recreate the request with the verified user_id; submit_phone's
+    # signature stays unchanged.
     verified_request = request.model_copy(update={"user_id": user_id})
 
     with propagate_attributes(

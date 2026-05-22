@@ -18,7 +18,7 @@ def is_business_hours(
     elif dt.tzinfo is None:
         dt = dt.replace(tzinfo=ZoneInfo(tz))
     local = dt.astimezone(ZoneInfo(tz))
-    ***REMOVED*** Weekdays only (Mon=0, Sun=6).
+    # Weekdays only (Mon=0, Sun=6).
     if local.weekday() >= 5:
         return False
     return start <= local.hour < end

@@ -1,10 +1,10 @@
-***REMOVED*** Telegram Bot Constants
+# Telegram Bot Constants
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Shared constant values used by bot dialogs, handlers, and services.
 
-***REMOVED******REMOVED*** Files
+## Files
 
 - `apartment_constants.py` — apartment filter options, canonical city names, and aliases used by:
   - `telegram_bot/services/filter_extractor.py`
@@ -12,7 +12,7 @@ Shared constant values used by bot dialogs, handlers, and services.
   - `telegram_bot/dialogs/filter_constants.py`
   - corresponding tests in `tests/unit`
 
-***REMOVED******REMOVED*** Related
+## Related
 
 - [Telegram bot index](../README.md)
 - [Services](../services/README.md) for business logic

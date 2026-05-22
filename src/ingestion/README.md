@@ -1,15 +1,15 @@
-***REMOVED*** src/ingestion/
+# src/ingestion/
 
 Document ingestion: parsing, chunking, embedding, and indexing into Qdrant.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two paths exist:
 
 1. **Current path** (`unified/`) — CocoIndex-based incremental pipeline with deterministic file identity and replace semantics.
 2. **Legacy local wrappers** (`chunker.py`, `indexer.py`, `service.py`) — standalone helpers retained for compatibility; deprecated GDrive-specific modules were retired in favor of `unified/`.
 
-***REMOVED******REMOVED*** Entrypoints
+## Entrypoints
 
 | Entrypoint | Role |
 |------------|------|
@@ -18,7 +18,7 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 | `src.ingestion.unified.flow` `build_flow()` / `run_once()` / `run_watch()` | CocoIndex flow assembly and execution |
 | `src.ingestion.unified.qdrant_writer` `QdrantHybridWriter` | Writes hybrid vectors (dense + sparse + ColBERT) to Qdrant |
 
-***REMOVED******REMOVED*** Key Files
+## Key Files
 
 | File | Purpose |
 |------|---------|
@@ -32,34 +32,34 @@ Turn raw documents (PDF, DOCX, CSV, etc.) into searchable vector chunks. Two pat
 | [`unified/state_manager.py`](./unified/state_manager.py) | Ingestion state and resume tracking |
 | [`unified/targets/qdrant_hybrid_target.py`](./unified/targets/qdrant_hybrid_target.py) | Custom CocoIndex target connector |
 
-***REMOVED******REMOVED*** Boundaries
+## Boundaries
 
 - **Ingestion determinism and resumability** are critical. File identity uses content hashes (`manifest.py`); renames/moves do not create duplicates.
 - **Do not change collection schema**, manifest hashing, or payload contract without updating downstream retrieval assumptions.
 - `QdrantHybridWriter` enforces replace semantics: a file re-ingestion deletes old chunks before inserting new ones.
 
-***REMOVED******REMOVED*** Related Runtime Services
+## Related Runtime Services
 
 - **Qdrant** — target vector database
 - **PostgreSQL** — CocoIndex flow state database
 - **BGE-M3** — dense + sparse embeddings (or Voyage when configured)
 - **Docling** — document parsing (HTTP or native backend)
 
-***REMOVED******REMOVED*** Focused Checks
+## Focused Checks
 
 ```bash
-***REMOVED*** Unified pipeline dry-run
+# Unified pipeline dry-run
 python -m src.ingestion.unified.cli run --dry-run
 
-***REMOVED*** Status check
+# Status check
 python -m src.ingestion.unified.cli status
 
-***REMOVED*** Tests
+# Tests
 pytest src/ingestion/unified/
 make check
 ```
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`./unified/AGENTS.override.md`](./unified/AGENTS.override.md) — Ingestion-specific scope rules and validation
 - [`./unified/README.md`](./unified/README.md) — Detailed unified pipeline docs

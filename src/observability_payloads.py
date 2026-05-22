@@ -53,9 +53,9 @@ def build_safe_input_payload(
         payload["route"] = route
 
     if extra is not None:
-        ***REMOVED*** Keys that must never be overridden or introduced raw.
-        ***REMOVED*** Use a static set that includes all schema keys so that extra can
-        ***REMOVED*** never inject an action/scenario/route when the caller omitted them.
+        # Keys that must never be overridden or introduced raw.
+        # Use a static set that includes all schema keys so that extra can
+        # never inject an action/scenario/route when the caller omitted them.
         _SAFE_KEYS = frozenset(
             {
                 "content_type",
@@ -72,10 +72,10 @@ def build_safe_input_payload(
             if v is None:
                 continue
             if k in _SAFE_KEYS:
-                continue  ***REMOVED*** never override safe payload keys
+                continue  # never override safe payload keys
             if k in _BLOCKED_EXTRA_KEYS:
-                continue  ***REMOVED*** never introduce raw key names
-            ***REMOVED*** Redact and bound extra values (strings, dicts, lists)
+                continue  # never introduce raw key names
+            # Redact and bound extra values (strings, dicts, lists)
             payload[k] = _redactor.mask(v, max_length=_PREVIEW_LIMIT)
 
     return payload

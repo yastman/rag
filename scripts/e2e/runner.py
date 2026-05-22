@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """E2E test runner for Telegram bot."""
 
 import argparse
@@ -14,7 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from scripts.e2e.claude_judge import (
@@ -56,10 +56,10 @@ async def run_single_test(
     progress.update(task_id, description=f"[cyan]{scenario.id}[/] {scenario.name}")
 
     try:
-        ***REMOVED*** Record start time for trace validation
+        # Record start time for trace validation
         test_started_at = datetime.now(UTC)
 
-        ***REMOVED*** Determine scenario kind for trace validation
+        # Determine scenario kind for trace validation
         delivery = getattr(scenario, "delivery", "text")
         group = getattr(scenario, "group", None)
         if delivery == "voice":
@@ -76,7 +76,7 @@ async def run_single_test(
         else:
             scenario_kind = "text_rag"
 
-        ***REMOVED*** Send message and get response
+        # Send message and get response
         if delivery == "voice":
             response = await client.send_voice_and_wait(
                 response_timeout=scenario.timeout,
@@ -87,7 +87,7 @@ async def run_single_test(
                 response_timeout=scenario.timeout,
             )
 
-        ***REMOVED*** Validate Langfuse trace if enabled
+        # Validate Langfuse trace if enabled
         trace_validation = None
         if validate_traces:
             trace_validation = validate_latest_trace(
@@ -100,7 +100,7 @@ async def run_single_test(
             if not trace_validation.ok:
                 logger.warning(f"Trace validation failed: {trace_validation}")
 
-        ***REMOVED*** Judge the response
+        # Judge the response
         judge_result = await judge.evaluate(
             scenario=scenario,
             bot_response=response.text,
@@ -215,7 +215,7 @@ async def run_tests(
                 )
                 results.append(result)
 
-                ***REMOVED*** Print immediate result
+                # Print immediate result
                 status = "[green]PASS[/]" if result.passed else "[red]FAIL[/]"
                 console.print(
                     f"  {status} {scenario.id} {scenario.name}: "
@@ -224,7 +224,7 @@ async def run_tests(
 
                 progress.advance(task_id)
 
-                ***REMOVED*** Rate limiting
+                # Rate limiting
                 await asyncio.sleep(config.between_tests_delay)
 
     total_duration_ms = int((time.time() - start_time) * 1000)
@@ -301,7 +301,7 @@ def main():
     )
     args = parser.parse_args()
 
-    ***REMOVED*** Load config
+    # Load config
     config = E2EConfig()
     if args.judge_provider:
         config.judge_provider = args.judge_provider
@@ -312,7 +312,7 @@ def main():
             console.print(f"  - {e}")
         sys.exit(1)
 
-    ***REMOVED*** Select scenarios
+    # Select scenarios
     if args.scenario:
         scenarios = []
         for sid in args.scenario:
@@ -333,7 +333,7 @@ def main():
         f"(judge={config.judge_provider}, mode={'no-judge' if args.no_judge else 'llm'})[/]\n"
     )
 
-    ***REMOVED*** Qdrant preflight for RAG/apartment/voice scenarios
+    # Qdrant preflight for RAG/apartment/voice scenarios
     needs_qdrant = any(s.group not in {TestGroup.COMMANDS, TestGroup.CHITCHAT} for s in scenarios)
     if needs_qdrant and not args.skip_qdrant_preflight:
         from scripts.e2e.qdrant_preflight import CollectionRequirement, run_qdrant_preflight
@@ -363,7 +363,7 @@ def main():
         console.print("[green]Qdrant preflight passed[/]")
         console.print()
 
-    ***REMOVED*** Check if trace validation is enabled
+    # Check if trace validation is enabled
     validate_traces = is_validation_enabled()
     route_proof: dict[str, str | None] | None = None
     should_probe_route = (
@@ -379,7 +379,7 @@ def main():
                 "source": proof.source,
             }
 
-    ***REMOVED*** Run tests
+    # Run tests
     try:
         report = asyncio.run(
             run_tests(
@@ -394,18 +394,18 @@ def main():
         console.print(f"[red]E2E runner blocked:[/] {exc}")
         sys.exit(1)
 
-    ***REMOVED*** Generate reports
+    # Generate reports
     generator = ReportGenerator(config.reports_dir)
     json_path, html_path = generator.generate(report)
 
-    ***REMOVED*** Print summary
+    # Print summary
     print_summary(report)
 
     console.print("\n[dim]Reports saved to:[/]")
     console.print(f"  JSON: {json_path}")
     console.print(f"  HTML: {html_path}")
 
-    ***REMOVED*** Exit code based on pass rate
+    # Exit code based on pass rate
     sys.exit(0 if report.pass_rate >= 80 else 1)
 
 

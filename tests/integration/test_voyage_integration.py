@@ -15,14 +15,14 @@ class TestQueryPreprocessorPipeline:
         """Test that transliteration improves search for Latin place names."""
         preprocessor = QueryPreprocessor()
 
-        ***REMOVED*** Latin input
+        # Latin input
         result = preprocessor.analyze("villa in Sveti Vlas near beach")
 
-        ***REMOVED*** Should be normalized to Cyrillic
+        # Should be normalized to Cyrillic
         assert "Святой Влас" in result["normalized_query"]
         assert "Sveti Vlas" not in result["normalized_query"]
 
-        ***REMOVED*** Should still be semantic query (no IDs/corpus)
+        # Should still be semantic query (no IDs/corpus)
         assert result["rrf_weights"]["dense"] == 0.6
         assert result["is_exact"] is False
 
@@ -63,15 +63,15 @@ class TestQueryPreprocessorPipeline:
         """Test cache threshold adapts to query type."""
         preprocessor = QueryPreprocessor()
 
-        ***REMOVED*** General query - default threshold
+        # General query - default threshold
         result = preprocessor.analyze("квартиры в центре города")
         assert result["cache_threshold"] == 0.10
 
-        ***REMOVED*** Query with number - strict threshold
+        # Query with number - strict threshold
         result = preprocessor.analyze("квартира номер 12345")
         assert result["cache_threshold"] == 0.05
 
-        ***REMOVED*** Query with corpus - strict threshold
+        # Query with corpus - strict threshold
         result = preprocessor.analyze("корпус Б апартаменты")
         assert result["cache_threshold"] == 0.05
 
@@ -94,15 +94,15 @@ class TestQueryPreprocessorEdgeCases:
         """Test transliteration works regardless of case."""
         preprocessor = QueryPreprocessor()
 
-        ***REMOVED*** Lowercase
+        # Lowercase
         result1 = preprocessor.analyze("villa in sunny beach")
         assert "Солнечный берег" in result1["normalized_query"]
 
-        ***REMOVED*** Uppercase
+        # Uppercase
         result2 = preprocessor.analyze("villa in SUNNY BEACH")
         assert "Солнечный берег" in result2["normalized_query"]
 
-        ***REMOVED*** Mixed case
+        # Mixed case
         result3 = preprocessor.analyze("villa in SuNnY BeAcH")
         assert "Солнечный берег" in result3["normalized_query"]
 

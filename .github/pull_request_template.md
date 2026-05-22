@@ -1,8 +1,8 @@
-***REMOVED******REMOVED*** Summary
+## Summary
 
 What does this PR do and why?
 
-***REMOVED******REMOVED*** Scope
+## Scope
 
 - [ ] Bug fix
 - [ ] Feature
@@ -10,12 +10,12 @@ What does this PR do and why?
 - [ ] Documentation / portfolio cleanup
 - [ ] Infrastructure / deploy
 
-***REMOVED******REMOVED*** Files touched
+## Files touched
 
 List the main files or modules changed (one per line):
 - `...`
 
-***REMOVED******REMOVED*** Validation
+## Validation
 
 What did you run to verify this change?
 
@@ -28,7 +28,7 @@ What did you run to verify this change?
 If any check above was skipped, state the reason explicitly:
 > ___________
 
-***REMOVED******REMOVED*** Runtime Impact
+## Runtime Impact
 
 Does this change affect Docker Compose, k8s manifests, service startup, or production deploy?
 
@@ -42,11 +42,11 @@ Does this change affect Docker Compose, k8s manifests, service startup, or produ
 If runtime-impacting, note the verification you ran (e.g., `COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility config --services`):
 > ___________
 
-***REMOVED******REMOVED*** Screenshots / Demo
+## Screenshots / Demo
 
 If this PR changes UI, Telegram flows, or visual output, attach screenshots or a short demo.
 
-***REMOVED******REMOVED*** Reviewer Notes
+## Reviewer Notes
 
 - Anything non-obvious about the implementation?
 - Any trade-offs or follow-up work?

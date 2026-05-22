@@ -19,11 +19,11 @@ from redis.retry import Retry
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Thresholds
-HIT_RATE_WARNING_THRESHOLD = 0.50  ***REMOVED*** Warn if hit rate < 50%
-MEMORY_WARNING_THRESHOLD = 0.80  ***REMOVED*** Warn if memory usage > 80%
-CHECKPOINT_GROWTH_WARN_DELTA = 1  ***REMOVED*** Warn on any growth; tune later if noisy
-CHECK_INTERVAL_SECONDS = 300  ***REMOVED*** 5 minutes
+# Thresholds
+HIT_RATE_WARNING_THRESHOLD = 0.50  # Warn if hit rate < 50%
+MEMORY_WARNING_THRESHOLD = 0.80  # Warn if memory usage > 80%
+CHECKPOINT_GROWTH_WARN_DELTA = 1  # Warn on any growth; tune later if noisy
+CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 
 
 class RedisHealthMonitor:
@@ -106,7 +106,7 @@ class RedisHealthMonitor:
             logger.warning("Redis health check: unable to connect to Redis")
             raise
 
-        ***REMOVED*** --- Evicted keys ---
+        # --- Evicted keys ---
         evicted_keys = int(info_stats.get("evicted_keys", 0))
         new_evictions = 0
         if self._prev_evicted_keys is not None:
@@ -120,7 +120,7 @@ class RedisHealthMonitor:
                 evicted_keys,
             )
 
-        ***REMOVED*** --- Hit rate ---
+        # --- Hit rate ---
         keyspace_hits = int(info_stats.get("keyspace_hits", 0))
         keyspace_misses = int(info_stats.get("keyspace_misses", 0))
         total_ops = keyspace_hits + keyspace_misses
@@ -134,7 +134,7 @@ class RedisHealthMonitor:
                 keyspace_misses,
             )
 
-        ***REMOVED*** --- Memory usage ---
+        # --- Memory usage ---
         used_memory = int(info_memory.get("used_memory", 0))
         maxmemory = int(info_memory.get("maxmemory", 0))
         used_memory_human = info_memory.get("used_memory_human", "N/A")
@@ -151,7 +151,7 @@ class RedisHealthMonitor:
                     maxmemory_human,
                 )
 
-        ***REMOVED*** --- Checkpoint key metrics (***REMOVED***159) ---
+        # --- Checkpoint key metrics (#159) ---
         try:
             dbsize = await self._redis.dbsize()
             cursor: int = 0
@@ -192,7 +192,7 @@ class RedisHealthMonitor:
                 e,
             )
 
-        ***REMOVED*** --- INFO log every cycle ---
+        # --- INFO log every cycle ---
         logger.info(
             "Redis health: memory=%s/%s (%.1f%%), hit_rate=%.1f%%, evicted_keys=%d (new=%d)",
             used_memory_human,

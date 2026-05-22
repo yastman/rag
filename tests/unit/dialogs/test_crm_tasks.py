@@ -1,4 +1,4 @@
-"""Tests for CRM task wizard and My Tasks view dialogs (***REMOVED***697) — Task 6."""
+"""Tests for CRM task wizard and My Tasks view dialogs (#697) — Task 6."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import time
 import pytest
 
 
-***REMOVED*** --- MyTasksSG states ---
+# --- MyTasksSG states ---
 
 
 def test_my_tasks_sg_has_filter_state():
@@ -32,7 +32,7 @@ def test_create_task_sg_has_task_type_state():
     assert hasattr(CreateTaskSG, "task_type")
 
 
-***REMOVED*** --- parse_due_date helper ---
+# --- parse_due_date helper ---
 
 
 def test_parse_due_date_valid():
@@ -65,7 +65,7 @@ def test_parse_due_date_invalid_raises():
         parse_due_date("32.13.2026")
 
     with pytest.raises(ValueError):
-        parse_due_date("2026-12-31")  ***REMOVED*** wrong format
+        parse_due_date("2026-12-31")  # wrong format
 
 
 def test_parse_due_date_past_raises():
@@ -76,7 +76,7 @@ def test_parse_due_date_past_raises():
         parse_due_date("01.01.2000")
 
 
-***REMOVED*** --- filter_tasks helpers ---
+# --- filter_tasks helpers ---
 
 
 def test_filter_tasks_today_returns_only_todays_tasks():
@@ -106,8 +106,8 @@ def test_filter_tasks_overdue_returns_only_overdue():
     from telegram_bot.services.kommo_models import Task
 
     now = int(time.time())
-    past_ts = now - 86400  ***REMOVED*** yesterday
-    future_ts = now + 86400  ***REMOVED*** tomorrow
+    past_ts = now - 86400  # yesterday
+    future_ts = now + 86400  # tomorrow
 
     tasks = [
         Task(id=1, text="Overdue", complete_till=past_ts, is_completed=False),
@@ -136,7 +136,7 @@ def test_filter_tasks_today_skips_completed():
     assert result == []
 
 
-***REMOVED*** --- Dialog object export ---
+# --- Dialog object export ---
 
 
 def test_create_task_dialog_exported():
@@ -171,7 +171,7 @@ def test_my_tasks_dialog_is_dialog():
     assert isinstance(my_tasks_dialog, Dialog)
 
 
-***REMOVED*** --- task_type_id mapping ---
+# --- task_type_id mapping ---
 
 
 def test_task_type_id_from_key_call():
@@ -203,7 +203,7 @@ def test_task_type_id_from_key_unknown_raises():
         task_type_id_from_key("invalid")
 
 
-***REMOVED*** --- render_tasks_text helper ---
+# --- render_tasks_text helper ---
 
 
 def test_render_tasks_text_empty():
@@ -211,8 +211,8 @@ def test_render_tasks_text_empty():
     from telegram_bot.dialogs.crm_tasks import render_tasks_text
 
     result = render_tasks_text([])
-    ***REMOVED*** Must be exactly the canonical empty-state string. The previous loose
-    ***REMOVED*** assertion (`len(result) > 0`) accepted any non-empty wrong output.
+    # Must be exactly the canonical empty-state string. The previous loose
+    # assertion (`len(result) > 0`) accepted any non-empty wrong output.
     assert result == "Задач нет."
 
 
@@ -243,7 +243,7 @@ def test_render_tasks_text_multiple_tasks():
     assert "Second task" in result
 
 
-***REMOVED*** --- get_task_list: edit_tasks data ---
+# --- get_task_list: edit_tasks data ---
 
 
 async def test_get_task_list_includes_edit_tasks():
@@ -299,7 +299,7 @@ async def test_get_task_list_edit_tasks_excludes_completed():
     assert "20" not in ids
 
 
-***REMOVED*** --- on_task_edit_from_list ---
+# --- on_task_edit_from_list ---
 
 
 async def test_on_task_edit_from_list_sets_fsm_and_closes_dialog():

@@ -26,7 +26,7 @@ class TestRouteStart:
         assert route_start(state) == "classify"
 
     def test_voice_audio_absent_routes_to_classify(self):
-        state = {"query": "hello"}  ***REMOVED*** no voice_audio key at all
+        state = {"query": "hello"}  # no voice_audio key at all
         assert route_start(state) == "classify"
 
 

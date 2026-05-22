@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test hybrid search with sparse vectors in production code.
 Verifies that HybridRRFSearchEngine uses both dense and sparse vectors via RRF.
@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 import pytest
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -29,7 +29,7 @@ def _run_hybrid_search_with_sparse() -> bool:
     print("TEST: HYBRID SEARCH WITH SPARSE VECTORS")
     print("=" * 80)
 
-    ***REMOVED*** Initialize settings and search engine
+    # Initialize settings and search engine
     settings = Settings()
     print("\n📋 Configuration:")
     print(f"   Qdrant URL: {settings.qdrant_url}")
@@ -38,16 +38,16 @@ def _run_hybrid_search_with_sparse() -> bool:
         f"   API Key: {'***' + settings.qdrant_api_key[-10:] if settings.qdrant_api_key else 'Not set'}"
     )
 
-    ***REMOVED*** Initialize hybrid search engine
+    # Initialize hybrid search engine
     print("\n🔧 Initializing HybridRRFSearchEngine...")
     search_engine = HybridRRFSearchEngine(settings)
     print("   ✅ Search engine initialized with BGE-M3 model")
 
-    ***REMOVED*** Test queries
+    # Test queries
     test_queries = [
-        "Стаття 121 Кримінального кодексу",  ***REMOVED*** Article lookup
-        "Умисне вбивство",  ***REMOVED*** Crime definition
-        "Що таке крайня необхідність?",  ***REMOVED*** Legal concept
+        "Стаття 121 Кримінального кодексу",  # Article lookup
+        "Умисне вбивство",  # Crime definition
+        "Що таке крайня необхідність?",  # Legal concept
     ]
 
     total_results = 0
@@ -57,9 +57,9 @@ def _run_hybrid_search_with_sparse() -> bool:
         print(f"{'=' * 80}")
 
         try:
-            ***REMOVED*** Execute search with query string (will use sparse vectors)
+            # Execute search with query string (will use sparse vectors)
             results = search_engine.search(
-                query_embedding=query,  ***REMOVED*** Pass string, not embedding
+                query_embedding=query,  # Pass string, not embedding
                 top_k=5,
                 score_threshold=0.3,
             )
@@ -122,14 +122,14 @@ def test_hybrid_search_with_sparse():
     ):
         pytest.skip(f"Collection not found: {settings.collection_name}")
 
-    ***REMOVED*** Run the search; the helper returns the total result count across probe
-    ***REMOVED*** queries. Zero results across every query means the sparse search path
-    ***REMOVED*** is silently empty — fail instead of reporting green (***REMOVED***1631).
+    # Run the search; the helper returns the total result count across probe
+    # queries. Zero results across every query means the sparse search path
+    # is silently empty — fail instead of reporting green (#1631).
     total_results = _run_hybrid_search_with_sparse()
     assert total_results is not False, "hybrid search execution failed"
     assert total_results > 0, (
         "hybrid search returned 0 results across all probe queries — "
-        "sparse search path is empty or misconfigured (***REMOVED***1631)"
+        "sparse search path is empty or misconfigured (#1631)"
     )
 
 

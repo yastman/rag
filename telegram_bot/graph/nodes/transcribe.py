@@ -45,7 +45,7 @@ def make_transcribe_node(
         if voice_audio is None:
             raise ValueError("voice_audio is None — transcribe_node requires audio data")
 
-        ***REMOVED*** Curated span input (no raw bytes!)
+        # Curated span input (no raw bytes!)
         lf = get_client()
         lf.update_current_span(
             input={
@@ -59,7 +59,7 @@ def make_transcribe_node(
         buf = io.BytesIO(voice_audio)
         buf.name = "voice.ogg"
 
-        ***REMOVED*** Best-effort Langfuse generation observation — must not break STT
+        # Best-effort Langfuse generation observation — must not break STT
         import contextlib
 
         gen_obs_ctx = None
@@ -105,7 +105,7 @@ def make_transcribe_node(
             voice_language,
         )
 
-        ***REMOVED*** Curated span output
+        # Curated span output
         lf.update_current_span(
             output={
                 "stt_duration_ms": round(stt_duration_ms, 1),
@@ -114,7 +114,7 @@ def make_transcribe_node(
             }
         )
 
-        ***REMOVED*** Send transcription preview (optional)
+        # Send transcription preview (optional)
         if show_transcription and message is not None:
             try:
                 await message.answer(
@@ -129,7 +129,7 @@ def make_transcribe_node(
             "stt_duration_ms": stt_duration_ms,
             "query": text,
             "messages": [{"role": "user", "content": text}],
-            "voice_audio": None,  ***REMOVED*** Free memory — audio no longer needed
+            "voice_audio": None,  # Free memory — audio no longer needed
         }
 
     return transcribe_node

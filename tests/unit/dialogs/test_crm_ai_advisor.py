@@ -1,16 +1,16 @@
-"""Tests for CRM AI Advisor dialog — redesigned with 2 buttons and loading state (***REMOVED***731)."""
+"""Tests for CRM AI Advisor dialog — redesigned with 2 buttons and loading state (#731)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 
-***REMOVED*** --- Module imports ---
+# --- Module imports ---
 
 
 def test_crm_ai_advisor_module_is_importable():
     """crm_ai_advisor module can be imported."""
-    from telegram_bot.dialogs import crm_ai_advisor  ***REMOVED*** noqa: F401
+    from telegram_bot.dialogs import crm_ai_advisor  # noqa: F401
 
 
 def test_advisor_dialog_is_exported():
@@ -29,7 +29,7 @@ def test_advisor_dialog_is_aiogram_dialog():
     assert isinstance(advisor_dialog, Dialog)
 
 
-***REMOVED*** --- FSM States ---
+# --- FSM States ---
 
 
 def test_ai_advisor_sg_has_main_state():
@@ -53,7 +53,7 @@ def test_ai_advisor_sg_has_result_state():
     assert hasattr(AIAdvisorSG, "result"), "AIAdvisorSG must have 'result' state"
 
 
-***REMOVED*** --- Actions list ---
+# --- Actions list ---
 
 
 def test_advisor_has_exactly_two_actions():
@@ -72,7 +72,7 @@ def test_advisor_actions_are_daily_plan_and_deal_tips():
     assert "deal_tips" in action_ids
 
 
-***REMOVED*** --- Action getter ---
+# --- Action getter ---
 
 
 async def test_get_advisor_menu_returns_dict_with_title_and_items():
@@ -97,7 +97,7 @@ async def test_get_advisor_menu_items_have_two_elements():
         assert len(item) == 2, f"Item must be (label, id) pair: {item}"
 
 
-***REMOVED*** --- Loading window getter ---
+# --- Loading window getter ---
 
 
 async def test_get_loading_data_returns_loading_text():
@@ -111,7 +111,7 @@ async def test_get_loading_data_returns_loading_text():
     assert len(result["loading_text"]) > 0
 
 
-***REMOVED*** --- on_advisor_action handler ---
+# --- on_advisor_action handler ---
 
 
 async def test_on_advisor_action_sets_dialog_data_with_action():
@@ -149,7 +149,7 @@ async def test_on_advisor_action_switches_to_loading_not_result():
     manager.switch_to.assert_called_once_with(AIAdvisorSG.loading)
 
 
-***REMOVED*** --- get_advisor_result getter ---
+# --- get_advisor_result getter ---
 
 
 async def test_get_advisor_result_reads_result_text_from_dialog_data():
@@ -166,7 +166,7 @@ async def test_get_advisor_result_reads_result_text_from_dialog_data():
 
     result = await get_advisor_result(dialog_manager=dialog_manager)
 
-    ***REMOVED*** Should read from dialog_data, not call the service
+    # Should read from dialog_data, not call the service
     advisor.get_daily_plan.assert_not_called()
     advisor.get_deal_and_task_tips.assert_not_called()
     assert result["result_text"] == "Заранее подготовленный ответ"
@@ -182,7 +182,7 @@ async def test_get_advisor_result_returns_dash_when_no_dialog_manager():
     assert isinstance(result["result_text"], str)
 
 
-***REMOVED*** --- on_advisor_back handler ---
+# --- on_advisor_back handler ---
 
 
 async def test_on_advisor_back_switches_to_main():

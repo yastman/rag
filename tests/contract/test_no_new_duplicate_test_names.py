@@ -1,4 +1,4 @@
-"""Sentinel test: forbid NEW duplicate test function names across the suite (***REMOVED***1539).
+"""Sentinel test: forbid NEW duplicate test function names across the suite (#1539).
 
 pytest-xdist may silently merge or skip identically-named tests living in
 different files. We track the current 177 duplicate names in
@@ -41,10 +41,10 @@ def test_no_new_duplicate_test_function_names():
         timeout=60,
     )
     if result.returncode != 0:
-        ***REMOVED*** Surface the script's stderr as the test failure message so the
-        ***REMOVED*** developer sees exactly which names need renaming.
+        # Surface the script's stderr as the test failure message so the
+        # developer sees exactly which names need renaming.
         msg = (
-            "Duplicate test name ratchet failed (***REMOVED***1539). "
+            "Duplicate test name ratchet failed (#1539). "
             "Rename your new test to be unique. "
             "DO NOT regenerate the allowlist to silence this:\n\n" + result.stderr
         )

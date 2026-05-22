@@ -1,7 +1,7 @@
 """Contract test: lock SDK-native Qdrant usage in core retrieval / ingestion modules.
 
-Several earlier issues (***REMOVED***1647 partially closed by ***REMOVED***1751; ***REMOVED***1846 build-then-delete
-via HasIdCondition; the score-boosting consolidation around ***REMOVED***590) converged on a
+Several earlier issues (#1647 partially closed by #1751; #1846 build-then-delete
+via HasIdCondition; the score-boosting consolidation around #590) converged on a
 single rule: in the modules listed below, search and delete must go through the
 canonical Qdrant Python client surface — never re-implemented as custom helpers
 or older deprecated entry points.
@@ -21,7 +21,7 @@ This test scans the five files where these patterns concentrate. It must
 trivially pass today and stay green forever; any new offender is a contract
 regression.
 
-Refs ***REMOVED***1538, ***REMOVED***1647, ***REMOVED***1751, ***REMOVED***1846, ***REMOVED***590.
+Refs #1538, #1647, #1751, #1846, #590.
 """
 
 from __future__ import annotations
@@ -32,9 +32,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-***REMOVED*** The five files where Qdrant SDK calls live — keep this list in sync with the
-***REMOVED*** audit issue (***REMOVED***1538). Adding a new core retrieval / ingestion file? Extend
-***REMOVED*** this list rather than working around the contract.
+# The five files where Qdrant SDK calls live — keep this list in sync with the
+# audit issue (#1538). Adding a new core retrieval / ingestion file? Extend
+# this list rather than working around the contract.
 SCAN_FILES: list[Path] = [
     REPO_ROOT / "src" / "ingestion" / "unified" / "qdrant_writer.py",
     REPO_ROOT / "telegram_bot" / "services" / "apartments_service.py",
@@ -43,31 +43,31 @@ SCAN_FILES: list[Path] = [
     REPO_ROOT / "src" / "evaluation" / "search_engines.py",
 ]
 
-***REMOVED*** Substrings that flag a custom rank-fusion or score-boost helper. The Qdrant
-***REMOVED*** server-side primitives (``RrfQuery`` / ``FusionQuery`` / ``FormulaQuery``)
-***REMOVED*** already cover every legitimate case; a Python function whose name contains
-***REMOVED*** any of these tokens is almost certainly re-implementing the SDK in user code.
+# Substrings that flag a custom rank-fusion or score-boost helper. The Qdrant
+# server-side primitives (``RrfQuery`` / ``FusionQuery`` / ``FormulaQuery``)
+# already cover every legitimate case; a Python function whose name contains
+# any of these tokens is almost certainly re-implementing the SDK in user code.
 FORBIDDEN_FN_NAME_TOKENS: tuple[str, ...] = (
     "_compute_rrf",
     "_custom_rrf",
     "_score_boost",
 )
 
-***REMOVED*** Allowlist of function names that legitimately contain a forbidden token but
-***REMOVED*** are SDK-native at the call level. Kept small and justified per entry.
+# Allowlist of function names that legitimately contain a forbidden token but
+# are SDK-native at the call level. Kept small and justified per entry.
 ALLOWED_FN_NAMES: frozenset[str] = frozenset(
     {
-        ***REMOVED*** Public method on QdrantService that delegates server-side boosting to
-        ***REMOVED*** ``models.FormulaQuery`` + ``ExpDecayExpression`` (Qdrant 1.14+); not a
-        ***REMOVED*** custom Python helper. Tracked under ***REMOVED***590.
+        # Public method on QdrantService that delegates server-side boosting to
+        # ``models.FormulaQuery`` + ``ExpDecayExpression`` (Qdrant 1.14+); not a
+        # custom Python helper. Tracked under #590.
         "search_with_score_boosting",
     }
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** AST helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# AST helpers
+# ---------------------------------------------------------------------------
 
 
 def _attribute_chain(node: ast.AST) -> str:
@@ -79,7 +79,7 @@ def _attribute_chain(node: ast.AST) -> str:
     """
     try:
         return ast.unparse(node)
-    except Exception:  ***REMOVED*** pragma: no cover — defensive, ast.unparse is total in 3.10+
+    except Exception:  # pragma: no cover — defensive, ast.unparse is total in 3.10+
         return ""
 
 
@@ -95,9 +95,9 @@ def _iter_function_defs(tree: ast.AST):
             yield node
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Individual rule scanners
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Individual rule scanners
+# ---------------------------------------------------------------------------
 
 
 def _find_fusion_rrf_literals(tree: ast.AST, file_path: Path) -> list[tuple[Path, int, str]]:
@@ -106,13 +106,13 @@ def _find_fusion_rrf_literals(tree: ast.AST, file_path: Path) -> list[tuple[Path
     The current canonical RRF wrapper is ``models.RrfQuery(rrf=models.Rrf(k=...))``.
     The legacy ``FusionQuery(fusion=models.Fusion.RRF)`` form is functionally
     equivalent but discouraged: ``RrfQuery`` exposes the ``k`` parameter
-    explicitly and is what the rest of this codebase converged on after ***REMOVED***1751.
+    explicitly and is what the rest of this codebase converged on after #1751.
     """
     offenders: list[tuple[Path, int, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr == "RRF":
             chain = _attribute_chain(node)
-            ***REMOVED*** Only flag the Fusion.RRF form, not arbitrary user enums named RRF.
+            # Only flag the Fusion.RRF form, not arbitrary user enums named RRF.
             if chain.endswith("Fusion.RRF"):
                 offenders.append((file_path, node.lineno, chain))
     return offenders
@@ -148,15 +148,15 @@ def _find_deprecated_client_search_calls(
         if not (isinstance(func, ast.Attribute) and func.attr == "search"):
             continue
         receiver_src = _attribute_chain(func.value)
-        ***REMOVED*** Only flag when the receiver chain looks like a Qdrant client handle.
+        # Only flag when the receiver chain looks like a Qdrant client handle.
         if "client" in receiver_src.lower() or "qdrant" in receiver_src.lower():
             offenders.append((file_path, call.lineno, _attribute_chain(func)))
     return offenders
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Test entrypoints
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Test entrypoints
+# ---------------------------------------------------------------------------
 
 
 def _load_tree(file_path: Path) -> ast.AST:
@@ -180,7 +180,7 @@ def test_no_legacy_fusion_rrf_attribute() -> None:
         offenders.extend(_find_fusion_rrf_literals(_load_tree(path), path))
     assert not offenders, (
         "Legacy `Fusion.RRF` attribute access found. Replace with the canonical "
-        "`models.RrfQuery(rrf=models.Rrf(k=...))` per ***REMOVED***1751:\n"
+        "`models.RrfQuery(rrf=models.Rrf(k=...))` per #1751:\n"
         + "\n".join(
             f"  {p.relative_to(REPO_ROOT)}:{lineno} -> {expr}"
             for p, lineno, expr in offenders

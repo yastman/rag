@@ -1,4 +1,4 @@
-"""RAG pipeline — async functions replacing 11-node LangGraph graph (***REMOVED***442).
+"""RAG pipeline — async functions replacing 11-node LangGraph graph (#442).
 
 Pipeline returns CONTEXT (documents, scores, latency_stages).
 Agent generates ANSWER from that context.
@@ -49,8 +49,8 @@ from telegram_bot.services.rag_core import (
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** top_k=7 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
-***REMOVED*** 3 was too restrictive — comprehensive queries (e.g. list all ВНЖ types) were losing chunks.
+# top_k=7 for reranking. Standard in literature; balances latency vs recall for reranking candidate pool.
+# 3 was too restrictive — comprehensive queries (e.g. list all ВНЖ types) were losing chunks.
 _DEFAULT_RERANK_TOP_K = 7
 _CONFIDENT_TRIM_TOP_K = 3
 _QUERY_PREPROCESSOR = QueryPreprocessor()
@@ -148,9 +148,9 @@ async def _run_relaxed_retrieval(
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Step 1: Cache check
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Step 1: Cache check
+# ---------------------------------------------------------------------------
 
 
 @observe(name="cache-check", capture_input=False, capture_output=False)
@@ -187,7 +187,7 @@ async def _cache_check(
 
     start = time.perf_counter()
 
-    ***REMOVED*** Try bundle cache first (avoids redundant BGE-M3 calls when full bundle is cached ***REMOVED***1493)
+    # Try bundle cache first (avoids redundant BGE-M3 calls when full bundle is cached #1493)
     bundle = None
     _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
     if _has_bundle_cache and pre_computed_embedding is None:
@@ -208,7 +208,7 @@ async def _cache_check(
         colbert_query = bundle.colbert
         embeddings_cache_hit = True
     else:
-        ***REMOVED*** Step 1: Get or compute dense embedding via shared core
+        # Step 1: Get or compute dense embedding via shared core
         if pre_computed_embedding:
             logger.debug(
                 "_cache_check: reusing pre-computed embedding (%d dims)",
@@ -249,7 +249,7 @@ async def _cache_check(
                 "latency_stages": {**latency_stages, "cache_check": latency},
             }
 
-    ***REMOVED*** Step 2: Check semantic cache via shared core
+    # Step 2: Check semantic cache via shared core
     contextual_query = is_contextual_query(query)
     if (
         semantic_cache_already_checked
@@ -291,7 +291,7 @@ async def _cache_check(
             "latency_stages": {**latency_stages, "cache_check": latency},
         }
 
-    ***REMOVED*** ColBERT query vectors are only needed on semantic miss.
+    # ColBERT query vectors are only needed on semantic miss.
     if colbert_query is None:
         _has_hybrid_colbert = callable(
             getattr(embeddings, "aembed_hybrid_with_colbert", None)
@@ -309,7 +309,7 @@ async def _cache_check(
                     sparse = sparse_from_hybrid
                     if not pre_computed_sparse:
                         await cache.store_sparse_embedding(query, sparse_from_hybrid)
-                ***REMOVED*** Store full bundle for future requests (***REMOVED***1493)
+                # Store full bundle for future requests (#1493)
                 if (
                     _has_bundle_cache
                     and embedding is not None
@@ -362,9 +362,9 @@ async def _cache_check(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Step 2: Hybrid retrieve
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Step 2: Hybrid retrieve
+# ---------------------------------------------------------------------------
 
 
 @observe(name="hybrid-retrieve", capture_input=False, capture_output=False)
@@ -399,12 +399,12 @@ async def _hybrid_retrieve(
     )
 
     dense_vector = query_embedding
-    ***REMOVED*** Initialize with pre-computed sparse from _cache_check to avoid redundant BGE-M3 call (***REMOVED***571)
+    # Initialize with pre-computed sparse from _cache_check to avoid redundant BGE-M3 call (#571)
     sparse_vector: Any = sparse_embedding
 
-    ***REMOVED*** After rewrite, query_embedding is None — re-embed the rewritten query
+    # After rewrite, query_embedding is None — re-embed the rewritten query
     if dense_vector is None and embeddings is not None:
-        ***REMOVED*** Check bundle cache first (avoids redundant BGE-M3 calls ***REMOVED***1493)
+        # Check bundle cache first (avoids redundant BGE-M3 calls #1493)
         _has_bundle_cache = callable(getattr(cache, "get_bge_m3_query_bundle", None))
         bundle = None
         if _has_bundle_cache:
@@ -441,7 +441,7 @@ async def _hybrid_retrieve(
                     ) = await embeddings.aembed_hybrid_with_colbert(query)
                     await cache.store_embedding(query, dense_vector)
                     await cache.store_sparse_embedding(query, sparse_vector)
-                    ***REMOVED*** Store full bundle for future requests (***REMOVED***1493)
+                    # Store full bundle for future requests (#1493)
                     if (
                         _has_bundle_cache
                         and dense_vector is not None
@@ -486,7 +486,7 @@ async def _hybrid_retrieve(
     if not dense_vector:
         dense_vector = []
 
-    ***REMOVED*** Step 1: Compute retrieval filters before touching the search cache.
+    # Step 1: Compute retrieval filters before touching the search cache.
     colbert_search_used = False
     normalized_query = query.strip().lower()
     query_word_count = len(normalized_query.split()) if normalized_query else 0
@@ -514,7 +514,7 @@ async def _hybrid_retrieve(
 
     start = time.perf_counter()
 
-    ***REMOVED*** Step 2: Check search cache
+    # Step 2: Check search cache
     cached_results = await cache.get_search_results(dense_vector, initial_filters)
     if cached_results is not None:
         latency = time.perf_counter() - start
@@ -549,14 +549,14 @@ async def _hybrid_retrieve(
             "final_filters": initial_filters,
         }
 
-    ***REMOVED*** Step 3: Get sparse embedding only after a confirmed search-cache miss.
+    # Step 3: Get sparse embedding only after a confirmed search-cache miss.
     if sparse_vector is None:
         sparse_vector = await cache.get_sparse_embedding(query)
         if sparse_vector is None:
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    ***REMOVED*** Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
+    # Step 4: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     if colbert_query and callable(getattr(qdrant, "hybrid_search_rrf_colbert", None)):
         record_counter_metric("colbert_rerank_attempted")
     results, search_meta, colbert_used = await _run_initial_retrieval(
@@ -620,7 +620,7 @@ async def _hybrid_retrieve(
     if not results:
         record_counter_metric("retrieval_zero_docs")
 
-    ***REMOVED*** Step 5: Cache results
+    # Step 5: Cache results
     if results and not search_meta.get("backend_error", False):
         stored_filters: list[dict[str, Any] | None] = []
         cache_targets = [final_filters] if final_filters != initial_filters else [initial_filters]
@@ -679,9 +679,9 @@ async def _hybrid_retrieve(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Step 3: Grade documents
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Step 3: Grade documents
+# ---------------------------------------------------------------------------
 
 
 @observe(name="grade-documents", as_type="evaluator")
@@ -758,9 +758,9 @@ async def _grade_documents(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Step 4: Rerank
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Step 4: Rerank
+# ---------------------------------------------------------------------------
 
 
 @observe(name="rerank")
@@ -793,7 +793,7 @@ async def _rerank(
             query, documents, cache=cache, reranker=reranker, top_k=top_k
         )
         if not rerank_applied:
-            ***REMOVED*** No reranker path: sort and trim here
+            # No reranker path: sort and trim here
             reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
     except Exception as e:
         logger.exception("rerank: ColBERT failed, falling back to score sort")
@@ -829,9 +829,9 @@ async def _rerank(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Step 5: Rewrite query
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Step 5: Rewrite query
+# ---------------------------------------------------------------------------
 
 
 @observe(name="query-rewrite")
@@ -903,9 +903,9 @@ async def _rewrite_query(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Step 6: Cache store
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Step 6: Cache store
+# ---------------------------------------------------------------------------
 
 
 @observe(name="cache-store", capture_input=False, capture_output=False)
@@ -939,8 +939,8 @@ async def _cache_store(
 
     stored_semantic = False
     if response and query_embedding and query_type in CACHEABLE_QUERY_TYPES:
-        ***REMOVED*** Legacy helper kept as a thin delegate so tests and older callsites do not
-        ***REMOVED*** carry a second cache-policy implementation.
+        # Legacy helper kept as a thin delegate so tests and older callsites do not
+        # carry a second cache-policy implementation.
         decision = build_cacheability_decision(
             result={
                 "response": response,
@@ -973,8 +973,8 @@ async def _cache_store(
                 agent_role=agent_role,
             )
         except Exception as exc:
-            ***REMOVED*** RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
-            ***REMOVED*** error from store_semantic must never lose the response (***REMOVED***524).
+            # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
+            # error from store_semantic must never lose the response (#524).
             logger.warning(
                 "cache_store: semantic store failed, response preserved: %s: %s",
                 type(exc).__name__,
@@ -999,9 +999,9 @@ async def _cache_store(
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Orchestrator: rag_pipeline()
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Orchestrator: rag_pipeline()
+# ---------------------------------------------------------------------------
 
 
 @observe(name="rag-pipeline", capture_input=False, capture_output=False)
@@ -1042,8 +1042,8 @@ async def rag_pipeline(
 
     config = GraphConfig.from_env()
 
-    ***REMOVED*** cache_key: use original user query for semantic cache so repeated queries hit
-    ***REMOVED*** even when the agent reformulates them. Falls back to query when not provided.
+    # cache_key: use original user query for semantic cache so repeated queries hit
+    # even when the agent reformulates them. Falls back to query when not provided.
     cache_key = original_query or query
 
     lf = get_client()
@@ -1078,8 +1078,8 @@ async def rag_pipeline(
     if semantic_cache_filter_sensitive and semantic_cache_filter_signature is None:
         semantic_cache_prechecked = True
 
-    ***REMOVED*** Step 1: Cache check (use cache_key = original user query)
-    ***REMOVED*** Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
+    # Step 1: Cache check (use cache_key = original user query)
+    # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
     cache_result: dict[str, Any]
     if (
         state_contract is not None
@@ -1116,7 +1116,7 @@ async def rag_pipeline(
             semantic_cache_filter_signature=semantic_cache_filter_signature,
         )
     semantic_cache_already_checked = semantic_cache_prechecked
-    ***REMOVED*** Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
+    # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding = cast(list[float] | None, cache_result.get("query_embedding"))
     cache_sparse: Any = cache_result.get("sparse_embedding")
     latency_stages = cast(dict[str, float], cache_result["latency_stages"])
@@ -1161,25 +1161,25 @@ async def rag_pipeline(
             "semantic_cache_already_checked": semantic_cache_already_checked,
         }
 
-    ***REMOVED*** For retrieval, use reformulated query embedding.
-    ***REMOVED*** If cache_key differs from query (agent reformulated), pre-fetch the
-    ***REMOVED*** reformulated query embedding for the FIRST retrieval attempt. This avoids a
-    ***REMOVED*** redundant BGE-M3 call in _hybrid_retrieve on warm requests (***REMOVED***513).
-    ***REMOVED*** Subsequent iterations after _rewrite_query set query_embedding = None and
-    ***REMOVED*** let _hybrid_retrieve handle cache lookup for those new rewritten queries.
+    # For retrieval, use reformulated query embedding.
+    # If cache_key differs from query (agent reformulated), pre-fetch the
+    # reformulated query embedding for the FIRST retrieval attempt. This avoids a
+    # redundant BGE-M3 call in _hybrid_retrieve on warm requests (#513).
+    # Subsequent iterations after _rewrite_query set query_embedding = None and
+    # let _hybrid_retrieve handle cache lookup for those new rewritten queries.
     if cache_key != query:
-        ***REMOVED*** Agent reformulated query — all pre-computed embeddings are for original text.
-        ***REMOVED*** Let _hybrid_retrieve do ONE combined aembed_hybrid_with_colbert call (***REMOVED***951).
+        # Agent reformulated query — all pre-computed embeddings are for original text.
+        # Let _hybrid_retrieve do ONE combined aembed_hybrid_with_colbert call (#951).
         query_embedding = None
         colbert_query = None
         query_sparse: Any = None
     else:
         query_embedding = cache_embedding
-        query_sparse = cache_sparse  ***REMOVED*** reuse sparse from _cache_check for this query (***REMOVED***571)
+        query_sparse = cache_sparse  # reuse sparse from _cache_check for this query (#571)
 
-    ***REMOVED*** Retrieve → grade → (rerank | rewrite loop)
+    # Retrieve → grade → (rerank | rewrite loop)
     for _attempt in range(config.max_rewrite_attempts + 1):
-        ***REMOVED*** Step 2: Hybrid retrieve
+        # Step 2: Hybrid retrieve
         retrieve_result = await _hybrid_retrieve(
             current_query,
             query_embedding,
@@ -1198,7 +1198,7 @@ async def rag_pipeline(
         query_embedding = retrieve_result.get("query_embedding", query_embedding)
         colbert_query = retrieve_result.get("colbert_query", colbert_query)
 
-        ***REMOVED*** Step 3: Grade documents
+        # Step 3: Grade documents
         grade_result = await _grade_documents(
             documents,
             grade_confidence,
@@ -1208,14 +1208,14 @@ async def rag_pipeline(
         grade_confidence = grade_result["grade_confidence"]
 
         if grade_result["documents_relevant"]:
-            ***REMOVED*** Step 4: Rerank (if needed)
+            # Step 4: Rerank (if needed)
             rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
             if grade_result["skip_rerank"] or rerank_from_retrieve:
-                ***REMOVED*** High confidence or server-side ColBERT already applied — skip rerank
+                # High confidence or server-side ColBERT already applied — skip rerank
                 final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
                     : config.rerank_top_k
                 ]
-                rerank_applied = rerank_from_retrieve  ***REMOVED*** preserve True from ColBERT path
+                rerank_applied = rerank_from_retrieve  # preserve True from ColBERT path
                 rerank_cache_hit = False
             else:
                 rerank_result = await _rerank(
@@ -1235,7 +1235,7 @@ async def rag_pipeline(
             )
             final_gap_confident = bool(final_gap["confident"])
             gap_ratio = final_gap.get("ratio", 0.0)
-            ***REMOVED*** Only trim when gap is confident AND we have more than min floor.
+            # Only trim when gap is confident AND we have more than min floor.
             if final_gap_confident and len(final_docs) > _CONFIDENT_TRIM_TOP_K:
                 logger.info(
                     "Score gap confident, trimming final docs",
@@ -1247,7 +1247,7 @@ async def rag_pipeline(
                 )
                 final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
 
-            ***REMOVED*** Small-to-big context expansion
+            # Small-to-big context expansion
             await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
 
             result = _assemble_context(
@@ -1284,7 +1284,7 @@ async def rag_pipeline(
             )
             return result
 
-        ***REMOVED*** Check if we should rewrite
+        # Check if we should rewrite
         can_rewrite = (
             rewrite_count < config.max_rewrite_attempts
             and not skip_rewrite
@@ -1294,7 +1294,7 @@ async def rag_pipeline(
         if not can_rewrite:
             break
 
-        ***REMOVED*** Step 5: Rewrite query
+        # Step 5: Rewrite query
         rewrite_result = await _rewrite_query(
             current_query,
             rewrite_count,
@@ -1306,14 +1306,14 @@ async def rag_pipeline(
         rewrite_count = rewrite_result["rewrite_count"]
         rewrite_effective = rewrite_result["rewrite_effective"]
         topic_hint = get_query_topic_hint(current_query)
-        query_embedding = None  ***REMOVED*** Force re-embed on next retrieve
-        colbert_query = None  ***REMOVED*** Force re-encode ColBERT on next retrieve
-        query_sparse = None  ***REMOVED*** Force re-compute sparse on next retrieve (query changed)
+        query_embedding = None  # Force re-embed on next retrieve
+        colbert_query = None  # Force re-encode ColBERT on next retrieve
+        query_sparse = None  # Force re-compute sparse on next retrieve (query changed)
 
-    ***REMOVED*** Fallback: ran out of rewrites, return best docs with rerank
+    # Fallback: ran out of rewrites, return best docs with rerank
     rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
     if rerank_from_retrieve:
-        ***REMOVED*** Server-side ColBERT already applied — skip separate rerank
+        # Server-side ColBERT already applied — skip separate rerank
         final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
             :_DEFAULT_RERANK_TOP_K
         ]
@@ -1347,7 +1347,7 @@ async def rag_pipeline(
         )
         final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
 
-    ***REMOVED*** Small-to-big context expansion (fallback path)
+    # Small-to-big context expansion (fallback path)
     await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
 
     result = _assemble_context(

@@ -1,4 +1,4 @@
-"""Pydantic models for lead scoring persistence (***REMOVED***384)."""
+"""Pydantic models for lead scoring persistence (#384)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/evaluation/test_create_golden_set.py
+# tests/unit/evaluation/test_create_golden_set.py
 """Tests for src/evaluation/create_golden_set.py."""
 
 import json

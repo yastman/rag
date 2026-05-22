@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/evaluation/test_ragas_evaluation.py
+# tests/unit/evaluation/test_ragas_evaluation.py
 """Tests for RAGAS evaluation module."""
 
 import json
@@ -223,11 +223,11 @@ class TestEvaluatePipeline:
         with patch("builtins.open", mock_open(read_data=json.dumps(test_data))):
             with patch("src.evaluation.ragas_evaluation.Dataset") as mock_dataset:
                 with patch("src.evaluation.ragas_evaluation.evaluate") as mock_evaluate:
-                    ***REMOVED*** All metrics above thresholds
+                    # All metrics above thresholds
                     mock_evaluate.return_value = {
-                        "faithfulness": 0.90,  ***REMOVED*** >= 0.85
-                        "context_precision": 0.85,  ***REMOVED*** >= 0.80
-                        "context_recall": 0.95,  ***REMOVED*** >= 0.90
+                        "faithfulness": 0.90,  # >= 0.85
+                        "context_precision": 0.85,  # >= 0.80
+                        "context_recall": 0.95,  # >= 0.90
                         "answer_relevancy": 0.88,
                     }
                     mock_dataset.from_list.return_value = MagicMock()
@@ -247,9 +247,9 @@ class TestEvaluatePipeline:
         with patch("builtins.open", mock_open(read_data=json.dumps(test_data))):
             with patch("src.evaluation.ragas_evaluation.Dataset") as mock_dataset:
                 with patch("src.evaluation.ragas_evaluation.evaluate") as mock_evaluate:
-                    ***REMOVED*** Faithfulness below threshold
+                    # Faithfulness below threshold
                     mock_evaluate.return_value = {
-                        "faithfulness": 0.70,  ***REMOVED*** < 0.85
+                        "faithfulness": 0.70,  # < 0.85
                         "context_precision": 0.85,
                         "context_recall": 0.95,
                         "answer_relevancy": 0.88,
@@ -266,7 +266,7 @@ class TestEvaluatePipeline:
         mock_pipeline = AsyncMock()
         mock_pipeline.query.return_value = {"answer": "test", "results": []}
 
-        ***REMOVED*** Create 100 queries
+        # Create 100 queries
         test_data = {"queries": [{"query": f"query {i}"} for i in range(100)]}
 
         with patch("builtins.open", mock_open(read_data=json.dumps(test_data))):
@@ -282,5 +282,5 @@ class TestEvaluatePipeline:
 
                     await evaluator.evaluate_pipeline(mock_pipeline)
 
-                    ***REMOVED*** Should only call query 50 times
+                    # Should only call query 50 times
                     assert mock_pipeline.query.call_count == 50

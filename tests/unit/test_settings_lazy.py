@@ -9,12 +9,12 @@ import pytest
 
 def test_import_settings_module_without_api_keys(monkeypatch: pytest.MonkeyPatch):
     """Importing settings module should not require API keys."""
-    ***REMOVED*** Clear any cached settings using monkeypatch (auto-restored after test)
+    # Clear any cached settings using monkeypatch (auto-restored after test)
     for mod in list(sys.modules.keys()):
         if mod.startswith("src.config"):
             monkeypatch.delitem(sys.modules, mod, raising=False)
 
-    ***REMOVED*** Import without API keys should not raise
+    # Import without API keys should not raise
     with patch.dict(
         os.environ,
         {
@@ -25,16 +25,16 @@ def test_import_settings_module_without_api_keys(monkeypatch: pytest.MonkeyPatch
         },
         clear=False,
     ):
-        ***REMOVED*** This should NOT raise ValueError
+        # This should NOT raise ValueError
         from src.config import settings as settings_module
 
-        ***REMOVED*** get_settings() should be available
+        # get_settings() should be available
         assert hasattr(settings_module, "get_settings")
 
 
 def test_get_settings_validates_on_call(monkeypatch: pytest.MonkeyPatch):
     """get_settings() should validate API keys when called."""
-    ***REMOVED*** Clear any cached settings using monkeypatch (auto-restored after test)
+    # Clear any cached settings using monkeypatch (auto-restored after test)
     for mod in list(sys.modules.keys()):
         if mod.startswith("src.config"):
             monkeypatch.delitem(sys.modules, mod, raising=False)

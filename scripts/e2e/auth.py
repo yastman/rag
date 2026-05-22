@@ -1,11 +1,11 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """One-time Telethon authentication script.
 
 Usage:
-    ***REMOVED*** Step 1: Send code to phone
+    # Step 1: Send code to phone
     python scripts/e2e/auth.py --phone +359XXXXXXXXX
 
-    ***REMOVED*** Step 2: Complete auth with received code
+    # Step 2: Complete auth with received code
     python scripts/e2e/auth.py --phone +359XXXXXXXXX --code 12345
 """
 
@@ -44,7 +44,7 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
 
     if not await client.is_user_authorized():
         if code is None:
-            ***REMOVED*** Step 1: Send code request and save hash
+            # Step 1: Send code request and save hash
             result = await client.send_code_request(phone)
             HASH_FILE.write_text(
                 json.dumps(
@@ -60,7 +60,7 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
             await client.disconnect()
             return
 
-        ***REMOVED*** Step 2: Sign in with code and saved hash
+        # Step 2: Sign in with code and saved hash
         if not HASH_FILE.exists():
             print("Error: No saved hash. Run without --code first.")
             await client.disconnect()
@@ -71,7 +71,7 @@ async def main(phone: str, code: str | None = None, password: str | None = None)
 
         try:
             await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
-            HASH_FILE.unlink()  ***REMOVED*** Clean up
+            HASH_FILE.unlink()  # Clean up
         except SessionPasswordNeededError:
             if not password:
                 print("2FA enabled! Run with --password:")

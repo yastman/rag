@@ -1,20 +1,20 @@
-***REMOVED*** Weekly Repo Hygiene Runbook
+# Weekly Repo Hygiene Runbook
 
 > Operator playbook for keeping local git state, the open PR queue, and the
-> issue backlog manageable. Spec: [***REMOVED***1717](https://github.com/yastman/rag/issues/1717).
+> issue backlog manageable. Spec: [#1717](https://github.com/yastman/rag/issues/1717).
 
-***REMOVED******REMOVED*** TL;DR (5-minute Monday check)
+## TL;DR (5-minute Monday check)
 
 ```bash
-make git-hygiene          ***REMOVED*** local branches + worktrees + transient files
-make pr-hygiene           ***REMOVED*** open PR queue triage
-make issue-hygiene        ***REMOVED*** open issue queue hygiene
+make git-hygiene          # local branches + worktrees + transient files
+make pr-hygiene           # open PR queue triage
+make issue-hygiene        # open issue queue hygiene
 ```
 
 Each command exits non-zero whenever something is actionable, so they're CI-
 friendly and can be wired into a weekly Slack/email digest.
 
-***REMOVED******REMOVED*** Before Starting New Work
+## Before Starting New Work
 
 Do not start non-trivial edits in a dirty checkout. Start from a clean worktree
 or create a project-local `.worktrees/<branch>` checkout when unrelated local
@@ -30,13 +30,13 @@ Use the new worktree for feature edits, verification, commits, and PR
 preparation. Leave unrelated dirty branches untouched until their owner or
 operator decides whether to keep, merge, or discard them.
 
-***REMOVED******REMOVED*** What each tool covers
+## What each tool covers
 
 | Tool                              | Covers                                | Issue   |
 | --------------------------------- | ------------------------------------- | ------- |
-| `make git-hygiene` (native git)   | branches, worktrees, transient files  | ***REMOVED***1718   |
-| `scripts/pr_queue_audit.py`       | open PR queue, blocked reasons, SLA   | ***REMOVED***1719   |
-| `scripts/issue_queue_audit.py`    | open issue labels, lanes, assignees   | ***REMOVED***1720   |
+| `make git-hygiene` (native git)   | branches, worktrees, transient files  | #1718   |
+| `scripts/pr_queue_audit.py`       | open PR queue, blocked reasons, SLA   | #1719   |
+| `scripts/issue_queue_audit.py`    | open issue labels, lanes, assignees   | #1720   |
 
 The PR and issue audits accept `--json` for programmatic consumption and
 human-readable output by default. The git hygiene path is now native git
@@ -46,7 +46,7 @@ Python helper to call directly. See
 [`docs/engineering/script-native-migration-matrix.md`](script-native-migration-matrix.md)
 for the audit decisions behind this split.
 
-***REMOVED******REMOVED*** Safety guarantees
+## Safety guarantees
 
 The cleanup tooling is designed so a tired operator running `make ... -fix`
 on Monday morning cannot lose work:
@@ -67,12 +67,12 @@ and issue lanes) will additionally surface borderline items, but git
 cleanup itself stays native and conservative — it never force-removes
 dirty worktrees.
 
-***REMOVED******REMOVED*** 1. Git hygiene
+## 1. Git hygiene
 
 ```bash
-make git-hygiene                              ***REMOVED*** report
-make git-hygiene-fix                          ***REMOVED*** dry-run cleanup of safe lane
-make git-hygiene-fix | sh                     ***REMOVED*** apply cleanup (review first!)
+make git-hygiene                              # report
+make git-hygiene-fix                          # dry-run cleanup of safe lane
+make git-hygiene-fix | sh                     # apply cleanup (review first!)
 ```
 
 `make git-hygiene-fix` prints the exact `git merge-base --is-ancestor … &&
@@ -99,10 +99,10 @@ Worktrees show up under `requires-human` whenever they are detached, in
 `/tmp`, or dirty. None of those are auto-removed; the operator decides
 whether to commit, stash, or `git worktree remove --force` after backup.
 
-***REMOVED******REMOVED*** 2. PR queue triage
+## 2. PR queue triage
 
 ```bash
-make pr-hygiene                                       ***REMOVED*** report
+make pr-hygiene                                       # report
 uv run python scripts/pr_queue_audit.py --json
 uv run python scripts/pr_queue_audit.py --bucket conflicts
 uv run python scripts/pr_queue_audit.py --base dev
@@ -122,7 +122,7 @@ Buckets in priority order:
                             than `--stale-days` (default 14).
 9. **unknown**            — gh fields missing; investigate.
 
-***REMOVED******REMOVED******REMOVED*** Triage SLA
+### Triage SLA
 
 The runbook recommends:
 
@@ -133,7 +133,7 @@ The runbook recommends:
 - **stale > 30 days**: close with a note, asking author to reopen with
   rebase if still relevant.
 
-***REMOVED******REMOVED******REMOVED*** Ownership rule
+### Ownership rule
 
 Pick the smallest unit:
 
@@ -141,7 +141,7 @@ Pick the smallest unit:
 - The reviewer pool owns `review-needed`.
 - The merger (CODEOWNER or release manager) owns `ready`.
 
-***REMOVED******REMOVED*** 3. Issue queue hygiene
+## 3. Issue queue hygiene
 
 ```bash
 make issue-hygiene
@@ -160,7 +160,7 @@ Buckets:
 | `stale`        | Older than `--stale-days` (default 60). Confirm or close.     |
 | `triaged`      | Already has labels + assignee + lane. No action.              |
 
-***REMOVED******REMOVED******REMOVED*** Splitting issues
+### Splitting issues
 
 A single issue should:
 
@@ -168,10 +168,10 @@ A single issue should:
 2. Be small enough that a single PR can close it.
 
 If the body needs a checklist longer than 5 items, **split** it into a parent
-issue + 1 child issue per lane (the pattern used for ***REMOVED***1717 → ***REMOVED***1718 / ***REMOVED***1719 /
-***REMOVED***1720).
+issue + 1 child issue per lane (the pattern used for #1717 → #1718 / #1719 /
+#1720).
 
-***REMOVED******REMOVED******REMOVED*** Lane labels
+### Lane labels
 
 | Lane                        | When to pick                                              |
 | --------------------------- | --------------------------------------------------------- |
@@ -182,7 +182,7 @@ issue + 1 child issue per lane (the pattern used for ***REMOVED***1717 → ***RE
 These match the existing decision model in
 `docs/engineering/issue-triage.md`.
 
-***REMOVED******REMOVED*** Weekly schedule (suggested)
+## Weekly schedule (suggested)
 
 | Day        | Action                                       |
 | ---------- | -------------------------------------------- |
@@ -192,16 +192,16 @@ These match the existing decision model in
 | Thu        | Triage `review-needed` PRs.                  |
 | Fri        | Run `git-hygiene-fix --dry-run`, then apply. |
 
-***REMOVED******REMOVED*** Non-goals
+## Non-goals
 
 - The runbook does not auto-close stale items; closure is a human decision.
 - It does not change branch protection rules.
 - It does not enforce a merge order; it surfaces signals.
 
-***REMOVED******REMOVED*** Related
+## Related
 
-- [***REMOVED***1717](https://github.com/yastman/rag/issues/1717) — parent spec
-- [***REMOVED***1718](https://github.com/yastman/rag/issues/1718) — git/worktree safety (this runbook §1)
-- [***REMOVED***1719](https://github.com/yastman/rag/issues/1719) — PR queue triage (this runbook §2)
-- [***REMOVED***1720](https://github.com/yastman/rag/issues/1720) — issue queue hygiene (this runbook §3)
+- [#1717](https://github.com/yastman/rag/issues/1717) — parent spec
+- [#1718](https://github.com/yastman/rag/issues/1718) — git/worktree safety (this runbook §1)
+- [#1719](https://github.com/yastman/rag/issues/1719) — PR queue triage (this runbook §2)
+- [#1720](https://github.com/yastman/rag/issues/1720) — issue queue hygiene (this runbook §3)
 - [`docs/engineering/issue-triage.md`](issue-triage.md) — decision model & lanes

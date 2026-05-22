@@ -1,4 +1,4 @@
-"""Human-in-the-Loop (HITL) support for CRM write tools (***REMOVED***443).
+"""Human-in-the-Loop (HITL) support for CRM write tools (#443).
 
 Uses LangGraph interrupt() to pause graph execution and surface a confirmation
 payload to the Telegram bot. The bot sends an inline keyboard; when the user
@@ -28,7 +28,7 @@ def hitl_guard(
     Returns:
         The resume value dict (with "action" key: "approve" or "cancel").
     """
-    return interrupt(  ***REMOVED*** type: ignore[return-value, no-any-return]
+    return interrupt(  # type: ignore[return-value, no-any-return]
         {
             "tool": tool_name,
             "preview": preview,

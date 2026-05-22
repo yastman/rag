@@ -68,9 +68,9 @@ def vps() -> dict:
     return _merge_compose(BASE_COMPOSE, VPS_OVERRIDE)
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** M7 — bot depends_on postgres
-***REMOVED*** =============================================================================
+# =============================================================================
+# M7 — bot depends_on postgres
+# =============================================================================
 
 
 class TestBotDependsOnPostgres:
@@ -81,7 +81,7 @@ class TestBotDependsOnPostgres:
         bot = dev["services"]["bot"]
         assert "depends_on" in bot, "bot service has no depends_on"
         depends = bot["depends_on"]
-        ***REMOVED*** depends_on can be a list or a dict (with condition)
+        # depends_on can be a list or a dict (with condition)
         if isinstance(depends, dict):
             assert "postgres" in depends, "bot.depends_on in dev compose does not include postgres"
         else:
@@ -116,9 +116,9 @@ class TestBotDependsOnPostgres:
         )
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** M8 — Makefile profile drift: docker-ai-up must use an existing profile
-***REMOVED*** =============================================================================
+# =============================================================================
+# M8 — Makefile profile drift: docker-ai-up must use an existing profile
+# =============================================================================
 
 
 class TestMakefileAiProfile:
@@ -134,9 +134,9 @@ class TestMakefileAiProfile:
     def _get_docker_up_profiles(self) -> set[str]:
         """Extract --profile values from Makefile docker-*-up target recipes only."""
         content = MAKEFILE.read_text()
-        ***REMOVED*** Extract only the docker-*-up section (from .PHONY declaration to docker-up alias)
+        # Extract only the docker-*-up section (from .PHONY declaration to docker-up alias)
         section = re.search(
-            r"(docker-core-up:.*?docker-up:.*?***REMOVED******REMOVED***.*?\n)",
+            r"(docker-core-up:.*?docker-up:.*?##.*?\n)",
             content,
             re.DOTALL,
         )
@@ -165,14 +165,14 @@ class TestMakefileAiProfile:
         )
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** M9 — VPS security baseline parity with dev compose
-***REMOVED*** =============================================================================
+# =============================================================================
+# M9 — VPS security baseline parity with dev compose
+# =============================================================================
 
-***REMOVED*** Services that have security defaults applied in dev compose (via <<: *security-defaults)
+# Services that have security defaults applied in dev compose (via <<: *security-defaults)
 _SECURITY_SERVICES = ["bge-m3", "user-base", "docling", "litellm", "bot"]
 
-***REMOVED*** Services that exist in both dev AND vps compose
+# Services that exist in both dev AND vps compose
 _VPS_SECURITY_SERVICES = [s for s in _SECURITY_SERVICES if s != "ingestion"]
 
 
@@ -343,7 +343,7 @@ class TestMiniAppFrontendHealthcheck:
 
 
 class TestMiniAppFrontendSecurityContract:
-    """Frontend nginx must stay compatible with hardened capability settings (***REMOVED***1431)."""
+    """Frontend nginx must stay compatible with hardened capability settings (#1431)."""
 
     def test_compose_runs_frontend_as_nginx_uid_gid(self, vps: dict) -> None:
         svc = vps["services"]["mini-app-frontend"]
@@ -374,7 +374,7 @@ class TestHandoffComposeContract:
 
 
 class TestOtelServiceNameDefaults:
-    """Services that emit Langfuse/OTel traces must have stable OTEL_SERVICE_NAME defaults (***REMOVED***1370)."""
+    """Services that emit Langfuse/OTel traces must have stable OTEL_SERVICE_NAME defaults (#1370)."""
 
     _EXPECTED = {
         "bot": "telegram-bot",
@@ -423,13 +423,13 @@ class TestOtelServiceNameDefaults:
         )
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** ***REMOVED***1307 — Langfuse web memory contract
-***REMOVED*** =============================================================================
+# =============================================================================
+# #1307 — Langfuse web memory contract
+# =============================================================================
 
 
 class TestLangfuseWebMemoryContract:
-    """Langfuse web service must have sufficient memory to avoid Node.js heap OOM (***REMOVED***1307)."""
+    """Langfuse web service must have sufficient memory to avoid Node.js heap OOM (#1307)."""
 
     def test_dev_langfuse_web_memory_limit_is_sufficient(self, dev: dict) -> None:
         """Dev langfuse web needs at least 1G memory to avoid heap limit crashes."""

@@ -1,4 +1,4 @@
-"""Edge-case tests for KommoClient lead operations (***REMOVED***1090)."""
+"""Edge-case tests for KommoClient lead operations (#1090)."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ async def test_search_leads_with_contacts_parses_embedded_and_does_not_mutate_or
     assert len(leads) == 1
     assert leads[0].contacts is not None
     assert leads[0].contacts[0]["name"] == "Alice"
-    ***REMOVED*** Original dict must be unchanged
+    # Original dict must be unchanged
     assert original_response["_embedded"]["leads"][0]["_embedded"] == {
         "contacts": [{"id": 8, "name": "Alice"}]
     }

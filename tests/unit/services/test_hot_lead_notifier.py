@@ -1,4 +1,4 @@
-"""Tests for hot lead notification service (***REMOVED***388)."""
+"""Tests for hot lead notification service (#388)."""
 
 from unittest.mock import AsyncMock
 
@@ -18,7 +18,7 @@ async def test_notifier_sends_once_per_session():
     await notifier.notify_if_hot(payload)
     await notifier.notify_if_hot(payload)
 
-    ***REMOVED*** First call fans out to 2 managers, second is deduped
+    # First call fans out to 2 managers, second is deduped
     assert bot.send_message.await_count == 2
 
 
@@ -66,7 +66,7 @@ import pytest
 
 
 class TestHotLeadNotifierObserveInstrumentation:
-    """Tests for @observe instrumentation on HotLeadNotifier.notify_if_hot (***REMOVED***1663).
+    """Tests for @observe instrumentation on HotLeadNotifier.notify_if_hot (#1663).
 
     Contract: notify_if_hot must be wrapped with @observe so each notification
     attempt produces a named Langfuse span. Curated update_current_span calls
@@ -103,7 +103,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         importlib.import_module("telegram_bot.services.hot_lead_notifier")
 
     def test_hot_lead_notifier_module_imports_observe_and_get_client(self):
-        """Module wires the Langfuse decorator + client accessor (***REMOVED***1663 contract)."""
+        """Module wires the Langfuse decorator + client accessor (#1663 contract)."""
         from telegram_bot.services import hot_lead_notifier as hln_mod
 
         assert hasattr(hln_mod, "observe"), (
@@ -174,7 +174,7 @@ class TestHotLeadNotifierObserveInstrumentation:
         bot = AsyncMock()
         notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
 
-        ***REMOVED*** Payload includes a "secret" PII-like field that MUST NOT leak into spans.
+        # Payload includes a "secret" PII-like field that MUST NOT leak into spans.
         await notifier.notify_if_hot(
             {
                 "lead_id": 77,
@@ -194,11 +194,11 @@ class TestHotLeadNotifierObserveInstrumentation:
         assert captured_input.get("lead_id") == 77
         assert captured_input.get("score") == 88
         assert captured_input.get("threshold") == 70
-        ***REMOVED*** PII must NOT appear in span input.
+        # PII must NOT appear in span input.
         assert "phone" not in captured_input
         assert "+380501112233" not in str(captured_input)
-        ***REMOVED*** session_id is acceptable elsewhere but must not be captured here per audit
-        ***REMOVED*** (curated keys are exactly: lead_id, score, threshold).
+        # session_id is acceptable elsewhere but must not be captured here per audit
+        # (curated keys are exactly: lead_id, score, threshold).
         assert set(captured_input.keys()) <= {"lead_id", "score", "threshold"}
 
     async def test_output_payload_records_notified_bool(self, monkeypatch):
@@ -236,7 +236,7 @@ class TestHotLeadNotifierObserveInstrumentation:
 
         cache = AsyncMock()
         cache.redis = AsyncMock()
-        cache.redis.set = AsyncMock(return_value=False)  ***REMOVED*** deduped
+        cache.redis.set = AsyncMock(return_value=False)  # deduped
         bot = AsyncMock()
         notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=60)
 

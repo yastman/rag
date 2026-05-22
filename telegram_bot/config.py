@@ -53,12 +53,12 @@ class BotConfig(BaseSettings):
         populate_by_name=True,
     )
 
-    ***REMOVED*** Telegram
+    # Telegram
     telegram_token: str = Field(
         default="", validation_alias=AliasChoices("telegram_token", "TELEGRAM_BOT_TOKEN")
     )
 
-    ***REMOVED*** Services
+    # Services
     bge_m3_url: str = Field(
         default="http://localhost:8000", validation_alias=AliasChoices("bge_m3_url", "BGE_M3_URL")
     )
@@ -85,7 +85,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("qdrant_history_collection", "QDRANT_HISTORY_COLLECTION"),
     )
 
-    ***REMOVED*** LLM (OpenAI compatible API)
+    # LLM (OpenAI compatible API)
     llm_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
@@ -98,7 +98,7 @@ class BotConfig(BaseSettings):
         default="gpt-4o-mini", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
     )
 
-    ***REMOVED*** Langfuse observability
+    # Langfuse observability
     langfuse_public_key: str = Field(
         default="",
         validation_alias=AliasChoices("langfuse_public_key", "LANGFUSE_PUBLIC_KEY"),
@@ -112,11 +112,11 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("langfuse_host", "LANGFUSE_HOST"),
     )
 
-    ***REMOVED*** RAG settings
+    # RAG settings
     top_k: int = 5
     min_score: float = 0.3
 
-    ***REMOVED*** Voyage AI Configuration
+    # Voyage AI Configuration
     voyage_api_key: str = Field(
         default="", validation_alias=AliasChoices("voyage_api_key", "VOYAGE_API_KEY")
     )
@@ -137,7 +137,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("voyage_embedding_dim", "VOYAGE_EMBEDDING_DIM"),
     )
 
-    ***REMOVED*** Legacy (for backward compatibility)
+    # Legacy (for backward compatibility)
     voyage_embed_model: str = Field(
         default="voyage-3-large",
         validation_alias=AliasChoices("voyage_embed_model", "VOYAGE_EMBED_MODEL"),
@@ -151,7 +151,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("voyage_rerank_model", "VOYAGE_RERANK_MODEL"),
     )
 
-    ***REMOVED*** Search Configuration
+    # Search Configuration
     search_top_k: int = Field(
         default=40, validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K")
     )
@@ -163,7 +163,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("rerank_candidates_max", "RERANK_CANDIDATES_MAX"),
     )
 
-    ***REMOVED*** CESC Configuration
+    # CESC Configuration
     cesc_enabled: bool = Field(
         default=True, validation_alias=AliasChoices("cesc_enabled", "CESC_ENABLED")
     )
@@ -176,18 +176,18 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("user_context_ttl", "USER_CONTEXT_TTL"),
     )
 
-    ***REMOVED*** Retrieval provider (bge_m3_api | voyage)
+    # Retrieval provider (bge_m3_api | voyage)
     retrieval_dense_provider: str = Field(
         default="bge_m3_api",
         validation_alias=AliasChoices("retrieval_dense_provider", "RETRIEVAL_DENSE_PROVIDER"),
     )
 
-    ***REMOVED*** Rerank provider (colbert | none | voyage)
+    # Rerank provider (colbert | none | voyage)
     rerank_provider: str = Field(
         default="colbert", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")
     )
 
-    ***REMOVED*** Hybrid Search Configuration
+    # Hybrid Search Configuration
     hybrid_dense_weight: float = Field(
         default=0.6,
         validation_alias=AliasChoices("hybrid_dense_weight", "HYBRID_DENSE_WEIGHT"),
@@ -197,13 +197,13 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("hybrid_sparse_weight", "HYBRID_SPARSE_WEIGHT"),
     )
 
-    ***REMOVED*** Qdrant Connection
+    # Qdrant Connection
     qdrant_timeout: int = Field(
         default=30,
         validation_alias=AliasChoices("qdrant_timeout", "QDRANT_TIMEOUT"),
     )
 
-    ***REMOVED*** Score Boosting Configuration
+    # Score Boosting Configuration
     freshness_boost_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("freshness_boost_enabled", "FRESHNESS_BOOST"),
@@ -217,7 +217,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("freshness_scale_days", "FRESHNESS_SCALE_DAYS"),
     )
 
-    ***REMOVED*** MMR Diversity Configuration
+    # MMR Diversity Configuration
     mmr_enabled: bool = Field(
         default=False, validation_alias=AliasChoices("mmr_enabled", "MMR_ENABLED")
     )
@@ -225,7 +225,7 @@ class BotConfig(BaseSettings):
         default=0.7, validation_alias=AliasChoices("mmr_lambda", "MMR_LAMBDA")
     )
 
-    ***REMOVED*** Qdrant Quantization Configuration
+    # Qdrant Quantization Configuration
     qdrant_quantization_mode: str = Field(
         default="off",
         validation_alias=AliasChoices("qdrant_quantization_mode", "QDRANT_QUANTIZATION_MODE"),
@@ -251,13 +251,13 @@ class BotConfig(BaseSettings):
         ),
     )
 
-    ***REMOVED*** HyDE (Hypothetical Document Embeddings)
+    # HyDE (Hypothetical Document Embeddings)
     use_hyde: bool = Field(default=False, validation_alias=AliasChoices("use_hyde", "USE_HYDE"))
     hyde_min_words: int = Field(
         default=5, validation_alias=AliasChoices("hyde_min_words", "HYDE_MIN_WORDS")
     )
 
-    ***REMOVED*** Semantic cache tuning
+    # Semantic cache tuning
     semantic_cache_threshold: float = Field(
         default=0.10,
         validation_alias=AliasChoices("semantic_cache_threshold", "SEMANTIC_CACHE_THRESHOLD"),
@@ -267,7 +267,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("semantic_cache_ttl_default", "SEMANTIC_CACHE_TTL_DEFAULT"),
     )
 
-    ***REMOVED*** Admin user IDs (comma-separated Telegram user IDs)
+    # Admin user IDs (comma-separated Telegram user IDs)
     admin_ids: Annotated[list[int], NoDecode] = Field(
         default_factory=list, validation_alias=AliasChoices("admin_ids", "ADMIN_IDS")
     )
@@ -281,7 +281,7 @@ class BotConfig(BaseSettings):
             return [int(x) for x in v]
         return []
 
-    ***REMOVED*** Domain configuration (configurable per deployment)
+    # Domain configuration (configurable per deployment)
     domain: str = Field(
         default="недвижимость", validation_alias=AliasChoices("domain", "BOT_DOMAIN")
     )
@@ -289,7 +289,7 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
-    ***REMOVED*** Mini App (Telegram Web App)
+    # Mini App (Telegram Web App)
     mini_app_url: str = Field(
         default="",
         validation_alias=AliasChoices("mini_app_url", "MINI_APP_URL"),
@@ -299,7 +299,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("expert_topics_enabled", "EXPERT_TOPICS_ENABLED"),
     )
 
-    ***REMOVED*** LiveKit (voice calls)
+    # LiveKit (voice calls)
     livekit_url: str = Field(
         default="", validation_alias=AliasChoices("LIVEKIT_URL", "livekit_url")
     )
@@ -313,7 +313,7 @@ class BotConfig(BaseSettings):
         default="", validation_alias=AliasChoices("SIP_TRUNK_ID", "sip_trunk_id")
     )
 
-    ***REMOVED*** Voice transcription
+    # Voice transcription
     show_transcription: bool = Field(
         default=True,
         validation_alias=AliasChoices("show_transcription", "SHOW_TRANSCRIPTION"),
@@ -327,7 +327,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("stt_model", "STT_MODEL"),
     )
 
-    ***REMOVED*** Content filtering (***REMOVED***227)
+    # Content filtering (#227)
     content_filter_enabled: bool = Field(
         default=True,
         validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
@@ -336,7 +336,7 @@ class BotConfig(BaseSettings):
         default="hard",
         validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
     )
-    ***REMOVED*** Guardrails
+    # Guardrails
     enable_confidence_scoring: bool = Field(
         default=False,
         validation_alias=AliasChoices("enable_confidence_scoring", "ENABLE_CONFIDENCE_SCORING"),
@@ -350,7 +350,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("low_confidence_threshold", "LOW_CONFIDENCE_THRESHOLD"),
     )
 
-    ***REMOVED*** Small-to-big context expansion
+    # Small-to-big context expansion
     small_to_big_mode: str = Field(
         default="off",
         validation_alias=AliasChoices("small_to_big_mode", "SMALL_TO_BIG_MODE"),
@@ -372,7 +372,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
 
-    ***REMOVED*** Supervisor routing model (***REMOVED***240, ***REMOVED***310 — supervisor-only since v3.3)
+    # Supervisor routing model (#240, #310 — supervisor-only since v3.3)
     supervisor_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
@@ -396,7 +396,7 @@ class BotConfig(BaseSettings):
         ),
     )
 
-    ***REMOVED*** Session summary + CRM (***REMOVED***305)
+    # Session summary + CRM (#305)
     session_summary_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("session_summary_enabled", "SESSION_SUMMARY_ENABLED"),
@@ -476,7 +476,7 @@ class BotConfig(BaseSettings):
         ),
     )
 
-    ***REMOVED*** Nurturing + funnel analytics (***REMOVED***390)
+    # Nurturing + funnel analytics (#390)
     nurturing_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("nurturing_enabled", "NURTURING_ENABLED"),
@@ -490,7 +490,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("funnel_rollup_cron", "FUNNEL_ROLLUP_CRON"),
     )
 
-    ***REMOVED*** NurturingDispatch worker (***REMOVED***445)
+    # NurturingDispatch worker (#445)
     nurturing_dispatch_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("nurturing_dispatch_enabled", "NURTURING_DISPATCH_ENABLED"),
@@ -504,7 +504,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("nurturing_dispatch_cron", "NURTURING_DISPATCH_CRON"),
     )
 
-    ***REMOVED*** SessionSummaryWorker (***REMOVED***445)
+    # SessionSummaryWorker (#445)
     session_idle_timeout_min: int = Field(
         default=30,
         validation_alias=AliasChoices("session_idle_timeout_min", "SESSION_IDLE_TIMEOUT_MIN"),
@@ -518,7 +518,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("session_summary_model", "SESSION_SUMMARY_MODEL"),
     )
 
-    ***REMOVED*** Call limits (***REMOVED***374)
+    # Call limits (#374)
     max_llm_calls: int = Field(
         default=5,
         ge=1,
@@ -530,7 +530,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_tool_calls", "MAX_TOOL_CALLS"),
     )
 
-    ***REMOVED*** LLM-as-a-Judge online sampling
+    # LLM-as-a-Judge online sampling
     judge_sample_rate: float = Field(
         default=0.0,
         validation_alias=AliasChoices("JUDGE_SAMPLE_RATE", "judge_sample_rate"),
@@ -542,7 +542,7 @@ class BotConfig(BaseSettings):
         description="LLM model for judge evaluation",
     )
 
-    ***REMOVED*** Agent checkpointer TTL (***REMOVED***424)
+    # Agent checkpointer TTL (#424)
     agent_checkpointer_ttl_minutes: int = Field(
         default=120,
         validation_alias=AliasChoices(
@@ -550,20 +550,20 @@ class BotConfig(BaseSettings):
         ),
     )
 
-    ***REMOVED*** Sliding window for agent history (***REMOVED***519)
+    # Sliding window for agent history (#519)
     agent_max_history_messages: int = Field(
         default=15,
         ge=1,
         validation_alias=AliasChoices("agent_max_history_messages", "AGENT_MAX_HISTORY_MESSAGES"),
     )
 
-    ***REMOVED*** Real Estate Database (realestate DB in shared Postgres)
+    # Real Estate Database (realestate DB in shared Postgres)
     realestate_database_url: str = Field(
         default="",
         validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
     )
 
-    ***REMOVED*** History search (***REMOVED***433)
+    # History search (#433)
     history_relevance_threshold: float = Field(
         default=0.7,
         ge=0.0,
@@ -571,7 +571,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("history_relevance_threshold", "HISTORY_RELEVANCE_THRESHOLD"),
     )
 
-    ***REMOVED*** i18n
+    # i18n
     supported_locales: list[str] = Field(
         default=["ru", "en", "uk"],
         validation_alias=AliasChoices("supported_locales", "SUPPORTED_LOCALES"),
@@ -581,7 +581,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("default_locale", "DEFAULT_LOCALE"),
     )
 
-    ***REMOVED*** Manager IDs (comma-separated Telegram user IDs)
+    # Manager IDs (comma-separated Telegram user IDs)
     manager_ids: Annotated[list[int], NoDecode] = Field(
         default_factory=list,
         validation_alias=AliasChoices("manager_ids", "MANAGER_IDS"),
@@ -595,7 +595,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("manager_hot_lead_dedupe_sec", "MANAGER_HOT_LEAD_DEDUPE_SEC"),
     )
 
-    ***REMOVED*** ── Handoff (Forum Topics) ──────────────────────────────────────
+    # ── Handoff (Forum Topics) ──────────────────────────────────────
     handoff_enabled: EmptyStrBool = Field(
         default=False,
         validation_alias=AliasChoices("handoff_enabled", "HANDOFF_ENABLED"),

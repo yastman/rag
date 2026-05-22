@@ -1,7 +1,7 @@
-***REMOVED*** tests/contract/test_k8s_postgres_init_parity_contract.py
+# tests/contract/test_k8s_postgres_init_parity_contract.py
 """Contract: K8s postgres-init ConfigMap must mirror docker init scripts.
 
-Closes ***REMOVED***1402.
+Closes #1402.
 
 Problem reproduced: ``docker/postgres/init/`` contains eight SQL bootstrap
 scripts (00, 02, 03, 04, 05, 06, 07, 08) that the Compose stack mounts into
@@ -18,7 +18,7 @@ This contract pins three things:
 2. Every ``*.sql`` file in ``docker/postgres/init/`` has a corresponding
    ``data:`` key in the ConfigMap (so kubelet projects it into the init
    directory at the same filename).
-3. For the scripts synchronized by issue ***REMOVED***1402 (04 through 08), the
+3. For the scripts synchronized by issue #1402 (04 through 08), the
    ConfigMap value is byte-identical to the docker source — they MUST be
    copied verbatim so the K8s and Compose paths produce the same schema.
 
@@ -39,8 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKER_INIT_DIR = REPO_ROOT / "docker" / "postgres" / "init"
 K8S_CONFIGMAP = REPO_ROOT / "k8s" / "base" / "configmaps" / "postgres-init.yaml"
 
-***REMOVED*** Scripts explicitly synchronized by issue ***REMOVED***1402. Their ConfigMap value
-***REMOVED*** must be byte-identical to the docker source.
+# Scripts explicitly synchronized by issue #1402. Their ConfigMap value
+# must be byte-identical to the docker source.
 SYNCED_SCRIPTS = (
     "04-voice-schema.sql",
     "05-realestate-schema.sql",

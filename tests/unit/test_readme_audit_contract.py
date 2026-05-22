@@ -54,7 +54,7 @@ class TestUnifiedReadme:
     def test_watch_mode_is_run_watch(self):
         text = _read("src/ingestion/unified/README.md")
         assert "python -m src.ingestion.unified.cli run --watch" in text
-        ***REMOVED*** standalone "watch" as a subcommand should not appear
+        # standalone "watch" as a subcommand should not appear
         lines = text.splitlines()
         for line in lines:
             if "cli watch" in line and "run --watch" not in line:

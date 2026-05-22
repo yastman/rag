@@ -37,7 +37,7 @@ def test_voice_bot_has_function_tool():
 
 
 def test_server_has_tuned_worker_settings():
-    """AgentServer uses increased timeouts and reduced idle procs (***REMOVED***218)."""
+    """AgentServer uses increased timeouts and reduced idle procs (#218)."""
     from src.voice.agent import server
 
     assert server._initialize_process_timeout == 30.0
@@ -46,14 +46,14 @@ def test_server_has_tuned_worker_settings():
 
 
 def test_server_has_prewarm_setup_fnc():
-    """AgentServer setup_fnc pre-loads VAD to avoid event loop blocking (***REMOVED***218)."""
+    """AgentServer setup_fnc pre-loads VAD to avoid event loop blocking (#218)."""
     from src.voice.agent import _prewarm_process, server
 
     assert server.setup_fnc is _prewarm_process
 
 
 def test_prewarm_stores_vad_in_userdata():
-    """_prewarm_process stores VAD model in proc.userdata for reuse (***REMOVED***218)."""
+    """_prewarm_process stores VAD model in proc.userdata for reuse (#218)."""
     from src.voice.agent import _prewarm_process
 
     proc = MagicMock()
@@ -65,7 +65,7 @@ def test_prewarm_stores_vad_in_userdata():
 
 
 def test_voice_bot_stores_langfuse_trace_id():
-    """langfuse_trace_id is stored on the agent for trace linking (***REMOVED***241)."""
+    """langfuse_trace_id is stored on the agent for trace linking (#241)."""
     from src.voice.agent import VoiceBot
 
     agent = VoiceBot(call_id="test-789", langfuse_trace_id="trace-abc123")
@@ -121,7 +121,7 @@ def test_setup_langfuse_configures_langfuse_otel_headers(monkeypatch):
 
 
 async def test_voice_tool_propagates_langfuse_trace_id_to_api_payload():
-    """Voice tool should pass langfuse_trace_id to RAG API payload (***REMOVED***609)."""
+    """Voice tool should pass langfuse_trace_id to RAG API payload (#609)."""
     from src.voice.agent import VoiceBot
 
     store = MagicMock()
@@ -146,7 +146,7 @@ async def test_voice_tool_propagates_langfuse_trace_id_to_api_payload():
 
 
 async def test_search_tool_omits_langfuse_trace_id_when_none():
-    """langfuse_trace_id is NOT in payload when not provided (***REMOVED***241)."""
+    """langfuse_trace_id is NOT in payload when not provided (#241)."""
     from src.voice.agent import VoiceBot
 
     agent = VoiceBot(call_id="22222222-2222-2222-2222-222222222222")
@@ -186,7 +186,7 @@ async def test_search_tool_appends_transcript_entries_with_store():
 
 
 def test_get_http_client_returns_shared_instance():
-    """_get_http_client returns the same AsyncClient on repeated calls (***REMOVED***369)."""
+    """_get_http_client returns the same AsyncClient on repeated calls (#369)."""
     import src.voice.agent as mod
 
     original = mod._rag_api_client
@@ -201,7 +201,7 @@ def test_get_http_client_returns_shared_instance():
 
 
 def test_get_http_client_has_pool_limits():
-    """Shared httpx client uses connection pool limits (***REMOVED***369)."""
+    """Shared httpx client uses connection pool limits (#369)."""
     import src.voice.agent as mod
 
     original = mod._rag_api_client
@@ -216,7 +216,7 @@ def test_get_http_client_has_pool_limits():
 
 
 async def test_close_http_client():
-    """_close_http_client closes the client and resets the global (***REMOVED***369)."""
+    """_close_http_client closes the client and resets the global (#369)."""
     import src.voice.agent as mod
 
     original = mod._rag_api_client

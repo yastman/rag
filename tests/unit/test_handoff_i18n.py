@@ -37,7 +37,7 @@ def test_handoff_key_exists(locale, key):
     hub = create_translator_hub()
     i18n = hub.get_translator_by_locale(locale)
     result = i18n.get(key, **HANDOFF_KEY_KWARGS.get(key, {}))
-    ***REMOVED*** Must not return the key itself (means missing translation).
+    # Must not return the key itself (means missing translation).
     assert result != key, f"Missing .ftl key '{key}' for locale '{locale}'"
 
 

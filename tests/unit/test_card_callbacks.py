@@ -1,4 +1,4 @@
-"""Unit tests for handle_card_callback (card:viewing, card:ask) ***REMOVED***705."""
+"""Unit tests for handle_card_callback (card:viewing, card:ask) #705."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers (same pattern as test_favorites_callbacks.py)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers (same pattern as test_favorites_callbacks.py)
+# ---------------------------------------------------------------------------
 
 
 def _make_config() -> BotConfig:
@@ -88,9 +88,9 @@ def _sample_result(property_id: str = "prop-42") -> dict:
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tests: handle_card_callback
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tests: handle_card_callback
+# ---------------------------------------------------------------------------
 
 
 async def test_card_viewing_starts_phone_collection() -> None:

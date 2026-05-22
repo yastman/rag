@@ -2,7 +2,7 @@
 inclusion: always
 ---
 
-***REMOVED*** Agent Workflow Steering
+# Agent Workflow Steering
 
 Follow the repo-local agent workflow in `skills/superpowers/` before working on
 GitHub issues.

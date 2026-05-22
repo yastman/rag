@@ -1,4 +1,4 @@
-***REMOVED*** Runbook: PostgreSQL/WAL Corruption Recovery
+# Runbook: PostgreSQL/WAL Corruption Recovery
 
 Use this runbook when PostgreSQL shows signs of WAL (Write-Ahead Log) corruption.
 
@@ -7,48 +7,48 @@ The current Compose service uses `pgvector/pgvector:pg17` and the managed
 project). Do not use old bind-path recovery commands or standalone PostgreSQL
 recovery images that do not match the Compose service image for this stack.
 
-***REMOVED******REMOVED*** Symptoms
+## Symptoms
 
 - `FATAL: WAL of base backup is corrupted`
 - Database fails to start after restart
 - Replication errors in logs
 - Inconsistent data between queries
 
-***REMOVED******REMOVED*** Warning
+## Warning
 
 **This runbook involves potentially destructive operations. Ensure you have a current backup before proceeding.**
 
 All destructive steps below are marked as last resort. Prefer named-volume
 backup/export and Compose-native commands before modifying the live data volume.
 
-***REMOVED******REMOVED*** Diagnosis
+## Diagnosis
 
-***REMOVED******REMOVED******REMOVED*** 1. Check PostgreSQL Logs
+### 1. Check PostgreSQL Logs
 
 ```bash
 docker compose logs postgres --tail=100 | grep -i "wal\|corrupt\|error"
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Verify Named Volume
+### 2. Verify Named Volume
 
 ```bash
-***REMOVED*** Confirm the Compose-managed volume exists.
+# Confirm the Compose-managed volume exists.
 docker volume inspect dev_postgres_data
 
-***REMOVED*** Read-only listing through a short-lived helper container.
+# Read-only listing through a short-lived helper container.
 docker run --rm -v dev_postgres_data:/pgdata:ro alpine sh -lc 'ls -la /pgdata | head'
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Check Disk Space
+### 3. Check Disk Space
 
 ```bash
 df -h
-***REMOVED*** WAL issues can occur with full disk
+# WAL issues can occur with full disk
 ```
 
-***REMOVED******REMOVED*** Remediation
+## Remediation
 
-***REMOVED******REMOVED******REMOVED*** Option 0: Export the Named Volume Before Remediation
+### Option 0: Export the Named Volume Before Remediation
 
 Before any recovery command, create an offline copy of the named volume:
 
@@ -64,7 +64,7 @@ docker run --rm \
 Keep this archive until application-level checks confirm the recovered database
 is consistent.
 
-***REMOVED******REMOVED******REMOVED*** Option 1: `pg_resetwal` (High Risk)
+### Option 1: `pg_resetwal` (High Risk)
 
 If PostgreSQL won't start due to WAL corruption:
 
@@ -88,7 +88,7 @@ If PostgreSQL won't start due to WAL corruption:
    database starts. `pg_resetwal` can make committed transactions disappear and
    should only be used when restoring from backup is not viable.
 
-***REMOVED******REMOVED******REMOVED*** Option 2: Restore From Backup / PITR
+### Option 2: Restore From Backup / PITR
 
 If you have a recent base backup:
 
@@ -99,7 +99,7 @@ If you have a recent base backup:
 4. Start PostgreSQL in recovery mode and verify application databases before
    resuming dependent services
 
-***REMOVED******REMOVED******REMOVED*** Option 3: Reinitialize (Last Resort)
+### Option 3: Reinitialize (Last Resort)
 
 If other methods fail and data loss is acceptable, remove only the Compose
 managed named volume after exporting it.
@@ -132,7 +132,7 @@ managed named volume after exporting it.
 
 5. Re-run any necessary setup scripts or restore logical dumps
 
-***REMOVED******REMOVED*** Prevention
+## Prevention
 
 - Regular base backups with PostgreSQL 17-compatible tooling
 - Monitor disk space (WAL needs room)

@@ -1,7 +1,7 @@
-***REMOVED***!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" ***REMOVED*** auto|true|false
+REQUIRE_MINI_APP_ENDPOINT="${REQUIRE_MINI_APP_ENDPOINT:-auto}" # auto|true|false
 MINI_APP_FRONTEND_URL="${MINI_APP_FRONTEND_URL:-http://127.0.0.1:8091/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
 export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
@@ -60,9 +60,9 @@ if printf '%s\n' "$container_statuses" | grep -Eq '\(unhealthy\)'; then
   fail "compose project has unhealthy containers"
 fi
 
-***REMOVED*** Single source of truth: scripts/lib/vps_noncore_services.sh (***REMOVED***1611).
+# Single source of truth: scripts/lib/vps_noncore_services.sh (#1611).
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-***REMOVED*** shellcheck source=lib/vps_noncore_services.sh
+# shellcheck source=lib/vps_noncore_services.sh
 . "${SCRIPT_DIR}/lib/vps_noncore_services.sh"
 
 running_services="$(docker compose ps --status running --services 2>/dev/null || true)"

@@ -13,11 +13,11 @@ class ChunkingStrategy(StrEnum):
     """Document chunking strategies."""
 
     FIXED_SIZE = (
-        "fixed_size"  ***REMOVED*** Fixed chunk size with overlap (deprecated — use Docling HybridChunker)
+        "fixed_size"  # Fixed chunk size with overlap (deprecated — use Docling HybridChunker)
     )
-    SEMANTIC = "semantic"  ***REMOVED*** Based on content structure (paragraphs, sections)
+    SEMANTIC = "semantic"  # Based on content structure (paragraphs, sections)
     SLIDING_WINDOW = (
-        "sliding_window"  ***REMOVED*** Sliding window with overlap (deprecated — use Docling HybridChunker)
+        "sliding_window"  # Sliding window with overlap (deprecated — use Docling HybridChunker)
     )
 
 
@@ -28,12 +28,12 @@ class Chunk:
     text: str
     chunk_id: int
     document_name: str
-    article_number: str  ***REMOVED*** For legal documents
+    article_number: str  # For legal documents
     chapter: str | None = None
     section: str | None = None
-    page_range: tuple[int, int] | None = None  ***REMOVED*** (start, end) pages
+    page_range: tuple[int, int] | None = None  # (start, end) pages
     order: int = 0
-    extra_metadata: dict[str, Any] | None = None  ***REMOVED*** For structured data (CSV, etc.)
+    extra_metadata: dict[str, Any] | None = None  # For structured data (CSV, etc.)
 
 
 class DocumentChunker:
@@ -105,7 +105,7 @@ class DocumentChunker:
         """Chunk text into fixed-size pieces."""
         chunks = []
 
-        ***REMOVED*** Calculate number of chunks needed
+        # Calculate number of chunks needed
         num_chunks = max(1, (len(text) - self.overlap) // (self.chunk_size - self.overlap))
 
         for i in range(num_chunks):
@@ -139,7 +139,7 @@ class DocumentChunker:
         """
         chunks = []
 
-        ***REMOVED*** Split by major sections first
+        # Split by major sections first
         section_pattern = r"(Розділ|Глава|Стаття|§|Ст\.)\s*[IVXLCDM\d\w]+"
         sections = re.split(f"({section_pattern})", text)
 
@@ -150,7 +150,7 @@ class DocumentChunker:
             if not part.strip():
                 continue
 
-            ***REMOVED*** If this is a section header
+            # If this is a section header
             if re.match(section_pattern, part):
                 if current_chunk_text.strip():
                     chunks.append(
@@ -167,7 +167,7 @@ class DocumentChunker:
             else:
                 current_chunk_text += part
 
-            ***REMOVED*** If chunk is large enough, create it
+            # If chunk is large enough, create it
             if len(current_chunk_text) >= self.chunk_size:
                 chunks.append(
                     Chunk(
@@ -181,7 +181,7 @@ class DocumentChunker:
                 current_chunk_text = ""
                 chunk_id += 1
 
-        ***REMOVED*** Add remaining chunk
+        # Add remaining chunk
         if current_chunk_text.strip():
             chunks.append(
                 Chunk(
@@ -231,12 +231,12 @@ class DocumentChunker:
         """
         metadata = {}
 
-        ***REMOVED*** Try to find article number
+        # Try to find article number
         article_match = re.search(r"(Стаття|Ст\.)\s*(\d+)", chunk_text)
         if article_match:
             metadata["article_number"] = article_match.group(2)
 
-        ***REMOVED*** Try to find chapter
+        # Try to find chapter
         chapter_match = re.search(r"(Розділ|Глава|§)\s*([IVXLCDM\d]+)", chunk_text)
         if chapter_match:
             metadata["chapter"] = chapter_match.group(2)
@@ -268,13 +268,13 @@ def chunk_csv_by_rows(csv_path: Path, document_name: str) -> list[Chunk]:
         reader = csv.DictReader(f)
 
         for row_idx, row in enumerate(reader):
-            ***REMOVED*** Format row as readable text: "Field1: value1, Field2: value2, ..."
+            # Format row as readable text: "Field1: value1, Field2: value2, ..."
             row_text = ", ".join(f"{k}: {v}" for k, v in row.items() if v)
 
-            ***REMOVED*** Use first column value or row number as article_number
+            # Use first column value or row number as article_number
             article_number = next(iter(row.values())) if row else str(row_idx)
 
-            ***REMOVED*** Extract structured metadata for filtering
+            # Extract structured metadata for filtering
             extra_metadata = _parse_csv_row_metadata(row)
 
             chunk = Chunk(
@@ -306,21 +306,21 @@ def _parse_csv_row_metadata(row: dict[str, str]) -> dict[str, Any]:
     """
     metadata: dict[str, Any] = {}
 
-    ***REMOVED*** Helper to parse number from string (handles "120 000" format)
+    # Helper to parse number from string (handles "120 000" format)
     def parse_number(value: str) -> int | float | None:
         if not value or not value.strip():
             return None
         try:
-            ***REMOVED*** Remove spaces and try to parse
+            # Remove spaces and try to parse
             cleaned = value.replace(" ", "").replace(",", "")
-            ***REMOVED*** Try int first, then float
+            # Try int first, then float
             if "." in cleaned:
                 return float(cleaned)
             return int(cleaned)
         except (ValueError, AttributeError):
             return None
 
-    ***REMOVED*** Map CSV column names to metadata fields
+    # Map CSV column names to metadata fields
     field_mappings = {
         "Название": "title",
         "Город": "city",
@@ -343,7 +343,7 @@ def _parse_csv_row_metadata(row: dict[str, str]) -> dict[str, Any]:
         if not value:
             continue
 
-        ***REMOVED*** Numeric fields
+        # Numeric fields
         if csv_field in [
             "Цена (€)",
             "Комнат",
@@ -358,15 +358,15 @@ def _parse_csv_row_metadata(row: dict[str, str]) -> dict[str, Any]:
             if parsed is not None:
                 metadata[meta_field] = parsed
 
-        ***REMOVED*** Boolean fields
+        # Boolean fields
         elif csv_field in ["Мебель", "Круглогодичность"]:
             metadata[meta_field] = value.lower() in ["есть", "да", "yes", "true"]
 
-        ***REMOVED*** Text fields (string as-is)
+        # Text fields (string as-is)
         else:
             metadata[meta_field] = value
 
-    ***REMOVED*** Add type marker for filtering
+    # Add type marker for filtering
     metadata["source_type"] = "csv_row"
 
     return metadata

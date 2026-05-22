@@ -30,7 +30,7 @@ def _load_env_example_keys() -> set[str]:
     keys: set[str] = set()
     for line in path.read_text().splitlines():
         line = line.strip()
-        if line and not line.startswith("***REMOVED***"):
+        if line and not line.startswith("#"):
             key = line.split("=", 1)[0]
             keys.add(key)
     return keys
@@ -58,7 +58,7 @@ def _run_make_k3s_secrets(env_text: str) -> tuple[subprocess.CompletedProcess[st
         kubectl_path.write_text(
             textwrap.dedent(
                 """\
-                ***REMOVED***!/usr/bin/env bash
+                #!/usr/bin/env bash
                 set -euo pipefail
 
                 log_dir="${FAKE_KUBECTL_LOG_DIR:?}"
@@ -69,7 +69,7 @@ def _run_make_k3s_secrets(env_text: str) -> tuple[subprocess.CompletedProcess[st
                     for arg in "$@"; do
                         case "$arg" in
                             --from-env-file=*)
-                                env_file="${arg***REMOVED***--from-env-file=}"
+                                env_file="${arg#--from-env-file=}"
                                 ;;
                         esac
                     done

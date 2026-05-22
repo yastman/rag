@@ -1,4 +1,4 @@
-"""Contract tests for Issue ***REMOVED***1418: bot log triage targets and traceback capture.
+"""Contract tests for Issue #1418: bot log triage targets and traceback capture.
 
 This file enforces:
 - Makefile exposes operator-friendly bot log triage targets:
@@ -45,9 +45,9 @@ def _target_block(target: str) -> str:
     return block_match.group(0)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Makefile contract
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Makefile contract
+# ---------------------------------------------------------------------------
 
 
 class TestBotLogTargetsExist:
@@ -60,7 +60,7 @@ class TestBotLogTargetsExist:
     def test_target_defined(self, target: str) -> None:
         text = _makefile_text()
         assert re.search(rf"^{re.escape(target)}:", text, re.MULTILINE), (
-            f"Makefile target {target!r} must be defined for issue ***REMOVED***1418"
+            f"Makefile target {target!r} must be defined for issue #1418"
         )
 
     @pytest.mark.parametrize(
@@ -69,10 +69,10 @@ class TestBotLogTargetsExist:
     )
     def test_target_phony(self, target: str) -> None:
         text = _makefile_text()
-        ***REMOVED*** Robust regex that captures multi-line .PHONY blocks (continuation lines
-        ***REMOVED*** ending with `\`). The historical pattern ``^\.PHONY:.*(?:\\\n.*)*``
-        ***REMOVED*** silently fails on continuations because greedy ``.*`` swallows the
-        ***REMOVED*** trailing backslash.
+        # Robust regex that captures multi-line .PHONY blocks (continuation lines
+        # ending with `\`). The historical pattern ``^\.PHONY:.*(?:\\\n.*)*``
+        # silently fails on continuations because greedy ``.*`` swallows the
+        # trailing backslash.
         phony_blocks = re.findall(r"^\.PHONY:(?:[^\n]*\\\n)*[^\n]*", text, re.MULTILINE)
         assert phony_blocks, ".PHONY declarations not found in Makefile"
         combined = " ".join(phony_blocks)
@@ -86,11 +86,11 @@ class TestBotLogTargetsExist:
         ["bot-logs-tail", "bot-logs-errors", "bot-logs-startup"],
     )
     def test_target_has_help_doc(self, target: str) -> None:
-        """Each target must include the `***REMOVED******REMOVED*** help` annotation so it shows in `make help`."""
+        """Each target must include the `## help` annotation so it shows in `make help`."""
         text = _makefile_text()
-        match = re.search(rf"^{re.escape(target)}:.*?***REMOVED******REMOVED***\s+(.+)$", text, re.MULTILINE)
+        match = re.search(rf"^{re.escape(target)}:.*?##\s+(.+)$", text, re.MULTILINE)
         assert match, (
-            f"Makefile target {target!r} must include a `***REMOVED******REMOVED*** help` comment so it "
+            f"Makefile target {target!r} must include a `## help` comment so it "
             f"appears in `make help` output"
         )
         help_text = match.group(1).strip()
@@ -132,7 +132,7 @@ class TestBotLogsTailSemantics:
 
     def test_uses_tail_follow(self) -> None:
         block = _target_block("bot-logs-tail")
-        ***REMOVED*** tail -F preferred (handles log rotation); tail -f is acceptable too.
+        # tail -F preferred (handles log rotation); tail -f is acceptable too.
         assert re.search(r"\btail\s+-[fF]\b", block), (
             "bot-logs-tail must use `tail -f` (or `tail -F`) to stream the log file"
         )
@@ -143,9 +143,9 @@ class TestBotLogsErrorsSemantics:
 
     def test_filters_for_error_signals(self) -> None:
         block = _target_block("bot-logs-errors")
-        ***REMOVED*** The recipe must look for at least one of the canonical error signals.
-        ***REMOVED*** Accept either upper-case logging level or the structured JSON level
-        ***REMOVED*** field, plus `Traceback` for stacktraces.
+        # The recipe must look for at least one of the canonical error signals.
+        # Accept either upper-case logging level or the structured JSON level
+        # field, plus `Traceback` for stacktraces.
         canonical_signals = ("ERROR", "CRITICAL", "Traceback", "exception")
         present = [sig for sig in canonical_signals if sig in block]
         assert present, (
@@ -165,8 +165,8 @@ class TestBotLogsStartupSemantics:
 
     def test_filters_for_startup_signals(self) -> None:
         block = _target_block("bot-logs-startup")
-        ***REMOVED*** Bot startup logs include "Startup verdict", "Preflight", or
-        ***REMOVED*** "Logging configured" — at least one must appear.
+        # Bot startup logs include "Startup verdict", "Preflight", or
+        # "Logging configured" — at least one must appear.
         canonical_signals = ("Startup verdict", "Preflight", "Logging configured")
         present = [sig for sig in canonical_signals if sig in block]
         assert present, (
@@ -175,9 +175,9 @@ class TestBotLogsStartupSemantics:
         )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** main.py — fatal-error traceback capture
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# main.py — fatal-error traceback capture
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -249,7 +249,7 @@ class TestFatalTelegramErrorTraceback:
         from aiogram.exceptions import TelegramUnauthorizedError
 
         mock_bot_instance, _mock_bot_cls, sys_mocks = _build_main_mocks()
-        ***REMOVED*** Use a real exception so logger.exception sees a usable __traceback__.
+        # Use a real exception so logger.exception sees a usable __traceback__.
         unauthorized = TelegramUnauthorizedError(method=MagicMock(), message="bad token")
         mock_bot_instance.start = AsyncMock(side_effect=unauthorized)
 
@@ -269,7 +269,7 @@ class TestFatalTelegramErrorTraceback:
             "Fatal Telegram errors (Unauthorized/Conflict) must be logged via "
             "logger.exception() so operators see the traceback in logs/bot-run.log"
         )
-        ***REMOVED*** The fatal-error log must mention what happened.
+        # The fatal-error log must mention what happened.
         call_msgs = [c.args[0] for c in mock_logger.exception.call_args_list if c.args]
         assert any("Fatal Telegram error" in msg for msg in call_msgs), (
             "logger.exception() call must keep the existing 'Fatal Telegram error' "
@@ -375,7 +375,7 @@ class TestAsyncioLoopExceptionHandler:
             handler = loop.get_exception_handler()
             assert handler is not None
 
-            ***REMOVED*** Reset call history so we only see what the handler logs.
+            # Reset call history so we only see what the handler logs.
             mock_logger.reset_mock()
             try:
                 raise RuntimeError("background boom")

@@ -1,8 +1,8 @@
-***REMOVED*** tests/contract/test_shared_phone_normalization_contract.py
+# tests/contract/test_shared_phone_normalization_contract.py
 """Contract: Mini App phone capture must reuse the shared phonenumbers-based
 normalization, not redeclare a digit-count regex.
 
-Closes ***REMOVED***1614.
+Closes #1614.
 
 Audit evidence:
 - ``mini_app/phone.py`` defined its own ``_PHONE_RE = re.compile(r"^\\+?\\d{7,15}$")``
@@ -137,10 +137,10 @@ def test_pydantic_phone_request_rejects_impossible_numbers() -> None:
 
     from mini_app.phone import PhoneRequest
 
-    ***REMOVED*** All-1s: 11 digits, regex-valid, phonenumbers-invalid.
+    # All-1s: 11 digits, regex-valid, phonenumbers-invalid.
     with pytest.raises(ValidationError):
         PhoneRequest(phone="+11111111111", source="test", user_id=42)
 
-    ***REMOVED*** Letters: matches neither regex nor phonenumbers.
+    # Letters: matches neither regex nor phonenumbers.
     with pytest.raises(ValidationError):
         PhoneRequest(phone="not-a-phone", source="test", user_id=42)

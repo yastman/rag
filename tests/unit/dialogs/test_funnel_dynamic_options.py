@@ -20,7 +20,7 @@ async def test_get_city_options_from_service() -> None:
     result = await get_city_options(dialog_manager=manager)
     items = result["items"]
 
-    ***REMOVED*** Should contain service cities + "Любой город"
+    # Should contain service cities + "Любой город"
     city_names = [item[0] for item in items]
     assert "Свети Влас" in city_names
     assert "Солнечный берег" in city_names
@@ -39,7 +39,7 @@ async def test_get_city_options_fallback_on_no_service() -> None:
 
     result = await get_city_options(dialog_manager=manager)
     items = result["items"]
-    assert len(items) >= 2  ***REMOVED*** at least 1 city + "Любой город"
+    assert len(items) >= 2  # at least 1 city + "Любой город"
     assert items[-1][1] == "any"
 
 

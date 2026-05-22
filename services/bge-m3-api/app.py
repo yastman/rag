@@ -18,11 +18,11 @@ from pydantic import BaseModel, Field
 from config import settings
 
 
-***REMOVED*** Logging
+# Logging
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Prometheus metrics
+# Prometheus metrics
 encode_requests_total = Counter(
     "bge_encode_requests_total", "Total encoding requests", ["encode_type"]
 )
@@ -35,7 +35,7 @@ encode_partial_failures_total = Counter(
 )
 model_loaded = Gauge("bge_model_loaded", "Model loaded status (1=loaded, 0=not loaded)")
 
-***REMOVED*** Global model instance
+# Global model instance
 _model = None
 _warmed_up = False
 
@@ -86,7 +86,7 @@ def get_model():
     return _model
 
 
-***REMOVED*** Pydantic models
+# Pydantic models
 class EncodeRequest(BaseModel):
     texts: list[str] = Field(..., description="List of texts to encode")
     max_length: int = Field(settings.MAX_LENGTH, description="Max token length")
@@ -181,12 +181,12 @@ def _validate_texts(texts: list[str]) -> tuple[list[int], list[int], list[str]]:
 def _lexical_weights_to_qdrant_sparse(
     lexical_weights: list[dict[Any, Any]],
 ) -> list[dict[str, list]]:
-    """Convert FlagEmbedding ``lexical_weights`` rows to Qdrant sparse format (***REMOVED***1237).
+    """Convert FlagEmbedding ``lexical_weights`` rows to Qdrant sparse format (#1237).
 
     Extracted from ``encode_sparse`` and ``encode_hybrid``; previously each
     site rebuilt the same ``{indices, values}`` shape with a hand-rolled
     loop. Centralising the conversion eliminates the duplication called out
-    in ***REMOVED***1237 and provides a single place to evolve the format if Qdrant
+    in #1237 and provides a single place to evolve the format if Qdrant
     changes its API.
     """
     converted: list[dict[str, list]] = []
@@ -201,7 +201,7 @@ def _lexical_weights_to_qdrant_sparse(
 
 
 def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray]) -> list[float]:
-    """Compute MaxSim (ColBERT late-interaction) scores via FlagEmbedding (***REMOVED***1237).
+    """Compute MaxSim (ColBERT late-interaction) scores via FlagEmbedding (#1237).
 
     Delegates to :meth:`BGEM3FlagModel.colbert_score`, the SDK-native MaxSim
     implementation that ships with FlagEmbedding 1.2+. Replaces the previous
@@ -218,12 +218,12 @@ def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray
         List of MaxSim scores, one per document, in input order.
     """
     model = get_model()
-    ***REMOVED*** ``BGEM3FlagModel.colbert_score`` accepts a single (query, doc) pair and
-    ***REMOVED*** returns a torch scalar; cast to float for JSON-serialisable output.
+    # ``BGEM3FlagModel.colbert_score`` accepts a single (query, doc) pair and
+    # returns a torch scalar; cast to float for JSON-serialisable output.
     return [float(model.colbert_score(query_vecs, doc_vecs)) for doc_vecs in doc_vecs_list]
 
 
-***REMOVED*** Endpoints
+# Endpoints
 @app.get("/health")
 async def health():
     """Health check endpoint"""
@@ -258,7 +258,7 @@ async def encode_dense(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        ***REMOVED*** Encode only valid texts
+        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -276,7 +276,7 @@ async def encode_dense(request: EncodeRequest):
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="dense").observe(processing_time)
 
-        ***REMOVED*** Reconstruct full-cardinality response
+        # Reconstruct full-cardinality response
         dense_sentinel = [0.0] * 1024
         dense_vecs = [None] * len(request.texts)
         valid_iter = iter(valid_vecs)
@@ -324,7 +324,7 @@ async def encode_sparse(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        ***REMOVED*** Encode only valid texts
+        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -335,7 +335,7 @@ async def encode_sparse(request: EncodeRequest):
                 return_sparse=True,
                 return_colbert_vecs=False,
             )
-            ***REMOVED*** Convert sparse vectors to Qdrant format
+            # Convert sparse vectors to Qdrant format
             valid_weights = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
         else:
             valid_weights = []
@@ -343,7 +343,7 @@ async def encode_sparse(request: EncodeRequest):
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="sparse").observe(processing_time)
 
-        ***REMOVED*** Reconstruct full-cardinality response
+        # Reconstruct full-cardinality response
         sparse_sentinel = {"indices": [], "values": []}
         lexical_weights = [None] * len(request.texts)
         valid_iter = iter(valid_weights)
@@ -391,7 +391,7 @@ async def encode_colbert(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        ***REMOVED*** Encode only valid texts
+        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -409,7 +409,7 @@ async def encode_colbert(request: EncodeRequest):
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="colbert").observe(processing_time)
 
-        ***REMOVED*** Reconstruct full-cardinality response
+        # Reconstruct full-cardinality response
         colbert_sentinel = [[0.0] * 1024]
         colbert_vecs = [None] * len(request.texts)
         valid_iter = iter(valid_vecs)
@@ -458,7 +458,7 @@ async def encode_hybrid(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        ***REMOVED*** Encode only valid texts
+        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -480,7 +480,7 @@ async def encode_hybrid(request: EncodeRequest):
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="hybrid").observe(processing_time)
 
-        ***REMOVED*** Reconstruct full-cardinality responses
+        # Reconstruct full-cardinality responses
         dense_sentinel = [0.0] * 1024
         sparse_sentinel = {"indices": [], "values": []}
         colbert_sentinel = [[0.0] * 1024]
@@ -529,7 +529,7 @@ async def rerank(request: RerankRequest):
     """
     encode_requests_total.labels(encode_type="rerank").inc()
 
-    ***REMOVED*** Validate limits
+    # Validate limits
     if len(request.documents) > settings.RERANK_MAX_DOCS:
         raise HTTPException(
             400,
@@ -548,7 +548,7 @@ async def rerank(request: RerankRequest):
         model = get_model()
         start_time = time.time()
 
-        ***REMOVED*** Encode query and documents with ColBERT
+        # Encode query and documents with ColBERT
         all_texts = [query, *documents]
         embeddings = model.encode(
             all_texts,
@@ -560,13 +560,13 @@ async def rerank(request: RerankRequest):
         )
 
         colbert_vecs = embeddings["colbert_vecs"]
-        query_vecs = colbert_vecs[0]  ***REMOVED*** First is query
-        doc_vecs_list = colbert_vecs[1:]  ***REMOVED*** Rest are documents
+        query_vecs = colbert_vecs[0]  # First is query
+        doc_vecs_list = colbert_vecs[1:]  # Rest are documents
 
-        ***REMOVED*** Compute MaxSim scores
+        # Compute MaxSim scores
         scores = compute_maxsim_scores(query_vecs, doc_vecs_list)
 
-        ***REMOVED*** Sort by score descending and take top_k
+        # Sort by score descending and take top_k
         indexed_scores = [(i, s) for i, s in enumerate(scores)]
         indexed_scores.sort(key=lambda x: x[1], reverse=True)
         top_k = min(request.top_k, len(indexed_scores))
@@ -584,7 +584,7 @@ async def rerank(request: RerankRequest):
         raise HTTPException(500, f"Rerank failed: {e!s}")
 
 
-***REMOVED*** Mount Prometheus metrics
+# Mount Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 

@@ -1,4 +1,4 @@
-"""Verify .env.example contains all BotConfig CRM/manager fields (***REMOVED***402)."""
+"""Verify .env.example contains all BotConfig CRM/manager fields (#402)."""
 
 import re
 from pathlib import Path
@@ -12,7 +12,7 @@ def _parse_env_example() -> set[str]:
     keys: set[str] = set()
     for line in env_file.read_text().splitlines():
         line = line.strip()
-        if line and not line.startswith("***REMOVED***"):
+        if line and not line.startswith("#"):
             match = re.match(r"^([A-Z_][A-Z0-9_]*)=", line)
             if match:
                 keys.add(match.group(1))
@@ -48,8 +48,8 @@ class TestEnvExampleSanitization:
     """.env.example must not contain real IPs or secret-looking placeholders."""
 
     BLOCKED_STRINGS = [
-        "REDACTED_VPS_IP",  ***REMOVED*** placeholder: replace with actual VPS IP
-        "REDACTED_PRIVATE_IP",  ***REMOVED*** placeholder: replace with actual LAN IP
+        "REDACTED_VPS_IP",  # placeholder: replace with actual VPS IP
+        "REDACTED_PRIVATE_IP",  # placeholder: replace with actual LAN IP
         "[REDACTED-ANTHROPIC-KEY]
     ]
 

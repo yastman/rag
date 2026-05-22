@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test ColBERT multivector rerank in production code (Variant A - Complete).
 Verifies HybridRRFColBERTSearchEngine uses: Dense + Sparse + ColBERT rerank.
@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 import pytest
 
 
-***REMOVED*** Add project root to path
+# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -30,7 +30,7 @@ def _run_colbert_rerank() -> bool:
     print("TEST: VARIANT A - HYBRID RRF + COLBERT RERANK")
     print("=" * 80)
 
-    ***REMOVED*** Initialize settings and search engine
+    # Initialize settings and search engine
     settings = Settings()
     print("\n📋 Configuration:")
     print(f"   Qdrant URL: {settings.qdrant_url}")
@@ -39,7 +39,7 @@ def _run_colbert_rerank() -> bool:
         f"   API Key: {'***' + settings.qdrant_api_key[-10:] if settings.qdrant_api_key else 'Not set'}"
     )
 
-    ***REMOVED*** Initialize Variant A search engine
+    # Initialize Variant A search engine
     print("\n🔧 Initializing HybridRRFColBERTSearchEngine (Variant A)...")
     search_engine = HybridRRFColBERTSearchEngine(settings)
     print("   ✅ Search engine initialized with BGE-M3 model")
@@ -48,7 +48,7 @@ def _run_colbert_rerank() -> bool:
     print("      Stage 2: RRF fusion")
     print("      Stage 3: ColBERT multivector MaxSim rerank")
 
-    ***REMOVED*** Test queries
+    # Test queries
     test_queries = [
         ("Стаття 121 Кримінального кодексу", "Article lookup with exact number"),
         ("Умисне вбивство з особливою жорстокістю", "Crime with specific qualifier"),
@@ -62,9 +62,9 @@ def _run_colbert_rerank() -> bool:
         print(f"{'=' * 80}")
 
         try:
-            ***REMOVED*** Execute Variant A search (dense + sparse + ColBERT)
+            # Execute Variant A search (dense + sparse + ColBERT)
             results = search_engine.search(
-                query_embedding=query,  ***REMOVED*** Pass string for full pipeline
+                query_embedding=query,  # Pass string for full pipeline
                 top_k=5,
                 score_threshold=0.3,
             )
@@ -79,7 +79,7 @@ def _run_colbert_rerank() -> bool:
                 text_preview = result.text[:150].replace("\n", " ")
                 print(f"      Text: {text_preview}...")
 
-            ***REMOVED*** Verify search method
+            # Verify search method
             if results:
                 method = results[0].metadata.get("search_method")
                 if method == "hybrid_rrf_colbert":

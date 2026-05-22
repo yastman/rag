@@ -1,4 +1,4 @@
-***REMOVED*** Runbook: Qdrant Telemetry and Monitoring
+# Runbook: Qdrant Telemetry and Monitoring
 
 > **Owner:** Retrieval & Vector Storage subsystems
 > **Last verified:** 2026-05-07
@@ -9,7 +9,7 @@
 
 Use this runbook when Qdrant collection has issues or monitoring shows anomalies.
 
-***REMOVED******REMOVED*** Symptoms
+## Symptoms
 
 - Collection exists but shows 0 points despite successful ingestion
 - Slow query responses from Qdrant
@@ -17,7 +17,7 @@ Use this runbook when Qdrant collection has issues or monitoring shows anomalies
 - Collection health shows degraded state
 - `Qdrant connection refused` or timeout errors in bot / API logs
 
-***REMOVED******REMOVED*** Service / Container Map
+## Service / Container Map
 
 | Compose service | Typical container names |
 |---|---|
@@ -26,39 +26,39 @@ Use this runbook when Qdrant collection has issues or monitoring shows anomalies
 > For service endpoints, ports, and Compose profiles, see the canonical [`DOCKER.md`](../../DOCKER.md).
 > For local development commands and the validation ladder, see [`docs/LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
 
-***REMOVED******REMOVED*** Fast-Path Diagnosis (read-only)
+## Fast-Path Diagnosis (read-only)
 
 Run these commands before deciding whether the issue is a service failure or an application bug.
 
-***REMOVED******REMOVED******REMOVED*** 1. Container health and reachability
+### 1. Container health and reachability
 
 ```bash
-***REMOVED*** Check service status with deterministic CI env (read-only, no local .env required)
+# Check service status with deterministic CI env (read-only, no local .env required)
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps qdrant
 
-***REMOVED*** Health check (host-side; dev Compose publishes Qdrant REST on localhost:6333)
+# Health check (host-side; dev Compose publishes Qdrant REST on localhost:6333)
 curl -fsS http://localhost:6333/readyz
 ```
 
 Expected: exit code `0` (HTTP 200 OK).
 If this fails, treat as **service failure** (container down, disk full, or OOM).
 
-***REMOVED******REMOVED******REMOVED*** 2. Collection and points count
+### 2. Collection and points count
 
 ```bash
-***REMOVED*** List all collections
+# List all collections
 curl -fsS http://localhost:6333/collections | jq
 
-***REMOVED*** Check specific collection metadata
+# Check specific collection metadata
 curl -fsS http://localhost:6333/collections/gdrive_documents_bge | jq
 
-***REMOVED*** Get points count
+# Get points count
 curl -fsS 'http://localhost:6333/collections/gdrive_documents_bge/points/count' | jq
 ```
 
 If `count: 0` but ingestion succeeded, see [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md).
 
-***REMOVED******REMOVED******REMOVED*** 3. Cluster health (single-node deployments)
+### 3. Cluster health (single-node deployments)
 
 ```bash
 curl -fsS http://localhost:6333/cluster | jq
@@ -68,13 +68,13 @@ curl -fsS http://localhost:6333/cluster/status | jq
 On a single-node dev setup the cluster should show itself as the only peer.
 If Raft consensus is unhealthy, treat as **service failure** (restart Qdrant after checking disk).
 
-***REMOVED******REMOVED******REMOVED*** 4. Query latency metrics
+### 4. Query latency metrics
 
 ```bash
 curl -fsS http://localhost:6333/metrics | grep -E "(query_latency|search_latency)"
 ```
 
-***REMOVED******REMOVED******REMOVED*** 5. Logs (read-only)
+### 5. Logs (read-only)
 
 ```bash
 COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml logs qdrant --tail=200
@@ -86,7 +86,7 @@ Check for:
 - Segment merge failures
 - WAL corruption warnings
 
-***REMOVED******REMOVED*** Service Failure vs App Bug
+## Service Failure vs App Bug
 
 | Observation | Interpretation | Next step |
 |---|---|---|
@@ -98,7 +98,7 @@ Check for:
 | High Qdrant CPU/memory with normal query volume | Service failure / capacity | Increase `deploy.resources.limits.memory` in `compose.yml`; check segment count |
 | ColBERT coverage drops below 99.5% | App bug | Re-run ingestion with ColBERT enabled; check `search_engines.py` for schema drift |
 
-***REMOVED******REMOVED*** Source Paths
+## Source Paths
 
 | Component | Path |
 |---|---|
@@ -109,7 +109,7 @@ Check for:
 | Dev overrides (ports, profiles) | [`compose.dev.yml`](../../compose.dev.yml) |
 | CI env fixture (deterministic interpolation) | [`tests/fixtures/compose.ci.env`](../../tests/fixtures/compose.ci.env) |
 
-***REMOVED******REMOVED*** Logs and Artifacts
+## Logs and Artifacts
 
 | Artifact | Location / command |
 |---|---|
@@ -119,11 +119,11 @@ Check for:
 | Query metrics | `curl http://localhost:6333/metrics` (dev only) |
 | Ingestion manifest | `ingestion` service volume `ingestion-manifest`; check with `make ingest-unified-status` |
 
-***REMOVED******REMOVED*** Remediation
+## Remediation
 
 > ⚠️ **Caution:** Commands in this section mutate state. Run only after fast-path diagnosis confirms the issue is not an app bug.
 
-***REMOVED******REMOVED******REMOVED*** Collection Has 0 Points
+### Collection Has 0 Points
 
 1. Verify ingestion completed:
    ```bash
@@ -142,7 +142,7 @@ Check for:
 
 See [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md) for full procedure.
 
-***REMOVED******REMOVED******REMOVED*** Slow Queries
+### Slow Queries
 
 1. Check CPU/memory usage:
    ```bash
@@ -157,7 +157,7 @@ See [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md) for 
    - Set `RERANK_PROVIDER=none` in `compose.dev.yml` (dev) or the bot environment (production)
    - Restart the bot / API service and re-run the slow query
 
-***REMOVED******REMOVED******REMOVED*** ColBERT Coverage Drop
+### ColBERT Coverage Drop
 
 ColBERT coverage measures the percentage of vectors with ColBERT embeddings.
 
@@ -170,7 +170,7 @@ ColBERT coverage measures the percentage of vectors with ColBERT embeddings.
 2. Check ingestion logs for ColBERT-related errors
 3. Verify `search_engines.py` still requests `multi_vector` payloads for the collection
 
-***REMOVED******REMOVED******REMOVED*** Disk or Memory Pressure
+### Disk or Memory Pressure
 
 If Qdrant logs show storage or memory errors:
 
@@ -189,7 +189,7 @@ If Qdrant logs show storage or memory errors:
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml restart qdrant
    ```
 
-***REMOVED******REMOVED*** Prevention
+## Prevention
 
 - Monitor `collection_points_count` metric
 - Set up alerts for >5% point count drop
@@ -197,7 +197,7 @@ If Qdrant logs show storage or memory errors:
 - Keep Qdrant storage volume on a disk with >20% headroom
 - Run `make ingest-unified-status` after every ingestion batch
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [Redis Cache Degradation](REDIS_CACHE_DEGRADATION.md)
 - [VPS Google Drive Ingestion Recovery](vps-gdrive-ingestion-recovery.md)

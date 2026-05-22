@@ -1,6 +1,6 @@
 <div align="center">
 
-***REMOVED*** Conversational AI Automation Platform
+# Conversational AI Automation Platform
 
 **Build domain-specific AI assistants that connect chat, voice, knowledge search, CRM workflows, and business automation in one observable runtime.**
 
@@ -22,7 +22,7 @@ This repository is a production-oriented foundation for AI assistants that answe
 
 The current codebase includes one working sales/catalog automation domain, but the platform is intentionally modular: replace the domain prompts, search tools, and business integrations while keeping the orchestration, retrieval, ingestion, caching, observability, and runtime contracts.
 
-***REMOVED******REMOVED*** Why It Exists
+## Why It Exists
 
 Most business bots stop at scripted replies. Most AI demos stop at a prompt. This project demonstrates the full operational loop: users ask in natural language, the system retrieves grounded knowledge, routes workflow intent, calls business tools, asks for human approval when needed, and leaves traces operators can inspect.
 
@@ -35,7 +35,7 @@ Most business bots stop at scripted replies. Most AI demos stop at a prompt. Thi
 | Keep AI behavior inspectable | LangGraph state flow, Langfuse traces, structured logs, quality scores, and runbooks |
 | Control latency and cost | Redis-backed semantic, embedding, search, rerank, and extraction caches |
 
-***REMOVED******REMOVED*** Adapt It To Your Domain
+## Adapt It To Your Domain
 
 The reusable part is the platform: channels, graph orchestration, retrieval, ingestion, cache, observability, and Docker runtime. The replaceable part is the domain layer: prompts, tools, search schema, CRM/workflow integration, and UI copy.
 
@@ -47,7 +47,7 @@ The reusable part is the platform: channels, graph orchestration, retrieval, ing
 | Education | Course search, student FAQ, onboarding flows |
 | Internal operations | Knowledge-base assistant, document search, approval workflows |
 
-***REMOVED******REMOVED*** Platform Capabilities
+## Platform Capabilities
 
 | Capability | What it means in this repo | Evidence |
 |---|---|---|
@@ -61,7 +61,7 @@ The reusable part is the platform: channels, graph orchestration, retrieval, ing
 | Observability | Langfuse traces/scores, trace validation, Loki/Promtail/Alertmanager local monitoring, and runbooks | [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) |
 | Compose-first runtime | Docker Compose profiles cover core services, bot, ingestion, voice, ML observability, monitoring, and full stack | [`DOCKER.md`](DOCKER.md) |
 
-***REMOVED******REMOVED*** Why This Is More Than A Bot
+## Why This Is More Than A Bot
 
 A simple chatbot receives a message and calls an LLM. This repository treats the assistant as an operating system for business workflows:
 
@@ -70,7 +70,7 @@ A simple chatbot receives a message and calls an LLM. This repository treats the
 - Domain behavior lives behind tools and prompts, so catalog/search/CRM logic can be replaced without rewriting the runtime.
 - Runtime behavior is observable through traces, logs, health checks, validation commands, and documented runbooks.
 
-***REMOVED******REMOVED*** Architecture Snapshot
+## Architecture Snapshot
 
 ```mermaid
 graph TB
@@ -132,7 +132,7 @@ graph TB
     DOCKER --> MON
 ```
 
-***REMOVED******REMOVED*** Review This In 5 Minutes
+## Review This In 5 Minutes
 
 If you are evaluating the project for collaboration, hiring, or client work, read it in this order:
 
@@ -149,7 +149,7 @@ Safe review notes:
 - Start with [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) before executing commands.
 - Repository presentation checklist lives in [`docs/review/GITHUB_REPO_SETUP.md`](docs/review/GITHUB_REPO_SETUP.md).
 
-***REMOVED******REMOVED*** Proof Of Engineering
+## Proof Of Engineering
 
 - Workflow architecture: LangGraph graph, typed state, conditional edges, tool boundaries, and HITL confirmation.
 - Retrieval infrastructure: BGE-M3, Qdrant dense/sparse/ColBERT vectors, aliases, strict mode, and reranking path.
@@ -159,13 +159,13 @@ Safe review notes:
 - Observability: Langfuse traces/scores, prompt management, trace validation, local monitoring, and runbooks.
 - Quality gates: Ruff, MyPy, pytest tiers, CI guardrails, and documented local validation.
 
-***REMOVED******REMOVED*** Current Domain Module
+## Current Domain Module
 
 The repository currently includes a working sales/catalog automation module: catalog-style search, lead workflows, manager handoff, scoring, and Kommo CRM integration. Treat that as the first domain implementation, not the boundary of the platform.
 
 To adapt the system, replace the domain prompts, extraction logic, catalog/search tools, CRM/tool integrations, and UI copy while keeping the common runtime: channels, LangGraph orchestration, RAG, ingestion, cache, observability, and Docker profiles.
 
-***REMOVED******REMOVED*** Quick Start
+## Quick Start
 
 Choose the path that matches your goal:
 
@@ -178,7 +178,7 @@ Choose the path that matches your goal:
 | Run the full Compose stack | `make docker-full-up` |
 | Understand runtime profiles and ports | [`DOCKER.md`](DOCKER.md) |
 
-***REMOVED******REMOVED******REMOVED*** Prerequisites
+### Prerequisites
 
 - Python 3.11+; Python 3.12 is recommended for local development.
 - [`uv`](https://docs.astral.sh/uv/)
@@ -193,7 +193,7 @@ cp .env.example .env
 
 For full setup, validation ladder, environment behavior, and troubleshooting, use [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
 
-***REMOVED******REMOVED******REMOVED*** Runtime Profiles
+### Runtime Profiles
 
 Docker Compose is the primary local/VPS runtime. Profiles split the system by operational surface:
 
@@ -209,7 +209,7 @@ Docker Compose is the primary local/VPS runtime. Profiles split the system by op
 
 The repo also includes remote Docker helpers for running Compose on a remote host. Treat this as a development convenience, not a required public setup path; see [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md) and [`DOCKER.md`](DOCKER.md) for details.
 
-***REMOVED******REMOVED*** Project Map
+## Project Map
 
 Use [`docs/review/PROJECT_GUIDE.md`](docs/review/PROJECT_GUIDE.md) for the maintained folder map and high-signal files.
 
@@ -225,17 +225,17 @@ High-level entry points:
 | Mini App | [`mini_app/`](mini_app/) |
 | Runtime | [`compose.yml`](compose.yml), [`compose.dev.yml`](compose.dev.yml), [`DOCKER.md`](DOCKER.md) |
 
-***REMOVED******REMOVED*** Validation
+## Validation
 
 ```bash
-make check       ***REMOVED*** Ruff lint + MyPy strict type checking
-make test-unit   ***REMOVED*** Unit tests (parallel via pytest-xdist)
-make test-full   ***REMOVED*** Full suite: parallel-safe tiers first, live/stateful tiers after
+make check       # Ruff lint + MyPy strict type checking
+make test-unit   # Unit tests (parallel via pytest-xdist)
+make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
 Local verification is the release authority for this repo. Run focused checks for the touched area before merging to `dev` or deploying. CI is intentionally lightweight: it runs static/lint guardrails, not pytest suites or the authoritative full-suite signal.
 
-***REMOVED******REMOVED*** Honest Scope
+## Honest Scope
 
 - Docker Compose is the primary local runtime path.
 - k3s manifests exist for core services but are not full parity with Compose.
@@ -245,7 +245,7 @@ Local verification is the release authority for this repo. Run focused checks fo
 - Some UI/i18n strings are still being migrated into Fluent bundles.
 - Domain-specific names, prompts, and catalog fields remain in the current implementation and should be replaced for a different customer domain.
 
-***REMOVED******REMOVED*** Documentation
+## Documentation
 
 | Document | Use it for |
 |---|---|
@@ -259,6 +259,6 @@ Local verification is the release authority for this repo. Run focused checks fo
 | [`docs/INGESTION.md`](docs/INGESTION.md) | unified ingestion operations |
 | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) | vector schema and Qdrant operations |
 
-***REMOVED******REMOVED*** License
+## License
 
 This project is licensed under the [MIT License](LICENSE).

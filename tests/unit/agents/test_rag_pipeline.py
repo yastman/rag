@@ -1,4 +1,4 @@
-"""Tests for rag_pipeline async functions (***REMOVED***442)."""
+"""Tests for rag_pipeline async functions (#442)."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def mock_embeddings():
     emb = AsyncMock()
     emb.aembed_query = AsyncMock(return_value=[0.1] * 1024)
     emb.aembed_hybrid = AsyncMock(return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}))
-    emb.aembed_hybrid_with_colbert = None  ***REMOVED*** not available; prevents auto-AsyncMock child
+    emb.aembed_hybrid_with_colbert = None  # not available; prevents auto-AsyncMock child
     emb.aembed_colbert_query = None
     return emb
 
@@ -45,8 +45,8 @@ def mock_sparse():
 @pytest.fixture
 def mock_qdrant():
     qdrant = AsyncMock()
-    ***REMOVED*** Scores between relevance_threshold (0.005) and skip_rerank_threshold (0.012)
-    ***REMOVED*** so rerank is always triggered in happy path
+    # Scores between relevance_threshold (0.005) and skip_rerank_threshold (0.012)
+    # so rerank is always triggered in happy path
     qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
             [
@@ -71,9 +71,9 @@ def mock_reranker():
     return reranker
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _cache_check tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _cache_check tests
+# ---------------------------------------------------------------------------
 
 
 async def test_cache_check_miss(mock_cache, mock_embeddings):
@@ -237,9 +237,9 @@ async def test_cache_check_skips_contextual_follow_up_lookup(mock_cache, mock_em
     mock_cache.check_semantic.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _hybrid_retrieve tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _hybrid_retrieve tests
+# ---------------------------------------------------------------------------
 
 
 async def test_hybrid_retrieve(mock_cache, mock_sparse, mock_qdrant):
@@ -656,9 +656,9 @@ async def test_hybrid_retrieve_relaxes_topic_layers_but_keeps_user_filters(mock_
     assert result["final_filters"] == user_filters
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _grade_documents tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _grade_documents tests
+# ---------------------------------------------------------------------------
 
 
 async def test_grade_documents_relevant():
@@ -711,9 +711,9 @@ async def test_grade_documents_records_score_gap_counter():
     assert stats["counters"]["score_gap_confident"] == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _rerank tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _rerank tests
+# ---------------------------------------------------------------------------
 
 
 async def test_rerank_with_colbert(mock_reranker):
@@ -747,7 +747,7 @@ async def test_rerank_fallback_no_reranker():
 
     assert result["rerank_applied"] is False
     assert result["rerank_cache_hit"] is False
-    assert result["documents"][0]["score"] == 0.8  ***REMOVED*** sorted desc
+    assert result["documents"][0]["score"] == 0.8  # sorted desc
 
 
 async def test_rerank_empty_docs():
@@ -814,9 +814,9 @@ async def test_rerank_ignores_deprecated_colbert_service():
     client.rerank.assert_not_awaited()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _rewrite_query tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _rewrite_query tests
+# ---------------------------------------------------------------------------
 
 
 async def test_rewrite_query_success():
@@ -875,9 +875,9 @@ async def test_short_finance_query_expands_before_rewrite_loop():
     assert result["rewritten_query"] != "рассрочки"
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _cache_store tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _cache_store tests
+# ---------------------------------------------------------------------------
 
 
 async def test_cache_store_semantic(mock_cache):
@@ -934,7 +934,7 @@ async def test_cache_store_skips_contextual_follow_up(mock_cache):
 
 
 async def test_cache_store_exception_preserves_response_and_logs_warning(mock_cache, caplog):
-    """store_semantic raises Exception → response not lost, warning is logged (***REMOVED***524)."""
+    """store_semantic raises Exception → response not lost, warning is logged (#524)."""
     import logging
 
     from telegram_bot.agents.rag_pipeline import _cache_store
@@ -952,19 +952,19 @@ async def test_cache_store_exception_preserves_response_and_logs_warning(mock_ca
             latency_stages={},
         )
 
-    ***REMOVED*** Response is preserved — not lost on cache error
+    # Response is preserved — not lost on cache error
     assert result["stored_semantic"] is False
-    ***REMOVED*** Latency stage is still populated
+    # Latency stage is still populated
     assert "cache_store" in result["latency_stages"]
-    ***REMOVED*** Warning was emitted
+    # Warning was emitted
     assert any(
         "cache_store" in r.message or "semantic store failed" in r.message for r in caplog.records
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** rag_pipeline (full flow) tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# rag_pipeline (full flow) tests
+# ---------------------------------------------------------------------------
 
 
 async def test_pipeline_cache_hit(mock_cache, mock_embeddings, mock_sparse, mock_qdrant):
@@ -1018,7 +1018,7 @@ async def test_pipeline_rewrite_loop(
     """Pipeline retries with rewrite when documents are irrelevant."""
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** First retrieve returns low scores, second returns high scores
+    # First retrieve returns low scores, second returns high scores
     call_count = 0
     low_results = (
         [{"text": "irrelevant", "score": 0.001, "metadata": {}}],
@@ -1063,9 +1063,9 @@ async def test_pipeline_rewrite_loop(
     assert len(result["documents"]) > 0
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** original_query cache key tests (***REMOVED***430)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# original_query cache key tests (#430)
+# ---------------------------------------------------------------------------
 
 
 async def test_pipeline_cache_hit_via_original_query(
@@ -1080,13 +1080,13 @@ async def test_pipeline_cache_hit_via_original_query(
     """
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** Cache has an entry stored under the original query
+    # Cache has an entry stored under the original query
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value="Cached answer about Nesebar apartments")
 
     result = await rag_pipeline(
-        "how to buy property",  ***REMOVED*** agent-reformulated query
-        original_query="как оформить покупку",  ***REMOVED*** original user query
+        "how to buy property",  # agent-reformulated query
+        original_query="как оформить покупку",  # original user query
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -1098,9 +1098,9 @@ async def test_pipeline_cache_hit_via_original_query(
 
     assert result["cache_hit"] is True
     assert result["response"] == "Cached answer about Nesebar apartments"
-    ***REMOVED*** Retrieval must NOT be called when cache hits
+    # Retrieval must NOT be called when cache hits
     mock_qdrant.hybrid_search_rrf.assert_not_called()
-    ***REMOVED*** Cache was checked with the ORIGINAL query (not the reformulated one)
+    # Cache was checked with the ORIGINAL query (not the reformulated one)
     check_call = mock_cache.check_semantic.call_args
     assert check_call.kwargs["query"] == "как оформить покупку"
 
@@ -1116,13 +1116,13 @@ async def test_pipeline_cache_uses_original_query_as_key(
     """
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** Cache miss — proceed to retrieval
+    # Cache miss — proceed to retrieval
     mock_cache.get_embedding = AsyncMock(return_value=None)
     mock_cache.check_semantic = AsyncMock(return_value=None)
 
     await rag_pipeline(
-        "how to buy property",  ***REMOVED*** reformulated
-        original_query="как оформить покупку",  ***REMOVED*** original
+        "how to buy property",  # reformulated
+        original_query="как оформить покупку",  # original
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -1132,10 +1132,10 @@ async def test_pipeline_cache_uses_original_query_as_key(
         qdrant=mock_qdrant,
     )
 
-    ***REMOVED*** Embedding was computed for the ORIGINAL query
+    # Embedding was computed for the ORIGINAL query
     embed_call_args = [str(c) for c in mock_embeddings.aembed_hybrid.call_args_list]
     assert any("как оформить покупку" in a for a in embed_call_args)
-    ***REMOVED*** Semantic check was done with the original query key
+    # Semantic check was done with the original query key
     check_call = mock_cache.check_semantic.call_args
     assert check_call.kwargs["query"] == "как оформить покупку"
 
@@ -1151,7 +1151,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
 
     await rag_pipeline(
         "как оформить покупку",
-        original_query="",  ***REMOVED*** empty — backward compat mode
+        original_query="",  # empty — backward compat mode
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -1161,7 +1161,7 @@ async def test_pipeline_fallback_to_query_when_original_query_empty(
         qdrant=mock_qdrant,
     )
 
-    ***REMOVED*** Fallback: cache was checked with the query itself
+    # Fallback: cache was checked with the query itself
     check_call = mock_cache.check_semantic.call_args
     assert check_call.kwargs["query"] == "как оформить покупку"
 
@@ -1172,13 +1172,13 @@ async def test_pipeline_cache_miss_when_different_original_query(
     """Cache miss when a different original_query doesn't match the stored key."""
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** Cache returns None (miss) regardless of which key we check
+    # Cache returns None (miss) regardless of which key we check
     mock_cache.get_embedding = AsyncMock(return_value=None)
     mock_cache.check_semantic = AsyncMock(return_value=None)
 
     result = await rag_pipeline(
         "apartments in Varna",
-        original_query="квартиры в Варне",  ***REMOVED*** different from any stored key
+        original_query="квартиры в Варне",  # different from any stored key
         user_id=42,
         session_id="test",
         query_type="FAQ",
@@ -1189,14 +1189,14 @@ async def test_pipeline_cache_miss_when_different_original_query(
     )
 
     assert result["cache_hit"] is False
-    ***REMOVED*** Retrieval was executed after the miss
+    # Retrieval was executed after the miss
     mock_qdrant.hybrid_search_rrf.assert_called_once()
 
 
 async def test_pipeline_reformulation_skips_embed_on_warm_cache(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant
 ):
-    """Reformulated query embedding in cache prevents a redundant BGE-M3 call (***REMOVED***513).
+    """Reformulated query embedding in cache prevents a redundant BGE-M3 call (#513).
 
     Scenario: embeddings_cache_hit=True for original query, but the agent reformulated.
     On the second+ request the reformulated embedding is also cached — aembed_hybrid
@@ -1205,22 +1205,22 @@ async def test_pipeline_reformulation_skips_embed_on_warm_cache(
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
     original_emb = [0.1] * 1024
-    reform_emb = [0.2] * 1024  ***REMOVED*** distinct embedding for reformulated query
+    reform_emb = [0.2] * 1024  # distinct embedding for reformulated query
 
     def _get_embedding(text: str):
         if "квартиры" in text:
-            return original_emb  ***REMOVED*** original query — warm
+            return original_emb  # original query — warm
         if "apartments" in text:
-            return reform_emb  ***REMOVED*** reformulated query — warm
+            return reform_emb  # reformulated query — warm
         return None
 
     mock_cache.get_embedding = AsyncMock(side_effect=_get_embedding)
-    mock_cache.check_semantic = AsyncMock(return_value=None)  ***REMOVED*** semantic miss → full retrieval
+    mock_cache.check_semantic = AsyncMock(return_value=None)  # semantic miss → full retrieval
     mock_cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
 
     result = await rag_pipeline(
-        "apartments in Nesebar",  ***REMOVED*** agent-reformulated query
-        original_query="квартиры в Несебре",  ***REMOVED*** original user query
+        "apartments in Nesebar",  # agent-reformulated query
+        original_query="квартиры в Несебре",  # original user query
         user_id=42,
         session_id="test",
         query_type="GENERAL",
@@ -1230,13 +1230,13 @@ async def test_pipeline_reformulation_skips_embed_on_warm_cache(
         qdrant=mock_qdrant,
     )
 
-    ***REMOVED*** Reformulated embedding was in cache — BGE-M3 must NOT be called
+    # Reformulated embedding was in cache — BGE-M3 must NOT be called
     mock_embeddings.aembed_hybrid.assert_not_called()
     mock_embeddings.aembed_query.assert_not_called()
     assert result["cache_hit"] is False
     mock_qdrant.hybrid_search_rrf.assert_called_once()
-    ***REMOVED*** Verify the orchestrator pre-fetched the reformulated query embedding from
-    ***REMOVED*** cache (the mechanism of the fix — not just the observable BGE-M3 side-effect).
+    # Verify the orchestrator pre-fetched the reformulated query embedding from
+    # cache (the mechanism of the fix — not just the observable BGE-M3 side-effect).
     get_embedding_calls = [str(c.args[0]) for c in mock_cache.get_embedding.call_args_list]
     assert any("apartments" in c for c in get_embedding_calls)
 
@@ -1246,7 +1246,7 @@ async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
 
     bad_embeddings = AsyncMock()
     bad_embeddings.aembed_hybrid = AsyncMock(side_effect=RuntimeError("BGE-M3 down"))
-    bad_embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** not available
+    bad_embeddings.aembed_hybrid_with_colbert = None  # not available
 
     result = await rag_pipeline(
         "test",
@@ -1263,9 +1263,9 @@ async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
     assert result["documents"] == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** skip_rewrite tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# skip_rewrite tests
+# ---------------------------------------------------------------------------
 
 
 async def test_skip_rewrite_bypasses_rewrite_loop(
@@ -1274,7 +1274,7 @@ async def test_skip_rewrite_bypasses_rewrite_loop(
     """skip_rewrite=True prevents _rewrite_query from being called."""
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** Return irrelevant docs so the rewrite check is reached
+    # Return irrelevant docs so the rewrite check is reached
     mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
             [{"text": "irrelevant", "score": 0.001, "metadata": {}}],
@@ -1311,7 +1311,7 @@ async def test_skip_rewrite_false_allows_rewrite(
     """skip_rewrite=False (default) allows the rewrite loop to execute."""
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    ***REMOVED*** Return irrelevant docs so rewrite condition is reached
+    # Return irrelevant docs so rewrite condition is reached
     mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
             [{"text": "irrelevant", "score": 0.001, "metadata": {}}],
@@ -1386,9 +1386,9 @@ async def test_skip_rewrite_in_result(
     assert result_false["skip_rewrite"] is False
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** ColBERT wiring tests (Tasks 8 & 10, ***REMOVED***568)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# ColBERT wiring tests (Tasks 8 & 10, #568)
+# ---------------------------------------------------------------------------
 
 
 async def test_cache_check_returns_colbert_query(mock_cache):
@@ -1446,7 +1446,7 @@ async def test_cache_check_computes_colbert_when_embedding_cached(mock_cache):
 
     from telegram_bot.agents.rag_pipeline import _cache_check
 
-    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  ***REMOVED*** cached!
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid = None
@@ -1496,15 +1496,15 @@ async def test_hybrid_retrieve_recomputes_colbert_after_rewrite(mock_cache, mock
         )
     )
 
-    ***REMOVED*** query_embedding=None simulates post-rewrite state
+    # query_embedding=None simulates post-rewrite state
     result = await _hybrid_retrieve(
         "rewritten query",
-        None,  ***REMOVED*** dense_vector is None after rewrite
+        None,  # dense_vector is None after rewrite
         cache=mock_cache,
         sparse_embeddings=mock_sparse,
         qdrant=mock_qdrant,
         embeddings=mock_embeddings,
-        colbert_query=None,  ***REMOVED*** was reset after rewrite
+        colbert_query=None,  # was reset after rewrite
         latency_stages={},
     )
 
@@ -1629,8 +1629,8 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
     mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 4)
 
     mock_qdrant = AsyncMock()
-    ***REMOVED*** Score between relevance_threshold (0.005) and skip_rerank_threshold (0.018)
-    ***REMOVED*** so grade says skip_rerank=False, but ColBERT path sets rerank_applied=True
+    # Score between relevance_threshold (0.005) and skip_rerank_threshold (0.018)
+    # so grade says skip_rerank=False, but ColBERT path sets rerank_applied=True
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
         return_value=(
             [{"id": "1", "score": 0.008, "text": "doc", "metadata": {}}],
@@ -1661,7 +1661,7 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
 
 
 async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache, mock_sparse):
-    """***REMOVED***951: When original_query != query, don't call aembed_colbert_query separately.
+    """#951: When original_query != query, don't call aembed_colbert_query separately.
     Instead set query_embedding=None and let _hybrid_retrieve do one combined call."""
     from unittest.mock import AsyncMock
 
@@ -1695,14 +1695,14 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
         reranker=None,
     )
 
-    ***REMOVED*** ***REMOVED***951 fix: aembed_colbert_query called once for cache_key in _cache_check,
-    ***REMOVED*** but NOT a second time for the reformulated query (old behavior was 2 calls).
+    # #951 fix: aembed_colbert_query called once for cache_key in _cache_check,
+    # but NOT a second time for the reformulated query (old behavior was 2 calls).
     assert mock_embeddings.aembed_colbert_query.call_count <= 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Pre-computed sparse + colbert passthrough (***REMOVED***571)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pre-computed sparse + colbert passthrough (#571)
+# ---------------------------------------------------------------------------
 
 
 async def test_cache_check_uses_pre_computed_sparse(mock_cache):
@@ -1715,7 +1715,7 @@ async def test_cache_check_uses_pre_computed_sparse(mock_cache):
     sparse = {"indices": [1, 2], "values": [0.5, 0.3]}
 
     mock_embeddings = AsyncMock()
-    mock_embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** not available
+    mock_embeddings.aembed_hybrid_with_colbert = None  # not available
     mock_embeddings.aembed_colbert_query = None
 
     result = await _cache_check(
@@ -1730,7 +1730,7 @@ async def test_cache_check_uses_pre_computed_sparse(mock_cache):
     )
 
     assert result["sparse_embedding"] == sparse
-    ***REMOVED*** Pre-agent already stored embeddings — _cache_check must NOT re-store (***REMOVED***633)
+    # Pre-agent already stored embeddings — _cache_check must NOT re-store (#633)
     mock_cache.store_sparse_embedding.assert_not_awaited()
     mock_cache.store_embedding.assert_not_awaited()
     assert result["cache_hit"] is False
@@ -1765,7 +1765,7 @@ async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
     )
 
     assert result["colbert_query"] == colbert
-    ***REMOVED*** Must NOT call aembed_hybrid_with_colbert since colbert was pre-computed
+    # Must NOT call aembed_hybrid_with_colbert since colbert was pre-computed
     mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
 
 
@@ -1799,7 +1799,7 @@ async def test_cache_check_prefers_hybrid_colbert_over_standalone(mock_cache):
 
 
 async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mock_cache):
-    """_cache_check with all three pre-computed skips stores AND extra BGE-M3 calls (***REMOVED***633)."""
+    """_cache_check with all three pre-computed skips stores AND extra BGE-M3 calls (#633)."""
     from unittest.mock import AsyncMock
 
     from telegram_bot.agents.rag_pipeline import _cache_check
@@ -1825,14 +1825,14 @@ async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mo
         pre_computed_colbert=colbert,
     )
 
-    ***REMOVED*** No redundant cache stores — pre-agent already stored (***REMOVED***633)
+    # No redundant cache stores — pre-agent already stored (#633)
     mock_cache.store_embedding.assert_not_awaited()
     mock_cache.store_sparse_embedding.assert_not_awaited()
-    ***REMOVED*** No redundant BGE-M3 calls — all vectors pre-computed
+    # No redundant BGE-M3 calls — all vectors pre-computed
     mock_embeddings.aembed_hybrid.assert_not_awaited()
     mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
     mock_embeddings.aembed_colbert_query.assert_not_awaited()
-    ***REMOVED*** All vectors passed through
+    # All vectors passed through
     assert result["query_embedding"] == dense
     assert result["sparse_embedding"] == sparse
     assert result["colbert_query"] == colbert
@@ -1911,7 +1911,7 @@ async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
     mock_embeddings.aembed_hybrid_with_colbert = None
     mock_embeddings.aembed_colbert_query = None
 
-    ***REMOVED*** MISS path
+    # MISS path
     result_miss = await _cache_check(
         "miss query",
         "GENERAL",
@@ -1924,7 +1924,7 @@ async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
     )
     assert "sparse_embedding" in result_miss
 
-    ***REMOVED*** HIT path
+    # HIT path
     mock_cache.check_semantic = AsyncMock(return_value="cached answer")
     result_hit = await _cache_check(
         "hit query",
@@ -1957,7 +1957,7 @@ async def test_hybrid_retrieve_uses_pre_computed_sparse(mock_cache, mock_sparse,
         latency_stages={},
     )
 
-    ***REMOVED*** Sparse cache and recompute must NOT be called — pre-computed sparse was provided
+    # Sparse cache and recompute must NOT be called — pre-computed sparse was provided
     mock_cache.get_sparse_embedding.assert_not_awaited()
     mock_sparse.aembed_query.assert_not_awaited()
     assert result["documents"]
@@ -2031,12 +2031,12 @@ async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, m
     sparse = {"indices": [3], "values": [0.7]}
 
     mock_embeddings = AsyncMock()
-    mock_embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** disable colbert
-    mock_embeddings.aembed_hybrid = None  ***REMOVED*** disable hybrid
+    mock_embeddings.aembed_hybrid_with_colbert = None  # disable colbert
+    mock_embeddings.aembed_hybrid = None  # disable hybrid
     mock_embeddings.aembed_colbert_query = None
 
     mock_qdrant = AsyncMock()
-    mock_qdrant.hybrid_search_rrf_colbert = None  ***REMOVED*** ensure plain RRF path
+    mock_qdrant.hybrid_search_rrf_colbert = None  # ensure plain RRF path
     mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
             [{"text": "doc", "score": 0.9, "metadata": {}}],
@@ -2058,9 +2058,9 @@ async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, m
         pre_computed_sparse=sparse,
     )
 
-    ***REMOVED*** sparse_embeddings.aembed_query must NOT be called — sparse was pre-computed
+    # sparse_embeddings.aembed_query must NOT be called — sparse was pre-computed
     mock_sparse.aembed_query.assert_not_awaited()
-    ***REMOVED*** cache get_sparse_embedding must NOT be called either
+    # cache get_sparse_embedding must NOT be called either
     mock_cache.get_sparse_embedding.assert_not_awaited()
     assert result["documents"]
 
@@ -2288,9 +2288,9 @@ async def test_rag_pipeline_skips_blind_semantic_lookup_for_filter_sensitive_que
     assert result["semantic_cache_already_checked"] is True
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** BGE-M3 query vector bundle tests (***REMOVED***1493)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# BGE-M3 query vector bundle tests (#1493)
+# ---------------------------------------------------------------------------
 
 
 async def test_cache_check_uses_bundle_cache_hit(mock_cache):
@@ -2387,7 +2387,7 @@ async def test_hybrid_retrieve_uses_bundle_after_rewrite(mock_cache, mock_sparse
 
     result = await _hybrid_retrieve(
         "rewritten query",
-        None,  ***REMOVED*** dense_vector is None after rewrite
+        None,  # dense_vector is None after rewrite
         cache=mock_cache,
         sparse_embeddings=mock_sparse,
         qdrant=mock_qdrant,

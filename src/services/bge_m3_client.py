@@ -77,7 +77,7 @@ class BGEM3Client:
 
         client = BGEM3Client("http://bge-m3:8000")
         result = await client.encode_dense(["hello world"])
-        vectors = result.vectors  ***REMOVED*** [[0.1, 0.2, ...]]
+        vectors = result.vectors  # [[0.1, 0.2, ...]]
         await client.aclose()
     """
 
@@ -98,10 +98,10 @@ class BGEM3Client:
         else:
             self._timeout = timeout
         self._client: httpx.AsyncClient | None = None
-        ***REMOVED*** Guards _get_client / aclose so concurrent reconnects after close do
-        ***REMOVED*** not race in creating multiple AsyncClient instances. Created lazily
-        ***REMOVED*** against the running loop so the lock is bound to the same event loop
-        ***REMOVED*** that uses the client (***REMOVED***1641).
+        # Guards _get_client / aclose so concurrent reconnects after close do
+        # not race in creating multiple AsyncClient instances. Created lazily
+        # against the running loop so the lock is bound to the same event loop
+        # that uses the client (#1641).
         self._client_lock: asyncio.Lock | None = None
 
     def _get_client_lock(self) -> asyncio.Lock:
@@ -121,7 +121,7 @@ class BGEM3Client:
         Concurrent callers that arrive while ``self._client`` is ``None`` or
         closed all observe a single replacement AsyncClient: the lock guards
         the check-then-set window, and the post-lock re-check ensures only
-        the first task constructs the new instance (***REMOVED***1641).
+        the first task constructs the new instance (#1641).
         """
         client = self._client
         if client is not None and not client.is_closed:
@@ -129,9 +129,9 @@ class BGEM3Client:
         async with self._get_client_lock():
             client = self._client
             if client is None or client.is_closed:
-                ***REMOVED*** Note: a pre-closed client does not need explicit aclose().
-                ***REMOVED*** We never replace a non-closed client here — the outer
-                ***REMOVED*** check would have returned it already.
+                # Note: a pre-closed client does not need explicit aclose().
+                # We never replace a non-closed client here — the outer
+                # check would have returned it already.
                 client = httpx.AsyncClient(
                     timeout=self._timeout,
                     limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
@@ -351,7 +351,7 @@ class BGEM3Client:
         """Close the underlying httpx client.
 
         Coordinated with ``_get_client`` via the same asyncio.Lock so a
-        concurrent reconnect cannot observe a half-closed client (***REMOVED***1641).
+        concurrent reconnect cannot observe a half-closed client (#1641).
         """
         async with self._get_client_lock():
             client = self._client

@@ -35,9 +35,9 @@ def test_validate_valid_init_data():
 
 def test_validate_invalid_hash():
     raw = _make_init_data(BOT_TOKEN)
-    ***REMOVED*** Replace valid hash with an invalid one
+    # Replace valid hash with an invalid one
     parts = dict(pair.split("=", 1) for pair in raw.split("&"))
-    parts["hash"] = "deadbeef" * 8  ***REMOVED*** wrong 64-char hex string
+    parts["hash"] = "deadbeef" * 8  # wrong 64-char hex string
     raw_invalid = "&".join(f"{k}={v}" for k, v in parts.items())
     with pytest.raises(ValueError, match="Invalid"):
         validate_init_data(raw_invalid, BOT_TOKEN)
@@ -62,11 +62,11 @@ def test_validate_missing_auth_date():
     so a payload that lacks it raises a validation error before the freshness
     check runs. Both the parse-error and the freshness-error paths surface
     the same conservative ``"Invalid initData"`` / ``"initData expired"``
-    message to callers (***REMOVED***1595).
+    message to callers (#1595).
     """
-    ***REMOVED*** Build valid initData without auth_date — the SDK refuses to construct
-    ***REMOVED*** the WebAppInitData model and our wrapper translates that into "Invalid
-    ***REMOVED*** initData" so 401s look the same regardless of which branch fired.
+    # Build valid initData without auth_date — the SDK refuses to construct
+    # the WebAppInitData model and our wrapper translates that into "Invalid
+    # initData" so 401s look the same regardless of which branch fired.
     params = {"user": '{"id":123,"first_name":"Test"}'}
     data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
     secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()

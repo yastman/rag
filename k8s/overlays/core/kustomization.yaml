@@ -6,15 +6,15 @@ namespace: rag
 resources:
   - ../../base/namespace.yaml
   - ../../base/configmaps/postgres-init.yaml
-  ***REMOVED*** Postgres
+  # Postgres
   - ../../base/postgres/pvc.yaml
   - ../../base/postgres/deployment.yaml
   - ../../base/postgres/service.yaml
-  ***REMOVED*** Redis
+  # Redis
   - ../../base/redis/pvc.yaml
   - ../../base/redis/deployment.yaml
   - ../../base/redis/service.yaml
-  ***REMOVED*** Qdrant
+  # Qdrant
   - ../../base/qdrant/pvc.yaml
   - ../../base/qdrant/deployment.yaml
   - ../../base/qdrant/service.yaml

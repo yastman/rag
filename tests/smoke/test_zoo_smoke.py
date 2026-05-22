@@ -1,4 +1,4 @@
-***REMOVED*** tests/smoke/test_zoo_smoke.py
+# tests/smoke/test_zoo_smoke.py
 """Zoo smoke tests - verify all services are alive and functional."""
 
 import os
@@ -75,12 +75,12 @@ class TestZooHealth:
     @pytest.mark.asyncio
     async def test_litellm_health(self, litellm_url):
         """litellm /health/liveliness returns 200."""
-        ***REMOVED*** Only test if URL points to local LiteLLM proxy
+        # Only test if URL points to local LiteLLM proxy
         if "localhost" not in litellm_url and "127.0.0.1" not in litellm_url:
             pytest.skip(f"LLM_BASE_URL points to external API ({litellm_url}), not LiteLLM")
         if not _is_port_open("localhost", 4000):
             pytest.skip("LiteLLM not running (port 4000)")
-        ***REMOVED*** Health endpoint is rooted at LiteLLM host (without API version suffix).
+        # Health endpoint is rooted at LiteLLM host (without API version suffix).
         health_base_url = litellm_url.rstrip("/")
         health_base_url = health_base_url.removesuffix("/v1")
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -239,17 +239,17 @@ class TestZooEndToEnd:
         query = f"zoo_e2e_test_{int(time.time())}"
         payload = {"filters": {"test": True}, "semantic_query": query}
 
-        ***REMOVED*** First request - should be MISS
+        # First request - should be MISS
         key = cache_service.make_hash(query)
         await cache_service.get_exact("search", key)
         after_first = cache_service.get_metrics()
         first_misses = after_first["search"]["misses"] - base_misses
         assert first_misses >= 1, "First request should miss in search tier"
 
-        ***REMOVED*** Store result
+        # Store result
         await cache_service.store_exact("search", key, payload)
 
-        ***REMOVED*** Second request - should be HIT
+        # Second request - should be HIT
         cached = await cache_service.get_exact("search", key)
         after_second = cache_service.get_metrics()
         second_hits = after_second["search"]["hits"] - base_hits

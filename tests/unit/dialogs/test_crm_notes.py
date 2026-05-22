@@ -1,11 +1,11 @@
-"""Tests for CRM note wizard dialog (***REMOVED***697) — Task 7."""
+"""Tests for CRM note wizard dialog (#697) — Task 7."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 
-***REMOVED*** --- Dialog object export ---
+# --- Dialog object export ---
 
 
 def test_create_note_dialog_exported():
@@ -24,7 +24,7 @@ def test_create_note_dialog_is_dialog():
     assert isinstance(create_note_dialog, Dialog)
 
 
-***REMOVED*** --- CreateNoteSG states ---
+# --- CreateNoteSG states ---
 
 
 def test_create_note_sg_has_text_state():
@@ -55,7 +55,7 @@ def test_create_note_sg_has_summary_state():
     assert hasattr(CreateNoteSG, "summary")
 
 
-***REMOVED*** --- Entity type options ---
+# --- Entity type options ---
 
 
 def test_note_entity_type_options_exported():
@@ -91,7 +91,7 @@ def test_note_entity_type_options_are_tuples():
         assert len(item) == 2
 
 
-***REMOVED*** --- build_note_summary helper ---
+# --- build_note_summary helper ---
 
 
 def test_build_note_summary_leads():
@@ -124,7 +124,7 @@ def test_build_note_summary_no_entity():
     assert isinstance(result, str)
 
 
-***REMOVED*** --- Handlers ---
+# --- Handlers ---
 
 
 async def test_on_note_text_entered_strips_and_saves():
@@ -200,7 +200,7 @@ async def test_on_entity_selected_stores_id_and_switches_summary():
     dm.switch_to.assert_awaited_once_with(CreateNoteSG.summary)
 
 
-***REMOVED*** --- Getters ---
+# --- Getters ---
 
 
 async def test_get_entity_options_mocked_leads():
@@ -281,7 +281,7 @@ async def test_get_note_summary_no_entity():
     assert "без привязки" in result["summary"]
 
 
-***REMOVED*** --- on_note_confirm ---
+# --- on_note_confirm ---
 
 
 async def test_on_note_confirm_no_attachment():
@@ -360,7 +360,7 @@ async def test_on_note_confirm_success():
     await on_note_confirm(callback, button, dm)
 
     kommo.add_note.assert_awaited_once_with("leads", 5, "Note text")
-    callback.answer.assert_awaited_once_with("📝 Заметка ***REMOVED***99 создана!", show_alert=True)
+    callback.answer.assert_awaited_once_with("📝 Заметка #99 создана!", show_alert=True)
     dm.done.assert_awaited_once()
 
 

@@ -8,18 +8,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** MOCK HEAVY IMPORTS FOR UNIT TESTS
-***REMOVED*** =============================================================================
-***REMOVED*** These modules are slow to import due to model loading.  Mocks are installed
-***REMOVED*** in ``pytest_configure`` (earliest hook, before collection) and removed in
-***REMOVED*** ``pytest_unconfigure`` so that no MagicMock leaks into sys.modules after the
-***REMOVED*** session ends.
-***REMOVED***
-***REMOVED*** Policy: NEVER assign to sys.modules at module level.  Use
-***REMOVED*** ``monkeypatch.setitem(sys.modules, ...)`` inside fixtures, or register mocks
-***REMOVED*** via ``pytest_configure`` for collection-time needs.  See
-***REMOVED*** ``.claude/rules/testing.md`` § "sys.modules hygiene".
+# =============================================================================
+# MOCK HEAVY IMPORTS FOR UNIT TESTS
+# =============================================================================
+# These modules are slow to import due to model loading.  Mocks are installed
+# in ``pytest_configure`` (earliest hook, before collection) and removed in
+# ``pytest_unconfigure`` so that no MagicMock leaks into sys.modules after the
+# session ends.
+#
+# Policy: NEVER assign to sys.modules at module level.  Use
+# ``monkeypatch.setitem(sys.modules, ...)`` inside fixtures, or register mocks
+# via ``pytest_configure`` for collection-time needs.  See
+# ``.claude/rules/testing.md`` § "sys.modules hygiene".
 
 _saved_modules: dict[str, object] = {}
 _mocked_module_names: list[str] = []
@@ -27,8 +27,8 @@ _mocked_module_names: list[str] = []
 
 def pytest_configure(config):
     """Install lightweight mocks for heavy ML libs before test collection."""
-    ***REMOVED*** -- sentence_transformers / FlagEmbedding (slow model loading) ----------
-    ***REMOVED*** Skip if: (a) real module already loaded, or (b) re-entry (already mocked).
+    # -- sentence_transformers / FlagEmbedding (slow model loading) ----------
+    # Skip if: (a) real module already loaded, or (b) re-entry (already mocked).
     _already_mocked = "sentence_transformers" in _mocked_module_names
     _real_module_loaded = "sentence_transformers" in sys.modules and not isinstance(
         sys.modules["sentence_transformers"], MagicMock
@@ -48,7 +48,7 @@ def pytest_configure(config):
         sys.modules["FlagEmbedding"] = mock_flag
         _mocked_module_names.append("FlagEmbedding")
 
-    ***REMOVED*** -- aiogram (optional Telegram runtime dep) -----------------------------
+    # -- aiogram (optional Telegram runtime dep) -----------------------------
     try:
         if importlib.util.find_spec("aiogram") is None:
             raise ModuleNotFoundError("aiogram not installed")
@@ -80,7 +80,7 @@ def pytest_unconfigure(config):
         if original is None:
             sys.modules.pop(mod_name, None)
         else:
-            sys.modules[mod_name] = original  ***REMOVED*** type: ignore[assignment]
+            sys.modules[mod_name] = original  # type: ignore[assignment]
     _mocked_module_names.clear()
     _saved_modules.clear()
 
@@ -93,7 +93,7 @@ def mock_get_client(isolate_otel_langfuse):
     Uses a shared MagicMock that tests can inspect via
     ``telegram_bot.bot.get_client`` if they need the reference.
 
-    Lazy-patch behavior (***REMOVED***conftest-coverage-blocker fix): the fixture skips
+    Lazy-patch behavior (#conftest-coverage-blocker fix): the fixture skips
     patching when ``telegram_bot.bot`` is NOT already in ``sys.modules``.
 
     Why: Eagerly resolving ``"telegram_bot.bot.get_client"`` triggers the
@@ -119,8 +119,8 @@ def mock_get_client(isolate_otel_langfuse):
     ``get_client`` out of ``telegram_bot.bot``.
     """
     if "telegram_bot.bot" not in sys.modules:
-        ***REMOVED*** Bot module not loaded — no test in this run is exercising it,
-        ***REMOVED*** so patching is unnecessary and would re-trigger the import chain.
+        # Bot module not loaded — no test in this run is exercising it,
+        # so patching is unnecessary and would re-trigger the import chain.
         yield MagicMock()
         return
 
@@ -137,12 +137,12 @@ def isolate_otel_langfuse(monkeypatch):
     because deleting/replacing modules breaks import references in other
     tests running in the same xdist worker process.
     """
-    ***REMOVED*** Reset prompt_manager singleton so it uses fresh env vars each test
+    # Reset prompt_manager singleton so it uses fresh env vars each test
     from telegram_bot.integrations.prompt_manager import _reset_client
 
     _reset_client()
 
-    ***REMOVED*** Force environment variables (override, not setdefault)
+    # Force environment variables (override, not setdefault)
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
     monkeypatch.setenv("OTEL_TRACES_EXPORTER", "none")
     monkeypatch.setenv("OTEL_METRICS_EXPORTER", "none")
@@ -153,17 +153,17 @@ def isolate_otel_langfuse(monkeypatch):
     monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
 
-    ***REMOVED*** Create no-op mocks
+    # Create no-op mocks
     mock_noop = MagicMock()
 
-    ***REMOVED*** Patch at entry points to prevent any network initialization.
-    ***REMOVED*** Do NOT patch "langfuse.Langfuse" — the patch() call itself imports
-    ***REMOVED*** langfuse and can corrupt module state on stop().  Instead, patch the
-    ***REMOVED*** higher-level wrappers that our code actually calls.
+    # Patch at entry points to prevent any network initialization.
+    # Do NOT patch "langfuse.Langfuse" — the patch() call itself imports
+    # langfuse and can corrupt module state on stop().  Instead, patch the
+    # higher-level wrappers that our code actually calls.
     patches = [
-        ***REMOVED*** Langfuse — patch our wrapper, not the SDK class directly
+        # Langfuse — patch our wrapper, not the SDK class directly
         patch("telegram_bot.services.observability.get_client", lambda: mock_noop),
-        ***REMOVED*** Fallback: patch low-level OTEL exporters
+        # Fallback: patch low-level OTEL exporters
         patch(
             "opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter",
             mock_noop,
@@ -180,21 +180,21 @@ def isolate_otel_langfuse(monkeypatch):
     ]
 
     for p in patches:
-        ***REMOVED*** ***REMOVED***1601: narrow suppression — only swallow expected optional-import
-        ***REMOVED*** failures (the patched module/class is intentionally missing in some
-        ***REMOVED*** envs) and lazy-attribute resolution misses (telegram_bot.services
-        ***REMOVED*** raises AttributeError from its lazy import handler when the target
-        ***REMOVED*** symbol is provided by a sibling package, not the package itself).
-        ***REMOVED*** Anything else (TypeError, ValueError, etc.) is a real isolation
-        ***REMOVED*** bug we want to surface.
+        # #1601: narrow suppression — only swallow expected optional-import
+        # failures (the patched module/class is intentionally missing in some
+        # envs) and lazy-attribute resolution misses (telegram_bot.services
+        # raises AttributeError from its lazy import handler when the target
+        # symbol is provided by a sibling package, not the package itself).
+        # Anything else (TypeError, ValueError, etc.) is a real isolation
+        # bug we want to surface.
         with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError):
             p.start()
 
     yield
 
     for p in patches:
-        ***REMOVED*** RuntimeError is raised by mock.patch when the start failed
-        ***REMOVED*** earlier and stop has no original to restore. AttributeError
-        ***REMOVED*** mirrors the start-time guard above.
+        # RuntimeError is raised by mock.patch when the start failed
+        # earlier and stop has no original to restore. AttributeError
+        # mirrors the start-time guard above.
         with contextlib.suppress(ModuleNotFoundError, ImportError, AttributeError, RuntimeError):
             p.stop()

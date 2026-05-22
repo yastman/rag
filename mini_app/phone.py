@@ -24,7 +24,7 @@ class PhoneRequest(BaseModel):
     def validate_phone(cls, v: str) -> str:
         """Normalize to E.164 via the shared phonenumbers-based helper.
 
-        Closes ***REMOVED***1614 — the previous local digit-count regex accepted
+        Closes #1614 — the previous local digit-count regex accepted
         impossible numbers (e.g. eleven repeated ones) and never produced
         E.164 output, so the same Mini App contact could be stored in a
         different format than the bot-side phone collection.
@@ -38,7 +38,7 @@ class PhoneRequest(BaseModel):
 
 def get_kommo_client():
     """Get Kommo client (lazy import)."""
-    from telegram_bot.services.kommo_client import KommoClient  ***REMOVED*** type: ignore[import-untyped]
+    from telegram_bot.services.kommo_client import KommoClient  # type: ignore[import-untyped]
 
     return KommoClient()
 
@@ -53,7 +53,7 @@ async def submit_phone(request: PhoneRequest) -> dict:
         ``{"success": True, "lead_id": <int>}`` on success.
         ``{"success": False, "lead_id": None, "error": "crm_submission_failed"}``
         on any CRM failure. Returning ``success: True`` for a swallowed
-        exception (***REMOVED***1596) made it impossible for clients to distinguish a
+        exception (#1596) made it impossible for clients to distinguish a
         real captured lead from a dropped one. The error code is stable so
         the frontend can show a retry/contact-support state without parsing
         free-form text. The ``@observe`` wrapper records success/failure
@@ -73,7 +73,7 @@ async def submit_phone(request: PhoneRequest) -> dict:
     except Exception as exc:
         logger.exception("CRM submission failed")
         if lf is not None:
-            ***REMOVED*** Bounded status_message keeps Langfuse payload small and PII-free.
+            # Bounded status_message keeps Langfuse payload small and PII-free.
             lf.update_current_span(
                 level="ERROR",
                 status_message=f"kommo_submission_failed: {type(exc).__name__}"[:200],
@@ -85,7 +85,7 @@ async def submit_phone(request: PhoneRequest) -> dict:
             "error": "crm_submission_failed",
         }
 
-    ***REMOVED*** Curated success output — no phone, no name, no raw Kommo IDs.
+    # Curated success output — no phone, no name, no raw Kommo IDs.
     if lf is not None:
         lf.update_current_span(
             output={

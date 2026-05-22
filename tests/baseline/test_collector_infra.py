@@ -13,7 +13,7 @@ class TestInfrastructureMetrics:
         """Create LangfuseMetricsCollector with mocked deps."""
         from tests.baseline.collector import LangfuseMetricsCollector
 
-        ***REMOVED*** Mock the Langfuse client to avoid initialization errors
+        # Mock the Langfuse client to avoid initialization errors
         with patch("tests.baseline.collector.Langfuse"):
             collector = LangfuseMetricsCollector(
                 public_key="pk-test",
@@ -32,9 +32,9 @@ class TestInfrastructureMetrics:
             "evicted_keys": 5,
         }
         mock_info_memory = {
-            "used_memory": 10 * 1024 * 1024,  ***REMOVED*** 10MB
-            "used_memory_peak": 15 * 1024 * 1024,  ***REMOVED*** 15MB
-            "maxmemory": 100 * 1024 * 1024,  ***REMOVED*** 100MB
+            "used_memory": 10 * 1024 * 1024,  # 10MB
+            "used_memory_peak": 15 * 1024 * 1024,  # 15MB
+            "maxmemory": 100 * 1024 * 1024,  # 100MB
         }
 
         with patch("redis.from_url") as mock_redis_from_url:
@@ -53,7 +53,7 @@ class TestInfrastructureMetrics:
                 metrics = await collector.collect_infrastructure_metrics()
 
         assert metrics["redis"]["keyspace_hits"] == 1000
-        assert metrics["redis"]["hit_rate"] == 83.33  ***REMOVED*** 1000/(1000+200)*100
+        assert metrics["redis"]["hit_rate"] == 83.33  # 1000/(1000+200)*100
 
     async def test_collects_qdrant_metrics(self, collector):
         """Should fetch Qdrant /metrics endpoint."""

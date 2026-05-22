@@ -7,13 +7,13 @@ from telegram_bot.services.filter_extractor import FilterExtractor
 from telegram_bot.services.text_utils import parse_int_with_k_suffix
 
 
-***REMOVED*** Read-only: safe to share across all tests.
+# Read-only: safe to share across all tests.
 _ext = FilterExtractor()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Price
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Price
+# ---------------------------------------------------------------------------
 class TestFilterExtractorPrice:
     """Tests for price filter extraction."""
 
@@ -62,9 +62,9 @@ class TestFilterExtractorPrice:
         assert "price" not in _ext.extract_filters("двукомнатная квартира в Бургасе")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Rooms
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Rooms
+# ---------------------------------------------------------------------------
 class TestFilterExtractorRooms:
     """Tests for rooms filter extraction."""
 
@@ -107,9 +107,9 @@ class TestFilterExtractorRooms:
         assert "rooms" not in _ext.extract_filters("квартира в Бургасе до 50000")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** City
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# City
+# ---------------------------------------------------------------------------
 class TestFilterExtractorCity:
     """Tests for city filter extraction."""
 
@@ -151,13 +151,13 @@ class TestFilterExtractorCity:
     @pytest.mark.parametrize(
         ("query", "city"),
         [
-            ***REMOVED*** Russian morphological forms — were lost from cache signatures (***REMOVED***1607)
+            # Russian morphological forms — were lost from cache signatures (#1607)
             ("квартира в Святом Власе", "Свети Влас"),
             ("квартира в святом власе", "Свети Влас"),
             ("дом на свети власе", "Свети Влас"),
             ("апартаменты на солнечном берегу", "Солнечный берег"),
             ("квартира на солнечного берега", "Солнечный берег"),
-            ***REMOVED*** English aliases
+            # English aliases
             ("apartment in sunny beach", "Солнечный берег"),
             ("villa in elenite", "Элените"),
             ("санни бич студия", "Солнечный берег"),
@@ -167,7 +167,7 @@ class TestFilterExtractorCity:
         """City aliases (RU morphological forms + EN) must resolve to canonical
         names so semantic-cache filter signatures stay stable across phrasings.
 
-        Regression for ***REMOVED***1607.
+        Regression for #1607.
         """
         assert _ext.extract_filters(query)["city"] == city
 
@@ -179,9 +179,9 @@ class TestFilterExtractorCity:
         assert "city" not in _ext.extract_filters(query)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Distance to sea
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Distance to sea
+# ---------------------------------------------------------------------------
 class TestFilterExtractorDistanceToSea:
     """Tests for distance to sea filter extraction."""
 
@@ -209,13 +209,13 @@ class TestFilterExtractorDistanceToSea:
         assert "distance_to_sea" not in _ext.extract_filters("двукомнатная квартира в Бургасе")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Furniture
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Furniture
+# ---------------------------------------------------------------------------
 class TestFilterExtractorFurniture:
     """Tests for furnished filter extraction.
 
-    Canonical key for the document/CSV pipeline (***REMOVED***1401) is
+    Canonical key for the document/CSV pipeline (#1401) is
     ``furnished: bool`` so that ``qdrant._build_filter`` produces a BOOL match
     against ``metadata.furnished`` — what ``src/ingestion/chunker.py`` writes
     and what ``src/ingestion/indexer.py`` indexes.
@@ -248,9 +248,9 @@ class TestFilterExtractorFurniture:
         assert "furnished" not in _ext.extract_filters("квартира в Варне")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Year-round
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Year-round
+# ---------------------------------------------------------------------------
 class TestFilterExtractorYearRound:
     """Tests for year_round filter extraction."""
 
@@ -270,9 +270,9 @@ class TestFilterExtractorYearRound:
         assert "year_round" not in _ext.extract_filters("квартира в Варне")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Area
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Area
+# ---------------------------------------------------------------------------
 class TestFilterExtractorArea:
     """Tests for area filter extraction."""
 
@@ -292,9 +292,9 @@ class TestFilterExtractorArea:
         assert "area" not in _ext.extract_filters("двукомнатная квартира")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Floor
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Floor
+# ---------------------------------------------------------------------------
 class TestFilterExtractorFloor:
     """Tests for floor filter extraction."""
 
@@ -313,9 +313,9 @@ class TestFilterExtractorFloor:
         assert "floor" not in _ext.extract_filters("двукомнатная квартира в Бургасе")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Maintenance
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Maintenance
+# ---------------------------------------------------------------------------
 class TestFilterExtractorMaintenance:
     """Tests for maintenance cost filter extraction."""
 
@@ -334,9 +334,9 @@ class TestFilterExtractorMaintenance:
         assert "maintenance" not in _ext.extract_filters("двукомнатная квартира")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Bathrooms
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Bathrooms
+# ---------------------------------------------------------------------------
 class TestFilterExtractorBathrooms:
     """Tests for bathrooms filter extraction."""
 
@@ -356,9 +356,9 @@ class TestFilterExtractorBathrooms:
         assert "bathrooms" not in _ext.extract_filters("двукомнатная квартира")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Combined filters
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Combined filters
+# ---------------------------------------------------------------------------
 class TestFilterExtractorCombined:
     """Tests for multiple filters extraction."""
 
@@ -395,9 +395,9 @@ class TestFilterExtractorCombined:
         assert _ext.extract_filters("") == {}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Edge cases
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
 class TestFilterExtractorEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
@@ -445,9 +445,9 @@ class TestFilterExtractorEdgeCases:
         assert _ext.extract_filters("СТУДИЯ в центре города")["rooms"] == 1
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** _parse_number helper
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# _parse_number helper
+# ---------------------------------------------------------------------------
 class TestParseNumberMethod:
     """Tests for the _parse_number helper method."""
 

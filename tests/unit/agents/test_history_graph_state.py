@@ -1,4 +1,4 @@
-"""Tests for HistoryState schema (***REMOVED***408 Task 1)."""
+"""Tests for HistoryState schema (#408 Task 1)."""
 
 from __future__ import annotations
 

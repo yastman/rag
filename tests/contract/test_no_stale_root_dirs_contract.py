@@ -1,11 +1,11 @@
-"""Contract: no stale infra directories at repo root (***REMOVED***1526, ***REMOVED***1527).
+"""Contract: no stale infra directories at repo root (#1526, #1527).
 
 Two cleanup themes share the same shape — leftover throwaway scratch
 directories that drifted into the working tree from past swarm /
 orchestration sessions and never got pruned:
 
 - Three ``tmp.<random>/`` directories left over from March 2026 swarm
-  work (***REMOVED***1526):
+  work (#1526):
 
   - ``tmp.CwOPYeK8wR/``
   - ``tmp.QApjFztnuW/``
@@ -17,7 +17,7 @@ orchestration sessions and never got pruned:
   ``git status`` as untracked noise and make ``ls`` at the repo root
   confusing.
 
-- ``.github/workflows.disabled/`` (***REMOVED***1527): an old duplicate of the
+- ``.github/workflows.disabled/`` (#1527): an old duplicate of the
   active CI workflows, gitignored at ``.gitignore`` line 248. Like the
   ``tmp.*`` dirs, it is gitignored but not tracked, so it survives on
   developer machines where it was created before the gitignore rule
@@ -61,7 +61,7 @@ def test_stale_root_dir_is_absent(path: Path) -> None:
     ``.github/workflows.disabled/``) prevent accidental re-tracking,
     but the directories must also be physically absent from the
     working tree to keep ``git status`` clean and the root tidy
-    (***REMOVED***1526, ***REMOVED***1527).
+    (#1526, #1527).
     """
     if path.exists():
         rel = path.relative_to(REPO_ROOT)
@@ -71,5 +71,5 @@ def test_stale_root_dir_is_absent(path: Path) -> None:
             "orchestration sessions and must not be reintroduced. Remove the "
             "directory (it is already gitignored) and, if a tool created it, "
             "fix the tool to write under a temp dir outside the working tree "
-            "(***REMOVED***1526, ***REMOVED***1527)."
+            "(#1526, #1527)."
         )

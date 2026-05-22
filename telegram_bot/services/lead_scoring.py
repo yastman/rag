@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-***REMOVED*** Points per funnel answer
+# Points per funnel answer
 _TIMELINE_SCORES = {
     "asap": 40,
     "3months": 25,
@@ -11,8 +11,8 @@ _TIMELINE_SCORES = {
     "looking": 5,
 }
 
-_BUDGET_BONUS = 20  ***REMOVED*** Any defined budget
-_TYPE_BONUS = 10  ***REMOVED*** Any defined property type (not "looking")
+_BUDGET_BONUS = 20  # Any defined budget
+_TYPE_BONUS = 10  # Any defined property type (not "looking")
 
 
 def compute_lead_score(

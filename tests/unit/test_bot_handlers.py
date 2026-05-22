@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 
-***REMOVED*** Skip entire module if aiogram not installed
+# Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
@@ -49,7 +49,7 @@ def mock_config(monkeypatch):
         qdrant_api_key="qdrant-key",
         qdrant_collection="test_collection",
         redis_url="redis://localhost:6379",
-        ***REMOVED*** Keep the DB name for tests that exercise auto-create logic, but fail fast locally.
+        # Keep the DB name for tests that exercise auto-create logic, but fail fast locally.
         realestate_database_url="postgresql://postgres:postgres@127.0.0.1:1/realestate",
         rerank_provider="none",
     )
@@ -225,7 +225,7 @@ class TestPropertyBotInit:
             mock_cache.assert_called_once()
             mock_emb.assert_called_once()
             mock_sparse.assert_called_once()
-            assert mock_qdrant.call_count == 2  ***REMOVED*** main + apartments collection
+            assert mock_qdrant.call_count == 2  # main + apartments collection
 
     def test_init_passes_qdrant_timeout(self, mock_config):
         """PropertyBot should pass configured timeout to QdrantService."""
@@ -241,7 +241,7 @@ class TestPropertyBotInit:
         ):
             PropertyBot(mock_config)
 
-        ***REMOVED*** First call is main collection (with timeout), second is apartments
+        # First call is main collection (with timeout), second is apartments
         assert mock_qdrant.call_args_list[0].kwargs["timeout"] == 7
 
     def test_init_keeps_colbert_runtime_server_side(self, mock_config):
@@ -267,7 +267,7 @@ class TestCommandHandlers:
     """Test command handlers."""
 
     async def test_cmd_start_sends_reply_keyboard(self, mock_config):
-        """Test /start sends ReplyKeyboard with greeting (***REMOVED***628)."""
+        """Test /start sends ReplyKeyboard with greeting (#628)."""
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
@@ -276,9 +276,9 @@ class TestCommandHandlers:
         message.answer.assert_called_once()
         call_args = message.answer.call_args
         text = call_args[0][0]
-        ***REMOVED*** Welcome text now comes from content_loader (***REMOVED***628)
+        # Welcome text now comes from content_loader (#628)
         assert "Добро пожаловать" in text or "Привет" in text or "FortNoks" in text
-        ***REMOVED*** Verify ReplyKeyboardMarkup is sent
+        # Verify ReplyKeyboardMarkup is sent
         from aiogram.types import ReplyKeyboardMarkup
 
         assert isinstance(call_args[1]["reply_markup"], ReplyKeyboardMarkup)
@@ -294,7 +294,7 @@ class TestCommandHandlers:
 
         await cmd_start(bot, message, i18n=i18n)
 
-        ***REMOVED*** Verify i18n.get was called with name= kwarg
+        # Verify i18n.get was called with name= kwarg
         i18n.get.assert_any_call("welcome-text", name="Test")
 
     async def test_cmd_help(self, mock_config):
@@ -310,7 +310,7 @@ class TestCommandHandlers:
             assert fragment in call_args
 
     async def test_cmd_help_includes_all_commands(self, mock_config):
-        """Test /help lists /history, /metrics, /clearcache (***REMOVED***864)."""
+        """Test /help lists /history, /metrics, /clearcache (#864)."""
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
@@ -321,12 +321,12 @@ class TestCommandHandlers:
             assert cmd in call_args, f"{cmd} missing from /help text"
 
     async def test_no_handle_promotions_method(self, mock_config):
-        """_handle_promotions removed as dead code (***REMOVED***863)."""
+        """_handle_promotions removed as dead code (#863)."""
         bot, _ = _create_bot(mock_config)
         assert not hasattr(bot, "_handle_promotions")
 
     async def test_cmd_start_manager_receives_manager_menu(self, mock_config):
-        """Manager user receives manager dialog when kommo enabled (***REMOVED***388, ***REMOVED***628)."""
+        """Manager user receives manager dialog when kommo enabled (#388, #628)."""
         mock_config.manager_ids = [12345]
         mock_config.kommo_enabled = True
         bot, _ = _create_bot(mock_config)
@@ -338,7 +338,7 @@ class TestCommandHandlers:
         dialog_manager.start.assert_called_once()
 
     async def test_resolve_user_role_prefers_config_manager_ids_on_db_client(self, mock_config):
-        """manager_ids fallback should elevate manager even when DB returns client (***REMOVED***388)."""
+        """manager_ids fallback should elevate manager even when DB returns client (#388)."""
         mock_config.manager_ids = [12345]
         bot, _ = _create_bot(mock_config)
         bot._user_service = AsyncMock()
@@ -404,7 +404,7 @@ class TestCommandHandlers:
 
         await cmd_clear(bot, message)
 
-        ***REMOVED*** Both text thread (tg_12345) and voice thread (12345) must be deleted
+        # Both text thread (tg_12345) and voice thread (12345) must be deleted
         cp_calls = bot._checkpointer.adelete_thread.call_args_list
         assert len(cp_calls) == 2
         called_ids = {c.args[0] for c in cp_calls}
@@ -420,7 +420,7 @@ class TestCommandHandlers:
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
     async def test_cmd_clear_resets_active_dialog_stack(self, mock_config):
-        """***REMOVED***1454: /clear must reset any active aiogram-dialog stack so the next
+        """#1454: /clear must reset any active aiogram-dialog stack so the next
         free-text message is routed back to the supervisor / RAG path
         (e.g. user is no longer stuck inside DemoSG.search)."""
         bot, _ = _create_bot(mock_config)
@@ -435,14 +435,14 @@ class TestCommandHandlers:
         await cmd_clear(bot, message, state=state, dialog_manager=dialog_manager)
 
         dialog_manager.reset_stack.assert_awaited_once()
-        ***REMOVED*** remove_keyboard=False — keep the chat composer untouched after /clear
+        # remove_keyboard=False — keep the chat composer untouched after /clear
         assert dialog_manager.reset_stack.await_args.kwargs.get("remove_keyboard") is False
         state.clear.assert_awaited_once()
         message.answer.assert_awaited_once()
         assert "очищена" in message.answer.await_args.args[0].lower()
 
     async def test_cmd_clear_clears_fsm_state_without_active_dialog(self, mock_config):
-        """***REMOVED***1454: when no aiogram-dialog stack is active, /clear still clears FSM."""
+        """#1454: when no aiogram-dialog stack is active, /clear still clears FSM."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
@@ -458,7 +458,7 @@ class TestCommandHandlers:
         state.clear.assert_awaited_once()
 
     async def test_cmd_clear_handles_dialog_reset_failure_gracefully(self, mock_config):
-        """***REMOVED***1454: a failure inside reset_stack must NOT raise; it surfaces as a
+        """#1454: a failure inside reset_stack must NOT raise; it surfaces as a
         partial-success message so the user knows to fall back to /start."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
@@ -526,8 +526,8 @@ class TestCommandHandlers:
 
         cp_calls = bot._checkpointer.adelete_thread.call_args_list
         called_ids = {c.args[0] for c in cp_calls}
-        assert "tg_42" in called_ids  ***REMOVED*** text thread uses chat_id
-        assert "777" in called_ids  ***REMOVED*** voice thread uses user_id
+        assert "tg_42" in called_ids  # text thread uses chat_id
+        assert "777" in called_ids  # voice thread uses user_id
 
         agent_calls = bot._agent_checkpointer.adelete_thread.call_args_list
         called_ids = {c.args[0] for c in agent_calls}
@@ -563,7 +563,7 @@ class TestCommandHandlers:
         await cmd_clear(bot, message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        ***REMOVED*** Both text and voice thread deletions are attempted for the failing checkpointer
+        # Both text and voice thread deletions are attempted for the failing checkpointer
         assert bot._checkpointer.adelete_thread.await_count == 2
         called_ids = {c.args[0] for c in bot._checkpointer.adelete_thread.call_args_list}
         assert "tg_12345" in called_ids
@@ -584,7 +584,7 @@ class TestCommandHandlers:
 
         await cmd_clear(bot, message)
 
-        ***REMOVED*** Deduplicated to 1 instance, but that instance deletes both text and voice threads
+        # Deduplicated to 1 instance, but that instance deletes both text and voice threads
         assert shared_cp.adelete_thread.await_count == 2
         called_ids = {c.args[0] for c in shared_cp.adelete_thread.call_args_list}
         assert "tg_12345" in called_ids
@@ -621,7 +621,7 @@ class TestCommandHandlers:
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
-        ***REMOVED*** Should show "30/40" (hits/total), where total = hits + misses
+        # Should show "30/40" (hits/total), where total = hits + misses
         assert "30/40" in call_args, "Expected denominator to be hits + misses = 40"
 
     async def test_cmd_metrics(self, mock_config):
@@ -641,7 +641,7 @@ class TestCommandHandlers:
         assert "p50" in call_args
 
     async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
-        """`/call` dispatch metadata should include langfuse_trace_id for continuity (***REMOVED***609)."""
+        """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""
         mock_config.admin_ids = [12345]
         mock_config.livekit_url = "ws://livekit.local"
         mock_config.livekit_api_key = "lk-key"
@@ -677,7 +677,7 @@ class TestCommandHandlers:
 
 
 def _mock_agent_result(**overrides):
-    """Create a standard SDK agent result dict (***REMOVED***413)."""
+    """Create a standard SDK agent result dict (#413)."""
     base = {
         "messages": [MagicMock(content="Supervisor response")],
     }
@@ -686,10 +686,10 @@ def _mock_agent_result(**overrides):
 
 
 class TestHandleQuery:
-    """Test handle_query method — supervisor-only path (***REMOVED***310)."""
+    """Test handle_query method — supervisor-only path (#310)."""
 
     async def test_handle_query_invokes_agent(self, mock_config):
-        """handle_query invokes SDK agent (***REMOVED***413)."""
+        """handle_query invokes SDK agent (#413)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -710,7 +710,7 @@ class TestHandleQuery:
     async def test_handle_query_retries_with_memory_on_checkpointer_runtime_error(
         self, mock_config
     ):
-        """Text path retries once with MemorySaver when checkpointer write fails (***REMOVED***466)."""
+        """Text path retries once with MemorySaver when checkpointer write fails (#466)."""
         bot, _ = _create_bot(mock_config)
 
         failing_agent = AsyncMock()
@@ -814,7 +814,7 @@ class TestHandleQuery:
             message.bot.send_chat_action.assert_called_once_with(chat_id=12345, action="typing")
 
     async def test_handle_query_writes_langfuse_trace(self, mock_config):
-        """handle_query updates Langfuse trace with sdk_agent metadata (***REMOVED***413)."""
+        """handle_query updates Langfuse trace with sdk_agent metadata (#413)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -832,13 +832,13 @@ class TestHandleQuery:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-            ***REMOVED*** Child span call (first) carries metadata; root span call (second) carries output (***REMOVED***511)
+            # Child span call (first) carries metadata; root span call (second) carries output (#511)
             assert mock_lf.update_current_span.call_count >= 1
             trace_kwargs = mock_lf.update_current_span.call_args_list[0].kwargs
             assert trace_kwargs["metadata"]["pipeline_mode"] == "sdk_agent"
 
     async def test_handle_query_writes_supervisor_model_score(self, mock_config):
-        """handle_query writes supervisor_model score (***REMOVED***413: agent_used/latency removed)."""
+        """handle_query writes supervisor_model score (#413: agent_used/latency removed)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -860,12 +860,12 @@ class TestHandleQuery:
                 c.kwargs["name"]: c.kwargs.get("value") for c in mock_lf.create_score.call_args_list
             }
             assert "supervisor_model" in score_calls
-            ***REMOVED*** SDK agent handles routing internally — no agent_used/supervisor_latency_ms
+            # SDK agent handles routing internally — no agent_used/supervisor_latency_ms
             assert "agent_used" not in score_calls
             assert "supervisor_latency_ms" not in score_calls
 
     async def test_handle_query_passes_bot_context_in_configurable(self, mock_config):
-        """SDK agent config passes bot_context to tools via configurable (***REMOVED***413)."""
+        """SDK agent config passes bot_context to tools via configurable (#413)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -905,7 +905,7 @@ class TestHandleQuery:
         assert config_arg["configurable"]["thread_id"] == "tg_42"
 
     async def test_handle_query_passes_guard_config_in_bot_context(self, mock_config):
-        """SDK agent path forwards guard settings via BotContext (***REMOVED***413)."""
+        """SDK agent path forwards guard settings via BotContext (#413)."""
         mock_config.content_filter_enabled = False
         mock_config.guard_mode = "soft"
         bot, _ = _create_bot(mock_config)
@@ -958,7 +958,7 @@ class TestHistorySaveOnResponse:
     """Test Q&A history persistence after successful responses."""
 
     async def test_handle_query_saves_history(self, mock_config):
-        """handle_query (sdk_agent) stores history record when response exists (***REMOVED***413)."""
+        """handle_query (sdk_agent) stores history record when response exists (#413)."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = AsyncMock()
         bot._history_service.save_turn = AsyncMock(return_value=True)
@@ -980,7 +980,7 @@ class TestHistorySaveOnResponse:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        await asyncio.sleep(0)  ***REMOVED*** drain fire-and-forget history-save task
+        await asyncio.sleep(0)  # drain fire-and-forget history-save task
         bot._history_service.save_turn.assert_awaited_once()
         call_kwargs = bot._history_service.save_turn.call_args.kwargs
         assert call_kwargs["user_id"] == 12345
@@ -1035,7 +1035,7 @@ class TestHistorySaveOnResponse:
         assert call_kwargs["query"] == "распознанный текст"
 
     async def test_handle_query_skips_history_when_no_service(self, mock_config):
-        """handle_query (sdk_agent) skips history save when service is None (***REMOVED***413)."""
+        """handle_query (sdk_agent) skips history save when service is None (#413)."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = None
 
@@ -1050,11 +1050,11 @@ class TestHistorySaveOnResponse:
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
-                ***REMOVED*** Should not raise
+                # Should not raise
                 await bot.handle_query(message)
 
     async def test_handle_query_history_save_failure_does_not_break_response(self, mock_config):
-        """History save failure should not break user response flow (sdk_agent, ***REMOVED***413)."""
+        """History save failure should not break user response flow (sdk_agent, #413)."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = AsyncMock()
         bot._history_service.save_turn = AsyncMock(side_effect=RuntimeError("save failed"))
@@ -1070,7 +1070,7 @@ class TestHistorySaveOnResponse:
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
-                ***REMOVED*** Should not raise despite save failure
+                # Should not raise despite save failure
                 await bot.handle_query(message)
 
 
@@ -1246,14 +1246,14 @@ class TestCmdHistory:
             with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
                 await cmd_history(bot, message)
 
-        ***REMOVED*** Trace metadata
+        # Trace metadata
         mock_lf.update_current_span.assert_called_once()
         trace_kwargs = mock_lf.update_current_span.call_args[1]
         assert trace_kwargs["input"]["command"] == "/history"
         assert trace_kwargs["input"]["query"] == "цены"
         assert trace_kwargs["output"]["results_count"] == 1
 
-        ***REMOVED*** Scores (***REMOVED***435: uses create_score with trace_id)
+        # Scores (#435: uses create_score with trace_id)
         score_calls = mock_lf.create_score.call_args_list
         score_names = [c.kwargs["name"] for c in score_calls]
         assert "history_search_count" in score_names
@@ -1261,7 +1261,7 @@ class TestCmdHistory:
         assert "history_search_empty" in score_names
         assert "history_backend" in score_names
 
-        ***REMOVED*** Verify values
+        # Verify values
         score_map = {c.kwargs["name"]: c.kwargs["value"] for c in score_calls}
         assert score_map["history_search_count"] == 1
         assert score_map["history_search_empty"] == 0.0
@@ -1296,11 +1296,11 @@ class TestCmdHistory:
             with patch("telegram_bot.handlers.command_handlers.propagate_attributes"):
                 await cmd_history(bot, message)
 
-        ***REMOVED*** Trace should indicate error
+        # Trace should indicate error
         trace_kwargs = mock_lf.update_current_span.call_args[1]
         assert trace_kwargs["output"]["error"] == "service_unavailable"
 
-        ***REMOVED*** Scores (***REMOVED***435: uses create_score with trace_id)
+        # Scores (#435: uses create_score with trace_id)
         score_calls = mock_lf.create_score.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs["value"] for c in score_calls}
         assert score_map["history_search_count"] == 0
@@ -1359,7 +1359,7 @@ class TestCheckpointNamespace:
             )
 
     async def test_text_and_voice_concurrent_requests_keep_separate_threads(self, mock_config):
-        """Concurrent text+voice requests from same user should not interfere (***REMOVED***540)."""
+        """Concurrent text+voice requests from same user should not interfere (#540)."""
         bot, _ = _create_bot(mock_config)
         bot._checkpointer = object()
         bot._agent_checkpointer = object()
@@ -1424,7 +1424,7 @@ class TestCheckpointNamespace:
 
 
 class TestHandleVoiceExceptionHandling:
-    """Test handle_voice exception handling — ***REMOVED***201."""
+    """Test handle_voice exception handling — #201."""
 
     def _make_voice_message(self):
         """Create a mock voice message."""
@@ -1446,7 +1446,7 @@ class TestHandleVoiceExceptionHandling:
 
     async def test_post_pipeline_error_still_writes_scores(self, mock_config):
         """When ainvoke succeeds but ChatActionSender __aexit__ throws,
-        scores and trace output should still be written (***REMOVED***201)."""
+        scores and trace output should still be written (#201)."""
         bot, _ = _create_bot(mock_config)
 
         pipeline_result = {
@@ -1477,7 +1477,7 @@ class TestHandleVoiceExceptionHandling:
 
     async def test_post_pipeline_error_does_not_send_false_error(self, mock_config):
         """When pipeline succeeds but post-invoke fails, user should NOT
-        receive 'Не удалось распознать' error message (***REMOVED***201)."""
+        receive 'Не удалось распознать' error message (#201)."""
         bot, _ = _create_bot(mock_config)
 
         pipeline_result = {
@@ -1559,7 +1559,7 @@ class TestHandleVoiceExceptionHandling:
             mock_write_scores.assert_called_once()
 
     async def test_scores_written_even_if_trace_update_fails(self, mock_config):
-        """Trace update failure should not prevent score writes (***REMOVED***202 review)."""
+        """Trace update failure should not prevent score writes (#202 review)."""
         bot, _ = _create_bot(mock_config)
 
         pipeline_result = {
@@ -1828,7 +1828,7 @@ class TestBotLifecycle:
         checkpointer.__aexit__.assert_awaited_once_with(None, None, None)
 
     async def test_stop_closes_agent_checkpointer_context(self, mock_config):
-        """stop() should close async agent checkpointer context when available (***REMOVED***424)."""
+        """stop() should close async agent checkpointer context when available (#424)."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.close = AsyncMock()
@@ -1854,7 +1854,7 @@ class TestBotLifecycle:
         assert bot._agent_checkpointer is None
 
     async def test_stop_agent_checkpointer_none_safe(self, mock_config):
-        """stop() works fine when agent checkpointer is None (***REMOVED***424)."""
+        """stop() works fine when agent checkpointer is None (#424)."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.close = AsyncMock()
@@ -1872,7 +1872,7 @@ class TestBotLifecycle:
         bot._redis_monitor.stop = AsyncMock()
         bot._agent_checkpointer = None
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await bot.stop()
 
     async def test_stop_releases_polling_lock(self, mock_config):
@@ -1925,19 +1925,19 @@ class TestBotLifecycle:
         bot.dp = MagicMock()
         bot.dp.stop_polling = AsyncMock()
 
-        ***REMOVED*** First tick: failure 1 of 2, should not stop yet
+        # First tick: failure 1 of 2, should not stop yet
         await bot._polling_lock_heartbeat_tick()
         assert bot._polling_lock_consecutive_failures == 1
         bot.dp.stop_polling.assert_not_awaited()
 
-        ***REMOVED*** Second tick: failure 2 of 2, should trigger stop_polling
+        # Second tick: failure 2 of 2, should trigger stop_polling
         await bot._polling_lock_heartbeat_tick()
         assert bot._polling_lock.refresh.await_count == 2
         bot.dp.stop_polling.assert_awaited_once_with()
 
 
 class TestAgentCheckpointerLifecycle:
-    """Test agent checkpointer Redis init with TTL and fallback (***REMOVED***424)."""
+    """Test agent checkpointer Redis init with TTL and fallback (#424)."""
 
     def _make_start_mocks(self, bot):
         """Set up minimal mocks for bot.start()."""
@@ -1953,7 +1953,7 @@ class TestAgentCheckpointerLifecycle:
         bot.bot.set_chat_menu_button = AsyncMock()
 
     async def test_start_creates_redis_agent_checkpointer(self, mock_config):
-        """start() creates Redis agent checkpointer with configured TTL (***REMOVED***424)."""
+        """start() creates Redis agent checkpointer with configured TTL (#424)."""
         mock_config.agent_checkpointer_ttl_minutes = 120
         bot, _ = _create_bot(mock_config)
         self._make_start_mocks(bot)
@@ -1969,14 +1969,14 @@ class TestAgentCheckpointerLifecycle:
         ):
             await bot.start()
 
-        ***REMOVED*** Should have been called twice: conversation + agent checkpointers
+        # Should have been called twice: conversation + agent checkpointers
         calls = mock_create.call_args_list
         agent_call = next((c for c in calls if c.kwargs.get("ttl_minutes") == 120), None)
         assert agent_call is not None, "create_redis_checkpointer not called with ttl_minutes=120"
         mock_redis_cp.asetup.assert_awaited()
 
     async def test_start_fallback_to_memory_when_redis_fails(self, mock_config):
-        """start() falls back to MemorySaver for agent when Redis init fails (***REMOVED***424)."""
+        """start() falls back to MemorySaver for agent when Redis init fails (#424)."""
         from langgraph.checkpoint.memory import MemorySaver
 
         bot, _ = _create_bot(mock_config)
@@ -1988,11 +1988,11 @@ class TestAgentCheckpointerLifecycle:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                ***REMOVED*** First call (conversation checkpointer) — succeeds
+                # First call (conversation checkpointer) — succeeds
                 cp = AsyncMock()
                 cp.asetup = AsyncMock()
                 return cp
-            ***REMOVED*** Second call (agent checkpointer) — raises
+            # Second call (agent checkpointer) — raises
             raise ConnectionError("Redis unavailable")
 
         with (
@@ -2008,7 +2008,7 @@ class TestAgentCheckpointerLifecycle:
         ):
             await bot.start()
 
-        ***REMOVED*** Fallback must have been called (at least once for agent cp)
+        # Fallback must have been called (at least once for agent cp)
         mock_fallback.assert_called()
         assert isinstance(bot._agent_checkpointer, MemorySaver)
 
@@ -2070,7 +2070,7 @@ class TestHistoryServiceLifecycle:
             mock_svc = AsyncMock()
             mock_svc.ensure_collection = AsyncMock(side_effect=RuntimeError("qdrant down"))
             mock_history_cls.return_value = mock_svc
-            ***REMOVED*** Should not raise
+            # Should not raise
             await bot.start()
 
         assert bot._history_service is None
@@ -2094,7 +2094,7 @@ class TestHistoryServiceLifecycle:
         bot._redis_monitor.stop = AsyncMock()
         bot._history_service = None
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await bot.stop()
 
 
@@ -2206,7 +2206,7 @@ class TestPostgresPoolInit:
 
 
 class TestKommoGracefulInit:
-    """Kommo init logs INFO (not WARNING+traceback) when tokens unavailable (***REMOVED***570)."""
+    """Kommo init logs INFO (not WARNING+traceback) when tokens unavailable (#570)."""
 
     async def test_kommo_missing_tokens_logs_info_not_warning(self, mock_config, caplog):
         """INFO log (no traceback) when no Redis tokens and no KOMMO_AUTH_CODE."""
@@ -2294,7 +2294,7 @@ class TestRegisterHandlers:
 
 
 class TestWriteLangfuseScores:
-    """Test write_langfuse_scores score writing (canonical in scoring.py, ***REMOVED***435: create_score)."""
+    """Test write_langfuse_scores score writing (canonical in scoring.py, #435: create_score)."""
 
     _TID = "test-trace-scores"
 
@@ -2414,7 +2414,7 @@ class TestWriteLangfuseScores:
         result = {
             "query_type": "FAQ",
             "cache_hit": False,
-            "latency_stages": {"cache_check": 9.999},  ***REMOVED*** fallback should be ignored
+            "latency_stages": {"cache_check": 9.999},  # fallback should be ignored
             "pre_agent_embed_ms": 321.5,
         }
         write_langfuse_scores(mock_lf, result, trace_id=self._TID)
@@ -2431,7 +2431,7 @@ class TestMakeSessionId:
         assert sid.startswith("chat-")
         parts = sid.split("-")
         assert len(parts) == 3
-        assert len(parts[1]) == 8  ***REMOVED*** hash
+        assert len(parts[1]) == 8  # hash
 
     @pytest.mark.parametrize(
         ("prefix", "identifier"),
@@ -2451,10 +2451,10 @@ class TestMakeSessionId:
 
 
 class TestPreAgentGuard:
-    """Test pre-agent content filter for text path (***REMOVED***439)."""
+    """Test pre-agent content filter for text path (#439)."""
 
     async def test_injection_blocked_before_agent(self, mock_config):
-        """Injection in hard mode blocks query before agent.ainvoke (***REMOVED***439)."""
+        """Injection in hard mode blocks query before agent.ainvoke (#439)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -2472,14 +2472,14 @@ class TestPreAgentGuard:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-            ***REMOVED*** Agent must NOT be called
+            # Agent must NOT be called
             mock_agent.ainvoke.assert_not_called()
-            ***REMOVED*** User gets blocked response
+            # User gets blocked response
             message.answer.assert_called_once()
             assert "не может быть обработан" in message.answer.call_args[0][0]
 
     async def test_injection_blocked_writes_langfuse_guard_scores(self, mock_config):
-        """Pre-agent guard writes guard_blocked and injection_pattern scores (***REMOVED***439)."""
+        """Pre-agent guard writes guard_blocked and injection_pattern scores (#439)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -2496,15 +2496,15 @@ class TestPreAgentGuard:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Verify trace metadata
-        ***REMOVED*** Guard metadata is in the child span call (first); root span call (second) has output (***REMOVED***511)
+        # Verify trace metadata
+        # Guard metadata is in the child span call (first); root span call (second) has output (#511)
         assert mock_lf.update_current_span.call_count >= 1
         trace_meta = mock_lf.update_current_span.call_args_list[0].kwargs["metadata"]
         assert trace_meta["guard_blocked"] is True
         assert trace_meta["injection_pattern"] == "system_prompt_leak"
 
     async def test_injection_blocked_writes_full_langfuse_scores(self, mock_config):
-        """Pre-agent guard blocked path writes full Langfuse score set (***REMOVED***1368)."""
+        """Pre-agent guard blocked path writes full Langfuse score set (#1368)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -2534,7 +2534,7 @@ class TestPreAgentGuard:
         assert minimal_result["cache_hit"] is False
 
     async def test_clean_query_reaches_agent(self, mock_config):
-        """Legitimate query passes pre-agent guard and reaches agent.ainvoke (***REMOVED***439)."""
+        """Legitimate query passes pre-agent guard and reaches agent.ainvoke (#439)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -2553,7 +2553,7 @@ class TestPreAgentGuard:
             mock_agent.ainvoke.assert_called_once()
 
     async def test_guard_disabled_skips_check(self, mock_config):
-        """When content_filter_enabled=False, guard is skipped (***REMOVED***439)."""
+        """When content_filter_enabled=False, guard is skipped (#439)."""
         mock_config.content_filter_enabled = False
         bot, _ = _create_bot(mock_config)
 
@@ -2575,7 +2575,7 @@ class TestPreAgentGuard:
             mock_agent.ainvoke.assert_called_once()
 
     async def test_soft_mode_does_not_block(self, mock_config):
-        """In soft guard mode, injection is detected but not blocked (***REMOVED***439)."""
+        """In soft guard mode, injection is detected but not blocked (#439)."""
         mock_config.guard_mode = "soft"
         bot, _ = _create_bot(mock_config)
 
@@ -2592,11 +2592,11 @@ class TestPreAgentGuard:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-            ***REMOVED*** Agent IS called in soft mode
+            # Agent IS called in soft mode
             mock_agent.ainvoke.assert_called_once()
 
     async def test_original_user_query_passed_in_bot_context(self, mock_config):
-        """BotContext carries original_user_query for rag_tool guard (***REMOVED***439)."""
+        """BotContext carries original_user_query for rag_tool guard (#439)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -2618,10 +2618,10 @@ class TestPreAgentGuard:
 
 
 class TestSdkAgentIntegration:
-    """Test SDK agent query path (***REMOVED***413, replaces ***REMOVED***310 supervisor)."""
+    """Test SDK agent query path (#413, replaces #310 supervisor)."""
 
     async def test_handle_query_always_uses_sdk_agent(self, mock_config):
-        """handle_query always uses SDK agent (***REMOVED***413)."""
+        """handle_query always uses SDK agent (#413)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -3163,7 +3163,7 @@ class TestHandleQuerySDKAgent:
 
 
 class TestStreamingCoordination:
-    """Test response_sent flag prevents double-sending after streaming (***REMOVED***428)."""
+    """Test response_sent flag prevents double-sending after streaming (#428)."""
 
     async def test_ainvoke_uses_graph_streaming_flag(self, mock_config):
         """Streaming gate must read GraphConfig, not BotConfig."""
@@ -3204,11 +3204,11 @@ class TestStreamingCoordination:
         agent.ainvoke.assert_not_called()
 
     async def test_handle_query_skips_send_when_response_sent_flagged(self, mock_config):
-        """When ctx.response_sent=True, bot.py must NOT send again (***REMOVED***428)."""
+        """When ctx.response_sent=True, bot.py must NOT send again (#428)."""
         bot, _ = _create_bot(mock_config)
 
         async def _simulate_streaming(*args, **kwargs):
-            ***REMOVED*** Simulate a tool that streams the response and marks it as sent.
+            # Simulate a tool that streams the response and marks it as sent.
             config_arg = kwargs.get("config", {})
             ctx = config_arg.get("configurable", {}).get("bot_context")
             if ctx is not None:
@@ -3228,7 +3228,7 @@ class TestStreamingCoordination:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Streaming already sent the message — bot.py must NOT send again.
+        # Streaming already sent the message — bot.py must NOT send again.
         message.answer.assert_not_called()
 
     async def test_handle_query_streams_private_sdk_agent_via_drafts(self, mock_config):
@@ -3275,7 +3275,7 @@ class TestStreamingCoordination:
         assert bot.bot.send_message.await_args.kwargs["text"] == "Добрый день"
 
     async def test_sdk_agent_draftstreamer_records_langfuse_root_output(self, mock_config):
-        """DraftStreamer finalize in private chat must record sanitized root output (***REMOVED***1485)."""
+        """DraftStreamer finalize in private chat must record sanitized root output (#1485)."""
         from langchain_core.messages import AIMessageChunk
 
         bot, _ = _create_bot(mock_config)
@@ -3422,7 +3422,7 @@ class TestStreamingCoordination:
         assert mock_create_fallback_cp.call_count == (1 if should_retry else 0)
 
     async def test_handle_query_sends_when_response_not_sent(self, mock_config):
-        """When ctx.response_sent=False (non-streaming), bot.py sends response (***REMOVED***428)."""
+        """When ctx.response_sent=False (non-streaming), bot.py sends response (#428)."""
         bot, _ = _create_bot(mock_config)
 
         mock_agent = AsyncMock()
@@ -3441,7 +3441,7 @@ class TestStreamingCoordination:
         message.answer.assert_called()
 
     def test_bot_context_response_sent_defaults_false(self, mock_config):
-        """BotContext.response_sent defaults to False (***REMOVED***428). Full field tests in test_streaming.py."""
+        """BotContext.response_sent defaults to False (#428). Full field tests in test_streaming.py."""
         from unittest.mock import MagicMock as _MagicMock
 
         from telegram_bot.agents.context import BotContext
@@ -3463,7 +3463,7 @@ class TestStreamingCoordination:
 
 
 class TestToolCallsCount:
-    """Tests for tool_calls counting from agent result messages (***REMOVED***437)."""
+    """Tests for tool_calls counting from agent result messages (#437)."""
 
     def test_count_tool_calls_from_messages_with_tool_calls(self):
         """Messages with non-empty tool_calls are counted."""
@@ -3484,7 +3484,7 @@ class TestToolCallsCount:
         m2 = MagicMock()
         m2.tool_calls = [{"name": "history_search", "args": {}}]
         m3 = MagicMock()
-        m3.tool_calls = []  ***REMOVED*** empty — not counted
+        m3.tool_calls = []  # empty — not counted
         result = {"messages": [m1, m2, m3]}
         tool_calls = sum(
             len(m.tool_calls)
@@ -3510,7 +3510,7 @@ class TestToolCallsCount:
 
     def test_count_tool_calls_no_tool_calls(self):
         """Messages without tool_calls return 0."""
-        msg = MagicMock(spec=["content"])  ***REMOVED*** no tool_calls attr
+        msg = MagicMock(spec=["content"])  # no tool_calls attr
         result = {"messages": [msg]}
         tool_calls = sum(
             len(m.tool_calls)
@@ -3540,7 +3540,7 @@ class TestToolCallsCount:
         assert tool_calls == 0
 
     async def test_handle_query_writes_tool_calls_score_when_tools_used(self, mock_config):
-        """tool_calls_total score is written when agent uses tools (***REMOVED***437)."""
+        """tool_calls_total score is written when agent uses tools (#437)."""
         bot, _ = _create_bot(mock_config)
         mock_lf = MagicMock()
 
@@ -3576,7 +3576,7 @@ class TestToolCallsCount:
         assert score_calls["tool_calls_total"] == 2.0
 
     async def test_handle_query_skips_tool_calls_score_when_no_tools_used(self, mock_config):
-        """tool_calls_total score NOT written when agent uses no tools (***REMOVED***437)."""
+        """tool_calls_total score NOT written when agent uses no tools (#437)."""
         bot, _ = _create_bot(mock_config)
         mock_lf = MagicMock()
 
@@ -3603,12 +3603,12 @@ class TestToolCallsCount:
 
 
 class TestToolListByRole:
-    """Test that client/manager roles receive correct tool sets (***REMOVED***509)."""
+    """Test that client/manager roles receive correct tool sets (#509)."""
 
     async def test_client_role_does_not_get_history_search(self, mock_config):
         """Client role gets only rag_search — no history_search."""
         bot, _ = _create_bot(mock_config)
-        bot._history_service = AsyncMock()  ***REMOVED*** service available, but should not be in client tools
+        bot._history_service = AsyncMock()  # service available, but should not be in client tools
 
         mock_agent = AsyncMock()
         mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
@@ -3645,7 +3645,7 @@ class TestToolListByRole:
             patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
             patch("telegram_bot.agents.manager_tools.build_tools_for_role") as mock_build,
         ):
-            mock_build.side_effect = lambda *, role, base_tools, manager_tools: (  ***REMOVED*** noqa: ARG005
+            mock_build.side_effect = lambda *, role, base_tools, manager_tools: (  # noqa: ARG005
                 list(base_tools) + list(manager_tools)
             )
             message = _make_text_message("цены", user_id=12345)
@@ -3675,7 +3675,7 @@ def _make_callback_query(data="hitl:approve", user_id=12345, chat_id=12345):
 
 
 class TestHITLBotHandler:
-    """Tests for HITL interrupt detection and callback handling (***REMOVED***443)."""
+    """Tests for HITL interrupt detection and callback handling (#443)."""
 
     async def test_handle_query_detects_interrupt_and_returns_early(self, mock_config):
         """When agent returns __interrupt__, confirmation is sent and handler returns early."""
@@ -3779,7 +3779,7 @@ class TestHITLBotHandler:
 
 
 class TestPreAgentCacheCheck:
-    """Tests for pre-agent semantic cache check (***REMOVED***563)."""
+    """Tests for pre-agent semantic cache check (#563)."""
 
     def _setup_cache_mocks(self, bot, embedding=None, cached_response=None):
         """Configure cache and embeddings mocks on a bot instance."""
@@ -3793,7 +3793,7 @@ class TestPreAgentCacheCheck:
         bot._cache.check_semantic = AsyncMock(return_value=cached_response)
 
     async def test_pre_agent_cache_hit_returns_cached_response(self, mock_config):
-        """On pre-agent cache HIT, cached response is sent and agent.ainvoke is NOT called (***REMOVED***563)."""
+        """On pre-agent cache HIT, cached response is sent and agent.ainvoke is NOT called (#563)."""
         bot, _ = _create_bot(mock_config)
         self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
 
@@ -3813,9 +3813,9 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Agent must NOT be called on cache HIT
+        # Agent must NOT be called on cache HIT
         mock_agent.ainvoke.assert_not_called()
-        ***REMOVED*** Cached response must be delivered to the user
+        # Cached response must be delivered to the user
         message.answer.assert_called()
         sent_text = message.answer.call_args_list[0].args[0]
         assert "Ответ из кеша" in sent_text
@@ -3846,7 +3846,7 @@ class TestPreAgentCacheCheck:
         bot._cache.check_semantic.assert_awaited_once()
 
     async def test_pre_agent_cache_miss_proceeds_to_agent(self, mock_config):
-        """On pre-agent cache MISS, agent.ainvoke is called and embedding is stashed (***REMOVED***563)."""
+        """On pre-agent cache MISS, agent.ainvoke is called and embedding is stashed (#563)."""
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10
         self._setup_cache_mocks(bot, embedding=test_embedding, cached_response=None)
@@ -3857,7 +3857,7 @@ class TestPreAgentCacheCheck:
         async def _capture_invoke(*args, **kwargs):
             nonlocal invoke_count
             invoke_count += 1
-            ***REMOVED*** Capture the rag_result_store reference before agent runs
+            # Capture the rag_result_store reference before agent runs
             stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
             return _mock_agent_result()
 
@@ -3875,9 +3875,9 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Agent MUST be called on cache MISS
+        # Agent MUST be called on cache MISS
         assert invoke_count == 1
-        ***REMOVED*** Pre-computed embedding must be stashed in rag_result_store
+        # Pre-computed embedding must be stashed in rag_result_store
         assert stashed_store.get("cache_key_embedding") == test_embedding
         assert stashed_store.get("query_type") == "FAQ"
 
@@ -4021,7 +4021,7 @@ class TestPreAgentCacheCheck:
         mock_agent.ainvoke.assert_awaited_once()
 
     async def test_pre_agent_cache_skip_chitchat(self, mock_config):
-        """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (***REMOVED***563)."""
+        """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (#563)."""
         bot, _ = _create_bot(mock_config)
         bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
         bot._cache.store_embedding = AsyncMock()
@@ -4042,13 +4042,13 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** For CHITCHAT, embedding computation must be skipped
+        # For CHITCHAT, embedding computation must be skipped
         bot._embeddings.aembed_query.assert_not_called()
-        ***REMOVED*** Agent must still be called
+        # Agent must still be called
         mock_agent.ainvoke.assert_called_once()
 
     async def test_pre_agent_cache_embedding_error_proceeds_to_agent(self, mock_config):
-        """Embedding error in pre-agent check is swallowed; agent.ainvoke still called (***REMOVED***563)."""
+        """Embedding error in pre-agent check is swallowed; agent.ainvoke still called (#563)."""
         bot, _ = _create_bot(mock_config)
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
@@ -4069,14 +4069,14 @@ class TestPreAgentCacheCheck:
             message = _make_text_message("как оформить покупку")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
-                ***REMOVED*** Must NOT raise despite embedding failure
+                # Must NOT raise despite embedding failure
                 await bot.handle_query(message)
 
-        ***REMOVED*** Graceful degradation: agent must still be called
+        # Graceful degradation: agent must still be called
         mock_agent.ainvoke.assert_called_once()
 
     async def test_pre_agent_cache_hit_writes_langfuse_scores(self, mock_config):
-        """Pre-agent cache HIT writes pre_agent_cache_hit, query_type, user_role scores (***REMOVED***563)."""
+        """Pre-agent cache HIT writes pre_agent_cache_hit, query_type, user_role scores (#563)."""
         bot, _ = _create_bot(mock_config)
         self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
 
@@ -4097,9 +4097,9 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Verify Langfuse trace metadata
+        # Verify Langfuse trace metadata
         trace_calls = mock_lf.update_current_span.call_args_list
-        ***REMOVED*** First update_current_span call should have pipeline_mode = "pre_agent_cache"
+        # First update_current_span call should have pipeline_mode = "pre_agent_cache"
         meta_call = next(
             (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
             None,
@@ -4107,13 +4107,13 @@ class TestPreAgentCacheCheck:
         assert meta_call is not None
         assert meta_call.kwargs["metadata"]["pipeline_mode"] == "pre_agent_cache"
 
-        ***REMOVED*** Verify scores were written
+        # Verify scores were written
         score_names = [c.kwargs["name"] for c in mock_score.call_args_list]
         assert "pre_agent_cache_hit" in score_names
         assert "query_type" in score_names
         assert "user_role" in score_names
 
-        ***REMOVED*** Verify values
+        # Verify values
         score_map = {c.kwargs["name"]: c.kwargs for c in mock_score.call_args_list}
         assert score_map["pre_agent_cache_hit"]["value"] == 1
         assert score_map["pre_agent_cache_hit"]["data_type"] == "BOOLEAN"
@@ -4121,7 +4121,7 @@ class TestPreAgentCacheCheck:
         assert score_map["query_type"]["data_type"] == "CATEGORICAL"
 
     async def test_pre_agent_cache_hit_writes_full_langfuse_scores(self, mock_config):
-        """Pre-agent cache HIT writes full Langfuse score set via write_langfuse_scores (***REMOVED***1368)."""
+        """Pre-agent cache HIT writes full Langfuse score set via write_langfuse_scores (#1368)."""
         bot, _ = _create_bot(mock_config)
         self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
 
@@ -4225,7 +4225,7 @@ class TestPreAgentCacheCheck:
         assert metadata["filter_signature"] == "city=Несебр"
 
     async def test_pre_agent_cache_skip_off_topic(self, mock_config):
-        """OFF_TOPIC query type skips pre-agent cache entirely (***REMOVED***563)."""
+        """OFF_TOPIC query type skips pre-agent cache entirely (#563)."""
         bot, _ = _create_bot(mock_config)
         bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
         bot._cache.store_embedding = AsyncMock()
@@ -4251,17 +4251,17 @@ class TestPreAgentCacheCheck:
         mock_agent.ainvoke.assert_called_once()
 
     async def test_pre_agent_uses_hybrid_when_available(self, mock_config):
-        """MISS: dense first, semantic check, then hybrid for sparse (***REMOVED***1501)."""
+        """MISS: dense first, semantic check, then hybrid for sparse (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
         sparse = {"indices": [1], "values": [0.7]}
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
         bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
-        bot._embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** unavailable
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid_with_colbert = None  # unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4288,7 +4288,7 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** dense computed first, then hybrid called after semantic MISS
+        # dense computed first, then hybrid called after semantic MISS
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid.assert_awaited_once()
         bot._cache.store_sparse_embedding.assert_awaited_once()
@@ -4298,20 +4298,20 @@ class TestPreAgentCacheCheck:
         assert stashed_store.get("state_contract") is not None
 
     async def test_pre_agent_uses_hybrid_with_colbert_and_stashes_all_three(self, mock_config):
-        """MISS: dense first, then hybrid_with_colbert for sparse+colbert (***REMOVED***1501)."""
+        """MISS: dense first, then hybrid_with_colbert for sparse+colbert (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
         sparse = {"indices": [1], "values": [0.7]}
         colbert = [[0.2] * 10, [0.3] * 10]
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
         bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
             return_value=(dense, sparse, colbert)
         )
-        bot._embeddings.aembed_hybrid = None  ***REMOVED*** unavailable
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid = None  # unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4338,7 +4338,7 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** dense computed first, then hybrid_with_colbert after semantic MISS
+        # dense computed first, then hybrid_with_colbert after semantic MISS
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
         assert stashed_store.get("cache_key_embedding") == dense
@@ -4353,11 +4353,11 @@ class TestPreAgentCacheCheck:
         dense = [0.5] * 10
         sparse = {"indices": [1], "values": [0.7]}
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
-        bot._embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid_with_colbert = None  # unavailable
         bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4384,7 +4384,7 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** dense computed first, then hybrid fallback after semantic MISS
+        # dense computed first, then hybrid fallback after semantic MISS
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid.assert_awaited_once()
         assert stashed_store.get("cache_key_embedding") == dense
@@ -4398,7 +4398,7 @@ class TestPreAgentCacheCheck:
         test_embedding = [0.5] * 10
 
         bot._embeddings.aembed_query = AsyncMock(return_value=test_embedding)
-        bot._embeddings.aembed_hybrid = None  ***REMOVED*** not available
+        bot._embeddings.aembed_hybrid = None  # not available
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4425,25 +4425,25 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** aembed_query must be called; sparse must NOT be stored
+        # aembed_query must be called; sparse must NOT be stored
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._cache.store_sparse_embedding.assert_not_awaited()
-        ***REMOVED*** sparse and colbert must be None in stashed store
+        # sparse and colbert must be None in stashed store
         assert stashed_store.get("cache_key_embedding") == test_embedding
         assert stashed_store.get("cache_key_sparse") is None
         assert stashed_store.get("cache_key_colbert") is None
 
     async def test_pre_agent_hybrid_stash_on_cache_hit(self, mock_config):
-        """On cache HIT, only dense is computed; no sparse/ColBERT prep (***REMOVED***1501)."""
+        """On cache HIT, only dense is computed; no sparse/ColBERT prep (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
-        bot._embeddings.aembed_hybrid = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** unavailable
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_hybrid_with_colbert = None  # unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4467,20 +4467,20 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** On cache HIT, agent is NOT called and no retrieval-vector prep happens
+        # On cache HIT, agent is NOT called and no retrieval-vector prep happens
         mock_agent.ainvoke.assert_not_called()
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid.assert_not_called()
         bot._cache.store_sparse_embedding.assert_not_awaited()
 
     async def test_pre_agent_hybrid_colbert_error_proceeds_to_agent(self, mock_config):
-        """aembed_hybrid_with_colbert error is swallowed; agent.ainvoke still called (***REMOVED***633)."""
+        """aembed_hybrid_with_colbert error is swallowed; agent.ainvoke still called (#633)."""
         bot, _ = _create_bot(mock_config)
 
         bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
             side_effect=RuntimeError("BGE-M3 timeout")
         )
-        bot._embeddings.aembed_hybrid = None  ***REMOVED*** also unavailable
+        bot._embeddings.aembed_hybrid = None  # also unavailable
         bot._embeddings.aembed_query = AsyncMock(side_effect=RuntimeError("also down"))
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
@@ -4502,20 +4502,20 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Graceful degradation: agent must still be called despite embed failure
+        # Graceful degradation: agent must still be called despite embed failure
         mock_agent.ainvoke.assert_called_once()
 
     async def test_pre_agent_cache_hit_stashes_colbert_on_hybrid_colbert_path(self, mock_config):
-        """On cache HIT, only dense is computed; no hybrid_with_colbert call (***REMOVED***1501)."""
+        """On cache HIT, only dense is computed; no hybrid_with_colbert call (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
-        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_hybrid = None  ***REMOVED*** unavailable
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_hybrid = None  # unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4539,23 +4539,23 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** On cache HIT, agent is NOT called and no retrieval-vector prep happens
+        # On cache HIT, agent is NOT called and no retrieval-vector prep happens
         mock_agent.ainvoke.assert_not_called()
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid_with_colbert.assert_not_called()
         bot._cache.store_sparse_embedding.assert_not_awaited()
 
     async def test_pre_agent_cache_hit_dense_missing_no_sparse_colbert(self, mock_config):
-        """HIT when dense missing: dense-only compute, no sparse/ColBERT prep (***REMOVED***1501)."""
+        """HIT when dense missing: dense-only compute, no sparse/ColBERT prep (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
 
         bot._embeddings.aembed_dense_query = AsyncMock(return_value=(dense, 0.05))
-        bot._embeddings.aembed_query = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_hybrid = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_colbert_query = AsyncMock()  ***REMOVED*** should NOT be called
+        bot._embeddings.aembed_query = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_hybrid = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_colbert_query = AsyncMock()  # should NOT be called
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4584,16 +4584,16 @@ class TestPreAgentCacheCheck:
         bot._cache.store_sparse_embedding.assert_not_awaited()
 
     async def test_pre_agent_ttl_desync_hit_no_sparse_heal(self, mock_config):
-        """TTL-desync HIT: dense cached, sparse missing, but no healing on HIT (***REMOVED***1501)."""
+        """TTL-desync HIT: dense cached, sparse missing, but no healing on HIT (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         cached_dense = [0.5] * 10
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
-        bot._embeddings.aembed_query = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_hybrid = AsyncMock()  ***REMOVED*** should NOT be called
-        bot._embeddings.aembed_colbert_query = AsyncMock()  ***REMOVED*** should NOT be called
+        bot._embeddings.aembed_dense_query = None  # unavailable
+        bot._embeddings.aembed_query = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_hybrid = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_colbert_query = AsyncMock()  # should NOT be called
         bot._cache.get_embedding = AsyncMock(return_value=cached_dense)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4621,20 +4621,20 @@ class TestPreAgentCacheCheck:
         bot._cache.store_sparse_embedding.assert_not_awaited()
 
     async def test_pre_agent_miss_dense_then_sparse_colbert(self, mock_config):
-        """MISS: dense lookup first, semantic MISS, then sparse/ColBERT, then state_contract (***REMOVED***1501)."""
+        """MISS: dense lookup first, semantic MISS, then sparse/ColBERT, then state_contract (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
         sparse = {"indices": [1], "values": [0.7]}
         colbert = [[0.2] * 10]
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
         bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
             return_value=(dense, sparse, colbert)
         )
-        bot._embeddings.aembed_hybrid = None  ***REMOVED*** unavailable
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid = None  # unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -4662,7 +4662,7 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** Sequence: dense first, then hybrid_with_colbert after MISS
+        # Sequence: dense first, then hybrid_with_colbert after MISS
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
         assert stashed_store.get("cache_key_embedding") == dense
@@ -4675,7 +4675,7 @@ class TestPreAgentCacheCheck:
         assert contract["colbert_query"] == colbert
 
     async def test_pre_agent_cache_hit_respects_role_isolation(self, mock_config):
-        """Cache check passes correct agent_role to check_semantic (***REMOVED***563)."""
+        """Cache check passes correct agent_role to check_semantic (#563)."""
         bot, _ = _create_bot(mock_config)
         self._setup_cache_mocks(bot, cached_response=None)
 
@@ -4720,7 +4720,7 @@ class TestPreAgentCacheCheck:
         assert kwargs["require_safe_reuse"] is True
 
     async def test_pre_agent_ttl_desync_heals_sparse_via_hybrid_colbert(self, mock_config):
-        """When embedding cached but sparse expired, heals via aembed_hybrid_with_colbert (***REMOVED***637)."""
+        """When embedding cached but sparse expired, heals via aembed_hybrid_with_colbert (#637)."""
         bot, _ = _create_bot(mock_config)
 
         cached_dense = [0.5] * 10
@@ -4759,7 +4759,7 @@ class TestPreAgentCacheCheck:
         assert stashed_store.get("cache_key_sparse") == healed_sparse
 
     async def test_pre_agent_ttl_desync_heals_sparse_via_hybrid_fallback(self, mock_config):
-        """When hybrid_colbert absent, falls back to aembed_hybrid for desync healing (***REMOVED***637)."""
+        """When hybrid_colbert absent, falls back to aembed_hybrid for desync healing (#637)."""
         bot, _ = _create_bot(mock_config)
 
         cached_dense = [0.5] * 10
@@ -4837,7 +4837,7 @@ class TestPreAgentCacheCheck:
         sparse = {"indices": [1], "values": [0.7]}
         colbert_result = [[0.2] * 10]
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
         bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
             return_value=(dense, sparse, colbert_result)
@@ -4870,7 +4870,7 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** dense computed first, then hybrid_with_colbert after semantic MISS
+        # dense computed first, then hybrid_with_colbert after semantic MISS
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
         bot._embeddings.aembed_colbert_query.assert_not_awaited()
@@ -4886,7 +4886,7 @@ class TestPreAgentCacheCheck:
         sparse = {"indices": [1], "values": [0.7]}
         colbert_result = [[0.2] * 10]
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
         bot._embeddings.aembed_hybrid_with_colbert = None
         bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
@@ -4917,7 +4917,7 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        ***REMOVED*** dense computed first, then hybrid for sparse, then colbert_query for colbert
+        # dense computed first, then hybrid for sparse, then colbert_query for colbert
         bot._embeddings.aembed_query.assert_awaited_once()
         bot._embeddings.aembed_hybrid.assert_awaited_once()
         bot._embeddings.aembed_colbert_query.assert_awaited_once()
@@ -5002,17 +5002,17 @@ class TestPreAgentCacheCheck:
     async def test_pre_agent_cache_miss_strict_grounding_preserved_in_state_contract(
         self, mock_config
     ):
-        """On cache MISS with strict grounding, state_contract preserves grounding_mode (***REMOVED***1501)."""
+        """On cache MISS with strict grounding, state_contract preserves grounding_mode (#1501)."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
         sparse = {"indices": [1], "values": [0.7]}
 
-        bot._embeddings.aembed_dense_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_dense_query = None  # unavailable
         bot._embeddings.aembed_query = AsyncMock(return_value=dense)
-        bot._embeddings.aembed_hybrid_with_colbert = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_hybrid_with_colbert = None  # unavailable
         bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
-        bot._embeddings.aembed_colbert_query = None  ***REMOVED*** unavailable
+        bot._embeddings.aembed_colbert_query = None  # unavailable
         bot._cache.get_embedding = AsyncMock(return_value=None)
         bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
@@ -5279,7 +5279,7 @@ class TestClearCacheCommand:
         assert call_kwargs is not None
         reply_markup = call_kwargs.kwargs.get("reply_markup") or call_kwargs.args[1]
         assert isinstance(reply_markup, InlineKeyboardMarkup)
-        ***REMOVED*** 3 rows total, without analysis tier
+        # 3 rows total, without analysis tier
         assert len(reply_markup.inline_keyboard) == 3
         all_buttons = [btn for row in reply_markup.inline_keyboard for btn in row]
         callback_data_values = {btn.callback_data for btn in all_buttons}
@@ -5424,7 +5424,7 @@ class TestLegacyCallbackRoutes:
 
         callback_handler_names = [h.callback.__name__ for h in bot.dp.callback_query.handlers]
 
-        ***REMOVED*** One route is CallbackData-based, one is legacy exact-match fallback.
+        # One route is CallbackData-based, one is legacy exact-match fallback.
         assert callback_handler_names.count("handle_feedback") >= 2
 
     def test_registers_favorite_viewing_all_legacy_route(self, mock_config):
@@ -5435,9 +5435,9 @@ class TestLegacyCallbackRoutes:
         assert "handle_favorite_callback" in callback_handler_names
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** PropertyBot apartment pipeline wiring
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# PropertyBot apartment pipeline wiring
+# ---------------------------------------------------------------------------
 
 
 class TestPropertyBotApartmentPipeline:
@@ -5485,7 +5485,7 @@ class TestPropertyBotApartmentPipeline:
 
         bot, _ = _create_bot(mock_config)
 
-        ***REMOVED*** Pipeline mock
+        # Pipeline mock
         pipeline = AsyncMock()
         extraction = MagicMock()
         extraction.meta.confidence = "HIGH"
@@ -5494,13 +5494,13 @@ class TestPropertyBotApartmentPipeline:
         pipeline.extract.return_value = extraction
         bot._apartment_pipeline = pipeline
 
-        ***REMOVED*** Service mocks
+        # Service mocks
         bot._embeddings = AsyncMock()
         bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
             return_value=([0.1] * 1024, {"indices": [], "values": []}, None)
         )
         bot._cache = AsyncMock()
-        bot._cache.redis = None  ***REMOVED*** skip implicit retry block
+        bot._cache.redis = None  # skip implicit retry block
         bot._apartments_service = AsyncMock()
         bot._apartments_service.search_with_filters.return_value = ([], 0)
 

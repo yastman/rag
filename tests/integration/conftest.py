@@ -1,2 +1,2 @@
-***REMOVED*** tests/integration/conftest.py
+# tests/integration/conftest.py
 """Integration test configuration."""

@@ -1,4 +1,4 @@
-"""Hot lead notification service (***REMOVED***388).
+"""Hot lead notification service (#388).
 
 Sends Telegram messages to manager users when a hot lead is detected.
 Deduplicates via Redis SET NX to avoid spamming on repeated events.
@@ -38,7 +38,7 @@ class HotLeadNotifier:
 
         Returns True if notification was sent, False if deduped or invalid.
 
-        Wrapped in ``@observe`` (***REMOVED***1663) so each notification attempt emits a
+        Wrapped in ``@observe`` (#1663) so each notification attempt emits a
         named Langfuse span. Curated ``update_current_span`` calls record only
         ``{lead_id, score, threshold}`` as input and ``{notified}`` as output;
         full payload dicts (which may carry phone/email/session_id metadata)

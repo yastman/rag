@@ -42,7 +42,7 @@ async def test_pipeline_regex_fallback_works():
     assert result.meta.source == "regex"
 
 
-***REMOVED*** --- CallbackData SDK tests ---
+# --- CallbackData SDK tests ---
 
 
 def test_demo_cb_apartments_pack_unpack():

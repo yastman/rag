@@ -1,8 +1,8 @@
-***REMOVED*** Client Pipeline: Dual-Path Architecture
+# Client Pipeline: Dual-Path Architecture
 
 The Telegram bot uses a **dual-path architecture** to route queries efficiently based on role and query complexity.
 
-***REMOVED******REMOVED*** Architecture Overview
+## Architecture Overview
 
 ```
 User Query
@@ -24,13 +24,13 @@ PropertyBot.handle_query()
                                     create_bot_agent() → tools
 ```
 
-***REMOVED******REMOVED*** Path 1: Client Direct Pipeline
+## Path 1: Client Direct Pipeline
 
 **When:** `CLIENT_DIRECT_PIPELINE_ENABLED=true` AND user has `client` role AND query is simple.
 
 **File:** `telegram_bot/pipelines/client.py` — `run_client_pipeline()`
 
-***REMOVED******REMOVED******REMOVED*** Flow
+### Flow
 
 ```
 1. Classify query type
@@ -43,7 +43,7 @@ PropertyBot.handle_query()
 6. Post-process (double-send guard, cache store, history save)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Characteristics
+### Characteristics
 
 - **0-1 LLM calls** (cache hit = 0, cache miss = 1)
 - **No agent loop** — deterministic code path
@@ -51,20 +51,20 @@ PropertyBot.handle_query()
 - **Faster** — lower latency than agent path
 - **Feature flag:** `CLIENT_DIRECT_PIPELINE_ENABLED` env var
 
-***REMOVED******REMOVED******REMOVED*** Cache Behavior
+### Cache Behavior
 
 Client pipeline uses store guards:
 - Only stores for `FAQ`, `GENERAL`, `ENTITY`, `STRUCTURED` types
 - Skips contextual follow-ups ("подробнее"/"more details", "первый"/"the first one")
 - Requires `grade_confidence >= 0.005` (RRF scale)
 
-***REMOVED******REMOVED*** Path 2: SDK Agent Pipeline
+## Path 2: SDK Agent Pipeline
 
 **When:** User has `manager` role OR query needs tools (CRM, history, etc.) OR client pipeline signaled `needs_agent=True`.
 
 **File:** `telegram_bot/agents/agent.py` — `create_bot_agent()`
 
-***REMOVED******REMOVED******REMOVED*** Flow
+### Flow
 
 ```
 1. Build tools list (rag_search, history_search, CRM tools)
@@ -74,14 +74,14 @@ Client pipeline uses store guards:
 5. Agent generates final response
 ```
 
-***REMOVED******REMOVED******REMOVED*** Characteristics
+### Characteristics
 
 - **1-N LLM calls** (agent loop + generation)
 - **Full LangGraph** with checkpointer
 - **Tools available:** RAG search, history, CRM operations
 - **Higher latency** but more capable
 
-***REMOVED******REMOVED******REMOVED*** Available Tools
+### Available Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -92,9 +92,9 @@ Client pipeline uses store guards:
 | `daily_summary` | Session summary generation |
 | `handoff` | Transfer to human manager |
 
-***REMOVED******REMOVED*** Routing Logic
+## Routing Logic
 
-***REMOVED******REMOVED******REMOVED*** PropertyBot.handle_query()
+### PropertyBot.handle_query()
 
 ```python
 async def handle_query(self, query, user, ...):
@@ -104,7 +104,7 @@ async def handle_query(self, query, user, ...):
         return await self._handle_query_supervisor(query, user, ...)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Fallback
+### Fallback
 
 If client pipeline raises an exception, it falls back to agent path:
 
@@ -116,7 +116,7 @@ except Exception:
     return await self._handle_query_supervisor(...)
 ```
 
-***REMOVED******REMOVED*** Observability
+## Observability
 
 Each path sets `pipeline_mode` metadata in Langfuse:
 
@@ -127,7 +127,7 @@ Each path sets `pipeline_mode` metadata in Langfuse:
 
 Check this in Langfuse UI → Trace → Metadata to understand which path was taken.
 
-***REMOVED******REMOVED*** Performance Comparison
+## Performance Comparison
 
 | Metric | Client Direct | SDK Agent |
 |--------|---------------|-----------|
@@ -137,9 +137,9 @@ Check this in Langfuse UI → Trace → Metadata to understand which path was ta
 | Tool use | No | Yes |
 | CRM access | No | Yes |
 
-***REMOVED******REMOVED*** Debugging
+## Debugging
 
-***REMOVED******REMOVED******REMOVED*** Disable Client Pipeline
+### Disable Client Pipeline
 
 Set in `.env`:
 ```
@@ -148,24 +148,24 @@ CLIENT_DIRECT_PIPELINE_ENABLED=false
 
 All queries will go through the SDK agent path.
 
-***REMOVED******REMOVED******REMOVED*** Trace Which Path
+### Trace Which Path
 
 In Langfuse:
 1. Open trace
 2. Look for `pipeline_mode` in metadata
 3. Or check span names: `run_client_pipeline` vs `create_bot_agent`
 
-***REMOVED******REMOVED******REMOVED*** Log Comparison
+### Log Comparison
 
 ```
-***REMOVED*** Client direct
+# Client direct
 logger.info("Client direct pipeline completed", extra={"cache_hit": True, "latency_ms": 150})
 
-***REMOVED*** SDK agent
+# SDK agent
 logger.info("SDK agent completed", extra={"tool_calls": ["rag_search", "crm_create_lead"]})
 ```
 
-***REMOVED******REMOVED*** Feature Flags
+## Feature Flags
 
 | Flag | Default | Purpose |
 |------|---------|---------|

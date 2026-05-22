@@ -1,13 +1,13 @@
-***REMOVED*** Ingestion
+# Ingestion
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 docker/ingestion
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - entrypoint.sh
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

@@ -1,13 +1,13 @@
-***REMOVED*** Keyboards
+# Keyboards
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 telegram_bot/keyboards
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - __init__.py
 - catalog_keyboard.py
 - client_keyboard.py
@@ -16,5 +16,5 @@ telegram_bot/keyboards
 - property_card.py
 - services_keyboard.py
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

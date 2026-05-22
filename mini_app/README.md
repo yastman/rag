@@ -1,12 +1,12 @@
-***REMOVED*** Mini App
+# Mini App
 
 Telegram Mini App backend and frontend for domain-specific assistant workflows.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Provides a web UI inside Telegram for users to start expert chats, submit phone leads, and retrieve UI configuration. The backend is a FastAPI service; the frontend is a React + Vite SPA served by nginx.
 
-***REMOVED******REMOVED*** Backend
+## Backend
 
 - **Entrypoint**: [`api.py`](api.py)
 - **Dockerfile**: [`Dockerfile`](Dockerfile)
@@ -16,7 +16,7 @@ Provides a web UI inside Telegram for users to start expert chats, submit phone 
 - **Local port**: `8090` (mapped in `compose.dev.yml`)
 - **Health**: `GET http://localhost:8090/health`
 
-***REMOVED******REMOVED******REMOVED*** API Surface
+### API Surface
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -26,35 +26,35 @@ Provides a web UI inside Telegram for users to start expert chats, submit phone 
 | `/api/log` | POST | Frontend remote logging sink |
 | `/health` | GET | Service health |
 
-***REMOVED******REMOVED******REMOVED*** Quick Start
+### Quick Start
 
 ```bash
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d mini-app-api
 curl -fsS http://localhost:8090/health
 ```
 
-***REMOVED******REMOVED*** Frontend
+## Frontend
 
 See [`frontend/README.md`](frontend/README.md).
 
-***REMOVED******REMOVED*** Tests & Checks
+## Tests & Checks
 
 ```bash
-***REMOVED*** Backend unit tests
+# Backend unit tests
 uv run pytest tests/unit/mini_app/ tests/unit/test_bot_mini_app.py tests/unit/test_mini_app_dockerfile_build_deps.py -v
 
-***REMOVED*** Frontend unit tests
+# Frontend unit tests
 cd mini_app/frontend && npm run test
 ```
 
-***REMOVED******REMOVED*** Owner Boundaries
+## Owner Boundaries
 
 - **Backend**: FastAPI app, Redis pub/sub bridge to the bot, CRM phone lead submission
 - **Frontend**: React SPA, Telegram Mini App SDK integration, static build consumed by `mini-app-frontend` container
 
 Do not change the exposed port (`8090`), healthcheck path, or API response shapes without updating the frontend callers and Compose health checks.
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`frontend/README.md`](frontend/README.md) — Frontend build, dev server, and test details
 - [`../DOCKER.md`](../DOCKER.md) — Compose operations and service map

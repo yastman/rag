@@ -1,4 +1,4 @@
-"""CRM Contact dialogs: submenu, create wizard, search (***REMOVED***697).
+"""CRM Contact dialogs: submenu, create wizard, search (#697).
 
 Dialogs:
   contacts_menu_dialog    — ContactsMenuSG.main  — navigation hub for contacts
@@ -30,9 +30,9 @@ from .states import (
 logger = logging.getLogger(__name__)
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Contacts Menu — getters & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Contacts Menu — getters & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_contacts_menu_data(**kwargs: Any) -> dict[str, str]:
@@ -67,9 +67,9 @@ contacts_menu_dialog = Dialog(
 )
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Create Contact Wizard — getters, handlers & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Create Contact Wizard — getters, handlers & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_contact_first_name_prompt(**kwargs: Any) -> dict[str, str]:
@@ -130,7 +130,7 @@ async def get_contact_summary_data(dialog_manager: DialogManager, **kwargs: Any)
     }
 
 
-***REMOVED*** Handlers
+# Handlers
 
 
 async def on_first_name_entered(
@@ -238,40 +238,40 @@ async def on_contact_confirm(
 
 
 create_contact_dialog = Dialog(
-    ***REMOVED*** Step 1: First name
+    # Step 1: First name
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_first_name", on_success=on_first_name_entered),  ***REMOVED*** type: ignore[arg-type]
+        TextInput(id="contact_first_name", on_success=on_first_name_entered),  # type: ignore[arg-type]
         Cancel(Format("{btn_cancel}")),
         getter=get_contact_first_name_prompt,
         state=CreateContactSG.first_name,
     ),
-    ***REMOVED*** Step 2: Last name
+    # Step 2: Last name
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_last_name", on_success=on_last_name_entered),  ***REMOVED*** type: ignore[arg-type]
+        TextInput(id="contact_last_name", on_success=on_last_name_entered),  # type: ignore[arg-type]
         Back(Format("{btn_back}")),
         getter=get_contact_last_name_prompt,
         state=CreateContactSG.last_name,
     ),
-    ***REMOVED*** Step 3: Phone
+    # Step 3: Phone
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_phone", on_success=on_phone_entered),  ***REMOVED*** type: ignore[arg-type]
+        TextInput(id="contact_phone", on_success=on_phone_entered),  # type: ignore[arg-type]
         Back(Format("{btn_back}")),
         getter=get_contact_phone_prompt,
         state=CreateContactSG.phone,
     ),
-    ***REMOVED*** Step 4: Email (optional)
+    # Step 4: Email (optional)
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_email", on_success=on_email_entered),  ***REMOVED*** type: ignore[arg-type]
+        TextInput(id="contact_email", on_success=on_email_entered),  # type: ignore[arg-type]
         Button(Format("{btn_skip}"), id="email_skip", on_click=on_email_skip),
         Back(Format("{btn_back}")),
         getter=get_contact_email_prompt,
         state=CreateContactSG.email,
     ),
-    ***REMOVED*** Step 5: Summary + Confirm
+    # Step 5: Summary + Confirm
     Window(
         Format("{summary_text}"),
         Button(Format("{btn_confirm}"), id="contact_confirm", on_click=on_contact_confirm),
@@ -283,9 +283,9 @@ create_contact_dialog = Dialog(
 )
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Search Contacts — getters, handlers & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Search Contacts — getters, handlers & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_search_contacts_prompt(**kwargs: Any) -> dict[str, str]:
@@ -339,7 +339,7 @@ async def on_search_contacts_query(
 
 
 search_contacts_dialog = Dialog(
-    ***REMOVED*** Step 1: Query input
+    # Step 1: Query input
     Window(
         Format("{prompt}"),
         MessageInput(func=on_search_contacts_query),
@@ -347,7 +347,7 @@ search_contacts_dialog = Dialog(
         getter=get_search_contacts_prompt,
         state=SearchContactsSG.query,
     ),
-    ***REMOVED*** Step 2: Results
+    # Step 2: Results
     Window(
         Format("{title}\n\n{results_text}"),
         Back(Format("{btn_back}")),

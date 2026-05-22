@@ -74,7 +74,7 @@ class TestQueryResponse:
 
     def test_response_required(self):
         with pytest.raises(ValidationError):
-            QueryResponse()  ***REMOVED*** type: ignore[call-arg]
+            QueryResponse()  # type: ignore[call-arg]
 
 
 class TestQueryResponseContext:

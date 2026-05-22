@@ -1,4 +1,4 @@
-"""Trace coverage contract tests for issue ***REMOVED***609."""
+"""Trace coverage contract tests for issue #609."""
 
 from pathlib import Path
 

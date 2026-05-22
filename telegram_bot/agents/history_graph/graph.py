@@ -1,4 +1,4 @@
-"""History sub-graph assembly — retrieve → grade → rewrite → summarize (***REMOVED***408).
+"""History sub-graph assembly — retrieve → grade → rewrite → summarize (#408).
 
 Builds and compiles a LangGraph StateGraph for agentic history search.
 """
@@ -36,15 +36,15 @@ def build_history_graph(
         history_service: HistoryService instance (Qdrant + BGE-M3).
         llm: LLM instance (langfuse.openai.AsyncOpenAI). Falls back to GraphConfig.create_llm().
         guard_mode: Content filter mode — "hard" (block), "soft" (flag), "log" (log only).
-        content_filter_enabled: If False, skip guard node entirely (***REMOVED***432).
-        relevance_threshold: Min similarity score to consider a result relevant (default 0.7; ***REMOVED***433).
+        content_filter_enabled: If False, skip guard node entirely (#432).
+        relevance_threshold: Min similarity score to consider a result relevant (default 0.7; #433).
 
     Returns:
         Compiled StateGraph ready for .ainvoke().
     """
     workflow = StateGraph(HistoryState)
 
-    ***REMOVED*** Bind dependencies via functools.partial
+    # Bind dependencies via functools.partial
     retrieve = functools.partial(history_retrieve_node, history_service=history_service)
     grade = functools.partial(history_grade_node, threshold=relevance_threshold)
     rewrite = functools.partial(history_rewrite_node, llm=llm)
@@ -55,7 +55,7 @@ def build_history_graph(
     workflow.add_node("rewrite", cast(Any, rewrite))
     workflow.add_node("summarize", cast(Any, summarize))
 
-    ***REMOVED*** Guard node: injection/toxicity filtering (***REMOVED***432)
+    # Guard node: injection/toxicity filtering (#432)
     if content_filter_enabled:
         guard = functools.partial(history_guard_node, guard_mode=guard_mode)
         workflow.add_node("guard", cast(Any, guard))
@@ -71,7 +71,7 @@ def build_history_graph(
     else:
         workflow.add_edge(START, "retrieve")
 
-    ***REMOVED*** Edges
+    # Edges
     workflow.add_edge("retrieve", "grade")
     workflow.add_conditional_edges(
         "grade",
@@ -81,7 +81,7 @@ def build_history_graph(
             "rewrite": "rewrite",
         },
     )
-    workflow.add_edge("rewrite", "retrieve")  ***REMOVED*** rewrite → retrieve loop
+    workflow.add_edge("rewrite", "retrieve")  # rewrite → retrieve loop
     workflow.add_edge("summarize", END)
 
     return workflow.compile()

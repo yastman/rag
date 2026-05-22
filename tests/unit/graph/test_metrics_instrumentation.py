@@ -1,4 +1,4 @@
-"""Tests for PipelineMetrics instrumentation in graph nodes (***REMOVED***436)."""
+"""Tests for PipelineMetrics instrumentation in graph nodes (#436)."""
 
 import sys
 from types import ModuleType
@@ -33,7 +33,7 @@ def _reset_metrics():
 def _ensure_redisvl_mock(monkeypatch):
     """Ensure redisvl modules are importable (mock if needed)."""
     try:
-        import redisvl.query.filter  ***REMOVED*** noqa: F401
+        import redisvl.query.filter  # noqa: F401
 
         return
     except (ImportError, ModuleNotFoundError):
@@ -50,7 +50,7 @@ def _ensure_redisvl_mock(monkeypatch):
         def __eq__(self, other):
             return MagicMock()
 
-    filter_mod.Tag = MockTag  ***REMOVED*** type: ignore[attr-defined]
+    filter_mod.Tag = MockTag  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "redisvl", redisvl_mod)
     monkeypatch.setitem(sys.modules, "redisvl.query", query_mod)
     monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
@@ -236,7 +236,7 @@ class TestCacheCheckNodeMetrics:
 
         cache = AsyncMock()
         cache.get_embedding = AsyncMock(return_value=embedding)
-        cache.check_semantic = AsyncMock(return_value=None)  ***REMOVED*** cache miss
+        cache.check_semantic = AsyncMock(return_value=None)  # cache miss
 
         embeddings = AsyncMock()
 
@@ -247,9 +247,9 @@ class TestCacheCheckNodeMetrics:
         assert stats["counters"].get("cache_hit", 0) == 0
 
     async def test_general_query_type_misses_when_no_cached_response(self):
-        """GENERAL query type checks semantic cache and increments cache_miss on MISS (***REMOVED***477)."""
+        """GENERAL query type checks semantic cache and increments cache_miss on MISS (#477)."""
         state = make_initial_state(user_id=1, session_id="s1", query="general question")
-        state["query_type"] = "GENERAL"  ***REMOVED*** now in CACHEABLE_QUERY_TYPES (threshold 0.08)
+        state["query_type"] = "GENERAL"  # now in CACHEABLE_QUERY_TYPES (threshold 0.08)
 
         embedding = [0.3] * 1024
 

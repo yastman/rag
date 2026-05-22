@@ -13,7 +13,7 @@ from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationE
 def _ensure_redisvl_mock(monkeypatch):
     """Ensure redisvl modules are importable (mock if needed) — fixture-scoped."""
     try:
-        import redisvl.query.filter  ***REMOVED*** noqa: F401
+        import redisvl.query.filter  # noqa: F401
 
         return
     except (ImportError, ModuleNotFoundError):
@@ -30,7 +30,7 @@ def _ensure_redisvl_mock(monkeypatch):
         def __eq__(self, other):
             return MagicMock()
 
-    filter_mod.Tag = MockTag  ***REMOVED*** type: ignore[attr-defined]
+    filter_mod.Tag = MockTag  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "redisvl", redisvl_mod)
     monkeypatch.setitem(sys.modules, "redisvl.query", query_mod)
     monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
@@ -71,7 +71,7 @@ class TestCacheCheckNode:
         cache.check_semantic = AsyncMock(return_value=None)
         cache.get_embedding = AsyncMock(return_value=None)
 
-        ***REMOVED*** Non-hybrid embeddings (no aembed_hybrid attr)
+        # Non-hybrid embeddings (no aembed_hybrid attr)
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
 
@@ -114,7 +114,7 @@ class TestCacheCheckNode:
         assert result["cache_hit"] is True
         assert result["cached_response"] == "cached answer"
         assert result["query_embedding"] == [0.2] * 1024
-        ***REMOVED*** Should use cached embedding, not recompute
+        # Should use cached embedding, not recompute
         embeddings.aembed_query.assert_not_awaited()
 
     async def test_hit_path_does_not_compute_colbert(self):
@@ -222,7 +222,7 @@ class TestCacheCheckNode:
         cache.check_semantic = AsyncMock(return_value=None)
         cache.store_embedding = AsyncMock()
 
-        ***REMOVED*** Non-hybrid embeddings (no aembed_hybrid attr)
+        # Non-hybrid embeddings (no aembed_hybrid attr)
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.3] * 1024)
 
@@ -255,12 +255,12 @@ class TestCacheCheckNode:
         )
 
         assert result.get("colbert_query") is not None
-        assert len(result["colbert_query"]) == 4  ***REMOVED*** 4 token vectors
+        assert len(result["colbert_query"]) == 4  # 4 token vectors
 
     async def test_cache_check_computes_colbert_when_embedding_cached(self):
         """When embedding is cached but ColBERT not computed, compute ColBERT separately."""
         mock_cache = AsyncMock()
-        mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  ***REMOVED*** cached!
+        mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!
         mock_cache.check_semantic = AsyncMock(return_value=None)
 
         mock_embeddings = AsyncMock()
@@ -281,7 +281,7 @@ class TestCacheCheckNode:
 
         assert result.get("colbert_query") is not None
         assert len(result["colbert_query"]) == 4
-        ***REMOVED*** Called to get ColBERT vectors even though embedding was cached
+        # Called to get ColBERT vectors even though embedding was cached
         mock_embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
 
     async def test_hybrid_stores_both_embeddings(self):
@@ -318,7 +318,7 @@ class TestCacheCheckNode:
         cache.get_bge_m3_query_bundle = AsyncMock(return_value=bundle)
         cache.check_semantic = AsyncMock(return_value=None)
 
-        ***REMOVED*** No aembed_hybrid_with_colbert — bundle should be used
+        # No aembed_hybrid_with_colbert — bundle should be used
         embeddings = AsyncMock(spec=[])
 
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
@@ -330,7 +330,7 @@ class TestCacheCheckNode:
         assert result.get("colbert_query") is not None
         assert len(result["colbert_query"]) == 4
         cache.get_bge_m3_query_bundle.assert_awaited_once_with("test query")
-        ***REMOVED*** embeddings has no aembed_hybrid_with_colbert attribute (spec=[])
+        # embeddings has no aembed_hybrid_with_colbert attribute (spec=[])
         assert not hasattr(embeddings, "aembed_hybrid_with_colbert")
 
     async def test_bundle_cache_miss_computes_full_bundle(self):
@@ -563,7 +563,7 @@ class TestCacheableQueryTypes:
         assert "STRUCTURED" in CACHEABLE_QUERY_TYPES
 
     def test_allowlist_includes_general(self):
-        """GENERAL is now cacheable with threshold 0.08 (***REMOVED***477)."""
+        """GENERAL is now cacheable with threshold 0.08 (#477)."""
         assert "GENERAL" in CACHEABLE_QUERY_TYPES
 
     def test_allowlist_excludes_non_rag_types(self):
@@ -597,7 +597,7 @@ class TestCacheCheckEmbeddingError:
         state["query_type"] = "FAQ"
 
         cache = AsyncMock()
-        cache.get_embedding = AsyncMock(return_value=None)  ***REMOVED*** cache miss
+        cache.get_embedding = AsyncMock(return_value=None)  # cache miss
 
         embeddings = MagicMock()
         embeddings.aembed_hybrid = AsyncMock(
@@ -638,7 +638,7 @@ class TestCacheCheckEmbeddingError:
         cache.check_semantic = AsyncMock(return_value=None)
 
         embeddings = MagicMock()
-        ***REMOVED*** aembed_hybrid should NOT be called
+        # aembed_hybrid should NOT be called
         embeddings.aembed_hybrid = AsyncMock(side_effect=Exception("should not be called"))
 
         result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
@@ -653,11 +653,11 @@ class TestCacheStoreNodeRedisVLErrorHandling:
 
     Scenario: store_semantic's internal try/except is bypassed (e.g., via @observe decorator
     cleanup, BaseException subclass, or future code changes). The node must always return
-    the response so the voice pipeline doesn't lose its output (***REMOVED***524).
+    the response so the voice pipeline doesn't lose its output (#524).
     """
 
     async def test_store_node_preserves_response_on_redisvl_error(self):
-        """Response is returned even when store_semantic raises RedisVLError (***REMOVED***524)."""
+        """Response is returned even when store_semantic raises RedisVLError (#524)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -671,7 +671,7 @@ class TestCacheStoreNodeRedisVLErrorHandling:
         assert result["response"] == "generated voice response"
 
     async def test_store_node_preserves_response_on_redis_search_error(self):
-        """Response is returned even when store_semantic raises RedisSearchError (***REMOVED***524)."""
+        """Response is returned even when store_semantic raises RedisSearchError (#524)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "GENERAL"
         state["query_embedding"] = [0.1] * 1024
@@ -685,7 +685,7 @@ class TestCacheStoreNodeRedisVLErrorHandling:
         assert result["response"] == "rag answer"
 
     async def test_store_node_preserves_response_on_schema_validation_error(self):
-        """Response returned even when index schema mismatch causes SchemaValidationError (***REMOVED***524)."""
+        """Response returned even when index schema mismatch causes SchemaValidationError (#524)."""
         state = make_initial_state(user_id=1, session_id="s1", query="query")
         state["query_type"] = "ENTITY"
         state["query_embedding"] = [0.2] * 1024

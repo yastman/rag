@@ -69,11 +69,11 @@ class DocumentIndexer:
             settings: Configuration settings
         """
         self.settings = settings or Settings()
-        ***REMOVED*** Use longer timeout for large batches (embeddings can take 40-60s)
+        # Use longer timeout for large batches (embeddings can take 40-60s)
         self.client = QdrantClient(
             self.settings.qdrant_url,
             api_key=self.settings.qdrant_api_key,
-            timeout=120,  ***REMOVED*** 2 minutes timeout for large batch operations
+            timeout=120,  # 2 minutes timeout for large batch operations
         )
         self.embedding_model = get_bge_m3_model(use_fp16=True)
         self.stats = IndexStats()
@@ -90,7 +90,7 @@ class DocumentIndexer:
             True if collection created/exists, False otherwise
         """
         try:
-            ***REMOVED*** Check if collection exists
+            # Check if collection exists
             self.client.get_collection(collection_name)
             if recreate:
                 self.client.delete_collection(collection_name)
@@ -101,59 +101,59 @@ class DocumentIndexer:
         except Exception:
             logger.debug("Collection %s not found, will create", collection_name)
 
-        ***REMOVED*** Create collection with optimized vector configuration
-        ***REMOVED*** Optimizations based on Qdrant best practices (Nov 2025):
-        ***REMOVED*** - Scalar Int8 quantization: 4x compression, 0.99 accuracy, 2x faster
-        ***REMOVED*** - BM42 sparse vectors: +9% Precision@10 vs BM25 for short chunks
-        ***REMOVED*** - Original vectors on disk: RAM savings with fast rescoring
-        ***REMOVED*** - HNSW optimized: m=16 (balance), ef_construct=200 (quality)
-        ***REMOVED*** - Oversampling enabled: 3x limit for rescoring accuracy
+        # Create collection with optimized vector configuration
+        # Optimizations based on Qdrant best practices (Nov 2025):
+        # - Scalar Int8 quantization: 4x compression, 0.99 accuracy, 2x faster
+        # - BM42 sparse vectors: +9% Precision@10 vs BM25 for short chunks
+        # - Original vectors on disk: RAM savings with fast rescoring
+        # - HNSW optimized: m=16 (balance), ef_construct=200 (quality)
+        # - Oversampling enabled: 3x limit for rescoring accuracy
         self.client.create_collection(
             collection_name=collection_name,
             vectors_config={
-                ***REMOVED*** Dense vectors for semantic search (BGE-M3)
+                # Dense vectors for semantic search (BGE-M3)
                 "dense": VectorParams(
                     size=VectorDimensions.DENSE,
                     distance=Distance.COSINE,
                     hnsw_config=HnswConfigDiff(
-                        m=16,  ***REMOVED*** Edges per node: balance memory/quality
-                        ef_construct=200,  ***REMOVED*** Build quality (higher = better graph)
-                        on_disk=False,  ***REMOVED*** HNSW graph in RAM for fast traversal
+                        m=16,  # Edges per node: balance memory/quality
+                        ef_construct=200,  # Build quality (higher = better graph)
+                        on_disk=False,  # HNSW graph in RAM for fast traversal
                     ),
                     quantization_config=ScalarQuantization(
                         scalar=ScalarQuantizationConfig(
-                            type=ScalarType.INT8,  ***REMOVED*** 4x compression, 0.99 accuracy
-                            quantile=0.99,  ***REMOVED*** Exclude top 1% outliers
-                            always_ram=True,  ***REMOVED*** Quantized vectors in RAM (fast search)
+                            type=ScalarType.INT8,  # 4x compression, 0.99 accuracy
+                            quantile=0.99,  # Exclude top 1% outliers
+                            always_ram=True,  # Quantized vectors in RAM (fast search)
                         )
                     ),
-                    on_disk=True,  ***REMOVED*** Original vectors on disk (RAM savings + rescoring)
+                    on_disk=True,  # Original vectors on disk (RAM savings + rescoring)
                 ),
-                ***REMOVED*** ColBERT multivector for reranking
+                # ColBERT multivector for reranking
                 "colbert": VectorParams(
                     size=VectorDimensions.DENSE,
                     distance=Distance.COSINE,
                     multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
                     hnsw_config=HnswConfigDiff(
-                        m=0,  ***REMOVED*** Disable HNSW for ColBERT (only for reranking)
+                        m=0,  # Disable HNSW for ColBERT (only for reranking)
                     ),
-                    on_disk=True,  ***REMOVED*** ColBERT vectors on disk (only used for rerank)
+                    on_disk=True,  # ColBERT vectors on disk (only used for rerank)
                 ),
             },
-            ***REMOVED*** BM42 sparse vectors (better than BM25 for short chunks)
+            # BM42 sparse vectors (better than BM25 for short chunks)
             sparse_vectors_config={
                 "bm42": SparseVectorParams(
-                    modifier=Modifier.IDF,  ***REMOVED*** Native IDF computation in Qdrant
+                    modifier=Modifier.IDF,  # Native IDF computation in Qdrant
                 )
             },
-            ***REMOVED*** Optimizer config for better bulk indexing
+            # Optimizer config for better bulk indexing
             optimizers_config=OptimizersConfigDiff(
-                indexing_threshold=20000,  ***REMOVED*** Build HNSW every 20k vectors
-                memmap_threshold=50000,  ***REMOVED*** Use mmap for segments >50k
+                indexing_threshold=20000,  # Build HNSW every 20k vectors
+                memmap_threshold=50000,  # Use mmap for segments >50k
             ),
         )
 
-        ***REMOVED*** Create indexes on important payload fields for fast filtering
+        # Create indexes on important payload fields for fast filtering
         self._create_payload_indexes(collection_name)
 
         print(f"✓ Created collection: {collection_name}")
@@ -162,7 +162,7 @@ class DocumentIndexer:
     def _create_payload_indexes(self, collection_name: str) -> None:
         """Create indexes on payload fields for fast filtering."""
         try:
-            ***REMOVED*** Basic document metadata indexes
+            # Basic document metadata indexes
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.article_number",
@@ -175,8 +175,8 @@ class DocumentIndexer:
                 field_schema=PayloadSchemaType.KEYWORD,
             )
 
-            ***REMOVED*** CSV structured data indexes (for filtering apartments)
-            ***REMOVED*** Text fields
+            # CSV structured data indexes (for filtering apartments)
+            # Text fields
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.city",
@@ -202,14 +202,14 @@ class DocumentIndexer:
                     field_schema=PayloadSchemaType.KEYWORD,
                 )
 
-            ***REMOVED*** Small-to-big: index order field for neighbor chunk queries
+            # Small-to-big: index order field for neighbor chunk queries
             self.client.create_payload_index(
                 collection_name=collection_name,
                 field_name="metadata.order",
                 field_schema=PayloadSchemaType.INTEGER,
             )
 
-            ***REMOVED*** Numeric fields - enable range filtering (price < 100000, rooms >= 2, etc.)
+            # Numeric fields - enable range filtering (price < 100000, rooms >= 2, etc.)
             for field in [
                 "price",
                 "rooms",
@@ -225,7 +225,7 @@ class DocumentIndexer:
                     field_schema=PayloadSchemaType.INTEGER,
                 )
 
-            ***REMOVED*** Boolean fields
+            # Boolean fields
             for field in ["furnished", "year_round"]:
                 self.client.create_payload_index(
                     collection_name=collection_name,
@@ -258,10 +258,10 @@ class DocumentIndexer:
 
         self.stats = IndexStats(total_chunks=len(chunks))
 
-        ***REMOVED*** Create collection if needed
+        # Create collection if needed
         self.create_collection(collection_name)
 
-        ***REMOVED*** Process chunks in batches
+        # Process chunks in batches
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i : i + batch_size]
             await self._index_batch(batch, collection_name)
@@ -273,11 +273,11 @@ class DocumentIndexer:
         batch_start = time.time()
 
         try:
-            ***REMOVED*** Log batch info
+            # Log batch info
             doc_names = {c.document_name for c in chunks}
             logger.info(f"Starting batch: {len(chunks)} chunks from {doc_names}")
 
-            ***REMOVED*** Generate embeddings for batch
+            # Generate embeddings for batch
             texts = [chunk.text for chunk in chunks]
             avg_len = sum(len(t) for t in texts) / len(texts)
             logger.info(f"  Texts prepared: {len(texts)} chunks, avg {avg_len:.0f} chars")
@@ -289,30 +289,30 @@ class DocumentIndexer:
                 f"  Embeddings generated: {embed_time:.2f}s ({len(texts) / embed_time:.1f} chunks/s)"
             )
 
-            ***REMOVED*** Prepare points for Qdrant with named vectors
+            # Prepare points for Qdrant with named vectors
             prep_start = time.time()
             points = []
             for chunk, emb in zip(chunks, embeddings, strict=True):
-                ***REMOVED*** Convert sparse dict to lists for Qdrant
+                # Convert sparse dict to lists for Qdrant
                 sparse_indices = list(emb["lexical_weights"].keys())
                 sparse_values = list(emb["lexical_weights"].values())
                 dense_vector = [float(v) for v in emb["dense_vecs"].tolist()]
                 colbert_vector = [[float(v) for v in row] for row in emb["colbert_vecs"].tolist()]
 
-                ***REMOVED*** Build metadata dict
-                ***REMOVED*** doc_id and chunk_order are explicit aliases for small-to-big retrieval
+                # Build metadata dict
+                # doc_id and chunk_order are explicit aliases for small-to-big retrieval
                 metadata_dict = {
                     "document_name": chunk.document_name,
-                    "doc_id": chunk.document_name,  ***REMOVED*** Explicit alias for small-to-big
+                    "doc_id": chunk.document_name,  # Explicit alias for small-to-big
                     "article_number": chunk.article_number,
                     "chapter": chunk.chapter,
                     "section": chunk.section,
                     "chunk_id": chunk.chunk_id,
                     "order": chunk.order,
-                    "chunk_order": chunk.order,  ***REMOVED*** Explicit alias for small-to-big
+                    "chunk_order": chunk.order,  # Explicit alias for small-to-big
                 }
 
-                ***REMOVED*** Add extra_metadata for structured data (CSV, etc.)
+                # Add extra_metadata for structured data (CSV, etc.)
                 if chunk.extra_metadata:
                     metadata_dict.update(chunk.extra_metadata)
 
@@ -327,8 +327,8 @@ class DocumentIndexer:
                         ),
                     },
                     payload={
-                        "page_content": chunk.text,  ***REMOVED*** n8n expects this field
-                        "metadata": metadata_dict,  ***REMOVED*** All other fields go into metadata
+                        "page_content": chunk.text,  # n8n expects this field
+                        "metadata": metadata_dict,  # All other fields go into metadata
                     },
                 )
                 points.append(point)
@@ -336,7 +336,7 @@ class DocumentIndexer:
             prep_time = time.time() - prep_start
             logger.info(f"  Points prepared: {len(points)} points in {prep_time:.2f}s")
 
-            ***REMOVED*** Upsert points to Qdrant
+            # Upsert points to Qdrant
             upsert_start = time.time()
             self.client.upsert(
                 collection_name=collection_name,
@@ -376,7 +376,7 @@ class DocumentIndexer:
             f"Encoding {len(texts)} texts with BGE-M3 (batch_size={self.settings.batch_size_embeddings})"
         )
 
-        ***REMOVED*** Run embedding in threadpool to avoid blocking
+        # Run embedding in threadpool to avoid blocking
         encode_start = time.time()
         output = await asyncio.to_thread(
             self.embedding_model.encode,
@@ -389,7 +389,7 @@ class DocumentIndexer:
         encode_time = time.time() - encode_start
         logger.debug(f"BGE-M3 encode completed in {encode_time:.2f}s")
 
-        ***REMOVED*** Convert to list of dicts (one per text)
+        # Convert to list of dicts (one per text)
         result = []
         for i in range(len(texts)):
             result.append(

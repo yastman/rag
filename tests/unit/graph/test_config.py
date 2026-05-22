@@ -27,7 +27,7 @@ class TestGraphConfig:
         assert cfg.rewrite_max_tokens == 128
 
     def test_from_env_llm_max_tokens(self):
-        """Regression for ***REMOVED***1537: LLM_MAX_TOKENS must drive llm_max_tokens.
+        """Regression for #1537: LLM_MAX_TOKENS must drive llm_max_tokens.
         Before the fix the field defaulted to 4096 with no env override path."""
         from telegram_bot.graph.config import GraphConfig
 
@@ -239,7 +239,7 @@ class TestGraphConfig:
         assert cfg.max_expanded_chunks == 20
         assert cfg.max_context_tokens == 12000
 
-    ***REMOVED*** --- Reasoning control ---
+    # --- Reasoning control ---
 
     def test_reasoning_defaults_none(self):
         from telegram_bot.graph.config import GraphConfig
@@ -311,7 +311,7 @@ class TestGraphConfig:
         from telegram_bot.graph.config import GraphConfig
 
         config = GraphConfig.from_env()
-        single_query_top1_rrf = 1 / 61  ***REMOVED*** ≈ 0.01639
+        single_query_top1_rrf = 1 / 61  # ≈ 0.01639
         assert config.skip_rerank_threshold > single_query_top1_rrf, (
             f"skip_rerank_threshold={config.skip_rerank_threshold} must be > "
             f"single-query top-1 RRF={single_query_top1_rrf:.5f}"
@@ -319,7 +319,7 @@ class TestGraphConfig:
 
 
 class TestCreateSummarizeModel:
-    """Contract: _create_summarize_model must use SDK-native init_chat_model (***REMOVED***1653).
+    """Contract: _create_summarize_model must use SDK-native init_chat_model (#1653).
 
     LangChain 1.x exposes `langchain.chat_models.init_chat_model` as the
     provider-neutral way to construct a chat model. Direct ChatOpenAI

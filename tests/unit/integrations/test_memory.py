@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, Mock, patch
 
-import langgraph.checkpoint.redis.aio  ***REMOVED*** noqa: F401 — ensure submodule for patch()
+import langgraph.checkpoint.redis.aio  # noqa: F401 — ensure submodule for patch()
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 

@@ -15,9 +15,9 @@ from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers (same pattern as test_favorites_callbacks.py)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers (same pattern as test_favorites_callbacks.py)
+# ---------------------------------------------------------------------------
 
 
 def _make_config() -> BotConfig:
@@ -70,9 +70,9 @@ def _sample_result(property_id: str = "prop-1") -> dict:
     }
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Tests: _send_property_card
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tests: _send_property_card
+# ---------------------------------------------------------------------------
 
 
 @patch(
@@ -134,7 +134,7 @@ async def test_send_property_card_favorited_shows_remove(_mock_photos: MagicMock
 async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) -> None:
     """If _favorites_service is not set, is_favorited defaults to False (no crash)."""
     bot = _create_bot()
-    ***REMOVED*** Ensure no favorites service
+    # Ensure no favorites service
     if hasattr(bot, "_favorites_service"):
         del bot._favorites_service
 

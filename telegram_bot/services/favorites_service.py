@@ -1,4 +1,4 @@
-"""CRUD service for user bookmarked properties (***REMOVED***628)."""
+"""CRUD service for user bookmarked properties (#628)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def _parse_jsonb(val: Any) -> dict[str, Any]:
     if isinstance(val, dict):
         return val
     if isinstance(val, str):
-        return json.loads(val)  ***REMOVED*** type: ignore[no-any-return]
+        return json.loads(val)  # type: ignore[no-any-return]
     return {}
 
 
@@ -62,7 +62,7 @@ class FavoritesService:
             telegram_id,
             property_id,
         )
-        ***REMOVED*** asyncpg returns 'DELETE N' where N is rows affected
+        # asyncpg returns 'DELETE N' where N is rows affected
         return result.endswith(" 1")
 
     async def list(self, telegram_id: int, limit: int = 50) -> list[Favorite]:

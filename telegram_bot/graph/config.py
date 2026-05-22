@@ -20,10 +20,10 @@ class GraphConfig:
     llm_temperature: float = 0.7
     llm_max_tokens: int = 4096
     generate_max_tokens: int = 1024
-    ***REMOVED*** Reasoning control for Cerebras models (***REMOVED***reasoning)
-    reasoning_effort: str | None = None  ***REMOVED*** "low"/"medium"/"high" (gpt-oss-120b)
-    reasoning_format: str | None = None  ***REMOVED*** "hidden"/"parsed"/"raw"/"none"
-    disable_reasoning: bool | None = None  ***REMOVED*** True/False (zai-glm-4.7)
+    # Reasoning control for Cerebras models (#reasoning)
+    reasoning_effort: str | None = None  # "low"/"medium"/"high" (gpt-oss-120b)
+    reasoning_format: str | None = None  # "hidden"/"parsed"/"raw"/"none"
+    disable_reasoning: bool | None = None  # True/False (zai-glm-4.7)
     rewrite_model: str = "gpt-4o-mini"
     rewrite_max_tokens: int = 64
 
@@ -41,38 +41,38 @@ class GraphConfig:
     domain_language: str = "ru"
 
     max_rewrite_attempts: int = 1
-    ***REMOVED*** RRF score scale: 1/(rank+k), k=60 default. Top-1 = ~0.016, Top-20 last = ~0.012.
-    ***REMOVED*** skip_rerank_threshold >= 0.018 means top-1 result already has very high rank — safe to skip
-    ***REMOVED*** ColBERT rerank. Must be > 1/61≈0.016 to ensure ColBERT runs on borderline cases.
+    # RRF score scale: 1/(rank+k), k=60 default. Top-1 = ~0.016, Top-20 last = ~0.012.
+    # skip_rerank_threshold >= 0.018 means top-1 result already has very high rank — safe to skip
+    # ColBERT rerank. Must be > 1/61≈0.016 to ensure ColBERT runs on borderline cases.
     skip_rerank_threshold: float = 0.018
-    ***REMOVED*** RRF score scale: threshold 0.005 accepts all top-20 results (~0.012..0.016 typical range).
-    ***REMOVED*** This is intentional — loose filter that only rejects truly irrelevant results (score < 0.005).
+    # RRF score scale: threshold 0.005 accepts all top-20 results (~0.012..0.016 typical range).
+    # This is intentional — loose filter that only rejects truly irrelevant results (score < 0.005).
     relevance_threshold_rrf: float = 0.005
     score_improvement_delta: float = 0.001
     streaming_enabled: bool = True
     rerank_provider: str = "colbert"
-    ***REMOVED*** Small-to-big context expansion
+    # Small-to-big context expansion
     small_to_big_mode: str = "on"
     small_to_big_window_before: int = 0
     small_to_big_window_after: int = 2
     max_expanded_chunks: int = 10
     max_context_tokens: int = 8000
-    ***REMOVED*** Response length control rollout (***REMOVED***129)
+    # Response length control rollout (#129)
     response_style_enabled: bool = False
     response_style_shadow_mode: bool = False
-    ***REMOVED*** Source attribution (***REMOVED***225)
+    # Source attribution (#225)
     show_sources: bool = False
-    ***REMOVED*** Content filtering (***REMOVED***227)
+    # Content filtering (#227)
     content_filter_enabled: bool = True
-    ***REMOVED*** Voice transcription (***REMOVED***151)
+    # Voice transcription (#151)
     show_transcription: bool = True
     voice_language: str = "ru"
     stt_model: str = "whisper"
-    ***REMOVED*** Prompt injection defense (***REMOVED***226)
-    guard_mode: str = "hard"  ***REMOVED*** "hard" = block, "soft" = flag + continue, "log" = log only
-    ***REMOVED*** TTFT drift warning threshold in ms (***REMOVED***675); raise for reasoning models behind proxy
+    # Prompt injection defense (#226)
+    guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
+    # TTFT drift warning threshold in ms (#675); raise for reasoning models behind proxy
     ttft_drift_warn_ms: int = 500
-    ***REMOVED*** Query classifier mode (***REMOVED***805): "regex" (default) or "semantic" (RedisVL SemanticRouter)
+    # Query classifier mode (#805): "regex" (default) or "semantic" (RedisVL SemanticRouter)
     classifier_mode: str = "regex"
 
     cache_thresholds: dict[str, float] = field(
@@ -86,10 +86,10 @@ class GraphConfig:
 
     cache_ttl: dict[str, int] = field(
         default_factory=lambda: {
-            "FAQ": 86400,  ***REMOVED*** 24h
-            "ENTITY": 3600,  ***REMOVED*** 1h
-            "GENERAL": 3600,  ***REMOVED*** 1h
-            "STRUCTURED": 7200,  ***REMOVED*** 2h
+            "FAQ": 86400,  # 24h
+            "ENTITY": 3600,  # 1h
+            "GENERAL": 3600,  # 1h
+            "STRUCTURED": 7200,  # 2h
         }
     )
 
@@ -111,7 +111,7 @@ class GraphConfig:
             llm_base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000"),
             llm_api_key=os.getenv(
                 "LLM_API_KEY", os.getenv("OPENAI_API_KEY", "")
-            ),  ***REMOVED*** LLM_API_KEY preferred
+            ),  # LLM_API_KEY preferred
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
@@ -181,7 +181,7 @@ class GraphConfig:
             timeout=60.0,
         )
         if not auto_trace:
-            ***REMOVED*** Mark plain client so helpers can skip Langfuse-specific kwargs safely.
+            # Mark plain client so helpers can skip Langfuse-specific kwargs safely.
             object.__setattr__(client, "_langfuse_auto_trace", False)
         return client
 

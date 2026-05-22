@@ -1,4 +1,4 @@
-***REMOVED*** tests/smoke/queries.py
+# tests/smoke/queries.py
 """Smoke test query definitions by type.
 
 Distribution: 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX = 20 total
@@ -26,24 +26,24 @@ class SmokeQuery:
     expect_rerank: bool = False
 
 
-***REMOVED*** 20 queries: 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX (STRICT)
+# 20 queries: 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX (STRICT)
 SMOKE_QUERIES: list[SmokeQuery] = [
-    ***REMOVED*** === CHITCHAT (6) - skip RAG entirely ===
+    # === CHITCHAT (6) - skip RAG entirely ===
     SmokeQuery("Привет!", ExpectedQueryType.CHITCHAT),
     SmokeQuery("Добрый день", ExpectedQueryType.CHITCHAT),
     SmokeQuery("Спасибо за помощь", ExpectedQueryType.CHITCHAT),
     SmokeQuery("Кто ты?", ExpectedQueryType.CHITCHAT),
     SmokeQuery("Что ты умеешь?", ExpectedQueryType.CHITCHAT),
     SmokeQuery("Пока, до свидания", ExpectedQueryType.CHITCHAT),
-    ***REMOVED*** === SIMPLE (6) - light RAG, skip rerank ===
-    ***REMOVED*** These match SIMPLE_PATTERNS in query_router.py
+    # === SIMPLE (6) - light RAG, skip rerank ===
+    # These match SIMPLE_PATTERNS in query_router.py
     SmokeQuery("Сколько стоит квартира?", ExpectedQueryType.SIMPLE, expect_cache_write=True),
     SmokeQuery("Какая цена на студию?", ExpectedQueryType.SIMPLE, expect_cache_write=True),
     SmokeQuery("Сколько стоит дом?", ExpectedQueryType.SIMPLE, expect_cache_write=True),
     SmokeQuery("Какая цена аренды?", ExpectedQueryType.SIMPLE, expect_cache_write=True),
     SmokeQuery("Двухкомнатная квартира", ExpectedQueryType.SIMPLE, expect_cache_write=True),
     SmokeQuery("Трёхкомнатная квартира", ExpectedQueryType.SIMPLE, expect_cache_write=True),
-    ***REMOVED*** === COMPLEX (8) - full RAG + rerank + quantization A/B ===
+    # === COMPLEX (8) - full RAG + rerank + quantization A/B ===
     SmokeQuery(
         "Найди двухкомнатную квартиру в Солнечном берегу до 50000 евро с видом на море",
         ExpectedQueryType.COMPLEX,
@@ -112,5 +112,5 @@ def validate_distribution():
     assert len(SMOKE_QUERIES) == 20, f"Total should be 20, got {len(SMOKE_QUERIES)}"
 
 
-***REMOVED*** Validate on import
+# Validate on import
 validate_distribution()

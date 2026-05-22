@@ -1,4 +1,4 @@
-"""CRM Lead dialogs: submenu, create wizard, my leads, search (***REMOVED***697).
+"""CRM Lead dialogs: submenu, create wizard, my leads, search (#697).
 
 Dialogs:
   leads_menu_dialog    — LeadsMenuSG.main  — navigation hub for leads
@@ -35,9 +35,9 @@ logger = logging.getLogger(__name__)
 _PAGE_SIZE = 5
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Leads Menu — getters & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Leads Menu — getters & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_leads_menu_data(**kwargs: Any) -> dict[str, str]:
@@ -72,9 +72,9 @@ leads_menu_dialog = Dialog(
 )
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Create Lead Wizard — getters, handlers & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Create Lead Wizard — getters, handlers & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_lead_name_prompt(**kwargs: Any) -> dict[str, str]:
@@ -140,7 +140,7 @@ async def get_lead_summary_data(dialog_manager: DialogManager, **kwargs: Any) ->
     }
 
 
-***REMOVED*** Handlers
+# Handlers
 
 
 async def on_lead_name_entered(
@@ -251,23 +251,23 @@ async def on_lead_edit(
 
 
 create_lead_dialog = Dialog(
-    ***REMOVED*** Step 1: Name
+    # Step 1: Name
     Window(
         Format("{prompt}"),
-        TextInput(id="lead_name", on_success=on_lead_name_entered),  ***REMOVED*** type: ignore[arg-type]
+        TextInput(id="lead_name", on_success=on_lead_name_entered),  # type: ignore[arg-type]
         Cancel(Format("{btn_cancel}")),
         getter=get_lead_name_prompt,
         state=CreateLeadSG.name,
     ),
-    ***REMOVED*** Step 2: Budget
+    # Step 2: Budget
     Window(
         Format("{prompt}"),
-        TextInput(id="lead_budget", on_success=on_lead_budget_entered),  ***REMOVED*** type: ignore[arg-type]
+        TextInput(id="lead_budget", on_success=on_lead_budget_entered),  # type: ignore[arg-type]
         Back(Format("{btn_back}")),
         getter=get_lead_budget_prompt,
         state=CreateLeadSG.budget,
     ),
-    ***REMOVED*** Step 3: Pipeline
+    # Step 3: Pipeline
     Window(
         Format("{title}"),
         Column(
@@ -285,7 +285,7 @@ create_lead_dialog = Dialog(
         getter=get_lead_pipeline_options,
         state=CreateLeadSG.pipeline,
     ),
-    ***REMOVED*** Step 4: Summary + Confirm
+    # Step 4: Summary + Confirm
     Window(
         Format("{summary_text}"),
         Button(Format("{btn_confirm}"), id="lead_confirm", on_click=on_lead_confirm),
@@ -297,13 +297,13 @@ create_lead_dialog = Dialog(
 )
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** My Leads — getters, pagination handlers & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# My Leads — getters, pagination handlers & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_my_leads_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    """Getter: fetch manager's leads with task counts and simple pagination (***REMOVED***731)."""
+    """Getter: fetch manager's leads with task counts and simple pagination (#731)."""
     kommo = dialog_manager.middleware_data.get("kommo_client")
     page = dialog_manager.dialog_data.get("page", 0)
 
@@ -321,7 +321,7 @@ async def get_my_leads_data(dialog_manager: DialogManager, **kwargs: Any) -> dic
             )
             total = len(leads)
 
-            ***REMOVED*** Batch-fetch open tasks for all manager's leads, group by entity_id (***REMOVED***731)
+            # Batch-fetch open tasks for all manager's leads, group by entity_id (#731)
             task_counts: dict[int, int] = {}
             try:
                 all_tasks = await kommo.get_tasks(
@@ -404,9 +404,9 @@ my_leads_dialog = Dialog(
 )
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Search Leads — getters, handlers & dialog
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Search Leads — getters, handlers & dialog
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_search_leads_prompt(**kwargs: Any) -> dict[str, str]:
@@ -458,7 +458,7 @@ async def on_search_leads_query(
 
 
 search_leads_dialog = Dialog(
-    ***REMOVED*** Step 1: Query input
+    # Step 1: Query input
     Window(
         Format("{prompt}"),
         MessageInput(func=on_search_leads_query),
@@ -466,7 +466,7 @@ search_leads_dialog = Dialog(
         getter=get_search_leads_prompt,
         state=SearchLeadsSG.query,
     ),
-    ***REMOVED*** Step 2: Results
+    # Step 2: Results
     Window(
         Format("{title}\n\n{results_text}"),
         Back(Format("{btn_back}")),

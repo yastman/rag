@@ -1,32 +1,32 @@
-***REMOVED*** Tests
+# Tests
 
 This directory contains the full test pyramid for the contextual RAG system.
 For test-writing conventions, see [`docs/engineering/test-writing-guide.md`](../docs/engineering/test-writing-guide.md).
 
-***REMOVED******REMOVED*** Directory Structure
+## Directory Structure
 
 ```
 tests/
-├── conftest.py          ***REMOVED*** Shared fixtures and hooks
-├── unit/                ***REMOVED*** Fast, isolated tests (mocked/no external deps)
-│   └── e2e_adapters/    ***REMOVED*** Unit checks for E2E adapters/config/validators (not live E2E)
-├── contract/            ***REMOVED*** Static contracts: trace families, span coverage, error shapes
-├── integration/         ***REMOVED*** Service-aware paths and real component interaction
-├── smoke/               ***REMOVED*** Quick health checks against live services
-├── eval/                ***REMOVED*** RAG evaluation (RAGAS, ground_truth.json)
-├── baseline/            ***REMOVED*** Langfuse baseline metrics and threshold checks
-├── benchmark/           ***REMOVED*** Performance comparisons (RRF vs DBSF, parser vs Docling, etc.)
-├── observability/       ***REMOVED*** Trace/contract CLI and collector infrastructure tests
-├── chaos/               ***REMOVED*** Resilience tests (service failures, LLM fallbacks)
-├── load/                ***REMOVED*** Load/throughput and Redis eviction tests
-├── e2e/                 ***REMOVED*** End-to-end pipeline and Telegram E2E tests
-├── fixtures/            ***REMOVED*** Shared test data and CI env stubs (e.g., compose.ci.env)
-└── data/                ***REMOVED*** Test datasets and generated assets
+├── conftest.py          # Shared fixtures and hooks
+├── unit/                # Fast, isolated tests (mocked/no external deps)
+│   └── e2e_adapters/    # Unit checks for E2E adapters/config/validators (not live E2E)
+├── contract/            # Static contracts: trace families, span coverage, error shapes
+├── integration/         # Service-aware paths and real component interaction
+├── smoke/               # Quick health checks against live services
+├── eval/                # RAG evaluation (RAGAS, ground_truth.json)
+├── baseline/            # Langfuse baseline metrics and threshold checks
+├── benchmark/           # Performance comparisons (RRF vs DBSF, parser vs Docling, etc.)
+├── observability/       # Trace/contract CLI and collector infrastructure tests
+├── chaos/               # Resilience tests (service failures, LLM fallbacks)
+├── load/                # Load/throughput and Redis eviction tests
+├── e2e/                 # End-to-end pipeline and Telegram E2E tests
+├── fixtures/            # Shared test data and CI env stubs (e.g., compose.ci.env)
+└── data/                # Test datasets and generated assets
 ```
 
-***REMOVED******REMOVED*** Test Tiers
+## Test Tiers
 
-***REMOVED******REMOVED******REMOVED*** Local-fast checks (no Docker required)
+### Local-fast checks (no Docker required)
 These are the default gate for PRs and local development.
 
 | Tier | Location | What it proves | Typical duration |
@@ -34,7 +34,7 @@ These are the default gate for PRs and local development.
 | Unit | `tests/unit/` | Isolated logic with mocks/fakes | Seconds |
 | Contract | `tests/contract/` | Trace/schema contracts via static analysis | Seconds |
 
-***REMOVED******REMOVED******REMOVED*** Heavy / runtime checks (services or credentials required)
+### Heavy / runtime checks (services or credentials required)
 Run these selectively, not on every save.
 
 | Tier | Location | What it proves | Typical duration |
@@ -53,74 +53,74 @@ Canonical E2E placement:
 - Live end-to-end scenarios belong only to `tests/e2e/`.
 - `tests/unit/e2e_adapters/` is unit-only coverage for E2E helper code (config, adapters, validators) and must stay in the local-fast lane.
 
-***REMOVED******REMOVED*** Commands
+## Commands
 
-***REMOVED******REMOVED******REMOVED*** Quick checks (lint + types)
+### Quick checks (lint + types)
 ```bash
 make check
 ```
 
-***REMOVED******REMOVED******REMOVED*** Fast test gate (unit + critical graph paths)
+### Fast test gate (unit + critical graph paths)
 ```bash
 make test
 ```
 
-***REMOVED******REMOVED******REMOVED*** Core unit tests (parallel, default local gate)
+### Core unit tests (parallel, default local gate)
 ```bash
 PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 ```
 
-***REMOVED******REMOVED******REMOVED*** Focused run (preferred while developing)
+### Focused run (preferred while developing)
 ```bash
 uv run pytest tests/unit/test_<module>.py -q
 ```
 
-***REMOVED******REMOVED******REMOVED*** Contract tests (no Docker)
+### Contract tests (no Docker)
 ```bash
 make test-contract
 ```
 
-***REMOVED******REMOVED******REMOVED*** Integration tests (requires services)
+### Integration tests (requires services)
 ```bash
-make test-integration        ***REMOVED*** graph paths only (~5s, no Docker)
-make test-integration-full   ***REMOVED*** all integration tests (requires Docker)
+make test-integration        # graph paths only (~5s, no Docker)
+make test-integration-full   # all integration tests (requires Docker)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Smoke tests (requires live services)
+### Smoke tests (requires live services)
 ```bash
 make test-smoke
-make test-preflight          ***REMOVED*** Qdrant/Redis config checks
+make test-preflight          # Qdrant/Redis config checks
 ```
 
-***REMOVED******REMOVED******REMOVED*** Load / chaos / nightly
+### Load / chaos / nightly
 ```bash
-make test-load-eviction      ***REMOVED*** Redis eviction tests
-make test-nightly            ***REMOVED*** chaos + smoke + slow unit
+make test-load-eviction      # Redis eviction tests
+make test-nightly            # chaos + smoke + slow unit
 ```
 
-***REMOVED******REMOVED******REMOVED*** E2E
+### E2E
 ```bash
-make e2e-test                ***REMOVED*** pytest E2E suite (live services)
-make e2e-telegram-test       ***REMOVED*** Telegram userbot runner
-make e2e-test-traces-core    ***REMOVED*** required ***REMOVED***1307 core Telethon trace gate
+make e2e-test                # pytest E2E suite (live services)
+make e2e-telegram-test       # Telegram userbot runner
+make e2e-test-traces-core    # required #1307 core Telethon trace gate
 ```
 
-The `e2e-test-traces-core` target runs the required ***REMOVED***1307 Telethon scenarios with Langfuse validation (`E2E_VALIDATE_LANGFUSE=1`). Ensure the bot is running locally (`make bot`) before executing this gate.
+The `e2e-test-traces-core` target runs the required #1307 Telethon scenarios with Langfuse validation (`E2E_VALIDATE_LANGFUSE=1`). Ensure the bot is running locally (`make bot`) before executing this gate.
 
-***REMOVED******REMOVED******REMOVED*** RAG evaluation
+### RAG evaluation
 ```bash
-make eval-rag                ***REMOVED*** RAGAS on ground_truth.json
-make eval-rag-quick          ***REMOVED*** 10-sample subset
-make eval-rag-full           ***REMOVED*** RAGAS + DeepEval
+make eval-rag                # RAGAS on ground_truth.json
+make eval-rag-quick          # 10-sample subset
+make eval-rag-full           # RAGAS + DeepEval
 ```
 
-***REMOVED******REMOVED******REMOVED*** Baseline / observability
+### Baseline / observability
 ```bash
-make baseline-smoke          ***REMOVED*** smoke with Langfuse tracing
-make baseline-compare        ***REMOVED*** compare against a baseline tag
+make baseline-smoke          # smoke with Langfuse tracing
+make baseline-compare        # compare against a baseline tag
 ```
 
-***REMOVED******REMOVED******REMOVED*** Compose validation (for runtime-impacting changes)
+### Compose validation (for runtime-impacting changes)
 When changing `compose*.yml`, Dockerfiles, or service definitions, verify the effective config:
 
 ```bash
@@ -132,15 +132,15 @@ CI uses `tests/fixtures/compose.ci.env` for interpolation validation:
 COMPOSE_DISABLE_ENV_FILE=1 docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml config --quiet
 ```
 
-***REMOVED******REMOVED******REMOVED*** Other useful commands
+### Other useful commands
 ```bash
-make test-cov                ***REMOVED*** coverage report
-make test-lf                 ***REMOVED*** last failed only
-make test-profile            ***REMOVED*** slowest tests
-make test-store-durations    ***REMOVED*** update .test_durations for CI sharding
+make test-cov                # coverage report
+make test-lf                 # last failed only
+make test-profile            # slowest tests
+make test-store-durations    # update .test_durations for CI sharding
 ```
 
-***REMOVED******REMOVED*** Markers
+## Markers
 
 Markers are defined in `pyproject.toml`. Common ones:
 
@@ -157,7 +157,7 @@ Markers are defined in `pyproject.toml`. Common ones:
 
 See `pyproject.toml` for the full marker list (including exclusions for old API tests).
 
-***REMOVED******REMOVED*** Key Test Files
+## Key Test Files
 
 | File | Description |
 |------|-------------|
@@ -179,7 +179,7 @@ Voyage-dependent tests (unit/test_voyage_service.py, unit/test_contextualized_em
 uv sync --extra voyage
 ```
 
-***REMOVED******REMOVED*** Writing Tests
+## Writing Tests
 
 - **Default guide**: [`docs/engineering/test-writing-guide.md`](../docs/engineering/test-writing-guide.md)
 - **Unit tests**: Mock external services; keep them fast and deterministic.
@@ -188,11 +188,11 @@ uv sync --extra voyage
 - **Reuse**: Search existing coverage before adding new files (`rg -n "<behavior>" tests/`).
 - **Fixtures**: Use `conftest.py` for shared setup; keep scopes narrow.
 
-***REMOVED******REMOVED*** Test Naming
+## Test Naming
 
 ```
-test_<feature>.py                  ***REMOVED*** File
-test_<behavior>_<expected>()       ***REMOVED*** Function
+test_<feature>.py                  # File
+test_<behavior>_<expected>()       # Function
 ```
 
 Example:
@@ -202,7 +202,7 @@ def test_store_embedding_creates_hash():
     ...
 ```
 
-***REMOVED******REMOVED*** Notes
+## Notes
 
 - The full heavy suite (chaos, load, E2E, benchmark) is not required for every commit; run the fast gate (`make test` or `make test-unit`) locally.
 - The old deprecated directory is no longer collected (`norecursedirs` in `pyproject.toml`).

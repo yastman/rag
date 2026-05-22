@@ -1,6 +1,6 @@
 """Telegram Mini App initData validation.
 
-SDK-audited (***REMOVED***1595, Context7 ``/aiogram/aiogram``): aiogram 3.x ships a
+SDK-audited (#1595, Context7 ``/aiogram/aiogram``): aiogram 3.x ships a
 vetted WebApp validator at :mod:`aiogram.utils.web_app` that uses
 ``hmac.compare_digest`` for timing-attack protection. We delegate the
 HMAC-SHA256 signature check + URL-encoded payload parsing to the SDK and
@@ -60,8 +60,8 @@ def validate_init_data(
     try:
         webapp_data = safe_parse_webapp_init_data(token=bot_token, init_data=raw)
     except ValueError as exc:
-        ***REMOVED*** SDK raises ValueError for both bad signature and malformed
-        ***REMOVED*** payloads; treat both as "invalid" without leaking details.
+        # SDK raises ValueError for both bad signature and malformed
+        # payloads; treat both as "invalid" without leaking details.
         msg = "Invalid initData"
         raise ValueError(msg) from exc
 
@@ -71,13 +71,13 @@ def validate_init_data(
         msg = "initData expired"
         raise ValueError(msg)
 
-    ***REMOVED*** Mirror the previous public shape so the existing callers and the
-    ***REMOVED*** ``test_auth.py`` regression suite stay byte-compatible.
+    # Mirror the previous public shape so the existing callers and the
+    # ``test_auth.py`` regression suite stay byte-compatible.
     result: dict[str, Any] = {"auth_date": str(auth_ts)}
     if webapp_data.user is not None:
-        ***REMOVED*** ``WebAppUser`` is a Pydantic v2 model with optional fields;
-        ***REMOVED*** ``model_dump(exclude_none=True)`` drops anything Telegram did
-        ***REMOVED*** not send so the dict stays compact.
+        # ``WebAppUser`` is a Pydantic v2 model with optional fields;
+        # ``model_dump(exclude_none=True)`` drops anything Telegram did
+        # not send so the dict stays compact.
         result["user"] = webapp_data.user.model_dump(exclude_none=True)
     if webapp_data.query_id is not None:
         result["query_id"] = webapp_data.query_id

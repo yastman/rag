@@ -1,4 +1,4 @@
-"""Postgres store for funnel analytics queries (***REMOVED***390)."""
+"""Postgres store for funnel analytics queries (#390)."""
 
 from __future__ import annotations
 

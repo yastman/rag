@@ -1,4 +1,4 @@
-"""Tests for feedback callback_query handler (***REMOVED***229, ***REMOVED***277, ***REMOVED***755)."""
+"""Tests for feedback callback_query handler (#229, #277, #755)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class TestParseFeedbackIntegration:
 
 
 class TestBuildDislikeReasonKeyboard:
-    """Tests for the 6-button dislike reason keyboard (***REMOVED***755)."""
+    """Tests for the 6-button dislike reason keyboard (#755)."""
 
     def test_returns_3_rows_of_2_buttons(self):
         from telegram_bot.feedback import build_dislike_reason_keyboard
@@ -50,7 +50,7 @@ class TestBuildDislikeReasonKeyboard:
         codes = set()
         for row in kb.inline_keyboard:
             for btn in row:
-                ***REMOVED*** format: fbr:{code}:{trace_id}
+                # format: fbr:{code}:{trace_id}
                 parts = (btn.callback_data or "").split(":")
                 codes.add(parts[1])
         assert codes == {"wt", "mi", "bs", "ha", "ic", "fm"}
@@ -67,7 +67,7 @@ class TestBuildDislikeReasonKeyboard:
     def test_callback_within_64_bytes(self):
         from telegram_bot.feedback import build_dislike_reason_keyboard
 
-        trace_id = "a" * 32  ***REMOVED*** max W3C Trace Context
+        trace_id = "a" * 32  # max W3C Trace Context
         kb = build_dislike_reason_keyboard(trace_id)
         for row in kb.inline_keyboard:
             for btn in row:
@@ -75,7 +75,7 @@ class TestBuildDislikeReasonKeyboard:
 
 
 class TestParseFeedbackCallbackReasonPath:
-    """Tests for 3-tuple return and reason path parsing (***REMOVED***755)."""
+    """Tests for 3-tuple return and reason path parsing (#755)."""
 
     def test_like_returns_3_tuple_with_none_reason(self):
         from telegram_bot.feedback import parse_feedback_callback
@@ -152,7 +152,7 @@ class TestParseFeedbackCallbackReasonPath:
 
 
 class TestHandleFeedbackLangfuse:
-    """Tests for handle_feedback writing scores via get_langfuse_client (***REMOVED***277)."""
+    """Tests for handle_feedback writing scores via get_langfuse_client (#277)."""
 
     async def test_creates_score_with_idempotency_id(self):
         """get_langfuse_client().create_score() called with correct args including id."""
@@ -202,12 +202,12 @@ class TestHandleFeedbackLangfuse:
             )
             await bot_instance.handle_feedback(callback)
 
-        ***REMOVED*** Should complete without error — no create_score call
+        # Should complete without error — no create_score call
         callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
 
 
 class TestHandleFeedback2Step:
-    """Tests for the 2-step dislike flow (***REMOVED***755)."""
+    """Tests for the 2-step dislike flow (#755)."""
 
     async def test_dislike_shows_reason_keyboard_not_score(self):
         """fb:0:trace → show reason keyboard, NO score written."""
@@ -231,7 +231,7 @@ class TestHandleFeedback2Step:
         mock_lf.create_score.assert_not_called()
         callback.message.edit_reply_markup.assert_awaited_once()
         called_markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
-        ***REMOVED*** Reason keyboard: 3 rows × 2 buttons
+        # Reason keyboard: 3 rows × 2 buttons
         assert len(called_markup.inline_keyboard) == 3
 
     async def test_dislike_answers_callback(self):
@@ -349,7 +349,7 @@ class TestHandleFeedback2Step:
 
         callback.message.edit_reply_markup.assert_awaited_once()
         called_markup = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
-        ***REMOVED*** Confirmation: 1 row × 1 button
+        # Confirmation: 1 row × 1 button
         assert len(called_markup.inline_keyboard) == 1
 
     async def test_reason_selected_answers_thanks(self):
@@ -394,5 +394,5 @@ class TestFeedbackConfirmationCleanup:
         bot = object.__new__(PropertyBot)
 
         with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()):
-            ***REMOVED*** Should not raise
+            # Should not raise
             await bot._clear_feedback_confirmation_later(message, delay_s=1.0)

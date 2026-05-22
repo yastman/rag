@@ -1,1 +1,1 @@
-"""Agent tools and context for create_agent SDK (***REMOVED***413)."""
+"""Agent tools and context for create_agent SDK (#413)."""

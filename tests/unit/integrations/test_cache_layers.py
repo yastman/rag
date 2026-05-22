@@ -22,13 +22,13 @@ from telegram_bot.integrations.cache import (
 def _ensure_redisvl_filter_mock(monkeypatch):
     """Ensure redisvl.query.filter.Tag is importable (mock if needed) — fixture-scoped."""
     try:
-        import redisvl.query.filter  ***REMOVED*** noqa: F401
+        import redisvl.query.filter  # noqa: F401
 
         return
     except (ImportError, ModuleNotFoundError):
         pass
 
-    ***REMOVED*** Create minimal mock module chain only when redisvl is genuinely unavailable
+    # Create minimal mock module chain only when redisvl is genuinely unavailable
     redisvl_mod = sys.modules.get("redisvl") or ModuleType("redisvl")
     query_mod = ModuleType("redisvl.query")
     filter_mod = ModuleType("redisvl.query.filter")
@@ -40,7 +40,7 @@ def _ensure_redisvl_filter_mock(monkeypatch):
         def __eq__(self, other):
             return MagicMock()
 
-    filter_mod.Tag = MockTag  ***REMOVED*** type: ignore[attr-defined]
+    filter_mod.Tag = MockTag  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "redisvl", redisvl_mod)
     monkeypatch.setitem(sys.modules, "redisvl.query", query_mod)
     monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
@@ -305,7 +305,7 @@ class TestSemanticCache:
         )
         assert result == "user-specific answer"
 
-        ***REMOVED*** Verify acheck was called with a filter_expression
+        # Verify acheck was called with a filter_expression
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 
@@ -397,7 +397,7 @@ class TestSemanticCache:
 
 
 class TestSemanticCacheRedisVLErrors:
-    """Test CacheLayerManager graceful degradation on RedisVL errors (***REMOVED***524).
+    """Test CacheLayerManager graceful degradation on RedisVL errors (#524).
 
     When Redis Stack modules are unavailable or the index schema is mismatched,
     redisvl raises RedisVLError subclasses. Both store_semantic and check_semantic
@@ -411,7 +411,7 @@ class TestSemanticCacheRedisVLErrors:
         mgr.semantic_cache.astore = AsyncMock(side_effect=RedisVLError("index not found"))
         mgr.cache_ttl = {"FAQ": 86400}
 
-        ***REMOVED*** Should not raise — graceful degradation
+        # Should not raise — graceful degradation
         await mgr.store_semantic(
             query="test",
             response="answer",
@@ -490,11 +490,11 @@ class TestExactCaches:
         mgr.redis.get = AsyncMock(return_value=json.dumps([0.1, 0.2, 0.3]))
         mgr.redis.setex = AsyncMock()
 
-        ***REMOVED*** Store
+        # Store
         await mgr.store_exact("embeddings", "key1", [0.1, 0.2, 0.3])
         mgr.redis.setex.assert_awaited_once()
 
-        ***REMOVED*** Get
+        # Get
         result = await mgr.get_exact("embeddings", "key1")
         assert result == [0.1, 0.2, 0.3]
         assert mgr._metrics["embeddings"]["hits"] == 1
@@ -650,7 +650,7 @@ class TestEmbeddingsCacheSDK:
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.embed_cache = None
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await mgr.store_embedding("тест", [0.2] * 1024)
 
     async def test_store_embedding_normalizes_text(self):
@@ -746,18 +746,18 @@ class TestQueryNormalization:
         assert _normalize_query_for_cache("внж??") == "внж"
 
     def test_case_and_punctuation_produce_same_key(self):
-        """'ВНЖ?' and 'внж' produce the same normalized form (***REMOVED***477)."""
+        """'ВНЖ?' and 'внж' produce the same normalized form (#477)."""
         assert _normalize_query_for_cache("ВНЖ?") == _normalize_query_for_cache("внж")
 
     def test_mid_query_punctuation_preserved(self):
         """Punctuation inside query text is NOT removed, only trailing."""
-        ***REMOVED*** Trailing ? is removed
+        # Trailing ? is removed
         result = _normalize_query_for_cache("как оформить внж?")
         assert result == "как оформить внж"
-        ***REMOVED*** Internal dot (e.g. abbreviation) is preserved; trailing ? removed
+        # Internal dot (e.g. abbreviation) is preserved; trailing ? removed
         result_with_dot = _normalize_query_for_cache("ул. Ленина?")
         assert result_with_dot == "ул. ленина"
-        assert result_with_dot.endswith("а")  ***REMOVED*** dot in middle is kept, trailing ? removed
+        assert result_with_dot.endswith("а")  # dot in middle is kept, trailing ? removed
 
     def test_empty_string(self):
         assert _normalize_query_for_cache("") == ""
@@ -783,17 +783,17 @@ class TestQueryNormalization:
         mock_embed_cache.aget = mock_aget
         mgr.embed_cache = mock_embed_cache
 
-        ***REMOVED*** Store with uppercase + trailing punctuation — normalized to 'внж'
+        # Store with uppercase + trailing punctuation — normalized to 'внж'
         await mgr.store_embedding("ВНЖ?", [0.5] * 1024)
 
-        ***REMOVED*** Get with lowercase, no punctuation — same normalized form
+        # Get with lowercase, no punctuation — same normalized form
         result = await mgr.get_embedding("внж")
 
         assert result == [0.5] * 1024, "Normalized queries should share embedding cache key"
 
 
 class TestScopeRoleIsolation:
-    """Test cache_scope and agent_role tag isolation (***REMOVED***529)."""
+    """Test cache_scope and agent_role tag isolation (#529)."""
 
     async def test_store_semantic_includes_cache_scope(self, _ensure_redisvl_filter_mock):
         """store_semantic with cache_scope passes it in filters dict."""
@@ -982,9 +982,9 @@ class TestScopeRoleIsolation:
 
     async def test_rag_store_history_check_miss(self, _ensure_redisvl_filter_mock):
         """RAG store (scope=rag) → history check (scope=history) = MISS via filter mismatch."""
-        ***REMOVED*** This test verifies the FILTER EXPRESSION is different for different scopes.
-        ***REMOVED*** In production, RedisVL would return no results because the scope tag differs.
-        ***REMOVED*** Here we simulate it: acheck returns nothing when scope=history filter applied.
+        # This test verifies the FILTER EXPRESSION is different for different scopes.
+        # In production, RedisVL would return no results because the scope tag differs.
+        # Here we simulate it: acheck returns nothing when scope=history filter applied.
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.cache_ttl = {"FAQ": 86400}
@@ -995,11 +995,11 @@ class TestScopeRoleIsolation:
         async def mock_store(**kwargs):
             stored_filters.update(kwargs.get("filters", {}))
 
-        ***REMOVED*** Simulate: history check returns [] because scope=rag entry doesn't match scope=history
+        # Simulate: history check returns [] because scope=rag entry doesn't match scope=history
         mgr.semantic_cache.astore = AsyncMock(side_effect=mock_store)
         mgr.semantic_cache.acheck = AsyncMock(return_value=[])
 
-        ***REMOVED*** Store as RAG scope
+        # Store as RAG scope
         await mgr.store_semantic(
             query="test query",
             response="rag answer",
@@ -1009,7 +1009,7 @@ class TestScopeRoleIsolation:
         )
         assert stored_filters.get("cache_scope") == "rag"
 
-        ***REMOVED*** Check as history scope — returns miss (empty from mock)
+        # Check as history scope — returns miss (empty from mock)
         result = await mgr.check_semantic(
             query="test query",
             vector=[0.1] * 1024,
@@ -1018,7 +1018,7 @@ class TestScopeRoleIsolation:
         )
         assert result is None
 
-        ***REMOVED*** Verify acheck was called with a filter expression (scope=history)
+        # Verify acheck was called with a filter expression (scope=history)
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 
@@ -1034,11 +1034,11 @@ class TestScopeRoleIsolation:
         async def mock_store(**kwargs):
             stored_filters.update(kwargs.get("filters", {}))
 
-        ***REMOVED*** Simulate: manager check returns [] because role=client entry doesn't match role=manager
+        # Simulate: manager check returns [] because role=client entry doesn't match role=manager
         mgr.semantic_cache.astore = AsyncMock(side_effect=mock_store)
         mgr.semantic_cache.acheck = AsyncMock(return_value=[])
 
-        ***REMOVED*** Store as client role
+        # Store as client role
         await mgr.store_semantic(
             query="test query",
             response="client answer",
@@ -1049,7 +1049,7 @@ class TestScopeRoleIsolation:
         )
         assert stored_filters.get("agent_role") == "client"
 
-        ***REMOVED*** Check as manager role — returns miss (empty from mock)
+        # Check as manager role — returns miss (empty from mock)
         result = await mgr.check_semantic(
             query="test query",
             vector=[0.1] * 1024,
@@ -1059,7 +1059,7 @@ class TestScopeRoleIsolation:
         )
         assert result is None
 
-        ***REMOVED*** Verify filter_expression was built (role=manager filter applied)
+        # Verify filter_expression was built (role=manager filter applied)
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
 
@@ -1148,7 +1148,7 @@ class TestCacheClearing:
         mgr.redis = AsyncMock()
 
         async def mock_scan_iter(**kwargs):
-            if False:  ***REMOVED*** makes this an async generator with no items
+            if False:  # makes this an async generator with no items
                 yield ""
 
         mgr.redis.scan_iter = mock_scan_iter
@@ -1188,7 +1188,7 @@ class TestRedisPoolConfig:
 
 
 class TestCacheSpanMetadata:
-    """Runtime tests for cache embedding span metadata (***REMOVED***1365)."""
+    """Runtime tests for cache embedding span metadata (#1365)."""
 
     @pytest.fixture
     def mock_lf(self):

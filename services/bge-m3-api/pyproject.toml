@@ -4,29 +4,29 @@ version = "1.0.0"
 description = "BGE-M3 Embeddings API - FastAPI service"
 requires-python = ">=3.11"
 dependencies = [
-    ***REMOVED*** Core ML/Embeddings
+    # Core ML/Embeddings
     "FlagEmbedding==1.4.0",
     "torch==2.12.0+cpu",
     "transformers==4.57.6",
     "sentence-transformers==5.5.1",
-    ***REMOVED*** FastAPI & Web Server
+    # FastAPI & Web Server
     "fastapi==0.136.1",
     "uvicorn[standard]==0.47.0",
     "python-multipart==0.0.29",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
-    ***REMOVED*** Monitoring & Metrics
+    # Monitoring & Metrics
     "prometheus-client==0.25.0",
-    ***REMOVED*** Observability
+    # Observability
     "langfuse>=4.0.0,<5.0",
-    ***REMOVED*** Utilities
+    # Utilities
     "numpy==2.4.6",
     "scipy==1.17.1",
     "lxml>=6.1.0",
 ]
 
 [tool.uv]
-***REMOVED*** Use PyPI as default, PyTorch CPU index only for torch packages
+# Use PyPI as default, PyTorch CPU index only for torch packages
 index-strategy = "unsafe-best-match"
 
 [[tool.uv.index]]

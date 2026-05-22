@@ -1,5 +1,5 @@
-***REMOVED*** compose.vps.yml — VPS production overrides: minimal RAG runtime profile gating.
-***REMOVED*** Usage: COMPOSE_FILE=compose.yml:compose.vps.yml docker compose up -d
+# compose.vps.yml — VPS production overrides: minimal RAG runtime profile gating.
+# Usage: COMPOSE_FILE=compose.yml:compose.vps.yml docker compose up -d
 
 services:
   bge-m3:
@@ -8,16 +8,16 @@ services:
       - /tmp
 
   bot:
-    ***REMOVED*** Do not copy the dev-only profiles here: bot is part of the default
-    ***REMOVED*** VPS RAG chatbot core.
+    # Do not copy the dev-only profiles here: bot is part of the default
+    # VPS RAG chatbot core.
     environment:
       RERANK_PROVIDER: "colbert"
       RERANK_CANDIDATES_MAX: "3"
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-}
 
   litellm:
-    ***REMOVED*** Do not copy the dev-only profiles here: litellm is part of the default
-    ***REMOVED*** VPS RAG chatbot core.
+    # Do not copy the dev-only profiles here: litellm is part of the default
+    # VPS RAG chatbot core.
     environment:
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-}
       LANGFUSE_OTEL_HOST: ${LANGFUSE_DOCKER_HOST:-}

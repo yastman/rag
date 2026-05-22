@@ -1,4 +1,4 @@
-***REMOVED*** Contextualized Embeddings (voyage-context-3)
+# Contextualized Embeddings (voyage-context-3)
 
 > Voyage AI contextualized embeddings for improved document retrieval quality.
 
@@ -20,7 +20,7 @@ instantiate `ContextualizedEmbeddingService` from that flag.
 
 ---
 
-***REMOVED******REMOVED*** Overview
+## Overview
 
 Contextualized embeddings process document chunks together, allowing each chunk's embedding to incorporate context from surrounding chunks in the same document. This can improve retrieval quality for complex queries that depend on document structure. In this repository it is not wired into the primary BGE-M3 ingestion or Telegram RAG query path yet.
 
@@ -38,7 +38,7 @@ Standard Embeddings:     Contextualized Embeddings:
 
 ---
 
-***REMOVED******REMOVED*** When to Use
+## When to Use
 
 | Use Case | Contextualized? | Rationale |
 |----------|-----------------|-----------|
@@ -49,7 +49,7 @@ Standard Embeddings:     Contextualized Embeddings:
 
 ---
 
-***REMOVED******REMOVED*** API Constraints (2026)
+## API Constraints (2026)
 
 | Parameter | Limit |
 |-----------|-------|
@@ -62,42 +62,42 @@ Standard Embeddings:     Contextualized Embeddings:
 
 ---
 
-***REMOVED******REMOVED*** Usage
+## Usage
 
-***REMOVED******REMOVED******REMOVED*** Basic Usage
+### Basic Usage
 
 ```python
 from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
 service = ContextualizedEmbeddingService(
     api_key="your-voyage-api-key",
-    output_dimension=1024,  ***REMOVED*** 2048, 1024, 512, or 256
-    output_dtype="float",   ***REMOVED*** float, int8, uint8, binary, ubinary
+    output_dimension=1024,  # 2048, 1024, 512, or 256
+    output_dtype="float",   # float, int8, uint8, binary, ubinary
 )
 
-***REMOVED*** Embed document chunks (process together for context)
+# Embed document chunks (process together for context)
 doc_chunks = [
-    ["Introduction to topic...", "Main content...", "Conclusion..."],  ***REMOVED*** Doc 1
-    ["Chapter 1...", "Chapter 2..."],  ***REMOVED*** Doc 2
+    ["Introduction to topic...", "Main content...", "Conclusion..."],  # Doc 1
+    ["Chapter 1...", "Chapter 2..."],  # Doc 2
 ]
 result = await service.embed_documents(doc_chunks)
-***REMOVED*** result.embeddings: list of vectors (one per chunk, flattened)
-***REMOVED*** result.chunks_per_document: [3, 2] (chunks per doc)
+# result.embeddings: list of vectors (one per chunk, flattened)
+# result.chunks_per_document: [3, 2] (chunks per doc)
 
-***REMOVED*** Embed query
+# Embed query
 query_vec = await service.embed_query("search query")
 ```
 
-***REMOVED******REMOVED******REMOVED*** Configuration
+### Configuration
 
 The settings object reads these values, but enabling them does not switch the
 main runtime embedding provider by itself:
 
 ```bash
-***REMOVED*** Enable contextualized embeddings (default: false)
+# Enable contextualized embeddings (default: false)
 USE_CONTEXTUALIZED_EMBEDDINGS=true
 
-***REMOVED*** Optional: output dimension (default: 1024)
+# Optional: output dimension (default: 1024)
 CONTEXTUALIZED_EMBEDDING_DIM=1024
 ```
 
@@ -115,25 +115,25 @@ and calls `ContextualizedEmbeddingService`.
 
 ---
 
-***REMOVED******REMOVED*** A/B Testing
+## A/B Testing
 
 Run the A/B test to compare baseline vs contextualized embeddings:
 
 ```bash
-***REMOVED*** Basic test
+# Basic test
 python scripts/test_contextualized_ab.py
 
-***REMOVED*** With ground truth evaluation
+# With ground truth evaluation
 python scripts/test_contextualized_ab.py \
     --ground-truth tests/eval/ground_truth.json \
     --k 5 \
     --runs 3
 
-***REMOVED*** Different dimension
+# Different dimension
 python scripts/test_contextualized_ab.py --dim 2048
 ```
 
-***REMOVED******REMOVED******REMOVED*** Metrics Evaluated
+### Metrics Evaluated
 
 | Metric | Description |
 |--------|-------------|
@@ -142,7 +142,7 @@ python scripts/test_contextualized_ab.py --dim 2048
 | Recall@k | % of relevant docs retrieved |
 | Overlap | % same results as baseline |
 
-***REMOVED******REMOVED******REMOVED*** Pass Criteria
+### Pass Criteria
 
 - Latency overhead <= 50%
 - Overlap with baseline >= 60%
@@ -151,9 +151,9 @@ python scripts/test_contextualized_ab.py --dim 2048
 
 ---
 
-***REMOVED******REMOVED*** Implementation Details
+## Implementation Details
 
-***REMOVED******REMOVED******REMOVED*** Service Class
+### Service Class
 
 Located in `src/models/contextualized_embedding.py`:
 
@@ -161,27 +161,27 @@ Located in `src/models/contextualized_embedding.py`:
 class ContextualizedEmbeddingService:
     MODEL_NAME = "voyage-context-3"
 
-    ***REMOVED*** API limits
+    # API limits
     MAX_DOCUMENTS_PER_REQUEST = 1000
     MAX_CHUNKS_PER_REQUEST = 16000
     MAX_TOKENS_PER_DOCUMENT = 32000
     MAX_TOTAL_TOKENS = 120000
 
-    ***REMOVED*** Matryoshka dimensions
+    # Matryoshka dimensions
     SUPPORTED_DIMS = (2048, 1024, 512, 256)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Result Format
+### Result Format
 
 ```python
 @dataclass
 class ContextualizedEmbeddingResult:
-    embeddings: list[list[float]]  ***REMOVED*** Flat list of all chunk embeddings
-    total_tokens: int              ***REMOVED*** Total tokens processed
-    chunks_per_document: list[int] ***REMOVED*** Chunks per input document
+    embeddings: list[list[float]]  # Flat list of all chunk embeddings
+    total_tokens: int              # Total tokens processed
+    chunks_per_document: list[int] # Chunks per input document
 ```
 
-***REMOVED******REMOVED******REMOVED*** Langfuse Tracing
+### Langfuse Tracing
 
 All calls are automatically traced with `@observe` decorator:
 - `voyage-contextualized-embed-documents`
@@ -190,9 +190,9 @@ All calls are automatically traced with `@observe` decorator:
 
 ---
 
-***REMOVED******REMOVED*** Best Practices
+## Best Practices
 
-***REMOVED******REMOVED******REMOVED*** Chunking Strategy
+### Chunking Strategy
 
 For contextualized embeddings, chunks should:
 
@@ -202,41 +202,41 @@ For contextualized embeddings, chunks should:
 4. **Group logically** - All chunks from same document together
 
 ```python
-***REMOVED*** Good: Non-overlapping semantic chunks
+# Good: Non-overlapping semantic chunks
 chunks = ["Introduction...", "Section 1...", "Section 2...", "Conclusion..."]
 
-***REMOVED*** Bad: Overlapping chunks (standard RAG style)
-chunks = ["Intro + start of S1", "end of S1 + start of S2", ...]  ***REMOVED*** Don't do this
+# Bad: Overlapping chunks (standard RAG style)
+chunks = ["Intro + start of S1", "end of S1 + start of S2", ...]  # Don't do this
 ```
 
-***REMOVED******REMOVED******REMOVED*** Batch Processing
+### Batch Processing
 
 Process multiple documents together for efficiency:
 
 ```python
-***REMOVED*** Process 10 documents in one API call
+# Process 10 documents in one API call
 all_docs = [doc1_chunks, doc2_chunks, ..., doc10_chunks]
 result = await service.embed_documents(all_docs)
 
-***REMOVED*** Map embeddings back to documents
+# Map embeddings back to documents
 offset = 0
 for doc_idx, num_chunks in enumerate(result.chunks_per_document):
     doc_embeddings = result.embeddings[offset:offset + num_chunks]
     offset += num_chunks
 ```
 
-***REMOVED******REMOVED******REMOVED*** Error Handling
+### Error Handling
 
 The service includes automatic retry with exponential backoff:
 
 ```python
-***REMOVED*** Retries on: RateLimitError, ServiceUnavailableError, Timeout
-***REMOVED*** Up to 6 attempts with random exponential backoff (max 60s)
+# Retries on: RateLimitError, ServiceUnavailableError, Timeout
+# Up to 6 attempts with random exponential backoff (max 60s)
 ```
 
 ---
 
-***REMOVED******REMOVED*** Comparison: Standard vs Contextualized
+## Comparison: Standard vs Contextualized
 
 | Aspect | Standard (voyage-3-large) | Contextualized (voyage-context-3) |
 |--------|---------------------------|-----------------------------------|
@@ -249,9 +249,9 @@ The service includes automatic retry with exponential backoff:
 
 ---
 
-***REMOVED******REMOVED*** Troubleshooting
+## Troubleshooting
 
-***REMOVED******REMOVED******REMOVED*** Common Issues
+### Common Issues
 
 | Issue | Solution |
 |-------|----------|
@@ -260,7 +260,7 @@ The service includes automatic retry with exponential backoff:
 | Low quality results | Check chunking strategy (no overlap) |
 | High latency | Reduce output dimension (1024 → 512) |
 
-***REMOVED******REMOVED******REMOVED*** Debugging
+### Debugging
 
 Enable debug logging:
 
@@ -271,7 +271,7 @@ logging.getLogger("src.models.contextualized_embedding").setLevel(logging.DEBUG)
 
 ---
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - `scripts/test_contextualized_ab.py` - A/B testing script
 - `tests/unit/models/test_contextualized_pipeline.py` - Service pipeline tests

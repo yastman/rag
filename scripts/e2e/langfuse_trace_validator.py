@@ -85,7 +85,7 @@ class LiteLLMRouteProof:
 
 
 def _langfuse_is_configured() -> bool:
-    ***REMOVED*** Langfuse SDK can be configured via env. If keys are missing, validation is meaningless.
+    # Langfuse SDK can be configured via env. If keys are missing, validation is meaningless.
     return bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
 
 
@@ -113,7 +113,7 @@ def probe_litellm_route(
 
     request = urllib.request.Request(info_url, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:  ***REMOVED*** nosec B310
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
             raw_payload = response.read().decode("utf-8")
     except Exception:
         return None
@@ -184,7 +184,7 @@ def resolve_missing_observations(
     of their alias spans in ``span_names``.
 
     Shared between :mod:`scripts.e2e.langfuse_trace_validator` and
-    :mod:`scripts.e2e.langfuse_latest_trace_audit` (***REMOVED***1621).
+    :mod:`scripts.e2e.langfuse_latest_trace_audit` (#1621).
     """
     missing: set[str] = set()
     for required in required_observations:
@@ -194,8 +194,8 @@ def resolve_missing_observations(
     return missing
 
 
-***REMOVED*** Backwards compatibility shim for any external callers still using the
-***REMOVED*** private name. Slated for removal once 1.x consumers migrate.
+# Backwards compatibility shim for any external callers still using the
+# private name. Slated for removal once 1.x consumers migrate.
 _resolve_missing_observations = resolve_missing_observations
 
 
@@ -249,7 +249,7 @@ def validate_latest_trace(
 ) -> TraceValidationResult:
     """Validate that the latest trace contains required spans/scores."""
     if is_command:
-        ***REMOVED*** Commands are handled by separate handlers, not the RAG pipeline entrypoint.
+        # Commands are handled by separate handlers, not the RAG pipeline entrypoint.
         return TraceValidationResult(
             ok=True,
             trace_id=None,
@@ -259,7 +259,7 @@ def validate_latest_trace(
 
     contract = SCENARIO_CONTRACTS.get(scenario_kind, SCENARIO_CONTRACTS["text_rag"])
 
-    ***REMOVED*** Base contract from scenario; branch-aware RAG expectations are additive.
+    # Base contract from scenario; branch-aware RAG expectations are additive.
     required_scores: set[str] = set(contract["required_scores"])
     required_observations: set[str] = set(contract["required_observations"])
 
@@ -272,7 +272,7 @@ def validate_latest_trace(
             error="Langfuse keys are not configured (LANGFUSE_PUBLIC_KEY/SECRET_KEY).",
         )
 
-    ***REMOVED*** Use scenario trace names and tags when the caller has not overridden them.
+    # Use scenario trace names and tags when the caller has not overridden them.
     effective_trace_name = trace_name
     if trace_name == DEFAULT_TRACE_NAME and contract.get("trace_names"):
         effective_trace_name = contract["trace_names"]
@@ -304,10 +304,10 @@ def validate_latest_trace(
     scores = {s.name: getattr(s, "value", None) for s in trace.scores}
     score_names = set(scores.keys())
 
-    ***REMOVED*** Base observation misses from the scenario contract.
+    # Base observation misses from the scenario contract.
     missing_spans = resolve_missing_observations(required_observations, span_names)
 
-    ***REMOVED*** Root trace input/output checks (trace-level, not observation-level).
+    # Root trace input/output checks (trace-level, not observation-level).
     trace_input = getattr(trace, "input", None) or {}
     trace_output = getattr(trace, "output", None) or {}
 
@@ -317,7 +317,7 @@ def validate_latest_trace(
     if not isinstance(trace_output, dict) or trace_output.get("answer_hash") is None:
         missing_spans.add("root_output")
 
-    ***REMOVED*** Determine branch from scores, falling back to scenario hints when scores are missing.
+    # Determine branch from scores, falling back to scenario hints when scores are missing.
     query_type = _as_float(scores.get("query_type"))
     semantic_hit = _as_bool(scores.get("semantic_cache_hit"))
     llm_used = _as_bool(scores.get("llm_used"))
@@ -325,28 +325,28 @@ def validate_latest_trace(
     no_results = _as_bool(scores.get("no_results"))
     rerank_applied = _as_bool(scores.get("rerank_applied"))
 
-    ***REMOVED*** If query_type missing, infer CHITCHAT from scenario hint.
+    # If query_type missing, infer CHITCHAT from scenario hint.
     is_chitchat = (query_type == 0.0) if query_type is not None else bool(should_skip_rag)
 
     if not is_chitchat:
         required_observations |= {"node-cache-check"}
 
     if not is_chitchat and semantic_hit is False:
-        ***REMOVED*** Retrieval path: cache miss → retrieve → grade
+        # Retrieval path: cache miss → retrieve → grade
         required_observations |= {"node-retrieve", "node-grade"}
 
         if rerank_applied is True:
             required_observations |= {"node-rerank"}
 
         if (llm_used is True) and (no_results is False) and ((results_count or 0) > 0):
-            ***REMOVED*** Generation path: generate → cache-store → respond
+            # Generation path: generate → cache-store → respond
             required_observations |= {"node-generate", "node-cache-store", "node-respond"}
 
-    ***REMOVED*** Recompute observation misses after branch-aware additions.
+    # Recompute observation misses after branch-aware additions.
     missing_spans |= resolve_missing_observations(required_observations, span_names)
     missing_scores = set(required_scores - score_names)
 
-    ***REMOVED*** Invalid/non-numeric query_type must be treated as a missing required score.
+    # Invalid/non-numeric query_type must be treated as a missing required score.
     if "query_type" in score_names and query_type is None:
         missing_scores.add("query_type")
 

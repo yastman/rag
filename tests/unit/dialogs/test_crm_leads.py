@@ -1,11 +1,11 @@
-"""Tests for CRM Leads dialogs: CreateLeadWizard, LeadsMenu, MyLeads, SearchLeads (***REMOVED***697)."""
+"""Tests for CRM Leads dialogs: CreateLeadWizard, LeadsMenu, MyLeads, SearchLeads (#697)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 
-***REMOVED*** --- LeadsMenuSG states ---
+# --- LeadsMenuSG states ---
 
 
 def test_leads_menu_sg_has_main():
@@ -15,7 +15,7 @@ def test_leads_menu_sg_has_main():
     assert hasattr(LeadsMenuSG, "main")
 
 
-***REMOVED*** --- MyLeadsSG states ---
+# --- MyLeadsSG states ---
 
 
 def test_my_leads_sg_has_main():
@@ -25,7 +25,7 @@ def test_my_leads_sg_has_main():
     assert hasattr(MyLeadsSG, "main")
 
 
-***REMOVED*** --- SearchLeadsSG states ---
+# --- SearchLeadsSG states ---
 
 
 def test_search_leads_sg_has_query_and_results():
@@ -36,7 +36,7 @@ def test_search_leads_sg_has_query_and_results():
     assert hasattr(SearchLeadsSG, "results")
 
 
-***REMOVED*** --- Dialog objects ---
+# --- Dialog objects ---
 
 
 def test_leads_menu_dialog_is_dialog():
@@ -118,11 +118,11 @@ def test_search_leads_dialog_has_query_and_results_windows():
     assert SearchLeadsSG.results in states
 
 
-***REMOVED*** --- Getters ---
+# --- Getters ---
 
 
 async def test_get_leads_menu_data_returns_required_keys():
-    """Leads menu getter returns title + button labels (no btn_search after ***REMOVED***731)."""
+    """Leads menu getter returns title + button labels (no btn_search after #731)."""
     from telegram_bot.dialogs.crm_leads import get_leads_menu_data
 
     result = await get_leads_menu_data()
@@ -246,7 +246,7 @@ async def test_get_search_leads_results_with_mock_kommo():
     assert "Searched Deal" in result["results_text"]
 
 
-***REMOVED*** --- on_name_entered handler ---
+# --- on_name_entered handler ---
 
 
 async def test_on_lead_name_entered_saves_name_and_advances():
@@ -267,7 +267,7 @@ async def test_on_lead_name_entered_saves_name_and_advances():
     dm.switch_to.assert_called_once_with(CreateLeadSG.budget)
 
 
-***REMOVED*** --- on_budget_entered handler ---
+# --- on_budget_entered handler ---
 
 
 async def test_on_lead_budget_entered_valid_saves_and_advances():
@@ -324,7 +324,7 @@ async def test_on_lead_budget_entered_invalid_shows_error():
     dm.switch_to.assert_not_called()
 
 
-***REMOVED*** --- on_pipeline_selected handler ---
+# --- on_pipeline_selected handler ---
 
 
 async def test_on_pipeline_selected_saves_and_advances():
@@ -346,7 +346,7 @@ async def test_on_pipeline_selected_saves_and_advances():
     dm.switch_to.assert_called_once_with(CreateLeadSG.summary)
 
 
-***REMOVED*** --- on_lead_confirm handler (calls kommo API) ---
+# --- on_lead_confirm handler (calls kommo API) ---
 
 
 async def test_on_lead_confirm_calls_create_lead():
@@ -395,7 +395,7 @@ async def test_on_lead_confirm_no_kommo_shows_error():
     dm.done.assert_not_called()
 
 
-***REMOVED*** --- Search flow handler ---
+# --- Search flow handler ---
 
 
 async def test_on_search_leads_query_saves_and_switches():
@@ -416,26 +416,26 @@ async def test_on_search_leads_query_saves_and_switches():
     dm.switch_to.assert_called_once_with(SearchLeadsSG.results)
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Task 3: Search button removed from leads menu (***REMOVED***731)
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 3: Search button removed from leads menu (#731)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def test_leads_menu_getter_has_no_btn_search():
-    """leads menu getter should not return btn_search after removal (***REMOVED***731)."""
+    """leads menu getter should not return btn_search after removal (#731)."""
     from telegram_bot.dialogs.crm_leads import get_leads_menu_data
 
     result = await get_leads_menu_data()
     assert "btn_search" not in result
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Task 4: Updated lead card — contact name, task count, no raw IDs (***REMOVED***731)
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 4: Updated lead card — contact name, task count, no raw IDs (#731)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_lead_card_no_raw_ids():
-    """format_lead_card should not show raw status_id or pipeline_id (***REMOVED***731)."""
+    """format_lead_card should not show raw status_id or pipeline_id (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
     from telegram_bot.services.kommo_models import Lead
 
@@ -446,7 +446,7 @@ def test_lead_card_no_raw_ids():
 
 
 def test_lead_card_shows_contact_name():
-    """format_lead_card displays contact name when contacts available (***REMOVED***731)."""
+    """format_lead_card displays contact name when contacts available (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
     from telegram_bot.services.kommo_models import Lead
 
@@ -456,7 +456,7 @@ def test_lead_card_shows_contact_name():
 
 
 def test_lead_card_shows_task_count():
-    """format_lead_card displays task_count when provided (***REMOVED***731)."""
+    """format_lead_card displays task_count when provided (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
     from telegram_bot.services.kommo_models import Lead
 
@@ -466,7 +466,7 @@ def test_lead_card_shows_task_count():
 
 
 def test_lead_card_shows_zero_tasks_by_default():
-    """format_lead_card shows 0 tasks when task_count not provided (***REMOVED***731)."""
+    """format_lead_card shows 0 tasks when task_count not provided (#731)."""
     from telegram_bot.dialogs.crm_cards import format_lead_card
     from telegram_bot.services.kommo_models import Lead
 
@@ -476,7 +476,7 @@ def test_lead_card_shows_zero_tasks_by_default():
 
 
 async def test_get_my_leads_batches_task_counts():
-    """my leads getter fetches task counts and passes them to card formatter (***REMOVED***731)."""
+    """my leads getter fetches task counts and passes them to card formatter (#731)."""
     from telegram_bot.dialogs.crm_leads import get_my_leads_data
     from telegram_bot.services.kommo_models import Lead, Task
 
@@ -492,6 +492,6 @@ async def test_get_my_leads_batches_task_counts():
     dm.middleware_data = {"kommo_client": kommo}
 
     result = await get_my_leads_data(dialog_manager=dm)
-    ***REMOVED*** get_tasks should be called for task counts
+    # get_tasks should be called for task counts
     kommo.get_tasks.assert_called_once()
     assert "Deal Beta" in result["leads_text"]

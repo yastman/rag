@@ -19,9 +19,9 @@ from scripts.export_traces_to_dataset import (
 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_trace(
@@ -46,9 +46,9 @@ def _make_observation(
     return SimpleNamespace(name=name, output=output)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** get_trace_scores
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# get_trace_scores
+# ---------------------------------------------------------------------------
 
 
 class TestGetTraceScores:
@@ -68,9 +68,9 @@ class TestGetTraceScores:
         assert get_trace_scores(trace) == {}
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** classify_export_reasons
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# classify_export_reasons
+# ---------------------------------------------------------------------------
 
 
 class TestClassifyExportReasons:
@@ -109,9 +109,9 @@ class TestClassifyExportReasons:
         assert SCORE_THRESHOLDS["judge_context_relevance"] == 0.65
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** extract_item_data
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# extract_item_data
+# ---------------------------------------------------------------------------
 
 
 class TestExtractItemData:
@@ -135,7 +135,7 @@ class TestExtractItemData:
         obs = _make_observation(
             name="node-retrieve",
             output={
-                ***REMOVED*** node-retrieve writes eval_docs as a joined string, not retrieved_context
+                # node-retrieve writes eval_docs as a joined string, not retrieved_context
                 "eval_docs": "[0.90] doc1\n\n[0.80] doc2",
             },
         )
@@ -152,9 +152,9 @@ class TestExtractItemData:
         assert data["context"] == []
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** fetch_exportable_traces
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# fetch_exportable_traces
+# ---------------------------------------------------------------------------
 
 
 class TestFetchExportableTraces:
@@ -171,7 +171,7 @@ class TestFetchExportableTraces:
         )
 
         langfuse = MagicMock()
-        ***REMOVED*** Page 1: two traces; Page 2: empty
+        # Page 1: two traces; Page 2: empty
         langfuse.api.trace.list.side_effect = [
             SimpleNamespace(data=[bad_trace, good_trace]),
             SimpleNamespace(data=[]),
@@ -213,9 +213,9 @@ class TestFetchExportableTraces:
         assert langfuse.api.trace.list.call_count == 3
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** export_to_langfuse
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# export_to_langfuse
+# ---------------------------------------------------------------------------
 
 
 class TestExportToLangfuse:
@@ -245,9 +245,9 @@ class TestExportToLangfuse:
         langfuse.flush.assert_called_once()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** export_to_jsonl
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# export_to_jsonl
+# ---------------------------------------------------------------------------
 
 
 class TestExportToJsonl:
@@ -287,9 +287,9 @@ class TestExportToJsonl:
         assert output.exists()
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** make_dataset_name
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# make_dataset_name
+# ---------------------------------------------------------------------------
 
 
 class TestMakeDatasetName:

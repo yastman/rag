@@ -24,7 +24,7 @@ class TestBuildGraph:
             qdrant=qdrant,
         )
         assert graph is not None
-        ***REMOVED*** Compiled graph should have an invoke method
+        # Compiled graph should have an invoke method
         assert hasattr(graph, "ainvoke")
 
     def test_graph_has_expected_nodes(self):
@@ -41,7 +41,7 @@ class TestBuildGraph:
             qdrant=qdrant,
         )
 
-        ***REMOVED*** Get node names from the graph
+        # Get node names from the graph
         node_names = set(graph.get_graph().nodes.keys())
         expected_nodes = {
             "guard",
@@ -116,8 +116,8 @@ class TestBuildGraph:
         )
 
         with pytest.raises(Exception) as exc_info:
-            ***REMOVED*** Empty state is intentionally invalid, but this call must not crash
-            ***REMOVED*** with TypeError caused by duplicate "context" kwargs.
+            # Empty state is intentionally invalid, but this call must not crash
+            # with TypeError caused by duplicate "context" kwargs.
             await graph.ainvoke({}, context={"guard_mode": "soft"})
 
         assert "multiple values for keyword argument 'context'" not in str(exc_info.value)

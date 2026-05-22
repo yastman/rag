@@ -210,7 +210,7 @@ async def test_catalog_text_input_routes_actions_before_search() -> None:
 
 @pytest.mark.asyncio
 async def test_catalog_text_input_routes_home_before_search() -> None:
-    """Regression ***REMOVED***1298: '🏠 Главное меню' must not fall through to _run_demo_search."""
+    """Regression #1298: '🏠 Главное меню' must not fall through to _run_demo_search."""
     from telegram_bot.dialogs.catalog import on_catalog_text_input
 
     message = MagicMock()

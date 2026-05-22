@@ -16,15 +16,58 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd ***REMOVED*** v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b ***REMOVED*** v8.1.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
 
       - name: Ruff lint
-        run: uvx ruff check src/ telegram_bot/ --output-format=github
+        run: uvx ruff check src/ telegram_bot/ mini_app/ services/ scripts/ --output-format=github
 
       - name: Ruff format check
-        run: uvx ruff format --target-version py312 --check src/ telegram_bot/
+        run: uvx ruff format --target-version py312 --check src/ telegram_bot/ mini_app/ services/ scripts/
+
+  fast-tests:
+    name: Fast Tests (unit + contract + critical graph paths)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run fast tests with coverage
+        run: >
+          PYTHONDONTWRITEBYTECODE=1 uv run pytest
+          tests/unit/ tests/contract/ tests/integration/test_graph_paths.py
+          --ignore=tests/unit/test_document_parser.py
+          --ignore=tests/unit/test_evaluator.py
+          --ignore=tests/unit/evaluation/test_ragas_evaluation.py
+          --ignore=tests/unit/api
+          --ignore=tests/unit/mini_app
+          --ignore=tests/contract/test_issue_1812_mypy_embedding_reranker_contract.py
+          --ignore=tests/unit/voice/test_sip_setup.py
+          --ignore=tests/unit/voice/test_voice_agent.py
+          --ignore=tests/unit/ingestion/test_cocoindex_init.py
+          --ignore=tests/unit/ingestion/test_qdrant_hybrid_target.py
+          --ignore=tests/unit/ingestion/test_qdrant_hybrid_target_helpers.py
+          --ignore=tests/unit/ingestion/test_qdrant_hybrid_target_state_paths.py
+          --ignore=tests/unit/ingestion/test_target_sync_execution.py
+          --ignore=tests/unit/ingestion/test_unified_cli.py
+          --ignore=tests/unit/ingestion/test_unified_flow.py
+          --ignore=tests/unit/ingestion/test_unified_flow_wiring.py
+          -n auto --dist=worksteal -q --timeout=30
+          -m "not legacy_api and not requires_extras and not slow"
+          --cov=src --cov=telegram_bot
+          --cov-report=term-missing
+          --cov-fail-under=80

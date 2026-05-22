@@ -1,18 +1,18 @@
-***REMOVED*** Mini App Frontend
+# Mini App Frontend
 
 React + Vite SPA for the Telegram Mini App.
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 
 Renders the expert-selection UI, deep-link flow, and phone-capture form inside Telegram. Built as static assets and served by nginx in the `mini-app-frontend` container.
 
-***REMOVED******REMOVED*** Entrypoint
+## Entrypoint
 
 - **Application**: [`src/main.tsx`](src/main.tsx)
 - **Dockerfile**: [`Dockerfile`](Dockerfile)
 - **Nginx config**: [`nginx.conf`](nginx.conf)
 
-***REMOVED******REMOVED*** Docker
+## Docker
 
 - **Service name**: `mini-app-frontend`
 - **Profile**: — (default, unprofiled)
@@ -22,17 +22,17 @@ Renders the expert-selection UI, deep-link flow, and phone-capture form inside T
 - **Runtime security**: runs as `uid:gid 101:101` with `cap_drop: [ALL]` and only `cap_add: [NET_BIND_SERVICE]`
 - **Writable runtime paths**: nginx PID and temp/cache paths are rooted directly under `/tmp/*`
 
-***REMOVED******REMOVED*** Local Development
+## Local Development
 
 ```bash
 cd mini_app/frontend
 npm ci
-npm run dev        ***REMOVED*** Vite dev server (proxies /api to localhost:8090)
-npm run build      ***REMOVED*** Production build → dist/
-npm run test       ***REMOVED*** Vitest unit tests
+npm run dev        # Vite dev server (proxies /api to localhost:8090)
+npm run build      # Production build → dist/
+npm run test       # Vitest unit tests
 ```
 
-***REMOVED******REMOVED*** Configuration
+## Configuration
 
 Vite exposes only variables prefixed with `VITE_` to the client bundle.
 Copy [`.env.example`](.env.example) to `.env.local` and adjust per
@@ -45,18 +45,18 @@ deployment.
 |                     | "Открыть в Telegram" ("Open in Telegram") CTA: `https://t.me/${VITE_BOT_USERNAME}`. Should   |                  |
 |                     | match the backend `BOT_USERNAME` env var.                              |                  |
 
-***REMOVED******REMOVED*** Tests & Checks
+## Tests & Checks
 
 ```bash
-***REMOVED*** Frontend unit tests (vitest)
+# Frontend unit tests (vitest)
 npm run test
 
-***REMOVED*** Dockerfile / runtime contract tests
+# Dockerfile / runtime contract tests
 uv run pytest tests/unit/mini_app/test_frontend_runtime_contract.py -v
 uv run pytest tests/unit/test_mini_app_dockerfile_build_deps.py -v
 ```
 
-***REMOVED******REMOVED*** Owner Boundaries
+## Owner Boundaries
 
 - React component tree, state management (React hooks), routing
 - Telegram Mini App SDK integration (`@tma.js/sdk-react`)

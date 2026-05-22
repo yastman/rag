@@ -1,13 +1,13 @@
-***REMOVED*** Alert Rules for Extended Services
-***REMOVED*** Monitors: docling, minio, redis-langfuse, lightrag
+# Alert Rules for Extended Services
+# Monitors: docling, minio, redis-langfuse, lightrag
 
 groups:
   - name: extended-services
     interval: 1m
     rules:
-      ***REMOVED*** =========================================================================
-      ***REMOVED*** DEV-DOCLING (Critical - Ingestion Pipeline)
-      ***REMOVED*** =========================================================================
+      # =========================================================================
+      # DEV-DOCLING (Critical - Ingestion Pipeline)
+      # =========================================================================
 
       - alert: DoclingDown
         expr: |
@@ -53,9 +53,9 @@ groups:
           summary: "Docling errors detected"
           description: "Multiple errors in Docling logs"
 
-      ***REMOVED*** =========================================================================
-      ***REMOVED*** DEV-MINIO (Critical - Langfuse Storage)
-      ***REMOVED*** =========================================================================
+      # =========================================================================
+      # DEV-MINIO (Critical - Langfuse Storage)
+      # =========================================================================
 
       - alert: MinioDown
         expr: |
@@ -112,9 +112,9 @@ groups:
           summary: "MinIO errors detected"
           description: "Multiple errors in MinIO logs"
 
-      ***REMOVED*** =========================================================================
-      ***REMOVED*** DEV-REDIS-LANGFUSE (Critical - Langfuse Queue)
-      ***REMOVED*** =========================================================================
+      # =========================================================================
+      # DEV-REDIS-LANGFUSE (Critical - Langfuse Queue)
+      # =========================================================================
 
       - alert: RedisLangfuseDown
         expr: |
@@ -149,9 +149,9 @@ groups:
           summary: "Redis Langfuse memory pressure"
           description: "Redis Langfuse memory eviction detected"
 
-      ***REMOVED*** =========================================================================
-      ***REMOVED*** DEV-LIGHTRAG (Critical - Graph RAG)
-      ***REMOVED*** =========================================================================
+      # =========================================================================
+      # DEV-LIGHTRAG (Critical - Graph RAG)
+      # =========================================================================
 
       - alert: LightRAGDown
         expr: |

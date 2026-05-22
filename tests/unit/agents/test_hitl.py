@@ -1,4 +1,4 @@
-"""Tests for HITL (Human-in-the-Loop) guard and preview (***REMOVED***443)."""
+"""Tests for HITL (Human-in-the-Loop) guard and preview (#443)."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _make_ctx(mock_kommo) -> BotContext:
     )
 
 
-***REMOVED*** --- format_hitl_preview ---
+# --- format_hitl_preview ---
 
 
 def test_format_hitl_preview_create_lead():
@@ -99,7 +99,7 @@ def test_format_hitl_preview_unknown_tool():
     assert "some_unknown_tool" in preview
 
 
-***REMOVED*** --- hitl_guard calls interrupt ---
+# --- hitl_guard calls interrupt ---
 
 
 def test_hitl_guard_calls_interrupt_with_payload():
@@ -132,7 +132,7 @@ def test_hitl_guard_returns_cancel():
         assert result == {"action": "cancel"}
 
 
-***REMOVED*** --- HITL-wrapped CRM tools ---
+# --- HITL-wrapped CRM tools ---
 
 
 async def test_crm_create_lead_approve():

@@ -11,9 +11,9 @@ from telegram_bot.services.query_analyzer import QueryAnalysisResult, QueryAnaly
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestQueryAnalyzerInit
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestQueryAnalyzerInit
+# =============================================================================
 
 
 class TestQueryAnalyzerInit:
@@ -56,9 +56,9 @@ class TestQueryAnalyzerInit:
             assert analyzer.model == model, f"Failed for model: {model}"
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestQueryAnalyzerAnalyze
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestQueryAnalyzerAnalyze
+# =============================================================================
 
 
 class TestQueryAnalyzerAnalyze:
@@ -278,9 +278,9 @@ class TestQueryAnalyzerAnalyze:
         assert result["semantic_query"] == "test query"
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestQueryAnalyzerClose
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestQueryAnalyzerClose
+# =============================================================================
 
 
 class TestQueryAnalyzerClose:
@@ -295,9 +295,9 @@ class TestQueryAnalyzerClose:
         analyzer.client.close.assert_called_once()
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** Integration-style tests (still mocked, but testing flow)
-***REMOVED*** =============================================================================
+# =============================================================================
+# Integration-style tests (still mocked, but testing flow)
+# =============================================================================
 
 
 class TestQueryAnalyzerFlow:
@@ -314,7 +314,7 @@ class TestQueryAnalyzerFlow:
                 filters={"price": {"lt": 75000}}, semantic_query="квартира у моря"
             )
         )
-        analyzer.client = AsyncMock()  ***REMOVED*** needed for close() assertion
+        analyzer.client = AsyncMock()  # needed for close() assertion
 
         assert analyzer.api_key == "test-key"
         assert analyzer.base_url == "http://localhost:8000"
@@ -367,16 +367,16 @@ class TestQueryAnalyzerFlow:
         assert result2["semantic_query"] == "квартира"
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestQueryAnalyzerInstructorLangfuseCompat (***REMOVED***1659 STEP 0 PREFLIGHT)
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestQueryAnalyzerInstructorLangfuseCompat (#1659 STEP 0 PREFLIGHT)
+# =============================================================================
 
 
 class TestQueryAnalyzerInstructorLangfuseCompat:
     """Preflight: confirm `instructor.from_openai(langfuse.openai.AsyncOpenAI(...))`
     preserves langfuse auto-tracing on the underlying client.
 
-    Rationale (audit comment on ***REMOVED***1659): if instructor patched
+    Rationale (audit comment on #1659): if instructor patched
     ``chat.completions.create`` at the wrong layer it would strip the
     ``langfuse.openai`` wrap, and then a plain ``@observe`` wrapper around
     ``QueryAnalyzer.analyze`` would NOT contain a nested generation
@@ -390,7 +390,7 @@ class TestQueryAnalyzerInstructorLangfuseCompat:
     instructor's ``AsyncInstructor.create`` ultimately delegates to
     ``self.client.chat.completions.create`` via ``self.create_fn`` so the
     langfuse generation is created at call time. Pass ⇒ simple ``@observe``
-    is the correct implementation strategy for ***REMOVED***1659.
+    is the correct implementation strategy for #1659.
     """
 
     def test_chat_completions_create_remains_langfuse_wrapped(self):
@@ -401,15 +401,15 @@ class TestQueryAnalyzerInstructorLangfuseCompat:
         c = AsyncOpenAI(api_key="x", base_url="http://x")
         ic = instructor.from_openai(c)
 
-        ***REMOVED*** instructor stores the original client as ic.client
+        # instructor stores the original client as ic.client
         assert ic.client is c, (
             "instructor.from_openai must retain the original langfuse-wrapped "
             "client; otherwise the langfuse trace wrap is lost"
         )
 
         underlying_create = ic.client.chat.completions.create
-        ***REMOVED*** langfuse uses wrapt to monkey-patch the OpenAI SDK call site, leaving
-        ***REMOVED*** a BoundFunctionWrapper whose `_self_wrapper` points back at langfuse.
+        # langfuse uses wrapt to monkey-patch the OpenAI SDK call site, leaving
+        # a BoundFunctionWrapper whose `_self_wrapper` points back at langfuse.
         assert hasattr(underlying_create, "__wrapped__"), (
             "Expected `__wrapped__` marker from wrapt on langfuse.openai's "
             "patched chat.completions.create"
@@ -422,19 +422,19 @@ class TestQueryAnalyzerInstructorLangfuseCompat:
         assert wrapper_module.startswith("langfuse.openai"), (
             f"langfuse trace wrap stripped after instructor.from_openai — "
             f"_self_wrapper module is {wrapper_module!r}; "
-            f"***REMOVED***1659 implementation must switch to "
+            f"#1659 implementation must switch to "
             f"`with langfuse.start_as_current_observation(as_type='generation', "
             f"name='query-analyzer-llm', model=self.model) as gen: ...`"
         )
 
 
-***REMOVED*** =============================================================================
-***REMOVED*** TestQueryAnalyzerObserveInstrumentation (***REMOVED***1659)
-***REMOVED*** =============================================================================
+# =============================================================================
+# TestQueryAnalyzerObserveInstrumentation (#1659)
+# =============================================================================
 
 
 class TestQueryAnalyzerObserveInstrumentation:
-    """Tests for @observe instrumentation on QueryAnalyzer.analyze (***REMOVED***1659).
+    """Tests for @observe instrumentation on QueryAnalyzer.analyze (#1659).
 
     Contract: ``analyze`` (line ~86) must be wrapped with::
 
@@ -477,7 +477,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         the original module object is restored — otherwise the reload would
         leave a fresh ``QueryAnalyzer`` class in ``sys.modules`` and other
         tests would see drift between the lazy-imported package attribute
-        and any test-file-level binding (pattern from ***REMOVED***1660 TDD).
+        and any test-file-level binding (pattern from #1660 TDD).
         """
         import importlib
         import sys
@@ -523,12 +523,12 @@ class TestQueryAnalyzerObserveInstrumentation:
         importlib.import_module("telegram_bot.services.query_analyzer")
         return captured_calls
 
-    ***REMOVED*** ------------------------------------------------------------------
-    ***REMOVED*** Module-level wiring
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Module-level wiring
+    # ------------------------------------------------------------------
 
     def test_query_analyzer_module_imports_observe_and_get_client(self):
-        """Module wires the Langfuse decorator + client accessor (***REMOVED***1659 contract)."""
+        """Module wires the Langfuse decorator + client accessor (#1659 contract)."""
         from telegram_bot.services import query_analyzer as qa_mod
 
         assert hasattr(qa_mod, "observe"), (
@@ -541,9 +541,9 @@ class TestQueryAnalyzerObserveInstrumentation:
             "from telegram_bot.observability for curated update_current_span calls"
         )
 
-    ***REMOVED*** ------------------------------------------------------------------
-    ***REMOVED*** Decorator kwargs
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Decorator kwargs
+    # ------------------------------------------------------------------
 
     def test_query_analyzer_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
         """``analyze`` is decorated with the audit's exact kwargs.
@@ -563,10 +563,10 @@ class TestQueryAnalyzerObserveInstrumentation:
         )
         kwargs = matches[0]
         assert kwargs.get("capture_input") is False, (
-            "capture_input must be False (issue ***REMOVED***1659 explicit kwarg)"
+            "capture_input must be False (issue #1659 explicit kwarg)"
         )
         assert kwargs.get("capture_output") is False, (
-            "capture_output must be False (issue ***REMOVED***1659 explicit kwarg)"
+            "capture_output must be False (issue #1659 explicit kwarg)"
         )
         assert "as_type" not in kwargs, (
             "Wrapper must NOT use as_type='generation' — langfuse.openai "
@@ -575,9 +575,9 @@ class TestQueryAnalyzerObserveInstrumentation:
             "generation would produce duplicates."
         )
 
-    ***REMOVED*** ------------------------------------------------------------------
-    ***REMOVED*** Behavior: input payload (curated)
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Behavior: input payload (curated)
+    # ------------------------------------------------------------------
 
     async def test_input_payload_is_curated_query_preview_and_model(self, monkeypatch):
         """``analyze`` records {query_preview (<=120), model} only — no full query."""
@@ -619,12 +619,12 @@ class TestQueryAnalyzerObserveInstrumentation:
         assert len(captured_input["query_preview"]) <= 120
         assert captured_input.get("model") == "gpt-4o-mini"
 
-        ***REMOVED*** Forbidden: full query MUST NOT appear in span input.
+        # Forbidden: full query MUST NOT appear in span input.
         assert long_query not in str(captured_input)
 
-    ***REMOVED*** ------------------------------------------------------------------
-    ***REMOVED*** Behavior: output payload (curated)
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Behavior: output payload (curated)
+    # ------------------------------------------------------------------
 
     async def test_output_payload_records_curated_qaresult_summary(self, monkeypatch):
         """``analyze`` records curated summary of QueryAnalysisResult — no full payload.
@@ -665,7 +665,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         )
 
         result = await analyzer.analyze("any query")
-        ***REMOVED*** Behavior unchanged: caller still receives full filters + semantic_query
+        # Behavior unchanged: caller still receives full filters + semantic_query
         assert result["filters"]["city"] == secret_city
         assert result["semantic_query"] == secret_semantic
 
@@ -681,7 +681,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         assert captured_output.get("filter_keys") == sorted(["price", "city", "rooms"])
         assert captured_output.get("semantic_query_len") == len(secret_semantic)
 
-        ***REMOVED*** Forbidden: full LLM response payload MUST NOT appear in span output.
+        # Forbidden: full LLM response payload MUST NOT appear in span output.
         captured_str = str(captured_output)
         assert secret_city not in captured_str, (
             "Full filter values (e.g. city name) must not be captured to span output"
@@ -714,9 +714,9 @@ class TestQueryAnalyzerObserveInstrumentation:
 
         assert result == {"filters": {"city": "Бургас"}, "semantic_query": "квартира"}
 
-    ***REMOVED*** ------------------------------------------------------------------
-    ***REMOVED*** Behavior: exception path
-    ***REMOVED*** ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Behavior: exception path
+    # ------------------------------------------------------------------
 
     async def test_exception_path_records_error_level_and_returns_fallback(self, monkeypatch):
         """On internal failure: span level=ERROR + truncated status_message.
@@ -741,7 +741,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         original_query = "квартира в Бургасе"
         result = await analyzer.analyze(original_query)
 
-        ***REMOVED*** Existing fallback contract preserved
+        # Existing fallback contract preserved
         assert result == {"filters": {}, "semantic_query": original_query}
 
         error_calls = [
@@ -751,7 +751,7 @@ class TestQueryAnalyzerObserveInstrumentation:
         ]
         assert error_calls, (
             "Failure path must call update_current_span(level='ERROR', ...) on "
-            "QueryAnalyzer.analyze (***REMOVED***1659 plan)"
+            "QueryAnalyzer.analyze (#1659 plan)"
         )
         status = error_calls[0].get("status_message", "")
         assert "Instructor exploded mid-analyze" in status

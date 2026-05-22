@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """A/B test for Voyage Contextualized Embeddings (voyage-context-3).
 
 Compares baseline Voyage embeddings (voyage-3-large) against contextualized
@@ -28,7 +28,7 @@ from telegram_bot.services.qdrant import QdrantService
 from telegram_bot.services.voyage import VoyageService
 
 
-***REMOVED*** Optional: import contextualized service if available
+# Optional: import contextualized service if available
 try:
     from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -81,7 +81,7 @@ async def run_ab_test(
 
     config = BotConfig()
 
-    ***REMOVED*** Initialize services
+    # Initialize services
     baseline_voyage = VoyageService(api_key=config.voyage_api_key)
     contextualized = ContextualizedEmbeddingService(
         api_key=config.voyage_api_key,
@@ -93,12 +93,12 @@ async def run_ab_test(
         collection_name=config.qdrant_collection,
     )
 
-    ***REMOVED*** Load ground truth if available
+    # Load ground truth if available
     ground_truth: dict[str, list[str]] = {}
     if ground_truth_path and ground_truth_path.exists():
         with open(ground_truth_path) as f:
             gt_data = json.load(f)
-            ***REMOVED*** Support both formats: list of dicts or dict of query->ids
+            # Support both formats: list of dicts or dict of query->ids
             if isinstance(gt_data, list):
                 ground_truth = {
                     item.get("query", item.get("question", "")): item.get(
@@ -113,9 +113,9 @@ async def run_ab_test(
     else:
         logger.warning("No ground truth file - will measure overlap and latency only")
 
-    ***REMOVED*** Default test queries (use ground truth keys if available)
+    # Default test queries (use ground truth keys if available)
     test_queries = (
-        list(ground_truth.keys())[:20]  ***REMOVED*** Limit to 20 for reasonable test time
+        list(ground_truth.keys())[:20]  # Limit to 20 for reasonable test time
         if ground_truth
         else [
             "апартаменты в Солнечном берегу до 50000 евро",
@@ -137,7 +137,7 @@ async def run_ab_test(
         for query in test_queries:
             relevant_ids = ground_truth.get(query, [])
 
-            ***REMOVED*** === BASELINE (standard Voyage embeddings) ===
+            # === BASELINE (standard Voyage embeddings) ===
             start = time.time()
             baseline_embedding = await baseline_voyage.embed_query(query)
             baseline_embed_time = time.time() - start
@@ -152,7 +152,7 @@ async def run_ab_test(
             baseline_latency = baseline_embed_time + baseline_search_time
             baseline_ids = [r.get("id", str(r.get("point_id", ""))) for r in baseline_results]
 
-            ***REMOVED*** === CONTEXTUALIZED (voyage-context-3) ===
+            # === CONTEXTUALIZED (voyage-context-3) ===
             start = time.time()
             ctx_embedding = await contextualized.embed_query(query)
             ctx_embed_time = time.time() - start
@@ -167,7 +167,7 @@ async def run_ab_test(
             ctx_latency = ctx_embed_time + ctx_search_time
             ctx_ids = [r.get("id", str(r.get("point_id", ""))) for r in ctx_results]
 
-            ***REMOVED*** Calculate overlap between baseline and contextualized
+            # Calculate overlap between baseline and contextualized
             overlap = len(set(baseline_ids) & set(ctx_ids)) / k if k > 0 else 0
 
             results["baseline"].append(
@@ -195,25 +195,25 @@ async def run_ab_test(
                 }
             )
 
-    ***REMOVED*** Calculate aggregated metrics
+    # Calculate aggregated metrics
     n = len(results["baseline"])
 
-    ***REMOVED*** Latency metrics
+    # Latency metrics
     avg_latency_baseline = sum(r["latency"] for r in results["baseline"]) / n
     avg_latency_ctx = sum(r["latency"] for r in results["contextualized"]) / n
     avg_embed_baseline = sum(r["embed_time"] for r in results["baseline"]) / n
     avg_embed_ctx = sum(r["embed_time"] for r in results["contextualized"]) / n
 
-    ***REMOVED*** Overlap metric
+    # Overlap metric
     avg_overlap = sum(r["overlap_with_baseline"] for r in results["contextualized"]) / n
 
-    ***REMOVED*** Quality metrics
+    # Quality metrics
     avg_precision_baseline = sum(r["precision"] for r in results["baseline"]) / n
     avg_precision_ctx = sum(r["precision"] for r in results["contextualized"]) / n
     avg_recall_baseline = sum(r["recall"] for r in results["baseline"]) / n
     avg_recall_ctx = sum(r["recall"] for r in results["contextualized"]) / n
 
-    ***REMOVED*** Print results
+    # Print results
     print(f"\n{'=' * 70}")
     print(f"Contextualized Embeddings A/B Test Results (k={k}, runs={num_runs})")
     print("Model: voyage-context-3 vs baseline (voyage-3-large)")
@@ -258,14 +258,14 @@ async def run_ab_test(
 
     print(f"\n{'=' * 70}")
 
-    ***REMOVED*** Thresholds check
+    # Thresholds check
     print("\n  PASS/FAIL CRITERIA:")
     checks = [
         ("Latency overhead <= 50%", latency_diff <= 50),
         ("Overlap >= 60%", avg_overlap >= 0.6),
     ]
     if ground_truth:
-        ***REMOVED*** Contextualized should not degrade precision/recall by more than 10%
+        # Contextualized should not degrade precision/recall by more than 10%
         checks.append(
             ("Precision delta >= -10%", avg_precision_ctx >= avg_precision_baseline - 0.1)
         )
@@ -279,7 +279,7 @@ async def run_ab_test(
 
     print(f"\n{'=' * 70}")
 
-    ***REMOVED*** Save detailed results to JSON
+    # Save detailed results to JSON
     output_file = Path("reports/contextualized_ab_results.json")
     output_file.parent.mkdir(exist_ok=True)
     with open(output_file, "w") as f:

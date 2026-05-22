@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** Global singleton instances (typed as Any to avoid import at module level)
+# Global singleton instances (typed as Any to avoid import at module level)
 _bge_m3_model: Any | None = None
 _sentence_transformer: Any | None = None
 
@@ -116,7 +116,7 @@ def clear_models():
         del _sentence_transformer
         _sentence_transformer = None
 
-    ***REMOVED*** Force garbage collection
+    # Force garbage collection
     import gc
 
     gc.collect()

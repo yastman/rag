@@ -1,6 +1,6 @@
 """Contract: fast/profile/duration Makefile targets must select the same lane.
 
-Background (issue ***REMOVED***1795)
+Background (issue #1795)
 ------------------------
 The local fast-gate selection was inconsistent across `make` targets. Some
 targets did not exclude optional-extras tests via ``$(PYTEST_REQUIRES_EXTRAS_IGNORE)``,
@@ -38,9 +38,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
 
-***REMOVED*** Targets that SHARE the fast/local lane semantics with `test-unit`.
-***REMOVED*** `test-profile` and `test-store-durations` measure that same lane, so they
-***REMOVED*** must select identically.
+# Targets that SHARE the fast/local lane semantics with `test-unit`.
+# `test-profile` and `test-store-durations` measure that same lane, so they
+# must select identically.
 FAST_LANE_TARGETS = (
     "test",
     "test-unit",
@@ -124,7 +124,7 @@ def test_fast_lane_target_uses_canonical_marker(target: str) -> None:
     recipe = _extract_recipe(text, target)
     invocation = _pytest_invocation(recipe)
 
-    ***REMOVED*** Match `-m "<expr>"` or `-m '<expr>'`
+    # Match `-m "<expr>"` or `-m '<expr>'`
     marker_match = re.search(r"""-m\s+(["'])(?P<expr>[^"']*)\1""", invocation)
     assert marker_match, (
         f"Target `{target}` must pass an explicit `-m \"...\"` marker "

@@ -1,10 +1,10 @@
-***REMOVED*** AGENTS.override.md
+# AGENTS.override.md
 
-***REMOVED******REMOVED*** Scope
+## Scope
 - Applies to `telegram_bot/**`.
 - Extends root `AGENTS.md` with bot-specific constraints.
 
-***REMOVED******REMOVED*** Local Rules
+## Local Rules
 - Preserve LangGraph node contract shapes (`state` fields, routing assumptions).
 - Keep service boundaries intact:
   - `telegram_bot/services/` for business logic.
@@ -12,7 +12,7 @@
   - `telegram_bot/graph/nodes/` for pipeline steps.
 - Avoid mixing transport-layer Telegram handling with retrieval/domain logic.
 
-***REMOVED******REMOVED*** Required Validation
+## Required Validation
 - Always run fast checks:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
@@ -20,11 +20,11 @@
   - `uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q`
 - For cache/search/rerank behavior edits, run targeted suites from `tests/unit/` and affected integration tests.
 
-***REMOVED******REMOVED*** Observability
+## Observability
 - Keep existing tracing patterns consistent (`telegram_bot/observability.py`).
 - Do not remove score/trace instrumentation without explicit reason and replacement.
 
-***REMOVED******REMOVED*** References
+## References
 - `telegram_bot/README.md`
 - `docs/PIPELINE_OVERVIEW.md`
 - `docs/LOCAL-DEVELOPMENT.md`

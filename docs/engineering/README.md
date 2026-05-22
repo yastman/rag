@@ -1,8 +1,8 @@
-***REMOVED*** Engineering Docs
+# Engineering Docs
 
 Concise index for engineering process docs. These pages describe workflow, validation, triage, and process guidance; runtime and Docker facts stay in [`../../DOCKER.md`](../../DOCKER.md), local commands stay in [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md), and operational investigations start at [`../runbooks/README.md`](../runbooks/README.md).
 
-***REMOVED******REMOVED*** Active Workflow Docs
+## Active Workflow Docs
 
 | Doc | Use When |
 |---|---|
@@ -13,11 +13,11 @@ Concise index for engineering process docs. These pages describe workflow, valid
 | [`script-native-migration-matrix.md`](script-native-migration-matrix.md) | Auditing `scripts/` helpers and deciding keep/archive/native CLI migration paths. |
 
 
-***REMOVED******REMOVED*** Historical Or Resolved Notes
+## Historical Or Resolved Notes
 
 No active historical notes at this time.
 
-***REMOVED******REMOVED*** Fast Search
+## Fast Search
 
 ```bash
 rg -n "validation|test|triage|SDK|dependency|docs maintenance" docs/engineering/ docs/indexes/engineering-workflows.md

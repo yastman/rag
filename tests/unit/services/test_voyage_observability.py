@@ -22,9 +22,9 @@ class TestVoyageServiceObservability:
         """embed_query should have @observe decorator."""
         from telegram_bot.services.voyage import VoyageService
 
-        ***REMOVED*** Check if method has langfuse observation wrapper
+        # Check if method has langfuse observation wrapper
         method = VoyageService.embed_query
-        ***REMOVED*** The @observe decorator wraps the function, adding __wrapped__ attribute
+        # The @observe decorator wraps the function, adding __wrapped__ attribute
         assert hasattr(method, "__wrapped__") or hasattr(method, "_langfuse_observation")
 
     def test_embed_documents_has_observe_decorator(self):
@@ -78,7 +78,7 @@ class TestVoyageServiceObservabilityIntegration:
 
     async def test_embed_query_calls_langfuse_update(self, mock_voyage_client, mock_langfuse):
         """embed_query should update Langfuse generation with usage."""
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_response = MagicMock()
         mock_response.embeddings = [[0.1] * 1024]
         mock_response.usage = MagicMock(total_tokens=10)
@@ -88,16 +88,16 @@ class TestVoyageServiceObservabilityIntegration:
 
         service = VoyageService(api_key="test-key")
 
-        ***REMOVED*** Execute
+        # Execute
         result = await service.embed_query("test query")
 
-        ***REMOVED*** Verify embedding returned
+        # Verify embedding returned
         assert len(result) == 1024
         assert result[0] == 0.1
 
     async def test_embed_documents_calls_langfuse_update(self, mock_voyage_client, mock_langfuse):
         """embed_documents should update Langfuse generation with usage."""
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_response = MagicMock()
         mock_response.embeddings = [[0.1] * 1024, [0.2] * 1024]
         mock_response.usage = MagicMock(total_tokens=20)
@@ -107,16 +107,16 @@ class TestVoyageServiceObservabilityIntegration:
 
         service = VoyageService(api_key="test-key")
 
-        ***REMOVED*** Execute
+        # Execute
         result = await service.embed_documents(["doc1", "doc2"])
 
-        ***REMOVED*** Verify embeddings returned
+        # Verify embeddings returned
         assert len(result) == 2
         assert len(result[0]) == 1024
 
     async def test_rerank_calls_langfuse_update(self, mock_voyage_client, mock_langfuse):
         """rerank should update Langfuse generation with results count."""
-        ***REMOVED*** Setup mock response
+        # Setup mock response
         mock_result = MagicMock()
         mock_result.index = 0
         mock_result.relevance_score = 0.95
@@ -130,9 +130,9 @@ class TestVoyageServiceObservabilityIntegration:
 
         service = VoyageService(api_key="test-key")
 
-        ***REMOVED*** Execute
+        # Execute
         result = await service.rerank("query", ["doc1"], top_k=1)
 
-        ***REMOVED*** Verify results
+        # Verify results
         assert len(result) == 1
         assert result[0]["relevance_score"] == 0.95

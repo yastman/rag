@@ -1,4 +1,4 @@
-***REMOVED*** src/ingestion/unified/cli.py
+# src/ingestion/unified/cli.py
 """CLI for unified ingestion pipeline."""
 
 import argparse
@@ -26,7 +26,7 @@ def setup_logging(verbose: bool = False) -> None:
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
-    ***REMOVED*** Quiet noisy loggers
+    # Quiet noisy loggers
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("cocoindex").setLevel(logging.INFO)
@@ -132,7 +132,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     sync_info = _inspect_sync_dir(config.sync_dir, config.supported_extensions)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        ***REMOVED*** Qdrant reachable + collection exists
+        # Qdrant reachable + collection exists
         try:
             resp = await client.get(f"{config.qdrant_url}/collections/{config.collection_name}")
             results["qdrant"] = resp.status_code == 200
@@ -148,7 +148,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
             results["qdrant"] = False
             print(f"  [FAIL] Qdrant ({config.qdrant_url}) — {e}")
 
-        ***REMOVED*** BGE-M3 dense endpoint
+        # BGE-M3 dense endpoint
         try:
             resp = await client.post(
                 f"{config.bge_m3_url}/encode/dense",
@@ -163,7 +163,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
             results["bge_m3_dense"] = False
             print(f"  [FAIL] BGE-M3 dense ({config.bge_m3_url}) — {e}")
 
-        ***REMOVED*** BGE-M3 sparse endpoint
+        # BGE-M3 sparse endpoint
         try:
             resp = await client.post(
                 f"{config.bge_m3_url}/encode/sparse",
@@ -178,7 +178,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
             results["bge_m3_sparse"] = False
             print(f"  [FAIL] BGE-M3 sparse ({config.bge_m3_url}) — {e}")
 
-        ***REMOVED*** Docling backend
+        # Docling backend
         if config.docling_backend == "docling_native":
             try:
                 NativeDoclingAdapter(max_tokens=config.max_tokens_per_chunk)._get_converter()
@@ -199,7 +199,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
                 results["docling"] = False
                 print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
 
-    ***REMOVED*** Required env vars
+    # Required env vars
     required_vars = ["QDRANT_URL", "BGE_M3_URL", "INGESTION_DATABASE_URL"]
     if config.docling_backend != "docling_native":
         required_vars.append("DOCLING_URL")
@@ -223,7 +223,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
             f"  [OK] Sync dir: {config.sync_dir} ({sync_info['supported_files']} supported files)"
         )
 
-    ***REMOVED*** Summary
+    # Summary
     ok = sum(1 for v in results.values() if v)
     total = len(results)
     all_ok = ok == total
@@ -349,14 +349,14 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         timeout=60,
     )
 
-    ***REMOVED*** Check connection
+    # Check connection
     try:
         client.get_collections()
     except Exception as e:
         print(f"  [FAIL] Cannot connect to Qdrant: {e}")
         return 1
 
-    ***REMOVED*** Check if collection already exists
+    # Check if collection already exists
     exists = False
     existing_info = None
     try:
@@ -385,7 +385,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
             print("  Nothing to do.")
         return 0
 
-    ***REMOVED*** Create collection
+    # Create collection
     print(f"  Creating collection: {collection_name}")
     client.create_collection(
         collection_name=collection_name,
@@ -416,7 +416,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         ),
     )
 
-    ***REMOVED*** Create payload indexes
+    # Create payload indexes
     print("  Creating payload indexes...")
     for field in [
         "file_id",
@@ -494,7 +494,7 @@ async def cmd_reprocess(args: argparse.Namespace) -> int:
         for table_name in await _tracking_tables(pool):
             if not re.fullmatch(r"[A-Za-z0-9_]+", table_name):
                 raise ValueError(f"Unexpected tracking table name: {table_name}")
-            delete_query = f"DELETE FROM {table_name} WHERE source_key = ANY($1::jsonb[])"  ***REMOVED*** nosec B608
+            delete_query = f"DELETE FROM {table_name} WHERE source_key = ANY($1::jsonb[])"  # nosec B608
             deleted = await pool.execute(
                 delete_query,
                 source_keys,
@@ -662,17 +662,17 @@ def main() -> int:
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    ***REMOVED*** run
+    # run
     run_p = subparsers.add_parser("run", help="Run ingestion")
     run_p.add_argument("--watch", "-w", action="store_true", help="Continuous mode")
 
-    ***REMOVED*** status
+    # status
     subparsers.add_parser("status", help="Show status")
 
-    ***REMOVED*** preflight
+    # preflight
     subparsers.add_parser("preflight", help="Check dependencies are reachable")
 
-    ***REMOVED*** bootstrap
+    # bootstrap
     bootstrap_p = subparsers.add_parser("bootstrap", help="Create Qdrant collection if missing")
     bootstrap_p.add_argument(
         "--require-colbert",
@@ -680,7 +680,7 @@ def main() -> int:
         help="Fail if existing/new collection schema misses 'colbert' vector",
     )
 
-    ***REMOVED*** schema-check
+    # schema-check
     schema_check_p = subparsers.add_parser(
         "schema-check",
         help="Validate collection schema (dense/bm42 and optional colbert)",
@@ -690,7 +690,7 @@ def main() -> int:
         action="store_true",
         help="Require 'colbert' vector to be present",
     )
-    ***REMOVED*** coverage-check
+    # coverage-check
     coverage_check_p = subparsers.add_parser(
         "coverage-check",
         help="Check point-level ColBERT vector coverage",
@@ -702,7 +702,7 @@ def main() -> int:
         help="Minimum acceptable ColBERT coverage ratio (default: 0.995)",
     )
 
-    ***REMOVED*** backfill-colbert
+    # backfill-colbert
     backfill_p = subparsers.add_parser(
         "backfill-colbert",
         help="Backfill missing ColBERT vectors for existing points",
@@ -712,7 +712,7 @@ def main() -> int:
     backfill_p.add_argument("--dry-run", action="store_true", help="Do not write updates")
     backfill_p.add_argument("--resume", action="store_true", help="Resume from checkpoint")
 
-    ***REMOVED*** reprocess
+    # reprocess
     reprocess_p = subparsers.add_parser("reprocess", help="Reprocess files")
     reprocess_p.add_argument("--file-id", help="Specific file ID")
     reprocess_p.add_argument("--errors", action="store_true", help="All error files")

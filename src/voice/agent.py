@@ -69,7 +69,7 @@ try:
     from livekit.plugins import (
         silero as _livekit_silero,
     )
-except Exception as exc:  ***REMOVED*** pragma: no cover - exercised via tests/import fallback
+except Exception as exc:  # pragma: no cover - exercised via tests/import fallback
     _LIVEKIT_IMPORT_ERROR = exc
 
     def _raise_livekit_runtime_unavailable() -> None:
@@ -269,7 +269,7 @@ def _setup_langfuse() -> None:
         provider = TracerProvider()
         provider.add_span_processor(BatchSpanProcessor(exporter))
 
-        ***REMOVED*** Try livekit's telemetry helper, fall back to global OTEL
+        # Try livekit's telemetry helper, fall back to global OTEL
         try:
             from livekit.agents.telemetry import set_tracer_provider
 
@@ -372,15 +372,15 @@ def _prewarm_process(proc: JobProcess) -> None:
     """Pre-load Silero VAD during process init, before the ping timer starts.
 
     Heavy model loading on first job blocks the event loop and prevents pong
-    responses, triggering 'process is unresponsive' kills (***REMOVED***218).
+    responses, triggering 'process is unresponsive' kills (#218).
     """
     proc.userdata["vad"] = silero.VAD.load()
 
 
 server = AgentServer(
-    initialize_process_timeout=30.0,  ***REMOVED*** VAD model cold-load can exceed 10s default
-    shutdown_process_timeout=30.0,  ***REMOVED*** graceful cleanup during network disruptions
-    num_idle_processes=2,  ***REMOVED*** prod default=8 is excessive for single voice bot
+    initialize_process_timeout=30.0,  # VAD model cold-load can exceed 10s default
+    shutdown_process_timeout=30.0,  # graceful cleanup during network disruptions
+    num_idle_processes=2,  # prod default=8 is excessive for single voice bot
     setup_fnc=_prewarm_process,
 )
 
@@ -393,7 +393,7 @@ async def entrypoint(ctx: agents.JobContext):
             "LiveKit runtime is unavailable in this environment"
         ) from _LIVEKIT_IMPORT_ERROR
     await _mark_job_started()
-    ***REMOVED*** Parse call metadata
+    # Parse call metadata
     metadata: dict = {}
     if ctx.job.metadata:
         with contextlib.suppress(json.JSONDecodeError):
@@ -436,7 +436,7 @@ async def entrypoint(ctx: agents.JobContext):
         langfuse_trace_id=langfuse_trace_id,
     )
 
-    ***REMOVED*** Create agent session with ElevenLabs STT/TTS
+    # Create agent session with ElevenLabs STT/TTS
     session: AgentSession = AgentSession(
         stt=elevenlabs.STT(model_id="scribe_v2_realtime"),
         llm=openai.LLM(
@@ -460,7 +460,7 @@ async def entrypoint(ctx: agents.JobContext):
         langfuse_trace_id=langfuse_trace_id,
     )
 
-    ***REMOVED*** Register cleanup callback to finalize the call when the session ends
+    # Register cleanup callback to finalize the call when the session ends
     async def _finalize() -> None:
         try:
             if store and call_id:
@@ -494,7 +494,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     await session.start(room=ctx.room, agent=agent)
 
-    ***REMOVED*** Start conversation with greeting
+    # Start conversation with greeting
     await session.generate_reply(
         instructions="Поздоровайся с клиентом и спроси, актуальна ли его заявка."
     )
@@ -524,7 +524,7 @@ def _start_health_server() -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
-***REMOVED*** Setup Langfuse before starting
+# Setup Langfuse before starting
 _setup_langfuse()
 
 if __name__ == "__main__":

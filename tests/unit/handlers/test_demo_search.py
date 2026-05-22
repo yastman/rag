@@ -228,15 +228,15 @@ class TestDemoResultsFormatting:
         """Result with empty payload renders without crash."""
         results = [self._make_result({})]
         calls = await self._run(results, 1)
-        ***REMOVED*** format_apartment_list handles empty payload gracefully
-        assert len(calls) >= 2  ***REMOVED*** "Ищу..." + results
+        # format_apartment_list handles empty payload gracefully
+        assert len(calls) >= 2  # "Ищу..." + results
 
     @pytest.mark.asyncio
     async def test_missing_payload_key_graceful(self) -> None:
         """Result dict without 'payload' key doesn't crash."""
         results = [{"score": 0.5, "id": "x"}]
         calls = await self._run(results, 1)
-        assert len(calls) >= 2  ***REMOVED*** "Ищу..." + results
+        assert len(calls) >= 2  # "Ищу..." + results
 
     @pytest.mark.asyncio
     async def test_multiple_results_numbered(self) -> None:
@@ -257,7 +257,7 @@ class TestDemoResultsFormatting:
         result_msg = [c for c in calls if "Alpha" in c]
         assert len(result_msg) == 1
         text = result_msg[0]
-        assert "<b>" in text  ***REMOVED*** HTML format
+        assert "<b>" in text  # HTML format
         assert "Alpha" in text
         assert "Beta" in text
         assert "Gamma" in text
@@ -284,7 +284,7 @@ class TestDemoResultsFormatting:
         """format_apartment_list caps displayed results."""
         results = [self._make_result({"complex_name": f"R{i}"}, rid=str(i)) for i in range(7)]
         calls = await self._run(results, 7)
-        ***REMOVED*** format_apartment_list shows all passed results, header reflects total
+        # format_apartment_list shows all passed results, header reflects total
         result_msg = [c for c in calls if "R0" in c]
         assert len(result_msg) == 1
 
@@ -392,7 +392,7 @@ class TestKwargsPassthrough:
         apartments_service = AsyncMock()
         apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
-        ***REMOVED*** aiogram DI injects extra services; must not raise TypeError
+        # aiogram DI injects extra services; must not raise TypeError
         await handle_demo_search_text(
             message,
             state,

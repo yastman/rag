@@ -1,10 +1,10 @@
-***REMOVED*** Project Guide
+# Project Guide
 
 This guide is for reviewers who need to understand the repository quickly
 without reading every file. It complements the portfolio summary in
 `docs/portfolio/resume-case-study.md`.
 
-***REMOVED******REMOVED*** What This Project Is
+## What This Project Is
 
 Conversational AI automation platform with:
 
@@ -17,7 +17,7 @@ Conversational AI automation platform with:
 - Langfuse tracing, scoring, prompt management, and evaluation tooling
 - Docker Compose based local/VPS runtime
 
-***REMOVED******REMOVED*** Recommended Reading Path
+## Recommended Reading Path
 
 **10 minutes:** `README.md` → `docs/portfolio/resume-case-study.md` → skim this guide.
 
@@ -39,76 +39,76 @@ Ordered list for sequential reading:
 7. `src/voice/` for LiveKit voice agent and shared RAG API integration.
 8. `compose.yml`, `compose.dev.yml`, and `DOCKER.md` for runtime architecture.
 
-***REMOVED******REMOVED*** Folder Map
+## Folder Map
 
-***REMOVED******REMOVED******REMOVED*** `telegram_bot/`
+### `telegram_bot/`
 
 Main Telegram product surface. Contains aiogram handlers, dialog flows,
 middlewares, LangGraph orchestration, CRM/agent integrations, localization,
 and bot startup/preflight logic.
 
-***REMOVED******REMOVED******REMOVED*** `telegram_bot/graph/`
+### `telegram_bot/graph/`
 
 LangGraph RAG runtime: state, nodes, conditional edges, cache/retrieval/rerank/
 generation flow, and routing contracts.
 
-***REMOVED******REMOVED******REMOVED*** `telegram_bot/agents/`
+### `telegram_bot/agents/`
 
 Agent-facing tools and orchestration: CRM tools, domain/catalog tools, HITL
 interrupts, history search, and agent factory/prompt wiring.
 
-***REMOVED******REMOVED******REMOVED*** `telegram_bot/services/`
+### `telegram_bot/services/`
 
 Business services and integration logic: catalog search/filtering, Kommo
 client, lead scoring, handoff state, cache behavior, hot-lead notifications,
 and RAG service helpers.
 
-***REMOVED******REMOVED******REMOVED*** `telegram_bot/dialogs/` and `telegram_bot/handlers/`
+### `telegram_bot/dialogs/` and `telegram_bot/handlers/`
 
 User and manager interaction layer: menus, catalog, viewing flow, CRM task
 dialogs, phone collection, handoff, and command/message handlers.
 
-***REMOVED******REMOVED******REMOVED*** `src/ingestion/unified/`
+### `src/ingestion/unified/`
 
 Unified ingestion pipeline: Google Drive/local file identity, Docling parsing,
 chunking, manifest/state handling, Qdrant writes, retries, and DLQ behavior.
 
-***REMOVED******REMOVED******REMOVED*** `src/voice/`
+### `src/voice/`
 
 LiveKit voice agent path, transcript persistence, RAG API client, SIP setup,
 and voice observability helpers.
 
-***REMOVED******REMOVED******REMOVED*** `mini_app/`
+### `mini_app/`
 
 Telegram Mini App backend and frontend. Treat this as a lightweight entry
 surface, not full parity with the Telegram bot.
 
-***REMOVED******REMOVED******REMOVED*** `services/`
+### `services/`
 
 Local service containers and helper APIs, including BGE-M3 and USER2-base
 embedding services.
 
-***REMOVED******REMOVED******REMOVED*** `compose*.yml`, `docker/`, `DOCKER.md`
+### `compose*.yml`, `docker/`, `DOCKER.md`
 
 Docker Compose runtime. Compose is the primary local/VPS operating path. k3s
 manifests exist separately but are not full parity with the Compose service set.
 
-***REMOVED******REMOVED******REMOVED*** `k8s/`
+### `k8s/`
 
 Partial k3s manifests for core services. Use conservative wording when
 describing k3s support.
 
-***REMOVED******REMOVED******REMOVED*** `tests/`
+### `tests/`
 
 Unit, contract, integration, smoke, evaluation, and baseline tests. Local
 verification is the release authority; CI is intentionally lighter.
 
-***REMOVED******REMOVED******REMOVED*** `docs/`
+### `docs/`
 
 Architecture docs, runbooks, engineering notes, test-writing guidance, SDK
 registry, and portfolio material.
 
-***REMOVED******REMOVED*** High-Signal Files
+## High-Signal Files
 
 - `telegram_bot/graph/graph.py`
 - `telegram_bot/graph/state.py`
@@ -125,7 +125,7 @@ registry, and portfolio material.
 - `compose.yml`
 - `DOCKER.md`
 
-***REMOVED******REMOVED*** Honest Scope Notes
+## Honest Scope Notes
 
 - Docker Compose is the primary runtime path; k3s is partial.
 - Loki/Alertmanager are local/dev monitoring unless production evidence is

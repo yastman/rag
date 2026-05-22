@@ -106,7 +106,7 @@ class TestQdrantServiceQuantization:
 
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
 
-        ***REMOVED*** Test with specific values
+        # Test with specific values
         await service.hybrid_search_rrf(
             dense_vector=[0.1] * 1024,
             quantization_ignore=True,
@@ -117,7 +117,7 @@ class TestQdrantServiceQuantization:
         call_kwargs = service._client.query_points.call_args.kwargs
         search_params = call_kwargs["search_params"]
 
-        ***REMOVED*** Verify all quantization params are correctly passed
+        # Verify all quantization params are correctly passed
         assert search_params is not None
         assert search_params.quantization.ignore is True
         assert search_params.quantization.rescore is False
@@ -129,7 +129,7 @@ class TestQdrantServiceQuantization:
 
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
 
-        ***REMOVED*** Only set ignore, check defaults for rescore/oversampling
+        # Only set ignore, check defaults for rescore/oversampling
         await service.hybrid_search_rrf(
             dense_vector=[0.1] * 1024,
             quantization_ignore=False,
@@ -139,8 +139,8 @@ class TestQdrantServiceQuantization:
         search_params = call_kwargs["search_params"]
 
         assert search_params.quantization.ignore is False
-        assert search_params.quantization.rescore is True  ***REMOVED*** default
-        assert search_params.quantization.oversampling == 2.0  ***REMOVED*** default
+        assert search_params.quantization.rescore is True  # default
+        assert search_params.quantization.oversampling == 2.0  # default
 
 
 class TestQdrantServiceBatchSearch:
@@ -179,12 +179,12 @@ class TestQdrantServiceBatchSearch:
 
     async def test_batch_search_multiple_queries(self, service):
         """Test batch search with multiple queries merges results."""
-        ***REMOVED*** Query 1 returns doc_0, doc_1
+        # Query 1 returns doc_0, doc_1
         p0 = MagicMock(id="doc_0", score=0.9, payload={"page_content": "A", "metadata": {}})
         p1 = MagicMock(id="doc_1", score=0.7, payload={"page_content": "B", "metadata": {}})
         resp1 = MagicMock(points=[p0, p1])
 
-        ***REMOVED*** Query 2 returns doc_1 (higher score), doc_2
+        # Query 2 returns doc_1 (higher score), doc_2
         p1b = MagicMock(id="doc_1", score=0.85, payload={"page_content": "B", "metadata": {}})
         p2 = MagicMock(id="doc_2", score=0.6, payload={"page_content": "C", "metadata": {}})
         resp2 = MagicMock(points=[p1b, p2])
@@ -197,11 +197,11 @@ class TestQdrantServiceBatchSearch:
         ]
         results = await service.batch_search_rrf(queries=queries, top_k=10)
 
-        ***REMOVED*** Should have 3 unique docs
+        # Should have 3 unique docs
         assert len(results) == 3
         ids = [r["id"] for r in results]
         assert ids == ["doc_0", "doc_1", "doc_2"]
-        ***REMOVED*** doc_1 should keep the higher score from query 2
+        # doc_1 should keep the higher score from query 2
         assert results[1]["score"] == 0.85
 
     async def test_batch_search_dedup_keeps_best_score(self, service):
@@ -237,7 +237,7 @@ class TestQdrantServiceBatchSearch:
         results = await service.batch_search_rrf(queries=queries, top_k=5)
 
         assert len(results) == 3
-        ***REMOVED*** Verify the request has 2 prefetches (dense + sparse)
+        # Verify the request has 2 prefetches (dense + sparse)
         call_kwargs = service._client.query_batch_points.call_args.kwargs
         req = call_kwargs["requests"][0]
         assert len(req.prefetch) == 2
@@ -348,10 +348,10 @@ class TestQdrantServiceHybridSearch:
             top_k=5,
         )
 
-        ***REMOVED*** Verify prefetch includes both dense and sparse
+        # Verify prefetch includes both dense and sparse
         call_kwargs = service._client.query_points.call_args.kwargs
         prefetch = call_kwargs["prefetch"]
-        assert len(prefetch) == 2  ***REMOVED*** dense + sparse
+        assert len(prefetch) == 2  # dense + sparse
 
         assert len(results) == 1
         assert results[0]["id"] == "doc_1"
@@ -366,10 +366,10 @@ class TestQdrantServiceHybridSearch:
             top_k=5,
         )
 
-        ***REMOVED*** Verify prefetch has only dense
+        # Verify prefetch has only dense
         call_kwargs = service._client.query_points.call_args.kwargs
         prefetch = call_kwargs["prefetch"]
-        assert len(prefetch) == 1  ***REMOVED*** dense only
+        assert len(prefetch) == 1  # dense only
 
         assert len(results) == 1
 
@@ -385,10 +385,10 @@ class TestQdrantServiceHybridSearch:
             top_k=5,
         )
 
-        ***REMOVED*** Empty indices means no sparse prefetch
+        # Empty indices means no sparse prefetch
         call_kwargs = service._client.query_points.call_args.kwargs
         prefetch = call_kwargs["prefetch"]
-        assert len(prefetch) == 1  ***REMOVED*** dense only
+        assert len(prefetch) == 1  # dense only
 
     async def test_hybrid_search_with_filters(self, service, mock_point):
         """Test hybrid search applies filters."""
@@ -423,11 +423,11 @@ class TestQdrantServiceHybridSearch:
         call_kwargs = service._client.query_points.call_args.kwargs
         prefetch = call_kwargs["prefetch"]
 
-        ***REMOVED*** Dense gets higher limit due to higher weight
+        # Dense gets higher limit due to higher weight
         dense_limit = prefetch[0].limit
         sparse_limit = prefetch[1].limit
 
-        ***REMOVED*** Both should be at least top_k
+        # Both should be at least top_k
         assert dense_limit >= 10
         assert sparse_limit >= 10
 
@@ -589,7 +589,7 @@ class TestQdrantServiceHybridSearchColbert:
     @pytest.fixture
     def service(self):
         svc = _make_service(validated=True)
-        ***REMOVED*** Explicitly enable ColBERT path for tests that validate nested prefetch contract.
+        # Explicitly enable ColBERT path for tests that validate nested prefetch contract.
         svc._colbert_available = True
         return svc
 
@@ -605,7 +605,7 @@ class TestQdrantServiceHybridSearchColbert:
         """Verify nested prefetch structure: inner RRF, outer ColBERT."""
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
 
-        colbert_query = [[0.1] * 1024] * 5  ***REMOVED*** 5 query tokens
+        colbert_query = [[0.1] * 1024] * 5  # 5 query tokens
         sparse_vector = {"indices": [1, 5], "values": [0.5, 0.3]}
 
         results = await service.hybrid_search_rrf_colbert(
@@ -619,18 +619,18 @@ class TestQdrantServiceHybridSearchColbert:
         assert results[0]["id"] == "doc_1"
 
         call_kwargs = service._client.query_points.call_args.kwargs
-        ***REMOVED*** Outer query should be colbert vectors
+        # Outer query should be colbert vectors
         assert call_kwargs["using"] == "colbert"
-        ***REMOVED*** Outer prefetch should contain 1 RRF prefetch
+        # Outer prefetch should contain 1 RRF prefetch
         outer_prefetch = call_kwargs["prefetch"]
         assert len(outer_prefetch) == 1
-        ***REMOVED*** Inner prefetch should have dense + sparse
+        # Inner prefetch should have dense + sparse
         inner_prefetch = outer_prefetch[0].prefetch
         assert len(inner_prefetch) == 2
-        ***REMOVED*** RRF prefetch should have limit > top_k for meaningful ColBERT reranking
+        # RRF prefetch should have limit > top_k for meaningful ColBERT reranking
         rrf_limit = outer_prefetch[0].limit
         assert rrf_limit >= 20, f"RRF limit {rrf_limit} too low for ColBERT reranking"
-        assert rrf_limit > call_kwargs["limit"]  ***REMOVED*** must overfetch vs final top_k
+        assert rrf_limit > call_kwargs["limit"]  # must overfetch vs final top_k
 
     async def test_colbert_search_without_sparse(self, service, mock_point):
         """ColBERT search with dense only (no sparse vector)."""
@@ -648,7 +648,7 @@ class TestQdrantServiceHybridSearchColbert:
         assert len(results) == 1
         call_kwargs = service._client.query_points.call_args.kwargs
         inner_prefetch = call_kwargs["prefetch"][0].prefetch
-        assert len(inner_prefetch) == 1  ***REMOVED*** dense only
+        assert len(inner_prefetch) == 1  # dense only
 
     async def test_colbert_search_weight_distribution(self, service, mock_point):
         """ColBERT nested RRF prefetch limits should respect query weights."""
@@ -861,7 +861,7 @@ class TestQdrantServiceClose:
                 url="http://localhost:6333",
                 collection_name="test_collection",
             )
-            ***REMOVED*** Replace the client with our own mock so we can track calls
+            # Replace the client with our own mock so we can track calls
             mock_client = AsyncMock()
             service._client = mock_client
 
@@ -904,9 +904,9 @@ class TestQdrantServiceInit:
             assert service._client is not None
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** api_key safety for insecure transport
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# api_key safety for insecure transport
+# ===========================================================================
 
 
 class TestQdrantApiKeySafety:
@@ -934,9 +934,9 @@ class TestQdrantApiKeySafety:
             assert call_kwargs["api_key"] is None
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** _apply_strict_mode
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# _apply_strict_mode
+# ===========================================================================
 
 
 class TestApplyStrictMode:
@@ -979,14 +979,14 @@ class TestApplyStrictMode:
         svc._client.update_collection = AsyncMock(side_effect=Exception("unsupported"))
 
         with caplog.at_level(logging.WARNING):
-            await svc._apply_strict_mode()  ***REMOVED*** Must not raise
+            await svc._apply_strict_mode()  # Must not raise
 
         assert "strict mode not applied" in caplog.text.lower()
 
 
-***REMOVED*** ===========================================================================
-***REMOVED*** _ensure_alias
-***REMOVED*** ===========================================================================
+# ===========================================================================
+# _ensure_alias
+# ===========================================================================
 
 
 class TestEnsureAlias:
@@ -1068,7 +1068,7 @@ class TestEnsureAlias:
         )
 
         with caplog.at_level(logging.WARNING):
-            await svc._ensure_alias()  ***REMOVED*** Must not raise
+            await svc._ensure_alias()  # Must not raise
 
         assert "alias" in caplog.text.lower()
         assert "failed" in caplog.text.lower()

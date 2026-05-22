@@ -6,7 +6,7 @@ spec:
   replicas: 1
   progressDeadlineSeconds: 600
   strategy:
-    type: Recreate  ***REMOVED*** PVC is RWO — no rolling update for stateful
+    type: Recreate  # PVC is RWO — no rolling update for stateful
   selector:
     matchLabels:
       app: postgres

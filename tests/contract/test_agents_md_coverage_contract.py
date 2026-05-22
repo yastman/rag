@@ -3,7 +3,7 @@
 Each path in `REQUIRED_DIRS` must contain either an `AGENTS.md` (gateway file)
 or an `AGENTS.override.md` (scoped override extending the root AGENTS.md).
 
-Refs ***REMOVED***1530.
+Refs #1530.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-***REMOVED*** Directories that must expose AGENTS guidance to coding agents.
-***REMOVED*** Each entry is repo-root-relative.
+# Directories that must expose AGENTS guidance to coding agents.
+# Each entry is repo-root-relative.
 REQUIRED_DIRS: list[str] = [
     "scripts",
     "services",
@@ -38,7 +38,7 @@ def test_directory_has_agents_guidance(rel_dir: str) -> None:
 
     assert found, (
         f"{rel_dir} lacks AGENTS guidance — expected one of: "
-        f"AGENTS.md or AGENTS.override.md (see ***REMOVED***1530)."
+        f"AGENTS.md or AGENTS.override.md (see #1530)."
     )
 
 

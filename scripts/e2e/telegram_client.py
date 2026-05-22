@@ -85,18 +85,18 @@ class E2ETelegramClient:
             await conv.send_message(query)
             logger.debug(f"Sent: {query[:50]}...")
 
-            ***REMOVED*** Wait for response (handles streaming - waits for final message)
+            # Wait for response (handles streaming - waits for final message)
             response = await conv.get_response()
 
-            ***REMOVED*** For streaming bots, wait a bit more for edits to complete
+            # For streaming bots, wait a bit more for edits to complete
             await asyncio.sleep(1.0)
 
-            ***REMOVED*** Try to get the latest version of the message (after edits)
+            # Try to get the latest version of the message (after edits)
             try:
                 final_response = await conv.get_edit(timeout=3)
                 response = final_response
             except TimeoutError:
-                ***REMOVED*** No edits, use original response
+                # No edits, use original response
                 pass
 
         end_time = time.time()
@@ -156,18 +156,18 @@ class E2ETelegramClient:
             await conv.send_file(path, voice_note=True)
             logger.debug(f"Sent voice note: {path}")
 
-            ***REMOVED*** Wait for response (handles streaming - waits for final message)
+            # Wait for response (handles streaming - waits for final message)
             response = await conv.get_response()
 
-            ***REMOVED*** For streaming bots, wait a bit more for edits to complete
+            # For streaming bots, wait a bit more for edits to complete
             await asyncio.sleep(1.0)
 
-            ***REMOVED*** Try to get the latest version of the message (after edits)
+            # Try to get the latest version of the message (after edits)
             try:
                 final_response = await conv.get_edit(timeout=3)
                 response = final_response
             except TimeoutError:
-                ***REMOVED*** No edits, use original response
+                # No edits, use original response
                 pass
 
         end_time = time.time()

@@ -4,7 +4,7 @@ HTTP client for bge-m3-api /rerank endpoint (ColBERT MaxSim).
 Replaces VoyageService.rerank when RERANK_PROVIDER=colbert.
 Delegates to BGEM3Client (unified SDK layer).
 
-Deprecated: Server-side ColBERT via hybrid_search_rrf_colbert() (***REMOVED***569) is
+Deprecated: Server-side ColBERT via hybrid_search_rrf_colbert() (#569) is
 the production path. This module will be removed in a future release.
 """
 
@@ -26,7 +26,7 @@ class ColbertRerankerService:
     Uses ColBERT MaxSim scoring for local, fast reranking.
 
     Deprecated:
-        Use server-side ColBERT via hybrid_search_rrf_colbert() (see ***REMOVED***569).
+        Use server-side ColBERT via hybrid_search_rrf_colbert() (see #569).
         This class will be removed in a future release.
     """
 
@@ -39,7 +39,7 @@ class ColbertRerankerService:
     ):
         warnings.warn(
             "ColbertRerankerService is deprecated. Server-side ColBERT reranking via "
-            "hybrid_search_rrf_colbert() (introduced in ***REMOVED***569) is the production path. "
+            "hybrid_search_rrf_colbert() (introduced in #569) is the production path. "
             "This client-side service will be removed in a future release.",
             DeprecationWarning,
             stacklevel=2,

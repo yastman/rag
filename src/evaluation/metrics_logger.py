@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Production Metrics Logger
 
@@ -22,9 +22,9 @@ Usage in production:
         num_results=10
     )
 
-    ***REMOVED*** Export for Prometheus scraping
+    # Export for Prometheus scraping
     metrics_text = logger.export_prometheus()
-    ***REMOVED*** Write to /metrics endpoint
+    # Write to /metrics endpoint
 
 Integration with monitoring:
     - Prometheus: Scrape /metrics endpoint
@@ -73,7 +73,7 @@ class QueryMetrics:
         Returns:
             Prometheus-formatted metrics string
         """
-        return f"""***REMOVED*** Query {self.query_id} metrics
+        return f"""# Query {self.query_id} metrics
 rag_query_latency_ms{{engine="{self.engine}",config="{self.config_hash}"}} {self.latency_ms}
 rag_precision_at_1{{engine="{self.engine}"}} {self.precision_at_1}
 rag_recall_at_10{{engine="{self.engine}"}} {self.recall_at_10}
@@ -106,7 +106,7 @@ class MetricsLogger:
             lambda: defaultdict(list)
         )
 
-        ***REMOVED*** SLO thresholds (from config_snapshot)
+        # SLO thresholds (from config_snapshot)
         self.slo_thresholds = {
             "p50_latency_ms": 400,
             "p95_latency_ms": 800,
@@ -156,18 +156,18 @@ class MetricsLogger:
             session_id=session_id,
         )
 
-        ***REMOVED*** Add to buffer
+        # Add to buffer
         self.metrics_buffer.append(metrics)
 
-        ***REMOVED*** Update aggregated stats
+        # Update aggregated stats
         self.aggregated_stats[engine]["latency_ms"].append(latency_ms)
         self.aggregated_stats[engine]["precision_at_1"].append(precision_at_1)
         self.aggregated_stats[engine]["recall_at_10"].append(recall_at_10)
 
-        ***REMOVED*** Write to JSON log file
+        # Write to JSON log file
         self._write_json_log(metrics)
 
-        ***REMOVED*** Check for anomalies
+        # Check for anomalies
         self._check_anomalies(metrics)
 
         return metrics
@@ -184,21 +184,21 @@ class MetricsLogger:
         """Check for anomalous metrics and log warnings."""
         warnings = []
 
-        ***REMOVED*** Latency anomaly
+        # Latency anomaly
         if metrics.latency_ms > self.slo_thresholds["p99_latency_ms"]:
             warnings.append(
                 f"⚠️  LATENCY ANOMALY: {metrics.latency_ms:.0f}ms "
                 f"(threshold: {self.slo_thresholds['p99_latency_ms']}ms)"
             )
 
-        ***REMOVED*** Quality anomaly
+        # Quality anomaly
         if metrics.precision_at_1 < self.slo_thresholds["precision_at_1_min"]:
             warnings.append(
                 f"⚠️  QUALITY ANOMALY: P@1={metrics.precision_at_1:.1%} "
                 f"(threshold: {self.slo_thresholds['precision_at_1_min']:.0%})"
             )
 
-        ***REMOVED*** Zero results anomaly
+        # Zero results anomaly
         if metrics.num_results == 0:
             warnings.append("⚠️  ZERO RESULTS: No results returned for query")
 
@@ -219,65 +219,65 @@ class MetricsLogger:
             Prometheus-formatted metrics string for scraping
 
         Example output:
-            ***REMOVED*** HELP rag_queries_total Total number of queries
-            ***REMOVED*** TYPE rag_queries_total counter
+            # HELP rag_queries_total Total number of queries
+            # TYPE rag_queries_total counter
             rag_queries_total{engine="dbsf_colbert"} 1523
 
-            ***REMOVED*** HELP rag_latency_ms Query latency percentiles
-            ***REMOVED*** TYPE rag_latency_ms summary
+            # HELP rag_latency_ms Query latency percentiles
+            # TYPE rag_latency_ms summary
             rag_latency_ms{engine="dbsf_colbert",quantile="0.5"} 420.5
             rag_latency_ms{engine="dbsf_colbert",quantile="0.95"} 750.2
         """
         lines = []
 
-        ***REMOVED*** Header
-        lines.append("***REMOVED*** Contextual RAG Metrics")
-        lines.append(f"***REMOVED*** Config: {get_config_hash()}")
-        lines.append(f"***REMOVED*** Generated: {datetime.now().isoformat()}")
+        # Header
+        lines.append("# Contextual RAG Metrics")
+        lines.append(f"# Config: {get_config_hash()}")
+        lines.append(f"# Generated: {datetime.now().isoformat()}")
         lines.append("")
 
-        ***REMOVED*** Per-engine metrics
+        # Per-engine metrics
         for engine, stats in self.aggregated_stats.items():
-            ***REMOVED*** Total queries
+            # Total queries
             total_queries = len(stats["latency_ms"])
-            lines.append("***REMOVED*** HELP rag_queries_total Total number of queries")
-            lines.append("***REMOVED*** TYPE rag_queries_total counter")
+            lines.append("# HELP rag_queries_total Total number of queries")
+            lines.append("# TYPE rag_queries_total counter")
             lines.append(f'rag_queries_total{{engine="{engine}"}} {total_queries}')
             lines.append("")
 
-            ***REMOVED*** Latency percentiles
+            # Latency percentiles
             if stats["latency_ms"]:
                 latencies_sorted = sorted(stats["latency_ms"])
                 p50 = latencies_sorted[len(latencies_sorted) // 2]
                 p95 = latencies_sorted[int(len(latencies_sorted) * 0.95)]
                 p99 = latencies_sorted[int(len(latencies_sorted) * 0.99)]
 
-                lines.append("***REMOVED*** HELP rag_latency_ms Query latency in milliseconds")
-                lines.append("***REMOVED*** TYPE rag_latency_ms summary")
+                lines.append("# HELP rag_latency_ms Query latency in milliseconds")
+                lines.append("# TYPE rag_latency_ms summary")
                 lines.append(f'rag_latency_ms{{engine="{engine}",quantile="0.5"}} {p50:.1f}')
                 lines.append(f'rag_latency_ms{{engine="{engine}",quantile="0.95"}} {p95:.1f}')
                 lines.append(f'rag_latency_ms{{engine="{engine}",quantile="0.99"}} {p99:.1f}')
                 lines.append("")
 
-            ***REMOVED*** Precision@1 average
+            # Precision@1 average
             if stats["precision_at_1"]:
                 avg_precision = sum(stats["precision_at_1"]) / len(stats["precision_at_1"])
-                lines.append("***REMOVED*** HELP rag_precision_at_1 Average precision at rank 1")
-                lines.append("***REMOVED*** TYPE rag_precision_at_1 gauge")
+                lines.append("# HELP rag_precision_at_1 Average precision at rank 1")
+                lines.append("# TYPE rag_precision_at_1 gauge")
                 lines.append(f'rag_precision_at_1{{engine="{engine}"}} {avg_precision:.4f}')
                 lines.append("")
 
-            ***REMOVED*** Recall@10 average
+            # Recall@10 average
             if stats["recall_at_10"]:
                 avg_recall = sum(stats["recall_at_10"]) / len(stats["recall_at_10"])
-                lines.append("***REMOVED*** HELP rag_recall_at_10 Average recall at rank 10")
-                lines.append("***REMOVED*** TYPE rag_recall_at_10 gauge")
+                lines.append("# HELP rag_recall_at_10 Average recall at rank 10")
+                lines.append("# TYPE rag_recall_at_10 gauge")
                 lines.append(f'rag_recall_at_10{{engine="{engine}"}} {avg_recall:.4f}')
                 lines.append("")
 
-        ***REMOVED*** SLO compliance
-        lines.append("***REMOVED*** HELP rag_slo_violations Number of SLO violations")
-        lines.append("***REMOVED*** TYPE rag_slo_violations counter")
+        # SLO compliance
+        lines.append("# HELP rag_slo_violations Number of SLO violations")
+        lines.append("# TYPE rag_slo_violations counter")
         for engine in self.aggregated_stats:
             violations = self._count_slo_violations(engine)
             lines.append(f'rag_slo_violations{{engine="{engine}"}} {violations}')
@@ -289,14 +289,14 @@ class MetricsLogger:
         violations = 0
         stats = self.aggregated_stats[engine]
 
-        ***REMOVED*** Latency violations
+        # Latency violations
         if stats["latency_ms"]:
             latencies_sorted = sorted(stats["latency_ms"])
             p95 = latencies_sorted[int(len(latencies_sorted) * 0.95)]
             if p95 > self.slo_thresholds["p95_latency_ms"]:
                 violations += 1
 
-        ***REMOVED*** Quality violations
+        # Quality violations
         if stats["precision_at_1"]:
             avg_precision = sum(stats["precision_at_1"]) / len(stats["precision_at_1"])
             if avg_precision < self.slo_thresholds["precision_at_1_min"]:
@@ -362,21 +362,21 @@ class MetricsLogger:
 
 
 if __name__ == "__main__":
-    ***REMOVED*** Example usage
+    # Example usage
     print("=" * 80)
     print("METRICS LOGGER - Example Usage")
     print("=" * 80)
 
     logger = MetricsLogger()
 
-    ***REMOVED*** Simulate 100 queries
+    # Simulate 100 queries
     print("\n📊 Simulating 100 queries...")
     import random
 
     for i in range(100):
         engine = random.choice(["baseline", "dbsf_colbert"])
         latency = random.gauss(650 if engine == "baseline" else 700, 100)
-        precision = random.choice([1.0, 1.0, 1.0, 0.0])  ***REMOVED*** 75% success rate
+        precision = random.choice([1.0, 1.0, 1.0, 0.0])  # 75% success rate
 
         logger.log_query(
             query=f"test query {i}",
@@ -386,10 +386,10 @@ if __name__ == "__main__":
             num_results=10,
         )
 
-    ***REMOVED*** Print summary
+    # Print summary
     logger.print_summary()
 
-    ***REMOVED*** Export Prometheus metrics
+    # Export Prometheus metrics
     print("\n" + "=" * 80)
     print("PROMETHEUS EXPORT (first 20 lines)")
     print("=" * 80)

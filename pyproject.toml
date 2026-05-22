@@ -6,77 +6,77 @@ requires-python = ">=3.11"
 dependencies = [
     "anthropic",
     "openai",
-    "instructor>=1.7.0",  ***REMOVED*** Structured LLM extraction for apartment filters
+    "instructor>=1.7.0",  # Structured LLM extraction for apartment filters
     "groq",
     "python-dotenv",
-    "pydantic-settings>=2.0.0",  ***REMOVED*** Required by telegram_bot/config.py (BotConfig)
-    "typing-extensions>=4.0.0",  ***REMOVED*** Explicit dependency for forward references and compat
-    "cachetools>=5.0.0",  ***REMOVED*** Required by telegram_bot/middlewares/throttling.py
+    "pydantic-settings>=2.0.0",  # Required by telegram_bot/config.py (BotConfig)
+    "typing-extensions>=4.0.0",  # Explicit dependency for forward references and compat
+    "cachetools>=5.0.0",  # Required by telegram_bot/middlewares/throttling.py
     "numpy",
     "aiohttp",
     "requests",
-    "qdrant-client>=1.17.1",  ***REMOVED*** Vector database client (v1.17+ for weighted RRF, relevance feedback)
-    "langfuse>=4.0.0,<5.0",  ***REMOVED*** Native v4 observability migration
-    ***REMOVED*** Voyage AI is OPTIONAL (***REMOVED***1773): not used by default bot/retrieval runtime.
-    ***REMOVED*** Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
-    ***REMOVED*** contextualized-embedding paths.
-    "tenacity>=8.2.0",        ***REMOVED*** Retry logic with exponential backoff
+    "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
+    "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
+    # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
+    # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
+    # contextualized-embedding paths.
+    "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.1.0",
     "redisvl>=0.16.0",
     "aiogram==3.28.2",
-    "aiogram-dialog==2.6.0",            ***REMOVED*** Dialog framework (menus, navigation, widgets)
-    "fluentogram>=1.2.0",               ***REMOVED*** i18n (Fluent .ftl files, stub generator)
+    "aiogram-dialog==2.6.0",            # Dialog framework (menus, navigation, widgets)
+    "fluentogram>=1.2.0",               # i18n (Fluent .ftl files, stub generator)
     "asyncpg>=0.31.0",
-    ***REMOVED*** Performance (2026-02-06)
-    "uvloop>=0.21.0",                     ***REMOVED*** 2-4x faster asyncio event loop
-    ***REMOVED*** LangGraph Pipeline (2026-02-09)
-    "langgraph>=1.0.3,<2.0",               ***REMOVED*** State graph for RAG pipeline
-    "langchain-core>=1.2",                ***REMOVED*** Core abstractions (Embeddings, etc.)
-    ***REMOVED*** Conversation memory (***REMOVED***154)
-    ***REMOVED*** NOTE (***REMOVED***1254): only the Redis checkpointer is wired (telegram_bot/integrations/memory.py
-    ***REMOVED*** uses AsyncRedisSaver / MemorySaver). The Postgres checkpointer was never instantiated,
-    ***REMOVED*** so langgraph-checkpoint-postgres is intentionally NOT a dependency. Re-add it (and a
-    ***REMOVED*** CheckpointerKind config flag) only when the Postgres path is actually wired.
-    "langgraph-checkpoint-redis>=0.3.6",  ***REMOVED*** Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization ***REMOVED***128)
-    "langmem>=0.0.30",                    ***REMOVED*** SummarizationNode for conversation compression
-    ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
-    "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
+    # Performance (2026-02-06)
+    "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
+    # LangGraph Pipeline (2026-02-09)
+    "langgraph>=1.0.3,<2.0",               # State graph for RAG pipeline
+    "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
+    # Conversation memory (#154)
+    # NOTE (#1254): only the Redis checkpointer is wired (telegram_bot/integrations/memory.py
+    # uses AsyncRedisSaver / MemorySaver). The Postgres checkpointer was never instantiated,
+    # so langgraph-checkpoint-postgres is intentionally NOT a dependency. Re-add it (and a
+    # CheckpointerKind config flag) only when the Postgres path is actually wired.
+    "langgraph-checkpoint-redis>=0.3.6",  # Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization #128)
+    "langmem>=0.0.30",                    # SummarizationNode for conversation compression
+    # Scheduled nurturing + analytics (#390)
+    "apscheduler>=3.11.2,<4.0",           # Async job scheduling (v3 API)
     "phonenumbers>=9.0.25",
-    ***REMOVED*** Observability (***REMOVED***1648 — SDK-native pipeline metrics, slice 2/4)
-    ***REMOVED*** prometheus_client provides Histogram for latency distributions, replacing
-    ***REMOVED*** the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
+    # Observability (#1648 — SDK-native pipeline metrics, slice 2/4)
+    # prometheus_client provides Histogram for latency distributions, replacing
+    # the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
     "prometheus-client>=0.20.0,<1.0",
 ]
 
 [project.optional-dependencies]
-***REMOVED*** Local ML models (torch, FlagEmbedding, sentence-transformers)
-***REMOVED*** Only needed when running local model inference (BGE-M3, cross-encoder, etc.)
-***REMOVED*** Install: uv sync --extra ml-local
+# Local ML models (torch, FlagEmbedding, sentence-transformers)
+# Only needed when running local model inference (BGE-M3, cross-encoder, etc.)
+# Install: uv sync --extra ml-local
 ml-local = [
     "FlagEmbedding",
     "scipy",
     "sentence-transformers",
-    ***REMOVED*** PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
+    # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
-    "torchvision>=0.15.0",  ***REMOVED*** Must be direct dep for [tool.uv.sources] to apply CPU index
-    "transformers>=4.30.0", ***REMOVED*** For HuggingFace tokenizers in HybridChunker
+    "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
+    "transformers>=4.30.0", # For HuggingFace tokenizers in HybridChunker
 ]
 
-***REMOVED*** Documentation tools
+# Documentation tools
 docs = [
-    "mkdocs>=1.6.0",         ***REMOVED*** Documentation generator
-    "mkdocs-material>=9.5.0",***REMOVED*** Material theme
-    "mkdocstrings[python]>=0.25.0",  ***REMOVED*** Auto API docs
+    "mkdocs>=1.6.0",         # Documentation generator
+    "mkdocs-material>=9.5.0",# Material theme
+    "mkdocstrings[python]>=0.25.0",  # Auto API docs
 ]
 
-***REMOVED*** Mini App (Telegram Web App — FastAPI backend)
+# Mini App (Telegram Web App — FastAPI backend)
 mini-app = [
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
     "httpx>=0.27.0",
 ]
 
-***REMOVED*** Voice bot (LiveKit Agents + RAG API)
+# Voice bot (LiveKit Agents + RAG API)
 voice = [
     "livekit-agents[silero,turn-detector]~=1.4",
     "livekit-plugins-elevenlabs~=1.1",
@@ -89,12 +89,12 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
-***REMOVED*** Docling service (standalone docling-serve image)
+# Docling service (standalone docling-serve image)
 docling = [
     "docling-serve[ui]>=1.0.0",
 ]
 
-***REMOVED*** Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
+# Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
 ingest = [
     "pymupdf>=1.26.0",
     "docling>=2.70.0",
@@ -103,29 +103,29 @@ ingest = [
     "fastembed>=0.7.4",
 ]
 
-***REMOVED*** Evaluation tools (RAGAS, dataset generation)
+# Evaluation tools (RAGAS, dataset generation)
 eval = [
     "ragas>=0.4.3",
     "datasets>=3.0.0",
     "pandas>=2.0.0",
 ]
 
-***REMOVED*** Voyage AI (***REMOVED***1773) — optional. Not used by the default BGE-M3 + Qdrant
-***REMOVED*** runtime. Required only for legacy GDrive ingestion, contextualized
-***REMOVED*** embeddings, or the optional Voyage path in
-***REMOVED*** `src/ingestion/unified/qdrant_writer.py` (`use_local_embeddings=False`).
+# Voyage AI (#1773) — optional. Not used by the default BGE-M3 + Qdrant
+# runtime. Required only for legacy GDrive ingestion, contextualized
+# embeddings, or the optional Voyage path in
+# `src/ingestion/unified/qdrant_writer.py` (`use_local_embeddings=False`).
 voyage = [
     "voyageai>=0.3.0",
 ]
 
-***REMOVED*** All optional dependencies
+# All optional dependencies
 all = [
     "contextual-rag[docs,voice,eval,ingest,ml-local,voyage]",
 ]
 
-***REMOVED*** =============================================================================
-***REMOVED*** DEPENDENCY GROUPS (PEP 735) — dev tools installed by default with `uv sync`
-***REMOVED*** =============================================================================
+# =============================================================================
+# DEPENDENCY GROUPS (PEP 735) — dev tools installed by default with `uv sync`
+# =============================================================================
 
 [dependency-groups]
 dev = [
@@ -148,10 +148,10 @@ dev = [
     "fakeredis>=2.26.0",
 ]
 
-***REMOVED*** =============================================================================
-***REMOVED*** UV: CPU-only PyTorch (no CUDA — VPS has no GPU)
-***REMOVED*** SDK pattern from Context7: https://github.com/astral-sh/uv/blob/main/docs/guides/integration/pytorch.md
-***REMOVED*** =============================================================================
+# =============================================================================
+# UV: CPU-only PyTorch (no CUDA — VPS has no GPU)
+# SDK pattern from Context7: https://github.com/astral-sh/uv/blob/main/docs/guides/integration/pytorch.md
+# =============================================================================
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -166,15 +166,15 @@ torchvision = [
     { index = "pytorch-cpu" },
 ]
 
-***REMOVED*** =============================================================================
-***REMOVED*** RUFF CONFIGURATION (Modern Python Linter + Formatter, 2025)
-***REMOVED*** =============================================================================
-***REMOVED*** Ruff replaces: flake8, black, isort, pyupgrade, autoflake, and more
-***REMOVED*** Speed: 10-100x faster than traditional tools
-***REMOVED*** Documentation: https://docs.astral.sh/ruff/
+# =============================================================================
+# RUFF CONFIGURATION (Modern Python Linter + Formatter, 2025)
+# =============================================================================
+# Ruff replaces: flake8, black, isort, pyupgrade, autoflake, and more
+# Speed: 10-100x faster than traditional tools
+# Documentation: https://docs.astral.sh/ruff/
 
 [tool.ruff]
-***REMOVED*** Exclude common directories
+# Exclude common directories
 exclude = [
     ".bzr",
     ".direnv",
@@ -205,125 +205,125 @@ exclude = [
     "venv",
 ]
 
-***REMOVED*** Line length: 100 (slightly longer than Black's 88 for readability)
+# Line length: 100 (slightly longer than Black's 88 for readability)
 line-length = 100
 indent-width = 4
 
-***REMOVED*** Target Python 3.13 (aligned with Docker runtime; ***REMOVED***1307)
+# Target Python 3.13 (aligned with Docker runtime; #1307)
 target-version = "py313"
 
-***REMOVED*** =============================================================================
-***REMOVED*** LINTING RULES
-***REMOVED*** =============================================================================
+# =============================================================================
+# LINTING RULES
+# =============================================================================
 
 [tool.ruff.lint]
-***REMOVED*** Enable recommended rule sets (2025 best practices)
+# Enable recommended rule sets (2025 best practices)
 select = [
-    "E",     ***REMOVED*** pycodestyle errors
-    "W",     ***REMOVED*** pycodestyle warnings
-    "F",     ***REMOVED*** Pyflakes (undefined names, unused imports, etc.)
-    "B",     ***REMOVED*** flake8-bugbear (common bugs and design problems)
-    "I",     ***REMOVED*** isort (import sorting)
-    "UP",    ***REMOVED*** pyupgrade (modernize Python code)
-    "SIM",   ***REMOVED*** flake8-simplify (simplify code)
-    "C4",    ***REMOVED*** flake8-comprehensions (better list/dict/set comprehensions)
-    "PIE",   ***REMOVED*** flake8-pie (misc lints)
-    "T20",   ***REMOVED*** flake8-print (detect print statements)
-    "RET",   ***REMOVED*** flake8-return (return statement issues)
-    "ARG",   ***REMOVED*** flake8-unused-arguments
-    "PTH",   ***REMOVED*** flake8-use-pathlib (prefer pathlib over os.path)
-    "PERF",  ***REMOVED*** perflint (performance anti-patterns) - NEW 2025
-    "RUF",   ***REMOVED*** Ruff-specific rules - NEW 2025
-    "FURB",  ***REMOVED*** refurb (modernize Python idioms) - NEW 2025
-    "ASYNC", ***REMOVED*** flake8-async (async/await best practices) - NEW 2025
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # Pyflakes (undefined names, unused imports, etc.)
+    "B",     # flake8-bugbear (common bugs and design problems)
+    "I",     # isort (import sorting)
+    "UP",    # pyupgrade (modernize Python code)
+    "SIM",   # flake8-simplify (simplify code)
+    "C4",    # flake8-comprehensions (better list/dict/set comprehensions)
+    "PIE",   # flake8-pie (misc lints)
+    "T20",   # flake8-print (detect print statements)
+    "RET",   # flake8-return (return statement issues)
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
+    "PERF",  # perflint (performance anti-patterns) - NEW 2025
+    "RUF",   # Ruff-specific rules - NEW 2025
+    "FURB",  # refurb (modernize Python idioms) - NEW 2025
+    "ASYNC", # flake8-async (async/await best practices) - NEW 2025
 ]
 
-***REMOVED*** Ignore specific rules
+# Ignore specific rules
 ignore = [
-    "E501",    ***REMOVED*** Line too long (handled by formatter)
-    "B008",    ***REMOVED*** Function calls in argument defaults
-    "T201",    ***REMOVED*** print() statements (we use them for logging)
-    "PTH123",  ***REMOVED*** pathlib open() (we use built-in open())
-    "PTH",     ***REMOVED*** os.path usage (pathlib migration not critical for this project)
-    "ARG002",  ***REMOVED*** Unused method arguments (often required for interface compatibility)
-    "B904",    ***REMOVED*** raise-without-from (context dependent, not always needed)
-    "SIM113",  ***REMOVED*** enumerate-for-loop (minor optimization, not critical)
-    ***REMOVED*** NEW 2025 rules - selective ignores
-    "RUF001",  ***REMOVED*** ambiguous-unicode (false positives for Cyrillic/Ukrainian text)
-    "RUF002",  ***REMOVED*** ambiguous-unicode-docstring (false positives for Cyrillic)
-    "RUF003",  ***REMOVED*** ambiguous-unicode-comment (false positives for Cyrillic comments)
-    "PERF203", ***REMOVED*** try-except-in-loop (acceptable for error handling in async)
-    "PERF401", ***REMOVED*** manual-list-comprehension (readability over micro-optimization)
-    "RUF012",  ***REMOVED*** mutable-class-default (dataclasses handle this correctly)
-    "ASYNC230",***REMOVED*** blocking-open-call (some files are small, async not always needed)
-    "ASYNC240",***REMOVED*** blocking-path-call (local filesystem ops are fast, async overhead not worth it)
+    "E501",    # Line too long (handled by formatter)
+    "B008",    # Function calls in argument defaults
+    "T201",    # print() statements (we use them for logging)
+    "PTH123",  # pathlib open() (we use built-in open())
+    "PTH",     # os.path usage (pathlib migration not critical for this project)
+    "ARG002",  # Unused method arguments (often required for interface compatibility)
+    "B904",    # raise-without-from (context dependent, not always needed)
+    "SIM113",  # enumerate-for-loop (minor optimization, not critical)
+    # NEW 2025 rules - selective ignores
+    "RUF001",  # ambiguous-unicode (false positives for Cyrillic/Ukrainian text)
+    "RUF002",  # ambiguous-unicode-docstring (false positives for Cyrillic)
+    "RUF003",  # ambiguous-unicode-comment (false positives for Cyrillic comments)
+    "PERF203", # try-except-in-loop (acceptable for error handling in async)
+    "PERF401", # manual-list-comprehension (readability over micro-optimization)
+    "RUF012",  # mutable-class-default (dataclasses handle this correctly)
+    "ASYNC230",# blocking-open-call (some files are small, async not always needed)
+    "ASYNC240",# blocking-path-call (local filesystem ops are fast, async overhead not worth it)
 ]
 
-***REMOVED*** Allow auto-fix for all enabled rules
+# Allow auto-fix for all enabled rules
 fixable = ["ALL"]
 unfixable = []
 
-***REMOVED*** Allow unused variables when underscore-prefixed
+# Allow unused variables when underscore-prefixed
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-***REMOVED*** Per-file ignores
+# Per-file ignores
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401", "E402"]  ***REMOVED*** Allow unused imports and late imports
-"evaluation/*.py" = ["T201"]      ***REMOVED*** Allow print() in evaluation scripts
-"test_*.py" = ["E402", "T201", "SIM117"]  ***REMOVED*** Allow late imports, print(), nested with in tests
-"tests/**/*.py" = ["E402", "T201", "SIM117"]  ***REMOVED*** Same for tests/ directory
-"legacy/*.py" = ["ASYNC210"]      ***REMOVED*** Allow blocking HTTP calls in async functions (legacy code)
-***REMOVED*** Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
-***REMOVED*** src/ingestion/service.py removed in ***REMOVED***1532: ASYNC240 is already in the
-***REMOVED*** global ignore list above, so the per-file entries were redundant. The
-***REMOVED*** modules themselves cannot be deleted yet because there are live runtime
-***REMOVED*** callers; see tests/contract/test_legacy_ingestion_removed_contract.py
-***REMOVED*** for the full audit.
+"__init__.py" = ["F401", "E402"]  # Allow unused imports and late imports
+"evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
+"test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
+"tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
+"legacy/*.py" = ["ASYNC210"]      # Allow blocking HTTP calls in async functions (legacy code)
+# Per-file ASYNC240 ignores for src/ingestion/docling_client.py and
+# src/ingestion/service.py removed in #1532: ASYNC240 is already in the
+# global ignore list above, so the per-file entries were redundant. The
+# modules themselves cannot be deleted yet because there are live runtime
+# callers; see tests/contract/test_legacy_ingestion_removed_contract.py
+# for the full audit.
 
-"*.py" = ["ARG001"]               ***REMOVED*** Allow unused function arguments (common in callbacks)
+"*.py" = ["ARG001"]               # Allow unused function arguments (common in callbacks)
 
-***REMOVED*** Import sorting configuration (isort replacement)
+# Import sorting configuration (isort replacement)
 [tool.ruff.lint.isort]
 known-first-party = ["config", "evaluation"]
 force-single-line = false
 lines-after-imports = 2
 
-***REMOVED*** =============================================================================
-***REMOVED*** FORMATTING
-***REMOVED*** =============================================================================
+# =============================================================================
+# FORMATTING
+# =============================================================================
 
 [tool.ruff.format]
-***REMOVED*** Use double quotes for strings (like Black)
+# Use double quotes for strings (like Black)
 quote-style = "double"
 
-***REMOVED*** Indent with spaces (4 spaces)
+# Indent with spaces (4 spaces)
 indent-style = "space"
 
-***REMOVED*** Respect magic trailing commas
+# Respect magic trailing commas
 skip-magic-trailing-comma = false
 
-***REMOVED*** Auto-detect line endings (LF on Linux, CRLF on Windows)
+# Auto-detect line endings (LF on Linux, CRLF on Windows)
 line-ending = "auto"
 
-***REMOVED*** Format code examples in docstrings
+# Format code examples in docstrings
 docstring-code-format = true
 
-***REMOVED*** Docstring code line length (dynamic = same as main code)
+# Docstring code line length (dynamic = same as main code)
 docstring-code-line-length = "dynamic"
 
-***REMOVED*** =============================================================================
-***REMOVED*** MYPY CONFIGURATION (Type Checking)
-***REMOVED*** =============================================================================
-***REMOVED*** Uncomment to enable strict type checking
-***REMOVED*** Run: mypy .
+# =============================================================================
+# MYPY CONFIGURATION (Type Checking)
+# =============================================================================
+# Uncomment to enable strict type checking
+# Run: mypy .
 
 [tool.mypy]
 python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = false  ***REMOVED*** Set to true for strict mode
-ignore_missing_imports = true  ***REMOVED*** Ignore missing stubs for now
-explicit_package_bases = true  ***REMOVED*** Resolve duplicate module names in services/
+disallow_untyped_defs = false  # Set to true for strict mode
+ignore_missing_imports = true  # Ignore missing stubs for now
+explicit_package_bases = true  # Resolve duplicate module names in services/
 
 [[tool.mypy.overrides]]
 module = "FlagEmbedding.*"
@@ -333,56 +333,56 @@ ignore_missing_imports = true
 module = "src.retrieval.topic_classifier"
 disallow_untyped_defs = true
 
-***REMOVED*** =============================================================================
-***REMOVED*** BANDIT CONFIGURATION (Security Linting)
-***REMOVED*** =============================================================================
-***REMOVED*** Uncomment to enable security checks
-***REMOVED*** Run: bandit -r . -c pyproject.toml
+# =============================================================================
+# BANDIT CONFIGURATION (Security Linting)
+# =============================================================================
+# Uncomment to enable security checks
+# Run: bandit -r . -c pyproject.toml
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests", "evaluation", "legacy", "scripts/archive", "__pycache__"]
-skips = ["B101"]  ***REMOVED*** Skip assert_used (common in tests)
+skips = ["B101"]  # Skip assert_used (common in tests)
 
-***REMOVED*** =============================================================================
-***REMOVED*** PYLINT CONFIGURATION (Comprehensive Linting)
-***REMOVED*** =============================================================================
-***REMOVED*** Run: pylint src/
+# =============================================================================
+# PYLINT CONFIGURATION (Comprehensive Linting)
+# =============================================================================
+# Run: pylint src/
 
 [tool.pylint.main]
-***REMOVED*** Python version for compatibility checks
+# Python version for compatibility checks
 py-version = "3.13"
 
-***REMOVED*** Files/directories to exclude
+# Files/directories to exclude
 ignore = ["legacy", "tests", ".venv", "__pycache__"]
 ignore-patterns = [".*_old\\.py$", ".*_backup\\.py$"]
 
 [tool.pylint.messages_control]
-***REMOVED*** Disable specific checks
+# Disable specific checks
 disable = [
-    "C0111",  ***REMOVED*** missing-docstring
-    "C0103",  ***REMOVED*** invalid-name (sometimes OK for ML code)
-    "R0913",  ***REMOVED*** too-many-arguments (common in ML)
-    "R0914",  ***REMOVED*** too-many-locals
-    "W0511",  ***REMOVED*** fixme/todo comments
-    "C0301",  ***REMOVED*** line-too-long (handled by ruff)
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name (sometimes OK for ML code)
+    "R0913",  # too-many-arguments (common in ML)
+    "R0914",  # too-many-locals
+    "W0511",  # fixme/todo comments
+    "C0301",  # line-too-long (handled by ruff)
 ]
 
 [tool.pylint.format]
 max-line-length = 100
-indent-string = "    "  ***REMOVED*** 4 spaces
+indent-string = "    "  # 4 spaces
 
 [tool.pylint.basic]
-***REMOVED*** Good variable names
+# Good variable names
 good-names = ["i", "j", "k", "ex", "Run", "_", "id", "f", "e"]
 
 [tool.pylint.design]
-max-args = 10  ***REMOVED*** Allow more args (ML models need many params)
+max-args = 10  # Allow more args (ML models need many params)
 max-attributes = 15
 max-branches = 15
 
-***REMOVED*** =============================================================================
-***REMOVED*** PYTEST CONFIGURATION
-***REMOVED*** =============================================================================
+# =============================================================================
+# PYTEST CONFIGURATION
+# =============================================================================
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -417,14 +417,14 @@ markers = [
     "regression: Regression guard tests (baseline comparisons, golden sets)",
 ]
 filterwarnings = [
-    ***REMOVED*** trustcall 0.0.39 imports Send from deprecated langgraph.constants;
-    ***REMOVED*** no upstream fix available yet (tracked in ***REMOVED***306)
+    # trustcall 0.0.39 imports Send from deprecated langgraph.constants;
+    # no upstream fix available yet (tracked in #306)
     "ignore:Importing Send from langgraph:DeprecationWarning",
 ]
 
-***REMOVED*** =============================================================================
-***REMOVED*** COVERAGE CONFIGURATION
-***REMOVED*** =============================================================================
+# =============================================================================
+# COVERAGE CONFIGURATION
+# =============================================================================
 
 [tool.coverage.run]
 source = ["src", "telegram_bot"]
@@ -436,10 +436,10 @@ omit = [
     "*/.venv/*",
     "telegram_bot/.venv/*",
     "telegram_bot/.venv/**/*",
-    ***REMOVED*** Scripts directory (not production code)
+    # Scripts directory (not production code)
     "scripts/*",
     "scripts/**/*",
-    ***REMOVED*** Evaluation scripts (not production code)
+    # Evaluation scripts (not production code)
     "src/evaluation/create_golden_set.py",
     "src/evaluation/generate_test_queries.py",
     "src/evaluation/run_ab_test.py",
@@ -447,9 +447,9 @@ omit = [
     "src/evaluation/search_engines_rerank.py",
     "src/evaluation/evaluate_with_ragas.py",
     "src/evaluation/langfuse_integration.py",
-    ***REMOVED*** One-off setup scripts
+    # One-off setup scripts
     "telegram_bot/setup_qdrant_indexes.py",
-    ***REMOVED*** Test/debug scripts in wrong location
+    # Test/debug scripts in wrong location
     "telegram_bot/test_*.py",
 ]
 

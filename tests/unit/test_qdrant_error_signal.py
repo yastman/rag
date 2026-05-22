@@ -1,4 +1,4 @@
-"""Tests for Qdrant backend_error meta signal (***REMOVED***117).
+"""Tests for Qdrant backend_error meta signal (#117).
 
 Verifies that hybrid_search_rrf with return_meta=True distinguishes
 backend failures from genuine empty search results.
@@ -94,7 +94,7 @@ class TestQdrantErrorSignal:
             return_meta=False,
         )
 
-        ***REMOVED*** Old contract: plain list, not tuple
+        # Old contract: plain list, not tuple
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["id"] == "1"

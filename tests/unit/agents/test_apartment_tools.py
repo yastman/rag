@@ -49,7 +49,7 @@ class TestApartmentSearchTool:
         assert "215" in result
         assert "248" in result
 
-        ***REMOVED*** Verify top_k passed to service
+        # Verify top_k passed to service
         call_kwargs = mock_service.search_with_filters.await_args
         assert call_kwargs.kwargs["top_k"] == 20
 
@@ -76,7 +76,7 @@ class TestApartmentSearchTool:
 
     @pytest.mark.asyncio
     async def test_caches_embeddings_after_compute(self) -> None:
-        """Verify cache.store_embedding and store_sparse_embedding are called (***REMOVED***635)."""
+        """Verify cache.store_embedding and store_sparse_embedding are called (#635)."""
         dense = [0.1] * 1024
         sparse = {"indices": [1], "values": [0.5]}
         colbert = [[0.1] * 1024]
@@ -216,12 +216,12 @@ class TestApartmentSearchTool:
         config = {"configurable": {"bot_context": ctx}}
         result = await apartment_search.ainvoke({"query": "test"}, config=config)
 
-        assert "X" in result  ***REMOVED*** поиск прошёл несмотря на ошибку store
+        assert "X" in result  # поиск прошёл несмотря на ошибку store
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** BotContext field
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# BotContext field
+# ---------------------------------------------------------------------------
 
 
 def test_bot_context_has_apartment_pipeline_field() -> None:
@@ -245,9 +245,9 @@ def test_bot_context_has_apartment_pipeline_field() -> None:
     assert ctx.apartment_pipeline is None
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Pipeline fallback in apartment_search
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pipeline fallback in apartment_search
+# ---------------------------------------------------------------------------
 
 
 class TestPipelineFallback:
@@ -338,12 +338,12 @@ class TestPipelineFallback:
         ctx = self._make_ctx(pipeline=pipeline)
         config = {"configurable": {"bot_context": ctx}}
 
-        ***REMOVED*** Must not raise; search proceeds normally
+        # Must not raise; search proceeds normally
         result = await apartment_search.ainvoke({"query": "студия"}, config=config)
 
         ctx.embeddings.aembed_hybrid_with_colbert.assert_awaited_once_with("студия")
         call_kwargs = ctx.apartments_service.search_with_filters.await_args
-        ***REMOVED*** No filters extracted → filters dict is empty → passed as None
+        # No filters extracted → filters dict is empty → passed as None
         assert call_kwargs.kwargs.get("filters") is None
         assert "ошибка" not in result.lower()
 

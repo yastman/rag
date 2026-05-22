@@ -21,9 +21,9 @@ from telegram_bot.dialogs.filter_constants import (
 )
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Constants sanity checks
-***REMOVED*** ============================================================
+# ============================================================
+# Constants sanity checks
+# ============================================================
 
 
 class TestConstants:
@@ -83,9 +83,9 @@ class TestConstants:
         assert FIELD_TO_FILTER_KEY["furnished"] == "is_furnished"
 
 
-***REMOVED*** ============================================================
-***REMOVED*** coerce_filter_value
-***REMOVED*** ============================================================
+# ============================================================
+# coerce_filter_value
+# ============================================================
 
 
 class TestCoerceFilterValue:
@@ -126,9 +126,9 @@ class TestCoerceFilterValue:
         assert coerce_filter_value(field, value) == expected
 
 
-***REMOVED*** ============================================================
-***REMOVED*** build_filters_dict
-***REMOVED*** ============================================================
+# ============================================================
+# build_filters_dict
+# ============================================================
 
 
 class TestBuildFiltersDict:

@@ -1,4 +1,4 @@
-"""Tests for ***REMOVED***384 dependency contract enforcement in NurturingService (***REMOVED***390)."""
+"""Tests for #384 dependency contract enforcement in NurturingService (#390)."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ async def test_nurturing_service_fails_fast_when_384_columns_missing(
 ):
     svc = NurturingService(pool=fake_pool_without_384_columns)
 
-    with pytest.raises(RuntimeError, match="lead_scores contract from ***REMOVED***384 is missing"):
+    with pytest.raises(RuntimeError, match="lead_scores contract from #384 is missing"):
         await svc.select_candidates(limit=10)
 
 

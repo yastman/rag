@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Deep analysis: Why Docling loses article metadata
 Investigates Docling's document structure and metadata flow.
@@ -21,7 +21,7 @@ try:
     from docling.document_converter import DocumentConverter
     from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
     from transformers import AutoTokenizer
-except Exception as exc:  ***REMOVED*** pragma: no cover - depends on optional third-party packages
+except Exception as exc:  # pragma: no cover - depends on optional third-party packages
     pytest.skip(f"docling stack unusable in this environment: {exc}", allow_module_level=True)
 
 
@@ -48,7 +48,7 @@ def analyze_docling_document():
     print(f"   Pages: {len(doc.pages)}")
     print(f"   Text items: {len(doc.texts)}")
 
-    ***REMOVED*** Analyze document hierarchy
+    # Analyze document hierarchy
     print("\n📋 Document Items by Type:")
     item_types = {}
     for item, _level in doc.iterate_items():
@@ -60,7 +60,7 @@ def analyze_docling_document():
     for item_type, count in sorted(item_types.items(), key=lambda x: x[1], reverse=True):
         print(f"   {item_type}: {count}")
 
-    ***REMOVED*** Check for headings
+    # Check for headings
     print("\n🔍 Searching for 'Стаття' in document items...")
     article_patterns_found = {
         "in_headings": 0,
@@ -74,7 +74,7 @@ def analyze_docling_document():
 
     for item, _level in doc.iterate_items():
         item_text = getattr(item, "text", "")
-        if "Стаття" in item_text[:50]:  ***REMOVED*** Check first 50 chars
+        if "Стаття" in item_text[:50]:  # Check first 50 chars
             item_type = type(item).__name__
 
             if "heading" in item_type.lower():
@@ -104,7 +104,7 @@ def analyze_docling_document():
         for item_type, text in text_samples:
             print(f"   [{item_type}] {text}...")
 
-    ***REMOVED*** Analyze chunks
+    # Analyze chunks
     print("\n\n⚙️  Creating HybridChunker...")
     EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
     tokenizer = HuggingFaceTokenizer(
@@ -118,7 +118,7 @@ def analyze_docling_document():
 
     print(f"✅ Created {len(chunks)} chunks")
 
-    ***REMOVED*** Deep analysis of chunks
+    # Deep analysis of chunks
     print("\n🔬 Chunk Metadata Analysis:")
 
     chunks_with_headings = [c for c in chunks if c.meta.headings]
@@ -127,7 +127,7 @@ def analyze_docling_document():
     print(f"   Chunks with meta.headings: {len(chunks_with_headings)}")
     print(f"   Chunks starting with 'Стаття': {len(chunks_with_article_text)}")
 
-    ***REMOVED*** Sample chunk with article
+    # Sample chunk with article
     if chunks_with_article_text:
         print("\n📄 Sample chunk (starts with 'Стаття'):")
         sample = chunks_with_article_text[0]
@@ -135,24 +135,24 @@ def analyze_docling_document():
         print(f"   Doc items: {len(sample.meta.doc_items)}")
         print(f"   Text: {sample.text[:200]}...")
 
-        ***REMOVED*** Check doc_items
+        # Check doc_items
         print("\n   Doc items in this chunk:")
-        for item in sample.meta.doc_items[:5]:  ***REMOVED*** First 5
+        for item in sample.meta.doc_items[:5]:  # First 5
             print(f"     - {item.label}: {item.self_ref}")
 
-    ***REMOVED*** Check if doc_items contain text that starts with "Стаття"
+    # Check if doc_items contain text that starts with "Стаття"
     print("\n🔍 Checking doc_items for article info...")
     chunks_with_article_in_doc_items = 0
     for chunk in chunks:
         for doc_item in chunk.meta.doc_items:
-            ***REMOVED*** Check if we can access the actual text from doc_item
+            # Check if we can access the actual text from doc_item
             if hasattr(doc_item, "text") and "Стаття" in doc_item.text[:50]:
                 chunks_with_article_in_doc_items += 1
                 break
 
     print(f"   Chunks with 'Стаття' in doc_items: {chunks_with_article_in_doc_items}")
 
-    ***REMOVED*** KEY INSIGHT
+    # KEY INSIGHT
     print("\n\n" + "=" * 80)
     print("💡 KEY INSIGHT")
     print("=" * 80)

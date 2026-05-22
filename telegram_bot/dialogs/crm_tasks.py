@@ -1,4 +1,4 @@
-"""CRM Task wizard and My Tasks view dialogs (aiogram-dialog) — ***REMOVED***697.
+"""CRM Task wizard and My Tasks view dialogs (aiogram-dialog) — #697.
 
 Task 6:
 - CreateTaskWizard: text → task_type → lead_id → due_date → summary → confirm
@@ -27,34 +27,34 @@ from .states import CreateTaskSG, CrmQuickActionSG, MyTasksSG, TasksMenuSG
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** --- Constants ---
+# --- Constants ---
 
-***REMOVED*** Task type options: (label, key)
+# Task type options: (label, key)
 TASK_TYPE_OPTIONS: list[tuple[str, str]] = [
     ("📞 Звонок", "call"),
     ("🤝 Встреча", "meeting"),
     ("📋 Другое", "other"),
 ]
 
-***REMOVED*** Kommo task_type_id mapping
+# Kommo task_type_id mapping
 _TASK_TYPE_ID_MAP: dict[str, int] = {
     "call": 1,
     "meeting": 2,
     "other": 3,
 }
 
-***REMOVED*** Filter options for My Tasks
+# Filter options for My Tasks
 FILTER_OPTIONS: list[tuple[str, str]] = [
     ("📋 Все задачи", "all"),
     ("📅 Сегодня", "today"),
     ("⚠️ Просроченные", "overdue"),
 ]
 
-***REMOVED*** Pagination: tasks per page
+# Pagination: tasks per page
 _PAGE_SIZE = 5
 
 
-***REMOVED*** --- Helpers ---
+# --- Helpers ---
 
 
 def task_type_id_from_key(key: str) -> int:
@@ -89,7 +89,7 @@ def parse_due_date(date_str: str) -> int:
     except ValueError:
         raise ValueError(f"Неверный формат даты: '{date_str}'. Используйте DD.MM.YYYY")
 
-    ***REMOVED*** Set to end of day in UTC
+    # Set to end of day in UTC
     dt_utc = dt.replace(hour=23, minute=59, second=59, tzinfo=datetime.UTC)
     now_utc = datetime.datetime.now(tz=datetime.UTC)
 
@@ -164,7 +164,7 @@ def render_tasks_text(tasks: list[Task]) -> str:
             due_str = dt.strftime("%d.%m.%Y %H:%M")
 
         lines = [
-            f"{status_icon} *Задача ***REMOVED***{task.id}*",
+            f"{status_icon} *Задача #{task.id}*",
             f"Текст: {task.text or '—'}",
             f"Срок: {due_str}",
         ]
@@ -173,7 +173,7 @@ def render_tasks_text(tasks: list[Task]) -> str:
     return "\n\n".join(parts)
 
 
-***REMOVED*** --- Getters ---
+# --- Getters ---
 
 
 async def get_create_task_text_data(**kwargs: Any) -> dict[str, str]:
@@ -199,7 +199,7 @@ async def get_lead_options(dialog_manager: DialogManager, **kwargs: Any) -> dict
         try:
             leads = await kommo.search_leads(query="", limit=10)
             for lead in leads[:10]:
-                label = f"***REMOVED***{lead.id} {lead.name or '—'}"
+                label = f"#{lead.id} {lead.name or '—'}"
                 lead_items.append((label, str(lead.id)))
         except Exception:
             logger.exception("Failed to fetch leads for task wizard")
@@ -267,7 +267,7 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
 
     tasks: list[Task] = []
 
-    ***REMOVED*** Get Kommo user ID from bot config (not Telegram ID)
+    # Get Kommo user ID from bot config (not Telegram ID)
     config = kwargs.get("bot_config")
     manager_id: int | None = getattr(config, "kommo_responsible_user_id", None) if config else None
 
@@ -284,7 +284,7 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
         except Exception:
             logger.exception("Failed to fetch tasks for My Tasks view")
 
-    ***REMOVED*** Pagination
+    # Pagination
     total = len(tasks)
     start = page * _PAGE_SIZE
     end = start + _PAGE_SIZE
@@ -292,18 +292,18 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
 
     tasks_text = render_tasks_text(page_tasks)
 
-    ***REMOVED*** Filter label for header
+    # Filter label for header
     filter_labels = {"all": "Все", "today": "Сегодня", "overdue": "Просроченные"}
     filter_label = filter_labels.get(task_filter, "Все")
 
-    ***REMOVED*** Active tasks for complete select widget
+    # Active tasks for complete select widget
     active_tasks = [
-        (f"***REMOVED***{t.id}: {(t.text or '')[:30]}", str(t.id)) for t in page_tasks if not t.is_completed
+        (f"#{t.id}: {(t.text or '')[:30]}", str(t.id)) for t in page_tasks if not t.is_completed
     ]
 
-    ***REMOVED*** Edit tasks for edit select widget
+    # Edit tasks for edit select widget
     edit_tasks = [
-        (f"***REMOVED***{t.id}: {(t.text or '')[:25]}", str(t.id)) for t in page_tasks if not t.is_completed
+        (f"#{t.id}: {(t.text or '')[:25]}", str(t.id)) for t in page_tasks if not t.is_completed
     ]
 
     return {
@@ -319,7 +319,7 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
     }
 
 
-***REMOVED*** --- Handlers ---
+# --- Handlers ---
 
 
 async def on_task_text_entered(
@@ -355,8 +355,8 @@ async def on_lead_selected(
 ) -> None:
     """Save lead selection and advance to due date input."""
     manager.dialog_data["lead_id"] = int(item_id) if item_id != "0" else None
-    ***REMOVED*** Find label from items — store it for summary display
-    manager.dialog_data["lead_label"] = f"Сделка ***REMOVED***{item_id}" if item_id != "0" else "—"
+    # Find label from items — store it for summary display
+    manager.dialog_data["lead_label"] = f"Сделка #{item_id}" if item_id != "0" else "—"
     await manager.switch_to(CreateTaskSG.due_date)
 
 
@@ -374,7 +374,7 @@ async def on_due_date_entered(
         return
 
     manager.dialog_data["due_date_ts"] = ts
-    ***REMOVED*** Store display string
+    # Store display string
     dt = datetime.datetime.fromtimestamp(ts, tz=datetime.UTC)
     manager.dialog_data["due_date_display"] = dt.strftime("%d.%m.%Y")
     await manager.switch_to(CreateTaskSG.summary)
@@ -426,7 +426,7 @@ async def on_task_confirm(
                 task_type_id=task_type_id,
             )
         )
-        await callback.answer(f"✅ Задача ***REMOVED***{task.id} создана!", show_alert=True)
+        await callback.answer(f"✅ Задача #{task.id} создана!", show_alert=True)
     except Exception:
         logger.exception("Failed to create task via Kommo")
         await callback.answer("❌ Ошибка при создании задачи", show_alert=True)
@@ -499,17 +499,17 @@ async def on_task_complete(
     try:
         task_id = int(item_id)
         await kommo.complete_task(task_id)
-        await callback.answer(f"✅ Задача ***REMOVED***{task_id} выполнена!")
+        await callback.answer(f"✅ Задача #{task_id} выполнена!")
     except Exception:
         logger.exception("Failed to complete task %s", item_id)
         await callback.answer("❌ Не удалось завершить задачу", show_alert=True)
 
 
-***REMOVED*** --- Dialogs ---
+# --- Dialogs ---
 
 
 create_task_dialog = Dialog(
-    ***REMOVED*** Step 1: Task text input
+    # Step 1: Task text input
     Window(
         Format("{title}"),
         TextInput(
@@ -520,7 +520,7 @@ create_task_dialog = Dialog(
         getter=get_create_task_text_data,
         state=CreateTaskSG.text,
     ),
-    ***REMOVED*** Step 2: Task type selection
+    # Step 2: Task type selection
     Window(
         Format("{title}"),
         Column(
@@ -536,7 +536,7 @@ create_task_dialog = Dialog(
         getter=get_task_type_options,
         state=CreateTaskSG.task_type,
     ),
-    ***REMOVED*** Step 3: Lead selection
+    # Step 3: Lead selection
     Window(
         Format("{title}"),
         Column(
@@ -552,7 +552,7 @@ create_task_dialog = Dialog(
         getter=get_lead_options,
         state=CreateTaskSG.lead_id,
     ),
-    ***REMOVED*** Step 4: Due date input
+    # Step 4: Due date input
     Window(
         Format("{title}"),
         TextInput(
@@ -564,7 +564,7 @@ create_task_dialog = Dialog(
         getter=get_create_task_due_data,
         state=CreateTaskSG.due_date,
     ),
-    ***REMOVED*** Step 5: Summary / confirmation
+    # Step 5: Summary / confirmation
     Window(
         Format("{summary}"),
         Button(Const("✅ Создать"), id="confirm_task", on_click=on_task_confirm),
@@ -577,7 +577,7 @@ create_task_dialog = Dialog(
 
 
 my_tasks_dialog = Dialog(
-    ***REMOVED*** Step 1: Filter selection
+    # Step 1: Filter selection
     Window(
         Format("{title}"),
         Column(
@@ -593,10 +593,10 @@ my_tasks_dialog = Dialog(
         getter=get_filter_options,
         state=MyTasksSG.filter,
     ),
-    ***REMOVED*** Step 2: Task list with pagination and complete/edit actions
+    # Step 2: Task list with pagination and complete/edit actions
     Window(
         Format("{title}\n\n{tasks_text}"),
-        ***REMOVED*** Complete task select (shown only when there are active tasks)
+        # Complete task select (shown only when there are active tasks)
         Column(
             Select(
                 Format("✅ Выполнить: {item[0]}"),
@@ -607,7 +607,7 @@ my_tasks_dialog = Dialog(
                 when="has_active",
             ),
         ),
-        ***REMOVED*** Edit task select (shown only when there are active tasks)
+        # Edit task select (shown only when there are active tasks)
         Column(
             Select(
                 Format("✏️ Редактировать: {item[0]}"),
@@ -628,9 +628,9 @@ my_tasks_dialog = Dialog(
 )
 
 
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
-***REMOVED*** Tasks Menu — navigation hub (create + my tasks)
-***REMOVED*** ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Tasks Menu — navigation hub (create + my tasks)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def get_tasks_menu_data(**kwargs: Any) -> dict[str, str]:

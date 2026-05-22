@@ -1,4 +1,4 @@
-***REMOVED***!/bin/sh
+#!/bin/sh
 set -eu
 
 manifest_dir="${MANIFEST_DIR:-/data/manifest}"

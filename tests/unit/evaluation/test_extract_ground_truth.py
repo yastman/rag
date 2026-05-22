@@ -1,4 +1,4 @@
-***REMOVED*** tests/unit/evaluation/test_extract_ground_truth.py
+# tests/unit/evaluation/test_extract_ground_truth.py
 """Tests for ground truth extraction module."""
 
 from unittest.mock import MagicMock, mock_open, patch
@@ -12,7 +12,7 @@ class TestExtractArticles:
         """Test extract_articles scrolls through Qdrant collection."""
         mock_client = MagicMock()
 
-        ***REMOVED*** First scroll returns points, second returns empty
+        # First scroll returns points, second returns empty
         mock_point = MagicMock()
         mock_point.id = "point-1"
         mock_point.payload = {
@@ -65,12 +65,12 @@ class TestExtractArticles:
         """Test extract_articles handles multiple pages."""
         mock_client = MagicMock()
 
-        ***REMOVED*** First page
+        # First page
         p1 = MagicMock()
         p1.id = "1"
         p1.payload = {"article_number": 1, "chunk_id": "c1", "text": "A"}
 
-        ***REMOVED*** Second page
+        # Second page
         p2 = MagicMock()
         p2.id = "2"
         p2.payload = {"article_number": 2, "chunk_id": "c2", "text": "B"}
@@ -100,7 +100,7 @@ class TestExtractArticles:
 
         p2 = MagicMock()
         p2.id = "2"
-        p2.payload = {"text": "No article number"}  ***REMOVED*** Missing article
+        p2.payload = {"text": "No article number"}  # Missing article
 
         mock_client.scroll.return_value = ([p1, p2], None)
         mock_make_client.return_value = mock_client
@@ -110,7 +110,7 @@ class TestExtractArticles:
         result = extract_articles("test")
 
         assert "121" in result
-        assert len(result) == 1  ***REMOVED*** Only one article extracted
+        assert len(result) == 1  # Only one article extracted
 
     @patch("src.evaluation.extract_ground_truth._make_client")
     def test_extract_articles_uses_point_id_as_fallback(self, mock_make_client):
@@ -135,7 +135,7 @@ class TestExtractArticles:
         """Test extract_articles stores truncated text preview."""
         mock_client = MagicMock()
 
-        long_text = "A" * 200  ***REMOVED*** Longer than 100 chars
+        long_text = "A" * 200  # Longer than 100 chars
         p = MagicMock()
         p.id = "1"
         p.payload = {"article_number": 121, "chunk_id": "c1", "text": long_text}
@@ -147,7 +147,7 @@ class TestExtractArticles:
 
         result = extract_articles("test")
 
-        ***REMOVED*** Text preview should be truncated to 100 chars
+        # Text preview should be truncated to 100 chars
         assert len(result["121"][0]["text_preview"]) == 100
 
     @patch("src.evaluation.extract_ground_truth._make_client")
@@ -251,7 +251,7 @@ class TestMain:
         opened_paths = [call.args[0] for call in mock_file.call_args_list]
         assert any("ground_truth_articles.json" in p for p in opened_paths)
         assert any("article_to_chunk_mapping.json" in p for p in opened_paths)
-        ***REMOVED*** Verify no hardcoded /home/admin paths
+        # Verify no hardcoded /home/admin paths
         assert all("/home/admin" not in p for p in opened_paths)
 
     @patch("src.evaluation.extract_ground_truth.extract_articles")
@@ -273,9 +273,9 @@ class TestMain:
 
         main()
 
-        ***REMOVED*** Check that json.dump was called with simplified mapping
+        # Check that json.dump was called with simplified mapping
         write_calls = mock_file().write.call_args_list
-        ***REMOVED*** At least one write should contain the simplified mapping (first point_id only)
+        # At least one write should contain the simplified mapping (first point_id only)
         written_content = "".join(call[0][0] for call in write_calls)
         assert "p1" in written_content
 

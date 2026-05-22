@@ -17,7 +17,7 @@ import pytest
 
 pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
 pytestmark = pytest.mark.requires_extras
-***REMOVED*** ── Fake model that returns deterministic numpy arrays ──
+# ── Fake model that returns deterministic numpy arrays ──
 _DENSE_DIM = 1024
 _COLBERT_DIM = 1024
 
@@ -89,8 +89,8 @@ def bge_app():
             "fake_model": fake_model,
         }
 
-        ***REMOVED*** Clean up cached service imports (not mocks — real modules imported
-        ***REMOVED*** via syspath_prepend that shouldn't leak to other test files).
+        # Clean up cached service imports (not mocks — real modules imported
+        # via syspath_prepend that shouldn't leak to other test files).
         for mod_name in ("app", "config"):
             sys.modules.pop(mod_name, None)
 
@@ -102,7 +102,7 @@ async def client(bge_app):
         yield ac
 
 
-***REMOVED*** ── Endpoint tests ──
+# ── Endpoint tests ──
 
 
 class TestHealthEndpoint:
@@ -121,7 +121,7 @@ class TestEncodeSparse:
         assert "lexical_weights" in data
         assert isinstance(data["lexical_weights"], list)
         assert len(data["lexical_weights"]) == 1
-        ***REMOVED*** Each item has indices + values
+        # Each item has indices + values
         item = data["lexical_weights"][0]
         assert "indices" in item
         assert "values" in item
@@ -135,7 +135,7 @@ class TestEncodeColbert:
         assert "colbert_vecs" in data
         assert isinstance(data["colbert_vecs"], list)
         assert len(data["colbert_vecs"]) == 1
-        ***REMOVED*** Each embedding is list of lists (multi-vector)
+        # Each embedding is list of lists (multi-vector)
         vec = data["colbert_vecs"][0]
         assert isinstance(vec, list)
         assert isinstance(vec[0], list)
@@ -162,8 +162,8 @@ class TestEncodeDense:
 class TestMetrics:
     async def test_metrics_endpoint(self, client):
         resp = await client.get("/metrics")
-        ***REMOVED*** Prometheus metrics sub-app is mocked, so may return 200 or error
-        ***REMOVED*** The important thing is the route exists and doesn't 404
+        # Prometheus metrics sub-app is mocked, so may return 200 or error
+        # The important thing is the route exists and doesn't 404
         assert resp.status_code != 404
 
 
@@ -185,17 +185,17 @@ class TestPartialFailureIsolation:
         resp = await client.post("/encode/dense", json={"texts": ["hello", "", "world"]})
         assert resp.status_code == 200
         data = resp.json()
-        ***REMOVED*** Response cardinality matches input cardinality
+        # Response cardinality matches input cardinality
         assert len(data["dense_vecs"]) == 3
-        ***REMOVED*** partial_failures reports index 1
+        # partial_failures reports index 1
         assert "partial_failures" in data
         assert len(data["partial_failures"]) == 1
         assert data["partial_failures"][0]["index"] == 1
         assert "error" in data["partial_failures"][0]
-        ***REMOVED*** Valid items have non-zero vectors
+        # Valid items have non-zero vectors
         assert any(v != 0.0 for v in data["dense_vecs"][0])
         assert any(v != 0.0 for v in data["dense_vecs"][2])
-        ***REMOVED*** Invalid item has zero-vector sentinel
+        # Invalid item has zero-vector sentinel
         assert all(v == 0.0 for v in data["dense_vecs"][1])
         assert len(data["dense_vecs"][1]) == 1024
 
@@ -208,10 +208,10 @@ class TestPartialFailureIsolation:
         assert "partial_failures" in data
         assert len(data["partial_failures"]) == 1
         assert data["partial_failures"][0]["index"] == 1
-        ***REMOVED*** Invalid item has empty indices/values
+        # Invalid item has empty indices/values
         assert data["lexical_weights"][1]["indices"] == []
         assert data["lexical_weights"][1]["values"] == []
-        ***REMOVED*** Valid items have non-empty weights
+        # Valid items have non-empty weights
         assert len(data["lexical_weights"][0]["indices"]) > 0
         assert len(data["lexical_weights"][2]["indices"]) > 0
 
@@ -224,11 +224,11 @@ class TestPartialFailureIsolation:
         assert "partial_failures" in data
         assert len(data["partial_failures"]) == 1
         assert data["partial_failures"][0]["index"] == 1
-        ***REMOVED*** Invalid item: single zero-vector token [[0.0]*1024]
+        # Invalid item: single zero-vector token [[0.0]*1024]
         assert len(data["colbert_vecs"][1]) == 1
         assert all(v == 0.0 for v in data["colbert_vecs"][1][0])
         assert len(data["colbert_vecs"][1][0]) == 1024
-        ***REMOVED*** Valid items have multi-token vectors
+        # Valid items have multi-token vectors
         assert len(data["colbert_vecs"][0]) > 0
         assert len(data["colbert_vecs"][2]) > 0
 
@@ -240,14 +240,14 @@ class TestPartialFailureIsolation:
         assert "partial_failures" in data
         assert len(data["partial_failures"]) == 1
         assert data["partial_failures"][0]["index"] == 1
-        ***REMOVED*** Dense sentinel
+        # Dense sentinel
         assert len(data["dense_vecs"]) == 3
         assert all(v == 0.0 for v in data["dense_vecs"][1])
-        ***REMOVED*** Sparse sentinel
+        # Sparse sentinel
         assert len(data["lexical_weights"]) == 3
         assert data["lexical_weights"][1]["indices"] == []
         assert data["lexical_weights"][1]["values"] == []
-        ***REMOVED*** ColBERT sentinel
+        # ColBERT sentinel
         assert len(data["colbert_vecs"]) == 3
         assert len(data["colbert_vecs"][1]) == 1
         assert all(v == 0.0 for v in data["colbert_vecs"][1][0])
@@ -267,7 +267,7 @@ class TestPartialFailureIsolation:
         data = resp.json()
         assert len(data["dense_vecs"]) == 2
         assert len(data["partial_failures"]) == 2
-        ***REMOVED*** Both are zero sentinels
+        # Both are zero sentinels
         assert all(v == 0.0 for v in data["dense_vecs"][0])
         assert all(v == 0.0 for v in data["dense_vecs"][1])
 
@@ -291,7 +291,7 @@ class TestWarmup:
 
         fake_model.encode.reset_mock()
 
-        ***REMOVED*** Run the lifespan startup directly (no ASGI runner needed)
+        # Run the lifespan startup directly (no ASGI runner needed)
         gen = app_module.lifespan(None)
         await gen.__aenter__()
         await gen.__aexit__(None, None, None)

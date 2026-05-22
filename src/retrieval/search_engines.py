@@ -18,16 +18,16 @@ from src.retrieval.search_engine_shared import (
 from src.utils.serialization import convert_to_python_types
 
 
-***REMOVED*** ACORN: available in qdrant-client SDK (≥1.16.2) but intentionally not connected
-***REMOVED*** to bot runtime. Evaluation-only — used in search benchmark engines below.
-***REMOVED*** Connect to production when filtered queries need higher recall. See ***REMOVED***590.
+# ACORN: available in qdrant-client SDK (≥1.16.2) but intentionally not connected
+# to bot runtime. Evaluation-only — used in search benchmark engines below.
+# Connect to production when filtered queries need higher recall. See #590.
 try:
     from qdrant_client.models import AcornSearchParams
 
     ACORN_AVAILABLE = True
 except ImportError:
     ACORN_AVAILABLE = False
-    AcornSearchParams = None  ***REMOVED*** type: ignore[misc, assignment]
+    AcornSearchParams = None  # type: ignore[misc, assignment]
 
 
 @dataclass
@@ -47,7 +47,7 @@ class BaseSearchEngine(AbstractSearchEngine):
         """Initialize search engine."""
         self.settings = settings or Settings()
         self.client = QdrantClient(self.settings.qdrant_url)
-        ***REMOVED*** Use quantization-aware collection name
+        # Use quantization-aware collection name
         self._collection_name = self.settings.get_collection_name()
 
     @property
@@ -70,18 +70,18 @@ class BaseSearchEngine(AbstractSearchEngine):
             return False
 
         if self.settings.acorn_mode == AcornMode.ON:
-            ***REMOVED*** Always use ACORN when filters are present
+            # Always use ACORN when filters are present
             return has_filters
 
-        ***REMOVED*** AUTO mode: use ACORN only with filters AND low selectivity
+        # AUTO mode: use ACORN only with filters AND low selectivity
         if not has_filters:
             return False
 
-        ***REMOVED*** If selectivity is unknown, default to enabled (conservative)
+        # If selectivity is unknown, default to enabled (conservative)
         if estimated_selectivity is None:
             return True
 
-        ***REMOVED*** Enable ACORN only if selectivity is below threshold
+        # Enable ACORN only if selectivity is below threshold
         return estimated_selectivity < self.settings.acorn_enabled_selectivity_threshold
 
     def _build_search_params(
@@ -98,15 +98,15 @@ class BaseSearchEngine(AbstractSearchEngine):
         Returns:
             SearchParams configured for quantization and ACORN.
         """
-        ***REMOVED*** Build quantization params
+        # Build quantization params
         quantization_params = models.QuantizationSearchParams(
             ignore=(self.settings.quantization_mode == QuantizationMode.OFF),
             rescore=self.settings.quantization_rescore,
             oversampling=self.settings.quantization_oversampling,
         )
 
-        ***REMOVED*** Determine if ACORN should be enabled
-        ***REMOVED*** Only use ACORN if the feature is available in qdrant-client
+        # Determine if ACORN should be enabled
+        # Only use ACORN if the feature is available in qdrant-client
         use_acorn = ACORN_AVAILABLE and self._should_use_acorn(has_filters, estimated_selectivity)
 
         if use_acorn and AcornSearchParams is not None:
@@ -211,7 +211,7 @@ class BaselineSearchEngine(BaseSearchEngine):
         if score_threshold is None:
             score_threshold = 0.5
 
-        ***REMOVED*** Build search params with quantization and conditional ACORN
+        # Build search params with quantization and conditional ACORN
         has_filters = query_filter is not None
         search_params = self._build_search_params(
             has_filters=has_filters,
@@ -310,7 +310,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         if score_threshold is None:
             score_threshold = 0.3
 
-        ***REMOVED*** If query is a string, generate all embeddings and use hybrid search
+        # If query is a string, generate all embeddings and use hybrid search
         if isinstance(query_embedding, str):
             return self._search_hybrid(
                 query_embedding,
@@ -321,7 +321,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
                 group_size=group_size,
             )
 
-        ***REMOVED*** Backward compatibility: if embedding provided, use dense-only search
+        # Backward compatibility: if embedding provided, use dense-only search
         response = self.client.query_points(
             collection_name=self.collection_name,
             query=query_embedding,
@@ -368,10 +368,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         """
         import logging
 
-        ***REMOVED*** Generate all embeddings for query
+        # Generate all embeddings for query
         query_embeddings = self._encode_query(query)
 
-        ***REMOVED*** Convert to Python/Qdrant types
+        # Convert to Python/Qdrant types
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
         sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
 
@@ -501,7 +501,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         if score_threshold is None:
             score_threshold = 0.3
 
-        ***REMOVED*** If query is a string, use full hybrid + ColBERT rerank
+        # If query is a string, use full hybrid + ColBERT rerank
         if isinstance(query_embedding, str):
             return self._search_hybrid_colbert(
                 query_embedding,
@@ -512,7 +512,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
                 group_size=group_size,
             )
 
-        ***REMOVED*** Backward compatibility: if embedding provided, use dense-only search
+        # Backward compatibility: if embedding provided, use dense-only search
         response = self.client.query_points(
             collection_name=self.collection_name,
             query=query_embedding,
@@ -552,10 +552,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         """
         import logging
 
-        ***REMOVED*** Generate all embeddings for query (dense + sparse + colbert)
+        # Generate all embeddings for query (dense + sparse + colbert)
         query_embeddings = self._encode_query(query)
 
-        ***REMOVED*** Convert to Python/Qdrant types
+        # Convert to Python/Qdrant types
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
         sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
         colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
@@ -691,7 +691,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         if score_threshold is None:
             score_threshold = 0.3
 
-        ***REMOVED*** If query is a string, use full hybrid + ColBERT rerank
+        # If query is a string, use full hybrid + ColBERT rerank
         if isinstance(query_embedding, str):
             return self._search_hybrid_colbert(
                 query_embedding,
@@ -701,7 +701,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
                 group_size=group_size,
             )
 
-        ***REMOVED*** Backward compatibility: if embedding provided, use dense-only search
+        # Backward compatibility: if embedding provided, use dense-only search
         response = self.client.query_points(
             collection_name=self.collection_name,
             query=query_embedding,
@@ -739,7 +739,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         """
         import logging
 
-        ***REMOVED*** Generate all embeddings
+        # Generate all embeddings
         query_embeddings = self._encode_query(query)
 
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])

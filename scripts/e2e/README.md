@@ -1,13 +1,13 @@
-***REMOVED*** E2e
+# E2e
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 scripts/e2e
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - __init__.py
 - auth.py
 - claude_judge.py
@@ -20,5 +20,5 @@ scripts/e2e
 - test_scenarios.py
 - token_audit.py
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

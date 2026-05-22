@@ -1,4 +1,4 @@
-"""Regression tests for the Langfuse compose runtime contract (***REMOVED***1080)."""
+"""Regression tests for the Langfuse compose runtime contract (#1080)."""
 
 from __future__ import annotations
 

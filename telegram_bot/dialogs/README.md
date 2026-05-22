@@ -1,13 +1,13 @@
-***REMOVED*** Dialogs
+# Dialogs
 
-***REMOVED******REMOVED*** Purpose
+## Purpose
 Navigation index for the folder. Use this page to quickly find files and route into this part of the project.
 
-***REMOVED******REMOVED*** Scope
+## Scope
 telegram_bot/dialogs
 
 
-***REMOVED******REMOVED*** Contents
+## Contents
 - __init__.py
 - catalog.py
 - catalog_transport.py
@@ -31,5 +31,5 @@ telegram_bot/dialogs
 - states.py
 - viewing.py
 
-***REMOVED******REMOVED*** Parent
+## Parent
 - [..](..)

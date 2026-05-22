@@ -1,4 +1,4 @@
-"""Test HotLeadNotifier wiring in PropertyBot (***REMOVED***402)."""
+"""Test HotLeadNotifier wiring in PropertyBot (#402)."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ class TestHotLeadNotifierWiring:
         """PropertyBot must declare _hot_lead_notifier attribute."""
         bot = _create_bot(_make_config())
         assert hasattr(bot, "_hot_lead_notifier")
-        assert bot._hot_lead_notifier is None  ***REMOVED*** not yet initialized
+        assert bot._hot_lead_notifier is None  # not yet initialized
 
     def test_notifier_importable_and_has_interface(self):
         """HotLeadNotifier is importable and has notify_if_hot method."""

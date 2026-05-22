@@ -1,4 +1,4 @@
-"""Tests for error span tracking in LangGraph nodes (P1.2 ***REMOVED***103).
+"""Tests for error span tracking in LangGraph nodes (P1.2 #103).
 
 Verifies that generate, rewrite, rerank, and respond nodes call
 get_client().update_current_span(level="ERROR", ...) on failure paths.
@@ -77,7 +77,7 @@ class TestGenerateNodeErrorSpan:
         status_message = error_calls[-1]["status_message"]
         assert status_message.startswith("LLM failed:")
         assert len(status_message) > len("LLM failed:")
-        ***REMOVED*** Fallback response still returned
+        # Fallback response still returned
         assert result["response"] != ""
 
 
@@ -114,7 +114,7 @@ class TestRewriteNodeErrorSpan:
         assert call_kwargs["level"] == "ERROR"
         assert "Rewrite LLM failed" in call_kwargs["status_message"]
         assert "LLM rewrite timeout" in call_kwargs["status_message"]
-        ***REMOVED*** Falls back to original query
+        # Falls back to original query
         assert result["rewrite_effective"] is False
 
 
@@ -139,7 +139,7 @@ class TestRerankNodeErrorSpan:
         assert call_kwargs["level"] == "ERROR"
         assert "ColBERT rerank failed" in call_kwargs["status_message"]
         assert "ColBERT timeout" in call_kwargs["status_message"]
-        ***REMOVED*** Falls back to score-sort
+        # Falls back to score-sort
         assert result["rerank_applied"] is False
 
 
@@ -197,5 +197,5 @@ class TestRespondNodeErrorSpan:
         ]
         assert error_calls, "respond_node must emit ERROR span on Telegram send failure"
         assert "Telegram send failed" in error_calls[-1]["status_message"]
-        ***REMOVED*** Node still returns latency
+        # Node still returns latency
         assert "respond" in result["latency_stages"]

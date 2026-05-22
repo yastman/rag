@@ -1,10 +1,10 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Fail if test files are present in working tree but not tracked by Git."""
 
 from __future__ import annotations
 
 import re
-import subprocess  ***REMOVED*** nosec B404
+import subprocess  # nosec B404
 from pathlib import Path
 
 
@@ -15,7 +15,7 @@ TEST_FILENAME_RE = re.compile(
 
 
 def _repo_root() -> Path:
-    result = subprocess.run(  ***REMOVED*** nosec B603 B607 - fixed local git command, no shell.
+    result = subprocess.run(  # nosec B603 B607 - fixed local git command, no shell.
         ["git", "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
@@ -25,7 +25,7 @@ def _repo_root() -> Path:
 
 
 def _git_untracked(repo_root: Path) -> list[Path]:
-    result = subprocess.run(  ***REMOVED*** nosec B603 B607 - fixed local git command, no shell.
+    result = subprocess.run(  # nosec B603 B607 - fixed local git command, no shell.
         ["git", "ls-files", "--others", "--exclude-standard"],
         capture_output=True,
         text=True,

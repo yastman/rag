@@ -1,4 +1,4 @@
-"""Live integration tests for Kommo CRM API (***REMOVED***409).
+"""Live integration tests for Kommo CRM API (#409).
 
 Requires real credentials:
   KOMMO_SUBDOMAIN, KOMMO_ACCESS_TOKEN
@@ -18,7 +18,7 @@ import time
 import pytest
 
 
-***REMOVED*** Skip entire module if creds or opt-in missing
+# Skip entire module if creds or opt-in missing
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.kommo,
@@ -57,11 +57,11 @@ def _make_client():
 
     return KommoClient(
         subdomain=os.environ["KOMMO_SUBDOMAIN"],
-        token_store=_StaticTokenStore(os.environ["KOMMO_ACCESS_TOKEN"]),  ***REMOVED*** type: ignore[arg-type]
+        token_store=_StaticTokenStore(os.environ["KOMMO_ACCESS_TOKEN"]),  # type: ignore[arg-type]
     )
 
 
-***REMOVED*** Shared state for ordered tests
+# Shared state for ordered tests
 _RUN_ID = f"ci-{int(time.time())}"
 
 
@@ -207,8 +207,8 @@ class TestKommoLiveCRUD:
                         f"/leads/{self._lead_id}",
                         json={"is_deleted": True},
                     )
-                except Exception:  ***REMOVED*** noqa: BLE001
-                    pass  ***REMOVED*** best-effort
+                except Exception:  # noqa: BLE001
+                    pass  # best-effort
 
             if self._contact_id:
                 try:
@@ -217,7 +217,7 @@ class TestKommoLiveCRUD:
                         f"/contacts/{self._contact_id}",
                         json={"is_deleted": True},
                     )
-                except Exception:  ***REMOVED*** noqa: BLE001
-                    pass  ***REMOVED*** best-effort
+                except Exception:  # noqa: BLE001
+                    pass  # best-effort
         finally:
             await client.close()

@@ -1,4 +1,4 @@
-"""Tests for property search funnel dialog (***REMOVED***697 refactor, ***REMOVED***712 city filter)."""
+"""Tests for property search funnel dialog (#697 refactor, #712 city filter)."""
 
 from types import SimpleNamespace
 from typing import Any
@@ -11,7 +11,7 @@ from telegram_bot.dialogs.funnel import funnel_dialog
 from telegram_bot.dialogs.states import FunnelSG
 
 
-***REMOVED*** --- build_funnel_filters ---
+# --- build_funnel_filters ---
 
 
 def test_build_funnel_filters_includes_city():
@@ -51,7 +51,7 @@ def test_build_funnel_filters_skips_area_none():
     assert "area_m2" not in filters
 
 
-***REMOVED*** --- Dialog structure ---
+# --- Dialog structure ---
 
 
 def test_funnel_dialog_exists():
@@ -77,7 +77,7 @@ def test_funnel_has_all_windows():
     assert FunnelSG.change_filter in states
 
 
-***REMOVED*** --- City getter/handler ---
+# --- City getter/handler ---
 
 
 @pytest.mark.asyncio
@@ -109,7 +109,7 @@ async def test_city_return_to_summary_when_flag_set():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-***REMOVED*** --- pref_complex getter/handler ---
+# --- pref_complex getter/handler ---
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_pref_complex_options_has_10_complexes_plus_any():
     keys = [key for _, key in items]
     assert "Premier Fort Beach" in keys
     assert "any" in keys
-    assert len(items) == 11  ***REMOVED*** 10 complexes + "Любой"
+    assert len(items) == 11  # 10 complexes + "Любой"
 
 
 @pytest.mark.asyncio
@@ -143,7 +143,7 @@ async def test_pref_complex_any_clears_value():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-***REMOVED*** --- Preferences menu ---
+# --- Preferences menu ---
 
 
 @pytest.mark.asyncio
@@ -163,7 +163,7 @@ async def test_preferences_options_has_7_categories():
     assert "promotion" in ids
     assert "complex" in ids
     assert "section" in ids
-    assert "done" not in ids  ***REMOVED*** "done" is now a separate Button widget
+    assert "done" not in ids  # "done" is now a separate Button widget
     assert len(items) == 7
 
 
@@ -223,7 +223,7 @@ async def test_pref_category_complex_switches_to_pref_complex():
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_complex)
 
 
-***REMOVED*** --- pref_area getter/handler ---
+# --- pref_area getter/handler ---
 
 
 @pytest.mark.asyncio
@@ -267,7 +267,7 @@ async def test_pref_category_area_switches_to_pref_area():
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_area)
 
 
-***REMOVED*** --- Other step handlers (unchanged) ---
+# --- Other step handlers (unchanged) ---
 
 
 @pytest.mark.asyncio
@@ -325,7 +325,7 @@ async def test_pref_promotion_selected_saves_and_returns():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-***REMOVED*** --- Summary ---
+# --- Summary ---
 
 
 @pytest.mark.asyncio
@@ -409,7 +409,7 @@ async def test_summary_shows_area():
 
 @pytest.mark.asyncio
 async def test_summary_all_any_allows_search_and_shows_explicit_any_labels():
-    """Summary always allows search and shows explicit 'Любой' core filters (***REMOVED***722)."""
+    """Summary always allows search and shows explicit 'Любой' core filters (#722)."""
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
             dialog_data={"city": "any", "property_type": "any", "budget": "any"},
@@ -422,7 +422,7 @@ async def test_summary_all_any_allows_search_and_shows_explicit_any_labels():
     assert result["can_search"] is True
 
 
-***REMOVED*** --- Summary actions ---
+# --- Summary actions ---
 
 
 def test_switchto_change_in_summary_targets_change_filter():
@@ -447,7 +447,7 @@ def test_switchto_change_in_summary_targets_change_filter():
     assert found_widget.state == FunnelSG.change_filter
 
 
-***REMOVED*** --- Change filter ---
+# --- Change filter ---
 
 
 @pytest.mark.asyncio
@@ -474,7 +474,7 @@ async def test_change_filter_sets_return_flag():
     manager.switch_to.assert_awaited_once_with(FunnelSG.budget)
 
 
-***REMOVED*** --- Preference any clears ---
+# --- Preference any clears ---
 
 
 @pytest.mark.asyncio
@@ -495,7 +495,7 @@ async def test_pref_promotion_any_clears_value():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
-***REMOVED*** --- Zero suggestions ---
+# --- Zero suggestions ---
 
 
 @pytest.mark.asyncio
@@ -618,9 +618,9 @@ async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
     manager.switch_to.assert_awaited_once_with(FunnelSG.city)
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Task 1: Handler & navigation tests (existing code coverage)
-***REMOVED*** ============================================================
+# ============================================================
+# Task 1: Handler & navigation tests (existing code coverage)
+# ============================================================
 
 
 @pytest.mark.asyncio
@@ -687,9 +687,9 @@ async def test_property_type_return_to_summary():
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Task 2: Getters, zero suggestions, summary display
-***REMOVED*** ============================================================
+# ============================================================
+# Task 2: Getters, zero suggestions, summary display
+# ============================================================
 
 
 @pytest.mark.asyncio
@@ -829,9 +829,9 @@ async def test_summary_shows_promotion():
     assert "Акции" in result["summary_text"]
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Task 5: Section filter tests
-***REMOVED*** ============================================================
+# ============================================================
+# Task 5: Section filter tests
+# ============================================================
 
 
 @pytest.mark.asyncio
@@ -842,7 +842,7 @@ async def test_pref_section_options_has_sections_plus_any():
     assert "D-1" in keys
     assert "V- G" in keys
     assert "any" in keys
-    assert len(items) == 27  ***REMOVED*** 26 unique sections from CSV + "any"
+    assert len(items) == 27  # 26 unique sections from CSV + "any"
 
 
 @pytest.mark.asyncio
@@ -898,9 +898,9 @@ def _collect_widget_ids(window) -> set:
     return ids
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Task 3 (redesign): Summary window — Find/Edit buttons, live count
-***REMOVED*** ============================================================
+# ============================================================
+# Task 3 (redesign): Summary window — Find/Edit buttons, live count
+# ============================================================
 
 
 class TestSummaryRedesign:
@@ -942,9 +942,9 @@ def test_funnel_has_pref_section_window():
     assert FunnelSG.pref_section in states
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Task 4: on_summary_search redesign — catalog keyboard + FSM
-***REMOVED*** ============================================================
+# ============================================================
+# Task 4: on_summary_search redesign — catalog keyboard + FSM
+# ============================================================
 
 _APT_PAYLOAD = {
     "id": "apt-1",
@@ -1082,9 +1082,9 @@ class TestOnSummarySearchRedesign:
         assert call_kwargs.get("limit") == 10
 
 
-***REMOVED*** ============================================================
-***REMOVED*** Tasks 4-6: list/cards view mode in summary
-***REMOVED*** ============================================================
+# ============================================================
+# Tasks 4-6: list/cards view mode in summary
+# ============================================================
 
 
 def test_summary_has_list_and_cards_buttons():
@@ -1104,9 +1104,9 @@ def test_summary_has_no_results_window():
     )
 
 
-***REMOVED*** ============================================================
-***REMOVED*** format_apartment_list
-***REMOVED*** ============================================================
+# ============================================================
+# format_apartment_list
+# ============================================================
 
 
 class TestFormatApartmentList:
@@ -1131,8 +1131,8 @@ class TestFormatApartmentList:
         assert "<b>1. Premier Fort</b>" in text
         assert "55 000 €" in text
         assert "3 эт" in text
-        assert "42 м²" in text  ***REMOVED*** round(42.5) = 42 (banker's rounding)
-        ***REMOVED*** Multi-line format: details on separate lines
+        assert "42 м²" in text  # round(42.5) = 42 (banker's rounding)
+        # Multi-line format: details on separate lines
         assert "\n    Студия" in text
 
     def test_multiple_results_numbering(self):
@@ -1170,9 +1170,9 @@ class TestFormatApartmentList:
         assert "№42" in text
 
 
-***REMOVED*** ============================================================
-***REMOVED*** on_summary_search: list mode sends text, not cards
-***REMOVED*** ============================================================
+# ============================================================
+# on_summary_search: list mode sends text, not cards
+# ============================================================
 
 
 @pytest.mark.asyncio
@@ -1214,9 +1214,9 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
 
     await funnel_module.on_summary_search(callback, button, manager)
 
-    ***REMOVED*** Should send text, not cards
+    # Should send text, not cards
     mock_bot._send_property_card.assert_not_awaited()
-    ***REMOVED*** Should have at least one answer call with HTML (the list text)
+    # Should have at least one answer call with HTML (the list text)
     html_calls = [
         c for c in callback.message.answer.call_args_list if c.kwargs.get("parse_mode") == "HTML"
     ]

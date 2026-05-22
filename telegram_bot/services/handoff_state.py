@@ -26,7 +26,7 @@ class HandoffData(BaseModel):
 
     client_id: int
     topic_id: int
-    mode: str = "human_waiting"  ***REMOVED*** bot | human_waiting | human
+    mode: str = "human_waiting"  # bot | human_waiting | human
     lead_id: int | None = None
     created_at: float = Field(default_factory=time.time)
     manager_joined_at: float | None = None
@@ -78,7 +78,7 @@ class HandoffState:
         await pipe.execute()
 
     async def get_by_client(self, client_id: int) -> HandoffData | None:
-        raw = await self._redis.hgetall(f"{_PREFIX}:{client_id}")  ***REMOVED*** type: ignore[misc]
+        raw = await self._redis.hgetall(f"{_PREFIX}:{client_id}")  # type: ignore[misc]
         if not raw:
             return None
         return HandoffData.from_redis_dict(raw)

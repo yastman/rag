@@ -63,10 +63,10 @@ class VoyageService:
     - asyncio.to_thread for non-blocking async calls
     """
 
-    ***REMOVED*** Batch size for embeddings (Voyage AI recommendation)
+    # Batch size for embeddings (Voyage AI recommendation)
     BATCH_SIZE = 128
 
-    ***REMOVED*** Supported Matryoshka dimensions (voyage-4 series)
+    # Supported Matryoshka dimensions (voyage-4 series)
     MATRYOSHKA_DIMS = (2048, 1024, 512, 256)
     DEFAULT_DIM = 1024
 
@@ -313,7 +313,7 @@ class VoyageService:
 
         return cast(list[float], response.embeddings[0])
 
-    ***REMOVED*** Sync methods for compatibility with existing code
+    # Sync methods for compatibility with existing code
     def embed_documents_sync(
         self,
         texts: list[str],

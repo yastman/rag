@@ -1,4 +1,4 @@
-"""Tests for CRM navigation hub dialog (***REMOVED***697)."""
+"""Tests for CRM navigation hub dialog (#697)."""
 
 from telegram_bot.dialogs.crm_submenu import (
     crm_submenu_dialog,

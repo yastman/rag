@@ -1,4 +1,4 @@
-"""Verify k8s bot deployment has CRM env vars (***REMOVED***402)."""
+"""Verify k8s bot deployment has CRM env vars (#402)."""
 
 from pathlib import Path
 
@@ -21,7 +21,7 @@ def _load_k8s_secrets_env() -> set[str]:
     keys: set[str] = set()
     for line in path.read_text().splitlines():
         line = line.strip()
-        if line and not line.startswith("***REMOVED***"):
+        if line and not line.startswith("#"):
             key = line.split("=", 1)[0]
             keys.add(key)
     return keys

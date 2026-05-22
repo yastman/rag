@@ -159,7 +159,7 @@ class TestI18nMiddlewareCall:
         event = MagicMock(spec=Message)
         data: dict = {"event_from_user": user}
 
-        ***REMOVED*** Should not raise; fall back to default locale
+        # Should not raise; fall back to default locale
         await mw(handler, event, data)
         assert data["locale"] == "ru"
 

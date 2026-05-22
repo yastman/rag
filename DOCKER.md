@@ -1,8 +1,8 @@
-***REMOVED*** Docker Services
+# Docker Services
 
 This document is the source of truth for containerized local/dev/VPS runtime in this repository.
 
-***REMOVED******REMOVED*** Compose Files
+## Compose Files
 
 | File | Scope | Typical use |
 | --- | --- | --- |
@@ -10,11 +10,11 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 | `compose.dev.yml` | Development overrides (ports, profile gating, local defaults) | Local development and integration testing |
 | `compose.vps.yml` | VPS production-like overrides | Server deployment and operations |
 
-***REMOVED******REMOVED*** Compose Project Name
+## Compose Project Name
 
 The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is set in `tests/fixtures/compose.ci.env`, which is the fallback env file used by local `make` targets when `.env` is absent. There is only one local stack; do not create worktree-named Docker projects.
 
-***REMOVED******REMOVED*** Compose Profiles (`compose.yml` + `compose.dev.yml`)
+## Compose Profiles (`compose.yml` + `compose.dev.yml`)
 
 Default `up` (no profile) starts unprofiled services:
 - `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `docling`
@@ -32,7 +32,7 @@ Optional profiles add scoped services:
 | `obs` | `loki`, `promtail`, `alertmanager` |
 | `full` | all profile-gated services |
 
-***REMOVED******REMOVED******REMOVED*** VPS default runtime
+### VPS default runtime
 
 `compose.yml:compose.vps.yml` starts only the RAG chatbot core by default:
 `postgres`, `redis`, `qdrant`, `bge-m3`, `user-base`, `litellm`, and `bot`.
@@ -45,13 +45,13 @@ optional VPS profile locally, use:
 COMPOSE_FILE=compose.yml:compose.vps.yml docker compose --profile vps-noncore up -d
 ```
 
-***REMOVED******REMOVED*** Makefile Shortcuts
+## Makefile Shortcuts
 
 ```bash
-***REMOVED*** Core stack (default/unprofiled services)
+# Core stack (default/unprofiled services)
 make docker-up
 
-***REMOVED*** Profile stacks
+# Profile stacks
 make docker-bot-up
 make docker-ingest-up
 make docker-voice-up
@@ -59,11 +59,11 @@ make docker-ml-up
 make docker-obs-up
 make docker-full-up
 
-***REMOVED*** Lifecycle
+# Lifecycle
 make docker-ps
 make docker-down
 
-***REMOVED*** Minimal local subset (same compose file)
+# Minimal local subset (same compose file)
 make local-up
 make local-ps
 make local-down
@@ -73,7 +73,7 @@ For local development, the canonical local env file is `.env` in the repo root. 
 
 Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
 
-***REMOVED******REMOVED*** Service Endpoints (Host)
+## Service Endpoints (Host)
 
 | Service | URL/Port |
 | --- | --- |
@@ -92,9 +92,9 @@ Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to 
 | RAG API (voice path) | `http://localhost:8080` |
 | LiveKit | `ws://localhost:7880` |
 
-***REMOVED******REMOVED*** Required Environment Variables
+## Required Environment Variables
 
-***REMOVED******REMOVED******REMOVED*** Bot path (`make docker-bot-up`)
+### Bot path (`make docker-bot-up`)
 
 - `TELEGRAM_BOT_TOKEN`
 - `LITELLM_MASTER_KEY`
@@ -105,23 +105,23 @@ Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to 
 `telegram_bot/pyproject.toml` and `telegram_bot/uv.lock`. The root `uv.lock`
 does not define the bot image dependency set.
 
-***REMOVED******REMOVED******REMOVED*** ML profile (`make docker-ml-up`)
+### ML profile (`make docker-ml-up`)
 
 - `NEXTAUTH_SECRET`
 - `SALT`
 - `ENCRYPTION_KEY`
 
-***REMOVED******REMOVED******REMOVED*** Alert delivery (optional, for Telegram alerts)
+### Alert delivery (optional, for Telegram alerts)
 
 - `TELEGRAM_ALERTING_BOT_TOKEN`
 - `TELEGRAM_ALERTING_CHAT_ID`
 
-***REMOVED******REMOVED******REMOVED*** Voice path
+### Voice path
 
 - `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` (dev defaults exist)
 - `ELEVENLABS_API_KEY` (if ElevenLabs is used)
 
-***REMOVED******REMOVED******REMOVED*** OpenTelemetry Service Identity (`OTEL_SERVICE_NAME`)
+### OpenTelemetry Service Identity (`OTEL_SERVICE_NAME`)
 
 Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in Compose so traces and observations are consistently attributed. The variable is optional — every service falls back to its default when `OTEL_SERVICE_NAME` is unset.
 
@@ -142,7 +142,7 @@ export OTEL_SERVICE_NAME=custom-bot-name
 make docker-bot-up
 ```
 
-***REMOVED******REMOVED******REMOVED*** Local Langfuse Headless Initialization
+### Local Langfuse Headless Initialization
 
 `compose.yml` keeps Langfuse credentials secret-free: it declares traced service
 environment variables but does not provide predictable key defaults.
@@ -171,7 +171,7 @@ injected into traced services. Recreate `langfuse`, `langfuse-worker`, and the
 traced service with the same env file so headless initialization and service
 credentials line up.
 
-***REMOVED******REMOVED*** Health Checks
+## Health Checks
 
 ```bash
 make docker-ps
@@ -183,7 +183,7 @@ curl -fsS http://localhost:4000/health/liveliness
 curl -fsS http://localhost:3100/ready
 curl -fsS http://localhost:9093/-/healthy
 
-***REMOVED*** Preflight gate for Redis auth + retrieval + LLM connectivity
+# Preflight gate for Redis auth + retrieval + LLM connectivity
 make test-bot-health
 ```
 
@@ -197,7 +197,7 @@ For native bot startup it also resolves Redis in this order:
 2. `.env` value (`REDIS_URL=...`)
 3. derived local default from `REDIS_PASSWORD` as `redis://:REDIS_PASSWORD@localhost:6379`
 
-***REMOVED******REMOVED*** Local Release Gate
+## Local Release Gate
 
 ```bash
 make check
@@ -205,7 +205,7 @@ PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 make test-bot-health
 ```
 
-***REMOVED******REMOVED*** Source Of Truth
+## Source Of Truth
 
 - `main` in Git is the official deployment source of truth for VPS snapshots.
 - Recommended production flow:
@@ -220,7 +220,7 @@ make test-bot-health
   directly to `main`.
 - Do not treat `/opt/rag-fresh` on the server as an editable working copy; it is a deployment target.
 
-***REMOVED******REMOVED******REMOVED*** VPS cleanup
+### VPS cleanup
 
 After the minimal runtime change, removed-service data can be cleaned with:
 
@@ -233,7 +233,7 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
 `vps_hf_cache` during this cleanup. The cleanup script validates the
 `COMPOSE_PROJECT_NAME` and `vps-noncore` profile gating before applying.
 
-***REMOVED******REMOVED*** Internal K3s Images
+## Internal K3s Images
 
 - Kubernetes manifests under `k8s/` use versioned GitHub Container Registry images instead of local `rag/*:latest` tags.
 - Canonical image names:
@@ -246,33 +246,33 @@ Never remove `vps_qdrant_data`, `vps_postgres_data`, `vps_redis_data`, or
 - Manual publish helper: `make k3s-push-<service> K3S_IMAGE_TAG=v<version>`
 - Use explicit version tags for k3s manifests and let Renovate manage future updates.
 
-***REMOVED******REMOVED*** Common Operations
+## Common Operations
 
 ```bash
-***REMOVED*** Logs
+# Logs
 make monitoring-logs
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility logs -f bot litellm qdrant
 
-***REMOVED*** Rebuild selected services
+# Rebuild selected services
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility build bot litellm bge-m3
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility up -d --force-recreate bot litellm bge-m3
 
-***REMOVED*** Image drift check against compose-pinned images (uses compose.yml + compose.dev.yml + tests/fixtures/compose.ci.env)
+# Image drift check against compose-pinned images (uses compose.yml + compose.dev.yml + tests/fixtures/compose.ci.env)
 make verify-compose-images
 
-***REMOVED*** Validate required Langfuse trace families (fast, no rebuild)
+# Validate required Langfuse trace families (fast, no rebuild)
 make validate-traces-fast
 ```
 
-***REMOVED******REMOVED*** Qdrant Storage Management
+## Qdrant Storage Management
 
-***REMOVED******REMOVED******REMOVED*** Background — issue ***REMOVED***1545
+### Background — issue #1545
 
 The `gdrive_documents_bge` collection grew to 3.1 GB on dev and continued
 to expand unbounded in production because Qdrant's default settings keep all
 payload data in RAM and write-amplify every ingestion cycle.
 
-***REMOVED******REMOVED******REMOVED*** Storage optimisation config (`docker/qdrant/config.yaml`)
+### Storage optimisation config (`docker/qdrant/config.yaml`)
 
 `docker/qdrant/config.yaml` is mounted read-only into the Qdrant container as
 `/qdrant/config/production.yaml` (Qdrant's well-known override path).  The
@@ -283,23 +283,23 @@ file enables two settings based on Qdrant documentation:
 | `storage.on_disk_payload` | `true` | Moves payload data that is **not** actively indexed to disk, reducing resident RAM at the cost of a small read-latency increase. Indexed payload fields remain in RAM. |
 | `storage.optimizers.indexing_threshold_kb` | `20000` | Triggers HNSW graph construction once an unindexed segment exceeds 20 MB, balancing ingestion speed against timely index availability. |
 
-***REMOVED******REMOVED******REMOVED*** Applying the config to an existing collection
+### Applying the config to an existing collection
 
 The config file controls **defaults for new collections**.  For the existing
 `gdrive_documents_bge` collection, patch via the REST API after restarting
 Qdrant:
 
 ```bash
-***REMOVED*** Restart Qdrant to pick up the new config file
+# Restart Qdrant to pick up the new config file
 docker compose restart qdrant
 
-***REMOVED*** Patch the existing collection to move payloads to disk
+# Patch the existing collection to move payloads to disk
 curl -X PATCH http://localhost:6333/collections/gdrive_documents_bge \
      -H 'Content-Type: application/json' \
      -d '{"on_disk_payload": true}'
 ```
 
-***REMOVED******REMOVED******REMOVED*** Manual cleanup / pruning (`make qdrant-cleanup`)
+### Manual cleanup / pruning (`make qdrant-cleanup`)
 
 ```bash
 make qdrant-cleanup
@@ -320,17 +320,17 @@ This Makefile target:
 > documents are removed from Google Drive.  `make qdrant-cleanup` handles
 > storage *compaction*, not logical TTL.
 
-***REMOVED******REMOVED******REMOVED*** Volume size monitoring
+### Volume size monitoring
 
 ```bash
-***REMOVED*** Show Docker volume disk usage
+# Show Docker volume disk usage
 docker system df -v | grep qdrant
 
-***REMOVED*** Check collection point count and segment stats
+# Check collection point count and segment stats
 curl -s http://localhost:6333/collections/gdrive_documents_bge | python3 -m json.tool
 ```
 
-***REMOVED******REMOVED*** Notes
+## Notes
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
 - `bge-m3` memory is controlled by `BGE_M3_MEMORY_LIMIT` and defaults to 4G in

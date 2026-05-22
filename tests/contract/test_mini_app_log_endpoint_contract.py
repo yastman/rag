@@ -1,4 +1,4 @@
-"""Contract tests for /api/log endpoint security hardening (issue ***REMOVED***1613).
+"""Contract tests for /api/log endpoint security hardening (issue #1613).
 
 These tests guard the structural invariants of the remote-log endpoint:
   - No raw print() in the handler body (AST walk).
@@ -39,9 +39,9 @@ def _get_remote_log_ast_node() -> tuple[ast.AsyncFunctionDef, str]:
     raise AssertionError("remote_log async function not found in mini_app.api source")
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Contract 1: no print() in the handler body
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contract 1: no print() in the handler body
+# ---------------------------------------------------------------------------
 
 
 def test_remote_log_handler_has_no_print_statement():
@@ -65,9 +65,9 @@ def test_remote_log_handler_has_no_print_statement():
                 )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Contract 2: handler accepts a Pydantic model, not a raw dict
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contract 2: handler accepts a Pydantic model, not a raw dict
+# ---------------------------------------------------------------------------
 
 
 def test_remote_log_handler_uses_pydantic_model_not_dict():
@@ -80,7 +80,7 @@ def test_remote_log_handler_uses_pydantic_model_not_dict():
     func = _get_remote_log_function()
     hints = get_type_hints(func)
 
-    ***REMOVED*** FastAPI injects ``request`` as the body parameter name.
+    # FastAPI injects ``request`` as the body parameter name.
     param_type = hints.get("request")
     assert param_type is not None, (
         "remote_log has no 'request' parameter type annotation"
@@ -95,9 +95,9 @@ def test_remote_log_handler_uses_pydantic_model_not_dict():
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Contract 3: LogRequest has max_length on message
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contract 3: LogRequest has max_length on message
+# ---------------------------------------------------------------------------
 
 
 def test_log_request_model_has_max_length_on_message():
@@ -107,10 +107,10 @@ def test_log_request_model_has_max_length_on_message():
     field_info = LogRequest.model_fields.get("message")
     assert field_info is not None, "LogRequest has no 'message' field"
 
-    ***REMOVED*** Pydantic v2 stores constraints in field_info.metadata
+    # Pydantic v2 stores constraints in field_info.metadata
     has_max_length = False
     for meta in getattr(field_info, "metadata", []):
-        ***REMOVED*** pydantic._internal.known_annotated_metadata.MaxLen
+        # pydantic._internal.known_annotated_metadata.MaxLen
         if hasattr(meta, "max_length") and meta.max_length is not None:
             has_max_length = True
             break
@@ -121,9 +121,9 @@ def test_log_request_model_has_max_length_on_message():
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Contract 4: LogRequest level field is a Literal with allowed values only
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contract 4: LogRequest level field is a Literal with allowed values only
+# ---------------------------------------------------------------------------
 
 
 def test_log_request_model_restricts_level_to_known_values():
@@ -138,7 +138,7 @@ def test_log_request_model_restricts_level_to_known_values():
 
     annotation = field_info.annotation
     origin = getattr(annotation, "__origin__", None)
-    assert origin is Literal or origin is typing.Literal, (  ***REMOVED*** type: ignore[comparison-overlap]
+    assert origin is Literal or origin is typing.Literal, (  # type: ignore[comparison-overlap]
         f"LogRequest.level must be a Literal type, got {annotation!r}"
     )
 

@@ -50,7 +50,7 @@ def test_handoff_config_defaults(monkeypatch):
     """Handoff config has sensible defaults when env vars not set."""
     monkeypatch.delenv("MANAGERS_GROUP_ID", raising=False)
     cfg = BotConfig(
-        telegram_bot_token=[REDACTED-TELEGRAM-TOKEN]  ***REMOVED*** required field
+        telegram_bot_token=[REDACTED-TELEGRAM-TOKEN]  # required field
         _env_file=None,
     )
     assert cfg.managers_group_id is None

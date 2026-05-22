@@ -1,14 +1,14 @@
-***REMOVED*** Documentation Index
+# Documentation Index
 
 Project documentation index for humans and agents. Use this page to understand the system, find subsystem docs, and search the doc tree quickly.
 
-***REMOVED******REMOVED*** New Contributors Start Here
+## New Contributors Start Here
 
 1. **[ONBOARDING.md](ONBOARDING.md)** -- first-time setup: prerequisites, clone, env, services, validation.
 2. **[LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md)** -- day-to-day workflow: commands, profiles, validation ladder.
 3. **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** -- extending the platform: add graph nodes, tools, query types, ingestion sources.
 
-***REMOVED******REMOVED*** Task-Oriented Indexes
+## Task-Oriented Indexes
 
 For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/):
 
@@ -18,7 +18,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`indexes/local-runtime.md`](indexes/local-runtime.md) — local bot startup, Telegram E2E, Telethon sessions, polling locks
 - [`indexes/engineering-workflows.md`](indexes/engineering-workflows.md) — testing, issue triage, SDK lookup, dependency updates, docs maintenance, swarm process docs
 
-***REMOVED******REMOVED*** Understand the Project Fast
+## Understand the Project Fast
 
 - [`../README.md`](../README.md) — System overview, architecture diagram, quick start, and reviewer path.
 - [`review/PROJECT_GUIDE.md`](review/PROJECT_GUIDE.md) — Folder map and subsystem ownership.
@@ -32,7 +32,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`engineering/README.md`](engineering/README.md) — Engineering process index with active and historical notes.
 - [`adr/`](adr/) — Architecture decision records.
 
-***REMOVED******REMOVED*** Architecture & Design
+## Architecture & Design
 
 - [`PROJECT_STACK.md`](PROJECT_STACK.md) — System architecture and subsystem map.
 - [`BOT_ARCHITECTURE.md`](BOT_ARCHITECTURE.md) — Bot layer architecture.
@@ -44,7 +44,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`API_REFERENCE.md`](API_REFERENCE.md) — API reference.
 - [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) — Guide for extending graph nodes, tools, query types, and ingestion sources.
 
-***REMOVED******REMOVED*** Operations & Runbooks
+## Operations & Runbooks
 
 - [`../DOCKER.md`](../DOCKER.md) — Docker Compose profiles, service map, env requirements.
 - [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md) — Local setup and validation guide.
@@ -59,16 +59,16 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`TROUBLESHOOTING_CACHE.md`](TROUBLESHOOTING_CACHE.md) — Cache troubleshooting guide.
 - [`runbooks/`](runbooks/) — Incident-specific runbooks.
 
-***REMOVED******REMOVED*** Quality & Evaluation
+## Quality & Evaluation
 
 - [`RAG_QUALITY_SCORES.md`](RAG_QUALITY_SCORES.md) — Scoring taxonomy and trace expectations.
 
-***REMOVED******REMOVED*** Migration & SDK
+## Migration & SDK
 
 - [`engineering/sdk-registry.md`](engineering/sdk-registry.md) — Canonical SDK/framework lookup order and keeper stack.
 - [`indexes/docker-sdk-map.md`](indexes/docker-sdk-map.md) — Docker image and SDK ownership map.
 
-***REMOVED******REMOVED*** Engineering Notes
+## Engineering Notes
 
 - [`ERROR_RESPONSES.md`](ERROR_RESPONSES.md) — Error response taxonomy.
 - [`HITL.md`](HITL.md) — Human-in-the-loop design.
@@ -76,7 +76,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`CACHE_DEGRADATION.md`](CACHE_DEGRADATION.md) — Cache failure modes.
 - [`CLIENT_PIPELINE.md`](CLIENT_PIPELINE.md) — Client pipeline details.
 
-***REMOVED******REMOVED*** Fast Doc Search
+## Fast Doc Search
 
 Search the doc tree from the repo root:
 
@@ -85,7 +85,7 @@ rg -n "Langfuse|LiteLLM|Redis|Qdrant|Compose|ingestion|voice|mini app|Telegram|R
 find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 ```
 
-***REMOVED******REMOVED*** Where Docs Live
+## Where Docs Live
 
 | Path | Purpose |
 |---|---|

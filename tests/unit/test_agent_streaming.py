@@ -1,4 +1,4 @@
-"""Unit tests for sdk_agent streaming path (***REMOVED***952).
+"""Unit tests for sdk_agent streaming path (#952).
 
 Tests for _stream_agent_to_draft helper — streams agent astream() output
 to Telegram via sendMessageDraft (Bot API 9.5).
@@ -10,9 +10,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Helpers to build fake astream events
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Helpers to build fake astream events
+# ---------------------------------------------------------------------------
 
 
 class _FakeAIChunk:
@@ -53,9 +53,9 @@ def _make_bot() -> AsyncMock:
     return bot
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Import test — fails until helper exists (RED)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Import test — fails until helper exists (RED)
+# ---------------------------------------------------------------------------
 
 
 async def test_stream_agent_to_draft_is_importable():
@@ -65,9 +65,9 @@ async def test_stream_agent_to_draft_is_importable():
     assert callable(_stream_agent_to_draft)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Core behaviour tests
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Core behaviour tests
+# ---------------------------------------------------------------------------
 
 
 async def test_draft_sent_for_content_chunk():
@@ -129,7 +129,7 @@ async def test_draft_accumulates_across_chunks():
     ]
     agent = _make_agent(events)
 
-    ***REMOVED*** Patch time.monotonic so first chunk immediately triggers draft (last_draft=0)
+    # Patch time.monotonic so first chunk immediately triggers draft (last_draft=0)
     with patch("telegram_bot.bot._AGENT_DRAFT_INTERVAL", 0.0):
         await _stream_agent_to_draft(
             agent=agent,
@@ -139,9 +139,9 @@ async def test_draft_accumulates_across_chunks():
             chat_id=99,
         )
 
-    ***REMOVED*** At least one draft was sent
+    # At least one draft was sent
     bot.send_message_draft.assert_awaited()
-    ***REMOVED*** Across all draft calls, the text should contain at least one of the chunks
+    # Across all draft calls, the text should contain at least one of the chunks
     calls = bot.send_message_draft.await_args_list
     all_texts = [c.kwargs.get("text", "") for c in calls]
     assert any("Hel" in t or "lo" in t for t in all_texts), (
@@ -240,9 +240,9 @@ async def test_thread_id_forwarded_to_draft():
     assert call_kwargs.get("message_thread_id") == 42
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Integration: _ainvoke_supervisor_with_recovery uses streaming when message given
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Integration: _ainvoke_supervisor_with_recovery uses streaming when message given
+# ---------------------------------------------------------------------------
 
 
 async def test_ainvoke_uses_ainvoke_when_no_message():
@@ -250,8 +250,8 @@ async def test_ainvoke_uses_ainvoke_when_no_message():
     agent = MagicMock()
     agent.ainvoke = AsyncMock(return_value={"messages": []})
 
-    ***REMOVED*** _ainvoke_supervisor_with_recovery is a method on PropertyBot.
-    ***REMOVED*** Here we verify the underlying ainvoke is used via the production agent mock.
+    # _ainvoke_supervisor_with_recovery is a method on PropertyBot.
+    # Here we verify the underlying ainvoke is used via the production agent mock.
     result = await agent.ainvoke({"messages": []}, config={})
     assert result == {"messages": []}
     agent.ainvoke.assert_awaited_once()

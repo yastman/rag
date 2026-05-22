@@ -1,18 +1,18 @@
-***REMOVED***!/usr/bin/env bash
-***REMOVED*** scripts/archive/repo_cleanup.sh — Archived repository hygiene helper
-***REMOVED*** Retired by issue ***REMOVED***1728. Use docs/runbooks/GIT_PR_ISSUE_NATIVE.md and Makefile
-***REMOVED*** native git/gh targets for active hygiene workflows.
-***REMOVED*** Original usage: ./scripts/repo_cleanup.sh [--dry-run] [--force] [--help]
-***REMOVED***
-***REMOVED*** Stages:
-***REMOVED***   1. Prune stale remote tracking refs
-***REMOVED***   2. List/delete remote branches merged into main
-***REMOVED***   3. List/delete local branches merged into main
-***REMOVED***   4. List/remove stale worktrees (merged/orphaned)
-***REMOVED***   5. Show stash aging report
-***REMOVED***
-***REMOVED*** With --force: actually deletes (requires confirmation per batch).
-***REMOVED*** Default: dry-run (report only).
+#!/usr/bin/env bash
+# scripts/archive/repo_cleanup.sh — Archived repository hygiene helper
+# Retired by issue #1728. Use docs/runbooks/GIT_PR_ISSUE_NATIVE.md and Makefile
+# native git/gh targets for active hygiene workflows.
+# Original usage: ./scripts/repo_cleanup.sh [--dry-run] [--force] [--help]
+#
+# Stages:
+#   1. Prune stale remote tracking refs
+#   2. List/delete remote branches merged into main
+#   3. List/delete local branches merged into main
+#   4. List/remove stale worktrees (merged/orphaned)
+#   5. Show stash aging report
+#
+# With --force: actually deletes (requires confirmation per batch).
+# Default: dry-run (report only).
 
 set -euo pipefail
 
@@ -20,7 +20,7 @@ DRY_RUN=true
 MAIN_BRANCH="${MAIN_BRANCH:-dev}"
 
 show_help() {
-    sed -n '2,14p' "$0" | sed 's/^***REMOVED*** \?//'
+    sed -n '2,14p' "$0" | sed 's/^# \?//'
     exit 0
 }
 
@@ -33,7 +33,7 @@ for arg in "$@"; do
     esac
 done
 
-***REMOVED*** ---- Prerequisites ----
+# ---- Prerequisites ----
 if ! command -v gh &>/dev/null; then
     echo "ERROR: 'gh' CLI is required for PR protection. Install: https://cli.github.com/"
     exit 1
@@ -47,17 +47,17 @@ echo "=== Repository Cleanup ==="
 echo "Mode: $(if $DRY_RUN; then echo 'DRY RUN (report only)'; else echo 'FORCE (will delete)'; fi)"
 echo
 
-***REMOVED*** ---- 1. Fetch & prune ----
+# ---- 1. Fetch & prune ----
 echo "--- Step 1: Fetch & prune remote refs ---"
 git fetch --prune origin 2>&1
 echo
 
-***REMOVED*** ---- 2. Remote merged branches ----
+# ---- 2. Remote merged branches ----
 echo "--- Step 2: Remote branches merged into $MAIN_BRANCH ---"
 mapfile -t MERGED_REMOTE < <(git branch -r --merged "origin/$MAIN_BRANCH" \
     | grep -v HEAD | sed 's|^ *origin/||' || true)
 
-***REMOVED*** Filter out branches with open PRs
+# Filter out branches with open PRs
 SAFE_REMOTE=()
 PROTECTED_REMOTE=()
 for branch in "${MERGED_REMOTE[@]+"${MERGED_REMOTE[@]}"}"; do
@@ -71,24 +71,24 @@ for branch in "${MERGED_REMOTE[@]+"${MERGED_REMOTE[@]}"}"; do
     fi
 done
 
-echo "  Safe to delete: ${***REMOVED***SAFE_REMOTE[@]}"
+echo "  Safe to delete: ${#SAFE_REMOTE[@]}"
 for b in "${SAFE_REMOTE[@]+"${SAFE_REMOTE[@]}"}"; do echo "    - $b"; done
-if [ "${***REMOVED***PROTECTED_REMOTE[@]}" -gt 0 ]; then
-    echo "  Protected (open PRs): ${***REMOVED***PROTECTED_REMOTE[@]}"
+if [ "${#PROTECTED_REMOTE[@]}" -gt 0 ]; then
+    echo "  Protected (open PRs): ${#PROTECTED_REMOTE[@]}"
     for b in "${PROTECTED_REMOTE[@]}"; do echo "    - $b (has open PR)"; done
 fi
 
-if ! $DRY_RUN && [ "${***REMOVED***SAFE_REMOTE[@]}" -gt 0 ]; then
+if ! $DRY_RUN && [ "${#SAFE_REMOTE[@]}" -gt 0 ]; then
     echo
-    read -rp "  Delete ${***REMOVED***SAFE_REMOTE[@]} remote branches? [y/N] " confirm
+    read -rp "  Delete ${#SAFE_REMOTE[@]} remote branches? [y/N] " confirm
     if [[ "$confirm" =~ ^[Yy] ]]; then
         git push origin --delete "${SAFE_REMOTE[@]}"
-        echo "  Deleted ${***REMOVED***SAFE_REMOTE[@]} remote branches."
+        echo "  Deleted ${#SAFE_REMOTE[@]} remote branches."
     fi
 fi
 echo
 
-***REMOVED*** ---- 3. Local merged branches ----
+# ---- 3. Local merged branches ----
 echo "--- Step 3: Local branches merged into $MAIN_BRANCH ---"
 mapfile -t MERGED_LOCAL < <(git branch --merged "$MAIN_BRANCH" \
     | grep -v '\*' | sed 's/^[+ ]*//' || true)
@@ -98,7 +98,7 @@ WORKTREE_LOCAL=()
 for branch in "${MERGED_LOCAL[@]+"${MERGED_LOCAL[@]}"}"; do
     [ -z "$branch" ] && continue
     [ "$branch" = "$MAIN_BRANCH" ] && continue
-    ***REMOVED*** Check if branch is checked out in a worktree
+    # Check if branch is checked out in a worktree
     if git worktree list | grep -q "\[$branch\]"; then
         WORKTREE_LOCAL+=("$branch")
     else
@@ -106,16 +106,16 @@ for branch in "${MERGED_LOCAL[@]+"${MERGED_LOCAL[@]}"}"; do
     fi
 done
 
-echo "  Safe to delete: ${***REMOVED***SAFE_LOCAL[@]}"
+echo "  Safe to delete: ${#SAFE_LOCAL[@]}"
 for b in "${SAFE_LOCAL[@]+"${SAFE_LOCAL[@]}"}"; do echo "    - $b"; done
-if [ "${***REMOVED***WORKTREE_LOCAL[@]}" -gt 0 ]; then
-    echo "  In worktrees (skip): ${***REMOVED***WORKTREE_LOCAL[@]}"
+if [ "${#WORKTREE_LOCAL[@]}" -gt 0 ]; then
+    echo "  In worktrees (skip): ${#WORKTREE_LOCAL[@]}"
     for b in "${WORKTREE_LOCAL[@]}"; do echo "    - $b"; done
 fi
 
-if ! $DRY_RUN && [ "${***REMOVED***SAFE_LOCAL[@]}" -gt 0 ]; then
+if ! $DRY_RUN && [ "${#SAFE_LOCAL[@]}" -gt 0 ]; then
     echo
-    read -rp "  Delete ${***REMOVED***SAFE_LOCAL[@]} local branches? [y/N] " confirm
+    read -rp "  Delete ${#SAFE_LOCAL[@]} local branches? [y/N] " confirm
     if [[ "$confirm" =~ ^[Yy] ]]; then
         for b in "${SAFE_LOCAL[@]}"; do
             if ! git branch -d "$b" 2>&1; then
@@ -123,23 +123,23 @@ if ! $DRY_RUN && [ "${***REMOVED***SAFE_LOCAL[@]}" -gt 0 ]; then
                 git branch -D "$b"
             fi
         done
-        echo "  Deleted ${***REMOVED***SAFE_LOCAL[@]} local branches."
+        echo "  Deleted ${#SAFE_LOCAL[@]} local branches."
     fi
 fi
 echo
 
-***REMOVED*** ---- 4. Stale worktrees ----
+# ---- 4. Stale worktrees ----
 echo "--- Step 4: Worktree status ---"
 STALE_WORKTREES=()
 while read -r line; do
     wt_path=$(echo "$line" | awk '{print $1}')
     wt_branch=$(echo "$line" | sed -n 's/.*\[\(.*\)\].*/\1/p')
-    ***REMOVED*** Skip empty branch (detached HEAD) and main branch
+    # Skip empty branch (detached HEAD) and main branch
     if [ -z "$wt_branch" ] || [ "$wt_branch" = "$MAIN_BRANCH" ]; then
         echo "    OK:    $wt_path [$wt_branch]"
         continue
     fi
-    ***REMOVED*** Check if branch is merged into main
+    # Check if branch is merged into main
     if git branch --merged "$MAIN_BRANCH" | grep -qw "$wt_branch"; then
         echo "    STALE: $wt_path [$wt_branch] (merged into $MAIN_BRANCH)"
         STALE_WORKTREES+=("$wt_path")
@@ -148,9 +148,9 @@ while read -r line; do
     fi
 done < <(git worktree list)
 
-if ! $DRY_RUN && [ "${***REMOVED***STALE_WORKTREES[@]}" -gt 0 ]; then
+if ! $DRY_RUN && [ "${#STALE_WORKTREES[@]}" -gt 0 ]; then
     echo
-    echo "  ${***REMOVED***STALE_WORKTREES[@]} stale worktrees found."
+    echo "  ${#STALE_WORKTREES[@]} stale worktrees found."
     read -rp "  Remove stale worktrees? [y/N] " confirm
     if [[ "$confirm" =~ ^[Yy] ]]; then
         for wt in "${STALE_WORKTREES[@]}"; do
@@ -158,12 +158,12 @@ if ! $DRY_RUN && [ "${***REMOVED***STALE_WORKTREES[@]}" -gt 0 ]; then
             git worktree remove --force "$wt" 2>&1 || echo "    FAILED: $wt"
         done
         git worktree prune
-        echo "  Removed ${***REMOVED***STALE_WORKTREES[@]} stale worktrees."
+        echo "  Removed ${#STALE_WORKTREES[@]} stale worktrees."
     fi
 fi
 echo
 
-***REMOVED*** ---- 5. Stash report ----
+# ---- 5. Stash report ----
 echo "--- Step 5: Stash aging report ---"
 STASH_COUNT=$(git stash list | wc -l)
 if [ "$STASH_COUNT" -eq 0 ]; then
@@ -185,7 +185,7 @@ else
 fi
 echo
 
-***REMOVED*** ---- Summary ----
+# ---- Summary ----
 echo "=== Summary ==="
 echo "  Remote branches: $(git branch -r | grep -vc HEAD)"
 echo "  Local branches:  $(git branch | wc -l)"

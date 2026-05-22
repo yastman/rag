@@ -4,13 +4,13 @@ Tracks row-level changes via SHA-256 hash of mutable fields. Only re-embeds
 and upserts rows that changed since last run. State persisted to JSON file.
 
 Usage:
-    ***REMOVED*** Full re-index (first run or force)
+    # Full re-index (first run or force)
     python -m src.ingestion.apartments.runner
 
-    ***REMOVED*** Incremental (only changed rows)
+    # Incremental (only changed rows)
     python -m src.ingestion.apartments.runner --incremental
 
-    ***REMOVED*** Dry run (show what would change)
+    # Dry run (show what would change)
     python -m src.ingestion.apartments.runner --incremental --dry-run
 """
 
@@ -160,10 +160,10 @@ class IncrementalApartmentIngester:
         try:
             descriptions = [format_apartment_text(r) for r in records]
 
-            ***REMOVED*** Embed — single hybrid call (3x fewer HTTP requests, 1 model forward pass)
+            # Embed — single hybrid call (3x fewer HTTP requests, 1 model forward pass)
             hybrid_result = bge.encode_hybrid(descriptions)
 
-            ***REMOVED*** Build points
+            # Build points
             point_dicts = build_ingestion_batch(
                 records,
                 hybrid_result.dense_vecs,
@@ -171,7 +171,7 @@ class IncrementalApartmentIngester:
                 hybrid_result.colbert_vecs or [],
             )
 
-            ***REMOVED*** Upsert
+            # Upsert
             points = [
                 PointStruct(id=p["id"], vector=p["vector"], payload=p["payload"])
                 for p in point_dicts

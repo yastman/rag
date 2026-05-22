@@ -1,4 +1,4 @@
-"""Tests for history_search tool with config-based context DI (***REMOVED***413)."""
+"""Tests for history_search tool with config-based context DI (#413)."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ async def test_history_search_exception_returns_error(bot_context):
     assert "ошибк" in result.lower() or "error" in result.lower()
 
 
-***REMOVED*** --- Semantic cache tests (***REMOVED***431/***REMOVED***464) ---
+# --- Semantic cache tests (#431/#464) ---
 
 
 async def test_history_search_semantic_cache_hit(bot_context):
@@ -198,7 +198,7 @@ async def test_history_search_embedding_computed_on_cache_miss(bot_context):
 
 
 async def test_history_search_passes_threshold_to_graph(bot_context):
-    """history_search passes history_relevance_threshold from BotContext to build_history_graph (***REMOVED***433)."""
+    """history_search passes history_relevance_threshold from BotContext to build_history_graph (#433)."""
     from telegram_bot.agents.history_tool import history_search
 
     bot_context.history_relevance_threshold = 0.5
@@ -222,7 +222,7 @@ async def test_history_search_passes_threshold_to_graph(bot_context):
 
 
 async def test_history_search_sets_reply_markup_on_success(bot_context):
-    """history_search stores feedback keyboard in ctx.history_reply_markup on success (***REMOVED***434)."""
+    """history_search stores feedback keyboard in ctx.history_reply_markup on success (#434)."""
     from aiogram.types import InlineKeyboardMarkup
 
     from telegram_bot.agents.history_tool import history_search
@@ -251,7 +251,7 @@ async def test_history_search_sets_reply_markup_on_success(bot_context):
 
 
 async def test_history_search_no_reply_markup_on_empty_summary(bot_context):
-    """history_search does not set reply_markup when summary is empty (***REMOVED***434)."""
+    """history_search does not set reply_markup when summary is empty (#434)."""
     from telegram_bot.agents.history_tool import history_search
 
     mock_graph = AsyncMock()

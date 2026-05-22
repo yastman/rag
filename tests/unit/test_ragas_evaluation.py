@@ -58,7 +58,7 @@ class TestGetLangfuseClient:
 
     def test_creates_client_when_enabled(self):
         """Test creates Langfuse client when tracing is enabled."""
-        ***REMOVED*** Patch at the point of import inside the function
+        # Patch at the point of import inside the function
         with patch.dict(
             "os.environ",
             {
@@ -74,7 +74,7 @@ class TestGetLangfuseClient:
 
                 result = _get_langfuse_client()
 
-                ***REMOVED*** Verify Langfuse was called with correct params
+                # Verify Langfuse was called with correct params
                 mock_langfuse_class.assert_called_once_with(
                     host="http://test:3001",
                     public_key="pk-test",
@@ -117,14 +117,14 @@ class TestLogRagasScoresToLangfuse:
 
         assert result == "trace-123"
 
-        ***REMOVED*** Verify trace was created
+        # Verify trace was created
         mock_client.trace.assert_called_once()
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["session_id"] == "test-session"
         assert "ragas" in call_kwargs["tags"]
 
-        ***REMOVED*** Verify all 4 RAGAS metrics + acceptance_passed were scored
-        ***REMOVED*** 4 RAGAS metrics + acceptance_passed = 5 score calls minimum
+        # Verify all 4 RAGAS metrics + acceptance_passed were scored
+        # 4 RAGAS metrics + acceptance_passed = 5 score calls minimum
         assert mock_trace.score.call_count >= 5
 
     def test_logs_eval_duration_when_present(self):
@@ -145,7 +145,7 @@ class TestLogRagasScoresToLangfuse:
             session_id="test-session",
         )
 
-        ***REMOVED*** Check that eval_duration_seconds was logged
+        # Check that eval_duration_seconds was logged
         score_calls = mock_trace.score.call_args_list
         duration_calls = [c for c in score_calls if c.kwargs.get("name") == "eval_duration_seconds"]
         assert len(duration_calls) == 1
@@ -181,7 +181,7 @@ class TestLogRagasScoresToLangfuse:
         mock_trace.id = "trace-pass"
         mock_client.trace.return_value = mock_trace
 
-        metrics = {"faithfulness": 0.85}  ***REMOVED*** > 0.80
+        metrics = {"faithfulness": 0.85}  # > 0.80
 
         _log_ragas_scores_to_langfuse(
             langfuse_client=mock_client,
@@ -201,7 +201,7 @@ class TestLogRagasScoresToLangfuse:
         mock_trace.id = "trace-fail"
         mock_client.trace.return_value = mock_trace
 
-        metrics = {"faithfulness": 0.75}  ***REMOVED*** < 0.80
+        metrics = {"faithfulness": 0.75}  # < 0.80
 
         _log_ragas_scores_to_langfuse(
             langfuse_client=mock_client,
@@ -229,7 +229,7 @@ class TestLogRagasScoresToLangfuse:
             session_id="test-session",
         )
 
-        ***REMOVED*** Verify trace.update was called with output
+        # Verify trace.update was called with output
         mock_trace.update.assert_called_once()
         update_kwargs = mock_trace.update.call_args.kwargs
         assert "output" in update_kwargs
@@ -277,7 +277,7 @@ class TestRAGASMetricsFormat:
         mock_trace.id = "trace-complete"
         mock_client.trace.return_value = mock_trace
 
-        ***REMOVED*** Complete metrics dict as returned by RAGASEvaluator
+        # Complete metrics dict as returned by RAGASEvaluator
         complete_metrics = {
             "faithfulness": 0.85,
             "context_precision": 0.82,
@@ -295,8 +295,8 @@ class TestRAGASMetricsFormat:
 
         assert result == "trace-complete"
 
-        ***REMOVED*** Should have logged 7 scores:
-        ***REMOVED*** 4 RAGAS metrics + eval_duration + queries_evaluated + acceptance_passed
+        # Should have logged 7 scores:
+        # 4 RAGAS metrics + eval_duration + queries_evaluated + acceptance_passed
         assert mock_trace.score.call_count == 7
 
 
@@ -306,12 +306,12 @@ class TestThresholdEnforcement:
     @pytest.mark.parametrize(
         "faithfulness,expected_passed",
         [
-            (0.80, True),  ***REMOVED*** Exactly at threshold
-            (0.81, True),  ***REMOVED*** Above threshold
-            (0.95, True),  ***REMOVED*** Well above threshold
-            (0.79, False),  ***REMOVED*** Just below threshold
-            (0.50, False),  ***REMOVED*** Well below threshold
-            (0.0, False),  ***REMOVED*** Zero
+            (0.80, True),  # Exactly at threshold
+            (0.81, True),  # Above threshold
+            (0.95, True),  # Well above threshold
+            (0.79, False),  # Just below threshold
+            (0.50, False),  # Well below threshold
+            (0.0, False),  # Zero
         ],
     )
     def test_acceptance_based_on_faithfulness(self, faithfulness, expected_passed):
@@ -329,7 +329,7 @@ class TestThresholdEnforcement:
             session_id="test-session",
         )
 
-        ***REMOVED*** Find acceptance_passed score call
+        # Find acceptance_passed score call
         score_calls = mock_trace.score.call_args_list
         acceptance_calls = [c for c in score_calls if c.kwargs.get("name") == "acceptance_passed"]
         assert len(acceptance_calls) == 1

@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/services/test_draft_streamer_removed.py
-"""Regression locks: the custom DraftStreamer abstraction must stay deleted (***REMOVED***1671).
+# tests/unit/services/test_draft_streamer_removed.py
+"""Regression locks: the custom DraftStreamer abstraction must stay deleted (#1671).
 
 `telegram_bot/services/draft_streamer.py` was a thin custom wrapper around
 `bot.send_message_draft` + `bot.send_message`. The streaming consumer
@@ -30,37 +30,37 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_draft_streamer_module_file_is_gone() -> None:
-    """`telegram_bot/services/draft_streamer.py` must not exist (***REMOVED***1671)."""
+    """`telegram_bot/services/draft_streamer.py` must not exist (#1671)."""
     candidate = REPO_ROOT / "telegram_bot" / "services" / "draft_streamer.py"
     assert not candidate.exists(), (
         f"DraftStreamer module re-introduced at {candidate}. The class is a custom "
-        "wrapper for `bot.send_message_draft` / `bot.send_message`; per ***REMOVED***1671 the "
+        "wrapper for `bot.send_message_draft` / `bot.send_message`; per #1671 the "
         "consumer in bot.py inlines those calls directly using the LangGraph SDK "
         "`stream_mode=['messages', 'values']` pattern."
     )
 
 
 def test_draft_streamer_module_import_fails() -> None:
-    """Direct module import must raise ImportError (***REMOVED***1671)."""
+    """Direct module import must raise ImportError (#1671)."""
     with pytest.raises(ImportError):
-        import telegram_bot.services.draft_streamer  ***REMOVED*** noqa: F401
+        import telegram_bot.services.draft_streamer  # noqa: F401
 
 
 def test_draft_streamer_class_import_fails() -> None:
-    """Symbol-level import must raise ImportError (***REMOVED***1671)."""
+    """Symbol-level import must raise ImportError (#1671)."""
     with pytest.raises(ImportError):
-        from telegram_bot.services.draft_streamer import DraftStreamer  ***REMOVED*** noqa: F401
+        from telegram_bot.services.draft_streamer import DraftStreamer  # noqa: F401
 
 
 def test_new_draft_id_lives_in_bot_module() -> None:
-    """`_new_draft_id` moved next to its sole consumer in `telegram_bot.bot` (***REMOVED***1671)."""
+    """`_new_draft_id` moved next to its sole consumer in `telegram_bot.bot` (#1671)."""
     from telegram_bot.bot import _new_draft_id
 
     assert callable(_new_draft_id)
 
 
 def test_new_draft_id_returns_positive_31bit_int() -> None:
-    """Shape contract preserved across the move (***REMOVED***1671)."""
+    """Shape contract preserved across the move (#1671)."""
     from telegram_bot.bot import _new_draft_id
 
     draft_id = _new_draft_id()
@@ -68,7 +68,7 @@ def test_new_draft_id_returns_positive_31bit_int() -> None:
 
 
 def test_no_production_references_to_draft_streamer_module() -> None:
-    """No production module imports `telegram_bot.services.draft_streamer` (***REMOVED***1671).
+    """No production module imports `telegram_bot.services.draft_streamer` (#1671).
 
     Tests are scanned separately; only `tests/` may legitimately mention the
     deleted module name (e.g. these regression locks). Production code must
@@ -98,7 +98,7 @@ def test_no_production_references_to_draft_streamer_module() -> None:
 
 
 def test_streaming_path_still_uses_send_message_draft_directly() -> None:
-    """The consumer must keep calling `bot.send_message_draft(...)` directly (***REMOVED***1671).
+    """The consumer must keep calling `bot.send_message_draft(...)` directly (#1671).
 
     Guards against accidentally re-introducing a custom streamer class. The
     SDK path is `agent.astream(..., stream_mode=["messages", "values"])`
@@ -106,8 +106,8 @@ def test_streaming_path_still_uses_send_message_draft_directly() -> None:
     """
     bot_py = (REPO_ROOT / "telegram_bot" / "bot.py").read_text(encoding="utf-8")
     assert "bot.send_message_draft" in bot_py, (
-        "Streaming path must call `bot.send_message_draft(...)` directly (***REMOVED***1671)."
+        "Streaming path must call `bot.send_message_draft(...)` directly (#1671)."
     )
     assert "DraftStreamer" not in bot_py, (
-        "`DraftStreamer` class is gone; do not reintroduce it (***REMOVED***1671)."
+        "`DraftStreamer` class is gone; do not reintroduce it (#1671)."
     )

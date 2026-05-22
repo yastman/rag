@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Trace validation runner.
 
 Rebuilds pipeline, runs queries through LangGraph, collects Langfuse traces,
@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 import os
-import subprocess  ***REMOVED*** nosec B404
+import subprocess  # nosec B404
 import sys
 import time
 import uuid
@@ -39,7 +39,7 @@ from tenacity import (
 )
 
 
-***REMOVED*** Ensure project root importable
+# Ensure project root importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.validate_queries import (
@@ -63,13 +63,13 @@ def _build_redis_url(redis_url: str) -> str:
 
 
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge"]
-***REMOVED*** Base names used by discovery helper (kept as explicit alias for tests/backward compatibility).
+# Base names used by discovery helper (kept as explicit alias for tests/backward compatibility).
 COLLECTION_BASE_NAMES = COLLECTIONS_TO_CHECK
 
-STREAMING_QUERY_COUNT = 5  ***REMOVED*** First N cold queries for streaming TTFT phase (deterministic)
+STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
 
-***REMOVED*** All node observation names tracked by enrichment and aggregation.
-***REMOVED*** Order mirrors the LangGraph pipeline: transcribe → classify → … → respond → summarize.
+# All node observation names tracked by enrichment and aggregation.
+# Order mirrors the LangGraph pipeline: transcribe → classify → … → respond → summarize.
 TRACKED_NODE_NAMES = [
     "transcribe",
     "classify",
@@ -203,7 +203,7 @@ class TraceResult:
     trace_id: str
     query: str
     collection: str
-    phase: str  ***REMOVED*** warmup | cold | cache_hit
+    phase: str  # warmup | cold | cache_hit
     source: str
     difficulty: str
     latency_wall_ms: float
@@ -226,9 +226,9 @@ class ValidationRun:
     results: list[TraceResult] = field(default_factory=list)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Preflight checks
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Preflight checks
+# ---------------------------------------------------------------------------
 
 
 def check_langfuse_config() -> None:
@@ -275,7 +275,7 @@ def check_worktree_clean(strict: bool = False) -> None:
     Args:
         strict: If True, exit on dirty worktree. If False, log warning only.
     """
-    result = subprocess.run(  ***REMOVED*** nosec B603 B607
+    result = subprocess.run(  # nosec B603 B607
         ["git", "status", "--porcelain", "--untracked-files=normal"],
         capture_output=True,
         text=True,
@@ -310,7 +310,7 @@ def detect_runner_mode(collection: str) -> str:
 
 def get_git_sha() -> str:
     """Get current git commit SHA."""
-    result = subprocess.run(  ***REMOVED*** nosec B603 B607
+    result = subprocess.run(  # nosec B603 B607
         ["git", "rev-parse", "HEAD"],
         capture_output=True,
         text=True,
@@ -377,7 +377,7 @@ async def discover_collections(qdrant_url: str, quantization_mode: str = "off") 
             logger.warning("Collection %s (any suffix) not found in Qdrant", base_name)
             continue
 
-        ***REMOVED*** Voyage collections need API key
+        # Voyage collections need API key
         if "voyage" in base_name and not check_voyage_available():
             logger.warning(
                 "Skipping %s: collection exists but VOYAGE_API_KEY not set",
@@ -396,9 +396,9 @@ async def discover_collections(qdrant_url: str, quantization_mode: str = "off") 
     return available
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Pipeline execution
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Pipeline execution
+# ---------------------------------------------------------------------------
 
 
 async def init_services(collection: str) -> dict[str, Any]:
@@ -413,7 +413,7 @@ async def init_services(collection: str) -> dict[str, Any]:
     from telegram_bot.services.qdrant import QdrantService
 
     config = GraphConfig.from_env()
-    ***REMOVED*** Override collection for this validation run
+    # Override collection for this validation run
     config.qdrant_collection = collection
 
     cache = CacheLayerManager(redis_url=_build_redis_url(config.redis_url))
@@ -460,7 +460,7 @@ async def run_single_query(
     trace_id = str(uuid.uuid4()).replace("-", "")
 
     state = make_initial_state(
-        user_id=0,  ***REMOVED*** validation user
+        user_id=0,  # validation user
         session_id=session_id,
         query=query.text,
     )
@@ -492,7 +492,7 @@ async def run_single_query(
             name="validation-query",
             trace_context=cast(Any, {"trace_id": trace_id}),
         ):
-            ***REMOVED*** Force streaming when fake message provided, restore in finally
+            # Force streaming when fake message provided, restore in finally
             orig_streaming = config.streaming_enabled
             if message is not None:
                 config.streaming_enabled = True
@@ -508,9 +508,9 @@ async def run_single_query(
                     message=message,
                 )
                 result = await graph.ainvoke(state)
-                ***REMOVED*** Compute wall-time BEFORE writing scores so latency_total_ms is correct
+                # Compute wall-time BEFORE writing scores so latency_total_ms is correct
                 result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
-                ***REMOVED*** Write metadata/scores while still inside active observation context
+                # Write metadata/scores while still inside active observation context
                 lf.update_current_span(
                     input={"query": query.text},
                     output={"response": result.get("response", "")[:200]},
@@ -588,23 +588,23 @@ async def _flush_redis_caches(cache: Any) -> str:
         "conversation:*",
     ]
     for pattern in patterns:
-        keys = [k async for k in cache.redis.scan_iter(match=pattern)]  ***REMOVED*** type: ignore[misc]
+        keys = [k async for k in cache.redis.scan_iter(match=pattern)]  # type: ignore[misc]
         if keys:
             deleted += len(keys)
-            await cache.redis.delete(*keys)  ***REMOVED*** type: ignore[misc]
+            await cache.redis.delete(*keys)  # type: ignore[misc]
 
-    ***REMOVED*** Semantic cache has its own key namespace and index lifecycle.
+    # Semantic cache has its own key namespace and index lifecycle.
     if hasattr(cache, "semantic_cache") and cache.semantic_cache:
         try:
             await cache.semantic_cache.aclear()
         except Exception as e:
             logger.warning("  Semantic cache clear failed: %s", e)
 
-    ***REMOVED*** Verify: re-scan to confirm keys are actually gone
+    # Verify: re-scan to confirm keys are actually gone
     remaining = 0
     for pattern in patterns:
         remaining += len(
-            [k async for k in cache.redis.scan_iter(match=pattern, count=100)]  ***REMOVED*** type: ignore[misc]
+            [k async for k in cache.redis.scan_iter(match=pattern, count=100)]  # type: ignore[misc]
         )
 
     if remaining > 0:
@@ -645,13 +645,13 @@ async def run_collection_validation(
 
     results: list[TraceResult] = []
 
-    ***REMOVED*** Phase 1: Warmup (discard) — warms up connections, LLM, embeddings
+    # Phase 1: Warmup (discard) — warms up connections, LLM, embeddings
     warmup_queries = get_warmup_queries(collection, count=3)
     logger.info("Phase 1: Warmup (%d queries, discarded)", len(warmup_queries))
     for q in warmup_queries:
         await run_single_query(q, services, run_meta, phase="warmup")
 
-    ***REMOVED*** Phase 2: Cold run — flush caches for true cold measurement
+    # Phase 2: Cold run — flush caches for true cold measurement
     logger.info("Phase 2: Flushing Redis caches for true cold run...")
     flush_status = await _flush_redis_caches(services["cache"])
     cold_queries = get_queries_for_collection(collection)
@@ -676,16 +676,16 @@ async def run_collection_validation(
             result = await run_single_query(q, services, run_meta, phase="cold")
             results.append(result)
 
-    ***REMOVED*** Phase 3: Cache-hit run (duplicates from cold)
+    # Phase 3: Cache-hit run (duplicates from cold)
     cache_queries = get_cache_hit_queries(cold_queries, count=10)
     logger.info("Phase 3: Cache-hit run (%d queries)", len(cache_queries))
     for q in cache_queries:
         result = await run_single_query(q, services, run_meta, phase="cache_hit")
         results.append(result)
 
-    ***REMOVED*** Phase 4: Streaming TTFT (first N cold queries, deterministic)
-    ***REMOVED*** Note: semantic cache may return cached_response here, bypassing LLM streaming.
-    ***REMOVED*** This is acceptable for MVP — TTFT=None for those queries, excluded from aggregates.
+    # Phase 4: Streaming TTFT (first N cold queries, deterministic)
+    # Note: semantic cache may return cached_response here, bypassing LLM streaming.
+    # This is acceptable for MVP — TTFT=None for those queries, excluded from aggregates.
     streaming_queries = cold_queries[:STREAMING_QUERY_COUNT]
     logger.info("Phase 4: Streaming TTFT (%d queries)", len(streaming_queries))
     for q in streaming_queries:
@@ -707,7 +707,7 @@ async def run_collection_validation(
                 result.state["streaming_ttft_ms"] = ttft
         results.append(result)
 
-    ***REMOVED*** Cleanup
+    # Cleanup
     await services["cache"].close()
     await services["qdrant"].close()
     if hasattr(services["embeddings"], "aclose"):
@@ -718,9 +718,9 @@ async def run_collection_validation(
     return results
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Langfuse enrichment
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Langfuse enrichment
+# ---------------------------------------------------------------------------
 
 
 async def enrich_results_from_langfuse(
@@ -739,14 +739,14 @@ async def enrich_results_from_langfuse(
             continue
         try:
             trace = lf.api.trace.get(r.trace_id)
-            ***REMOVED*** Populate scores from Langfuse
+            # Populate scores from Langfuse
             if hasattr(trace, "scores") and trace.scores:
                 for score in trace.scores:
                     name = getattr(score, "name", "")
                     value = getattr(score, "value", 0)
                     if name:
                         r.scores[name] = float(value)
-            ***REMOVED*** Populate node span durations and error count from observations
+            # Populate node span durations and error count from observations
             observation_error_count = 0
             if hasattr(trace, "observations") and trace.observations:
                 for obs in trace.observations:
@@ -873,7 +873,7 @@ def check_required_trace_coverage(
             logger.warning("Failed to check required trace '%s': %s", trace_name, exc)
             missing.append(trace_name)
 
-    ***REMOVED*** Opportunistic families — tracked but non-blocking
+    # Opportunistic families — tracked but non-blocking
     tiers = load_trace_coverage_tiers()
     opportunistic = [t for t in tiers.get("opportunistic_for_1307", []) if t not in required_direct]
     opportunistic_present: list[str] = []
@@ -1038,7 +1038,7 @@ def evaluate_go_no_go(
     cold_stddev = cold.get("latency_stddev", 0)
     cache_stddev = cache.get("latency_stddev", 0)
 
-    ***REMOVED*** 1. Cold p50
+    # 1. Cold p50
     cold_p50 = cold.get("latency_p50", 99999)
     cold_p50_limit = t.get("cold_p50_ms", 5000)
     criteria["cold_p50_lt_5s"] = {
@@ -1048,7 +1048,7 @@ def evaluate_go_no_go(
         "stddev": f"\u00b1{cold_stddev:.0f} ms" if cold_stddev else "\u2014",
     }
 
-    ***REMOVED*** 2. Cold p90 (fallback to p95 for backward compatibility)
+    # 2. Cold p90 (fallback to p95 for backward compatibility)
     cold_p90 = cold.get("latency_p90", cold.get("latency_p95", 99999))
     cold_p90_limit = t.get("cold_p90_ms", 8000)
     criteria["cold_p90_lt_8s"] = {
@@ -1058,7 +1058,7 @@ def evaluate_go_no_go(
         "stddev": f"\u00b1{cold_stddev:.0f} ms" if cold_stddev else "\u2014",
     }
 
-    ***REMOVED*** 3. Cold queries > 10s
+    # 3. Cold queries > 10s
     cold_over_10s_limit = t.get("cold_over_10s_pct", 0.15)
     if cold_results:
         over_10s = sum(1 for r in cold_results if r.latency_wall_ms > 10000)
@@ -1073,7 +1073,7 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    ***REMOVED*** 4. Cache-hit p50
+    # 4. Cache-hit p50
     cache_p50 = cache.get("latency_p50", 99999)
     cache_p50_limit = t.get("cache_hit_p50_ms", 1500)
     criteria["cache_hit_p50_lt_1500ms"] = {
@@ -1083,7 +1083,7 @@ def evaluate_go_no_go(
         "stddev": f"\u00b1{cache_stddev:.0f} ms" if cache_stddev else "\u2014",
     }
 
-    ***REMOVED*** 5. Generate node p50 (full generation latency, non-streaming mode)
+    # 5. Generate node p50 (full generation latency, non-streaming mode)
     generate_p50 = cold.get("node_p50", {}).get("generate", 99999)
     generate_p50_limit = t.get("generate_p50_ms", 2000)
     criteria["generate_p50_lt_2s"] = {
@@ -1093,7 +1093,7 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    ***REMOVED*** 6. Rewrite calls >= 2
+    # 6. Rewrite calls >= 2
     multi_rewrite_limit = t.get("multi_rewrite_pct", 0.10)
     if cold_results:
         multi_rewrite = sum(1 for r in cold_results if (r.state.get("rewrite_count", 0) or 0) >= 2)
@@ -1107,7 +1107,7 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    ***REMOVED*** 7. Rewrite completion_tokens p50 (from Langfuse scores if available)
+    # 7. Rewrite completion_tokens p50 (from Langfuse scores if available)
     rewrite_tokens_limit = t.get("rewrite_tokens_p50", 96)
     rewrite_tokens: list[float] = []
     for r in cold_results:
@@ -1121,7 +1121,7 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    ***REMOVED*** 8. ERROR observations = 0 new (from scores + observation levels)
+    # 8. ERROR observations = 0 new (from scores + observation levels)
     score_error_count = sum(
         1
         for r in results
@@ -1139,7 +1139,7 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    ***REMOVED*** 9. Orphan traces = 0%
+    # 9. Orphan traces = 0%
     criteria["orphan_traces_zero"] = {
         "target": "0%",
         "actual": f"{orphan_rate:.1%}",
@@ -1147,7 +1147,7 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    ***REMOVED*** 10. Required trace families are present in Langfuse.
+    # 10. Required trace families are present in Langfuse.
     if required_trace_coverage is None:
         criteria["required_trace_families_present"] = {
             "target": ", ".join(REQUIRED_TRACE_NAMES),
@@ -1175,7 +1175,7 @@ def evaluate_go_no_go(
             "stddev": "\u2014",
         }
 
-    ***REMOVED*** 11. Streaming TTFT p50 (skipped if sample < min)
+    # 11. Streaming TTFT p50 (skipped if sample < min)
     ttft_min_sample = t.get("ttft_min_sample", 3)
     ttft_p50_limit = t.get("ttft_p50_ms", 1000)
     streaming = aggregates.get("streaming", {})
@@ -1199,7 +1199,7 @@ def evaluate_go_no_go(
             "stddev": "\u2014",
         }
 
-    ***REMOVED*** 12. Judge quality scores (***REMOVED***386) — from Langfuse managed evaluators
+    # 12. Judge quality scores (#386) — from Langfuse managed evaluators
     judge_thresholds = t.get("judge", {})
     for metric, key, label in [
         ("judge_faithfulness_mean", "faithfulness_mean_gte", "faithfulness"),
@@ -1227,7 +1227,7 @@ def evaluate_go_no_go(
                 "stddev": "\u2014",
             }
 
-    ***REMOVED*** Override cold-dependent criteria when cold phase was skipped
+    # Override cold-dependent criteria when cold phase was skipped
     cold_skipped = all(r.state.get("cold_skipped") for r in cold_results) if cold_results else False
     if cold_skipped:
         skip_reason = cold_results[0].state.get("skip_reason", "unknown")
@@ -1250,9 +1250,9 @@ def evaluate_go_no_go(
     return criteria
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Aggregation and reporting
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Aggregation and reporting
+# ---------------------------------------------------------------------------
 
 
 def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
@@ -1275,7 +1275,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             "latency_stddev": float(np.std(latencies)) if len(latencies) > 1 else 0.0,
         }
 
-        ***REMOVED*** Rates from Langfuse score fields (fallback to local state if score missing)
+        # Rates from Langfuse score fields (fallback to local state if score missing)
         def score_rate(
             score_name: str,
             state_fallback: str | None = None,
@@ -1301,11 +1301,11 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             )
         )
 
-        ***REMOVED*** Avg results count
+        # Avg results count
         counts = [r.state.get("search_results_count", 0) for r in phase_results]
         agg["results_count_mean"] = float(np.mean(counts)) if counts else 0.0
 
-        ***REMOVED*** Per-node latency p50/p95 (prefer Langfuse spans, fallback to state latency_stages)
+        # Per-node latency p50/p95 (prefer Langfuse spans, fallback to state latency_stages)
         node_names = TRACKED_NODE_NAMES
         node_latencies: dict[str, list[float]] = {n: [] for n in node_names}
         for r in phase_results:
@@ -1317,7 +1317,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             stages = r.state.get("latency_stages") or {}
             for node in node_names:
                 if node in stages:
-                    node_latencies[node].append(stages[node] * 1000)  ***REMOVED*** sec → ms
+                    node_latencies[node].append(stages[node] * 1000)  # sec → ms
 
         agg["node_p50"] = {}
         agg["node_p95"] = {}
@@ -1329,7 +1329,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
 
         aggregates[phase] = agg
 
-    ***REMOVED*** Streaming TTFT aggregation (separate from cold/cache_hit latency stats)
+    # Streaming TTFT aggregation (separate from cold/cache_hit latency stats)
     streaming_results = [r for r in results if r.phase == "streaming"]
     ttft_values: list[float] = []
     for r in streaming_results:
@@ -1347,7 +1347,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             "ttft_max": float(np.max(ttft_values)),
         }
 
-    ***REMOVED*** Judge score aggregation (***REMOVED***386) — from Langfuse managed evaluators
+    # Judge score aggregation (#386) — from Langfuse managed evaluators
     judge_metrics = ("judge_faithfulness", "judge_answer_relevance", "judge_context_relevance")
     for judge_name in judge_metrics:
         vals = [r.scores.get(judge_name) for r in results if r.scores.get(judge_name) is not None]
@@ -1435,7 +1435,7 @@ def generate_report(
 ) -> None:
     """Generate markdown validation report."""
     lines: list[str] = []
-    lines.append("***REMOVED*** Trace Validation Report")
+    lines.append("# Trace Validation Report")
     lines.append("")
     lines.append(f"**Run ID:** `{run.run_id}`")
     lines.append(f"**Git SHA:** `{run.git_sha}`")
@@ -1444,13 +1444,13 @@ def generate_report(
     lines.append(f"**skip_rerank_threshold:** {run.skip_rerank_threshold}")
     lines.append("")
 
-    ***REMOVED*** Summary table per phase
+    # Summary table per phase
     for phase_name, phase_label in [("cold", "Cold Run"), ("cache_hit", "Cache-Hit Run")]:
         agg = aggregates.get(phase_name)
         if not agg:
             continue
 
-        lines.append(f"***REMOVED******REMOVED*** {phase_label} (n={agg['n']})")
+        lines.append(f"## {phase_label} (n={agg['n']})")
         lines.append("")
         lines.append("| Metric | Value |")
         lines.append("|--------|-------|")
@@ -1468,9 +1468,9 @@ def generate_report(
         lines.append(f"| results_count mean | {agg['results_count_mean']:.1f} |")
         lines.append("")
 
-        ***REMOVED*** Node-level latencies
+        # Node-level latencies
         if agg.get("node_p50"):
-            lines.append(f"***REMOVED******REMOVED******REMOVED*** Node Latencies ({phase_label})")
+            lines.append(f"### Node Latencies ({phase_label})")
             lines.append("")
             lines.append("| Node | p50 (ms) | p95 (ms) |")
             lines.append("|------|----------|----------|")
@@ -1480,10 +1480,10 @@ def generate_report(
                 lines.append(f"| {node} | {p50:.0f} | {p95:.0f} |")
             lines.append("")
 
-    ***REMOVED*** Streaming TTFT section
+    # Streaming TTFT section
     streaming_agg = aggregates.get("streaming")
     if streaming_agg:
-        lines.append(f"***REMOVED******REMOVED*** Streaming TTFT (n={streaming_agg['n']})")
+        lines.append(f"## Streaming TTFT (n={streaming_agg['n']})")
         lines.append("")
         lines.append("| Metric | Value |")
         lines.append("|--------|-------|")
@@ -1494,8 +1494,8 @@ def generate_report(
         lines.append(f"| sample count | {streaming_agg['ttft_sample_count']} |")
         lines.append("")
 
-    ***REMOVED*** All trace details
-    lines.append("***REMOVED******REMOVED*** Trace Details")
+    # All trace details
+    lines.append("## Trace Details")
     lines.append("")
     lines.append("| Phase | Query (truncated) | Latency (ms) | Cache | Rerank | Results |")
     lines.append("|-------|-------------------|-------------|-------|--------|---------|")
@@ -1511,15 +1511,15 @@ def generate_report(
         )
     lines.append("")
 
-    ***REMOVED*** Go/No-Go
-    lines.append("***REMOVED******REMOVED*** Go/No-Go Recommendation")
+    # Go/No-Go
+    lines.append("## Go/No-Go Recommendation")
     lines.append("")
     if go_no_go:
         all_passed = all(c["passed"] for c in go_no_go.values())
         verdict = "GO — all criteria passed" if all_passed else "NO-GO — see failures below"
         lines.append(f"**Verdict: {verdict}**")
         lines.append("")
-        lines.append("| ***REMOVED*** | Criterion | Target | Actual | Stddev | Status |")
+        lines.append("| # | Criterion | Target | Actual | Stddev | Status |")
         lines.append("|---|-----------|--------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
             status = _format_go_no_go_status(c)
@@ -1539,7 +1539,7 @@ def generate_report(
     lines.append("")
 
     if payload_summary:
-        lines.append("***REMOVED******REMOVED*** Node Payload Sizes (Bytes, p50)")
+        lines.append("## Node Payload Sizes (Bytes, p50)")
         lines.append("")
         lines.append("| Node | Input p50 | Output p50 | Metadata p50 | Total p50 |")
         lines.append("|------|-----------|------------|--------------|-----------|")
@@ -1561,9 +1561,9 @@ def generate_report(
     logger.info("Report saved to %s", output_path)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI entrypoint
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI entrypoint
+# ---------------------------------------------------------------------------
 
 
 async def run_validation(args: argparse.Namespace) -> None:
@@ -1574,7 +1574,7 @@ async def run_validation(args: argparse.Namespace) -> None:
     from telegram_bot.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
-    check_langfuse_config()  ***REMOVED*** fail fast if host/keys are missing
+    check_langfuse_config()  # fail fast if host/keys are missing
     check_worktree_clean(strict=args.strict_worktree)
 
     run = ValidationRun(
@@ -1591,10 +1591,10 @@ async def run_validation(args: argparse.Namespace) -> None:
     logger.info("skip_rerank_threshold: %s (from env/config)", config.skip_rerank_threshold)
     logger.info("relevance_threshold_rrf: %s (from env/config)", config.relevance_threshold_rrf)
 
-    ***REMOVED*** Discover available collections
+    # Discover available collections
     qdrant_url = config.qdrant_url
     if args.collection:
-        ***REMOVED*** User specified a single collection — verify it exists
+        # User specified a single collection — verify it exists
         from qdrant_client import AsyncQdrantClient
 
         client = AsyncQdrantClient(url=qdrant_url)
@@ -1619,7 +1619,7 @@ async def run_validation(args: argparse.Namespace) -> None:
 
     logger.info("Collections to validate: %s", collections)
 
-    ***REMOVED*** Run validation per collection
+    # Run validation per collection
     all_results: list[TraceResult] = []
     for collection in collections:
         results = await run_collection_validation(collection, run)
@@ -1637,7 +1637,7 @@ async def run_validation(args: argparse.Namespace) -> None:
     run.collections = validated_collections
     run.results = all_results
 
-    ***REMOVED*** Flush Langfuse
+    # Flush Langfuse
     logger.info("Flushing Langfuse queue...")
     try:
         from telegram_bot.observability import get_langfuse_client
@@ -1647,24 +1647,24 @@ async def run_validation(args: argparse.Namespace) -> None:
             lf_client.flush()
     except Exception as exc:
         logger.debug("Skipping final Langfuse flush: %s", exc)
-    await asyncio.sleep(5)  ***REMOVED*** extra wait for async flush
+    await asyncio.sleep(5)  # extra wait for async flush
 
-    ***REMOVED*** Enrich results from Langfuse API (scores + node spans) before aggregates
+    # Enrich results from Langfuse API (scores + node spans) before aggregates
     all_results = await enrich_results_from_langfuse(run_id, all_results)
     run.results = all_results
 
-    ***REMOVED*** Compute aggregates
+    # Compute aggregates
     aggregates = compute_aggregates(all_results)
     payload_summary = aggregate_node_payloads(all_results)
 
-    ***REMOVED*** Check orphan traces
+    # Check orphan traces
     logger.info("Checking orphan traces...")
     orphan_rate = check_orphan_traces(all_results)
 
     logger.info("Checking required trace family coverage...")
     required_trace_coverage = check_required_trace_coverage()
 
-    ***REMOVED*** Evaluate Go/No-Go criteria
+    # Evaluate Go/No-Go criteria
     go_no_go = evaluate_go_no_go(
         aggregates,
         all_results,
@@ -1698,13 +1698,13 @@ async def run_validation(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    ***REMOVED*** Print summary to console
+    # Print summary to console
     for phase, agg in aggregates.items():
         if phase == "streaming":
-            continue  ***REMOVED*** handled separately below
+            continue  # handled separately below
         logger.info("%s", format_phase_summary(phase, agg))
 
-    ***REMOVED*** Streaming TTFT summary
+    # Streaming TTFT summary
     streaming_agg = aggregates.get("streaming")
     if streaming_agg:
         logger.info(
@@ -1716,7 +1716,7 @@ async def run_validation(args: argparse.Namespace) -> None:
             streaming_agg["ttft_mean"],
         )
 
-    ***REMOVED*** Generate report
+    # Generate report
     if args.report:
         report_path = Path(
             f"docs/reports/{run.started_at.strftime('%Y-%m-%d')}-validation-{run_id[:8]}.md"
@@ -1729,7 +1729,7 @@ async def run_validation(args: argparse.Namespace) -> None:
             payload_summary=payload_summary,
         )
 
-    ***REMOVED*** Also dump raw JSON for programmatic use
+    # Also dump raw JSON for programmatic use
     raw_path = Path(
         f"docs/reports/{run.started_at.strftime('%Y-%m-%d')}-validation-{run_id[:8]}.json"
     )
@@ -1772,7 +1772,7 @@ async def run_validation(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    load_dotenv()  ***REMOVED*** Load .env before checking Langfuse config
+    load_dotenv()  # Load .env before checking Langfuse config
     parser = argparse.ArgumentParser(description="Trace validation runner")
     parser.add_argument(
         "--collection",

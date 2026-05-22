@@ -122,8 +122,8 @@ async def test_cache_miss_then_hit_on_repeated_query() -> None:
             if hits >= 1 and misses >= 1:
                 break
 
-    ***REMOVED*** Live stack already responded by the time we got here (***REMOVED***1630). Missing
-    ***REMOVED*** miss/hit transition is a real cache regression, not a skipped test.
+    # Live stack already responded by the time we got here (#1630). Missing
+    # miss/hit transition is a real cache regression, not a skipped test.
     assert misses >= 1, (
         "Live cache test never observed a cache miss across 4 queries. "
         "Either the test fixture leaked across runs or cache logic is "

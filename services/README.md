@@ -1,11 +1,11 @@
-***REMOVED*** Local Service Containers
+# Local Service Containers
 
 This directory contains standalone service containers that support the RAG runtime.
 They are referenced from the main [`compose.yml`](../compose.yml) and started as part of the Docker Compose stack.
 
 > For Compose operations, profiles, and env requirements, see [`../DOCKER.md`](../DOCKER.md).
 
-***REMOVED******REMOVED*** Services
+## Services
 
 | Service | Purpose | Entrypoint | Docker service | Profile | Local URL |
 |---|---|---|---|---|---|
@@ -13,28 +13,28 @@ They are referenced from the main [`compose.yml`](../compose.yml) and started as
 | `docling/` | Document parsing (PDF → markdown/HTML) | `docling-serve` | `docling` | — (default) | http://localhost:5001 |
 | `user-base/` | Russian dense embeddings (USER2-base) | [`main.py`](user-base/main.py) | `user-base` | — (default) | http://localhost:8003 |
 
-***REMOVED******REMOVED*** Quick Validation
+## Quick Validation
 
 Build and health-check a single service:
 
 ```bash
-***REMOVED*** bge-m3
+# bge-m3
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build bge-m3
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d bge-m3
 curl -fsS http://localhost:8000/health
 
-***REMOVED*** docling
+# docling
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build docling
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d docling
 curl -fsS http://localhost:5001/health
 
-***REMOVED*** user-base
+# user-base
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose build user-base
 COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d user-base
 curl -fsS http://localhost:8003/health
 ```
 
-***REMOVED******REMOVED*** Tests & Checks
+## Tests & Checks
 
 | Service | Unit tests | Dockerfile checks | Smoke tests |
 |---|---|---|---|
@@ -48,7 +48,7 @@ Run all relevant unit tests:
 make test-unit
 ```
 
-***REMOVED******REMOVED*** Owner Boundaries
+## Owner Boundaries
 
 - **bge-m3-api**: embedding model serving, metrics export, healthchecks
 - **docling**: document conversion, no persistent state (read-only root with `./data/docling` mount)
@@ -56,7 +56,7 @@ make test-unit
 
 Do not modify the application code in these directories without also verifying the corresponding Compose health checks and `make verify-compose-images` after image pin updates.
 
-***REMOVED******REMOVED*** See Also
+## See Also
 
 - [`../DOCKER.md`](../DOCKER.md) — Compose profiles, env requirements, and service map
 - [`../docs/LOCAL-DEVELOPMENT.md`](../docs/LOCAL-DEVELOPMENT.md) — Local setup and validation flow

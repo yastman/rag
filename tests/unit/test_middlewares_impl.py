@@ -29,7 +29,7 @@ class TestErrorHandlerMiddleware:
     async def test_error_handler_logs_exception(self, middleware):
         """Test that errors are logged with exception info."""
         handler = AsyncMock(side_effect=ValueError("Test error"))
-        event = MagicMock(spec=[])  ***REMOVED*** Not a Message
+        event = MagicMock(spec=[])  # Not a Message
         data = {}
 
         with patch("telegram_bot.middlewares.error_handler.logger") as mock_logger:
@@ -61,14 +61,14 @@ class TestErrorHandlerMiddleware:
     async def test_error_does_not_send_message_for_non_message_event(self, middleware):
         """Test that error does not try to send message for non-Message events."""
         handler = AsyncMock(side_effect=RuntimeError("Internal error"))
-        event = MagicMock(spec=[])  ***REMOVED*** Not a Message
+        event = MagicMock(spec=[])  # Not a Message
         data = {}
 
         with patch("telegram_bot.middlewares.error_handler.logger"):
             with pytest.raises(RuntimeError):
                 await middleware(handler, event, data)
 
-        ***REMOVED*** No answer method should be called
+        # No answer method should be called
         assert not hasattr(event, "answer") or not event.answer.called
 
     async def test_error_is_re_raised(self, middleware):
@@ -112,7 +112,7 @@ class TestThrottlingMiddleware:
         handler = AsyncMock(return_value="result")
         event = MagicMock()
         user = MagicMock()
-        user.id = 789  ***REMOVED*** Not an admin
+        user.id = 789  # Not an admin
         data = {"event_from_user": user}
 
         result = await middleware(handler, event, data)
@@ -131,11 +131,11 @@ class TestThrottlingMiddleware:
         user.id = 789
         data = {"event_from_user": user}
 
-        ***REMOVED*** First request - should pass
+        # First request - should pass
         result1 = await middleware(handler, event, data)
         assert result1 == "result"
 
-        ***REMOVED*** Second request immediately - should be throttled
+        # Second request immediately - should be throttled
         with patch("telegram_bot.middlewares.throttling.logger"):
             result2 = await middleware(handler, event, data)
 
@@ -151,14 +151,14 @@ class TestThrottlingMiddleware:
         handler = AsyncMock(return_value="result")
         event = MagicMock()
         user = MagicMock()
-        user.id = 123  ***REMOVED*** Admin ID
+        user.id = 123  # Admin ID
         data = {"event_from_user": user}
 
-        ***REMOVED*** First request
+        # First request
         result1 = await middleware(handler, event, data)
         assert result1 == "result"
 
-        ***REMOVED*** Second request immediately - should still pass (admin)
+        # Second request immediately - should still pass (admin)
         result2 = await middleware(handler, event, data)
         assert result2 == "result"
 
@@ -168,7 +168,7 @@ class TestThrottlingMiddleware:
         """Test that events without user info pass through."""
         handler = AsyncMock(return_value="result")
         event = MagicMock()
-        data = {}  ***REMOVED*** No event_from_user
+        data = {}  # No event_from_user
 
         result = await middleware(handler, event, data)
 
@@ -186,10 +186,10 @@ class TestThrottlingMiddleware:
         user.id = 789
         data = {"event_from_user": user}
 
-        ***REMOVED*** First request
+        # First request
         await middleware(handler, event, data)
 
-        ***REMOVED*** Second request - throttled
+        # Second request - throttled
         with patch("telegram_bot.middlewares.throttling.logger"):
             result = await middleware(handler, event, data)
 
@@ -279,7 +279,7 @@ class TestSetupThrottlingMiddleware:
             setup_throttling_middleware(mock_dp, default_rate=2.0, admin_ids=[111])
 
         mock_dp.message.middleware.register.assert_called_once()
-        ***REMOVED*** 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
         assert mock_dp.callback_query.middleware.register.call_count == 2
 
     def test_setup_uses_defaults(self):
@@ -292,5 +292,5 @@ class TestSetupThrottlingMiddleware:
             setup_throttling_middleware(mock_dp)
 
         mock_dp.message.middleware.register.assert_called_once()
-        ***REMOVED*** 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
         assert mock_dp.callback_query.middleware.register.call_count == 2

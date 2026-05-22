@@ -172,7 +172,7 @@ class TestFormatApartmentHtml:
             view="garden",
             price_eur=150000,
         )
-        ***REMOVED*** Price should be formatted as "150 000"
+        # Price should be formatted as "150 000"
         assert "150" in result
         assert "€" in result
 

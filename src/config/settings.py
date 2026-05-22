@@ -42,41 +42,41 @@ class Settings:
     def __init__(
         self,
         env_file: str | None = None,
-        ***REMOVED*** API Configuration
+        # API Configuration
         api_provider: str | None = None,
         anthropic_api_key: str | None = None,
         openai_api_key: str | None = None,
         groq_api_key: str | None = None,
-        ***REMOVED*** Model Configuration
+        # Model Configuration
         model_name: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        ***REMOVED*** Vector Database
+        # Vector Database
         qdrant_url: str | None = None,
         qdrant_api_key: str | None = None,
-        ***REMOVED*** Paths
+        # Paths
         data_dir: str | None = None,
         docs_dir: str | None = None,
         logs_dir: str | None = None,
-        ***REMOVED*** Search Configuration
+        # Search Configuration
         search_engine: str | None = None,
         score_threshold: float | None = None,
         top_k: int | None = None,
-        ***REMOVED*** Processing
+        # Processing
         batch_size_embeddings: int | None = None,
         batch_size_documents: int | None = None,
-        ***REMOVED*** Retry
+        # Retry
         max_retries: int | None = None,
         retry_backoff: float | None = None,
     ):
         """Initialize settings from environment and arguments."""
-        ***REMOVED*** Load .env file first
+        # Load .env file first
         if env_file:
             load_dotenv(env_file)
         else:
             load_dotenv()
 
-        ***REMOVED*** === API CONFIGURATION ===
+        # === API CONFIGURATION ===
         default_provider = DEFAULTS["api_provider"]
         default_provider_value = (
             default_provider.value
@@ -90,10 +90,10 @@ class Settings:
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
 
-        ***REMOVED*** Validate that appropriate API key is set
+        # Validate that appropriate API key is set
         self._validate_api_keys()
 
-        ***REMOVED*** === MODEL CONFIGURATION ===
+        # === MODEL CONFIGURATION ===
         self.model_name = model_name or os.getenv(
             "MODEL_NAME",
             self._default_model_for_provider(self.api_provider),
@@ -103,20 +103,20 @@ class Settings:
         self.max_retries = max_retries or DEFAULTS["max_retries"]
         self.retry_backoff = retry_backoff or DEFAULTS["retry_backoff"]
 
-        ***REMOVED*** === VECTOR DATABASE ===
+        # === VECTOR DATABASE ===
         self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
         self.qdrant_api_key = qdrant_api_key or os.getenv("QDRANT_API_KEY", "")
 
-        ***REMOVED*** === PATHS ===
+        # === PATHS ===
         self.project_root = Path(__file__).parent.parent.parent
         self.data_dir = Path(data_dir or os.getenv("DATA_DIR") or self.project_root / "data")
         self.docs_dir = Path(docs_dir or os.getenv("DOCS_DIR") or self.project_root / "docs")
         self.logs_dir = Path(logs_dir or os.getenv("LOGS_DIR") or self.project_root / "logs")
 
-        ***REMOVED*** Create directories if they don't exist
+        # Create directories if they don't exist
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
-        ***REMOVED*** === SEARCH CONFIGURATION ===
+        # === SEARCH CONFIGURATION ===
         default_engine = DEFAULTS["search_engine"]
         default_engine_value = (
             default_engine.value
@@ -129,72 +129,72 @@ class Settings:
         self.score_threshold = score_threshold or 0.3
         self.top_k = top_k or 10
 
-        ***REMOVED*** === COLLECTION ===
+        # === COLLECTION ===
         self.collection_name = os.getenv("COLLECTION_NAME") or DEFAULT_COLLECTION
 
-        ***REMOVED*** === PROCESSING ===
+        # === PROCESSING ===
         self.batch_size_embeddings = batch_size_embeddings or BatchSizes.EMBEDDINGS
         self.batch_size_documents = batch_size_documents or BatchSizes.DOCUMENTS
         self.batch_size_queries = BatchSizes.QUERIES
 
-        ***REMOVED*** === RETRIEVAL STAGES ===
+        # === RETRIEVAL STAGES ===
         self.retrieval_stage1_candidates = RetrievalStages.STAGE1_CANDIDATES
         self.retrieval_stage2_final = RetrievalStages.STAGE2_FINAL
 
-        ***REMOVED*** === FEATURES ===
+        # === FEATURES ===
         self.enable_caching = os.getenv("ENABLE_CACHING", "true").lower() == "true"
         self.enable_query_expansion = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
         self.enable_langfuse = os.getenv("ENABLE_LANGFUSE", "true").lower() == "true"
 
-        ***REMOVED*** === QUANTIZATION ===
-        ***REMOVED*** Binary: 32x compression, 40x faster (best for dim >= 1024)
-        ***REMOVED*** Scalar (INT8): 4x compression, better accuracy
+        # === QUANTIZATION ===
+        # Binary: 32x compression, 40x faster (best for dim >= 1024)
+        # Scalar (INT8): 4x compression, better accuracy
         self.quantization_mode = QuantizationMode(os.getenv("QUANTIZATION_MODE", "binary").lower())
         self.quantization_rescore = os.getenv("QUANTIZATION_RESCORE", "true").lower() == "true"
         self.quantization_oversampling = float(os.getenv("QUANTIZATION_OVERSAMPLING", "2.0"))
 
-        ***REMOVED*** === SMALL-TO-BIG CONTEXT EXPANSION ===
-        ***REMOVED*** Mode: off (disabled), on (always expand), auto (expand for complex queries)
+        # === SMALL-TO-BIG CONTEXT EXPANSION ===
+        # Mode: off (disabled), on (always expand), auto (expand for complex queries)
         self.small_to_big_mode = os.getenv("SMALL_TO_BIG_MODE", "off").lower()
-        ***REMOVED*** Window size: number of chunks to fetch before/after each result
+        # Window size: number of chunks to fetch before/after each result
         self.small_to_big_window_before = int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "1"))
         self.small_to_big_window_after = int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "1"))
-        ***REMOVED*** Limits to prevent context explosion
+        # Limits to prevent context explosion
         self.max_expanded_chunks = int(os.getenv("MAX_EXPANDED_CHUNKS", "10"))
         self.max_context_tokens = int(os.getenv("MAX_CONTEXT_TOKENS", "8000"))
 
-        ***REMOVED*** === ACORN (Filtered Vector Search Optimization) ===
-        ***REMOVED*** ACORN improves search quality when strict filters cause graph disconnection
-        ***REMOVED*** Best for: low selectivity filters (< 40% of vectors match)
-        ***REMOVED*** Requires: qdrant-client >= 1.15.0
+        # === ACORN (Filtered Vector Search Optimization) ===
+        # ACORN improves search quality when strict filters cause graph disconnection
+        # Best for: low selectivity filters (< 40% of vectors match)
+        # Requires: qdrant-client >= 1.15.0
         self.acorn_mode = AcornMode(os.getenv("ACORN_MODE", "off").lower())
-        ***REMOVED*** max_selectivity: ACORN won't be used if selectivity > this value (0.0-1.0)
-        ***REMOVED*** Higher values = more aggressive ACORN usage
+        # max_selectivity: ACORN won't be used if selectivity > this value (0.0-1.0)
+        # Higher values = more aggressive ACORN usage
         self.acorn_max_selectivity = float(os.getenv("ACORN_MAX_SELECTIVITY", "0.4"))
-        ***REMOVED*** In 'auto' mode: enable ACORN only if estimated selectivity < this threshold
+        # In 'auto' mode: enable ACORN only if estimated selectivity < this threshold
         self.acorn_enabled_selectivity_threshold = float(
             os.getenv("ACORN_ENABLED_SELECTIVITY_THRESHOLD", "0.4")
         )
 
-        ***REMOVED*** === HYDE (Hypothetical Document Embeddings) ===
-        ***REMOVED*** When enabled, generates hypothetical answer for short queries (< 5 words)
-        ***REMOVED*** to improve recall by embedding the answer instead of the question
+        # === HYDE (Hypothetical Document Embeddings) ===
+        # When enabled, generates hypothetical answer for short queries (< 5 words)
+        # to improve recall by embedding the answer instead of the question
         self.use_hyde = os.getenv("USE_HYDE", "false").lower() == "true"
-        ***REMOVED*** Minimum query length to skip HyDE (longer queries don't benefit as much)
+        # Minimum query length to skip HyDE (longer queries don't benefit as much)
         self.hyde_min_words = int(os.getenv("HYDE_MIN_WORDS", "5"))
 
-        ***REMOVED*** === CONTEXTUALIZED EMBEDDINGS (voyage-context-3) ===
-        ***REMOVED*** When enabled, uses Voyage AI contextualized embeddings that capture
-        ***REMOVED*** document structure by processing all chunks together. Each chunk's
-        ***REMOVED*** embedding incorporates context from surrounding chunks.
-        ***REMOVED*** Requires chunks WITHOUT overlap (different from standard RAG chunking).
+        # === CONTEXTUALIZED EMBEDDINGS (voyage-context-3) ===
+        # When enabled, uses Voyage AI contextualized embeddings that capture
+        # document structure by processing all chunks together. Each chunk's
+        # embedding incorporates context from surrounding chunks.
+        # Requires chunks WITHOUT overlap (different from standard RAG chunking).
         self.use_contextualized_embeddings = (
             os.getenv("USE_CONTEXTUALIZED_EMBEDDINGS", "false").lower() == "true"
         )
-        ***REMOVED*** Output dimension for contextualized embeddings (2048, 1024, 512, 256)
+        # Output dimension for contextualized embeddings (2048, 1024, 512, 256)
         self.contextualized_embedding_dim = int(os.getenv("CONTEXTUALIZED_EMBEDDING_DIM", "1024"))
 
-        ***REMOVED*** === ENVIRONMENT ===
+        # === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
 
@@ -223,7 +223,7 @@ class Settings:
             APIProvider.CLAUDE: ModelName.CLAUDE_SONNET.value,
             APIProvider.OPENAI: ModelName.GPT_4_TURBO.value,
             APIProvider.GROQ: ModelName.GROQ_LLAMA3_70B.value,
-            APIProvider.Z_AI: "glm-4.6",  ***REMOVED*** Legacy
+            APIProvider.Z_AI: "glm-4.6",  # Legacy
         }
         return defaults.get(provider, ModelName.CLAUDE_SONNET.value)
 
@@ -288,7 +288,7 @@ class Settings:
         )
 
 
-***REMOVED*** Lazy settings singleton
+# Lazy settings singleton
 _settings: Settings | None = None
 
 

@@ -16,7 +16,7 @@ def svc() -> ApartmentsService:
 
 async def test_get_distinct_values_returns_sorted_unique(svc: ApartmentsService) -> None:
     """get_distinct_values returns sorted unique values for a field."""
-    ***REMOVED*** Mock scroll returning records with duplicate cities
+    # Mock scroll returning records with duplicate cities
     record1 = MagicMock()
     record1.payload = {"city": "Свети Влас"}
     record1.id = "1"
@@ -24,12 +24,12 @@ async def test_get_distinct_values_returns_sorted_unique(svc: ApartmentsService)
     record2.payload = {"city": "Солнечный берег"}
     record2.id = "2"
     record3 = MagicMock()
-    record3.payload = {"city": "Свети Влас"}  ***REMOVED*** duplicate
+    record3.payload = {"city": "Свети Влас"}  # duplicate
     record3.id = "3"
 
     svc._qdrant.client.scroll = AsyncMock(
         side_effect=[
-            ([record1, record2, record3], None),  ***REMOVED*** first page, no next offset
+            ([record1, record2, record3], None),  # first page, no next offset
         ]
     )
 

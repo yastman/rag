@@ -21,16 +21,16 @@ def mock_cross_encoder(monkeypatch):
     - module: Mock sentence_transformers module
     - reranker: Fresh reranker module with mock in place
     """
-    ***REMOVED*** Clear reranker from module cache FIRST
+    # Clear reranker from module cache FIRST
     sys.modules.pop("src.retrieval.reranker", None)
 
-    ***REMOVED*** Create fresh mock and install BEFORE importing reranker
+    # Create fresh mock and install BEFORE importing reranker
     mock_st = MagicMock()
     mock_encoder_instance = MagicMock()
     mock_st.CrossEncoder.return_value = mock_encoder_instance
     monkeypatch.setitem(sys.modules, "sentence_transformers", mock_st)
 
-    ***REMOVED*** Now import reranker - it will use our mock
+    # Now import reranker - it will use our mock
     from src.retrieval import reranker
 
     reranker._cross_encoder = None
@@ -58,11 +58,11 @@ def reset_reranker_singleton(mock_cross_encoder):
     reranker_mod = mock_cross_encoder["reranker"]
     reranker_mod._cross_encoder = None
 
-    ***REMOVED*** Reset mock call counts
+    # Reset mock call counts
     mock_cross_encoder["class"].reset_mock()
     mock_cross_encoder["encoder"].reset_mock()
 
     yield
 
-    ***REMOVED*** Cleanup
+    # Cleanup
     reranker_mod._cross_encoder = None

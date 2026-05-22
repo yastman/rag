@@ -1,4 +1,4 @@
-***REMOVED*** Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -7,16 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-***REMOVED******REMOVED*** [2.14.0](https://github.com/yastman/rag/compare/v2.13.0...v2.14.0) (2026-01-28)
+## [2.14.0](https://github.com/yastman/rag/compare/v2.13.0...v2.14.0) (2026-01-28)
 
 
-***REMOVED******REMOVED******REMOVED*** Features
+### Features
 
 * **cache:** optimize semantic cache for Russian language ([f6a3bd8](https://github.com/yastman/rag/commit/f6a3bd804c52330863b65905bb22f33ef86bc151))
-* **renovate:** add Renovate Bot for Docker image auto-updates ([***REMOVED***10](https://github.com/yastman/rag/issues/10)) ([e90cda9](https://github.com/yastman/rag/commit/e90cda95b25c98a8dacbd92c8f6568aac37d1b47))
+* **renovate:** add Renovate Bot for Docker image auto-updates ([#10](https://github.com/yastman/rag/issues/10)) ([e90cda9](https://github.com/yastman/rag/commit/e90cda95b25c98a8dacbd92c8f6568aac37d1b47))
 
 
-***REMOVED******REMOVED******REMOVED*** Bug Fixes
+### Bug Fixes
 
 * **metrics:** use relative import for config_snapshot ([91e6280](https://github.com/yastman/rag/commit/91e62804ea301d3f58f208884bfd82a607f78eb5))
 * **otel:** add missing methods and fix test mocking ([13bd5da](https://github.com/yastman/rag/commit/13bd5dae780ef1752dc510016e08bb382b82d6bc))
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **tests:** use pytest.approx for floating-point comparison ([d5b666a](https://github.com/yastman/rag/commit/d5b666ac71777d3326b5106582f633b8339cc725))
 
 
-***REMOVED******REMOVED******REMOVED*** Documentation
+### Documentation
 
 * add dependency-updates skill design ([ff7bf36](https://github.com/yastman/rag/commit/ff7bf36327eb03ba15c58dada1c060bd1889d9ff))
 * add GitHub Issues task management plan ([48b0fa0](https://github.com/yastman/rag/commit/48b0fa0e9ba923b0115292eff96b114a88ceccf3))
@@ -41,10 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * update for v2.13.0 - docs system complete, start quantization A/B ([3d97fa0](https://github.com/yastman/rag/commit/3d97fa0bf9b3515e2d8636c51fc883f0b3f279e1))
 * update PIPELINE_OVERVIEW.md to v2.13.0 ([9c3cb98](https://github.com/yastman/rag/commit/9c3cb989022c6a029d3b70a96aa269a19e02d1d4))
 
-***REMOVED******REMOVED*** [2.13.0](https://github.com/yastman/rag/compare/v2.12.0...v2.13.0) (2026-01-26)
+## [2.13.0](https://github.com/yastman/rag/compare/v2.12.0...v2.13.0) (2026-01-26)
 
 
-***REMOVED******REMOVED******REMOVED*** Features
+### Features
 
 * add BGE-M3 API service for local development ([320a518](https://github.com/yastman/rag/commit/320a518b4cee8f5426f687721f2d5c995784bc4b))
 * add BM42 sparse embedding service (Docker) ([3dac4be](https://github.com/yastman/rag/commit/3dac4becbc16825e2676f2da7f1f0b74e4ce20d9))
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **voyage:** add VoyageClient with retry logic and singleton pattern ([32e2164](https://github.com/yastman/rag/commit/32e216492fb8001ef72c77d8b055aa0e88f1f1d4))
 
 
-***REMOVED******REMOVED******REMOVED*** Bug Fixes
+### Bug Fixes
 
 * **bot:** add missing cachetools dependency ([77472f0](https://github.com/yastman/rag/commit/77472f02c0bf9111b3934aa69a594e95a57385ea))
 * **bot:** add QdrantService cleanup in stop method ([d20671a](https://github.com/yastman/rag/commit/d20671a5bafed460c3183f360be95c51c5365343))
@@ -136,7 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * use official MultiVectorConfig for ColBERT instead of dict ([2cf93e6](https://github.com/yastman/rag/commit/2cf93e60c5d1ab8e4b126287f9d8f34a1ba8a035))
 
 
-***REMOVED******REMOVED******REMOVED*** Performance
+### Performance
 
 * **cache:** implement 2026 RAG caching best practices ([93803c5](https://github.com/yastman/rag/commit/93803c5f39b2658ea070cebae035621c1306c843))
 * **config:** reduce search_top_k from 30 to 20 for faster retrieval ([17552b9](https://github.com/yastman/rag/commit/17552b95e855189e796d47e66c7f196f3077e383))
@@ -146,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **pipeline:** optimize context & add query routing (2026 best practices) ([78c0950](https://github.com/yastman/rag/commit/78c0950f9360814957cfbeeba5d95976c80e9a69))
 
 
-***REMOVED******REMOVED******REMOVED*** Documentation
+### Documentation
 
 * add active tasks tracking ([5530d22](https://github.com/yastman/rag/commit/5530d2257d98e5a0bd8b49b1717a085d862223a5))
 * Add Azbyka RAG implementation plan 2025 v2 ([4e02017](https://github.com/yastman/rag/commit/4e0201798b05ad470dd2c88b398e2833d16a2230))
@@ -219,9 +219,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **voyage:** add bite-sized implementation plan for Voyage migration ([5e83f09](https://github.com/yastman/rag/commit/5e83f09b038cb20494bf132d98d14fdd696987f5))
 * **voyage:** add Voyage Unified RAG implementation plan ([2bf08b5](https://github.com/yastman/rag/commit/2bf08b56105e88a94f4b7a9342f4d3b5458efa77))
 
-***REMOVED******REMOVED*** [2.9.0] - 2026-01-21
+## [2.9.0] - 2026-01-21
 
-***REMOVED******REMOVED******REMOVED*** ✨ Features
+### ✨ Features
 - ✅ **CESC (Context-Enabled Semantic Cache)** - personalized cached responses
   - `UserContextService` - extracts user preferences from queries via LLM
   - `CESCPersonalizer` - adapts cached responses to user context
@@ -229,17 +229,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extraction frequency: every 3rd query
   - Storage: Redis JSON with 30-day TTL
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
+### ⚡ Performance
 - Cache HIT personalization: ~100ms (vs 2-3s full RAG)
 - Lightweight LLM call: ~100 tokens for personalization
 - User context stored efficiently in Redis
 
-***REMOVED******REMOVED******REMOVED*** 🏗️ Architecture
+### 🏗️ Architecture
 - New services: `telegram_bot/services/user_context.py`, `telegram_bot/services/cesc.py`
 - Configuration: `cesc_enabled`, `cesc_extraction_frequency`, `user_context_ttl`
 - Integration: `PropertyBot.handle_query` now personalizes cache hits
 
-***REMOVED******REMOVED******REMOVED*** 🧪 Testing
+### 🧪 Testing
 - 33 tests total for CESC components
   - `test_user_context.py` - 19 unit tests
   - `test_cesc.py` - 11 unit tests
@@ -247,70 +247,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-***REMOVED******REMOVED*** [2.8.0] - 2025-01-06
+## [2.8.0] - 2025-01-06
 
-***REMOVED******REMOVED******REMOVED*** 🛡️ Resilience
+### 🛡️ Resilience
 - ✅ **Graceful degradation** for all services (zero downtime)
   - Qdrant: Health checks, 5s timeout, empty results on failure
   - LLM: HTTP error handling, fallback answers with search results
   - Redis: Existing error handling improved
 - ✅ **Production error handling** - services fail gracefully without crashing
 
-***REMOVED******REMOVED******REMOVED*** 📊 Observability
+### 📊 Observability
 - ✅ **Structured JSON logging** for production
   - JSONFormatter for log aggregation (ELK, Grafana Loki, CloudWatch)
   - Configurable via `LOG_LEVEL`, `LOG_FORMAT`, `LOG_FILE` env vars
   - StructuredLogger wrapper for contextual logging
   - Third-party logger noise reduction
 
-***REMOVED******REMOVED******REMOVED*** 🏗️ Architecture
+### 🏗️ Architecture
 - Improved service resilience patterns
 - Better error propagation and handling
 - Production-ready logging infrastructure
 
 ---
 
-***REMOVED******REMOVED*** [2.7.0] - 2025-01-06
+## [2.7.0] - 2025-01-06
 
-***REMOVED******REMOVED******REMOVED*** ✨ Features
+### ✨ Features
 - ✅ **Streaming LLM responses** integrated in bot (real-time token display)
 - ✅ **Conversation memory** enabled for multi-turn dialogues
 - ✅ **Cross-encoder reranking** for +10-15% accuracy improvement
 - ✅ Added `/clear` command to clear conversation history
 - ✅ Added `/stats` command to view cache performance
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
+### ⚡ Performance
 - Cross-encoder reranking: ms-marco-MiniLM-L-6-v2 (CPU-optimized)
 - Rerank latency: ~50-100ms for top-5 results
 - Streaming: First tokens in 0.1s (10x UX boost)
 
-***REMOVED******REMOVED******REMOVED*** 🏗️ Architecture
+### 🏗️ Architecture
 - Created `src/retrieval/reranker.py` module
 - Singleton pattern for cross-encoder (save memory)
 - Graceful fallback: streaming → non-streaming on error
 
 ---
 
-***REMOVED******REMOVED*** [2.6.0] - 2025-01-06
+## [2.6.0] - 2025-01-06
 
-***REMOVED******REMOVED******REMOVED*** 🔒 Security
-- ✅ Removed exposed API keys from README.md (***REMOVED***1.1)
+### 🔒 Security
+- ✅ Removed exposed API keys from README.md (#1.1)
 - ✅ Replaced hardcoded secrets with placeholders
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
-- ✅ Migrated from `requests` to `httpx.AsyncClient` in search engines (***REMOVED***1.2)
-- ✅ Fixed blocking async calls in `pipeline.py` (***REMOVED***1.4)
-- ✅ Implemented BGE-M3 singleton pattern - **saved 4-6GB RAM** (***REMOVED***2.1)
-- ✅ Added LLM streaming responses - **10x UX improvement** (0.1s TTFB) (***REMOVED***2.3)
+### ⚡ Performance
+- ✅ Migrated from `requests` to `httpx.AsyncClient` in search engines (#1.2)
+- ✅ Fixed blocking async calls in `pipeline.py` (#1.4)
+- ✅ Implemented BGE-M3 singleton pattern - **saved 4-6GB RAM** (#2.1)
+- ✅ Added LLM streaming responses - **10x UX improvement** (0.1s TTFB) (#2.3)
 
-***REMOVED******REMOVED******REMOVED*** ✨ Features
+### ✨ Features
 - ✅ Added `ThrottlingMiddleware` for rate limiting (1.5s window)
 - ✅ Added `ErrorHandlerMiddleware` for centralized error handling
 - ✅ Implemented conversation memory in Redis (multi-turn dialogues)
 - ✅ Created `src/models/` module for shared model instances
 
-***REMOVED******REMOVED******REMOVED*** 📦 Dependencies
-- ✅ Completed `requirements.txt` with missing packages (***REMOVED***1.3):
+### 📦 Dependencies
+- ✅ Completed `requirements.txt` with missing packages (#1.3):
   - FlagEmbedding>=1.2.0
   - sentence-transformers>=2.2.0
   - anthropic>=0.18.0
@@ -323,23 +323,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - datasets>=3.0.0
   - cachetools>=5.3.0
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - ✅ Created comprehensive ROADMAP.md (16 tasks, 4 phases)
 - ✅ Created CHANGELOG.md (this file)
 - ✅ Created TODO.md for daily task tracking
 - ✅ Created TASK_MANAGEMENT_2025.md
 - ✅ Updated .claude.md with project context
 
-***REMOVED******REMOVED******REMOVED*** 🏗️ Architecture
+### 🏗️ Architecture
 - ✅ Added singleton pattern for embedding models
 - ✅ Integrated production-ready middleware from templates
 - ✅ Implemented async streaming for LLM responses
 
 ---
 
-***REMOVED******REMOVED*** [2.5.0] - 2025-11-05
+## [2.5.0] - 2025-11-05
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **Semantic Cache Architecture** - 4-tier caching with Redis Vector Search
   - Tier 1: Semantic cache with KNN (COSINE similarity, threshold 0.85)
   - Tier 1: Embeddings cache (30 days TTL, 1000x speedup)
@@ -348,20 +348,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Different query phrasings now trigger cache HIT
 - Cache performance: 1-5ms latency for semantic matching
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Added `CACHING.md` - Comprehensive caching architecture guide
 - Added `SEMANTIC_CACHE_COMPARISON.md` - Comparison of semantic cache approaches
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
+### ⚡ Performance
 - Semantic cache hit rate: 70-80%
 - Cost savings: 90% (LLM call reduction)
 - Cache query latency: 1-5ms
 
 ---
 
-***REMOVED******REMOVED*** [2.4.0] - 2025-11-05
+## [2.4.0] - 2025-11-05
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **Universal Document Indexer** - CLI tool for indexing multiple formats
   - Supports: PDF, DOCX, CSV, XLSX in single command
   - New script: `simple_index_test.py`
@@ -369,40 +369,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `demo_BG.csv` - 4 Bulgarian property listings
   - `info_bg_home.docx` - Company contact information
 
-***REMOVED******REMOVED******REMOVED*** 🐛 Fixed
+### 🐛 Fixed
 - Fixed Docling parser configuration issues
 - Improved CSV to Qdrant indexing reliability
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Added usage examples for universal indexer
 - Documented demo file structure
 
 ---
 
-***REMOVED******REMOVED*** [2.3.1] - 2025-11-04
+## [2.3.1] - 2025-11-04
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **CSV Support** - Direct CSV → Qdrant indexer
   - New script: `src/ingestion/csv_to_qdrant.py`
   - Structured metadata extraction for filtering
 - Qdrant Web UI access documentation
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Added `PIPELINE_OVERVIEW.md` - Complete system architecture
 - Documented Qdrant collections:
   - `legal_documents` - 1,294 points (Ukrainian Criminal Code)
   - `bulgarian_properties` - 4 points (demo CSV)
 - Added Qdrant Web UI access instructions
 
-***REMOVED******REMOVED******REMOVED*** 🔧 Configuration
+### 🔧 Configuration
 - Documented Qdrant API key usage
 - Added collection statistics
 
 ---
 
-***REMOVED******REMOVED*** [2.3.0] - 2025-10-30
+## [2.3.0] - 2025-10-30
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **Variant B: DBSF + ColBERT** Search Engine
   - Distribution-Based Score Fusion (DBSF) algorithm
   - Statistical score normalization
@@ -412,21 +412,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - MLflow experiment tracking
   - Automated metrics calculation
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
+### ⚡ Performance
 - Variant B latency: ~0.937s
 - Top result agreement with Variant A: 66.7%
 - Expected Recall@1: ~94-95%
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Added Variant A/B comparison guide
 - Documented DBSF fusion algorithm
 - Added A/B testing instructions
 
 ---
 
-***REMOVED******REMOVED*** [2.2.0] - 2025-10-30
+## [2.2.0] - 2025-10-30
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **Variant A: RRF + ColBERT** (Default Search Engine)
   - 3-Stage Pipeline:
     1. Prefetch: Dense (100) + Sparse BM42 (100)
@@ -435,21 +435,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - BM42 sparse vectors (better than BM25 for short chunks)
   - Server-side ColBERT reranking in Qdrant
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
+### ⚡ Performance
 - Recall@1: ~95% (improved from 91.3% baseline)
 - NDCG@10: ~0.98
 - Latency: ~1.0s
 - +9% Precision@10 with BM42 vs BM25
 
-***REMOVED******REMOVED******REMOVED*** 🔧 Changed
+### 🔧 Changed
 - Made Variant A default search engine
 - Upgraded Qdrant to v1.15.4 for BM42 support
 
 ---
 
-***REMOVED******REMOVED*** [2.1.0] - 2025-10-30
+## [2.1.0] - 2025-10-30
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **ML Platform Integration**
   - MLflow experiment tracking (port 5000)
   - Langfuse LLM tracing (port 3001)
@@ -467,21 +467,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Budget guards ($10/day, $300/month)
   - Rate limiting framework
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Added `src/evaluation/README.md` - MLflow/Langfuse guide
 - Added `src/cache/README.md` - Caching architecture
 - Added `src/governance/README.md` - Model registry
 - Added `src/security/README.md` - Security features
 
-***REMOVED******REMOVED******REMOVED*** 🔧 Infrastructure
+### 🔧 Infrastructure
 - Prometheus metrics (port 9090)
 - Grafana dashboards (port 3000)
 
 ---
 
-***REMOVED******REMOVED*** [2.0.0] - 2025-10-25
+## [2.0.0] - 2025-10-25
 
-***REMOVED******REMOVED******REMOVED*** ✨ Added
+### ✨ Added
 - **BGE-M3 Multi-Vector Embeddings**
   - Dense vectors (1024-dim) for semantic search
   - Sparse vectors (BM25) for keyword matching
@@ -492,45 +492,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - HNSW optimization (m=16, ef_construct=200)
   - Batch processing (32 embeddings, 16 documents)
 
-***REMOVED******REMOVED******REMOVED*** ⚡ Performance
+### ⚡ Performance
 - Recall@10: 0.96
 - NDCG@10: 0.98
 - RAM savings: ~75%
 - Query latency: < 1.5s
 
-***REMOVED******REMOVED******REMOVED*** 🔄 Changed
+### 🔄 Changed
 - Upgraded from single-vector to multi-vector approach
 - Migrated from BM25 to BM42 sparse vectors
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Added `QDRANT_STACK.md` - Detailed configuration guide
 
 ---
 
-***REMOVED******REMOVED*** [1.0.0] - 2025-10-15
+## [1.0.0] - 2025-10-15
 
-***REMOVED******REMOVED******REMOVED*** ✨ Initial Release
+### ✨ Initial Release
 - Basic RAG pipeline with dense vectors
 - PDF document parsing (PyMuPDF)
 - Baseline search engine (Recall@1: 91.3%)
 - Qdrant vector database integration
 - Basic caching layer
 
-***REMOVED******REMOVED******REMOVED*** 📦 Core Features
+### 📦 Core Features
 - Document chunking (512 chars, 128 overlap)
 - Semantic search with embeddings
 - LLM integration (Claude, OpenAI, Groq)
 - REST API endpoints
 
-***REMOVED******REMOVED******REMOVED*** 📝 Documentation
+### 📝 Documentation
 - Initial README.md
 - Basic setup instructions
 
 ---
 
-***REMOVED******REMOVED*** Legend
+## Legend
 
-***REMOVED******REMOVED******REMOVED*** Types of Changes
+### Types of Changes
 - `Added` - New features
 - `Changed` - Changes in existing functionality
 - `Deprecated` - Soon-to-be removed features
@@ -538,13 +538,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Fixed` - Bug fixes
 - `Security` - Security fixes
 
-***REMOVED******REMOVED******REMOVED*** Priority Icons
+### Priority Icons
 - 🔴 **CRITICAL** - Security or data loss issues
 - 🟠 **HIGH** - Performance or functionality blockers
 - 🟡 **MEDIUM** - Important but not blocking
 - 🟢 **LOW** - Nice-to-have improvements
 
-***REMOVED******REMOVED******REMOVED*** Category Icons
+### Category Icons
 - ✨ Features
 - 🐛 Bug Fixes
 - ⚡ Performance
@@ -557,7 +557,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-***REMOVED******REMOVED*** Versioning Strategy
+## Versioning Strategy
 
 This project follows [Semantic Versioning](https://semver.org/):
 
@@ -565,7 +565,7 @@ This project follows [Semantic Versioning](https://semver.org/):
 - **MINOR** (x.X.0) - New features (backward compatible)
 - **PATCH** (x.x.X) - Bug fixes (backward compatible)
 
-***REMOVED******REMOVED******REMOVED*** Version Bumping Rules
+### Version Bumping Rules
 
 - Security fixes → PATCH
 - Bug fixes → PATCH
@@ -576,19 +576,19 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 ---
 
-***REMOVED******REMOVED*** How to Update This File
+## How to Update This File
 
 1. **For developers:**
    ```bash
-   ***REMOVED*** Add your changes under [Unreleased]
-   ***REMOVED*** Use checkbox format: - [ ] Your change description
+   # Add your changes under [Unreleased]
+   # Use checkbox format: - [ ] Your change description
    ```
 
 2. **For releases:**
    ```bash
-   ***REMOVED*** Move items from [Unreleased] to new version section
-   ***REMOVED*** Update version number and date
-   ***REMOVED*** Mark checkboxes as completed: - [x]
+   # Move items from [Unreleased] to new version section
+   # Update version number and date
+   # Mark checkboxes as completed: - [x]
    ```
 
 3. **Commit format:**

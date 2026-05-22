@@ -1,4 +1,4 @@
-***REMOVED*** scripts/archive/
+# scripts/archive/
 
 Retired script helpers kept for short-term reference during migration windows.
 Do not add new runtime, CI, Makefile, or docs callsites to files in this

@@ -1,4 +1,4 @@
-***REMOVED*** Review
+# Review
 
 This directory contains reviewer-facing setup and project guide material. Treat
 these files as review support docs, not as canonical runtime, deploy, or test

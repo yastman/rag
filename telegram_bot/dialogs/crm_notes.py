@@ -1,4 +1,4 @@
-"""CRM Note wizard dialog (aiogram-dialog) — ***REMOVED***697.
+"""CRM Note wizard dialog (aiogram-dialog) — #697.
 
 Task 7: CreateNoteWizard
 - text → entity_type → entity_id (if entity_type != none) → summary → confirm
@@ -23,9 +23,9 @@ from .states import CreateNoteSG
 
 logger = logging.getLogger(__name__)
 
-***REMOVED*** --- Constants ---
+# --- Constants ---
 
-***REMOVED*** Entity type options: (label, key) — 'none' skips entity selection
+# Entity type options: (label, key) — 'none' skips entity selection
 NOTE_ENTITY_TYPES: list[tuple[str, str]] = [
     ("📋 К сделке", "leads"),
     ("👤 К контакту", "contacts"),
@@ -33,7 +33,7 @@ NOTE_ENTITY_TYPES: list[tuple[str, str]] = [
 ]
 
 
-***REMOVED*** --- Helpers ---
+# --- Helpers ---
 
 
 def build_note_summary(
@@ -54,9 +54,9 @@ def build_note_summary(
     """
     entity_label = ""
     if entity_type == "leads" and entity_id is not None:
-        entity_label = f"📋 Сделка ***REMOVED***{entity_id}"
+        entity_label = f"📋 Сделка #{entity_id}"
     elif entity_type == "contacts" and entity_id is not None:
-        entity_label = f"👤 Контакт ***REMOVED***{entity_id}"
+        entity_label = f"👤 Контакт #{entity_id}"
     else:
         entity_label = "— без привязки"
 
@@ -71,7 +71,7 @@ def build_note_summary(
     return "\n".join(lines)
 
 
-***REMOVED*** --- Getters ---
+# --- Getters ---
 
 
 async def get_note_text_data(**kwargs: Any) -> dict[str, str]:
@@ -103,12 +103,12 @@ async def get_entity_options(
             if entity_type == "leads":
                 entities = await kommo.search_leads(query="", limit=10)
                 for e in entities[:10]:
-                    label = f"***REMOVED***{e.id} {e.name or '—'}"
+                    label = f"#{e.id} {e.name or '—'}"
                     entity_items.append((label, str(e.id)))
             elif entity_type == "contacts":
                 contacts = await kommo.get_contacts(query="")
                 for c in contacts[:10]:
-                    full_name = " ".join(p for p in [c.first_name, c.last_name] if p) or f"***REMOVED***{c.id}"
+                    full_name = " ".join(p for p in [c.first_name, c.last_name] if p) or f"#{c.id}"
                     entity_items.append((full_name, str(c.id)))
         except Exception:
             logger.exception("Failed to fetch entities for note wizard")
@@ -138,7 +138,7 @@ async def get_note_summary(dialog_manager: DialogManager, **kwargs: Any) -> dict
     return {"summary": summary}
 
 
-***REMOVED*** --- Handlers ---
+# --- Handlers ---
 
 
 async def on_note_text_entered(
@@ -161,7 +161,7 @@ async def on_entity_type_selected(
     """Save entity type — skip entity selection if 'none'."""
     manager.dialog_data["entity_type"] = item_id
     if item_id == "none":
-        ***REMOVED*** Skip entity ID step — go straight to summary
+        # Skip entity ID step — go straight to summary
         manager.dialog_data["entity_id"] = None
         await manager.switch_to(CreateNoteSG.summary)
     else:
@@ -194,7 +194,7 @@ async def on_note_confirm(
     entity_id_raw = data.get("entity_id")
 
     if entity_type == "none" or entity_type is None:
-        ***REMOVED*** No entity attachment — show confirmation without API call
+        # No entity attachment — show confirmation without API call
         await callback.answer(
             "📝 Заметка сохранена (без привязки к сделке/контакту)", show_alert=True
         )
@@ -213,7 +213,7 @@ async def on_note_confirm(
     try:
         entity_id = int(entity_id_raw)
         note = await kommo.add_note(entity_type, entity_id, note_text)
-        await callback.answer(f"📝 Заметка ***REMOVED***{note.id} создана!", show_alert=True)
+        await callback.answer(f"📝 Заметка #{note.id} создана!", show_alert=True)
     except Exception:
         logger.exception("Failed to create note via Kommo")
         await callback.answer("❌ Ошибка при создании заметки", show_alert=True)
@@ -221,11 +221,11 @@ async def on_note_confirm(
     await manager.done()
 
 
-***REMOVED*** --- Dialog ---
+# --- Dialog ---
 
 
 create_note_dialog = Dialog(
-    ***REMOVED*** Step 1: Note text input
+    # Step 1: Note text input
     Window(
         Format("{title}"),
         TextInput(
@@ -236,7 +236,7 @@ create_note_dialog = Dialog(
         getter=get_note_text_data,
         state=CreateNoteSG.text,
     ),
-    ***REMOVED*** Step 2: Entity type selection
+    # Step 2: Entity type selection
     Window(
         Format("{title}"),
         Column(
@@ -252,7 +252,7 @@ create_note_dialog = Dialog(
         getter=get_entity_type_options,
         state=CreateNoteSG.entity_type,
     ),
-    ***REMOVED*** Step 3: Entity selection
+    # Step 3: Entity selection
     Window(
         Format("{title}"),
         Column(
@@ -268,7 +268,7 @@ create_note_dialog = Dialog(
         getter=get_entity_options,
         state=CreateNoteSG.entity_id,
     ),
-    ***REMOVED*** Step 4: Summary / confirmation
+    # Step 4: Summary / confirmation
     Window(
         Format("{summary}"),
         Button(Const("✅ Сохранить"), id="confirm_note", on_click=on_note_confirm),

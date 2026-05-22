@@ -77,12 +77,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <title>E2E Test Report - {{ report.timestamp.strftime('%Y-%m-%d %H:%M') }}</title>
     <style>
         :root {
-            --pass: ***REMOVED***22c55e;
-            --fail: ***REMOVED***ef4444;
-            --bg: ***REMOVED***1a1a2e;
-            --card: ***REMOVED***16213e;
-            --text: ***REMOVED***e8e8e8;
-            --muted: ***REMOVED***8b8b8b;
+            --pass: #22c55e;
+            --fail: #ef4444;
+            --bg: #1a1a2e;
+            --card: #16213e;
+            --text: #e8e8e8;
+            --muted: #8b8b8b;
         }
         body {
             font-family: 'Inter', -apple-system, sans-serif;
@@ -286,7 +286,7 @@ class ReportGenerator:
         """
         timestamp = report.timestamp.strftime("%Y-%m-%d_%H-%M-%S")
 
-        ***REMOVED*** JSON report
+        # JSON report
         json_path = self.reports_dir / f"e2e_{timestamp}.json"
         json_data = {
             "timestamp": report.timestamp.isoformat(),
@@ -333,7 +333,7 @@ class ReportGenerator:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(json_data, f, ensure_ascii=False, indent=2)
 
-        ***REMOVED*** HTML report
+        # HTML report
         html_path = self.reports_dir / f"e2e_{timestamp}.html"
         template = Template(HTML_TEMPLATE)
         html_content = template.render(report=report)

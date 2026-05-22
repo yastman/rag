@@ -1,4 +1,4 @@
-"""Contract: no foreign-lane markers (e.g. ``integration``) under ``tests/unit/`` (***REMOVED***1797).
+"""Contract: no foreign-lane markers (e.g. ``integration``) under ``tests/unit/`` (#1797).
 
 ``tests/conftest.py::pytest_collection_modifyitems`` injects directory-based
 markers, so a test file under ``tests/unit/`` is tagged ``unit`` automatically.
@@ -23,9 +23,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIT_DIR = REPO_ROOT / "tests" / "unit"
 
-***REMOVED*** Markers attached automatically by directory in tests/conftest.py.
-***REMOVED*** Anything in this set, used explicitly under tests/unit/, means the test
-***REMOVED*** is being placed in the wrong lane.
+# Markers attached automatically by directory in tests/conftest.py.
+# Anything in this set, used explicitly under tests/unit/, means the test
+# is being placed in the wrong lane.
 FOREIGN_LANE_MARKERS = frozenset(
     {
         "integration",
@@ -64,13 +64,13 @@ def _iter_test_definitions(tree: ast.AST):
 def _collect_violations() -> list[tuple[Path, str, str]]:
     """Return ``(file, test_name, foreign_marker)`` tuples found under ``tests/unit/``."""
     violations: list[tuple[Path, str, str]] = []
-    if not UNIT_DIR.exists():  ***REMOVED*** pragma: no cover - defensive
+    if not UNIT_DIR.exists():  # pragma: no cover - defensive
         return violations
 
     for path in sorted(UNIT_DIR.rglob("test_*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except SyntaxError:  ***REMOVED*** pragma: no cover - parser is forgiving enough
+        except SyntaxError:  # pragma: no cover - parser is forgiving enough
             continue
 
         for definition in _iter_test_definitions(tree):
@@ -84,7 +84,7 @@ def _collect_violations() -> list[tuple[Path, str, str]]:
 
 
 def test_no_foreign_lane_markers_under_tests_unit() -> None:
-    """No test under ``tests/unit/`` may carry a non-unit lane marker (***REMOVED***1797)."""
+    """No test under ``tests/unit/`` may carry a non-unit lane marker (#1797)."""
     violations = _collect_violations()
     if violations:
         formatted = "\n".join(
@@ -104,13 +104,13 @@ def test_no_foreign_lane_markers_under_tests_unit() -> None:
 def test_foreign_lane_marker_set_is_synced_with_conftest() -> None:
     """If a new lane is added in tests/conftest.py, this contract must learn it."""
     conftest = (REPO_ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
-    ***REMOVED*** Lanes appear as 'root / "<lane>": "<lane>",' in path_to_marker.
-    ***REMOVED*** We only care about the value side (marker name).
+    # Lanes appear as 'root / "<lane>": "<lane>",' in path_to_marker.
+    # We only care about the value side (marker name).
     import re
 
     pairs = re.findall(r'root / "([a-z0-9]+)": "([a-z0-9]+)",', conftest)
     discovered = {marker for _path, marker in pairs}
-    ***REMOVED*** `unit` is the home lane and must NOT be in the foreign set.
+    # `unit` is the home lane and must NOT be in the foreign set.
     expected_foreign = discovered - {"unit", "contract"}
     assert expected_foreign == FOREIGN_LANE_MARKERS, (
         "FOREIGN_LANE_MARKERS in this contract must match every non-unit, "

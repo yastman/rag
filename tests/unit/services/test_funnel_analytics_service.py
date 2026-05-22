@@ -1,4 +1,4 @@
-"""Tests for FunnelAnalyticsService (***REMOVED***390)."""
+"""Tests for FunnelAnalyticsService (#390)."""
 
 from __future__ import annotations
 

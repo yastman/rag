@@ -1,4 +1,4 @@
-"""Tests for menu button on_click -> handle_menu_action flow (***REMOVED***444)."""
+"""Tests for menu button on_click -> handle_menu_action flow (#444)."""
 
 from __future__ import annotations
 
@@ -66,9 +66,9 @@ async def test_on_menu_action_no_bot_silently_skips():
 
     manager = AsyncMock()
     manager.done = AsyncMock()
-    manager.middleware_data = {}  ***REMOVED*** no property_bot
+    manager.middleware_data = {}  # no property_bot
 
-    ***REMOVED*** Should not raise
+    # Should not raise
     await on_menu_action(callback, button, manager)
 
     manager.done.assert_not_called()
@@ -157,11 +157,11 @@ async def test_on_manager_action_calls_manager_done_and_handle_menu_action():
 
 
 def test_crm_submenu_is_navigation_hub():
-    """CRM submenu (***REMOVED***697 refactor) uses Start buttons — no action dispatching."""
+    """CRM submenu (#697 refactor) uses Start buttons — no action dispatching."""
     from telegram_bot.dialogs.crm_submenu import crm_submenu_dialog
     from telegram_bot.dialogs.states import CRMMenuSG
 
-    ***REMOVED*** Verify dialog uses CRMMenuSG.main state (not old CrmSubmenuSG)
+    # Verify dialog uses CRMMenuSG.main state (not old CrmSubmenuSG)
     states = [w.get_state() for w in crm_submenu_dialog.windows.values()]
     assert CRMMenuSG.main in states
 
@@ -193,7 +193,7 @@ async def test_handle_menu_action_returns_early_if_no_from_user():
         callback.from_user = None
         callback.message = MagicMock()
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await bot.handle_menu_action(callback, "some query")
 
 
@@ -208,5 +208,5 @@ async def test_handle_menu_action_returns_early_if_no_message():
         callback.from_user = MagicMock()
         callback.message = None
 
-        ***REMOVED*** Should not raise
+        # Should not raise
         await bot.handle_menu_action(callback, "some query")

@@ -5,7 +5,7 @@ Verifies that sensitive spans disable auto-capture and light spans use auto-capt
 The canonical list of sensitive spans lives in
 ``tests/observability/trace_contract.yaml`` under the ``sensitive_spans`` key.
 ``SENSITIVE_SPANS`` below is loaded from that YAML at import time so the test
-suite has a single source of truth (***REMOVED***1810). Do NOT re-introduce a hardcoded
+suite has a single source of truth (#1810). Do NOT re-introduce a hardcoded
 list here — add or remove entries in the YAML contract instead.
 """
 
@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 
-***REMOVED*** Root of the repo (two levels up from this file)
+# Root of the repo (two levels up from this file)
 REPO_ROOT = Path(__file__).parent.parent.parent
 
 SCAN_DIRS = [
@@ -26,14 +26,14 @@ SCAN_DIRS = [
 ]
 EXCLUDE_DIRS = ["tests/", "src/evaluation/", ".venv/"]
 
-***REMOVED*** Path to the canonical observability trace contract.
+# Path to the canonical observability trace contract.
 _TRACE_CONTRACT_PATH = REPO_ROOT / "tests" / "observability" / "trace_contract.yaml"
 
 
 def _load_sensitive_spans() -> list[str]:
     """Load the canonical ``sensitive_spans`` list from ``trace_contract.yaml``.
 
-    Single source of truth (***REMOVED***1810): any span that disables auto-capture in
+    Single source of truth (#1810): any span that disables auto-capture in
     production must be listed in the YAML contract. The previous hardcoded
     Python list drifted whenever new ``@observe(capture_input=False, ...)``
     spans were added (e.g. CRM observability wrappers, hyde-generate,
@@ -50,11 +50,11 @@ def _load_sensitive_spans() -> list[str]:
     return list(spans)
 
 
-***REMOVED*** Spans that carry large/sensitive payloads — must have capture_input=False, capture_output=False.
-***REMOVED*** Loaded from tests/observability/trace_contract.yaml (single source of truth, ***REMOVED***1810).
+# Spans that carry large/sensitive payloads — must have capture_input=False, capture_output=False.
+# Loaded from tests/observability/trace_contract.yaml (single source of truth, #1810).
 SENSITIVE_SPANS = _load_sensitive_spans()
 
-***REMOVED*** Light spans — use auto-capture (capture_input should NOT be explicitly set to False)
+# Light spans — use auto-capture (capture_input should NOT be explicitly set to False)
 LIGHT_SPANS = [
     "node-classify",
     "node-grade",
@@ -197,9 +197,9 @@ def test_sensitive_spans_match_yaml_contract(sensitive_spans: list[str]) -> None
     )
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** as_type contract checks (***REMOVED***1364)
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# as_type contract checks (#1364)
+# ---------------------------------------------------------------------------
 
 EMBEDDING_SPANS = [
     "bge-m3-encode-dense",

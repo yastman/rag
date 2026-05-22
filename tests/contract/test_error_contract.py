@@ -18,50 +18,50 @@ SCAN_DIRS = [
 ]
 EXCLUDE_DIRS = ["tests/", ".venv/"]
 
-***REMOVED*** Only these files are permitted to call update_current_span(level="ERROR"/"WARNING")
+# Only these files are permitted to call update_current_span(level="ERROR"/"WARNING")
 ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
-    ***REMOVED*** Graph nodes — core pipeline error/fallback paths
+    # Graph nodes — core pipeline error/fallback paths
     "telegram_bot/graph/nodes/generate.py": ["ERROR", "WARNING"],
     "telegram_bot/graph/nodes/rewrite.py": ["ERROR"],
     "telegram_bot/graph/nodes/rerank.py": ["ERROR"],
     "telegram_bot/graph/nodes/respond.py": ["ERROR"],
     "telegram_bot/graph/nodes/cache.py": ["ERROR"],
-    ***REMOVED*** Voice transcription error path (Whisper / LiteLLM failure) — span is
-    ***REMOVED*** re-raised so the outer voice-session trace records the failure (***REMOVED***1810).
+    # Voice transcription error path (Whisper / LiteLLM failure) — span is
+    # re-raised so the outer voice-session trace records the failure (#1810).
     "telegram_bot/graph/nodes/transcribe.py": ["ERROR"],
-    ***REMOVED*** Agent tools — pipeline wrapper error paths
+    # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],
     "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
     "telegram_bot/agents/history_graph/nodes.py": ["ERROR"],
-    ***REMOVED*** Services — curated error spans for degraded operations
+    # Services — curated error spans for degraded operations
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "telegram_bot/services/generate_response.py": ["ERROR", "WARNING"],
     "telegram_bot/services/qdrant.py": ["ERROR", "WARNING"],
     "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
-    ***REMOVED*** CRM callback handlers — exception path of CRM dialog/wrapper spans
-    ***REMOVED*** (note prompt, task prompt, task edit, etc.); telegram answer fails or
-    ***REMOVED*** backing CRM call raises and the trace must record ERROR (***REMOVED***1810).
+    # CRM callback handlers — exception path of CRM dialog/wrapper spans
+    # (note prompt, task prompt, task edit, etc.); telegram answer fails or
+    # backing CRM call raises and the trace must record ERROR (#1810).
     "telegram_bot/handlers/crm_callbacks.py": ["ERROR"],
-    ***REMOVED*** Background scheduler jobs — observability wrappers around hot lead
-    ***REMOVED*** notification, lead score sync, nurturing dispatch / funnel rollup;
-    ***REMOVED*** ERROR span recorded on unhandled exceptions before re-raise so the
-    ***REMOVED*** job's trace is not silently green (***REMOVED***1662, ***REMOVED***1810).
+    # Background scheduler jobs — observability wrappers around hot lead
+    # notification, lead score sync, nurturing dispatch / funnel rollup;
+    # ERROR span recorded on unhandled exceptions before re-raise so the
+    # job's trace is not silently green (#1662, #1810).
     "telegram_bot/services/hot_lead_notifier.py": ["ERROR"],
     "telegram_bot/services/lead_score_sync.py": ["ERROR"],
     "telegram_bot/services/nurturing_scheduler.py": ["ERROR"],
-    ***REMOVED*** Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
-    ***REMOVED*** rate-limit / timeout exceptions before falling back to the user's raw
-    ***REMOVED*** query (***REMOVED***1659, ***REMOVED***1810).
+    # Query analyzer LLM wrapper — records ERROR on OpenAI / connection /
+    # rate-limit / timeout exceptions before falling back to the user's raw
+    # query (#1659, #1810).
     "telegram_bot/services/query_analyzer.py": ["ERROR"],
-    ***REMOVED*** HyDE query preprocessor — records ERROR on hyde-generate-document
-    ***REMOVED*** span when the helper LLM call fails before falling back to the
-    ***REMOVED*** original query (***REMOVED***1810).
+    # HyDE query preprocessor — records ERROR on hyde-generate-document
+    # span when the helper LLM call fails before falling back to the
+    # original query (#1810).
     "telegram_bot/services/query_preprocessor.py": ["ERROR"],
-    ***REMOVED*** Session-summary worker — records ERROR on session-summary-llm span
-    ***REMOVED*** when the summarization LLM call fails; outer session-summary-check
-    ***REMOVED*** already swallows worker-cycle errors (***REMOVED***1662, ***REMOVED***1810).
+    # Session-summary worker — records ERROR on session-summary-llm span
+    # when the summarization LLM call fails; outer session-summary-check
+    # already swallows worker-cycle errors (#1662, #1810).
     "telegram_bot/services/session_summary_worker.py": ["ERROR"],
 }
 

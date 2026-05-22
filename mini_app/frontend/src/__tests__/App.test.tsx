@@ -22,16 +22,16 @@ describe('App', () => {
     const { container } = render(<App />);
     const wrapper = container.firstChild as HTMLElement;
     // App wraps routes in a div with inline style background fallback
-    expect(wrapper.style.background).toContain('***REMOVED***ffffff');
+    expect(wrapper.style.background).toContain('#ffffff');
   });
 
   it('redirects unknown routes to HomePage (wildcard fallback)', async () => {
     // Simulate Telegram Desktop opening URL without hash fragment
-    window.location.hash = '***REMOVED***/nonexistent-path';
+    window.location.hash = '#/nonexistent-path';
     render(<App />);
     await waitFor(() => {
       expect(screen.getByText('Загрузка...')).toBeInTheDocument();
     });
-    expect(window.location.hash).toBe('***REMOVED***/');
+    expect(window.location.hash).toBe('#/');
   });
 });

@@ -173,7 +173,7 @@ def _start_patches(bot):
         patch.object(bot.bot, "set_chat_menu_button", new_callable=AsyncMock)
     )
     stack.enter_context(patch("telegram_bot.bot.HistoryService", mock_history_cls))
-    ***REMOVED*** Prevent dialog router attachment errors (singletons already attached)
+    # Prevent dialog router attachment errors (singletons already attached)
     stack.enter_context(patch.object(bot.dp, "include_router", MagicMock()))
     stack.enter_context(
         patch("telegram_bot.middlewares.i18n.setup_i18n_middleware", MagicMock())
@@ -182,11 +182,11 @@ def _start_patches(bot):
     stack.enter_context(
         patch.object(bot, "_warmup_bge", new_callable=AsyncMock)
     )
-    ***REMOVED*** Prevent start_polling from actually blocking
+    # Prevent start_polling from actually blocking
     stack.enter_context(
         patch.object(bot.dp, "start_polling", new_callable=AsyncMock)
     )
-    ***REMOVED*** Mock cache.redis as None to skip polling lock and handoff sections that need real Redis
+    # Mock cache.redis as None to skip polling lock and handoff sections that need real Redis
     stack.enter_context(
         patch.object(bot._cache, "redis", None)
     )
@@ -324,14 +324,14 @@ class TestSpawnHistorySave:
 
         task = bot._spawn_history_save(_noop(), user_id=1)
         assert isinstance(task, asyncio.Task)
-        ***REMOVED*** Clean up
+        # Clean up
         await task
 
     async def test_at_max_concurrency_returns_none(self):
         bot = _create_bot()
         bot._history_save_max_concurrency = 2
 
-        ***REMOVED*** Fill up the set with dummy tasks
+        # Fill up the set with dummy tasks
         async def _block():
             await asyncio.sleep(10)
 
@@ -345,7 +345,7 @@ class TestSpawnHistorySave:
         result = bot._spawn_history_save(_noop(), user_id=99)
         assert result is None
 
-        ***REMOVED*** Clean up
+        # Clean up
         t1.cancel()
         t2.cancel()
         with pytest.raises(asyncio.CancelledError):

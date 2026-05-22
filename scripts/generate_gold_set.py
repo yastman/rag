@@ -1,4 +1,4 @@
-***REMOVED***!/usr/bin/env python3
+#!/usr/bin/env python3
 """Generate synthetic gold set from Qdrant for Langfuse experiments.
 
 Scrolls chunks from Qdrant, groups by document, generates Q&A via LLM,
@@ -32,9 +32,9 @@ DEFAULT_COLLECTION = "gdrive_documents_bge"
 DEFAULT_DATASET_PREFIX = "rag-gold-set"
 SCROLL_BATCH_SIZE = 100
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** LLM prompts
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# LLM prompts
+# ---------------------------------------------------------------------------
 
 GENERATION_PROMPT = """\
 Ты эксперт по недвижимости и иммиграции в Болгарии.
@@ -68,9 +68,9 @@ GROUNDEDNESS_PROMPT = """\
 Верни ТОЛЬКО JSON: {{"grounded": true|false, "reasoning": "1-2 предложения"}}"""
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Qdrant scroll
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Qdrant scroll
+# ---------------------------------------------------------------------------
 
 
 async def scroll_collection(
@@ -95,9 +95,9 @@ async def scroll_collection(
     return all_points
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Group & assemble
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Group & assemble
+# ---------------------------------------------------------------------------
 
 
 def group_by_document(points: list[Any]) -> dict[str, dict[str, Any]]:
@@ -136,9 +136,9 @@ def calculate_questions_count(chunk_count: int) -> int:
     return max(3, round(chunk_count / 4))
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** LLM generation
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# LLM generation
+# ---------------------------------------------------------------------------
 
 
 async def generate_qa_for_document(
@@ -221,14 +221,14 @@ async def validate_groundedness(
                     result.get("reasoning", ""),
                 )
         except Exception:
-            validated.append(item)  ***REMOVED*** keep on error
+            validated.append(item)  # keep on error
     logger.info("Groundedness: %d/%d passed", len(validated), len(items))
     return validated
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** Export
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
 
 
 def export_to_jsonl(output_path: Path, items: list[dict[str, Any]]) -> None:
@@ -293,9 +293,9 @@ def upload_to_langfuse(
     return len(items)
 
 
-***REMOVED*** ---------------------------------------------------------------------------
-***REMOVED*** CLI
-***REMOVED*** ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 def make_dataset_name(prefix: str = DEFAULT_DATASET_PREFIX) -> str:

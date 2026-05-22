@@ -1,26 +1,26 @@
-***REMOVED*** Error Response Reference
+# Error Response Reference
 
 Standardized error responses across the system.
 
-***REMOVED******REMOVED*** Telegram Bot Errors
+## Telegram Bot Errors
 
-***REMOVED******REMOVED******REMOVED*** Handler Errors
+### Handler Errors
 
 Errors in message/callback handlers are caught by `setup_error_handler` middleware and returned as user-friendly messages.
 
 ```python
-***REMOVED*** telegram_bot/middlewares/error_handler.py
+# telegram_bot/middlewares/error_handler.py
 async def error_handler(event, next):
     try:
         return await next(event)
     except Exception as e:
-        ***REMOVED*** Send user-friendly message
+        # Send user-friendly message
         await event.reply(f"⚠️ Error: {get_user_message(e)}")
-        ***REMOVED*** Re-raise for logging
+        # Re-raise for logging
         raise
 ```
 
-***REMOVED******REMOVED******REMOVED*** User-Facing Error Messages
+### User-Facing Error Messages
 
 | Error Type | User Message | Technical Details |
 |------------|--------------|-------------------|
@@ -30,7 +30,7 @@ async def error_handler(event, next):
 | `ValidationError` | "Invalid input" | Logged |
 | `Unauthorized` | "Please start over: /start" | FSM reset |
 
-***REMOVED******REMOVED******REMOVED*** FSM Errors
+### FSM Errors
 
 | Error | Cause | Recovery |
 |-------|-------|----------|
@@ -38,9 +38,9 @@ async def error_handler(event, next):
 | `StateNotFound` | Redis key expired | `/start` to re-init |
 | `FSMCancelError` | User sent `/cancel` | Normal flow |
 
-***REMOVED******REMOVED*** RAG API Errors
+## RAG API Errors
 
-***REMOVED******REMOVED******REMOVED*** HTTP Status Codes
+### HTTP Status Codes
 
 | Status | Meaning | Response Body |
 |--------|---------|---------------|
@@ -48,16 +48,16 @@ async def error_handler(event, next):
 | 422 | Validation error | `{"detail": [...]}` |
 | 500 | Internal error | `{"error": "Internal server error"}` |
 
-***REMOVED******REMOVED******REMOVED*** Error Response Schema
+### Error Response Schema
 
 ```python
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = None
-    trace_id: str | None = None  ***REMOVED*** Langfuse trace ID for debugging
+    trace_id: str | None = None  # Langfuse trace ID for debugging
 ```
 
-***REMOVED******REMOVED******REMOVED*** Langfuse Trace Linking
+### Langfuse Trace Linking
 
 500 errors include `trace_id` in response for debugging:
 
@@ -70,9 +70,9 @@ class ErrorResponse(BaseModel):
 
 Search Langfuse UI for this trace ID.
 
-***REMOVED******REMOVED*** Graph Pipeline Errors
+## Graph Pipeline Errors
 
-***REMOVED******REMOVED******REMOVED*** Node-Level Errors
+### Node-Level Errors
 
 Errors in nodes are caught and logged but don't crash the graph:
 
@@ -86,7 +86,7 @@ async def retrieve_node(state, context):
         return {"error": str(e), "retrieve_failed": True}
 ```
 
-***REMOVED******REMOVED******REMOVED*** Graceful Degradation
+### Graceful Degradation
 
 | Node Failure | Behavior |
 |--------------|----------|
@@ -95,19 +95,19 @@ async def retrieve_node(state, context):
 | `generate` | Return error message |
 | `cache_check` | Bypass cache, proceed to retrieval |
 
-***REMOVED******REMOVED******REMOVED*** Critical Errors (No Degradation)
+### Critical Errors (No Degradation)
 
 | Node Failure | Behavior |
 |--------------|----------|
 | `classify` | Default to `KNOWLEDGE` type |
 | `guard` | Default to `pass` (allow query) |
 
-***REMOVED******REMOVED*** CRM Errors
+## CRM Errors
 
-***REMOVED******REMOVED******REMOVED*** Kommo API Errors
+### Kommo API Errors
 
 ```python
-***REMOVED*** telegram_bot/services/kommo_client.py
+# telegram_bot/services/kommo_client.py
 class KommoError(Exception):
     pass
 
@@ -127,7 +127,7 @@ class KommoRateLimitError(KommoError):
 | `KommoNotFoundError` | Lead not found | Show error to user |
 | `KommoValidationError` | Invalid data | Show validation error |
 
-***REMOVED******REMOVED******REMOVED*** Handoff Errors
+### Handoff Errors
 
 | Error | Behavior |
 |-------|----------|
@@ -135,9 +135,9 @@ class KommoRateLimitError(KommoError):
 | `HandoffStateCorrupt` | Reject and log |
 | `RedisConnectionError` | Handoff fails, user notified |
 
-***REMOVED******REMOVED*** Ingestion Errors
+## Ingestion Errors
 
-***REMOVED******REMOVED******REMOVED*** Docling Errors
+### Docling Errors
 
 | Error | Impact | Recovery |
 |-------|--------|----------|
@@ -145,7 +145,7 @@ class KommoRateLimitError(KommoError):
 | `ChunkError` | Partial ingestion | Ingest valid chunks |
 | `EmbeddingError` | Retry with backoff | 3 retries |
 
-***REMOVED******REMOVED******REMOVED*** Qdrant Write Errors
+### Qdrant Write Errors
 
 | Error | Impact | Recovery |
 |-------|--------|----------|
@@ -153,7 +153,7 @@ class KommoRateLimitError(KommoError):
 | `DimensionMismatch` | Fatal | Check embedding config |
 | `WriteTimeout` | Retry | Auto-retry 3x |
 
-***REMOVED******REMOVED*** Logging and Tracing
+## Logging and Tracing
 
 All errors are:
 1. Logged with full stack trace
@@ -161,14 +161,14 @@ All errors are:
 3. Shown to user as friendly message (Telegram only)
 
 ```python
-***REMOVED*** Error logging format
+# Error logging format
 logger.error(
     "Error in {function}",
     extra={"error": str(e), "traceback": traceback.format_exc()}
 )
 ```
 
-***REMOVED******REMOVED*** Debugging Errors
+## Debugging Errors
 
 1. **Telegram bot errors:** Check Langfuse trace for the query
 2. **API errors:** Look for `trace_id` in 500 response
@@ -176,12 +176,12 @@ logger.error(
 4. **Ingestion errors:** Check DLQ in PostgreSQL
 
 ```bash
-***REMOVED*** Check recent errors in Langfuse
+# Check recent errors in Langfuse
 make validate-traces-fast
 
-***REMOVED*** Check handoff state
+# Check handoff state
 redis-cli GET "handoff:{thread_id}"
 
-***REMOVED*** Check DLQ
+# Check DLQ
 uv run python -m src.ingestion.unified.cli status
 ```

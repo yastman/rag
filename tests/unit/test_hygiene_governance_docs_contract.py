@@ -1,11 +1,11 @@
-"""Contract locks for repo-hygiene governance docs (closes ***REMOVED***1717, ***REMOVED***1719, ***REMOVED***1720).
+"""Contract locks for repo-hygiene governance docs (closes #1717, #1719, #1720).
 
 These docs are the canonical operator playbook for keeping the repo, the
 open PR queue, and the issue backlog manageable:
 
-- ``docs/engineering/repo-hygiene-runbook.md`` — weekly runbook (***REMOVED***1717).
-- ``docs/engineering/issue-triage.md`` — decision model & lanes (***REMOVED***1720).
-- ``docs/engineering/script-native-migration-matrix.md`` — script audit (***REMOVED***1726).
+- ``docs/engineering/repo-hygiene-runbook.md`` — weekly runbook (#1717).
+- ``docs/engineering/issue-triage.md`` — decision model & lanes (#1720).
+- ``docs/engineering/script-native-migration-matrix.md`` — script audit (#1726).
 
 The runbook references three Make targets and three audit scripts. If any
 of them is renamed or deleted, the runbook drifts silently and operators
@@ -29,7 +29,7 @@ DOC_RUNBOOK = REPO_ROOT / "docs" / "engineering" / "repo-hygiene-runbook.md"
 DOC_TRIAGE = REPO_ROOT / "docs" / "engineering" / "issue-triage.md"
 DOC_MATRIX = REPO_ROOT / "docs" / "engineering" / "script-native-migration-matrix.md"
 
-***REMOVED*** Audit scripts referenced by the runbook.
+# Audit scripts referenced by the runbook.
 SCRIPT_PR_AUDIT = REPO_ROOT / "scripts" / "pr_queue_audit.py"
 SCRIPT_ISSUE_AUDIT = REPO_ROOT / "scripts" / "issue_queue_audit.py"
 SCRIPT_GIT_HYGIENE = REPO_ROOT / "scripts" / "git_hygiene.py"
@@ -37,7 +37,7 @@ SCRIPT_GIT_HYGIENE = REPO_ROOT / "scripts" / "git_hygiene.py"
 MAKEFILE = REPO_ROOT / "Makefile"
 
 
-***REMOVED*** ------------- File existence locks ------------------------------------------------
+# ------------- File existence locks ------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -48,31 +48,31 @@ MAKEFILE = REPO_ROOT / "Makefile"
 def test_governance_doc_exists(path: Path) -> None:
     """Three governance docs are part of the contract; none may disappear silently."""
     assert path.exists(), (
-        f"missing governance doc: {path.relative_to(REPO_ROOT)}. See ***REMOVED***1717 / ***REMOVED***1719 / ***REMOVED***1720."
+        f"missing governance doc: {path.relative_to(REPO_ROOT)}. See #1717 / #1719 / #1720."
     )
     assert path.stat().st_size > 0, f"empty doc: {path.relative_to(REPO_ROOT)}"
 
 
-***REMOVED*** ------------- Runbook structural sections ----------------------------------------
+# ------------- Runbook structural sections ----------------------------------------
 
 
 def test_runbook_has_required_sections() -> None:
     """Runbook must keep its three top-level operational sections.
 
-    Splitting ***REMOVED***1717 into per-lane child issues (***REMOVED***1719 PR queue, ***REMOVED***1720
+    Splitting #1717 into per-lane child issues (#1719 PR queue, #1720
     issue queue) requires that the runbook still presents all three lanes
     in one document so operators can run the Monday check end-to-end.
     """
     text = DOC_RUNBOOK.read_text(encoding="utf-8")
     required_sections = [
-        "***REMOVED******REMOVED*** TL;DR",  ***REMOVED*** Monday 5-minute check command list.
-        "***REMOVED******REMOVED*** Safety guarantees",
-        "***REMOVED******REMOVED*** 1. Git hygiene",
-        "***REMOVED******REMOVED*** 2. PR queue triage",
-        "***REMOVED******REMOVED*** 3. Issue queue hygiene",
-        "***REMOVED******REMOVED******REMOVED*** Triage SLA",  ***REMOVED*** ***REMOVED***1719 SLA contract.
-        "***REMOVED******REMOVED******REMOVED*** Splitting issues",  ***REMOVED*** ***REMOVED***1720 split rules.
-        "***REMOVED******REMOVED******REMOVED*** Lane labels",
+        "## TL;DR",  # Monday 5-minute check command list.
+        "## Safety guarantees",
+        "## 1. Git hygiene",
+        "## 2. PR queue triage",
+        "## 3. Issue queue hygiene",
+        "### Triage SLA",  # #1719 SLA contract.
+        "### Splitting issues",  # #1720 split rules.
+        "### Lane labels",
     ]
     missing = [s for s in required_sections if s not in text]
     assert not missing, (
@@ -90,13 +90,13 @@ def test_runbook_references_all_three_make_targets() -> None:
     targets = ["git-hygiene", "pr-hygiene", "issue-hygiene"]
     for target in targets:
         assert f"make {target}" in runbook, (
-            f"runbook lost reference to `make {target}`; ***REMOVED***1717 contract"
+            f"runbook lost reference to `make {target}`; #1717 contract"
         )
 
     if MAKEFILE.exists():
         makefile = MAKEFILE.read_text(encoding="utf-8")
         for target in targets:
-            ***REMOVED*** Match a target definition at line start: ``<target>:`` (with optional deps).
+            # Match a target definition at line start: ``<target>:`` (with optional deps).
             assert f"\n{target}:" in f"\n{makefile}" or f"^{target}:" in makefile, (
                 f"Makefile missing target `{target}` referenced by repo-hygiene-runbook.md"
             )
@@ -105,7 +105,7 @@ def test_runbook_references_all_three_make_targets() -> None:
 def test_runbook_references_remaining_audit_scripts() -> None:
     """The runbook calls two audit scripts that must exist on disk.
 
-    ``scripts/git_hygiene.py`` was archived as part of ***REMOVED***1726 (script audit
+    ``scripts/git_hygiene.py`` was archived as part of #1726 (script audit
     matrix); the runbook now invokes native git via ``make git-hygiene``
     instead. See ``docs/engineering/script-native-migration-matrix.md``.
     """
@@ -125,17 +125,17 @@ def test_runbook_does_not_reference_archived_git_hygiene_script() -> None:
     Live runbook must not point operators at the archived path. The native
     git replacement is wired through ``make git-hygiene`` /
     ``make git-hygiene-fix``. Drift here means the audit migration in
-    ***REMOVED***1726 regressed.
+    #1726 regressed.
     """
     runbook = DOC_RUNBOOK.read_text(encoding="utf-8")
     assert "scripts/git_hygiene.py" not in runbook, (
         "runbook still references scripts/git_hygiene.py — that script was "
-        "archived per ***REMOVED***1726 (script-native-migration-matrix.md). Use "
+        "archived per #1726 (script-native-migration-matrix.md). Use "
         "`make git-hygiene` / `make git-hygiene-fix` instead."
     )
-    ***REMOVED*** Defense in depth: the archived file must remain only under archive/.
+    # Defense in depth: the archived file must remain only under archive/.
     assert not SCRIPT_GIT_HYGIENE.exists(), (
-        "scripts/git_hygiene.py reappeared at the active path; ***REMOVED***1726 archive contract violated."
+        "scripts/git_hygiene.py reappeared at the active path; #1726 archive contract violated."
     )
     archived = REPO_ROOT / "scripts" / "archive" / "git_hygiene.py"
     assert archived.exists(), (
@@ -144,31 +144,31 @@ def test_runbook_does_not_reference_archived_git_hygiene_script() -> None:
     )
 
 
-***REMOVED*** ------------- Issue-triage decision model lock ------------------------------------
+# ------------- Issue-triage decision model lock ------------------------------------
 
 
 def test_issue_triage_has_decision_model_and_lanes() -> None:
-    """***REMOVED***1720 contract: triage doc names the three lanes and the decision model."""
+    """#1720 contract: triage doc names the three lanes and the decision model."""
     text = DOC_TRIAGE.read_text(encoding="utf-8")
     required = [
-        "***REMOVED******REMOVED*** Decision Model",
-        "***REMOVED******REMOVED*** Execution Lanes",
+        "## Decision Model",
+        "## Execution Lanes",
         "Quick execution",
         "Plan needed",
         "Design first",
-        "***REMOVED******REMOVED*** Session Checklist",
+        "## Session Checklist",
     ]
     missing = [s for s in required if s not in text]
     assert not missing, f"docs/engineering/issue-triage.md missing required section(s): {missing}"
 
 
-***REMOVED*** ------------- Script audit matrix lock --------------------------------------------
+# ------------- Script audit matrix lock --------------------------------------------
 
 
 def test_script_native_migration_matrix_covers_audit_targets() -> None:
-    """***REMOVED***1726 audit must list the four scripts the matrix tracks.
+    """#1726 audit must list the four scripts the matrix tracks.
 
-    If any row is dropped, the audit footprint drifts and ***REMOVED***1726 cannot be
+    If any row is dropped, the audit footprint drifts and #1726 cannot be
     closed without re-running the inventory.
     """
     text = DOC_MATRIX.read_text(encoding="utf-8")
@@ -180,5 +180,5 @@ def test_script_native_migration_matrix_covers_audit_targets() -> None:
     ]
     for entry in expected:
         assert entry in text, (
-            f"script-native-migration-matrix.md lost row for `{entry}`; ***REMOVED***1726 contract"
+            f"script-native-migration-matrix.md lost row for `{entry}`; #1726 contract"
         )

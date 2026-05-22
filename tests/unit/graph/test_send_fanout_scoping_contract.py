@@ -1,4 +1,4 @@
-"""Scoping contract for LangGraph `Send` adoption (closes ***REMOVED***1670 / ADR-0009).
+"""Scoping contract for LangGraph `Send` adoption (closes #1670 / ADR-0009).
 
 These contracts pin two things:
 
@@ -66,7 +66,7 @@ def test_send_fanout_only_via_langgraph_types(path: Path) -> None:
     """
     source = path.read_text(encoding="utf-8")
     if "Send" not in source:
-        return  ***REMOVED*** Fast path.
+        return  # Fast path.
 
     tree = ast.parse(source, filename=str(path))
     sends_imported = []
@@ -102,7 +102,7 @@ def test_scoping_lock_send_not_yet_adopted() -> None:
             continue
         tree = ast.parse(source, filename=str(path))
 
-        ***REMOVED*** Imports of Send from langgraph.types.
+        # Imports of Send from langgraph.types.
         for imp in _imports_from(tree, "langgraph.types"):
             for alias in imp.names:
                 if alias.name == "Send":
@@ -110,7 +110,7 @@ def test_scoping_lock_send_not_yet_adopted() -> None:
                         f"{path.relative_to(REPO_ROOT)}:{imp.lineno} imports langgraph.types.Send"
                     )
 
-        ***REMOVED*** Direct Send(...) calls (defense-in-depth in case Send is rebound).
+        # Direct Send(...) calls (defense-in-depth in case Send is rebound).
         for call in _calls(tree):
             func = call.func
             if isinstance(func, ast.Name) and func.id == "Send":

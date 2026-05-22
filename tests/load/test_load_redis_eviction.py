@@ -1,4 +1,4 @@
-***REMOVED*** tests/load/test_load_redis_eviction.py
+# tests/load/test_load_redis_eviction.py
 """Load tests for Redis LFU eviction behavior."""
 
 import json
@@ -51,7 +51,7 @@ class TestLoadRedisEviction:
     class-level ``@pytest.mark.skipif(not os.getenv("REDIS_URL"), ...)``
     caused ``make test-load-eviction`` to silently skip when the env var
     was unset even though a Redis was listening on localhost:6379. See
-    issue ***REMOVED***1633.
+    issue #1633.
     """
 
     @pytest.fixture
@@ -70,7 +70,7 @@ class TestLoadRedisEviction:
                 last_error = exc
                 await client.aclose()
                 continue
-            except Exception as exc:  ***REMOVED*** pragma: no cover - environment dependent
+            except Exception as exc:  # pragma: no cover - environment dependent
                 last_error = exc
                 await client.aclose()
                 continue
@@ -103,14 +103,14 @@ class TestLoadRedisEviction:
         written are guaranteed to exceed the limit (with a 1.5x safety
         factor), then asserts at least one eviction was observed during
         the burst. Without the assertion the test was tautologically green
-        (***REMOVED***1634).
+        (#1634).
         """
         value_size_kb = eviction_config["value_size_kb"]
         value_size = value_size_kb * 1024
 
-        ***REMOVED*** Size the workload to guarantee pressure beyond the configured
-        ***REMOVED*** maxmemory. Operators can still raise EVICTION_TEST_MB to widen
-        ***REMOVED*** the burst on hosts with large maxmemory.
+        # Size the workload to guarantee pressure beyond the configured
+        # maxmemory. Operators can still raise EVICTION_TEST_MB to widen
+        # the burst on hosts with large maxmemory.
         configured_mb = eviction_config["total_mb"]
         configured_bytes = configured_mb * 1024 * 1024
 
@@ -125,10 +125,10 @@ class TestLoadRedisEviction:
         test_prefix = f"rag:eviction_test:{int(time.time())}"
         stats_timeseries = []
 
-        ***REMOVED*** Get initial stats
+        # Get initial stats
         info_start = await redis_client.info("stats")
 
-        ***REMOVED*** Write keys and sample stats
+        # Write keys and sample stats
         for i in range(num_keys):
             key = f"{test_prefix}:{i}"
             value = "x" * value_size
@@ -146,24 +146,24 @@ class TestLoadRedisEviction:
                     }
                 )
 
-        ***REMOVED*** Get final stats
+        # Get final stats
         info_end = await redis_client.info("stats")
         evictions = info_end.get("evicted_keys", 0) - info_start.get("evicted_keys", 0)
 
-        ***REMOVED*** Cleanup
+        # Cleanup
         keys = await redis_client.keys(f"{test_prefix}:*")
         if keys:
             await redis_client.delete(*keys)
 
-        ***REMOVED*** Save stats timeseries
+        # Save stats timeseries
         REPORTS_DIR.mkdir(parents=True, exist_ok=True)
         with open(REPORTS_DIR / "redis_stats_timeseries.json", "w") as f:
             json.dump(stats_timeseries, f, indent=2)
 
         print(f"\nWrote {num_keys} keys ({total_mb}MB), evictions: {evictions}")
 
-        ***REMOVED*** Behavioral assertion: pressure beyond maxmemory must trigger evictions.
-        ***REMOVED*** If maxmemory is 0 (unbounded) we cannot make this guarantee — skip.
+        # Behavioral assertion: pressure beyond maxmemory must trigger evictions.
+        # If maxmemory is 0 (unbounded) we cannot make this guarantee — skip.
         if maxmemory <= 0:
             pytest.skip("Redis maxmemory not configured; cannot exercise eviction policy.")
         assert evictions > 0, (
@@ -176,11 +176,11 @@ class TestLoadRedisEviction:
         """Test hit rate under Zipf-like access pattern."""
         test_prefix = f"rag:zipf_test:{int(time.time())}"
 
-        ***REMOVED*** Populate 50 keys
+        # Populate 50 keys
         for i in range(50):
             await redis_client.setex(f"{test_prefix}:{i}", 60, f"value_{i}")
 
-        ***REMOVED*** Zipf access (popular keys accessed more)
+        # Zipf access (popular keys accessed more)
         hits = 0
         misses = 0
 
@@ -192,7 +192,7 @@ class TestLoadRedisEviction:
             else:
                 misses += 1
 
-        ***REMOVED*** Cleanup
+        # Cleanup
         keys = await redis_client.keys(f"{test_prefix}:*")
         if keys:
             await redis_client.delete(*keys)

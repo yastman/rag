@@ -28,7 +28,7 @@ class RuntimeEventsConfig:
         dir: str | None = None,
         max_age_days: int | None = None,
     ) -> None:
-        ***REMOVED*** Resolve each field: explicit kwarg > env var > default
+        # Resolve each field: explicit kwarg > env var > default
         if enabled is not None:
             resolved_enabled = enabled
         else:

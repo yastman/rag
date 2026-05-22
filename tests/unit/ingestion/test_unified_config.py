@@ -1,5 +1,5 @@
-***REMOVED*** tests/unit/ingestion/test_unified_config.py
-"""Tests for UnifiedConfig manifest_dir / effective_manifest_dir (***REMOVED***215)."""
+# tests/unit/ingestion/test_unified_config.py
+"""Tests for UnifiedConfig manifest_dir / effective_manifest_dir (#215)."""
 
 from pathlib import Path
 
