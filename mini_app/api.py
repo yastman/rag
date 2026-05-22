@@ -288,6 +288,13 @@ class LogRequest(BaseModel):
         return v
 
 
+def _remote_log_data_shape(data: dict | None) -> str:
+    """Summarize untrusted frontend log context without copying raw values."""
+    if not data:
+        return "data_keys=0"
+    return f"data_keys={len(data)}"
+
+
 # Mapping from frontend level strings to Python logging levels.
 _LEVEL_MAP: dict[str, int] = {
     "debug": logging.DEBUG,
@@ -318,7 +325,13 @@ async def remote_log(
     as structured fields.
     """
     lvl = _LEVEL_MAP.get(request.level, logging.INFO)
-    logger.log(lvl, "[REMOTE:%s] %s %s", request.level, request.message, request.data or "")
+    logger.log(
+        lvl,
+        "[REMOTE:%s] frontend log received message_len=%d %s",
+        request.level,
+        len(request.message),
+        _remote_log_data_shape(request.data),
+    )
     return {"status": "ok"}
 
 

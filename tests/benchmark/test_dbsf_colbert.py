@@ -35,9 +35,7 @@ def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | No
     print("\n📋 Configuration:")
     print(f"   Qdrant URL: {settings.qdrant_url}")
     print(f"   Collection: {settings.collection_name}")
-    print(
-        f"   API Key: {'***' + settings.qdrant_api_key[-10:] if settings.qdrant_api_key else 'Not set'}"
-    )
+    print(f"   API Key: {'configured' if settings.qdrant_api_key else 'Not set'}")
 
     # Initialize Variant B search engine
     print("\n🔧 Initializing DBSFColBERTSearchEngine (Variant B)...")

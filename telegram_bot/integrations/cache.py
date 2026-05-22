@@ -198,7 +198,7 @@ class CacheLayerManager:
                 health_check_interval=30,
             )
             await self.redis.ping()  # type: ignore[misc]
-            logger.info("Redis connected: %s", _redact_redis_credentials(self.redis_url))
+            logger.info("Redis connected")
         except Exception as e:
             logger.error(
                 "Redis connection failed: %s: %s",
