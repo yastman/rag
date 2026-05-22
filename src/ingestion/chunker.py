@@ -2,7 +2,6 @@
 
 import csv
 import re
-import warnings
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -10,15 +9,17 @@ from typing import Any
 
 
 class ChunkingStrategy(StrEnum):
-    """Document chunking strategies."""
+    """Document chunking strategies.
 
-    FIXED_SIZE = (
-        "fixed_size"  # Fixed chunk size with overlap (deprecated — use Docling HybridChunker)
-    )
-    SEMANTIC = "semantic"  # Based on content structure (paragraphs, sections)
-    SLIDING_WINDOW = (
-        "sliding_window"  # Sliding window with overlap (deprecated — use Docling HybridChunker)
-    )
+    Only the structure-aware ``SEMANTIC`` path is kept — the previous
+    ``FIXED_SIZE`` and ``SLIDING_WINDOW`` strategies were deprecated
+    in #780 and removed in #1235 because production code never used them
+    (they emitted ``DeprecationWarning`` from ``chunk_text``). For new
+    chunking work prefer Docling ``HybridChunker`` via
+    ``DoclingClient.chunk_file()`` (#1235).
+    """
+
+    SEMANTIC = "semantic"  # Structure-aware: paragraphs, sections, articles
 
 
 @dataclass
@@ -37,13 +38,10 @@ class Chunk:
 
 
 class DocumentChunker:
-    """
-    Chunk documents into smaller units for processing.
+    """Structure-aware semantic chunker for legal/long-form text.
 
-    Strategies:
-    1. Fixed size - Simple, consistent chunk sizes
-    2. Semantic - Respects document structure
-    3. Sliding window - Overlapping chunks for context
+    Used by the legacy ingestion path; new ingestion goes through Docling
+    ``HybridChunker`` (#1235).
     """
 
     def __init__(
@@ -58,7 +56,7 @@ class DocumentChunker:
         Args:
             chunk_size: Target chunk size in characters (1024 optimal for BGE-M3)
             overlap: Overlap between chunks in characters
-            strategy: Chunking strategy (SEMANTIC preserves document structure)
+            strategy: Chunking strategy (only ``SEMANTIC`` is supported)
         """
         self.chunk_size = chunk_size
         self.overlap = overlap
@@ -81,51 +79,9 @@ class DocumentChunker:
         Returns:
             List of chunks
         """
-        if self.strategy == ChunkingStrategy.FIXED_SIZE:
-            warnings.warn(
-                "ChunkingStrategy.FIXED_SIZE is deprecated. Use CocoIndex + Docling "
-                "HybridChunker for production chunking.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return self._chunk_fixed_size(text, document_name, article_number)
         if self.strategy == ChunkingStrategy.SEMANTIC:
             return self._chunk_semantic(text, document_name, article_number)
-        if self.strategy == ChunkingStrategy.SLIDING_WINDOW:
-            warnings.warn(
-                "ChunkingStrategy.SLIDING_WINDOW is deprecated. Use CocoIndex + Docling "
-                "HybridChunker for production chunking.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return self._chunk_sliding_window(text, document_name, article_number)
         raise ValueError(f"Unknown strategy: {self.strategy}")
-
-    def _chunk_fixed_size(self, text: str, document_name: str, article_number: str) -> list[Chunk]:
-        """Chunk text into fixed-size pieces."""
-        chunks = []
-
-        # Calculate number of chunks needed
-        num_chunks = max(1, (len(text) - self.overlap) // (self.chunk_size - self.overlap))
-
-        for i in range(num_chunks):
-            start = i * (self.chunk_size - self.overlap)
-            end = start + self.chunk_size
-
-            chunk_text = text[start:end].strip()
-
-            if chunk_text:
-                chunks.append(
-                    Chunk(
-                        text=chunk_text,
-                        chunk_id=i,
-                        document_name=document_name,
-                        article_number=article_number,
-                        order=i,
-                    )
-                )
-
-        return chunks
 
     def _chunk_semantic(self, text: str, document_name: str, article_number: str) -> list[Chunk]:
         """
@@ -192,30 +148,6 @@ class DocumentChunker:
                     order=chunk_id,
                 )
             )
-
-        return chunks
-
-    def _chunk_sliding_window(
-        self, text: str, document_name: str, article_number: str
-    ) -> list[Chunk]:
-        """Chunk text with overlapping sliding window."""
-        chunks = []
-        step = self.chunk_size - self.overlap
-
-        for i, pos in enumerate(range(0, len(text), step)):
-            end = min(pos + self.chunk_size, len(text))
-            chunk_text = text[pos:end].strip()
-
-            if chunk_text:
-                chunks.append(
-                    Chunk(
-                        text=chunk_text,
-                        chunk_id=i,
-                        document_name=document_name,
-                        article_number=article_number,
-                        order=i,
-                    )
-                )
 
         return chunks
 
