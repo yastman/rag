@@ -44,7 +44,7 @@ EXTRACTED_HELPERS = (
 )
 
 
-def test_extracted_helpers_module_exists() -> None:
+def test_bot_observability_helpers_module_exists() -> None:
     assert HELPERS_PY.exists(), (
         "#1265 Slice 1 PR-2: telegram_bot/_bot_observability.py is the new home "
         "for _build_trace_metadata and _write_voice_error_scores."
@@ -62,7 +62,7 @@ def test_extracted_helpers_module_has_no_aiogram_or_fastapi_imports() -> None:
         )
 
 
-def test_helpers_module_exposes_expected_names() -> None:
+def test_bot_observability_module_exposes_expected_names() -> None:
     module = importlib.import_module("telegram_bot._bot_observability")
     for name in EXTRACTED_HELPERS:
         assert hasattr(module, name), (
@@ -124,7 +124,7 @@ def test_bot_py_re_exports_write_voice_error_scores_with_runtime_parity() -> Non
     assert lf_via_bot.create_score.call_args_list == lf_via_helpers.create_score.call_args_list
 
 
-def test_bot_py_does_not_redeclare_extracted_helpers() -> None:
+def test_bot_py_does_not_redeclare_observability_helpers() -> None:
     """No copy/paste of the extracted helpers may live in bot.py — only thin
     wrappers that delegate to ``_bot_observability``."""
     text = BOT_PY.read_text(encoding="utf-8")
