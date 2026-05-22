@@ -15,27 +15,27 @@
 - `AGENTS.md` - repo gateway; link to hygiene and validation docs, do not duplicate long policy.
 - `.gitignore` - keep internal Superpowers trees ignored while allowing committed plan documents under `docs/superpowers/plans/*.md`.
 - `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy.md` - this implementation plan.
-- `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md` - manifest for changes made outside this repo under `/home/user/.codex` and `/home/user/.config/opencode`.
+- `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md` - manifest for changes made outside this repo under `/path/to/user/.codex` and `/path/to/user/.config/opencode`.
 - `docs/LOCAL-DEVELOPMENT.md` - canonical local validation commands and hook/test separation.
 - `docs/engineering/repo-hygiene-runbook.md` - canonical dirty-checkout, worktree, PR, and cleanup runbook.
 - `tests/unit/test_agents_contract.py` - contract tests for `AGENTS.md` and repo hygiene docs.
 - `tests/unit/test_ci_deploy_workflow.py` - contract tests for hook/test separation in docs/config.
-- `/home/user/.codex/skills/swarm-plan/SKILL.md` - require worktree allocation and worker skill declarations in plans.
-- `/home/user/.codex/skills/swarm-launch/SKILL.md` - enforce worktree/branch/reservation/required-skill preflight before launching workers.
-- `/home/user/.codex/skills/swarm-acceptance/SKILL.md` - verify worker reports, diffs, skill usage, and final disposition.
-- `/home/user/.codex/skills/swarm-worker-contract/SKILL.md` - worker finish-report schema and forbidden git operations.
-- `/home/user/.codex/skills/swarm-orchestrator/SKILL.md` - clarify orchestration boundary only; no direct worktree creation for worker implementation.
-- `/home/user/.config/opencode/agents/pr-worker.md` - OpenCode worker invariant: load only prompt-required skills, stay in assigned worktree.
-- `/home/user/.config/opencode/agents/pr-review-fix.md` - review-fix worker invariant with same boundaries.
-- `/home/user/.config/opencode/agents/pr-review.md` - reviewer invariant: read-only unless explicitly assigned.
-- `/home/user/.config/opencode/skills/swarm-worker-contract/SKILL.md` - OpenCode-facing worker finish-report schema.
-- `/home/user/.config/opencode/skills/swarm-pr-finish/SKILL.md` - OpenCode-facing final report fields and local verification evidence.
-- `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh` - resolve and bundle namespaced Superpowers required skills.
-- `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_prompt.py` - validate worker prompts include/forbid correct Superpowers policy.
-- `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_signal.py` - allow namespaced skills in signal/report validation if currently rejected.
-- `/home/user/.codex/skills/tmux-swarm-orchestration/tests/` - add/update launcher and validator tests.
+- `/path/to/user/.codex/skills/swarm-plan/SKILL.md` - require worktree allocation and worker skill declarations in plans.
+- `/path/to/user/.codex/skills/swarm-launch/SKILL.md` - enforce worktree/branch/reservation/required-skill preflight before launching workers.
+- `/path/to/user/.codex/skills/swarm-acceptance/SKILL.md` - verify worker reports, diffs, skill usage, and final disposition.
+- `/path/to/user/.codex/skills/swarm-worker-contract/SKILL.md` - worker finish-report schema and forbidden git operations.
+- `/path/to/user/.codex/skills/swarm-orchestrator/SKILL.md` - clarify orchestration boundary only; no direct worktree creation for worker implementation.
+- `/path/to/user/.config/opencode/agents/pr-worker.md` - OpenCode worker invariant: load only prompt-required skills, stay in assigned worktree.
+- `/path/to/user/.config/opencode/agents/pr-review-fix.md` - review-fix worker invariant with same boundaries.
+- `/path/to/user/.config/opencode/agents/pr-review.md` - reviewer invariant: read-only unless explicitly assigned.
+- `/path/to/user/.config/opencode/skills/swarm-worker-contract/SKILL.md` - OpenCode-facing worker finish-report schema.
+- `/path/to/user/.config/opencode/skills/swarm-pr-finish/SKILL.md` - OpenCode-facing final report fields and local verification evidence.
+- `/path/to/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh` - resolve and bundle namespaced Superpowers required skills.
+- `/path/to/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_prompt.py` - validate worker prompts include/forbid correct Superpowers policy.
+- `/path/to/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_signal.py` - allow namespaced skills in signal/report validation if currently rejected.
+- `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/` - add/update launcher and validator tests.
 
-External paths under `/home/user/.codex` and `/home/user/.config/opencode` are not git repositories on this machine. Tasks that edit those paths must record an external-change manifest in this repo plan directory, or use an owning upstream repository if one is intentionally introduced later. Do not run `git add /home/user/.codex/...` or `git add /home/user/.config/opencode/...` from the repo.
+External paths under `/path/to/user/.codex` and `/path/to/user/.config/opencode` are not git repositories on this machine. Tasks that edit those paths must record an external-change manifest in this repo plan directory, or use an owning upstream repository if one is intentionally introduced later. Do not run `git add /path/to/user/.codex/...` or `git add /path/to/user/.config/opencode/...` from the repo.
 
 ## Policy Decisions
 
@@ -139,10 +139,10 @@ git commit -m "docs: define agent workspace hygiene policy"
 ### Task 2: Swarm Plan Worker Allocation And Orchestrator Boundary Contract
 
 **Files:**
-- Modify: `/home/user/.codex/skills/swarm-orchestrator/SKILL.md`
-- Modify: `/home/user/.codex/skills/swarm-plan/SKILL.md`
+- Modify: `/path/to/user/.codex/skills/swarm-orchestrator/SKILL.md`
+- Modify: `/path/to/user/.codex/skills/swarm-plan/SKILL.md`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_plan_contract.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_plan_contract.py`
 
 - [ ] **Step 1: Write failing test or fixture check**
 
@@ -150,7 +150,7 @@ Add tests that read `swarm-plan/SKILL.md` and `swarm-orchestrator/SKILL.md` sepa
 
 ```python
 def test_swarm_plan_requires_worker_allocation_fields():
-    text = Path("/home/user/.codex/skills/swarm-plan/SKILL.md").read_text()
+    text = Path("/path/to/user/.codex/skills/swarm-plan/SKILL.md").read_text()
     for literal in [
         "worktree",
         "base_branch",
@@ -163,7 +163,7 @@ def test_swarm_plan_requires_worker_allocation_fields():
         assert literal in text
 
 def test_swarm_orchestrator_is_control_plane_only():
-    text = Path("/home/user/.codex/skills/swarm-orchestrator/SKILL.md").read_text()
+    text = Path("/path/to/user/.codex/skills/swarm-orchestrator/SKILL.md").read_text()
     assert "control plane" in text
     assert "do not implement worker tasks directly" in text
     assert "reserved worker files" in text
@@ -171,7 +171,7 @@ def test_swarm_orchestrator_is_control_plane_only():
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run from `/home/user/.codex/skills/tmux-swarm-orchestration`: `pytest tests/test_swarm_plan_contract.py -q`
+Run from `/path/to/user/.codex/skills/tmux-swarm-orchestration`: `pytest tests/test_swarm_plan_contract.py -q`
 Expected: fail on missing allocation fields or missing orchestrator boundary text.
 
 - [ ] **Step 3: Update `swarm-plan`**
@@ -222,16 +222,16 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append a section to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md` listing changed external files, verification command output, and backup paths if backups were made. Do not run `git add` on `/home/user/.codex`.
+Append a section to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md` listing changed external files, verification command output, and backup paths if backups were made. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
 ### Task 3: Launcher Superpowers Skill Resolution
 
 **Files:**
-- Modify: `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh`
+- Modify: `/path/to/user/.codex/skills/tmux-swarm-orchestration/scripts/launch_opencode_worker.sh`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_launch_opencode_worker.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_launch_opencode_worker.py`
 
 - [ ] **Step 1: Write failing launcher tests**
 
@@ -295,16 +295,16 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
 ### Task 4: Prompt Validator Superpowers Policy
 
 **Files:**
-- Modify: `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_prompt.py`
+- Modify: `/path/to/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_prompt.py`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_validate_worker_prompt.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_validate_worker_prompt.py`
 
 - [ ] **Step 1: Write failing validator tests**
 
@@ -351,16 +351,16 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
 ### Task 5: Swarm Launch Enforcement
 
 **Files:**
-- Modify: `/home/user/.codex/skills/swarm-launch/SKILL.md`
+- Modify: `/path/to/user/.codex/skills/swarm-launch/SKILL.md`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_launch_contract.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_launch_contract.py`
 
 - [ ] **Step 1: Write failing contract test**
 
@@ -401,18 +401,18 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
 ### Task 6: Worker Contract And OpenCode Finish Reports
 
 **Files:**
-- Modify: `/home/user/.codex/skills/swarm-worker-contract/SKILL.md`
-- Modify: `/home/user/.config/opencode/skills/swarm-worker-contract/SKILL.md`
-- Modify: `/home/user/.config/opencode/skills/swarm-pr-finish/SKILL.md`
+- Modify: `/path/to/user/.codex/skills/swarm-worker-contract/SKILL.md`
+- Modify: `/path/to/user/.config/opencode/skills/swarm-worker-contract/SKILL.md`
+- Modify: `/path/to/user/.config/opencode/skills/swarm-pr-finish/SKILL.md`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_worker_contract.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_worker_contract.py`
 
 - [ ] **Step 1: Write failing contract tests**
 
@@ -475,16 +475,16 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex` or `/home/user/.config/opencode`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex` or `/path/to/user/.config/opencode`.
 
 ---
 
 ### Task 7: Acceptance Verification And Disposition
 
 **Files:**
-- Modify: `/home/user/.codex/skills/swarm-acceptance/SKILL.md`
+- Modify: `/path/to/user/.codex/skills/swarm-acceptance/SKILL.md`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_acceptance_contract.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_acceptance_contract.py`
 
 - [ ] **Step 1: Write failing acceptance tests**
 
@@ -547,18 +547,18 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
 ### Task 8: OpenCode Agent Invariants
 
 **Files:**
-- Modify: `/home/user/.config/opencode/agents/pr-worker.md`
-- Modify: `/home/user/.config/opencode/agents/pr-review-fix.md`
-- Modify: `/home/user/.config/opencode/agents/pr-review.md`
+- Modify: `/path/to/user/.config/opencode/agents/pr-worker.md`
+- Modify: `/path/to/user/.config/opencode/agents/pr-review-fix.md`
+- Modify: `/path/to/user/.config/opencode/agents/pr-review.md`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_opencode_agent_contract.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_opencode_agent_contract.py`
 
 - [ ] **Step 1: Write failing agent prompt tests**
 
@@ -595,16 +595,16 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex` or `/home/user/.config/opencode`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex` or `/path/to/user/.config/opencode`.
 
 ---
 
 ### Task 9: Signal Validator Compatibility For Namespaced Skills
 
 **Files:**
-- Modify: `/home/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_signal.py`
+- Modify: `/path/to/user/.codex/skills/tmux-swarm-orchestration/scripts/validate_worker_signal.py`
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_validate_worker_signal.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_validate_worker_signal.py`
 
 - [ ] **Step 1: Write failing validator test**
 
@@ -635,7 +635,7 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
@@ -643,7 +643,7 @@ Append changed external files and verification output to `docs/superpowers/plans
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`
-- Test: `/home/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_superpowers_dry_run.py`
+- Test: `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/test_swarm_superpowers_dry_run.py`
 
 - [ ] **Step 1: Write dry-run test**
 
@@ -679,7 +679,7 @@ Expected: pass.
 
 - [ ] **Step 5: Record external change manifest**
 
-Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/home/user/.codex`.
+Append changed external files and verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Do not run `git add` on `/path/to/user/.codex`.
 
 ---
 
@@ -703,7 +703,7 @@ Expected: pass.
 
 - [ ] **Step 2: Run swarm tooling verification**
 
-Run from `/home/user/.codex/skills/tmux-swarm-orchestration`:
+Run from `/path/to/user/.codex/skills/tmux-swarm-orchestration`:
 
 ```bash
 pytest tests/test_launch_opencode_worker.py tests/test_validate_worker_prompt.py tests/test_validate_worker_signal.py tests/test_swarm_plan_contract.py tests/test_swarm_launch_contract.py tests/test_worker_contract.py tests/test_swarm_acceptance_contract.py tests/test_opencode_agent_contract.py tests/test_swarm_superpowers_dry_run.py -q
@@ -716,8 +716,8 @@ Expected: pass.
 Run:
 
 ```bash
-rg "superpowers:using-superpowers|superpowers:using-git-worktrees|superpowers:finishing-a-development-branch" /home/user/.codex/skills/swarm-* /home/user/.config/opencode/agents /home/user/.config/opencode/skills
-rg "superpowers:test-driven-development|superpowers:verification-before-completion" /home/user/.codex/skills/swarm-* /home/user/.config/opencode/skills
+rg "superpowers:using-superpowers|superpowers:using-git-worktrees|superpowers:finishing-a-development-branch" /path/to/user/.codex/skills/swarm-* /path/to/user/.config/opencode/agents /path/to/user/.config/opencode/skills
+rg "superpowers:test-driven-development|superpowers:verification-before-completion" /path/to/user/.codex/skills/swarm-* /path/to/user/.config/opencode/skills
 ```
 
 Expected: forbidden Superpowers appear only in “do not require/use in workers” text; required Superpowers appear in plan/launch/contract policy.
@@ -728,7 +728,7 @@ Use `superpowers:requesting-code-review` or the local `review` skill for changed
 
 - [ ] **Step 5: Apply review fixes**
 
-If review finds blockers, use `superpowers:receiving-code-review` before changing code or docs. If fixes touch `/home/user/.codex` or `/home/user/.config/opencode`, append those files and fresh verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Repeat verification after fixes.
+If review finds blockers, use `superpowers:receiving-code-review` before changing code or docs. If fixes touch `/path/to/user/.codex` or `/path/to/user/.config/opencode`, append those files and fresh verification output to `docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md`. Repeat verification after fixes.
 
 - [ ] **Step 6: Final disposition**
 
@@ -748,7 +748,7 @@ Do not delete dirty worktrees automatically.
 ## Execution Notes
 
 - Keep repo edits in a dedicated worktree, not the dirty main checkout.
-- External skill/config edits under `/home/user/.codex` and `/home/user/.config/opencode` are outside the repo; verify them separately and do not mix their commit assumptions with repo commits.
-- If a test path under `/home/user/.codex/skills/tmux-swarm-orchestration/tests/` does not exist yet, create the smallest focused test file named in the task.
+- External skill/config edits under `/path/to/user/.codex` and `/path/to/user/.config/opencode` are outside the repo; verify them separately and do not mix their commit assumptions with repo commits.
+- If a test path under `/path/to/user/.codex/skills/tmux-swarm-orchestration/tests/` does not exist yet, create the smallest focused test file named in the task.
 - Do not globally enable all Superpowers for workers. Required Superpowers must be role-specific and visible in the worker prompt.
 - Treat worker reports as leads until acceptance verifies actual git diff, branch, head SHA, reserved files, and evidence commands.

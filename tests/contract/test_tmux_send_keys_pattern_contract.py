@@ -16,8 +16,8 @@ the TUI process input, and (3) submit with ``C-m`` in a separate call:
     tmux send-keys -t "$ORCH_TARGET" C-m
 
 The actual orchestration scripts and skills affected by these issues live
-*outside* this repository (under ``/home/user/.codex/`` and
-``/home/user/.config/opencode/`` per the swarm worker policy plan in
+*outside* this repository (under ``/path/to/user/.codex/`` and
+``/path/to/user/.config/opencode/`` per the swarm worker policy plan in
 ``docs/superpowers/plans/2026-05-20-swarm-superpowers-worker-policy-external-changes.md``).
 This test is a forward-looking guardrail: if any swarm-orchestration
 documentation, skill, or shell script that *does* land in this repo ever
