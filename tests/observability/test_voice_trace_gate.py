@@ -135,9 +135,9 @@ class TestVoiceTraceGateMocked:
         mock_prop_ctx.__exit__ = MagicMock(return_value=None)
 
         with (
-            patch("src.voice.observability.get_client", return_value=mock_lf),
+            patch("src.observability.get_langfuse_client", return_value=mock_lf),
             patch(
-                "src.voice.observability.propagate_attributes",
+                "src.observability.propagate_attributes",
                 return_value=mock_prop_ctx,
             ) as mock_prop,
         ):

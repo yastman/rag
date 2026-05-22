@@ -177,9 +177,7 @@ def _as_float(value: object) -> float | None:
     return None
 
 
-def resolve_missing_observations(
-    required_observations: set[str], span_names: set[str]
-) -> set[str]:
+def resolve_missing_observations(required_observations: set[str], span_names: set[str]) -> set[str]:
     """Return the subset of ``required_observations`` not satisfied by any
     of their alias spans in ``span_names``.
 

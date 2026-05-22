@@ -124,6 +124,21 @@ make test-bot-health   # local prerequisite check
 python -m telegram_bot.preflight   # startup health check
 ```
 
+## RAG API
+
+FastAPI service wrapping the LangGraph pipeline for synchronous RAG queries.
+
+- **Entrypoint**: `src/api/main.py`
+- **Service name**: `rag-api`
+- **Local port**: `8080`
+- **Canonical docs**: [`../RAG_API.md`](../RAG_API.md) (contract), [`../API_REFERENCE.md`](../API_REFERENCE.md) (quick-start examples)
+
+Quick check:
+
+```bash
+curl -fsS http://localhost:8080/health
+```
+
 ## Voice Agent
 
 LiveKit-powered voice path. Deferred by default.

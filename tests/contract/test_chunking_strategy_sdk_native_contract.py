@@ -12,7 +12,7 @@ fully replacing custom chunking with the SDK.
 
 This contract test forbids reintroducing custom-strategy enum members
 without an explicit decision to revert SDK-native chunking. Verified via
-Context7 (`/docling/docling`): ``HybridChunker`` is the documented
+Context7 (`/docling-project/docling-core`): ``HybridChunker`` is the documented
 replacement that respects token budgets and document structure (page
 boundaries, headings, table cells).
 
@@ -81,4 +81,47 @@ def test_chunker_does_not_define_deprecated_strategy_methods() -> None:
         f"Found deprecated chunking helpers {found} in {CHUNKER_PY.relative_to(REPO_ROOT)}. "
         f"Remove them per #1235; production code uses Docling HybridChunker via "
         f"DoclingClient.chunk_file()."
+    )
+
+
+def _module_level_function_names(tree: ast.AST) -> set[str]:
+    """Module-level (not class-level) function definitions."""
+    names: set[str] = set()
+    for node in tree.body:  # type: ignore[attr-defined]
+        if isinstance(node, ast.FunctionDef):
+            names.add(node.name)
+    return names
+
+
+def test_chunker_does_not_expose_chunk_csv_by_rows() -> None:
+    """``chunk_csv_by_rows`` was removed in the #1235 follow-up slice.
+
+    The function had zero production callers — only ``tests/unit/test_chunker.py``
+    referenced it. The real CSV ingest path lives in ``src/ingestion/apartments/``
+    (its own ``csv.DictReader`` flow), not in the generic chunker. Per the issue
+    body's "Решение" item #2, CSV chunking should go through Docling
+    (``HybridChunker`` + native CSV parsing) when needed; until that lives behind
+    a real caller, the dead helper must not return.
+    """
+    tree = ast.parse(CHUNKER_PY.read_text(encoding="utf-8"), filename=str(CHUNKER_PY))
+    names = _module_level_function_names(tree)
+    assert "chunk_csv_by_rows" not in names, (
+        "chunk_csv_by_rows was removed in the #1235 CSV slice (zero production "
+        "callers; the apartments ingest path uses its own csv.DictReader). "
+        "Re-introducing it requires (a) a documented production caller and "
+        "(b) a justification for not going through Docling — see issue #1235."
+    )
+
+
+def test_chunker_does_not_expose_parse_csv_row_metadata() -> None:
+    """``_parse_csv_row_metadata`` was removed alongside ``chunk_csv_by_rows``.
+
+    It was a private helper to that function; nothing else used it. Removing
+    it together keeps the surface clean.
+    """
+    tree = ast.parse(CHUNKER_PY.read_text(encoding="utf-8"), filename=str(CHUNKER_PY))
+    names = _module_level_function_names(tree)
+    assert "_parse_csv_row_metadata" not in names, (
+        "_parse_csv_row_metadata was removed alongside chunk_csv_by_rows in the "
+        "#1235 CSV slice. Re-add it only if a real caller (not a test) needs it."
     )

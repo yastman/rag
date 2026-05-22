@@ -55,14 +55,12 @@ repos:
           - --fix           # Auto-fix issues when possible
           - --exit-non-zero-on-fix  # Fail if fixes were applied (to review changes)
         types_or: [python, pyi]
-        exclude: ^legacy/
         stages: [pre-commit]
 
       # Step 2: Formatter - formats code (runs AFTER linting)
       - id: ruff-format
         name: Ruff Formatter
         types_or: [python, pyi]
-        exclude: ^legacy/
         stages: [pre-commit]
 
   # Standard pre-commit hooks
@@ -158,6 +156,7 @@ repos:
     hooks:
       - id: shellcheck
         name: shellcheck
+        args: [-x]
         stages: [pre-push]
 
   # Hadolint for Dockerfile linting (Python wrapper, no Docker required)

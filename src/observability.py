@@ -512,3 +512,81 @@ def _reset_langfuse_client_for_tests() -> None:
     _langfuse_client = None
     _langfuse_init_attempted = False
     _langfuse_endpoint_warned = False
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle trace helpers (shared by voice and ingestion families)
+# ---------------------------------------------------------------------------
+
+
+def make_lifecycle_session_id(family: str, key: str) -> str:
+    """Build a stable trace session id for a lifecycle family.
+
+    Returns ``"{family}-{normalized_key}"`` or ``"{family}-unknown"`` when *key*
+    is empty or whitespace-only.
+    """
+    normalized = (key or "").strip().replace(" ", "-")
+    return f"{family}-{normalized or 'unknown'}"
+
+
+def update_lifecycle_trace(
+    *,
+    family: str,
+    span_name: str,
+    session_id: str,
+    user_id: str,
+    tags: list[str],
+    metadata: dict[str, Any],
+    trace_id: str | None = None,
+) -> None:
+    """Update (or create) a lifecycle trace span via Langfuse.
+
+    This is the shared core used by both the voice and ingestion families.
+    It creates a span observation and propagates trace attributes in a single
+    context block.
+    """
+    lf = get_langfuse_client()
+    if lf is None:
+        return
+
+    resolved_trace_id = trace_id or lf.create_trace_id(seed=session_id)
+
+    with (
+        lf.start_as_current_observation(
+            as_type="span",
+            name=span_name,
+            trace_context={"trace_id": resolved_trace_id},
+        ) as observation,
+        propagate_attributes(
+            session_id=session_id,
+            user_id=user_id,
+            tags=tags,
+        ),
+    ):
+        observation.update(metadata=metadata)
+
+
+async def try_update_lifecycle_trace_async(
+    *,
+    family: str,
+    span_name: str,
+    session_id: str,
+    user_id: str,
+    tags: list[str],
+    metadata: dict[str, Any],
+    trace_id: str | None = None,
+) -> None:
+    """Best-effort async wrapper around :func:`update_lifecycle_trace`.
+
+    Suppresses all exceptions so callers never fail due to tracing issues.
+    """
+    with contextlib.suppress(Exception):
+        update_lifecycle_trace(
+            family=family,
+            span_name=span_name,
+            session_id=session_id,
+            user_id=user_id,
+            tags=tags,
+            metadata=metadata,
+            trace_id=trace_id,
+        )

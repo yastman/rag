@@ -6,7 +6,7 @@ The single new-contributor guide for the RAG Fresh project. Follow it top to bot
 
 ## Prerequisites
 
-- [ ] **Python 3.12** (recommended) or 3.11+
+- [ ] **Python 3.12+**
 - [ ] **[uv](https://docs.astral.sh/uv/)** package manager installed
 - [ ] **Docker & Docker Compose v2**
 - [ ] **Git**

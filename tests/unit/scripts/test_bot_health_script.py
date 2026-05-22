@@ -1,9 +1,9 @@
-"""Regression guards for scripts/test_bot_health.sh local contract."""
+"""Regression guards for scripts/probe/bot_health.sh local contract."""
 
 from pathlib import Path
 
 
-SCRIPT = Path("scripts/test_bot_health.sh")
+SCRIPT = Path("scripts/probe/bot_health.sh")
 
 
 def test_bot_health_uses_botconfig_and_redis_sdk_for_auth_contract() -> None:
