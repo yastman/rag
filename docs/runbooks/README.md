@@ -9,6 +9,7 @@ Operator entrypoint for incident response and service investigations. Start here
 | [GIT_PR_ISSUE_NATIVE.md](GIT_PR_ISSUE_NATIVE.md) | Git / GitHub | Branch, PR, issue, and worktree hygiene |
 | [LANGFUSE_TRACING_GAPS.md](LANGFUSE_TRACING_GAPS.md) | Observability | Langfuse missing traces, spans, and scores |
 | [LITEllm_FAILURE.md](LITEllm_FAILURE.md) | LLM Proxy | LiteLLM proxy outages, provider errors, fallback routing |
+| [MINIO_FAILURE.md](MINIO_FAILURE.md) | Object Storage | MinIO S3 outages, disk full, corruption, and healing failures |
 | [POSTGRESQL_WAL_RECOVERY.md](POSTGRESQL_WAL_RECOVERY.md) | Database | PostgreSQL WAL corruption and recovery procedures |
 | [QDRANT_TROUBLESHOOTING.md](QDRANT_TROUBLESHOOTING.md) | Vector DB | Qdrant health, collections, and query issues |
 | [REDIS_CACHE_DEGRADATION.md](REDIS_CACHE_DEGRADATION.md) | Cache | Redis cache misses, eviction, and connection failures |
