@@ -10,7 +10,7 @@ dependencies = [
     "transformers==5.9.0",
     "sentence-transformers==5.5.1",
     # FastAPI & Web Server
-    "fastapi==0.136.1",
+    "fastapi==0.136.3",
     "uvicorn[standard]==0.47.0",
     "python-multipart==0.0.29",
     "pydantic==2.13.4",
