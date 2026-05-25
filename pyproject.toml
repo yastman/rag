@@ -46,6 +46,10 @@ dependencies = [
     # prometheus_client provides Histogram for latency distributions, replacing
     # the in-memory rolling p50/p95 in telegram_bot/services/metrics.py.
     "prometheus-client>=0.20.0,<1.0",
+    # Observability (#2060 / umbrella #1417 — Sentry-compatible error tracking).
+    # sentry-sdk powers the optional Bugsink/Sentry-Cloud integration in
+    # src/observability_sentry.py. It silently no-ops when SENTRY_DSN is unset.
+    "sentry-sdk>=2.0,<3.0",
     # Direct root constraints to fix Dependabot alerts #50, #52-#55, #60, #66-#69
     "pillow>=12.2.0",
     "gradio>=6.7.0",
