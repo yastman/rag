@@ -18,6 +18,7 @@ from telegram_bot.dialogs.states import CatalogSG, DemoSG
 from telegram_bot.handlers.demo_handler import transcribe_voice
 from telegram_bot.keyboards.catalog_keyboard import build_catalog_keyboard
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
+from telegram_bot.observability import observe
 from telegram_bot.services.catalog_rendering import send_catalog_results
 from telegram_bot.services.catalog_session import CATALOG_RUNTIME_DATA_KEY, build_catalog_runtime
 
@@ -104,6 +105,7 @@ async def results_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[s
 # ---------------------------------------------------------------------------
 
 
+@observe(name="demo-search", capture_input=False, capture_output=False)
 async def _dialog_search(query: str, message: Message, manager: DialogManager) -> None:
     """LLM extraction → scroll_with_filters → catalog dialog."""
     from aiogram.fsm.context import FSMContext
