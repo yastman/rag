@@ -1,4 +1,28 @@
-"""Feature-flagged native Docling adapter for unified ingestion."""
+"""Feature-flagged native Docling adapter for unified ingestion (#1235).
+
+The native path runs ``docling.document_converter.DocumentConverter`` in
+process and chunks the result with ``docling_core.transforms.chunker.HybridChunker``
+— the SDK's tokenization-aware chunker that respects hierarchical document
+structure (headings, tables, page boundaries).
+
+Issue #1235 retired the previous custom chunking pair (``_chunk_markdown``
++ ``_split_text``) which segmented by raw markdown headings and then split
+overflowing sections by character count. The character-based splitter was
+already self-flagged ``DeprecationWarning`` in ``src/ingestion/chunker.py``
+and is what the issue specifically calls out. ``HybridChunker`` is the
+canonical Docling answer per the upstream docs (see Context7
+``/docling-project/docling-core``):
+
+    chunker = HybridChunker(max_tokens=N, merge_peers=True)
+    for chunk in chunker.chunk(doc):
+        ...  # chunk.text, chunk.meta.headings
+
+The chunker is dependency-injected via the constructor so unit tests can
+substitute a fake without loading a tokenizer model. When not injected, a
+default ``HybridChunker`` is lazily instantiated on first use.
+
+Refs #1235.
+"""
 
 from __future__ import annotations
 
@@ -23,21 +47,39 @@ def _load_runtime_document_converter() -> Any | None:
     return getattr(module, "DocumentConverter", None)
 
 
+def _load_runtime_hybrid_chunker() -> Any | None:
+    try:
+        module = import_module("docling_core.transforms.chunker")
+    except Exception:  # pragma: no cover - exercised in unit tests via injected chunker
+        return None
+    return getattr(module, "HybridChunker", None)
+
+
 RuntimeDocumentConverter: Any | None = _load_runtime_document_converter()
 
 
 class NativeDoclingAdapter(DoclingClient):
-    """Native Docling adapter with the same chunk contract as DoclingClient."""
+    """Native Docling adapter with the same chunk contract as DoclingClient.
+
+    Uses ``HybridChunker`` over the in-process ``DoclingDocument`` instead of
+    the parent class's docling-serve REST round-trip. Behaviour parity with
+    ``DoclingClient.chunk_file_sync`` is preserved through ``DoclingChunk``
+    objects: ``text``, ``seq_no``, ``headings`` (from ``chunk.meta.headings``),
+    plus a ``parser`` metadata marker so downstream consumers can attribute
+    chunks to this code path.
+    """
 
     def __init__(
         self,
         *,
         max_tokens: int = 512,
         converter: DocumentConverterType | None = None,
+        chunker: Any | None = None,
     ) -> None:
         super().__init__(DoclingConfig(max_tokens=max_tokens))
         self._converter = converter
         self._max_tokens = max_tokens
+        self._chunker = chunker
 
     def _get_converter(self) -> DocumentConverterType:
         if self._converter is None:
@@ -49,13 +91,35 @@ class NativeDoclingAdapter(DoclingClient):
             self._converter = RuntimeDocumentConverter()
         return self._converter
 
+    def _get_chunker(self) -> Any:
+        """Return the injected chunker, lazily falling back to a default ``HybridChunker``.
+
+        Tokenizer download is deferred to first chunk call so module import stays
+        cheap (matters for unit-test collection time and for the cocoindex
+        target connector that eagerly imports this module).
+        """
+        if self._chunker is None:
+            HybridChunker = _load_runtime_hybrid_chunker()
+            if HybridChunker is None:
+                raise RuntimeError(
+                    "docling_core is not installed; docling_native backend requires "
+                    "HybridChunker from docling_core.transforms.chunker"
+                )
+            self._chunker = HybridChunker(max_tokens=self._max_tokens, merge_peers=True)
+        return self._chunker
+
     def chunk_file_sync(
         self,
         file_path: Path,
         contextualize: bool = True,
     ) -> list[DoclingChunk]:
-        """Convert document natively and normalize it into DoclingChunk objects."""
-        del contextualize  # Native path already emits the final chunk text.
+        """Convert a document natively and chunk it via ``HybridChunker``.
+
+        The ``contextualize`` flag is part of the parent's signature; the
+        native path always emits the chunker's final text (which is itself
+        contextualized via ``HybridChunker.contextualize`` upstream).
+        """
+        del contextualize  # Native path emits final chunk text via HybridChunker.
 
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -65,67 +129,31 @@ class NativeDoclingAdapter(DoclingClient):
             raise ValueError(f"Unsupported format: {suffix}")
 
         result = self._get_converter().convert(file_path)
-        markdown = result.document.export_to_markdown()
-        chunks = self._chunk_markdown(markdown)
-        logger.info("Chunked (native) %s: %d chunks", file_path.name, len(chunks))
-        return chunks
+        document = result.document
 
-    def _chunk_markdown(self, markdown: str) -> list[DoclingChunk]:
-        sections: list[tuple[list[str], str]] = []
-        current_heading: list[str] = []
-        current_lines: list[str] = []
+        chunker = self._get_chunker()
+        raw_chunks = list(chunker.chunk(document))
 
-        def flush() -> None:
-            text = "\n".join(current_lines).strip()
+        chunks: list[DoclingChunk] = []
+        for raw_chunk in raw_chunks:
+            text = (getattr(raw_chunk, "text", "") or "").strip()
             if not text:
-                return
-            for chunk_text in self._split_text(text):
-                sections.append((current_heading.copy(), chunk_text))
-
-        for raw_line in markdown.splitlines():
-            line = raw_line.rstrip()
-            if line.startswith("#"):
-                flush()
-                current_lines = []
-                heading = line.lstrip("#").strip()
-                current_heading = [heading] if heading else []
                 continue
-
-            current_lines.append(line)
-
-        flush()
-
-        if not sections and markdown.strip():
-            sections.append(([], markdown.strip()))
-
-        normalized: list[DoclingChunk] = []
-        for idx, (headings, text) in enumerate(sections):
-            normalized.append(
+            meta = getattr(raw_chunk, "meta", None)
+            headings = list(getattr(meta, "headings", None) or []) if meta is not None else []
+            chunks.append(
                 DoclingChunk(
                     text=text,
-                    seq_no=idx,
+                    seq_no=len(chunks),
                     headings=headings,
                     page_range=None,
                     metadata={"parser": "docling_native"},
                 )
             )
-        return normalized
 
-    def _split_text(self, text: str) -> list[str]:
-        if len(text) <= self._max_tokens:
-            return [text]
-
-        chunks: list[str] = []
-        current = ""
-        for paragraph in [part.strip() for part in text.split("\n\n") if part.strip()]:
-            candidate = f"{current}\n\n{paragraph}".strip() if current else paragraph
-            if current and len(candidate) > self._max_tokens:
-                chunks.append(current)
-                current = paragraph
-            else:
-                current = candidate
-
-        if current:
-            chunks.append(current)
-
-        return chunks or [text]
+        logger.info(
+            "Chunked (native, HybridChunker) %s: %d chunks",
+            file_path.name,
+            len(chunks),
+        )
+        return chunks
