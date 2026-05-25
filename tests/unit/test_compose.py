@@ -100,6 +100,19 @@ def test_compose_dev_has_ports_for_core_services():
         )
 
 
+def test_compose_dev_postgres_has_minimal_startup_capabilities():
+    """Dev Postgres must be able to initialize its mounted data directory."""
+    data = load_yaml("compose.dev.yml")
+    postgres = data["services"]["postgres"]
+    assert set(postgres["cap_add"]) == {
+        "CHOWN",
+        "FOWNER",
+        "DAC_OVERRIDE",
+        "SETGID",
+        "SETUID",
+    }
+
+
 def test_compose_dev_redis_disables_rdb_snapshots():
     """Dev Redis must not block writes when local RDB persistence cannot save."""
     data = load_yaml("compose.dev.yml")

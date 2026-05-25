@@ -704,7 +704,7 @@ qa: all-checks test ## Full quality assurance
 # =============================================================================
 
 .PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
-LOCAL_SERVICES := redis qdrant bge-m3 litellm
+LOCAL_SERVICES := postgres redis qdrant bge-m3 litellm
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
