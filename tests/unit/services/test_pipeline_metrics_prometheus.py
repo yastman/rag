@@ -6,24 +6,23 @@ This module asserts the SDK-native observability migration:
     ``pipeline_latency_seconds`` is exported from
     ``telegram_bot.services.metrics``.
   * It uses the default ``prometheus_client.REGISTRY`` (no custom registry).
-  * It carries a single ``stage`` label so cardinality matches the legacy
-    rolling-window keys (``retrieve``, ``rerank``, ``generate``).
+  * It carries a single ``stage`` label so cardinality matches the
+    pipeline stage keys (``retrieve``, ``rerank``, ``generate``).
   * The new public function ``record_pipeline_latency(stage, seconds)``
     delegates to ``Histogram.observe(seconds)`` for the matching label.
-  * The legacy facade ``PipelineMetrics.get().record(stage, duration_ms)``
-    continues to work but ALSO observes into the Histogram (after ms→s
-    conversion). This is the backward-compatibility bridge documented in
-    the slice 2/4 PR — the existing five call-sites in graph nodes /
-    bot keep compiling unchanged.
-  * Touching the deprecated rolling p50/p95 surface
-    (``get_stats()`` / ``format_text()``) emits ``DeprecationWarning``.
+  * The slim ``PipelineMetrics.get().record(stage, duration_ms)``
+    facade continues to work but routes through the Histogram (after
+    ms→s conversion).
 
-Refs #1648.
+The deprecated rolling-window p50/p95 surface
+(``get_stats`` / ``format_text`` / ``log_summary`` / ``observe`` /
+``inc_queries``) was removed in #2058 once the admin ``/metrics``
+Telegram command migrated to ``prometheus_client.generate_latest``.
+
+Refs #1648 #2058.
 """
 
 from __future__ import annotations
-
-import warnings
 
 import pytest
 from prometheus_client import REGISTRY, Histogram
@@ -193,42 +192,31 @@ class TestPipelineMetricsRecordFacade:
 # ---------------------------------------------------------------------------
 
 
-class TestRollingP50P95Deprecation:
-    """The legacy rolling-window p50/p95 surface is deprecated.
+class TestRollingP50P95Removed:
+    """The legacy rolling-window p50/p95 surface was removed in #2058.
 
-    Slice 4/4 of #1648 will mount an ASGI ``/metrics`` endpoint and
-    drop the in-memory rolling-window entirely. Until then we keep
-    the surface working (the bot's admin ``/metrics`` Telegram command
-    relies on ``format_text()``) but emit a DeprecationWarning so
-    callers migrate.
+    Once the admin ``/metrics`` Telegram command migrated to
+    ``prometheus_client.generate_latest`` (slice 1/2 of #2058), the
+    in-memory rolling-window methods became dead code. Slice 2/2
+    deletes them entirely; this test pins the surface so a regression
+    that re-adds them shows up in code review.
     """
 
-    def test_get_stats_emits_deprecation_warning(self):
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "get_stats",
+            "format_text",
+            "log_summary",
+            "observe",
+            "inc_queries",
+        ],
+    )
+    def test_deprecated_rolling_window_method_is_absent(self, method: str) -> None:
         m = PipelineMetrics.get()
-        m.record("retrieve", 10.0)
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            m.get_stats()
-
-        assert any(
-            issubclass(w.category, DeprecationWarning)
-            and "pipeline_latency_seconds" in str(w.message)
-            for w in caught
-        ), (
-            "PipelineMetrics.get_stats() must emit a DeprecationWarning "
-            "pointing migrators at pipeline_latency_seconds Histogram "
-            "(slice 4/4 of #1648 will drop the rolling-window surface)."
-        )
-
-    def test_format_text_emits_deprecation_warning(self):
-        m = PipelineMetrics.get()
-        m.record("retrieve", 10.0)
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            m.format_text()
-
-        assert any(issubclass(w.category, DeprecationWarning) for w in caught), (
-            "PipelineMetrics.format_text() must emit a DeprecationWarning."
+        assert not hasattr(m, method), (
+            f"PipelineMetrics.{method} was removed in #2058. "
+            "Use the SDK-native pipeline_latency_seconds Histogram or "
+            "rag_pipeline_events_total Counter instead, or scrape the "
+            "Prometheus registry via prometheus_client.generate_latest()."
         )
