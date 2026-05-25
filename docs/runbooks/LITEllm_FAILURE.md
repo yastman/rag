@@ -35,15 +35,18 @@ grep -A5 'fallbacks:' k8s/base/configmaps/litellm-config.yaml
 
 Expected state (do **not** change without product decision):
 
-| Alias | Maps to | Role |
-|---|---|---|
-| `gpt-4o-mini` | `cerebras/zai-glm-4.7` (GLM 4.7) | **Primary** — low TTFT, reasoning disabled |
-| `gpt-4o-mini-cerebras-oss` | `cerebras/gpt-oss-120b` | Fallback 1 — reasoning, slower TTFT |
-| `gpt-4o-mini-fallback` | `groq/llama-3.1-70b-versatile` | Fallback 2 — fast, free tier |
-| `gpt-4o-mini-openai` | `openai/gpt-4o-mini` | Fallback 3 — reliable |
+| Routing group | Role |
+|---|---|
+| Primary alias | Low-latency default model for bot responses |
+| Fallback 1 | Reasoning-capable backup model |
+| Fallback 2 | Low-latency backup model |
+| Fallback 3 | Hosted compatibility backup model |
 
-- **Do not switch the primary back to a 120B model.** The `gpt-oss-120b` alias is reserved for benchmarking and fallback.
-- The bot sends requests to alias `gpt-4o-mini` (see `telegram_bot/graph/config.py`). `telegram_bot/config.py` sets a native default of `zai-glm-4.7` when running without the proxy.
+- **Do not change the primary model family without a product decision.**
+  High-capacity aliases are reserved for benchmarking and fallback.
+- The bot sends requests to alias `gpt-4o-mini` (see
+  `telegram_bot/graph/config.py`). Native defaults are defined in
+  `telegram_bot/config.py` for operation without the proxy.
 
 ### 1. Check LiteLLM Container State
 
@@ -191,7 +194,7 @@ grep -q "^LITELLM" .env && echo "LITELLM vars: present" || echo "LITELLM vars: M
 
 # Should be:
 # LLM_BASE_URL=http://litellm:4000
-# Not pointing directly to cerebras
+# Not pointing directly to an upstream provider
 ```
 
 ### Timeout Errors
@@ -246,7 +249,9 @@ If using multiple providers:
 
 ### Configure Fallback Models
 
-> **Caution:** Do not switch the primary model back to a 120B model (e.g., `cerebras/gpt-oss-120b`). GLM 4.7 (`cerebras/zai-glm-4.7`) remains the primary for low TTFT. Changing the primary requires a product decision.
+> **Caution:** Do not switch the primary model family or fallback order without
+> a product decision. High-capacity models are reserved for benchmarking and
+> fallback, and the primary route is optimized for low time-to-first-token.
 
 The canonical routing is defined in `docker/litellm/config.yaml` (Docker) and `k8s/base/configmaps/litellm-config.yaml` (K8s). Verify before editing:
 
