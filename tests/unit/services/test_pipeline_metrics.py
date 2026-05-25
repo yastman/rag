@@ -206,7 +206,7 @@ class TestLogSummary:
         m = PipelineMetrics.get()
         m.inc_queries()
         m.record("test_stage", 10.0)
-        with caplog.at_level(logging.INFO, logger="telegram_bot.services.metrics"):
+        with caplog.at_level(logging.INFO, logger="src.runtime.services.metrics"):
             m.log_summary()
         assert "Pipeline metrics" in caplog.text
         assert "query_count" in caplog.text
