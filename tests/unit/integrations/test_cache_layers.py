@@ -109,9 +109,9 @@ class TestCacheLayerManagerInitialize:
 
         with (
             patch(
-                "telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis
+                "src.runtime.integrations.cache.redis.from_url", return_value=mock_redis
             ) as mock_from_url,
-            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+            patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
         ):
             await mgr.initialize()
 
@@ -132,8 +132,8 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis),
-            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
         ):
             await mgr.initialize()
 
@@ -144,7 +144,7 @@ class TestCacheLayerManagerInitialize:
         mgr = CacheLayerManager(redis_url="redis://bad:6379")
 
         with patch(
-            "telegram_bot.integrations.cache.redis.from_url",
+            "src.runtime.integrations.cache.redis.from_url",
             side_effect=ConnectionError("refused"),
         ):
             await mgr.initialize()
@@ -157,7 +157,7 @@ class TestCacheLayerManagerInitialize:
         mock_redis = AsyncMock()
         mock_redis.ping = AsyncMock(side_effect=ConnectionError("pool exhausted"))
 
-        with patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis):
+        with patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis):
             await mgr.initialize()
 
         assert mgr.redis is None
@@ -168,9 +168,9 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis),
-            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
-            caplog.at_level("INFO", logger="telegram_bot.integrations.cache"),
+            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
+            caplog.at_level("INFO", logger="src.runtime.integrations.cache"),
         ):
             await mgr.initialize()
 
@@ -184,9 +184,9 @@ class TestCacheLayerManagerInitialize:
         mock_redis.ping = AsyncMock(return_value=True)
 
         with (
-            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis),
-            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
-            caplog.at_level("INFO", logger="telegram_bot.integrations.cache"),
+            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
+            caplog.at_level("INFO", logger="src.runtime.integrations.cache"),
         ):
             await mgr.initialize()
 
@@ -678,10 +678,10 @@ class TestEmbeddingsCacheSDK:
         mock_embed_cache = MagicMock()
 
         with (
-            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis),
-            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None),
             patch(
-                "telegram_bot.integrations.cache._create_embed_cache",
+                "src.runtime.integrations.cache._create_embed_cache",
                 return_value=mock_embed_cache,
             ) as mock_create,
         ):
@@ -1173,13 +1173,13 @@ class TestRedisPoolConfig:
 
     async def test_redis_pool_has_max_connections(self):
         """CacheLayerManager sets max_connections on Redis pool."""
-        with patch("telegram_bot.integrations.cache.redis") as mock_redis:
+        with patch("src.runtime.integrations.cache.redis") as mock_redis:
             mock_client = AsyncMock()
             mock_client.ping = AsyncMock()
             mock_redis.from_url.return_value = mock_client
 
             cache = CacheLayerManager(redis_url="redis://localhost:6379")
-            with patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None):
+            with patch("src.runtime.integrations.cache._create_semantic_cache", return_value=None):
                 await cache.initialize()
 
             call_kwargs = mock_redis.from_url.call_args[1]
@@ -1202,7 +1202,7 @@ class TestCacheSpanMetadata:
         mock_ec.aget = AsyncMock(return_value={"embedding": [0.1] * 1024})
         mgr.embed_cache = mock_ec
 
-        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+        with patch("src.runtime.integrations.cache.get_client", return_value=mock_lf):
             await mgr.get_embedding("тест", model="bge-m3")
 
         metadata_calls = [
@@ -1216,7 +1216,7 @@ class TestCacheSpanMetadata:
         mock_ec.aset = AsyncMock()
         mgr.embed_cache = mock_ec
 
-        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+        with patch("src.runtime.integrations.cache.get_client", return_value=mock_lf):
             await mgr.store_embedding("тест", [0.2] * 1024, model="bge-m3")
 
         metadata_calls = [
@@ -1229,7 +1229,7 @@ class TestCacheSpanMetadata:
         mgr.redis = AsyncMock()
         mgr.redis.get = AsyncMock(return_value=None)
 
-        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+        with patch("src.runtime.integrations.cache.get_client", return_value=mock_lf):
             await mgr.get_sparse_embedding("тест", model="bge_m3_sparse")
 
         metadata_calls = [
@@ -1242,7 +1242,7 @@ class TestCacheSpanMetadata:
         mgr.redis = AsyncMock()
         mgr.redis.setex = AsyncMock()
 
-        with patch("telegram_bot.integrations.cache.get_client", return_value=mock_lf):
+        with patch("src.runtime.integrations.cache.get_client", return_value=mock_lf):
             await mgr.store_sparse_embedding(
                 "тест", {"indices": [1], "values": [0.5]}, model="bge_m3_sparse"
             )
