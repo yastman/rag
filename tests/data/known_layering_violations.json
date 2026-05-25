@@ -1,6 +1,5 @@
 {
   "src/api/main.py": [
-    "telegram_bot.graph.graph",
-    "telegram_bot.integrations.cache"
+    "telegram_bot.graph.graph"
   ]
 }
