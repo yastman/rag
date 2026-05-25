@@ -44,6 +44,10 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # (note prompt, task prompt, task edit, etc.); telegram answer fails or
     # backing CRM call raises and the trace must record ERROR (#1810).
     "telegram_bot/handlers/crm_callbacks.py": ["ERROR"],
+    # CRM quick-actions aiogram-dialog (#2053) — error spans on Kommo
+    # add_note / create_task / update_task failures inside dialog message
+    # handlers (mirrors crm_callbacks.py before the FSM-to-dialog migration).
+    "telegram_bot/dialogs/crm_quick_actions.py": ["ERROR"],
     # Background scheduler jobs — observability wrappers around hot lead
     # notification, lead score sync, nurturing dispatch / funnel rollup;
     # ERROR span recorded on unhandled exceptions before re-raise so the
