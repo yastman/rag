@@ -310,6 +310,38 @@ def test_runtime_env_file_has_safe_fallback() -> None:
 # --- Local all-test entrypoint contract tests ---
 
 
+def test_test_bot_health_target_sources_env_file() -> None:
+    """The test-bot-health target must source an env file before running the script."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^test-bot-health:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "test-bot-health target not found in Makefile"
+    block = block_match.group(0)
+    assert "tests/fixtures/compose.ci.env" in block, (
+        "test-bot-health target must reference tests/fixtures/compose.ci.env "
+        "as the safe local env fallback when .env is absent"
+    )
+
+
+def test_test_bot_health_target_env_precedence() -> None:
+    """The test-bot-health target must prefer .env over the fixture when .env exists."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^test-bot-health:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "test-bot-health target not found in Makefile"
+    block = block_match.group(0)
+    assert "-f .env" in block, (
+        "test-bot-health target must check for .env existence first, "
+        "preserving user .env precedence over the compose.ci.env fallback"
+    )
+
+
 def test_frontend_test_target_runs_vitest() -> None:
     """The local test inventory includes Vitest tests outside pytest's testpaths."""
     text = _makefile_text()
@@ -359,9 +391,7 @@ def test_test_full_uses_bounded_parallelism_by_default() -> None:
     text = _makefile_text()
 
     # 1. PYTEST_FULL_PARALLEL_ARGS must be defined
-    var_match = re.search(
-        r"^PYTEST_FULL_PARALLEL_ARGS\s*\?=\s*(.+)$", text, re.MULTILINE
-    )
+    var_match = re.search(r"^PYTEST_FULL_PARALLEL_ARGS\s*\?=\s*(.+)$", text, re.MULTILINE)
     assert var_match, "PYTEST_FULL_PARALLEL_ARGS not found in Makefile"
 
     # 2. Its default must NOT be unbounded -n auto

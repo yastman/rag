@@ -4,6 +4,7 @@ import pytest
 
 
 pytest.importorskip("fastapi")
+pytestmark = pytest.mark.requires_extras
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
