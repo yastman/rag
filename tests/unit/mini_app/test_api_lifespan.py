@@ -33,6 +33,7 @@ import pytest
 
 
 pytest.importorskip("fastapi")
+pytestmark = pytest.mark.requires_extras
 
 
 def test_module_no_longer_exposes_module_level_redis_global() -> None:

@@ -378,7 +378,8 @@ test-redis: ## Verify Redis Query Engine is available
 
 test-bot-health: ## Preflight: verify local native-bot prerequisites (Redis/Qdrant/LiteLLM + optional Postgres note)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
-	@./scripts/probe/bot_health.sh
+	@set -a; if [ -f .env ]; then . ./.env; else . tests/fixtures/compose.ci.env; fi; set +a; \
+	./scripts/probe/bot_health.sh
 	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"
 
 test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker network (VPS)
