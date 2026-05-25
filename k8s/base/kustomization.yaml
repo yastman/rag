@@ -22,8 +22,10 @@ resources:
   - docling/pvc.yaml
   - docling/deployment.yaml
   - docling/service.yaml
+  - bge-m3/pvc.yaml
   - bge-m3/deployment.yaml
   - bge-m3/service.yaml
+  - user-base/pvc.yaml
   - user-base/deployment.yaml
   - user-base/service.yaml
   # Application
