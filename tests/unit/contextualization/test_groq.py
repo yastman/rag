@@ -98,61 +98,12 @@ class TestGroqContextualizerContextualize:
             ctx.client = mock_client
             return ctx
 
-    async def test_contextualize_single_chunk(self, contextualizer):
-        """Test contextualizing a single chunk."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="Summary of chunk"))]
-        mock_response.usage = MagicMock(total_tokens=100)
-        contextualizer.client.chat.completions.create = AsyncMock(return_value=mock_response)
-
-        chunks = ["This is a legal document about property rights."]
-        results = await contextualizer.contextualize(chunks)
-
-        assert len(results) == 1
-        assert isinstance(results[0], ContextualizedChunk)
-        assert results[0].original_text == chunks[0]
-        assert results[0].contextual_summary == "Summary of chunk"
-        assert results[0].article_number == "chunk_0"
-        assert results[0].context_method == "groq"
-
-    async def test_contextualize_multiple_chunks(self, contextualizer):
-        """Test contextualizing multiple chunks."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="Summary"))]
-        mock_response.usage = MagicMock(total_tokens=50)
-        contextualizer.client.chat.completions.create = AsyncMock(return_value=mock_response)
-
-        chunks = ["Chunk 1 text", "Chunk 2 text", "Chunk 3 text"]
-        results = await contextualizer.contextualize(chunks)
-
-        assert len(results) == 3
-        assert results[0].article_number == "chunk_0"
-        assert results[1].article_number == "chunk_1"
-        assert results[2].article_number == "chunk_2"
-        assert contextualizer.client.chat.completions.create.call_count == 3
-
-    async def test_contextualize_with_query(self, contextualizer):
-        """Test contextualizing with an optional query parameter."""
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock(message=MagicMock(content="Query-focused summary"))]
-        mock_response.usage = MagicMock(total_tokens=75)
-        contextualizer.client.chat.completions.create = AsyncMock(return_value=mock_response)
-
-        chunks = ["Document about property sale procedures."]
-        results = await contextualizer.contextualize(chunks, query="property sale")
-
-        assert len(results) == 1
-        assert results[0].contextual_summary == "Query-focused summary"
-
-    async def test_contextualize_empty_chunks(self, contextualizer):
-        """Test contextualizing with empty chunks list."""
-        results = await contextualizer.contextualize([])
-
-        assert results == []
-        contextualizer.client.chat.completions.create.assert_not_called()
-
     async def test_contextualize_handles_error_gracefully(self, contextualizer, caplog):
         """Test that errors in individual chunks are handled gracefully.
+
+        Provider-specific 3-call sequencing scenario plus base-logger warning
+        contract. Simpler single-call happy/error paths live in
+        ``test_providers_parametrized.py``.
 
         After #1533 the per-chunk fallback lives in ``base.contextualize_batch``
         which logs via ``logger.warning`` rather than ``print``; assert against
@@ -186,12 +137,10 @@ class TestGroqContextualizerContextualize:
         assert results[2].contextual_summary == "Success summary"
 
         # Base contextualize_batch logs a warning for the failed chunk
-        warning_messages = [
-            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
-        ]
-        assert any(
-            "contextualize_batch chunk 1 failed" in msg for msg in warning_messages
-        ), f"Expected warning for chunk 1, got: {warning_messages}"
+        warning_messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("contextualize_batch chunk 1 failed" in msg for msg in warning_messages), (
+            f"Expected warning for chunk 1, got: {warning_messages}"
+        )
 
 
 class TestGroqContextualizerContextualizeSingle:
@@ -553,15 +502,13 @@ class TestGroqContextualizerErrorHandling:
         assert results[3].contextual_summary == "Success"
         assert results[3].context_method == "groq"
 
-        warning_messages = [
-            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
-        ]
-        assert any(
-            "contextualize_batch chunk 0 failed" in msg for msg in warning_messages
-        ), f"Expected warning for chunk 0, got: {warning_messages}"
-        assert any(
-            "contextualize_batch chunk 2 failed" in msg for msg in warning_messages
-        ), f"Expected warning for chunk 2, got: {warning_messages}"
+        warning_messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("contextualize_batch chunk 0 failed" in msg for msg in warning_messages), (
+            f"Expected warning for chunk 0, got: {warning_messages}"
+        )
+        assert any("contextualize_batch chunk 2 failed" in msg for msg in warning_messages), (
+            f"Expected warning for chunk 2, got: {warning_messages}"
+        )
 
 
 class TestGroqContextualizerPrompts:
