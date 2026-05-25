@@ -22,8 +22,11 @@ configuration contract and the umbrella issue
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from importlib import metadata as _metadata
 from typing import Any
 
@@ -35,7 +38,17 @@ from src.security.pii_redaction import PIIRedactor
 
 __all__ = [
     "_reset_for_tests",
+    "add_safe_breadcrumb",
+    "error_boundary_breadcrumb",
+    "handler_breadcrumb",
+    "hash_id",
     "initialize_sentry",
+    "lifecycle_breadcrumb",
+    "message_receive_breadcrumb",
+    "rag_breadcrumb",
+    "runtime_scope",
+    "session_breadcrumb",
+    "set_runtime_tags",
 ]
 
 
@@ -45,6 +58,9 @@ logger = logging.getLogger(__name__)
 # global ``sentry_sdk`` module (which other helpers may import).
 _sentry_init = sentry_sdk.init
 _sentry_capture_message = sentry_sdk.capture_message
+_sentry_add_breadcrumb = sentry_sdk.add_breadcrumb
+_sentry_set_tag = sentry_sdk.set_tag
+_sentry_new_scope = sentry_sdk.new_scope
 
 _PII_TRUNCATE_LIMIT = 4000
 
@@ -251,3 +267,213 @@ def _reset_for_tests() -> None:
     global _initialized, _skip_logged
     _initialized = False
     _skip_logged = False
+
+
+# ---------------------------------------------------------------------------
+# Runtime tags + trace context (#2061)
+# ---------------------------------------------------------------------------
+
+
+_HASH_PREFIX_LEN = 16
+
+
+def hash_id(value: str | int) -> str:
+    """Return a stable, opaque 16-char hex hash of an ID.
+
+    Used for ``chat_id_hash`` / ``telegram_user_id_hash`` Sentry tags so we
+    keep the ability to correlate events for the same user without leaking
+    the raw Telegram identifier. Inputs are normalised to ``str`` so
+    ``hash_id(123)`` and ``hash_id("123")`` collide as expected.
+    """
+    digest = hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+    return digest[:_HASH_PREFIX_LEN]
+
+
+def set_runtime_tags(
+    *,
+    service: str = "telegram-bot",
+    component: str | None = None,
+    pipeline_mode: str | None = None,
+    route: str | None = None,
+    extra_tags: dict[str, str] | None = None,
+) -> None:
+    """Set static service-level tags on the active Sentry isolation scope.
+
+    Intended to be called once at startup (after :func:`initialize_sentry`)
+    so every event picks up the service / component / pipeline_mode / route
+    metadata. ``extra_tags`` is an escape hatch for deployment-specific
+    labels (locale, tenant, etc.).
+    """
+    _sentry_set_tag("service", service)
+    if component is not None:
+        _sentry_set_tag("component", component)
+    if pipeline_mode is not None:
+        _sentry_set_tag("pipeline_mode", pipeline_mode)
+    if route is not None:
+        _sentry_set_tag("route", route)
+    for key, value in (extra_tags or {}).items():
+        _sentry_set_tag(key, value)
+
+
+@contextmanager
+def runtime_scope(
+    *,
+    chat_id: str | int | None = None,
+    telegram_user_id: str | int | None = None,
+    trace_id: str | None = None,
+    langfuse_trace_id: str | None = None,
+    route: str | None = None,
+    pipeline_mode: str | None = None,
+    extra_tags: dict[str, str] | None = None,
+) -> Iterator[Any]:
+    """Push a request-scoped Sentry scope with PII-safe runtime metadata.
+
+    The context manager emits hashed ``chat_id_hash`` and
+    ``telegram_user_id_hash`` tags and a ``trace`` context block that
+    correlates the current Telegram update with its Langfuse / OTEL trace.
+    Raw Telegram identifiers and free-text payloads never reach the SDK.
+
+    All arguments are optional — ``None`` values are silently skipped so
+    callers can call ``runtime_scope(chat_id=update.chat.id, ...)`` without
+    branching on availability.
+    """
+    with _sentry_new_scope() as scope:
+        if chat_id is not None:
+            scope.set_tag("chat_id_hash", hash_id(chat_id))
+        if telegram_user_id is not None:
+            scope.set_tag("telegram_user_id_hash", hash_id(telegram_user_id))
+
+        trace_block: dict[str, str] = {}
+        if trace_id is not None:
+            scope.set_tag("trace_id", trace_id)
+            trace_block["trace_id"] = trace_id
+        if langfuse_trace_id is not None:
+            scope.set_tag("langfuse_trace_id", langfuse_trace_id)
+            trace_block["langfuse_trace_id"] = langfuse_trace_id
+        if trace_block:
+            scope.set_context("trace", trace_block)
+
+        if route is not None:
+            scope.set_tag("route", route)
+        if pipeline_mode is not None:
+            scope.set_tag("pipeline_mode", pipeline_mode)
+        for key, value in (extra_tags or {}).items():
+            scope.set_tag(key, value)
+
+        yield scope
+
+
+# ---------------------------------------------------------------------------
+# PII-safe breadcrumbs (#2062)
+# ---------------------------------------------------------------------------
+
+
+# Allow-list of safe metadata keys that ``message_receive_breadcrumb`` is
+# permitted to forward. Anything outside this set (raw text, tokens, CRM
+# payloads, headers, etc.) is dropped at the source — the ``before_send``
+# scrubber from #2060 acts as a second line of defence.
+_MESSAGE_RECEIVE_SAFE_KEYS: frozenset[str] = frozenset(
+    {
+        "content_type",
+        "text_length",
+        "voice_seconds",
+        "chat_id_hash",
+        "telegram_user_id_hash",
+        "route",
+        "pipeline_mode",
+        "trace_id",
+        "langfuse_trace_id",
+    }
+)
+
+
+def add_safe_breadcrumb(
+    *,
+    category: str,
+    message: str | None = None,
+    data: dict[str, Any] | None = None,
+    level: str = "info",
+) -> None:
+    """Add a Sentry breadcrumb whose ``message`` and ``data`` are PII-redacted.
+
+    Drop-in replacement for ``sentry_sdk.add_breadcrumb`` — runs every
+    string field through :class:`~src.security.pii_redaction.PIIRedactor`
+    (mask + truncate at 4000 chars) before delegating to the SDK. If
+    redaction itself fails, the breadcrumb is silently dropped rather than
+    risking a partially-redacted payload reaching Sentry.
+    """
+    try:
+        safe_message = _redact(message) if message is not None else None
+        safe_data = _redact(data) if data is not None else None
+    except Exception:
+        logger.warning("Sentry breadcrumb PII scrub failed; dropping breadcrumb", exc_info=True)
+        return
+
+    _sentry_add_breadcrumb(
+        category=category,
+        message=safe_message,
+        data=safe_data,
+        level=level,
+    )
+
+
+def lifecycle_breadcrumb(event: str, **data: Any) -> None:
+    """Bot/RAG lifecycle event (startup, shutdown, config reload)."""
+    add_safe_breadcrumb(
+        category="lifecycle",
+        message=event,
+        data=dict(data) if data else None,
+    )
+
+
+def rag_breadcrumb(event: str, *, level: str = "info", **data: Any) -> None:
+    """RAG pipeline lifecycle (rag.start, rag.end, rag.fallback)."""
+    add_safe_breadcrumb(
+        category="rag",
+        message=event,
+        data=dict(data) if data else None,
+        level=level,
+    )
+
+
+def session_breadcrumb(event: str, **data: Any) -> None:
+    """Conversation/session lifecycle (session.create, session.destroy)."""
+    add_safe_breadcrumb(
+        category="session",
+        message=event,
+        data=dict(data) if data else None,
+    )
+
+
+def handler_breadcrumb(event: str, **data: Any) -> None:
+    """Telegram handler dispatch (handler.dispatch, handler.exit)."""
+    add_safe_breadcrumb(
+        category="handler",
+        message=event,
+        data=dict(data) if data else None,
+    )
+
+
+def error_boundary_breadcrumb(event: str, **data: Any) -> None:
+    """Caught-exception boundary marker — emitted at warning level."""
+    add_safe_breadcrumb(
+        category="error_boundary",
+        message=event,
+        data=dict(data) if data else None,
+        level="warning",
+    )
+
+
+def message_receive_breadcrumb(**data: Any) -> None:
+    """Telegram message receipt — strict allow-list, NEVER logs raw text.
+
+    Only the ``_MESSAGE_RECEIVE_SAFE_KEYS`` metadata keys are forwarded to
+    the breadcrumb payload. Raw message text, tokens, CRM payloads, and any
+    other key that might leak PII are dropped at the source.
+    """
+    safe_data = {k: v for k, v in data.items() if k in _MESSAGE_RECEIVE_SAFE_KEYS}
+    add_safe_breadcrumb(
+        category="message_receive",
+        message=None,
+        data=safe_data or None,
+    )
