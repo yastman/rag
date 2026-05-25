@@ -217,6 +217,7 @@ spans:
     - dialog-filter-hub-data
     - dialog-filter-start
     - phone-lead-capture
+    - demo-apartments-prompt
     - demo-transcribe-voice
     - crm-quick-complete
     - crm-quick-note
@@ -419,6 +420,7 @@ sensitive_spans:
   - dialog-crm-create-task
   - dialog-crm-create-lead
   - phone-lead-capture
+  - demo-apartments-prompt
   - demo-search
   - crm-quick-complete
   - crm-quick-note

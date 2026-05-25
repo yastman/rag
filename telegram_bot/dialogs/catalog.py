@@ -452,19 +452,13 @@ async def on_catalog_text_input(
         return
 
     manager.show_mode = ShowMode.NO_UPDATE
-    from telegram_bot.handlers.demo_handler import _run_demo_search
+    from telegram_bot.dialogs.demo import _dialog_search
 
     state = await _get_state(manager)
     if state is None:
         return
-    await _run_demo_search(
-        message.text,
-        message,
-        state,
-        pipeline=manager.middleware_data.get("pipeline"),
-        apartments_service=manager.middleware_data.get("apartments_service"),
-        dialog_manager=manager,
-    )
+    manager.middleware_data.setdefault("state", state)
+    await _dialog_search(message.text, message, manager)
 
 
 async def on_catalog_voice_input(
@@ -473,19 +467,21 @@ async def on_catalog_voice_input(
     manager: DialogManager,
 ) -> None:
     manager.show_mode = ShowMode.NO_UPDATE
-    from telegram_bot.handlers.demo_handler import handle_demo_search_voice
+    from telegram_bot.dialogs.demo import _dialog_search
+    from telegram_bot.handlers.demo_handler import transcribe_voice
 
     state = await _get_state(manager)
     if state is None:
         return
-    await handle_demo_search_voice(
-        message,
-        state,
-        pipeline=manager.middleware_data.get("pipeline"),
-        apartments_service=manager.middleware_data.get("apartments_service"),
-        llm=manager.middleware_data.get("llm"),
-        dialog_manager=manager,
-    )
+    manager.middleware_data.setdefault("state", state)
+
+    await message.answer("🎤 Распознаю голос...")
+    text = await transcribe_voice(message, llm=manager.middleware_data.get("llm"))
+    if not text:
+        await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
+        return
+    await message.answer(f"📝 Распознано: {text}")
+    await _dialog_search(text, message, manager)
 
 
 catalog_dialog = Dialog(
