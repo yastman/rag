@@ -67,6 +67,5 @@ spec:
             failureThreshold: 3
       volumes:
         - name: hf-cache
-          hostPath:
-            path: /opt/k3s-data/hf-cache
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: bge-m3-model-cache

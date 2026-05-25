@@ -1,4 +1,4 @@
-# Pre-commit hooks configuration for contextual_rag project
+# Pre-commit hooks configuration for rag-fresh
 # Install: uv add pre-commit --dev && uv run pre-commit install
 # Setup pre-push: uv run pre-commit install --hook-type pre-push
 # Run manually: uv run pre-commit run --all-files
