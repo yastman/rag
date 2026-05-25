@@ -1,4 +1,11 @@
-"""Tests for PipelineMetrics instrumentation in graph nodes (#436)."""
+"""Tests for pipeline metrics instrumentation in graph nodes (#436, #2058).
+
+Migrated from rolling-window assertions to SDK-native Prometheus
+Histogram/Counter assertions. The legacy ``PipelineMetrics.get_stats()``
+surface was removed in #2058; the canonical observability surface is
+now ``pipeline_latency_seconds`` (Histogram, ``stage`` label) and
+``rag_pipeline_events_total`` (Counter, ``event`` label).
+"""
 
 import sys
 from types import ModuleType
@@ -6,27 +13,57 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langgraph.runtime import Runtime
+from prometheus_client import REGISTRY
 
 from telegram_bot.graph.nodes.cache import cache_check_node
 from telegram_bot.graph.nodes.generate import generate_node
 from telegram_bot.graph.nodes.rerank import rerank_node
 from telegram_bot.graph.nodes.retrieve import retrieve_node
 from telegram_bot.graph.state import make_initial_state
+from telegram_bot.services.metrics import (
+    PipelineMetrics,
+    pipeline_latency_seconds,
+    rag_pipeline_events_total,
+)
 
 
 def _rt(**ctx) -> Runtime:
     return Runtime(context=ctx)
 
 
-from telegram_bot.services.metrics import PipelineMetrics
-
-
 @pytest.fixture(autouse=True)
 def _reset_metrics():
-    """Reset PipelineMetrics singleton before and after each test."""
+    """Clear SDK Histogram + Counter children and the facade singleton.
+
+    The Prometheus collectors are module-level (registered exactly once
+    with the default REGISTRY); we only drop per-label children so each
+    test starts from zero counts.
+    """
+    pipeline_latency_seconds.clear()
+    rag_pipeline_events_total.clear()
     PipelineMetrics.reset()
     yield
+    pipeline_latency_seconds.clear()
+    rag_pipeline_events_total.clear()
     PipelineMetrics.reset()
+
+
+def _stage_count(stage: str) -> int:
+    """Read the observation count for ``stage`` directly from the registry."""
+    sample = REGISTRY.get_sample_value("pipeline_latency_seconds_count", labels={"stage": stage})
+    return int(sample or 0)
+
+
+def _stage_sum(stage: str) -> float:
+    """Read the observation sum (seconds) for ``stage`` from the registry."""
+    sample = REGISTRY.get_sample_value("pipeline_latency_seconds_sum", labels={"stage": stage})
+    return float(sample or 0.0)
+
+
+def _event_count(event: str) -> int:
+    """Read the cumulative count for ``event`` from the SDK Counter."""
+    sample = REGISTRY.get_sample_value("rag_pipeline_events_total", labels={"event": event})
+    return int(sample or 0)
 
 
 @pytest.fixture(autouse=True)
@@ -66,10 +103,10 @@ def _make_docs(n: int = 3) -> list[dict]:
 
 
 class TestRetrieveNodeMetrics:
-    """retrieve_node records timing to PipelineMetrics."""
+    """retrieve_node observes 'retrieve' latency to pipeline_latency_seconds."""
 
     async def test_cache_miss_records_retrieve_timing(self):
-        """retrieve_node records 'retrieve' timing on Qdrant path."""
+        """retrieve_node observes a 'retrieve' latency on Qdrant path."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["query_embedding"] = [0.1] * 1024
 
@@ -90,12 +127,10 @@ class TestRetrieveNodeMetrics:
             _rt(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
-        stats = PipelineMetrics.get().get_stats()
-        assert "retrieve" in stats["timings"], "Expected 'retrieve' timing to be recorded"
-        assert stats["timings"]["retrieve"]["count"] == 1
+        assert _stage_count("retrieve") == 1, "Expected one 'retrieve' observation"
 
     async def test_search_cache_hit_records_retrieve_timing(self):
-        """retrieve_node records 'retrieve' timing even on search cache hit."""
+        """retrieve_node observes a 'retrieve' latency even on search-cache hit."""
         state = make_initial_state(user_id=1, session_id="s1", query="cached")
         state["query_embedding"] = [0.2] * 1024
 
@@ -110,16 +145,14 @@ class TestRetrieveNodeMetrics:
             _rt(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
-        stats = PipelineMetrics.get().get_stats()
-        assert "retrieve" in stats["timings"]
-        assert stats["timings"]["retrieve"]["count"] == 1
+        assert _stage_count("retrieve") == 1
 
 
 class TestGenerateNodeMetrics:
-    """generate_node records timing to PipelineMetrics."""
+    """generate_node observes 'generate' latency to pipeline_latency_seconds."""
 
     async def test_records_generate_timing(self):
-        """generate_node records 'generate' timing after LLM call."""
+        """generate_node observes a positive 'generate' latency after the LLM call."""
         from unittest.mock import patch
 
         state = make_initial_state(user_id=1, session_id="s1", query="Сколько стоит?")
@@ -154,17 +187,15 @@ class TestGenerateNodeMetrics:
             ):
                 await generate_node(state)
 
-        stats = PipelineMetrics.get().get_stats()
-        assert "generate" in stats["timings"], "Expected 'generate' timing to be recorded"
-        assert stats["timings"]["generate"]["count"] == 1
-        assert stats["timings"]["generate"]["last"] > 0
+        assert _stage_count("generate") == 1, "Expected one 'generate' observation"
+        assert _stage_sum("generate") > 0, "Observed latency should be positive"
 
 
 class TestRerankNodeMetrics:
-    """rerank_node records timing to PipelineMetrics."""
+    """rerank_node observes 'rerank' latency to pipeline_latency_seconds."""
 
     async def test_colbert_rerank_records_timing(self):
-        """rerank_node records 'rerank' timing when ColBERT reranker is used."""
+        """rerank_node observes a 'rerank' latency when ColBERT reranker is used."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = _make_docs(5)
 
@@ -178,38 +209,32 @@ class TestRerankNodeMetrics:
 
         await rerank_node(state, _rt(reranker=reranker))
 
-        stats = PipelineMetrics.get().get_stats()
-        assert "rerank" in stats["timings"]
-        assert stats["timings"]["rerank"]["count"] == 1
+        assert _stage_count("rerank") == 1
 
     async def test_fallback_sort_records_timing(self):
-        """rerank_node records 'rerank' timing on score-based fallback (no reranker)."""
+        """rerank_node observes a 'rerank' latency on score-based fallback."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = _make_docs(5)
 
         await rerank_node(state, _rt())
 
-        stats = PipelineMetrics.get().get_stats()
-        assert "rerank" in stats["timings"]
-        assert stats["timings"]["rerank"]["count"] == 1
+        assert _stage_count("rerank") == 1
 
     async def test_empty_documents_records_timing(self):
-        """rerank_node records 'rerank' timing even when no documents."""
+        """rerank_node observes a 'rerank' latency even when no documents."""
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = []
 
         await rerank_node(state, _rt())
 
-        stats = PipelineMetrics.get().get_stats()
-        assert "rerank" in stats["timings"]
-        assert stats["timings"]["rerank"]["count"] == 1
+        assert _stage_count("rerank") == 1
 
 
 class TestCacheCheckNodeMetrics:
-    """cache_check_node increments hit/miss counters in PipelineMetrics."""
+    """cache_check_node increments hit/miss events on rag_pipeline_events_total."""
 
     async def test_cache_hit_increments_cache_hit_counter(self):
-        """cache_check_node increments 'cache_hit' counter on semantic hit."""
+        """cache_check_node increments 'cache_hit' on semantic hit."""
         state = make_initial_state(user_id=1, session_id="s1", query="FAQ about prices")
         state["query_type"] = "FAQ"
 
@@ -223,12 +248,11 @@ class TestCacheCheckNodeMetrics:
 
         await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
-        stats = PipelineMetrics.get().get_stats()
-        assert stats["counters"].get("cache_hit", 0) == 1
-        assert stats["counters"].get("cache_miss", 0) == 0
+        assert _event_count("cache_hit") == 1
+        assert _event_count("cache_miss") == 0
 
     async def test_cache_miss_increments_cache_miss_counter(self):
-        """cache_check_node increments 'cache_miss' counter on semantic miss."""
+        """cache_check_node increments 'cache_miss' on semantic miss."""
         state = make_initial_state(user_id=1, session_id="s1", query="new question")
         state["query_type"] = "FAQ"
 
@@ -242,9 +266,8 @@ class TestCacheCheckNodeMetrics:
 
         await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
-        stats = PipelineMetrics.get().get_stats()
-        assert stats["counters"].get("cache_miss", 0) == 1
-        assert stats["counters"].get("cache_hit", 0) == 0
+        assert _event_count("cache_miss") == 1
+        assert _event_count("cache_hit") == 0
 
     async def test_general_query_type_misses_when_no_cached_response(self):
         """GENERAL query type checks semantic cache and increments cache_miss on MISS (#477)."""
@@ -261,6 +284,5 @@ class TestCacheCheckNodeMetrics:
 
         await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
-        stats = PipelineMetrics.get().get_stats()
-        assert stats["counters"].get("cache_miss", 0) == 1
-        assert stats["counters"].get("cache_hit", 0) == 0
+        assert _event_count("cache_miss") == 1
+        assert _event_count("cache_hit") == 0
