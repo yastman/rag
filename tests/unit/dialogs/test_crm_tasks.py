@@ -302,24 +302,27 @@ async def test_get_task_list_edit_tasks_excludes_completed():
 # --- on_task_edit_from_list ---
 
 
-async def test_on_task_edit_from_list_sets_fsm_and_closes_dialog():
-    """on_task_edit_from_list sets FSM edit state and closes dialog."""
+async def test_on_task_edit_from_list_starts_quick_actions_dialog():
+    """on_task_edit_from_list opens CrmQuickActionsDialog with task id (#2053)."""
     from unittest.mock import AsyncMock, MagicMock
+
+    from aiogram_dialog import ShowMode, StartMode
 
     from telegram_bot.dialogs.crm_tasks import on_task_edit_from_list
     from telegram_bot.dialogs.states import CrmQuickActionSG
 
-    fsm_state = AsyncMock()
     callback = AsyncMock()
     callback.message = AsyncMock()
     widget = MagicMock()
     manager = MagicMock()
-    manager.done = AsyncMock()
-    manager.middleware_data = {"state": fsm_state}
+    manager.start = AsyncMock()
 
     await on_task_edit_from_list(callback, widget, manager, item_id="42")
 
-    fsm_state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_choose_field)
-    fsm_state.update_data.assert_called_once_with(edit_task_id=42)
-    manager.done.assert_called_once()
-    callback.answer.assert_called()
+    manager.start.assert_awaited_once()
+    args = manager.start.call_args
+    assert args.args[0] is CrmQuickActionSG.edit_task_choose_field
+    assert args.kwargs["data"] == {"edit_task_id": 42}
+    assert args.kwargs["mode"] is StartMode.RESET_STACK
+    assert args.kwargs["show_mode"] is ShowMode.SEND
+    callback.answer.assert_awaited()
