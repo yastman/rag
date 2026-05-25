@@ -119,17 +119,15 @@ class TestCmdMetrics:
     @pytest.mark.asyncio
     async def test_calls_prometheus_generate_latest(self, mock_bot):
         """cmd_metrics emits the Prometheus default-REGISTRY text format (#2058)."""
-        from prometheus_client import Counter
-
-        # Increment a known counter so generate_latest output is non-trivial.
-        sentinel = Counter(
-            "cmd_metrics_test_sentinel_total",
-            "test sentinel for cmd_metrics rewrite (#2058)",
-        )
-        sentinel.inc(7)
-
         message = _make_message()
-        await cmd_metrics(mock_bot, message)
+        payload = (
+            b"# HELP cmd_metrics_test_sentinel_total test sentinel\n"
+            b"# TYPE cmd_metrics_test_sentinel_total counter\n"
+            b"cmd_metrics_test_sentinel_total 7.0\n"
+        )
+
+        with patch("prometheus_client.generate_latest", return_value=payload):
+            await cmd_metrics(mock_bot, message)
 
         message.answer.assert_called_once()
         text = message.answer.call_args[0][0]
