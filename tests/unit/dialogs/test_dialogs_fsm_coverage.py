@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import inspect
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,19 @@ from telegram_bot.dialogs import states as states_module
 
 
 DIALOGS_DIR = Path(__file__).resolve().parents[3] / "telegram_bot" / "dialogs"
+_NOISE_PARTS: frozenset[str] = frozenset(
+    {
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".tox",
+        "node_modules",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".worktrees",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -210,9 +224,10 @@ def _all_production_files() -> list[Path]:
     dep source into the regex search and time the test out.
     """
     root = DIALOGS_DIR.parent  # telegram_bot/
-    skip_parts = {".venv", "venv", "__pycache__", ".tox", "node_modules", ".mypy_cache"}
     return sorted(
-        p for p in root.rglob("*.py") if p.name != "states.py" and skip_parts.isdisjoint(p.parts)
+        p
+        for p in root.rglob("*.py")
+        if p.name != "states.py" and _NOISE_PARTS.isdisjoint(p.relative_to(root).parts)
     )
 
 
@@ -260,6 +275,24 @@ def test_every_declared_state_is_referenced_by_a_dialog() -> None:
         "by any production module under telegram_bot/. Either wire them into "
         f"a dialog/handler or remove them.\n  Orphans: {orphaned!r}"
     )
+
+
+def test_all_production_files_excludes_noise_dirs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "telegram_bot"
+    dialogs = root / "dialogs"
+    dialogs.mkdir(parents=True)
+    real_file = root / "handlers.py"
+    real_file.write_text("# production\n", encoding="utf-8")
+    for part in _NOISE_PARTS:
+        noise_file = root / part / "noise.py"
+        noise_file.parent.mkdir(parents=True, exist_ok=True)
+        noise_file.write_text("# ignored\n", encoding="utf-8")
+
+    monkeypatch.setattr(sys.modules[__name__], "DIALOGS_DIR", dialogs)
+
+    assert _all_production_files() == [real_file]
 
 
 # ---------------------------------------------------------------------------
