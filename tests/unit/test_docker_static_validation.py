@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from aiogram.utils.token import validate_token
 
 
 DOCKERFILES = [
@@ -104,6 +105,17 @@ def test_compose_dev_config_renders_with_full_profile() -> None:
     assert result.returncode == 0, (
         f"Compose dev config with --profile full failed:\n{result.stderr}"
     )
+
+
+def test_compose_ci_telegram_token_is_sdk_valid() -> None:
+    """Fallback env must let `make bot` reach runtime startup, not fail token parsing."""
+    values = dict(
+        line.split("=", 1)
+        for line in COMPOSE_CI_ENV.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+
+    validate_token(values["TELEGRAM_BOT_TOKEN"])
 
 
 @pytest.mark.parametrize("dockerfile", _LANGFUSE_RUNTIME_DOCKERFILES)
