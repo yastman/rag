@@ -48,6 +48,17 @@ def test_local_services_excludes_docling() -> None:
     assert "docling" not in services, f"docling must not be in LOCAL_SERVICES (found {services!r})"
 
 
+def test_local_services_includes_postgres_for_native_bot_favorites() -> None:
+    text = _makefile_text()
+    match = re.search(r"^LOCAL_SERVICES\s*:=\s*(.+)$", text, re.MULTILINE)
+    assert match, "LOCAL_SERVICES not found in Makefile"
+    services = match.group(1).strip().split()
+    assert "postgres" in services, (
+        "LOCAL_SERVICES must include postgres so native bot favorites backed by "
+        "realestate.public.user_favorites are available in the local loop"
+    )
+
+
 def test_local_ingest_services_includes_docling() -> None:
     text = _makefile_text()
     match = re.search(r"^LOCAL_INGEST_SERVICES\s*:=\s*(.+)$", text, re.MULTILINE)
