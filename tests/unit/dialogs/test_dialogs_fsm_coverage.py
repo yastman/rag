@@ -256,9 +256,11 @@ def test_every_declared_state_is_referenced_by_a_dialog() -> None:
 
     Helps catch refactors that leave a State enum behind after the window
     was removed. Search scope is the whole ``telegram_bot/`` package because
-    a few groups (e.g. ``CrmQuickActionSG``) are still wired through raw
-    aiogram FSM in ``telegram_bot/handlers/`` rather than aiogram-dialog
-    windows (see #1232 for the migration roadmap).
+    a few groups are still wired through raw aiogram FSM in
+    ``telegram_bot/handlers/`` (e.g. the phone collector handler) rather
+    than through aiogram-dialog windows. ``CrmQuickActionSG`` was migrated
+    in #2053 and is now driven by ``crm_quick_actions_dialog``; see #1232
+    for the remaining migration targets.
     """
     sources = "\n".join(p.read_text(encoding="utf-8") for p in _all_production_files())
 
