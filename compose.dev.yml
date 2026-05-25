@@ -7,6 +7,14 @@
 
 services:
   postgres:
+    # Local pgvector startup needs these while initializing/fixing ownership on
+    # the mounted data and runtime directories. Keep this scoped to dev only.
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
     ports:
       - "127.0.0.1:5432:5432"
     environment:
