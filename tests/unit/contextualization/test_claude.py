@@ -110,79 +110,13 @@ class TestClaudeContextualizerContextualize:
             ctx.client = AsyncMock()
             return ctx
 
-    async def test_contextualize_single_chunk(self, contextualizer):
-        """Test contextualizing a single chunk."""
-        # Mock the API response
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Contextual summary")]
-        mock_response.usage.input_tokens = 100
-        mock_response.usage.output_tokens = 50
-        contextualizer.client.messages.create = AsyncMock(return_value=mock_response)
-
-        chunks = ["This is the legal text to contextualize."]
-        results = await contextualizer.contextualize(chunks)
-
-        assert len(results) == 1
-        assert isinstance(results[0], ContextualizedChunk)
-        assert results[0].original_text == chunks[0]
-        assert results[0].contextual_summary == "Contextual summary"
-        assert results[0].article_number == "chunk_0"
-        assert results[0].context_method == "claude"
-
-    async def test_contextualize_multiple_chunks(self, contextualizer):
-        """Test contextualizing multiple chunks."""
-        # Mock responses for each chunk
-        mock_responses = []
-        for i in range(3):
-            resp = MagicMock()
-            resp.content = [MagicMock(text=f"Summary {i}")]
-            resp.usage.input_tokens = 100
-            resp.usage.output_tokens = 50
-            mock_responses.append(resp)
-
-        contextualizer.client.messages.create = AsyncMock(side_effect=mock_responses)
-
-        chunks = ["Chunk 1 text", "Chunk 2 text", "Chunk 3 text"]
-        results = await contextualizer.contextualize(chunks)
-
-        assert len(results) == 3
-        for i, result in enumerate(results):
-            assert result.original_text == chunks[i]
-            assert result.contextual_summary == f"Summary {i}"
-            assert result.article_number == f"chunk_{i}"
-
-    async def test_contextualize_with_query(self, contextualizer):
-        """Test contextualization with optional query parameter."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Query-aware summary")]
-        mock_response.usage.input_tokens = 100
-        mock_response.usage.output_tokens = 50
-        contextualizer.client.messages.create = AsyncMock(return_value=mock_response)
-
-        chunks = ["Legal text"]
-        query = "What are the penalties?"
-        results = await contextualizer.contextualize(chunks, query=query)
-
-        assert len(results) == 1
-        # Verify the API was called (query is passed to contextualize_single)
-        contextualizer.client.messages.create.assert_called_once()
-
-    async def test_contextualize_handles_api_error_gracefully(self, contextualizer):
-        """Test that API errors result in fallback chunks."""
-        contextualizer.client.messages.create = AsyncMock(
-            side_effect=Exception("API rate limit exceeded")
-        )
-
-        chunks = ["Text that will fail"]
-        results = await contextualizer.contextualize(chunks)
-
-        assert len(results) == 1
-        assert results[0].original_text == chunks[0]
-        assert results[0].contextual_summary == ""  # Fallback
-        assert results[0].context_method == "none"  # Indicates failure
-
     async def test_contextualize_partial_failure(self, contextualizer):
-        """Test that partial failures don't affect successful chunks."""
+        """Test that partial failures don't affect successful chunks.
+
+        Provider-specific 3-call sequencing scenario; the simpler
+        single-call happy/error paths live in
+        ``test_providers_parametrized.py``.
+        """
         # First call succeeds, second fails, third succeeds
         success_response = MagicMock()
         success_response.content = [MagicMock(text="Success summary")]
@@ -204,11 +138,6 @@ class TestClaudeContextualizerContextualize:
         assert results[0].context_method == "claude"
         assert results[1].context_method == "none"  # Failed
         assert results[2].context_method == "claude"
-
-    async def test_contextualize_empty_chunks(self, contextualizer):
-        """Test contextualizing empty list returns empty list."""
-        results = await contextualizer.contextualize([])
-        assert results == []
 
 
 class TestClaudeContextualizerContextualizeSingle:
