@@ -699,16 +699,27 @@ async def test_grade_documents_includes_score_gap_confident():
 
 
 async def test_grade_documents_records_score_gap_counter():
-    from telegram_bot.agents.rag_pipeline import _grade_documents
-    from telegram_bot.services.metrics import PipelineMetrics
+    from prometheus_client import REGISTRY
 
-    PipelineMetrics.reset()
+    from telegram_bot.agents.rag_pipeline import _grade_documents
+
+    before = (
+        REGISTRY.get_sample_value(
+            "rag_pipeline_events_total", labels={"event": "score_gap_confident"}
+        )
+        or 0.0
+    )
     docs = [{"score": 0.020}, {"score": 0.010}, {"score": 0.005}]
 
     await _grade_documents(docs, 0.0, latency_stages={})
 
-    stats = PipelineMetrics.get().get_stats()
-    assert stats["counters"]["score_gap_confident"] == 1
+    after = (
+        REGISTRY.get_sample_value(
+            "rag_pipeline_events_total", labels={"event": "score_gap_confident"}
+        )
+        or 0.0
+    )
+    assert after - before == 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -1965,10 +1976,16 @@ async def test_hybrid_retrieve_uses_pre_computed_sparse(mock_cache, mock_sparse,
 
 async def test_hybrid_retrieve_counts_colbert_rerank_attempted(mock_cache, mock_sparse):
     """_hybrid_retrieve counts colbert_rerank_attempted when ColBERT path is taken."""
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
-    from telegram_bot.services.metrics import PipelineMetrics
+    from prometheus_client import REGISTRY
 
-    PipelineMetrics.reset()
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    before = (
+        REGISTRY.get_sample_value(
+            "rag_pipeline_events_total", labels={"event": "colbert_rerank_attempted"}
+        )
+        or 0.0
+    )
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -1988,16 +2005,27 @@ async def test_hybrid_retrieve_counts_colbert_rerank_attempted(mock_cache, mock_
         latency_stages={},
     )
 
-    stats = PipelineMetrics.get().get_stats()
-    assert stats["counters"]["colbert_rerank_attempted"] == 1
+    after = (
+        REGISTRY.get_sample_value(
+            "rag_pipeline_events_total", labels={"event": "colbert_rerank_attempted"}
+        )
+        or 0.0
+    )
+    assert after - before == 1.0
 
 
 async def test_hybrid_retrieve_counts_retrieval_zero_docs(mock_cache, mock_sparse):
     """_hybrid_retrieve counts retrieval_zero_docs when search returns empty list."""
-    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
-    from telegram_bot.services.metrics import PipelineMetrics
+    from prometheus_client import REGISTRY
 
-    PipelineMetrics.reset()
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    before = (
+        REGISTRY.get_sample_value(
+            "rag_pipeline_events_total", labels={"event": "retrieval_zero_docs"}
+        )
+        or 0.0
+    )
 
     mock_qdrant_empty = AsyncMock()
     mock_qdrant_empty.hybrid_search_rrf = AsyncMock(
@@ -2017,8 +2045,13 @@ async def test_hybrid_retrieve_counts_retrieval_zero_docs(mock_cache, mock_spars
         latency_stages={},
     )
 
-    stats = PipelineMetrics.get().get_stats()
-    assert stats["counters"]["retrieval_zero_docs"] == 1
+    after = (
+        REGISTRY.get_sample_value(
+            "rag_pipeline_events_total", labels={"event": "retrieval_zero_docs"}
+        )
+        or 0.0
+    )
+    assert after - before == 1.0
 
 
 async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, mock_sparse):

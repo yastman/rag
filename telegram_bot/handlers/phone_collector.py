@@ -1,5 +1,37 @@
 # telegram_bot/handlers/phone_collector.py
-"""Phone collection FSM for lead capture (#628)."""
+"""Phone collection FSM for lead capture (#628).
+
+## Design exception: justified non-aiogram-dialog FSM (#1232 / #2055)
+
+Telegram lead capture relies on a one-tap *contact share* button
+(`KeyboardButton(request_contact=True)` rendered via
+`ReplyKeyboardMarkup`). The native UX is:
+
+  * the user sees a single big "Поделиться номером" button at the bottom
+    of the chat,
+  * one tap sends a `Contact` payload (verified phone, no manual typing),
+  * fallback path accepts free-text phone input from users on clients
+    that hide the keyboard or refuse contact share.
+
+aiogram-dialog renders inline-keyboard `Select`/`Button` widgets above
+the message and does **not** provide a `request_contact` widget.
+Replacing the reply-keyboard contact share with an inline button would
+force users to type their phone manually, which measurably reduces
+opt-in rate for lead capture.
+
+This module therefore stays as a raw aiogram `Router` + `StatesGroup`
+implementation. The SDK registry calls this out at the bottom of the
+aiogram-dialog gotchas section: it is the **single** intentional
+exception to the "no custom FSM" rule. CRM quick actions (#2053) and
+the demo handler (#2054) migrate to aiogram-dialog as scheduled; this
+file does not.
+
+If a future product decision accepts a weaker UX (no contact share),
+or aiogram-dialog gains a native contact-share widget, drop this
+exception and migrate. Until then, do not "consistency-refactor" this
+file into aiogram-dialog. See #1232 (parent) and #2055 (this design
+note).
+"""
 
 from __future__ import annotations
 
