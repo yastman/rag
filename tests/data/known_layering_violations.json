@@ -1,7 +1,6 @@
 {
   "src/api/main.py": [
     "telegram_bot.graph.graph",
-    "telegram_bot.integrations.cache",
-    "telegram_bot.services.qdrant"
+    "telegram_bot.integrations.cache"
   ]
 }

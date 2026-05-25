@@ -7,7 +7,7 @@ construct does NOT exist in the live source tree.
 Items removed in PR #1843 (initial slice):
 
 * ``QdrantService.mmr_rerank`` — never called outside its own tests
-  (``telegram_bot/services/qdrant.py``).
+  (``src/runtime/services/qdrant.py``).
 * ``_PROPERTY_TYPE_QUERY_TEXT`` — module-level dict in
   ``telegram_bot/dialogs/funnel.py`` with zero references.
 * ``_remove_reply_keyboard`` — async helper in
@@ -101,7 +101,7 @@ def _has_assignment(tree: ast.AST, name: str) -> bool:
 
 def test_qdrant_service_mmr_rerank_method_is_gone() -> None:
     """``QdrantService.mmr_rerank`` must be removed (#1541 item #4)."""
-    tree = _parse("telegram_bot/services/qdrant.py")
+    tree = _parse("src/runtime/services/qdrant.py")
     qdrant_class: ast.ClassDef | None = None
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == "QdrantService":
@@ -271,7 +271,7 @@ def test_error_contract_drops_services_llm_allowlist() -> None:
 
 def test_qdrant_service_search_with_score_boosting_method_is_gone() -> None:
     """``QdrantService.search_with_score_boosting`` must be removed (#1541 item #3)."""
-    tree = _parse("telegram_bot/services/qdrant.py")
+    tree = _parse("src/runtime/services/qdrant.py")
     qdrant_class: ast.ClassDef | None = None
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == "QdrantService":
