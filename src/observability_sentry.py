@@ -35,7 +35,14 @@ from src.security.pii_redaction import PIIRedactor
 
 __all__ = [
     "_reset_for_tests",
+    "add_safe_breadcrumb",
+    "error_boundary_breadcrumb",
+    "handler_breadcrumb",
     "initialize_sentry",
+    "lifecycle_breadcrumb",
+    "message_receive_breadcrumb",
+    "rag_breadcrumb",
+    "session_breadcrumb",
 ]
 
 
@@ -45,6 +52,7 @@ logger = logging.getLogger(__name__)
 # global ``sentry_sdk`` module (which other helpers may import).
 _sentry_init = sentry_sdk.init
 _sentry_capture_message = sentry_sdk.capture_message
+_sentry_add_breadcrumb = sentry_sdk.add_breadcrumb
 
 _PII_TRUNCATE_LIMIT = 4000
 
@@ -251,3 +259,119 @@ def _reset_for_tests() -> None:
     global _initialized, _skip_logged
     _initialized = False
     _skip_logged = False
+
+
+# ---------------------------------------------------------------------------
+# PII-safe breadcrumbs (#2062)
+# ---------------------------------------------------------------------------
+
+
+# Allow-list of safe metadata keys that ``message_receive_breadcrumb`` is
+# permitted to forward. Anything outside this set (raw text, tokens, CRM
+# payloads, headers, etc.) is dropped at the source — the ``before_send``
+# scrubber from #2060 acts as a second line of defence.
+_MESSAGE_RECEIVE_SAFE_KEYS: frozenset[str] = frozenset(
+    {
+        "content_type",
+        "text_length",
+        "voice_seconds",
+        "chat_id_hash",
+        "telegram_user_id_hash",
+        "route",
+        "pipeline_mode",
+        "trace_id",
+        "langfuse_trace_id",
+    }
+)
+
+
+def add_safe_breadcrumb(
+    *,
+    category: str,
+    message: str | None = None,
+    data: dict[str, Any] | None = None,
+    level: str = "info",
+) -> None:
+    """Add a Sentry breadcrumb whose ``message`` and ``data`` are PII-redacted.
+
+    Drop-in replacement for ``sentry_sdk.add_breadcrumb`` — runs every
+    string field through :class:`~src.security.pii_redaction.PIIRedactor`
+    (mask + truncate at 4000 chars) before delegating to the SDK. If
+    redaction itself fails, the breadcrumb is silently dropped rather than
+    risking a partially-redacted payload reaching Sentry.
+    """
+    try:
+        safe_message = _redact(message) if message is not None else None
+        safe_data = _redact(data) if data is not None else None
+    except Exception:
+        logger.warning("Sentry breadcrumb PII scrub failed; dropping breadcrumb", exc_info=True)
+        return
+
+    _sentry_add_breadcrumb(
+        category=category,
+        message=safe_message,
+        data=safe_data,
+        level=level,
+    )
+
+
+def lifecycle_breadcrumb(event: str, **data: Any) -> None:
+    """Bot/RAG lifecycle event (startup, shutdown, config reload)."""
+    add_safe_breadcrumb(
+        category="lifecycle",
+        message=event,
+        data=dict(data) if data else None,
+    )
+
+
+def rag_breadcrumb(event: str, *, level: str = "info", **data: Any) -> None:
+    """RAG pipeline lifecycle (rag.start, rag.end, rag.fallback)."""
+    add_safe_breadcrumb(
+        category="rag",
+        message=event,
+        data=dict(data) if data else None,
+        level=level,
+    )
+
+
+def session_breadcrumb(event: str, **data: Any) -> None:
+    """Conversation/session lifecycle (session.create, session.destroy)."""
+    add_safe_breadcrumb(
+        category="session",
+        message=event,
+        data=dict(data) if data else None,
+    )
+
+
+def handler_breadcrumb(event: str, **data: Any) -> None:
+    """Telegram handler dispatch (handler.dispatch, handler.exit)."""
+    add_safe_breadcrumb(
+        category="handler",
+        message=event,
+        data=dict(data) if data else None,
+    )
+
+
+def error_boundary_breadcrumb(event: str, **data: Any) -> None:
+    """Caught-exception boundary marker — emitted at warning level."""
+    add_safe_breadcrumb(
+        category="error_boundary",
+        message=event,
+        data=dict(data) if data else None,
+        level="warning",
+    )
+
+
+def message_receive_breadcrumb(**data: Any) -> None:
+    """Telegram message receipt — strict allow-list, NEVER logs raw text.
+
+    Only the ``_MESSAGE_RECEIVE_SAFE_KEYS`` metadata keys are forwarded to
+    the breadcrumb payload. Raw message text, tokens, CRM payloads, and any
+    other key that might leak PII are dropped at the source.
+    """
+    safe_data = {k: v for k, v in data.items() if k in _MESSAGE_RECEIVE_SAFE_KEYS}
+    add_safe_breadcrumb(
+        category="message_receive",
+        message=None,
+        data=safe_data or None,
+    )
