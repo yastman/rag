@@ -100,6 +100,14 @@ def test_compose_dev_has_ports_for_core_services():
         )
 
 
+def test_compose_dev_redis_disables_rdb_snapshots():
+    """Dev Redis must not block writes when local RDB persistence cannot save."""
+    data = load_yaml("compose.dev.yml")
+    command = data["services"]["redis"]["command"]
+    assert '--save ""' in command
+    assert "--stop-writes-on-bgsave-error no" in command
+
+
 # ---------------------------------------------------------------------------
 # #810 — qdrant_ensure_indexes.py exists
 # ---------------------------------------------------------------------------
