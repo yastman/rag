@@ -307,6 +307,19 @@ def test_runtime_env_file_has_safe_fallback() -> None:
     )
 
 
+def test_runtime_env_file_resolves_before_export() -> None:
+    """RAG_RUNTIME_ENV_FILE must export an env-file path, not a shell expression."""
+    text = _makefile_text()
+    match = re.search(r"^RAG_RUNTIME_ENV_FILE\s*\?=\s*(.+)$", text, re.MULTILINE)
+    assert match, "RAG_RUNTIME_ENV_FILE assignment not found in Makefile"
+    value = match.group(1)
+    assert "$$(" not in value, (
+        "RAG_RUNTIME_ENV_FILE is exported to recipe shells, so it must resolve "
+        "to a concrete env-file path before export, not a deferred shell expression"
+    )
+    assert "$(shell " in value
+
+
 # --- Local all-test entrypoint contract tests ---
 
 
@@ -340,6 +353,48 @@ def test_test_bot_health_target_env_precedence() -> None:
         "test-bot-health target must check for .env existence first, "
         "preserving user .env precedence over the compose.ci.env fallback"
     )
+
+
+def test_run_bot_uses_runtime_env_file_fallback() -> None:
+    """`make run-bot` must work in local worktrees without a `.env` file."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^run-bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "run-bot target not found in Makefile"
+    block = block_match.group(0)
+    assert '--env-file "$$RAG_RUNTIME_ENV_FILE"' in block
+    assert "--env-file .env" not in block
+
+
+def test_bot_uses_runtime_env_file_fallback() -> None:
+    """`make bot` must tee logs while using the same `.env`/fixture fallback."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "bot target not found in Makefile"
+    block = block_match.group(0)
+    assert '--env-file "$$RAG_RUNTIME_ENV_FILE"' in block
+    assert "--env-file .env" not in block
+
+
+def test_bot_preserves_pipeline_failure_exit_code() -> None:
+    """`make bot` must not hide Python startup failures behind tee/echo."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "bot target not found in Makefile"
+    block = block_match.group(0)
+    assert "pipefail" in block
+    assert "exit $$status" in block
 
 
 def test_frontend_test_target_runs_vitest() -> None:
