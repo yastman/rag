@@ -232,7 +232,7 @@ class TestBGEIntegrationWrapperSpanMetadata:
 
     @pytest.fixture(scope="class")
     def integration_spans(self):
-        path = REPO_ROOT / "telegram_bot" / "integrations" / "embeddings.py"
+        path = REPO_ROOT / "src" / "runtime" / "integrations" / "embeddings.py"
         return _collect_observe_decorators(path)
 
     @pytest.mark.parametrize(

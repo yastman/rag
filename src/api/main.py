@@ -34,7 +34,7 @@ _LANGFUSE_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and teardown pipeline services."""
-    from telegram_bot.graph.config import GraphConfig
+    from src.runtime.graph.config import GraphConfig
     from telegram_bot.graph.graph import build_graph
     from telegram_bot.integrations.cache import CacheLayerManager
     from telegram_bot.services.qdrant import QdrantService
