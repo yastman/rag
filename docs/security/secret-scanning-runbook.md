@@ -3,6 +3,10 @@
 Use this runbook when CI, GitHub Secret Scanning, gitleaks, or a local audit
 reports a possible secret.
 
+For the public-release history rewrite gate, use
+[history-rewrite-manual-gate.md](history-rewrite-manual-gate.md) as the
+operator checklist.
+
 ## Gates
 
 1. **Scan**
