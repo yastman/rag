@@ -1,4 +1,41 @@
-"""Main Telegram bot logic — LangGraph pipeline."""
+"""Main Telegram bot logic — LangGraph pipeline.
+
+Module-level helpers were extracted to focused submodules in slice 1 of
+the ``PropertyBot`` decomposition (issue #1265 / #2046). The thin
+wrappers below preserve the historical ``from telegram_bot.bot import X``
+import surface for tests that ``patch("telegram_bot.bot.X", ...)``.
+
+Slice 1 extraction map:
+
+* ``_bot_state_helpers`` (#1265 PR-1) — apartment-list and catalog-control
+  message-id reads (``_state_apartment_results``,
+  ``_state_control_message_id``, ``_extract_current_turn``).
+* ``_bot_observability`` (#1265 PR-2) — Langfuse trace metadata builder
+  and voice error-score writer (``_build_trace_metadata``,
+  ``_write_voice_error_scores``).
+* ``_bot_error_classification`` (#1265 PR-3) — post-pipeline cleanup and
+  checkpointer error guards (``_is_post_pipeline_cleanup_error``,
+  ``_is_checkpointer_runtime_error``).
+* ``_bot_streaming`` (#1265 PR-4) — agent streaming draft helpers
+  (``_new_draft_id``, ``_extract_stream_chunk_text``,
+  ``_stream_agent_to_draft``, ``_AGENT_DRAFT_INTERVAL``).
+* ``_bot_pre_agent`` (#1265 PR-5) — pre-agent state contract, dense
+  vector caching, retrieval-vector preparation
+  (``_build_pre_agent_state_contract``, ``_has_async_method``,
+  ``_get_or_compute_pre_agent_dense``,
+  ``_prepare_pre_agent_retrieval_vectors``).
+* ``_bot_kommo`` (#1265 PR-6) — Kommo CRM startup token seeder
+  (``_seed_kommo_access_token``).
+
+Each extraction is enforced by a contract test under
+``tests/contract/test_bot_*_extraction_contract.py``: byte-for-byte
+parity with the previous module-level implementation, plus a
+``from telegram_bot.bot import …`` import surface guard.
+
+The remaining lifecycle method extraction (``PropertyBot`` instance
+methods → focused modules) is tracked separately as #2048 and is
+blocked on the runtime migration in #1948 / #2045 / #2047.
+"""
 
 from __future__ import annotations
 
