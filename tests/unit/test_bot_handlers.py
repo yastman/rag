@@ -625,20 +625,23 @@ class TestCommandHandlers:
         assert "30/40" in call_args, "Expected denominator to be hits + misses = 40"
 
     async def test_cmd_metrics(self, mock_config):
-        """Test /metrics command handler."""
+        """Test /metrics command handler emits Prometheus text format (#2058)."""
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
+        payload = (
+            b"# HELP bot_cmd_metrics_test_sentinel_total test sentinel\n"
+            b"# TYPE bot_cmd_metrics_test_sentinel_total counter\n"
+            b"bot_cmd_metrics_test_sentinel_total 3.0\n"
+        )
 
-        with patch("telegram_bot.handlers.command_handlers.PipelineMetrics") as mock_pm:
-            mock_metrics = MagicMock()
-            mock_metrics.format_text.return_value = "p50=100ms p95=200ms"
-            mock_pm.get.return_value = mock_metrics
-
+        with patch("prometheus_client.generate_latest", return_value=payload):
             await cmd_metrics(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
-        assert "p50" in call_args
+        assert call_args.startswith("```\n")
+        assert "# HELP" in call_args
+        assert "bot_cmd_metrics_test_sentinel_total" in call_args
 
     async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
         """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""
