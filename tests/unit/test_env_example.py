@@ -34,7 +34,8 @@ def test_local_env_contract_uses_root_dotenv_as_canonical_file() -> None:
     assert ".env.local` is not loaded automatically" in readme
     assert ".env.local` is legacy/manual-only and is not auto-loaded" in local_dev
     assert 'env_file=".env"' in bot_config
-    assert "uv run --env-file .env python -m telegram_bot.main" in makefile
+    assert "RAG_RUNTIME_ENV_FILE ?= $(shell [ -f .env ]" in makefile
+    assert '--env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main' in makefile
     assert "[ -f ./.env ] && . ./.env" in makefile
     assert "local-redis-recreate" in makefile
     assert "make local-redis-recreate" in env_example
