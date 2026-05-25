@@ -18,6 +18,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0012 - LangGraph state machine orchestration](0012-langgraph-orchestration.md)
 - [0013 - CocoIndex + Docling ingestion pipeline](0013-cocoindex-docling-ingestion.md)
 - [0014 - Properties CSV as source of truth (no admin panel)](0014-properties-csv-as-source-of-truth.md)
+- [0015 - SDK-native baseline (aiogram, LangGraph, Langfuse, Qdrant)](0015-sdk-native-baseline.md)
 
 ## When To Use
 
