@@ -266,6 +266,11 @@ make local-ps
 make local-down
 ```
 
+`make local-up` starts the native bot dependencies needed for the local loop:
+Postgres, Redis, Qdrant, BGE-M3, and LiteLLM. Postgres is included so
+favorites backed by `realestate.public.user_favorites` are available during
+native bot runs.
+
 If you changed `.env` `REDIS_PASSWORD`, recreate local Redis before retrying bot health:
 
 ```bash

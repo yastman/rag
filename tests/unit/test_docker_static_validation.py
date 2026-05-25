@@ -118,6 +118,38 @@ def test_compose_ci_telegram_token_is_sdk_valid() -> None:
     validate_token(values["TELEGRAM_BOT_TOKEN"])
 
 
+def test_compose_dev_postgres_renders_with_dev_only_capabilities() -> None:
+    """Dev Postgres keeps base cap_drop while adding only startup capabilities."""
+    result = _run_docker_command(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "config",
+            "postgres",
+        ],
+    )
+    assert result.returncode == 0, f"Compose postgres config failed:\n{result.stderr}"
+
+    import yaml
+
+    rendered = yaml.safe_load(result.stdout)
+    postgres = rendered["services"]["postgres"]
+    assert postgres["cap_drop"] == ["ALL"]
+    assert set(postgres["cap_add"]) == {
+        "CHOWN",
+        "FOWNER",
+        "DAC_OVERRIDE",
+        "SETGID",
+        "SETUID",
+    }
+
+
 @pytest.mark.parametrize("dockerfile", _LANGFUSE_RUNTIME_DOCKERFILES)
 def test_langfuse_dockerfile_does_not_use_python314(dockerfile: str) -> None:
     """Langfuse SDK uses Pydantic v1 compatibility that crashes under Python 3.14.
