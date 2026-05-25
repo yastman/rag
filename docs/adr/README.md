@@ -17,6 +17,7 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0011 - Docker Compose as primary runtime](0011-docker-compose-primary-runtime.md)
 - [0012 - LangGraph state machine orchestration](0012-langgraph-orchestration.md)
 - [0013 - CocoIndex + Docling ingestion pipeline](0013-cocoindex-docling-ingestion.md)
+- [0014 - Properties CSV as source of truth (no admin panel)](0014-properties-csv-as-source-of-truth.md)
 
 ## When To Use
 
