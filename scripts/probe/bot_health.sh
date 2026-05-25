@@ -12,6 +12,21 @@ strip_trailing_slash() {
   printf '%s' "${1%/}"
 }
 
+# Load runtime env: .env first (user override), then safe local fallback.
+# Docker Compose uses the same tests/fixtures/compose.ci.env fallback.
+# This bridge prevents BotConfig() from missing REDIS_PASSWORD when .env is absent.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+elif [ -f tests/fixtures/compose.ci.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . tests/fixtures/compose.ci.env
+  set +a
+fi
+
 if ! command -v curl >/dev/null 2>&1; then
   fail "curl is required"
 fi

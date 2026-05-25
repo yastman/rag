@@ -15,6 +15,7 @@ import pytest
 # installing a partial fake module into ``sys.modules`` that could leak into
 # later tests calling ``pytest.importorskip("fastapi")`` (#2009 evidence).
 pytest.importorskip("fastapi", reason="src.api.main needs FastAPI; install --extra api")
+pytestmark = pytest.mark.requires_extras
 
 from src.api.main import app, generic_error_handler, lifespan, query
 from src.api.schemas import QueryRequest, QueryResponse
@@ -50,8 +51,8 @@ async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
     lf.update_current_span = MagicMock()
 
     with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("src.observability.propagate_attributes", return_value=nullcontext()),
+        patch("src.observability.get_client", return_value=lf),
     ):
         await query(QueryRequest(query="test", user_id=1))
 
@@ -70,8 +71,8 @@ async def test_query_writes_langfuse_scores() -> None:
     lf.score_current_trace = MagicMock()
 
     with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("src.observability.propagate_attributes", return_value=nullcontext()),
+        patch("src.observability.get_client", return_value=lf),
         patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         await query(QueryRequest(query="test", user_id=1))
@@ -94,9 +95,9 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
 
     with (
         patch(
-            "telegram_bot.observability.propagate_attributes", return_value=nullcontext()
+            "src.observability.propagate_attributes", return_value=nullcontext()
         ) as mock_propagate,
-        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("src.observability.get_client", return_value=lf),
     ):
         await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
 
@@ -135,7 +136,7 @@ async def test_query_propagates_explicit_langfuse_trace_id() -> None:
     lf.start_as_current_observation.return_value = nullcontext()
 
     with (
-        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("src.observability.get_client", return_value=lf),
         patch(
             "src.api.main._execute_query",
             new=AsyncMock(return_value=SimpleNamespace()),
@@ -265,7 +266,7 @@ async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> 
 async def test_generic_error_handler_returns_structured_payload() -> None:
     """Unhandled exceptions must return a stable structured error with trace id."""
     with (
-        patch("telegram_bot.observability.get_client", return_value=None),
+        patch("src.observability.get_client", return_value=None),
         patch("src.api.main.uuid.uuid4", return_value=SimpleNamespace(hex="fallback-trace-id")),
         patch("src.api.main.logger") as mock_logger,
     ):
@@ -288,7 +289,7 @@ async def test_generic_error_handler_uses_langfuse_trace_id_when_available() -> 
     mock_lf.get_current_trace_id.return_value = "trace-abc-123"
 
     with (
-        patch("telegram_bot.observability.get_client", return_value=mock_lf),
+        patch("src.observability.get_client", return_value=mock_lf),
         patch("src.api.main.logger") as mock_logger,
     ):
         response = await generic_error_handler(None, ValueError("bad input"))
@@ -314,8 +315,8 @@ async def test_query_returns_fallback_on_graph_recursion_error() -> None:
     lf.update_current_span = MagicMock()
 
     with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("src.observability.propagate_attributes", return_value=nullcontext()),
+        patch("src.observability.get_client", return_value=lf),
         patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
@@ -345,8 +346,8 @@ async def test_query_graph_recursion_error_preserves_trace_context() -> None:
     lf.update_current_span = MagicMock()
 
     with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=lf),
+        patch("src.observability.propagate_attributes", return_value=nullcontext()),
+        patch("src.observability.get_client", return_value=lf),
     ):
         await query(QueryRequest(query="complex", user_id=42, session_id="sess-1"))
 
@@ -383,8 +384,8 @@ async def test_query_graph_recursion_error_works_when_langfuse_disabled() -> Non
     app.state.max_rewrite_attempts = 1
 
     with (
-        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
-        patch("telegram_bot.observability.get_client", return_value=None),
+        patch("src.observability.propagate_attributes", return_value=nullcontext()),
+        patch("src.observability.get_client", return_value=None),
         patch("src.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         response = await query(QueryRequest(query="test", user_id=1))
