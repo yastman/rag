@@ -191,6 +191,7 @@ async def test_catalog_manager_delegates_to_existing_handler() -> None:
 @pytest.mark.asyncio
 async def test_catalog_text_input_routes_actions_before_search() -> None:
     from telegram_bot.dialogs.catalog import on_catalog_text_input
+    from telegram_bot.dialogs.demo import _dialog_search
 
     message = MagicMock()
     message.text = "🔍 Фильтры"
@@ -200,18 +201,17 @@ async def test_catalog_text_input_routes_actions_before_search() -> None:
     manager = AsyncMock()
     manager.middleware_data = {"state": _make_state({"catalog_runtime": {"filters": {}}})}
 
-    with patch(
-        "telegram_bot.handlers.demo_handler._run_demo_search", new=AsyncMock()
-    ) as search_mock:
+    with patch("telegram_bot.dialogs.demo._dialog_search", wraps=_dialog_search) as search_mock:
         await on_catalog_text_input(message, MagicMock(), manager)
 
-    search_mock.assert_not_awaited()
+    search_mock.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_catalog_text_input_routes_home_before_search() -> None:
-    """Regression #1298: '🏠 Главное меню' must not fall through to _run_demo_search."""
+    """Regression #1298: '🏠 Главное меню' must not fall through to dialog search."""
     from telegram_bot.dialogs.catalog import on_catalog_text_input
+    from telegram_bot.dialogs.demo import _dialog_search
 
     message = MagicMock()
     message.text = "🏠 Главное меню"
@@ -226,11 +226,9 @@ async def test_catalog_text_input_routes_home_before_search() -> None:
         "i18n": None,
     }
 
-    with patch(
-        "telegram_bot.handlers.demo_handler._run_demo_search", new=AsyncMock()
-    ) as search_mock:
+    with patch("telegram_bot.dialogs.demo._dialog_search", wraps=_dialog_search) as search_mock:
         await on_catalog_text_input(message, MagicMock(), manager)
 
-    search_mock.assert_not_awaited()
+    search_mock.assert_not_called()
     state.clear.assert_awaited_once()
     manager.reset_stack.assert_awaited_once_with(remove_keyboard=True)
