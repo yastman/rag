@@ -21,12 +21,26 @@ These tests pin the post-deletion state:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+_NOISE_PARTS: frozenset[str] = frozenset(
+    {
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".tox",
+        "node_modules",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".worktrees",
+    }
+)
 
 
 def test_draft_streamer_module_file_is_gone() -> None:
@@ -78,6 +92,8 @@ def test_no_production_references_to_draft_streamer_module() -> None:
     for py_file in REPO_ROOT.rglob("*.py"):
         rel = py_file.relative_to(REPO_ROOT)
         rel_str = str(rel)
+        if any(part in _NOISE_PARTS for part in rel.parts):
+            continue
         if rel_str.startswith(("tests/", ".venv/", "scripts/")):
             continue
         if rel.name in {"test_draft_streamer.py", "test_draft_streamer_removed.py"}:
@@ -95,6 +111,21 @@ def test_no_production_references_to_draft_streamer_module() -> None:
     assert not bad_files, (
         f"Production code still references the deleted draft_streamer module: {bad_files}"
     )
+
+
+def test_production_reference_scanner_excludes_noise_dirs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (tmp_path / "telegram_bot").mkdir()
+    (tmp_path / "telegram_bot" / "bot.py").write_text("# clean production\n", encoding="utf-8")
+    for part in _NOISE_PARTS:
+        noise_file = tmp_path / part / "stale.py"
+        noise_file.parent.mkdir(parents=True, exist_ok=True)
+        noise_file.write_text("import telegram_bot.services.draft_streamer\n", encoding="utf-8")
+
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+
+    test_no_production_references_to_draft_streamer_module()
 
 
 def test_streaming_path_still_uses_send_message_draft_directly() -> None:
