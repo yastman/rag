@@ -736,10 +736,22 @@ class TestQdrantServiceHybridSearchColbert:
         service.hybrid_search_rrf.assert_awaited_once()
 
     async def test_colbert_empty_results_counts_rerank_empty_metric(self, service):
-        """Empty ColBERT results count rerank-empty and fallback metrics."""
-        from telegram_bot.services.metrics import PipelineMetrics
+        """Empty ColBERT results count rerank-empty and fallback metrics (#2056)."""
+        from prometheus_client import REGISTRY
 
-        PipelineMetrics.reset()
+        before_empty = (
+            REGISTRY.get_sample_value(
+                "rag_pipeline_events_total", labels={"event": "colbert_rerank_empty"}
+            )
+            or 0.0
+        )
+        before_fallback = (
+            REGISTRY.get_sample_value(
+                "rag_pipeline_events_total", labels={"event": "colbert_fallback_to_rrf"}
+            )
+            or 0.0
+        )
+
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         service.hybrid_search_rrf = AsyncMock(
             return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
@@ -751,9 +763,20 @@ class TestQdrantServiceHybridSearchColbert:
             top_k=5,
         )
 
-        stats = PipelineMetrics.get().get_stats()
-        assert stats["counters"]["colbert_rerank_empty"] == 1
-        assert stats["counters"]["colbert_fallback_to_rrf"] == 1
+        after_empty = (
+            REGISTRY.get_sample_value(
+                "rag_pipeline_events_total", labels={"event": "colbert_rerank_empty"}
+            )
+            or 0.0
+        )
+        after_fallback = (
+            REGISTRY.get_sample_value(
+                "rag_pipeline_events_total", labels={"event": "colbert_fallback_to_rrf"}
+            )
+            or 0.0
+        )
+        assert after_empty - before_empty == 1.0
+        assert after_fallback - before_fallback == 1.0
 
     async def test_colbert_search_with_filters(self, service, mock_point):
         """Filters are passed through to query_points."""
