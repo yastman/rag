@@ -31,8 +31,8 @@ Reusable base manifests. These are environment-agnostic and should not contain h
 - **`redis/`** — PVC, Deployment, Service.
 - **`qdrant/`** — PVC, Deployment, Service.
 - **`docling/`** — PVC, Deployment, Service.
-- **`bge-m3/`** — Deployment, Service.
-- **`user-base/`** — Deployment, Service.
+- **`bge-m3/`** — PVC, Deployment, Service.
+- **`user-base/`** — PVC, Deployment, Service.
 - **`litellm/`** — Deployment, Service.
 - **`bot/`** — Deployment.
 - **`ingestion/`** — Deployment.
