@@ -4357,6 +4357,7 @@ class PropertyBot:
             search_leads_dialog,
         )
         from .dialogs.crm_notes import create_note_dialog
+        from .dialogs.crm_quick_actions import crm_quick_actions_dialog
         from .dialogs.crm_tasks import create_task_dialog, my_tasks_dialog, tasks_menu_dialog
         from .dialogs.demo import demo_dialog
         from .dialogs.faq import faq_dialog
@@ -4385,6 +4386,7 @@ class PropertyBot:
         self.dp.include_router(create_task_dialog)
         self.dp.include_router(my_tasks_dialog)
         self.dp.include_router(create_note_dialog)
+        self.dp.include_router(crm_quick_actions_dialog)
         self.dp.include_router(advisor_dialog)
         self.dp.include_router(settings_dialog)
         self.dp.include_router(demo_dialog)

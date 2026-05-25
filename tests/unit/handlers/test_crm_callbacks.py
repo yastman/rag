@@ -1,8 +1,20 @@
-"""Tests for CRM card callback handlers (#697 Task 8)."""
+"""Tests for CRM card callback handlers (#697 Task 8 / migrated #2053).
+
+After #2053 the custom FSM (``state.set_state`` + ``StateFilter`` message
+handlers) was replaced by an aiogram-dialog ``CrmQuickActionsDialog``. This
+module now hosts only the callback-query trigger handlers, which start the
+dialog via ``dialog_manager.start(state, data=..., mode=RESET_STACK)``. Tests
+for the former message handlers (``on_note_text_received``,
+``on_task_text_received``, ``on_edit_field_chosen``,
+``on_edit_task_text_received``, ``on_edit_task_date_received``) live in
+``tests/unit/dialogs/test_crm_quick_actions.py``.
+"""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 # --- Router creation ---
@@ -19,22 +31,25 @@ def test_create_crm_router_returns_router():
     assert router.name == "crm_callbacks"
 
 
-# --- FSM states ---
+# --- FSM states still defined centrally in dialogs/states.py ---
 
 
 def test_crm_quick_action_states_exist():
-    """CrmQuickActionSG has waiting_note and waiting_task states."""
+    """CrmQuickActionSG retains the five states used by the dialog."""
     from telegram_bot.dialogs.states import CrmQuickActionSG
 
     assert hasattr(CrmQuickActionSG, "waiting_note")
     assert hasattr(CrmQuickActionSG, "waiting_task")
+    assert hasattr(CrmQuickActionSG, "edit_task_choose_field")
+    assert hasattr(CrmQuickActionSG, "edit_task_text")
+    assert hasattr(CrmQuickActionSG, "edit_task_date")
 
 
-# --- Callback handlers: immediate actions ---
+# --- Callback handlers: immediate actions (no dialog required) ---
 
 
+@pytest.mark.asyncio
 async def test_task_complete_calls_kommo():
-    """on_task_complete calls kommo_client.complete_task with correct id."""
     from telegram_bot.handlers.crm_callbacks import on_task_complete
 
     kommo = AsyncMock()
@@ -44,12 +59,12 @@ async def test_task_complete_calls_kommo():
 
     await on_task_complete(callback, kommo_client=kommo)
 
-    kommo.complete_task.assert_called_once_with(42)
-    callback.answer.assert_called()
+    kommo.complete_task.assert_awaited_once_with(42)
+    callback.answer.assert_awaited()
 
 
+@pytest.mark.asyncio
 async def test_task_complete_no_kommo_answers_alert():
-    """on_task_complete without kommo_client answers with show_alert=True."""
     from telegram_bot.handlers.crm_callbacks import on_task_complete
 
     callback = AsyncMock()
@@ -57,13 +72,12 @@ async def test_task_complete_no_kommo_answers_alert():
 
     await on_task_complete(callback, kommo_client=None)
 
-    callback.answer.assert_called_once()
-    call_kwargs = callback.answer.call_args.kwargs
-    assert call_kwargs.get("show_alert") is True
+    callback.answer.assert_awaited_once()
+    assert callback.answer.call_args.kwargs.get("show_alert") is True
 
 
+@pytest.mark.asyncio
 async def test_task_postpone_calls_kommo_update_task():
-    """on_task_postpone calls kommo_client.update_task(id, TaskUpdate) with +1 day."""
     from telegram_bot.handlers.crm_callbacks import on_task_postpone
     from telegram_bot.services.kommo_models import TaskUpdate
 
@@ -74,17 +88,16 @@ async def test_task_postpone_calls_kommo_update_task():
 
     await on_task_postpone(callback, kommo_client=kommo)
 
-    kommo.update_task.assert_called_once()
-    call_args = kommo.update_task.call_args
-    assert call_args.args[0] == 7
-    update_obj = call_args.args[1]
-    assert isinstance(update_obj, TaskUpdate)
-    assert update_obj.complete_till is not None
-    assert update_obj.complete_till > 0
+    kommo.update_task.assert_awaited_once()
+    args = kommo.update_task.call_args.args
+    assert args[0] == 7
+    assert isinstance(args[1], TaskUpdate)
+    assert args[1].complete_till is not None
+    assert args[1].complete_till > 0
 
 
+@pytest.mark.asyncio
 async def test_task_postpone_no_kommo_answers_alert():
-    """on_task_postpone without kommo_client answers with show_alert=True."""
     from telegram_bot.handlers.crm_callbacks import on_task_postpone
 
     callback = AsyncMock()
@@ -92,353 +105,129 @@ async def test_task_postpone_no_kommo_answers_alert():
 
     await on_task_postpone(callback, kommo_client=None)
 
-    callback.answer.assert_called_once()
-    call_kwargs = callback.answer.call_args.kwargs
-    assert call_kwargs.get("show_alert") is True
+    callback.answer.assert_awaited_once()
+    assert callback.answer.call_args.kwargs.get("show_alert") is True
 
 
-# --- Callback handlers: FSM-triggering ---
+# --- Callback handlers: dialog-triggering ---
 
 
-async def test_lead_note_callback_sets_fsm_state():
-    """on_lead_note sets waiting_note state with entity_type='leads'."""
+def _dialog_manager_mock() -> MagicMock:
+    manager = MagicMock()
+    manager.start = AsyncMock()
+    return manager
+
+
+@pytest.mark.asyncio
+async def test_lead_note_starts_dialog_with_leads_entity():
+    from aiogram_dialog import StartMode
+
     from telegram_bot.dialogs.states import CrmQuickActionSG
     from telegram_bot.handlers.crm_callbacks import on_lead_note
 
     kommo = AsyncMock()
-    state = AsyncMock()
+    manager = _dialog_manager_mock()
     callback = AsyncMock()
     callback.data = "crm:lead:note:99"
-    callback.message = AsyncMock()
 
-    await on_lead_note(callback, state, kommo_client=kommo)
+    await on_lead_note(callback, manager, kommo_client=kommo)
 
-    state.set_state.assert_called_once_with(CrmQuickActionSG.waiting_note)
-    state.update_data.assert_called_once_with(entity_type="leads", entity_id=99)
-    callback.message.answer.assert_called_once()
-    callback.answer.assert_called_once()
+    manager.start.assert_awaited_once()
+    args = manager.start.call_args
+    assert args.args[0] is CrmQuickActionSG.waiting_note
+    assert args.kwargs["data"] == {"entity_type": "leads", "entity_id": 99}
+    assert args.kwargs["mode"] is StartMode.RESET_STACK
+    callback.answer.assert_awaited_once()
 
 
-async def test_lead_note_no_kommo_answers_alert():
-    """on_lead_note without kommo_client answers alert, no FSM transition."""
+@pytest.mark.asyncio
+async def test_lead_note_no_kommo_answers_alert_no_dialog():
     from telegram_bot.handlers.crm_callbacks import on_lead_note
 
-    state = AsyncMock()
+    manager = _dialog_manager_mock()
     callback = AsyncMock()
     callback.data = "crm:lead:note:1"
 
-    await on_lead_note(callback, state, kommo_client=None)
+    await on_lead_note(callback, manager, kommo_client=None)
 
-    callback.answer.assert_called_once()
-    call_kwargs = callback.answer.call_args.kwargs
-    assert call_kwargs.get("show_alert") is True
-    state.set_state.assert_not_called()
+    callback.answer.assert_awaited_once()
+    assert callback.answer.call_args.kwargs.get("show_alert") is True
+    manager.start.assert_not_awaited()
 
 
-async def test_lead_task_callback_sets_fsm_state():
-    """on_lead_task sets waiting_task state with entity_type='leads'."""
+@pytest.mark.asyncio
+async def test_lead_task_starts_dialog_with_task_state():
     from telegram_bot.dialogs.states import CrmQuickActionSG
     from telegram_bot.handlers.crm_callbacks import on_lead_task
 
     kommo = AsyncMock()
-    state = AsyncMock()
+    manager = _dialog_manager_mock()
     callback = AsyncMock()
     callback.data = "crm:lead:task:55"
-    callback.message = AsyncMock()
 
-    await on_lead_task(callback, state, kommo_client=kommo)
+    await on_lead_task(callback, manager, kommo_client=kommo)
 
-    state.set_state.assert_called_once_with(CrmQuickActionSG.waiting_task)
-    state.update_data.assert_called_once_with(entity_id=55, entity_type="leads")
-    callback.message.answer.assert_called_once()
+    manager.start.assert_awaited_once()
+    args = manager.start.call_args
+    assert args.args[0] is CrmQuickActionSG.waiting_task
+    assert args.kwargs["data"] == {"entity_type": "leads", "entity_id": 55}
 
 
-async def test_contact_note_callback_sets_fsm_state():
-    """on_contact_note sets waiting_note state with entity_type='contacts'."""
+@pytest.mark.asyncio
+async def test_contact_note_starts_dialog_with_contacts_entity():
     from telegram_bot.dialogs.states import CrmQuickActionSG
     from telegram_bot.handlers.crm_callbacks import on_contact_note
 
     kommo = AsyncMock()
-    state = AsyncMock()
+    manager = _dialog_manager_mock()
     callback = AsyncMock()
     callback.data = "crm:contact:note:12"
-    callback.message = AsyncMock()
 
-    await on_contact_note(callback, state, kommo_client=kommo)
+    await on_contact_note(callback, manager, kommo_client=kommo)
 
-    state.set_state.assert_called_once_with(CrmQuickActionSG.waiting_note)
-    state.update_data.assert_called_once_with(entity_type="contacts", entity_id=12)
-    callback.message.answer.assert_called_once()
-
-
-# --- FSM message handlers ---
+    manager.start.assert_awaited_once()
+    args = manager.start.call_args
+    assert args.args[0] is CrmQuickActionSG.waiting_note
+    assert args.kwargs["data"] == {"entity_type": "contacts", "entity_id": 12}
 
 
-async def test_note_text_received_calls_add_note():
-    """on_note_text_received calls kommo_client.add_note with entity and text."""
-    from telegram_bot.handlers.crm_callbacks import on_note_text_received
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"entity_type": "leads", "entity_id": 10})
-    message = AsyncMock()
-    message.text = "Client called back"
-
-    await on_note_text_received(message, state, kommo_client=kommo)
-
-    kommo.add_note.assert_called_once_with("leads", 10, "Client called back")
-    state.clear.assert_called_once()
-    message.answer.assert_called()
-
-
-async def test_note_text_received_contacts_entity():
-    """on_note_text_received uses entity_type='contacts' correctly."""
-    from telegram_bot.handlers.crm_callbacks import on_note_text_received
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"entity_type": "contacts", "entity_id": 5})
-    message = AsyncMock()
-    message.text = "Contact note"
-
-    await on_note_text_received(message, state, kommo_client=kommo)
-
-    kommo.add_note.assert_called_once_with("contacts", 5, "Contact note")
-
-
-async def test_task_text_received_calls_create_task():
-    """on_task_text_received calls kommo_client.create_task with correct TaskCreate."""
-    from telegram_bot.handlers.crm_callbacks import on_task_text_received
-    from telegram_bot.services.kommo_models import TaskCreate
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"entity_id": 20, "entity_type": "leads"})
-    message = AsyncMock()
-    message.text = "Follow up with client"
-
-    await on_task_text_received(message, state, kommo_client=kommo)
-
-    kommo.create_task.assert_called_once()
-    task_arg = kommo.create_task.call_args.args[0]
-    assert isinstance(task_arg, TaskCreate)
-    assert task_arg.text == "Follow up with client"
-    assert task_arg.entity_id == 20
-    assert task_arg.complete_till is not None
-    state.clear.assert_called_once()
-    message.answer.assert_called()
-
-
-async def test_note_empty_text_skips_create():
-    """on_note_text_received with whitespace-only text does not call add_note."""
-    from telegram_bot.handlers.crm_callbacks import on_note_text_received
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"entity_type": "leads", "entity_id": 10})
-    message = AsyncMock()
-    message.text = "   "
-
-    await on_note_text_received(message, state, kommo_client=kommo)
-
-    kommo.add_note.assert_not_called()
-    message.answer.assert_called()
-
-
-async def test_note_no_kommo_sends_error_message():
-    """on_note_text_received without kommo_client sends an error message."""
-    from telegram_bot.handlers.crm_callbacks import on_note_text_received
-
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"entity_type": "leads", "entity_id": 10})
-    message = AsyncMock()
-    message.text = "Some note"
-
-    await on_note_text_received(message, state, kommo_client=None)
-
-    message.answer.assert_called()
-
-
-async def test_task_no_kommo_sends_error_message():
-    """on_task_text_received without kommo_client sends an error message."""
-    from telegram_bot.handlers.crm_callbacks import on_task_text_received
-
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"entity_id": 20, "entity_type": "leads"})
-    message = AsyncMock()
-    message.text = "Task text"
-
-    await on_task_text_received(message, state, kommo_client=None)
-
-    message.answer.assert_called()
-
-
-# --- Task edit FSM states ---
-
-
-def test_crm_quick_action_states_have_edit_states():
-    """CrmQuickActionSG has edit_task_choose_field, edit_task_text, edit_task_date states."""
-    from telegram_bot.dialogs.states import CrmQuickActionSG
-
-    assert hasattr(CrmQuickActionSG, "edit_task_choose_field")
-    assert hasattr(CrmQuickActionSG, "edit_task_text")
-    assert hasattr(CrmQuickActionSG, "edit_task_date")
-
-
-async def test_on_task_edit_starts_field_choice():
-    """crm:task:edit:{id} sets edit_task_choose_field state and stores task id."""
+@pytest.mark.asyncio
+async def test_task_edit_starts_field_choice_dialog():
     from telegram_bot.dialogs.states import CrmQuickActionSG
     from telegram_bot.handlers.crm_callbacks import on_task_edit
 
     kommo = AsyncMock()
-    state = AsyncMock()
+    manager = _dialog_manager_mock()
     callback = AsyncMock()
     callback.data = "crm:task:edit:42"
-    callback.message = AsyncMock()
 
-    await on_task_edit(callback, state, kommo_client=kommo)
+    await on_task_edit(callback, manager, kommo_client=kommo)
 
-    state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_choose_field)
-    state.update_data.assert_called_once_with(edit_task_id=42)
-    callback.answer.assert_called()
+    manager.start.assert_awaited_once()
+    args = manager.start.call_args
+    assert args.args[0] is CrmQuickActionSG.edit_task_choose_field
+    assert args.kwargs["data"] == {"edit_task_id": 42}
 
 
-async def test_on_task_edit_no_kommo_answers_alert():
-    """on_task_edit without kommo_client answers with show_alert=True."""
+@pytest.mark.asyncio
+async def test_task_edit_no_kommo_answers_alert_no_dialog():
     from telegram_bot.handlers.crm_callbacks import on_task_edit
 
-    state = AsyncMock()
+    manager = _dialog_manager_mock()
     callback = AsyncMock()
     callback.data = "crm:task:edit:5"
 
-    await on_task_edit(callback, state, kommo_client=None)
+    await on_task_edit(callback, manager, kommo_client=None)
 
-    callback.answer.assert_called_once()
-    call_kwargs = callback.answer.call_args.kwargs
-    assert call_kwargs.get("show_alert") is True
-    state.set_state.assert_not_called()
-
-
-async def test_on_edit_field_chosen_1_goes_to_text():
-    """on_edit_field_chosen with '1' sets edit_task_text state."""
-    from telegram_bot.dialogs.states import CrmQuickActionSG
-    from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
-
-    state = AsyncMock()
-    message = AsyncMock()
-    message.text = "1"
-
-    await on_edit_field_chosen(message, state)
-
-    state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_text)
-    message.answer.assert_called()
+    callback.answer.assert_awaited_once()
+    assert callback.answer.call_args.kwargs.get("show_alert") is True
+    manager.start.assert_not_awaited()
 
 
-async def test_on_edit_field_chosen_2_goes_to_date():
-    """on_edit_field_chosen with '2' sets edit_task_date state."""
-    from telegram_bot.dialogs.states import CrmQuickActionSG
-    from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
-
-    state = AsyncMock()
-    message = AsyncMock()
-    message.text = "2"
-
-    await on_edit_field_chosen(message, state)
-
-    state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_date)
-    message.answer.assert_called()
-
-
-async def test_on_edit_field_chosen_invalid_sends_warning():
-    """on_edit_field_chosen with invalid input sends warning, no state change."""
-    from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
-
-    state = AsyncMock()
-    message = AsyncMock()
-    message.text = "5"
-
-    await on_edit_field_chosen(message, state)
-
-    state.set_state.assert_not_called()
-    message.answer.assert_called()
-
-
-async def test_on_edit_task_text_received_calls_update():
-    """on_edit_task_text_received calls kommo_client.update_task with new text."""
-    from telegram_bot.handlers.crm_callbacks import on_edit_task_text_received
-    from telegram_bot.services.kommo_models import TaskUpdate
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"edit_task_id": 77})
-    message = AsyncMock()
-    message.text = "New task text"
-
-    await on_edit_task_text_received(message, state, kommo_client=kommo)
-
-    kommo.update_task.assert_called_once()
-    call_args = kommo.update_task.call_args
-    assert call_args.args[0] == 77
-    update_obj = call_args.args[1]
-    assert isinstance(update_obj, TaskUpdate)
-    assert update_obj.text == "New task text"
-    state.clear.assert_called_once()
-
-
-async def test_on_edit_task_date_received_calls_update():
-    """on_edit_task_date_received parses date and calls kommo_client.update_task."""
-    from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
-    from telegram_bot.services.kommo_models import TaskUpdate
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"edit_task_id": 55})
-    message = AsyncMock()
-    message.text = "31.12.2027 10:00"
-
-    await on_edit_task_date_received(message, state, kommo_client=kommo)
-
-    kommo.update_task.assert_called_once()
-    call_args = kommo.update_task.call_args
-    assert call_args.args[0] == 55
-    update_obj = call_args.args[1]
-    assert isinstance(update_obj, TaskUpdate)
-    assert update_obj.complete_till is not None
-    assert update_obj.complete_till > 0
-    state.clear.assert_called_once()
-
-
-async def test_on_edit_task_date_received_invalid_format():
-    """on_edit_task_date_received with bad date sends warning, no update."""
-    from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
-
-    kommo = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"edit_task_id": 55})
-    message = AsyncMock()
-    message.text = "not-a-date"
-
-    await on_edit_task_date_received(message, state, kommo_client=kommo)
-
-    kommo.update_task.assert_not_called()
-    message.answer.assert_called()
-
-
-def test_crm_router_registers_edit_callback():
-    """create_crm_router registers crm:task:edit handler."""
-    from telegram_bot.handlers.crm_callbacks import create_crm_router
-
-    router = create_crm_router()
-    # Verify router was created without errors (handlers registered)
-    assert router is not None
-    assert router.name == "crm_callbacks"
-
-
-# --- crm_cards.py: postpone button ---
+# --- crm_cards.py: postpone button (kept for parity, not affected by #2053) ---
 
 
 def test_format_task_card_active_task_has_postpone_button():
-    """format_task_card for active task includes crm:task:postpone:{id} button."""
     from telegram_bot.dialogs.crm_cards import format_task_card
     from telegram_bot.services.kommo_models import Task
 
@@ -453,7 +242,6 @@ def test_format_task_card_active_task_has_postpone_button():
 
 
 def test_format_task_card_completed_task_no_postpone_button():
-    """format_task_card for completed task does NOT include postpone button."""
     from telegram_bot.dialogs.crm_cards import format_task_card
     from telegram_bot.services.kommo_models import Task
 
@@ -467,47 +255,29 @@ def test_format_task_card_completed_task_no_postpone_button():
 
 
 # --------------------------------------------------------------------------
-# @observe instrumentation tests (#1664)
+# @observe instrumentation (#1664 + #2053)
 # --------------------------------------------------------------------------
 
 
 class TestCrmCallbacksObserveInstrumentation:
-    """Tests for @observe instrumentation on CRM callback handlers (#1664).
-
-    Contract: every write-side aiogram handler in
-    ``telegram_bot.handlers.crm_callbacks`` must be wrapped with
-    ``@observe(name="crm-<action>", capture_input=False, capture_output=False)``
-    so that nested Kommo / FSM observations are parented under a named span
-    instead of becoming orphan traces.
-
-    Curated input/output payloads must be written via
-    ``get_client().update_current_span(...)`` using only allow-listed keys
-    (``deal_id``, ``task_id``, ``field``, ``action``).  Raw ``callback.data``
-    and FSM-state contents must NEVER appear in span fields (issue's
-    Forbidden list).
+    """Trigger-side @observe spans must remain intact after the #2053
+    migration. Message-handler spans (``crm-quick-note``, ``crm-task-create``,
+    ``crm-task-edit-text``, ``crm-task-edit-date``, ``crm-task-edit-field``)
+    moved to the dialog module — they are checked there.
     """
 
-    # The 9 handlers we are instrumenting in this PR plus the 2 that were
-    # already decorated by #1673 / #1674 — total 11 expected spans.
-    EXPECTED_SPAN_NAMES_NEW = {
+    EXPECTED_CALLBACK_SPAN_NAMES = {
         "crm-lead-note-prompt",
         "crm-lead-task-prompt",
         "crm-task-postpone",
         "crm-contact-note-prompt",
-        "crm-task-create",
         "crm-task-edit-prompt",
-        "crm-task-edit-field",
-        "crm-task-edit-text",
-        "crm-task-edit-date",
+        "crm-quick-complete",
     }
-    EXPECTED_SPAN_NAMES_EXISTING = {"crm-quick-complete", "crm-quick-note"}
-    EXPECTED_SPAN_NAMES_ALL = EXPECTED_SPAN_NAMES_NEW | EXPECTED_SPAN_NAMES_EXISTING
 
     @staticmethod
     def _patched_lf(monkeypatch):
         """Replace get_client used by crm_callbacks module with a recording mock."""
-        from unittest.mock import MagicMock
-
         from telegram_bot.handlers import crm_callbacks as cb_mod
 
         mock_lf = MagicMock()
@@ -516,11 +286,6 @@ class TestCrmCallbacksObserveInstrumentation:
 
     @staticmethod
     def _disable_observe(monkeypatch):
-        """Replace the @observe decorator at module-import time with a no-op.
-
-        This lets behavior assertions (input/output/error) run without the
-        real Langfuse SDK trying to start an OTEL span.
-        """
         import importlib
         import sys
 
@@ -538,25 +303,13 @@ class TestCrmCallbacksObserveInstrumentation:
         sys.modules.pop("telegram_bot.handlers.crm_callbacks", None)
         importlib.import_module("telegram_bot.handlers.crm_callbacks")
 
-    # ---- Decorator-application contract ------------------------------------
-
     def test_crm_callbacks_module_imports_observe_and_get_client(self):
-        """Module wires the Langfuse decorator + client accessor (#1664 contract)."""
         from telegram_bot.handlers import crm_callbacks as cb_mod
 
-        assert hasattr(cb_mod, "observe"), (
-            "telegram_bot.handlers.crm_callbacks must import `observe` "
-            "from telegram_bot.observability for the @observe decorator on "
-            "write-side CRM callback handlers"
-        )
-        assert hasattr(cb_mod, "get_client"), (
-            "telegram_bot.handlers.crm_callbacks must import `get_client` "
-            "from telegram_bot.observability for curated update_current_span calls"
-        )
+        assert hasattr(cb_mod, "observe")
+        assert hasattr(cb_mod, "get_client")
 
     def test_crm_callbacks_observe_decorator_applied_with_correct_kwargs(self, monkeypatch):
-        """All 11 expected handlers must be wrapped with @observe(...) and the
-        right kwargs (capture_input=False, capture_output=False)."""
         import importlib
         import sys
 
@@ -565,9 +318,6 @@ class TestCrmCallbacksObserveInstrumentation:
         captured: list[dict] = []
 
         def recording_observe(*args, **kwargs):
-            # The handlers in this module always use the kwargs form
-            # (`@observe(name=..., capture_input=False, capture_output=False)`),
-            # so we only have to record kwargs.
             captured.append(dict(kwargs))
 
             def decorator(func):
@@ -582,28 +332,20 @@ class TestCrmCallbacksObserveInstrumentation:
         importlib.import_module("telegram_bot.handlers.crm_callbacks")
 
         names = {entry.get("name") for entry in captured}
-
-        # All 11 expected spans (9 new + 2 existing) must be present.
-        missing = self.EXPECTED_SPAN_NAMES_ALL - names
+        missing = self.EXPECTED_CALLBACK_SPAN_NAMES - names
         assert not missing, (
-            f"Missing @observe spans on crm_callbacks handlers: {sorted(missing)}. "
-            f"Captured: {sorted(n for n in names if n)}"
+            "Missing @observe spans on trigger-side crm_callbacks: "
+            f"{sorted(missing)}. Captured: {sorted(n for n in names if n)}"
         )
-
-        # Each captured entry must use capture_input=False and capture_output=False.
         for entry in captured:
             name = entry.get("name")
-            if name not in self.EXPECTED_SPAN_NAMES_ALL:
+            if name not in self.EXPECTED_CALLBACK_SPAN_NAMES:
                 continue
-            assert entry.get("capture_input") is False, (
-                f"@observe(name={name!r}) must use capture_input=False"
-            )
-            assert entry.get("capture_output") is False, (
-                f"@observe(name={name!r}) must use capture_output=False"
-            )
+            assert entry.get("capture_input") is False
+            assert entry.get("capture_output") is False
 
+    @pytest.mark.asyncio
     async def test_callback_prompt_works_when_langfuse_client_unavailable(self, monkeypatch):
-        """Callback prompt handlers must degrade gracefully when tracing is off."""
         self._disable_observe(monkeypatch)
         from telegram_bot.handlers import crm_callbacks as cb_mod
         from telegram_bot.handlers.crm_callbacks import on_lead_note
@@ -612,189 +354,10 @@ class TestCrmCallbacksObserveInstrumentation:
 
         callback = AsyncMock()
         callback.data = "crm:lead:note:123"
-        state = AsyncMock()
+        manager = _dialog_manager_mock()
 
-        await on_lead_note(callback, state, kommo_client=None)
+        await on_lead_note(callback, manager, kommo_client=None)
 
-        callback.answer.assert_called_once()
+        callback.answer.assert_awaited_once()
         assert callback.answer.call_args.kwargs.get("show_alert") is True
-
-    async def test_task_text_works_when_langfuse_client_unavailable(self, monkeypatch):
-        """Message handlers must not require an initialized Langfuse client."""
-        self._disable_observe(monkeypatch)
-        from telegram_bot.handlers import crm_callbacks as cb_mod
-        from telegram_bot.handlers.crm_callbacks import on_task_text_received
-
-        monkeypatch.setattr(cb_mod, "get_client", lambda: None)
-
-        state = AsyncMock()
-        state.get_data = AsyncMock(return_value={"entity_id": 123})
-        message = AsyncMock()
-        message.text = ""
-
-        await on_task_text_received(message, state, kommo_client=AsyncMock())
-
-        state.clear.assert_called_once()
-        message.answer.assert_called_once()
-
-    async def test_edit_date_works_when_langfuse_client_unavailable(self, monkeypatch):
-        """Date edit validation must still work when tracing is unavailable."""
-        self._disable_observe(monkeypatch)
-        from telegram_bot.handlers import crm_callbacks as cb_mod
-        from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
-
-        monkeypatch.setattr(cb_mod, "get_client", lambda: None)
-
-        state = AsyncMock()
-        state.get_data = AsyncMock(return_value={"edit_task_id": 456})
-        message = AsyncMock()
-        message.text = "bad date"
-
-        await on_edit_task_date_received(message, state, kommo_client=AsyncMock())
-
-        message.answer.assert_called_once()
-
-    # ---- Behavior tests for representative new handlers --------------------
-
-    async def test_on_task_text_received_records_curated_input(self, monkeypatch):
-        """on_task_text_received writes a curated input payload (no PII, no raw FSM)."""
-        from unittest.mock import AsyncMock
-
-        self._disable_observe(monkeypatch)
-        mock_lf = self._patched_lf(monkeypatch)
-
-        # Re-import after observe was monkeypatched.
-        from telegram_bot.handlers.crm_callbacks import on_task_text_received
-
-        kommo = AsyncMock()
-        state = AsyncMock()
-        state.get_data = AsyncMock(return_value={"entity_id": 1234, "entity_type": "leads"})
-        message = AsyncMock()
-        message.text = "Call client back tomorrow about contract +380501112233"
-
-        await on_task_text_received(message, state, kommo_client=kommo)
-
-        input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
-        ]
-        assert len(input_calls) >= 1, (
-            "on_task_text_received must call update_current_span(input=...)"
-        )
-        captured_input = input_calls[0]["input"]
-        assert isinstance(captured_input, dict)
-        # Curated keys only: deal_id / task_id / field / action.
-        assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
-        assert captured_input.get("action") == "create"
-        assert captured_input.get("deal_id") == 1234
-        # Forbidden values: raw text / FSM state contents must not appear.
-        flat = str(captured_input)
-        assert message.text not in flat
-        assert "+380501112233" not in flat
-
-    async def test_on_edit_field_chosen_records_curated_field(self, monkeypatch):
-        """on_edit_field_chosen reports which field was chosen via curated keys."""
-        from unittest.mock import AsyncMock
-
-        self._disable_observe(monkeypatch)
-        mock_lf = self._patched_lf(monkeypatch)
-
-        from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
-
-        state = AsyncMock()
-        message = AsyncMock()
-        message.text = "1"
-
-        await on_edit_field_chosen(message, state)
-
-        input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
-        ]
-        assert len(input_calls) >= 1
-        captured_input = input_calls[0]["input"]
-        assert isinstance(captured_input, dict)
-        assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
-        assert captured_input.get("field") == "text"
-        assert captured_input.get("action") == "edit-field-choice"
-
-    async def test_on_edit_field_chosen_invalid_records_cancelled_action(self, monkeypatch):
-        """Invalid field choice must record a cancelled / no-op action in span output."""
-        from unittest.mock import AsyncMock
-
-        self._disable_observe(monkeypatch)
-        mock_lf = self._patched_lf(monkeypatch)
-
-        from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
-
-        state = AsyncMock()
-        message = AsyncMock()
-        message.text = "5"  # neither '1' nor '2'
-
-        await on_edit_field_chosen(message, state)
-
-        output_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list if "output" in c.kwargs
-        ]
-        assert len(output_calls) >= 1, (
-            "Invalid field choice must record a span output describing the no-op."
-        )
-        captured_output = output_calls[-1]["output"]
-        assert isinstance(captured_output, dict)
-        assert captured_output.get("action") == "cancelled"
-
-    async def test_on_edit_task_date_received_records_curated_input(self, monkeypatch):
-        """on_edit_task_date_received writes curated input payload with task_id only."""
-        from unittest.mock import AsyncMock
-
-        self._disable_observe(monkeypatch)
-        mock_lf = self._patched_lf(monkeypatch)
-
-        from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
-
-        kommo = AsyncMock()
-        state = AsyncMock()
-        state.get_data = AsyncMock(return_value={"edit_task_id": 4242})
-        message = AsyncMock()
-        message.text = "31.12.2027 10:00"
-
-        await on_edit_task_date_received(message, state, kommo_client=kommo)
-
-        input_calls = [
-            c.kwargs for c in mock_lf.update_current_span.call_args_list if "input" in c.kwargs
-        ]
-        assert len(input_calls) >= 1
-        captured_input = input_calls[0]["input"]
-        assert isinstance(captured_input, dict)
-        assert set(captured_input.keys()) <= {"deal_id", "task_id", "field", "action"}
-        assert captured_input.get("task_id") == 4242
-        # Raw user-supplied date string must not appear.
-        assert "31.12.2027 10:00" not in str(captured_input)
-
-    async def test_on_edit_task_date_received_kommo_failure_records_error(self, monkeypatch):
-        """Kommo failure must be recorded as update_current_span(level='ERROR', ...)."""
-        from unittest.mock import AsyncMock
-
-        self._disable_observe(monkeypatch)
-        mock_lf = self._patched_lf(monkeypatch)
-
-        from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
-
-        kommo = AsyncMock()
-        kommo.update_task = AsyncMock(side_effect=RuntimeError("kommo HTTP 500"))
-        state = AsyncMock()
-        state.get_data = AsyncMock(return_value={"edit_task_id": 99})
-        message = AsyncMock()
-        message.text = "31.12.2027 10:00"
-
-        await on_edit_task_date_received(message, state, kommo_client=kommo)
-
-        error_calls = [
-            c.kwargs
-            for c in mock_lf.update_current_span.call_args_list
-            if c.kwargs.get("level") == "ERROR"
-        ]
-        assert len(error_calls) >= 1, (
-            "Kommo failure must call update_current_span(level='ERROR', ...)"
-        )
-        status = error_calls[0].get("status_message", "")
-        assert "kommo HTTP 500" in status
-        assert len(status) <= 220, "status_message must be truncated to ~200 chars"
+        manager.start.assert_not_awaited()
