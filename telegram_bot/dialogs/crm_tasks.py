@@ -12,13 +12,12 @@ import logging
 import operator
 from typing import Any
 
-from aiogram.types import CallbackQuery, InaccessibleMessage, Message
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram.types import CallbackQuery, Message
+from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode, Window
 from aiogram_dialog.widgets.input import ManagedTextInput, TextInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Start
 from aiogram_dialog.widgets.text import Const, Format
 
-from telegram_bot.handlers.crm_callbacks import _EDIT_FIELD_PROMPT
 from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import Task
 
@@ -472,15 +471,20 @@ async def on_task_edit_from_list(
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Start task edit from dialog select — close dialog and trigger FSM."""
+    """Start the CRM quick-actions edit dialog for the selected task.
+
+    #2053: replaces the previous custom-FSM trigger
+    (``state.set_state(CrmQuickActionSG.edit_task_choose_field)``) with the
+    dialog-native entry point, mirroring ``on_task_edit`` in
+    ``telegram_bot/handlers/crm_callbacks.py``.
+    """
     task_id = int(item_id)
-    fsm = manager.middleware_data.get("state")
-    if fsm:
-        await fsm.set_state(CrmQuickActionSG.edit_task_choose_field)
-        await fsm.update_data(edit_task_id=task_id)
-    await manager.done()
-    if callback.message and not isinstance(callback.message, InaccessibleMessage):
-        await callback.message.answer(_EDIT_FIELD_PROMPT)
+    await manager.start(
+        CrmQuickActionSG.edit_task_choose_field,
+        data={"edit_task_id": task_id},
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND,
+    )
     await callback.answer()
 
 
