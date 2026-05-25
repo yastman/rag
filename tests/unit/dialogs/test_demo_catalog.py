@@ -199,49 +199,10 @@ async def test_dialog_search_replaces_demo_dialog_with_catalog_shell() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Task 2: _run_demo_search (FSM handler) → CatalogSG
+# Task 2 was the legacy ``_run_demo_search`` FSM handler. After #2054 the
+# whole apartment search flow lives in ``demo_dialog._dialog_search`` and
+# is covered by the dialog-side tests above; the legacy handler is gone.
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_handler_run_demo_search_transitions_to_catalog() -> None:
-    """FSM handler should store catalog_runtime for CatalogSG."""
-    from telegram_bot.handlers.demo_handler import _run_demo_search
-
-    msg = _make_message()
-    state = _make_state()
-
-    await _run_demo_search(
-        "двушка",
-        msg,
-        state,
-        pipeline=_make_pipeline(),
-        apartments_service=_make_svc(results=[_APT] * 5, total=15),
-    )
-
-    kwargs = state.update_data.await_args.kwargs
-    assert "catalog_runtime" in kwargs
-    assert kwargs["catalog_runtime"]["source"] == "demo"
-
-
-@pytest.mark.asyncio
-async def test_handler_run_demo_search_uses_scroll() -> None:
-    """FSM handler should call scroll_with_filters."""
-    from telegram_bot.handlers.demo_handler import _run_demo_search
-
-    msg = _make_message()
-    state = _make_state()
-    svc = _make_svc()
-
-    await _run_demo_search(
-        "двушка",
-        msg,
-        state,
-        pipeline=_make_pipeline(),
-        apartments_service=svc,
-    )
-
-    svc.scroll_with_filters.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -413,60 +374,17 @@ def test_demo_dialog_has_voice_input() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Task 7: Legacy demo state must be cleared so catalog keyboard doesn't loop
+# Task 7: Legacy demo FSM state clearing
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_legacy_demo_exit_clears_fsm_state() -> None:
-    """After legacy _run_demo_search (dialog_manager=None), FSM state is cleared
-    so that subsequent '🏠 Главное меню' catalog keyboard text is NOT
-    re-interpreted as a new apartment query."""
-    from telegram_bot.handlers.demo_handler import _run_demo_search
-
-    msg = _make_message()
-    state = _make_state()
-
-    svc = _make_svc(results=[_APT] * 5, total=15)
-
-    await _run_demo_search(
-        "двушка",
-        msg,
-        state,
-        pipeline=_make_pipeline(),
-        apartments_service=svc,
-        dialog_manager=None,
-    )
-
-    state.set_state.assert_awaited_once_with(None)
-
-
-@pytest.mark.asyncio
-async def test_dialog_demo_exit_does_not_clear_raw_fsm() -> None:
-    """Dialog-managed path must NOT touch raw FSM state; dialog manages lifecycle."""
-    from telegram_bot.handlers.demo_handler import _run_demo_search
-
-    msg = _make_message()
-    state = _make_state()
-    manager = AsyncMock()
-    manager.middleware_data = {}
-
-    svc = _make_svc(results=[_APT] * 5, total=15)
-
-    await _run_demo_search(
-        "двушка",
-        msg,
-        state,
-        pipeline=_make_pipeline(),
-        apartments_service=svc,
-        dialog_manager=manager,
-    )
-
-    state.set_state.assert_not_awaited()
+# After #2054 the apartment-search flow no longer touches a parallel FSM
+# state — it lives entirely in ``demo_dialog`` (aiogram-dialog manages
+# state on its own stack). The two legacy tests that asserted the FSM
+# clear / no-clear contract were dropped; ``test_catalog_exit_returns_to_main_menu``
+# above still asserts that exiting back to the main menu clears state.
 
 
 # ---------------------------------------------------------------------------
-# Task 8: Full flow integration test
+# Task 8: Full flow integration test (dialog path)
 # ---------------------------------------------------------------------------
 
 
@@ -474,21 +392,24 @@ async def test_dialog_demo_exit_does_not_clear_raw_fsm() -> None:
 async def test_full_demo_flow_text_to_pagination() -> None:
     """Full flow: text → extraction → scroll → catalog → show more."""
     from telegram_bot.dialogs.catalog import on_catalog_more
-    from telegram_bot.handlers.demo_handler import _run_demo_search
+    from telegram_bot.dialogs.demo import _dialog_search
 
-    # Step 1: Initial search
+    # Step 1: Initial search via the dialog path (replaces legacy
+    # _run_demo_search; #2054).
     msg = _make_message()
     state = _make_state()
 
     svc = _make_svc(results=[_APT] * 10, total=25)
 
-    await _run_demo_search(
-        "двушка",
-        msg,
-        state,
-        pipeline=_make_pipeline(),
-        apartments_service=svc,
-    )
+    manager = AsyncMock()
+    manager.middleware_data = {
+        "pipeline": _make_pipeline(),
+        "apartments_service": svc,
+        "state": state,
+    }
+    manager.dialog_data = {}
+
+    await _dialog_search("двушка", msg, manager)
 
     assert "catalog_runtime" in state.update_data.await_args.kwargs
     assert svc.scroll_with_filters.await_count == 1

@@ -1,9 +1,9 @@
-"""E2E test for full demo flow: button → examples → search."""
+"""E2E checks for the demo apartment flow (#2054 dialog migration)."""
 
 import pytest
 
 from telegram_bot.callback_data import DemoCB
-from telegram_bot.handlers.demo_handler import DemoStates
+from telegram_bot.dialogs.states import DemoSG
 from telegram_bot.keyboards.client_keyboard import MENU_BUTTONS
 from telegram_bot.keyboards.demo_keyboard import (
     DEFAULT_EXAMPLES,
@@ -29,8 +29,11 @@ def test_demo_examples_keyboard():
     assert len(kb.inline_keyboard) == 4
 
 
-def test_demo_states_defined():
-    assert DemoStates.waiting_query is not None
+def test_demo_dialog_states_defined():
+    """After #2054 the demo flow is the aiogram-dialog ``DemoSG`` group;
+    the legacy ``DemoStates`` FSM has been removed."""
+    assert DemoSG.intro is not None
+    assert DemoSG.results is not None
 
 
 @pytest.mark.asyncio
