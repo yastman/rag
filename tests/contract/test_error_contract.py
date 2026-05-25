@@ -38,6 +38,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
     "telegram_bot/services/generate_response.py": ["ERROR", "WARNING"],
     "telegram_bot/services/qdrant.py": ["ERROR", "WARNING"],
+    "src/runtime/services/qdrant.py": ["ERROR", "WARNING"],
     "telegram_bot/services/history_service.py": ["ERROR"],
     "telegram_bot/middlewares/error_handler.py": ["ERROR"],
     # CRM callback handlers — exception path of CRM dialog/wrapper spans

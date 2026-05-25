@@ -52,6 +52,9 @@ ROLLING_WINDOW_ALLOWLIST: frozenset[str] = frozenset(
     {
         # Deprecated runtime facade — replaced by pipeline_latency_seconds
         # Histogram in slice 2/4; full deletion in slice 4/4.
+        # Canonical home moved to src/runtime/services/metrics.py in #2047
+        # slice; telegram_bot/services/metrics.py is now a back-compat shim.
+        "src/runtime/services/metrics.py",
         "telegram_bot/services/metrics.py",
         # Offline evaluation harness: computes quantiles from a list of
         # latencies recorded during a benchmark run, then emits a
@@ -173,8 +176,9 @@ def test_no_new_rolling_pxx_definitions_outside_allowlist() -> None:
     """Custom rolling p50/p95 dicts must stay confined to the deprecated file.
 
     Slice 4/4 will delete the surviving rolling-window altogether.
-    Until then, only ``telegram_bot/services/metrics.py`` may keep the
-    surface for the admin ``/metrics`` Telegram command.
+    Until then, only ``src/runtime/services/metrics.py`` (and its
+    ``telegram_bot/services/metrics.py`` shim) may keep the surface for
+    the admin ``/metrics`` Telegram command.
     """
     new_offenders: list[tuple[str, int]] = []
     for py_file in _iter_python_files(SCAN_DIRS):
@@ -190,7 +194,7 @@ def test_no_new_rolling_pxx_definitions_outside_allowlist() -> None:
             "New custom rolling p50/p95 definitions detected (#1648):\n"
             + bullets
             + "\nUse prometheus_client.Histogram instead. See "
-            "telegram_bot/services/metrics.py::pipeline_latency_seconds "
+            "src/runtime/services/metrics.py::pipeline_latency_seconds "
             "for the canonical SDK-native pattern."
         )
 

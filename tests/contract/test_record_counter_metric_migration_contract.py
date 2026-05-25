@@ -25,12 +25,12 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[2]
-METRICS_OWNER = REPO / "telegram_bot" / "services" / "metrics.py"
+METRICS_OWNER = REPO / "src" / "runtime" / "services" / "metrics.py"
 
 FIRST_PARTY_ROOTS = ("src", "telegram_bot", "mini_app", "services")
 
 IMPORT_RE = re.compile(
-    r"^\s*from\s+telegram_bot\.services\.metrics\s+import\s+[^#\n]*\brecord_counter_metric\b",
+    r"^\s*from\s+(telegram_bot|src\.runtime)\.services\.metrics\s+import\s+[^#\n]*\brecord_counter_metric\b",
     re.MULTILINE,
 )
 CALL_RE = re.compile(r"\brecord_counter_metric\s*\(")
@@ -61,7 +61,7 @@ def test_record_counter_metric_not_imported_outside_metrics_module() -> None:
     assert offenders == [], (
         "record_counter_metric is a legacy compatibility shim (issue #2056). "
         "First-party code must import record_pipeline_event from "
-        "telegram_bot.services.metrics instead. "
+        "src.runtime.services.metrics (or its telegram_bot.services.metrics shim) instead. "
         f"Offending imports: {offenders}"
     )
 
@@ -86,7 +86,7 @@ def test_record_pipeline_event_remains_the_canonical_counter_api() -> None:
     text = METRICS_OWNER.read_text(encoding="utf-8")
     assert "def record_pipeline_event(" in text, (
         "record_pipeline_event() must remain the canonical Counter API in "
-        "telegram_bot/services/metrics.py (issue #2056)."
+        "src/runtime/services/metrics.py (issue #2056)."
     )
     assert '"record_pipeline_event"' in text or "'record_pipeline_event'" in text, (
         "record_pipeline_event must be in the module __all__ export list."
