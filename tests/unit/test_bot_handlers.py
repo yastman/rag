@@ -626,18 +626,16 @@ class TestCommandHandlers:
 
     async def test_cmd_metrics(self, mock_config):
         """Test /metrics command handler emits Prometheus text format (#2058)."""
-        from prometheus_client import Counter
-
-        sentinel = Counter(
-            "bot_cmd_metrics_test_sentinel_total",
-            "test sentinel for cmd_metrics rewrite (#2058)",
-        )
-        sentinel.inc(3)
-
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
+        payload = (
+            b"# HELP bot_cmd_metrics_test_sentinel_total test sentinel\n"
+            b"# TYPE bot_cmd_metrics_test_sentinel_total counter\n"
+            b"bot_cmd_metrics_test_sentinel_total 3.0\n"
+        )
 
-        await cmd_metrics(bot, message)
+        with patch("prometheus_client.generate_latest", return_value=payload):
+            await cmd_metrics(bot, message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
