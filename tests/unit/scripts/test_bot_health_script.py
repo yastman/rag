@@ -43,3 +43,20 @@ def test_bot_health_reports_redis_password_drift_remediation() -> None:
 def test_bot_health_redacts_redis_and_rediss_credentials() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     assert r"(rediss?://)([^@\s]+)@" in text
+
+
+def test_bot_health_script_sources_env_file_with_fallback() -> None:
+    """The script must load runtime env vars (.env first, fallback fixture second)."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "tests/fixtures/compose.ci.env" in text, (
+        "script must reference tests/fixtures/compose.ci.env as the safe local env fallback"
+    )
+    assert "-f .env" in text, "script must check for .env file existence before using fallback"
+
+
+def test_bot_health_script_exports_env_vars_via_set_a() -> None:
+    """The script must auto-export sourced env vars to uv subprocesses."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "set -a" in text, (
+        "script must use 'set -a' so BotConfig() in uv subprocesses can read REDIS_PASSWORD"
+    )

@@ -3386,7 +3386,7 @@ class PropertyBot:
                     # into a ContextVar bucket while this capture is active.
                     # Falls back to the proxy when the checkpointer is not
                     # instrumented (e.g. MemorySaver in tests).
-                    overhead_bucket = begin_checkpoint_overhead_capture()
+                    overhead_bucket: dict[str, float] | None = begin_checkpoint_overhead_capture()
                     try:
                         result = await graph.ainvoke(state, config=invoke_config)
                     finally:
