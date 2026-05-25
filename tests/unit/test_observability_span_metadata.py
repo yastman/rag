@@ -89,7 +89,7 @@ class TestQdrantSpanMetadata:
 
     @pytest.fixture(scope="class")
     def qdrant_spans(self):
-        path = REPO_ROOT / "telegram_bot" / "services" / "qdrant.py"
+        path = REPO_ROOT / "src" / "runtime" / "services" / "qdrant.py"
         return _collect_observe_decorators(path)
 
     @pytest.mark.parametrize(
@@ -232,7 +232,7 @@ class TestBGEIntegrationWrapperSpanMetadata:
 
     @pytest.fixture(scope="class")
     def integration_spans(self):
-        path = REPO_ROOT / "telegram_bot" / "integrations" / "embeddings.py"
+        path = REPO_ROOT / "src" / "runtime" / "integrations" / "embeddings.py"
         return _collect_observe_decorators(path)
 
     @pytest.mark.parametrize(
