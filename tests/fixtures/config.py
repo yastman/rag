@@ -19,8 +19,14 @@ def qdrant_api_key():
 
 @pytest.fixture(scope="session")
 def qdrant_collection():
-    """Qdrant collection name for tests."""
-    return os.getenv("QDRANT_COLLECTION", "test_documents")
+    """Qdrant collection name for tests.
+
+    Defaults to the production contract value ``gdrive_documents_bge``
+    (matches ``telegram_bot/config.py`` and ``compose.yml``) so smoke
+    tests run against the same collection naming the bot uses
+    end-to-end. Override per-environment via ``QDRANT_COLLECTION``.
+    """
+    return os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge")
 
 
 @pytest.fixture(scope="session")
