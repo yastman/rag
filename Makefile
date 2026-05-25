@@ -437,7 +437,7 @@ LOCAL_COMPOSE_FILE := compose.yml:compose.dev.yml
 # Local dev env fallback: use .env if present, otherwise safe CI fixture values
 LOCAL_COMPOSE_CMD := COMPOSE_FILE=$(LOCAL_COMPOSE_FILE) $(COMPOSE_CMD) --env-file $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
 # Runtime env for E2E trace gates: allow worktrees to point at the main checkout .env
-RAG_RUNTIME_ENV_FILE ?= $$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )
+RAG_RUNTIME_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)
 export RAG_RUNTIME_ENV_FILE
 
 # =============================================================================
@@ -717,11 +717,12 @@ local-up-ingest:  ## Start local services + docling for ingestion workflows
 	@echo "$(GREEN)✓ Local services + docling started$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
-	uv run --env-file .env python -m telegram_bot.main
+	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
 bot:  ## Alias: run bot and tee output to logs/bot-run.log
 	@mkdir -p logs
-	uv run --env-file .env python -m telegram_bot.main 2>&1 | tee logs/bot-run.log; echo '[COMPLETE]'
+	@bash -o pipefail -c 'uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
+	status=$$?; echo '[COMPLETE]'; exit $$status
 
 # =============================================================================
 # BOT LOG TRIAGE (issue #1418)

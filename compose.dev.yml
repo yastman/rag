@@ -29,6 +29,8 @@ services:
       --maxmemory ${REDIS_MAXMEMORY:-512mb}
       --maxmemory-policy volatile-lfu
       --maxmemory-samples 10
+      --save ""
+      --stop-writes-on-bgsave-error no
 
   qdrant:
     ports:
