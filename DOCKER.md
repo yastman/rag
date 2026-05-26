@@ -174,8 +174,8 @@ match the traced service defaults:
 | `LANGFUSE_INIT_ORG_NAME` | `Local Dev` |
 | `LANGFUSE_INIT_PROJECT_ID` | `dev-project` |
 | `LANGFUSE_INIT_PROJECT_NAME` | `Local Dev` |
-| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `[REDACTED-LANGFUSE-KEY] |
-| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `[REDACTED-LANGFUSE-KEY] |
+| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `pk-lf-dev` |
+| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `sk-lf-dev` |
 
 These defaults are local-only. Override them from `.env` when a dev stack should
 use a different local Langfuse project. Production and VPS environments must
