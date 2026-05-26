@@ -18,6 +18,7 @@ from typing import Any, cast
 import httpx
 from dotenv import load_dotenv
 
+from src.observability_sentry import initialize_sentry, set_runtime_tags
 from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
 from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
 from src.voice.schemas import CallStatus
@@ -241,6 +242,17 @@ async def _get_transcript_store() -> TranscriptStore | None:
         _transcript_store = TranscriptStore(database_url=DATABASE_URL)
         await _transcript_store.initialize()
     return _transcript_store
+
+
+def _setup_sentry() -> None:
+    """Boot Sentry error tracking for the LiveKit voice process (#1417).
+
+    No-op when ``SENTRY_DSN`` is unset. Tags ``service=voice-agent`` so events
+    can be filtered separately from the Telegram bot runtime.
+    """
+    if initialize_sentry():
+        set_runtime_tags(service="voice-agent")
+        logger.info("Sentry error tracking enabled with PII redaction")
 
 
 def _setup_langfuse() -> None:
@@ -524,6 +536,8 @@ def _start_health_server() -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+# Setup Sentry (no-op without SENTRY_DSN) before Langfuse so init errors are captured.
+_setup_sentry()
 # Setup Langfuse before starting
 _setup_langfuse()
 
