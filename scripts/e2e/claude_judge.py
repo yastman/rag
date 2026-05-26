@@ -206,16 +206,22 @@ class ClaudeJudge(_BaseLLMJudge):
     async def evaluate(self, scenario: TestScenario, bot_response: str) -> JudgeResult:
         import asyncio
 
+        from anthropic.types import TextBlock
+
         user_prompt = self._build_user_prompt(scenario, bot_response)
 
         response = await asyncio.to_thread(
-            self._client.messages.create,
-            model=self.config.judge_model,
-            max_tokens=1024,
-            system=JUDGE_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
+            lambda: self._client.messages.create(
+                model=self.config.judge_model,
+                max_tokens=1024,
+                system=JUDGE_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
         )
-        response_text = response.content[0].text
+        block = response.content[0]
+        if not isinstance(block, TextBlock):
+            raise ValueError(f"Unexpected non-text block from Claude judge: {type(block).__name__}")
+        response_text = block.text
         return self._parse_judge_response(response_text)
 
 

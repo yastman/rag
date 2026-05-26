@@ -12,7 +12,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ DEFAULT_DATASET_NAME = "rag-gold-set"
 def load_ground_truth(path: str) -> list[dict[str, Any]]:
     """Load ground truth samples from JSON file."""
     data = json.loads(Path(path).read_text())
-    return data["samples"]
+    return cast("list[dict[str, Any]]", data["samples"])
 
 
 def sync_to_langfuse(

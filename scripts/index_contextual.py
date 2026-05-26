@@ -63,7 +63,9 @@ async def main(args: argparse.Namespace) -> int:
     # Create collection if needed
     if args.recreate:
         print(f"Recreating collection: {collection_name}")
-    await indexer.create_collection(collection_name, recreate=args.recreate)
+    # NOTE: DocumentIndexer.create_collection is synchronous; previously this
+    # was awaited which raised TypeError at runtime. See #2146.
+    indexer.create_collection(collection_name, recreate=args.recreate)
 
     # Find JSON files
     input_path = Path(args.input)
@@ -113,7 +115,9 @@ async def main(args: argparse.Namespace) -> int:
     print(f"\nTotal: {total_indexed} indexed, {total_failed} failed")
 
     # Print collection stats
-    stats = await indexer.get_collection_stats(collection_name)
+    # NOTE: DocumentIndexer.get_collection_stats is synchronous; previously
+    # this was awaited which raised TypeError at runtime. See #2146.
+    stats = indexer.get_collection_stats(collection_name)
     if stats:
         print(f"\nCollection '{collection_name}': {stats.get('points_count', 0)} total points")
 

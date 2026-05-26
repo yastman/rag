@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
-import yaml
+import yaml  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 from langfuse import Langfuse
 from tenacity import (
@@ -123,7 +123,7 @@ def _load_go_no_go_thresholds(
     defaults["judge"] = all_cfg.get("judge", {})
     if custom:
         defaults.update(custom)
-    return defaults
+    return cast("dict[str, Any]", defaults)
 
 
 def load_trace_coverage_tiers() -> dict[str, list[str]]:
@@ -1350,10 +1350,13 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
     # Judge score aggregation (#386) — from Langfuse managed evaluators
     judge_metrics = ("judge_faithfulness", "judge_answer_relevance", "judge_context_relevance")
     for judge_name in judge_metrics:
-        vals = [r.scores.get(judge_name) for r in results if r.scores.get(judge_name) is not None]
-        if vals:
-            aggregates[f"{judge_name}_mean"] = round(float(np.mean(vals)), 3)
-            aggregates[f"{judge_name}_count"] = len(vals)
+        # Filter Nones via walrus so mypy narrows the comprehension to list[float].
+        judge_vals: list[float] = [
+            v for r in results if (v := r.scores.get(judge_name)) is not None
+        ]
+        if judge_vals:
+            aggregates[f"{judge_name}_mean"] = round(float(np.mean(judge_vals)), 3)
+            aggregates[f"{judge_name}_count"] = len(judge_vals)
 
     return aggregates
 

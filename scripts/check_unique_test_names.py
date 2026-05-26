@@ -22,6 +22,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import cast
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -54,7 +55,7 @@ def collect_test_function_names() -> dict[str, list[str]]:
 def load_allowlist() -> dict[str, list[str]]:
     if not ALLOWLIST_PATH.exists():
         return {}
-    return json.loads(ALLOWLIST_PATH.read_text())
+    return cast("dict[str, list[str]]", json.loads(ALLOWLIST_PATH.read_text()))
 
 
 def write_allowlist(payload: dict[str, list[str]]) -> None:

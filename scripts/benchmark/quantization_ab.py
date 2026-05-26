@@ -16,6 +16,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
+from typing import Any, cast
 
 from telegram_bot.config import BotConfig
 from telegram_bot.services.qdrant import QdrantService
@@ -78,7 +79,7 @@ async def run_ab_test(
         ]
     )
 
-    results = {"with_quant": [], "without_quant": []}
+    results: dict[str, list[dict[str, Any]]] = {"with_quant": [], "without_quant": []}
 
     for run in range(num_runs):
         print(f"\n--- Run {run + 1}/{num_runs} ---")
@@ -95,7 +96,8 @@ async def run_ab_test(
                 top_k=k,
             )
             latency_with = time.time() - start
-            ids_with = [r["id"] for r in r1]
+            # `return_meta=False` (default) yields list[dict] only.
+            ids_with = [r["id"] for r in cast("list[dict[str, Any]]", r1)]
 
             # WITHOUT quantization (baseline)
             start = time.time()
@@ -105,7 +107,7 @@ async def run_ab_test(
                 top_k=k,
             )
             latency_without = time.time() - start
-            ids_without = [r["id"] for r in r2]
+            ids_without = [r["id"] for r in cast("list[dict[str, Any]]", r2)]
 
             # Calculate metrics
             overlap = len(set(ids_with) & set(ids_without)) / k if k > 0 else 0

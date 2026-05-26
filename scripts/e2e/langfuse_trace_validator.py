@@ -12,6 +12,7 @@ import time
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import cast
 from urllib.parse import urlparse
 
 from langfuse import Langfuse
@@ -227,7 +228,7 @@ def wait_for_trace(
                 limit=5,
             )
             if traces_page.data:
-                return traces_page.data[0].id
+                return cast("str | None", traces_page.data[0].id)
 
         time.sleep(poll_interval_s)
 
@@ -273,11 +274,11 @@ def validate_latest_trace(
     # Use scenario trace names and tags when the caller has not overridden them.
     effective_trace_name = trace_name
     if trace_name == DEFAULT_TRACE_NAME and contract.get("trace_names"):
-        effective_trace_name = contract["trace_names"]
+        effective_trace_name = cast("list[str]", contract["trace_names"])
 
     effective_tags = tags
     if tags == DEFAULT_TAGS and contract.get("tags"):
-        effective_tags = contract["tags"]
+        effective_tags = cast("list[str]", contract["tags"])
 
     trace_id = wait_for_trace(
         started_at=started_at,

@@ -396,10 +396,10 @@ def collect_branches(
 
         info.merged_into_base = _is_merged_into_base(name, base)
 
-        wt = wt_by_branch.get(name)
-        if wt is not None:
-            info.worktree_path = wt.path
-            info.worktree_dirty = wt.dirty
+        wt_for_branch = wt_by_branch.get(name)
+        if wt_for_branch is not None:
+            info.worktree_path = wt_for_branch.path
+            info.worktree_dirty = wt_for_branch.dirty
 
         branches.append(info)
 
@@ -562,8 +562,8 @@ def print_human_report(report: HygieneReport) -> None:
     print(f"\nRequires human review ({len(rh)}):")
     if rh:
         for b in rh:
-            wt = f" [worktree: {b.worktree_path}]" if b.worktree_path else ""
-            print(f"  - {b.name}{wt}")
+            wt_label = f" [worktree: {b.worktree_path}]" if b.worktree_path else ""
+            print(f"  - {b.name}{wt_label}")
             for reason in b.reasons:
                 print(f"      • {reason}")
     else:

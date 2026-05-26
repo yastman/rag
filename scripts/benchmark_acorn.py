@@ -114,7 +114,10 @@ def run_benchmark(
         query_vector = generate_random_vector()
 
         start = time.perf_counter()
-        results = client.search(
+        # NOTE: QdrantClient.search is deprecated in qdrant-client 1.10+ in
+        # favor of query_points; the bench keeps the legacy call for parity
+        # with historical numbers. See issue #1472.
+        results = client.search(  # type: ignore[attr-defined]
             collection_name=collection_name,
             query_vector=query_vector,
             query_filter=query_filter,

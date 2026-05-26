@@ -18,7 +18,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from langfuse import Langfuse
 
@@ -243,7 +243,9 @@ def _check_trace_coverage(trace: AuditTrace) -> TraceCoverage:
 
     # Branch-aware required child observations for known scenarios (mirrors validator logic).
     if scenario_kind != "unknown":
-        required_observations |= _compute_branch_observations(trace.score_values)
+        required_observations |= _compute_branch_observations(
+            cast("dict[str, object]", trace.score_values)
+        )
 
     span_names = set(trace.observation_names)
     missing_obs = resolve_missing_observations(required_observations, span_names)

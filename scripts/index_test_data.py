@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import sys
+from typing import cast
 
 import httpx
 from dotenv import load_dotenv
@@ -25,7 +26,7 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(f"{BGE_M3_URL}/encode/dense", json={"texts": texts})
         response.raise_for_status()
-        return response.json()["dense_vecs"]
+        return cast("list[list[float]]", response.json()["dense_vecs"])
 
 
 def create_collection(client: QdrantClient, collection_name: str, vector_size: int = 1024):
