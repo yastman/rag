@@ -4269,6 +4269,17 @@ class PropertyBot:
                     )
                 )
         else:
+            startup_report.add(
+                StartupSignal(
+                    source="postgres_runtime",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="PostgreSQL unavailable — preflight marked it as not reachable",
+                    remediation=(
+                        "restore PostgreSQL connectivity for favorites, search events, "
+                        "and user services"
+                    ),
+                )
+            )
             logger.info(
                 "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
