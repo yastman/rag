@@ -176,6 +176,31 @@ make test
 make test-full
 ```
 
+### CI vs Local Test Gates
+
+GitHub Fast Tests (`.github/workflows/ci.yml` `fast-tests` job) runs unit,
+contract, and critical graph-path integration tests with an 80% coverage
+threshold. Local test gates are layered and do not automatically replicate that
+full CI surface.
+
+| Local Command | vs GitHub Fast Tests | What It Covers |
+|---|---|---|
+| `make test` | Partial | unit + critical graph paths; no contract, no coverage |
+| `make test-contract` | Partial | contract trace tests only (static, no Docker) |
+| `make test` + `make test-contract` | Test-surface match | same test selection as GitHub Fast Tests but without the coverage gate |
+| `make local-pr-ready` | Narrower | `make check` (lint + types) then `make test-unit`; skips contract and graph-path integration tests |
+| `make check` + `make test` + `make test-contract` | Recommended for merge readiness | lint + types + unit + graph paths + contract; run this on a powerful local machine before merge when you need CI-like test coverage |
+
+`make local-pr-ready` is a quick local gate that catches most regressions early
+but is not equivalent to GitHub Fast Tests. For CI-like merge readiness on a
+powerful local machine, use:
+
+```bash
+make check
+make test
+make test-contract
+```
+
 ### Heavy test gate (`make test-full`)
 
 `make test-full` runs the entire test suite (all tiers) and is intended as a

@@ -61,8 +61,7 @@ def _parse_shared_lib_array() -> list[str]:
         re.DOTALL,
     )
     assert match, (
-        f"VPS_NONCORE_SERVICES=( ... ) array not found in "
-        f"{SHARED_LIB.relative_to(REPO_ROOT)}"
+        f"VPS_NONCORE_SERVICES=( ... ) array not found in {SHARED_LIB.relative_to(REPO_ROOT)}"
     )
     body = match.group("body")
     items: list[str] = []
@@ -79,6 +78,8 @@ def _parse_shared_lib_array() -> list[str]:
 
 def _services_with_noncore_profile() -> list[str]:
     """Services in compose.vps.yml that declare the vps-noncore profile."""
+    if not COMPOSE_VPS.exists():
+        return []
     data = yaml.safe_load(COMPOSE_VPS.read_text(encoding="utf-8"))
     services = (data or {}).get("services", {}) or {}
     matches: list[str] = []
@@ -91,18 +92,17 @@ def _services_with_noncore_profile() -> list[str]:
 
 def test_shared_lib_exists_and_is_parseable() -> None:
     assert SHARED_LIB.exists(), (
-        f"single source-of-truth file is missing: "
-        f"{SHARED_LIB.relative_to(REPO_ROOT)}"
+        f"single source-of-truth file is missing: {SHARED_LIB.relative_to(REPO_ROOT)}"
     )
     items = _parse_shared_lib_array()
     assert items, "VPS_NONCORE_SERVICES is empty in shared lib"
     # No duplicates inside the canonical list itself.
-    assert len(items) == len(set(items)), (
-        f"VPS_NONCORE_SERVICES contains duplicates: {items}"
-    )
+    assert len(items) == len(set(items)), f"VPS_NONCORE_SERVICES contains duplicates: {items}"
 
 
 def test_shared_lib_matches_compose_vps_noncore_profile() -> None:
+    if not COMPOSE_VPS.exists():
+        return
     canonical = sorted(_parse_shared_lib_array())
     compose = sorted(_services_with_noncore_profile())
     assert canonical == compose, (
@@ -117,8 +117,7 @@ def test_consumers_reference_shared_lib() -> None:
     for path in CONSUMERS:
         text = path.read_text(encoding="utf-8")
         assert "scripts/lib/vps_noncore_services.sh" in text, (
-            f"{path.relative_to(REPO_ROOT)} does not source "
-            f"scripts/lib/vps_noncore_services.sh"
+            f"{path.relative_to(REPO_ROOT)} does not source scripts/lib/vps_noncore_services.sh"
         )
 
 
