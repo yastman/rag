@@ -33,11 +33,19 @@ _LANGFUSE_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize and teardown pipeline services."""
+    """Initialize and teardown pipeline services.
+
+    The pipeline factory is resolved through :mod:`src.runtime.graph.builder`
+    (env var ``RAG_GRAPH_FACTORY``, default ``telegram_bot.graph.graph:build_graph``).
+    The dynamic resolution is the seam introduced for #1948: it removes the
+    last static ``from telegram_bot ...`` import under ``src/`` so the API
+    can be shipped without ``telegram_bot/`` next to it, while production
+    behaviour stays unchanged.
+    """
+    from src.runtime.graph.builder import build_pipeline
     from src.runtime.graph.config import GraphConfig
     from src.runtime.integrations.cache import CacheLayerManager
     from src.runtime.services.qdrant import QdrantService
-    from telegram_bot.graph.graph import build_graph
 
     cfg = GraphConfig.from_env()
 
@@ -68,7 +76,7 @@ async def lifespan(app: FastAPI):
 
     llm = cfg.create_llm()
 
-    graph = build_graph(
+    graph = build_pipeline(
         cache=cache,
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
