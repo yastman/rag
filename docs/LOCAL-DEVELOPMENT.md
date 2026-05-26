@@ -47,7 +47,13 @@ The canonical local Compose project name is `dev`. `COMPOSE_PROJECT_NAME=dev` is
 
 Secret model by compose file:
 - `compose.yml` is the secure baseline: no predictable built-in secret defaults.
-- `compose.dev.yml` may provide local-only defaults for development convenience (`[REDACTED-LANGFUSE-KEY] `[REDACTED-LANGFUSE-KEY] `clickhouse`, `miniosecret`, `langfuseredis`, `devkey`).
+  Stateful passwords use `${VAR:?VAR is required}` — they must come from `.env`
+  or an explicit `--env-file`.
+- `compose.dev.yml` overrides stateful password variables with the same required
+  pattern and provides local-only non-password defaults for Langfuse headless
+  init (`LANGFUSE_INIT_*`) and traced-service keys (`LANGFUSE_PUBLIC_KEY`,
+  `LANGFUSE_SECRET_KEY`). `LIVEKIT_API_KEY` defaults to `devkey` as a documented
+  dev identifier.
 - Production/VPS stacks must set real secret values via environment management or file-backed secret patterns (`*_FILE` / `secrets:`) when available.
 
 Langfuse local development:

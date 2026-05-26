@@ -1,9 +1,8 @@
-# compose.dev.yml — Development overrides: ports, colbert reranking, relaxed defaults, ML profile-gating.
+# compose.dev.yml — Development overrides: ports, colbert reranking, ML profile-gating.
 # Usage: COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d
 #
-# WARNING: This file contains hardcoded dev-only passwords (miniosecret, clickhouse, etc.).
-#          These defaults are safe for local development only. Do NOT reuse this file
-#          for any internet-facing or shared environment.
+# Docker credentials must come from .env or an explicit --env-file. The make
+# targets fall back to tests/fixtures/compose.ci.env when .env is absent.
 
 services:
   postgres:
@@ -18,7 +17,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -30,10 +29,10 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev_redis_pass}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD:-dev_redis_pass}
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       --maxmemory ${REDIS_MAXMEMORY:-512mb}
       --maxmemory-policy volatile-lfu
       --maxmemory-samples 10
@@ -90,7 +89,7 @@ services:
       - "127.0.0.1:8123:8123"
       - "127.0.0.1:9009:9000"
     environment:
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
 
   minio:
     profiles: ["ml", "full"]
@@ -99,15 +98,15 @@ services:
       - "127.0.0.1:9091:9001"
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
 
   redis-langfuse:
     profiles: ["ml", "full"]
     ports:
       - "127.0.0.1:6380:6379"
-    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-langfuseredis}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -115,10 +114,10 @@ services:
   langfuse-worker:
     profiles: ["ml", "full"]
     environment:
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
-      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
 
   langfuse:
     profiles: ["ml", "full"]
@@ -131,10 +130,10 @@ services:
       LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-Local Dev}
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-dev}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
-      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
     deploy:
       resources:
         limits:
@@ -170,7 +169,7 @@ services:
       - "127.0.0.1:50000-50100:50000-50100/udp"
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
 
   livekit-sip:
     ports:
@@ -179,12 +178,12 @@ services:
       - "127.0.0.1:10000-10100:10000-10100/udp"
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
 
   voice-agent:
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
