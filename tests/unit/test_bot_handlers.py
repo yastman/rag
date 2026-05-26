@@ -3358,6 +3358,88 @@ class TestStreamingCoordination:
         assert response_text == "Создать"
         assert result["__interrupt__"] == [interrupt_obj]
 
+    async def test_astream_supervisor_throttles_send_message_draft(self, mock_config):
+        """Throttle ``send_message_draft`` to at most one call per ``_AGENT_DRAFT_INTERVAL`` (#2159).
+
+        Regression contract for the supervisor stream path. Each text-bearing
+        chunk previously triggered a fresh ``sendMessageDraft`` HTTP call, so a
+        150-200 token answer produced 50-100 round-trips and added 3-6 seconds
+        of tail latency after the LLM had already finished. The sibling helper
+        ``_stream_agent_to_draft`` already throttles via ``_AGENT_DRAFT_INTERVAL``;
+        this test pins the same contract on ``_astream_supervisor_with_recovery``.
+
+        Strategy: feed 100 single-token chunks through a fake ``astream`` while
+        a controllable ``time.monotonic`` advances by less than the throttle
+        interval per chunk. We expect the final draft count to be **strictly
+        less** than the chunk count (without the fix it would equal the chunk
+        count). We also pin a generous upper bound so a future optimisation that
+        sends two early drafts plus a final drainer still passes.
+        """
+        from langchain_core.messages import AIMessageChunk
+
+        bot, _ = _create_bot(mock_config)
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+
+        chunk_count = 100
+
+        async def _agent_stream(*args, **kwargs):
+            for idx in range(chunk_count):
+                yield (
+                    AIMessageChunk(content=f"t{idx} "),
+                    {"langgraph_node": "model"},
+                )
+
+        mock_agent = AsyncMock()
+        mock_agent.astream = _agent_stream
+
+        # Fake monotonic clock that advances 0.05s per call — well under the
+        # production ``_AGENT_DRAFT_INTERVAL = 0.2s``. Each chunk consumes two
+        # ``time.monotonic()`` calls (now-comparison + last_draft_at update on
+        # the chosen ones), so we use a generator that ticks unconditionally.
+        clock = [0.0]
+
+        def _fake_monotonic() -> float:
+            value = clock[0]
+            clock[0] += 0.05
+            return value
+
+        with patch("telegram_bot.bot.time.monotonic", side_effect=_fake_monotonic):
+            response_text, _result = await bot._astream_supervisor_with_recovery(
+                agent=mock_agent,
+                tools=[],
+                role="client",
+                user_text="long answer",
+                chat_id=12345,
+                callbacks=[],
+                bot_context=types.SimpleNamespace(
+                    telegram_user_id=12345, session_id="sess-throttle"
+                ),
+                rag_result_store={},
+                forum_thread_id=None,
+                use_streaming=True,
+            )
+
+        # Final accumulated text must contain every chunk — throttle must NOT
+        # truncate the response.
+        assert response_text.startswith("t0 ")
+        assert response_text.endswith(f"t{chunk_count - 1} ")
+
+        # Throttle contract: strictly fewer draft sends than chunks. With
+        # the fix in place we expect at most ~chunk_count * 0.05s / 0.2s = 25
+        # draft sends; a comfortable upper bound of ``chunk_count // 2``
+        # tolerates implementation tweaks.
+        draft_calls = bot.bot.send_message_draft.await_count
+        assert draft_calls < chunk_count, (
+            f"send_message_draft was awaited {draft_calls} times for "
+            f"{chunk_count} chunks — throttle from #2159 regressed; expected "
+            f"< {chunk_count} (ideally ~{chunk_count // 4})"
+        )
+        assert draft_calls <= chunk_count // 2, (
+            f"send_message_draft was awaited {draft_calls} times for "
+            f"{chunk_count} chunks at 0.05s ticks under a 0.2s throttle; "
+            "the throttle window appears to be missing or much shorter"
+        )
+
     @pytest.mark.parametrize(
         ("manager_mode", "should_retry"),
         [(False, True), (True, False)],
