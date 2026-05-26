@@ -23,6 +23,9 @@ from src.runtime.services.metrics import record_pipeline_event
 
 logger = logging.getLogger(__name__)
 
+SearchResults = list[dict[Any, Any]]
+SearchReturn = SearchResults | tuple[SearchResults, dict[str, Any]]
+
 
 class QdrantService:
     """Smart Gateway for Qdrant with advanced search features.
@@ -565,6 +568,69 @@ class QdrantService:
                 }
             return []
 
+    async def _colbert_fallback_to_rrf(
+        self,
+        *,
+        dense_vector: list[float],
+        sparse_vector: dict | None,
+        filters: dict | None,
+        top_k: int,
+        dense_weight: float,
+        sparse_weight: float,
+        rrf_k: int,
+        return_meta: bool,
+        fallback_reason: str,
+    ) -> tuple[SearchReturn, SearchResults]:
+        """Run RRF as a fallback for ColBERT search and emit the standard span output.
+
+        Extracted from ``hybrid_search_rrf_colbert`` (#1542) where the same
+        ~17-line block was inlined four times — once for each fallback
+        cause: ``colbert_unavailable``, ``empty_colbert_query``,
+        ``colbert_empty`` (post-query empty result), and
+        ``colbert_error:<ExcType>``.
+
+        Args:
+            dense_vector / sparse_vector / filters / top_k / dense_weight /
+            sparse_weight / rrf_k / return_meta: forwarded verbatim to
+                :meth:`hybrid_search_rrf`.
+            fallback_reason: human-readable cause used as the
+                ``fallback_reason`` field in the Langfuse span output.
+                Caller-controlled so the four sites stay observably
+                distinct in traces.
+
+        Returns:
+            ``(fallback, fallback_results)`` — ``fallback`` preserves the
+            shape :meth:`hybrid_search_rrf` returned (list or
+            ``(list, meta)`` tuple, mirroring ``return_meta``);
+            ``fallback_results`` is the flat list, already unwrapped, so
+            the caller can run post-fallback hooks (e.g., disabling
+            ColBERT for the collection on a non-empty fallback) without
+            re-doing the ``isinstance`` dance.
+        """
+        fallback: SearchReturn = await self.hybrid_search_rrf(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            filters=filters,
+            top_k=top_k,
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
+            rrf_k=rrf_k,
+            return_meta=return_meta,
+        )
+        fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
+        get_client().update_current_span(
+            output={
+                "fallback_reason": fallback_reason,
+                "results_count": len(fallback_results),
+                "top_score": fallback_results[0]["score"] if fallback_results else None,
+            },
+            metadata={
+                "collection": self._collection_name,
+                "quantization_mode": self._quantization_mode,
+            },
+        )
+        return fallback, fallback_results
+
     @observe(
         name="qdrant-hybrid-search-rrf-colbert",
         as_type="retriever",
@@ -628,7 +694,7 @@ class QdrantService:
                 "Qdrant ColBERT skipped: vector unavailable in collection %s; using RRF",
                 self._collection_name,
             )
-            fallback = await self.hybrid_search_rrf(
+            fallback, _ = await self._colbert_fallback_to_rrf(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
                 filters=filters,
@@ -637,18 +703,7 @@ class QdrantService:
                 sparse_weight=sparse_weight,
                 rrf_k=rrf_k,
                 return_meta=return_meta,
-            )
-            fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
-            lf.update_current_span(
-                output={
-                    "fallback_reason": "colbert_unavailable",
-                    "results_count": len(fallback_results),
-                    "top_score": fallback_results[0]["score"] if fallback_results else None,
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
+                fallback_reason="colbert_unavailable",
             )
             return fallback
 
@@ -656,7 +711,7 @@ class QdrantService:
             logger.warning(
                 "Qdrant ColBERT search skipped: empty query vectors, falling back to RRF"
             )
-            fallback = await self.hybrid_search_rrf(
+            fallback, _ = await self._colbert_fallback_to_rrf(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
                 filters=filters,
@@ -665,18 +720,7 @@ class QdrantService:
                 sparse_weight=sparse_weight,
                 rrf_k=rrf_k,
                 return_meta=return_meta,
-            )
-            fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
-            lf.update_current_span(
-                output={
-                    "fallback_reason": "empty_colbert_query",
-                    "results_count": len(fallback_results),
-                    "top_score": fallback_results[0]["score"] if fallback_results else None,
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
+                fallback_reason="empty_colbert_query",
             )
             return fallback
 
@@ -742,7 +786,7 @@ class QdrantService:
                     self._collection_name,
                 )
                 record_pipeline_event("colbert_fallback_to_rrf")
-                fallback = await self.hybrid_search_rrf(
+                fallback, fallback_results = await self._colbert_fallback_to_rrf(
                     dense_vector=dense_vector,
                     sparse_vector=sparse_vector,
                     filters=filters,
@@ -751,18 +795,7 @@ class QdrantService:
                     sparse_weight=sparse_weight,
                     rrf_k=rrf_k,
                     return_meta=return_meta,
-                )
-                fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
-                lf.update_current_span(
-                    output={
-                        "fallback_reason": "colbert_empty",
-                        "results_count": len(fallback_results),
-                        "top_score": fallback_results[0]["score"] if fallback_results else None,
-                    },
-                    metadata={
-                        "collection": self._collection_name,
-                        "quantization_mode": self._quantization_mode,
-                    },
+                    fallback_reason="colbert_empty",
                 )
                 if fallback_results:
                     self._colbert_available = False
@@ -808,7 +841,7 @@ class QdrantService:
                     "quantization_mode": self._quantization_mode,
                 },
             )
-            fallback = await self.hybrid_search_rrf(
+            fallback, _ = await self._colbert_fallback_to_rrf(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
                 filters=filters,
@@ -817,18 +850,7 @@ class QdrantService:
                 sparse_weight=sparse_weight,
                 rrf_k=rrf_k,
                 return_meta=return_meta,
-            )
-            fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
-            lf.update_current_span(
-                output={
-                    "fallback_reason": f"colbert_error:{type(e).__name__}",
-                    "results_count": len(fallback_results),
-                    "top_score": fallback_results[0]["score"] if fallback_results else None,
-                },
-                metadata={
-                    "collection": self._collection_name,
-                    "quantization_mode": self._quantization_mode,
-                },
+                fallback_reason=f"colbert_error:{type(e).__name__}",
             )
             return fallback
 
