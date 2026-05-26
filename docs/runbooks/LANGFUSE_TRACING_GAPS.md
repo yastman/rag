@@ -214,18 +214,12 @@ write_langfuse_scores(lf, result, trace_id=trace_id)
 
 ### Embedding Span Missing or Orphaned (`core-pipeline-query-embedding`)
 
-**Cause:** The core RAG pipeline runs query embedding inside a thread-pool via `run_in_executor`. Langfuse spans rely on `contextvars` for parent-trace linkage; standard `run_in_executor` drops that context, so the span becomes orphaned or invisible.
+**Cause:** The core RAG pipeline runs query embedding and sync search calls inside worker threads. Langfuse spans rely on `contextvars` for parent-trace linkage; raw `run_in_executor` drops that context, so the span becomes orphaned or invisible.
 
-**Fix:** Wrap the observed call with `contextvars.copy_context()` and `Context.run()`:
+**Fix:** Use `asyncio.to_thread(...)` for observed sync calls; it propagates the current `contextvars.Context` into the worker thread:
 
 ```python
-import contextvars
-
-loop = asyncio.get_event_loop()
-ctx = contextvars.copy_context()
-query_embedding = await loop.run_in_executor(
-    None, lambda: ctx.run(self._encode_query, query)
-)
+query_embedding = await asyncio.to_thread(self._encode_query, query)
 ```
 
 Where `_encode_query` is decorated as:
@@ -243,7 +237,7 @@ def _encode_query(self, query: str):
 
 **Prevention:** All embedding spans (including `bge-m3-*`, `search-engine-*`, and pipeline spans) must keep `capture_input=False` and `capture_output=False` to avoid leaking raw vectors or query text into Langfuse.
 
-**Coverage of `RAGPipeline.search` (post #2167):** every `loop.run_in_executor(...)` hop inside `src/core/pipeline.py:RAGPipeline.search` — the encode-query path *and* both `search_engine.search(...)` paths (hybrid and non-hybrid) — must dispatch through `contextvars.copy_context().run(...)`. The `search_engine.search` methods are themselves `@observe`-decorated (`hybrid-rrf-search`, `hybrid-rrf-colbert-search`, etc.), so an executor hop without `ctx.run` would emit a top-level orphan trace instead of nesting under the active `rag-pipeline` / `telegram-message` parent. The contract is pinned by `tests/unit/core/test_pipeline.py::TestRAGPipelineExecutorContextPropagation`.
+**Coverage of `RAGPipeline.search` (post #2167):** every worker-thread hop inside `src/core/pipeline.py:RAGPipeline.search` — the encode-query path *and* both `search_engine.search(...)` paths (hybrid and non-hybrid) — must dispatch through `asyncio.to_thread(...)`. The `search_engine.search` methods are themselves `@observe`-decorated (`hybrid-rrf-search`, `hybrid-rrf-colbert-search`, etc.), so a raw executor hop without context propagation would emit a top-level orphan trace instead of nesting under the active `rag-pipeline` / `telegram-message` parent. The contract is pinned by `tests/unit/core/test_pipeline.py::TestRAGPipelineExecutorContextPropagation`.
 
 ### Flat `litellm-acompletion` Traces Everywhere
 
