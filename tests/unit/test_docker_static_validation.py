@@ -45,20 +45,47 @@ QDRANT_STACK_DOC = Path("docs/QDRANT_STACK.md")
 
 
 def _docker_available() -> bool:
-    return shutil.which("docker") is not None
+    """Return True only when both ``docker`` and the Compose v2 plugin are usable.
+
+    On hosts that ship the engine without the Compose plugin
+    (lightweight CI sandboxes, default Amazon Linux 2023, etc.)
+    ``shutil.which("docker")`` returns truthy but ``docker compose ...``
+    exits 125 ("looking up compose provider failed"). Probing the plugin
+    here lets the static-validation tests skip gracefully instead of
+    asserting on the plugin error message. Tracked under #2009.
+    """
+    if shutil.which("docker") is None:
+        return False
+    try:
+        probe = subprocess.run(
+            ["docker", "compose", "version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return probe.returncode == 0
 
 
 def _run_docker_command(args: list[str]) -> subprocess.CompletedProcess[str]:
     if not _docker_available():
-        pytest.skip("Docker not available")
+        pytest.skip("Docker / Compose plugin not available")
     try:
-        return subprocess.run(
+        result = subprocess.run(
             args,
             capture_output=True,
             text=True,
         )
     except FileNotFoundError:
-        pytest.skip("Docker not available")
+        pytest.skip("Docker / Compose plugin not available")
+    # Defensive: if the Compose plugin disappeared between the probe and
+    # this call (or the host emits the same "compose provider failed"
+    # error from a different path), downgrade to skip so we never flip a
+    # missing-runtime condition into a hard FAIL.
+    if result.returncode == 125 and "compose provider failed" in (result.stderr or ""):
+        pytest.skip("Docker Compose plugin missing at runtime")
+    return result
 
 
 @pytest.mark.parametrize("dockerfile", DOCKERFILES)
