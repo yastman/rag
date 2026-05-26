@@ -396,7 +396,7 @@ async def test_subscriber_loop_invalid_message(mock_config):
 
 @pytest.mark.asyncio
 async def test_subscriber_loop_crash_cleans_up(mock_config):
-    """Subscriber loop cleans up Redis resources on each retry attempt (#1408)."""
+    """Subscriber loop cleans up Redis resources when SDK retry is exhausted (#1408)."""
     from redis.exceptions import ConnectionError as RedisConnectionError
 
     bot = _create_bot(mock_config)
@@ -407,16 +407,12 @@ async def test_subscriber_loop_crash_cleans_up(mock_config):
 
     mock_redis, mock_pubsub = _make_mock_pubsub(mock_listen)
 
-    with (
-        patch("redis.asyncio.from_url", return_value=mock_redis),
-        patch("asyncio.sleep", new_callable=AsyncMock),
-    ):
+    with patch("redis.asyncio.from_url", return_value=mock_redis):
         with pytest.raises(RedisConnectionError):
             await bot._miniapp_subscriber_loop()
 
-    # Cleanup called at least once (fires on each retry attempt)
-    assert mock_pubsub.unsubscribe.call_count >= 1
-    assert mock_redis.aclose.call_count >= 1
+    mock_pubsub.unsubscribe.assert_called_once_with("miniapp:start")
+    mock_redis.aclose.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -445,49 +441,47 @@ async def test_deeplink_create_topic_error(mock_config):
     assert "не удалось" in msg.answer.call_args.args[0].lower()
 
 
-# ── Reconnect / backoff tests for _miniapp_subscriber_loop (#1408 Slice 2) ──
+# ── Redis SDK retry config for _miniapp_subscriber_loop (#1408 Slice 2) ──
 
 
 @pytest.mark.asyncio
-async def test_subscriber_reconnects_after_connection_error(mock_config):
-    """After a transient ConnectionError during listen, subscriber reconnects and processes messages."""
+async def test_subscriber_uses_redis_sdk_retry_config(mock_config):
+    """Subscriber configures redis-py Retry/ExponentialBackoff instead of custom sleeps."""
+    from redis.backoff import ExponentialBackoff
     from redis.exceptions import ConnectionError as RedisConnectionError
+    from redis.exceptions import TimeoutError as RedisTimeoutError
+    from redis.retry import Retry
 
     bot = _create_bot(mock_config)
     bot._deeplink_redis = AsyncMock()
     bot._topic_manager = AsyncMock()
     bot._process_miniapp_start = AsyncMock()
 
-    async def listen_after_reconnect():
+    async def mock_listen():
         yield {"type": "subscribe", "data": None}
         yield {"type": "message", "data": json.dumps({"uuid": "abc", "user_id": 123})}
         raise asyncio.CancelledError  # clean stop after processing
 
-    mock_redis_good, _mock_pubsub_good = _make_mock_pubsub(listen_after_reconnect)
+    mock_redis, _mock_pubsub = _make_mock_pubsub(mock_listen)
 
-    from_url_calls = 0
-
-    def from_url_side_effect(*args, **kwargs):
-        nonlocal from_url_calls
-        from_url_calls += 1
-        if from_url_calls == 1:
-            raise RedisConnectionError("Connection refused")
-        return mock_redis_good
-
-    with (
-        patch("redis.asyncio.from_url", side_effect=from_url_side_effect),
-        patch("asyncio.sleep", new_callable=AsyncMock),
-    ):
+    with patch("redis.asyncio.from_url", return_value=mock_redis) as from_url:
         with pytest.raises(asyncio.CancelledError):
             await bot._miniapp_subscriber_loop()
 
-    assert from_url_calls >= 2, "expected reconnect after first failure"
+    from_url.assert_called_once()
+    kwargs = from_url.call_args.kwargs
+    assert kwargs["decode_responses"] is True
+    assert kwargs["health_check_interval"] == 30
+    assert isinstance(kwargs["retry"], Retry)
+    assert isinstance(kwargs["retry"]._backoff, ExponentialBackoff)
+    assert kwargs["retry"]._retries == 10
+    assert kwargs["retry_on_error"] == [RedisConnectionError, RedisTimeoutError]
     bot._process_miniapp_start.assert_called_once_with(chat_id=123, uuid_str="abc")
 
 
 @pytest.mark.asyncio
-async def test_subscriber_exhausts_retries_on_persistent_error(mock_config):
-    """After max retries exhausted, subscriber loop raises the last exception."""
+async def test_subscriber_raises_connection_error_after_sdk_retry_exhausted(mock_config):
+    """If redis-py retry is exhausted, subscriber surfaces the connection error."""
     from redis.exceptions import ConnectionError as RedisConnectionError
 
     bot = _create_bot(mock_config)
@@ -498,10 +492,7 @@ async def test_subscriber_exhausts_retries_on_persistent_error(mock_config):
 
     mock_redis, _mock_pubsub = _make_mock_pubsub(listen_always_fails)
 
-    with (
-        patch("redis.asyncio.from_url", return_value=mock_redis),
-        patch("asyncio.sleep", new_callable=AsyncMock),
-    ):
+    with patch("redis.asyncio.from_url", return_value=mock_redis):
         with pytest.raises(RedisConnectionError):
             await bot._miniapp_subscriber_loop()
 
@@ -525,21 +516,3 @@ async def test_subscriber_no_retry_on_auth_error(mock_config):
             await bot._miniapp_subscriber_loop()
 
     assert from_url_calls == 1, "auth errors must not be retried"
-
-
-@pytest.mark.asyncio
-async def test_subscriber_cancelled_during_backoff(mock_config):
-    """Cancellation during retry backoff sleep is respected and propagated."""
-    from redis.exceptions import ConnectionError as RedisConnectionError
-
-    bot = _create_bot(mock_config)
-
-    # from_url always fails → triggers retry → asyncio.sleep is called
-    with patch("redis.asyncio.from_url", side_effect=RedisConnectionError("refused")):
-
-        async def cancelled_sleep(*args, **kwargs):
-            raise asyncio.CancelledError
-
-        with patch("asyncio.sleep", side_effect=cancelled_sleep):
-            with pytest.raises(asyncio.CancelledError):
-                await bot._miniapp_subscriber_loop()

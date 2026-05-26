@@ -1069,86 +1069,69 @@ class PropertyBot:
     async def _miniapp_subscriber_loop(self) -> None:
         """Subscribe to Redis miniapp:start channel and process requests.
 
-        Implements resilient reconnect with exponential backoff (#1408).
-        Authentication errors (permanent) are not retried.
+        Redis-py handles transient reconnect/resubscribe through its SDK retry
+        strategy; authentication errors remain permanent.
         """
         import redis.asyncio as aioredis
+        from redis.backoff import ExponentialBackoff
         from redis.exceptions import AuthenticationError
+        from redis.exceptions import ConnectionError as RedisConnectionError
+        from redis.exceptions import TimeoutError as RedisTimeoutError
+        from redis.retry import Retry
 
-        _MAX_RETRIES = 10
-        _BASE_BACKOFF_S = 1.0
-        _MAX_BACKOFF_S = 60.0
+        pubsub = None
+        sub_redis = None
+        try:
+            sub_redis = aioredis.from_url(
+                self.config.redis_url,
+                decode_responses=True,
+                health_check_interval=30,
+                retry=Retry(ExponentialBackoff(cap=60, base=1), 10),
+                retry_on_error=[RedisConnectionError, RedisTimeoutError],
+            )
+            pubsub = sub_redis.pubsub()
+            await pubsub.subscribe("miniapp:start")
+            logger.info("Mini App pub/sub subscriber started")
 
-        retry_count = 0
+            async for raw_msg in pubsub.listen():
+                if raw_msg["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(raw_msg["data"])
+                    uuid_str = data["uuid"]
+                    user_id = int(data["user_id"])
+                except (ValueError, TypeError, KeyError):
+                    logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
+                    continue
 
-        while retry_count < _MAX_RETRIES:  # pragma: no branch
-            pubsub = None
-            sub_redis = None
-            backoff_s = 0.0
-
-            try:
-                sub_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
-                pubsub = sub_redis.pubsub()
-                await pubsub.subscribe("miniapp:start")
-                logger.info("Mini App pub/sub subscriber started")
-
-                async for raw_msg in pubsub.listen():
-                    if raw_msg["type"] != "message":
-                        continue
-                    try:
-                        data = json.loads(raw_msg["data"])
-                        uuid_str = data["uuid"]
-                        user_id = int(data["user_id"])
-                    except (ValueError, TypeError, KeyError):
-                        logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
-                        continue
-
-                    logger.info("Mini App pub/sub: user=%s uuid=%s", user_id, uuid_str)
-                    await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
-                    # Reset retry count after successfully processing a
-                    # message — a connection that delivers messages is healthy.
-                    retry_count = 0
-
-            except asyncio.CancelledError:
-                logger.info("Mini App pub/sub subscriber stopped")
-                raise
-            except AuthenticationError:
-                logger.error("Mini App pub/sub: permanent Redis auth error, not retrying")
-                raise
-            except Exception:
-                retry_count += 1
-                if retry_count >= _MAX_RETRIES:
-                    logger.exception(
-                        "Mini App pub/sub subscriber crashed after %d retries",
-                        retry_count,
+                logger.info("Mini App pub/sub: user=%s uuid=%s", user_id, uuid_str)
+                await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
+        except asyncio.CancelledError:
+            logger.info("Mini App pub/sub subscriber stopped")
+            raise
+        except AuthenticationError:
+            logger.error("Mini App pub/sub: permanent Redis auth error, not retrying")
+            raise
+        except Exception:
+            logger.exception("Mini App pub/sub subscriber crashed")
+            raise
+        finally:
+            if pubsub is not None:
+                try:
+                    await pubsub.unsubscribe("miniapp:start")
+                except Exception:
+                    logger.debug(
+                        "Failed to unsubscribe during cleanup",
+                        exc_info=True,
                     )
-                    raise
-                backoff_s = min(_BASE_BACKOFF_S * (2 ** (retry_count - 1)), _MAX_BACKOFF_S)
-                logger.warning(
-                    "Mini App pub/sub subscriber: connection lost, retry %d/%d in %.1fs",
-                    retry_count,
-                    _MAX_RETRIES,
-                    backoff_s,
-                )
-            finally:
-                if pubsub is not None:
-                    try:
-                        await pubsub.unsubscribe("miniapp:start")
-                    except Exception:
-                        logger.debug(
-                            "Failed to unsubscribe during cleanup",
-                            exc_info=True,
-                        )
-                if sub_redis is not None:
-                    try:
-                        await sub_redis.aclose()
-                    except Exception:
-                        logger.debug(
-                            "Failed to close Redis connection during cleanup",
-                            exc_info=True,
-                        )
-
-            await asyncio.sleep(backoff_s)
+            if sub_redis is not None:
+                try:
+                    await sub_redis.aclose()
+                except Exception:
+                    logger.debug(
+                        "Failed to close Redis connection during cleanup",
+                        exc_info=True,
+                    )
 
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
