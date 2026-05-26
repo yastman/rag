@@ -13,7 +13,7 @@ The audit is non-destructive — every closure is justified inline with file pat
 | [#1648](https://github.com/yastman/rag/issues/1648) | observability: consolidate voice and pipeline metrics | **Close** | Slices 1/2/3 done across earlier PRs and PR #2106 (PipelineMetrics removal). Slice 4 (ASGI /metrics mount) tracked separately as #2057 |
 | [#2045](https://github.com/yastman/rag/issues/2045) | arch: extract pure shared runtime modules to src/runtime (#1948 phase 1) | **Close — pinned by contract test** | All 5 modules migrated; `tests/contract/test_runtime_phase1_modules_present_contract.py` added in this PR pins the result |
 | [#2047](https://github.com/yastman/rag/issues/2047) | arch: migrate coupled runtime modules cache, qdrant, and graph (#1948 phase 3) | **Close** | Cache (PR #2105), Qdrant (#2100), graph.config (#2099) done. Last piece (`graph.graph` / `build_graph`) tracked in #2049 |
-| [#1232](https://github.com/yastman/rag/issues/1232) | Replace custom aiogram FSM with aiogram-dialog | Stay open — 1/3 remaining | crm_callbacks done (#2053 + PR #2107), demo_handler done (#2054). `phone_collector.py` still raw FSM |
+| [#1232](https://github.com/yastman/rag/issues/1232) | Replace custom aiogram FSM with aiogram-dialog | Stay open — tracker needs rescope, not closure here | crm_callbacks done (#2053 + PR #2107), demo_handler done (#2054). `phone_collector.py` remains a justified #2055 exception because one-tap contact share requires `KeyboardButton(request_contact=True)` via `ReplyKeyboardMarkup`, which aiogram-dialog does not provide |
 | [#1515](https://github.com/yastman/rag/issues/1515) | Аудит тестов: phases 1+2 mostly done | Stay open — phases 3+4 outstanding | Phase 1 (B5/B6/B1/B3/B4/A4) and phase 2 (D2/D6/D9/D7) verified done in earlier waves. Phase 3 (A1/A2/A3/A5/A6) and phase 4 (S1-S7) pending |
 | [#2057](https://github.com/yastman/rag/issues/2057) | observability: mount telegram_bot ASGI /metrics endpoint | Stay open — needs runtime verify | Last slice of #1648 |
 | [#1535](https://github.com/yastman/rag/issues/1535), [#2050-2052](https://github.com/yastman/rag/issues/2050) | Voice path: legacy StateGraph → create_agent | Stay open — design-first | 4 sub-issues form the migration plan; no progress yet |
@@ -73,7 +73,12 @@ Slice 4 needs a live runtime to verify (`curl http://localhost:9091/metrics`); i
 
 ### #1538 — informational audit, conclusions pinned in ADR-0015 ✅
 
-The audit's "SDK-native baseline" / "tracked migrations" / "justified custom code" tables are reproduced in `docs/adr/0015-sdk-native-baseline.md` so the policy survives the issue closing. Active migrations are referenced via their own tracker issues (#1232, #1535, #2050-2052).
+The audit's "SDK-native baseline" / "tracked migrations" / "justified custom code" tables are reproduced in `docs/adr/0015-sdk-native-baseline.md` so the policy survives the issue closing. Active migrations are referenced via their own tracker issues (#1535, #2050-2052).
+
+Two policy-drift corrections are intentionally preserved in the ADR:
+
+- `telegram_bot/handlers/phone_collector.py` is not an un-justified aiogram-dialog migration target. The SDK registry and handler docstring already document it as the #1232/#2055 exception for Telegram one-tap contact share.
+- Draft streaming is already SDK-native in current code: `telegram_bot/_bot_streaming.py::_stream_agent_to_draft` consumes `agent.astream(..., stream_mode=["messages", "values"])` directly and does not reintroduce `DraftStreamer`. Follow-up PR #2112 pins that contract rather than changing the migration status here.
 
 ## Method
 

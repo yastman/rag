@@ -6,7 +6,7 @@
 
 **Closes:** [#1538](https://github.com/yastman/rag/issues/1538) (audit)
 
-**Related:** [#1535](https://github.com/yastman/rag/issues/1535) (voice path), [#1232](https://github.com/yastman/rag/issues/1232) (FSM → aiogram-dialog), [#2049](https://github.com/yastman/rag/issues/2049) (reverse-layering cleanup)
+**Related:** [#1535](https://github.com/yastman/rag/issues/1535) (voice path), [#1232](https://github.com/yastman/rag/issues/1232) / [#2055](https://github.com/yastman/rag/issues/2055) (phone collector FSM exception), [#2049](https://github.com/yastman/rag/issues/2049) (reverse-layering cleanup), [#2112](https://github.com/yastman/rag/pull/2112) (draft-streaming SDK contract follow-up)
 
 ## Context
 
@@ -25,6 +25,7 @@ The default for every new feature is **SDK-native first**. Custom implementation
 | Bot handlers | `aiogram.Router` + `Dispatcher.include_router(...)` | `telegram_bot/bot.py`, `telegram_bot/handlers/` |
 | FSM dialogs | `aiogram_dialog.Dialog` with `Window`, `MessageInput`, `Select`, `Cancel`, `Column`, etc. | `telegram_bot/dialogs/*.py`, locked by `tests/unit/dialogs/test_dialogs_fsm_coverage.py` and per-dialog migration contracts (`test_demo_dialog_*`, `test_crm_quick_actions_fsm_migration_contract.py`) |
 | Agent (text path) | `langchain.agents.create_agent` v1 with `before_model` middleware | `telegram_bot/bot.py::_handle_query_supervisor`, `telegram_bot/agents/` |
+| Agent draft streaming | LangGraph `agent.astream(..., stream_mode=["messages", "values"])` plus direct Telegram `send_message_draft(...)`; no `DraftStreamer` abstraction | `telegram_bot/_bot_streaming.py::_stream_agent_to_draft`, `tests/unit/services/test_draft_streamer_removed.py`; follow-up PR #2112 pins the current contract |
 | History trimmer | `before_model` middleware | `telegram_bot/agents/` |
 | Observability — traces | Langfuse SDK + OTEL with graceful Python 3.14 degradation | `src/observability.py` (canonical), `telegram_bot/observability.py` (re-export shim) |
 | Observability — metrics | `prometheus_client.Histogram` + `Counter` registered against the default `prometheus_client.REGISTRY` | `src/runtime/services/metrics.py` |
@@ -41,9 +42,6 @@ These are not justified deviations — they are tracked work items kept in fligh
 | Custom code | SDK target | Tracked under |
 |---|---|---|
 | Voice path 11-node `StateGraph` (`telegram_bot/graph/graph.py::build_graph`) | `langchain.agents.create_agent` (already used on text path) | [#1535](https://github.com/yastman/rag/issues/1535), child slices [#2050](https://github.com/yastman/rag/issues/2050) / [#2051](https://github.com/yastman/rag/issues/2051) / [#2052](https://github.com/yastman/rag/issues/2052) |
-| `phone_collector.py` raw `aiogram.fsm` (3 states) | `aiogram_dialog.Dialog` with `MessageInput` + getter validation | [#1232](https://github.com/yastman/rag/issues/1232) (last remaining sub-handler; CRM and demo are done) |
-| Custom `DraftStreamer` (sendMessageDraft polling) | LangGraph `StreamWriter` with `stream_mode="custom"` | currently P2 follow-up (no dedicated issue yet); revisit when streaming UX changes |
-| `_stream_agent_to_draft` wrapper in `bot.py` | LangGraph-native `agent.astream(stream_mode="messages")` | same as above |
 | Regex-based prompt-injection guard (`graph/nodes/guard.py`) | LangChain `InjectedState` + middleware | low-priority follow-up; current regex covers the threat model |
 
 ### Justified custom code (no SDK equivalent or domain-specific)
@@ -56,6 +54,8 @@ The following modules implement behavior that the underlying SDK does not provid
 | `telegram_bot/services/apartment_extraction_pipeline.py` | Domain-specific filter extraction (Russian-language regex + LLM fallback) |
 | `telegram_bot/services/forum_bridge.py` | Telegram-specific feature (manager ↔ client topic relay) — no SDK |
 | `telegram_bot/services/kommo_client.py` | Kommo CRM third-party API — no maintained Python SDK |
+| `telegram_bot/handlers/phone_collector.py` raw `aiogram.fsm` | Justified #1232/#2055 exception: Telegram one-tap contact capture requires `KeyboardButton(request_contact=True)` via `ReplyKeyboardMarkup`; aiogram-dialog does not provide an equivalent contact-share widget, and replacing it with inline buttons would degrade lead-capture UX |
+| `telegram_bot/_bot_streaming.py::_stream_agent_to_draft` | Thin bridge from LangGraph SDK streaming to Telegram draft API. It already consumes `agent.astream(..., stream_mode=["messages", "values"])` directly and exists only to throttle/filter draft writes, so it is not a migration target |
 | `src/security/pii_redaction.py` | Locale-specific patterns (Ukrainian passport / РНОКПП / phone formats) that vendor scrubbers do not model |
 | `src/runtime/services/metrics.py::PipelineMetrics` slim facade | Thin singleton over the SDK Histogram + Counter; preserves existing `record(stage, ms)` / `inc(name)` import surface used in 5 graph-node call-sites |
 
@@ -90,6 +90,8 @@ This ADR is documentation only. The behavioral guarantees are enforced by existi
 
 - Issue [#1538](https://github.com/yastman/rag/issues/1538) — original SDK-vs-custom audit (closed by this ADR)
 - Issue [#1535](https://github.com/yastman/rag/issues/1535) — voice path migration umbrella (still open)
-- Issue [#1232](https://github.com/yastman/rag/issues/1232) — FSM-to-dialog migration (1/3 remaining)
+- Issue [#1232](https://github.com/yastman/rag/issues/1232) — FSM-to-dialog migration tracker; this ADR does not close it
+- Issue [#2055](https://github.com/yastman/rag/issues/2055) — phone collector design exception for one-tap contact share
+- PR [#2112](https://github.com/yastman/rag/pull/2112) — follow-up contract pin for SDK-native draft streaming
 - ADR [0010](0010-voice-path-create-agent-migration-plan.md) — voice path migration plan
 - ADR [0012](0012-langgraph-orchestration.md) — LangGraph orchestration
