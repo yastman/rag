@@ -102,14 +102,30 @@ If `observations list` returns 404 in your deployment, continue with `traces get
 | Trace Name | Expected Structure | Common Gaps |
 |---|---|---|
 | `telegram-message` | Deeply structured (25–35 obs, depth 8, 30+ scores) with sanitized root input (`content_type`, `query_preview`, `query_hash`, `query_len`, `route`) | Missing when bot observability client fails to initialize or middleware is skipped; contract fails if raw `user/chat/message` payloads appear |
+| `telegram-rag-supervisor` / `telegram-rag-query` | Nested under `telegram-message`; one per text-message turn | Missing when middleware is skipped; if appearing as a top-level trace, see #2157 / PR #2158 |
+| `tool-rag-search` → `rag-pipeline` | Tool span wrapping the pipeline; **no** `langfuse_trace_id` forwarded into the pipeline (PR #2158) | If `rag-pipeline` becomes top-level, regression of #2157 — verify PR #2158 is merged |
+| `rag-core-*` (5 helpers: `build-context`, `rewrite-query`, `perform-rerank`, `compute-query-embedding`, `check-semantic-cache`) | Nested under `rag-pipeline`; curated metadata only (PII-safe) | Missing if `telegram_bot/services/rag_core.py` decorators stripped — see PR #2163 |
 | `litellm-acompletion` | Flat (1 GENERATION, depth 0, 0 scores) | **Proxy-generated**, not app-instrumented; inherently flat and lacks session context. See [LiteLLM Failure Runbook](LITEllm_FAILURE.md) |
 | `rag-api-query` | Structured SPANs + GENERATION | Often missing if RAG API is not called or `@observe` decorator is bypassed |
-| `core-pipeline-query-embedding` | SPAN (`as_type="embedding"`, capture disabled) | Missing or orphaned when the embedding call runs inside `run_in_executor` without preserving `contextvars` |
-| `voice-session` | Structured (capture disabled) | Missing when voice/LiveKit is off by default or voice agent did not start |
+| `core-pipeline-query-embedding` | SPAN (`as_type="embedding"`, capture disabled) | Missing or orphaned when the embedding call runs inside `run_in_executor` without preserving `contextvars` (see "Embedding Span Missing or Orphaned" below; PR #2167 closes the last `RAGPipeline.search` gap) |
+| `voice-session` | Top-level SPAN per LiveKit call; opens via `start_as_current_observation` (PR #2165) | Missing when voice/LiveKit is off by default, the worker process did not call `_setup_langfuse`, or the entrypoint did not open the parent context — see PR #2165 |
+| `voice-tool-search-knowledge-base` | Nested under `voice-session`; decorator stack `@function_tool() / @observe` (PR #2165) | If the tool span is missing while `voice-session` is present, the inner `@observe` was dropped during a LiveKit upgrade — re-stack decorators per PR #2165 |
+| `miniapp-start-expert`, `miniapp-submit-phone`, `miniapp-kommo-create-lead` | Nested under deterministic session `miniapp-{user_id}` so the funnel reconstructs across processes (PR #2164) | Missing entirely when `mini-app-api` lifespan does not call `initialize_langfuse` — see PR #2164 |
 | `ingestion-cli-run` | Structured (capture disabled) | Becomes stale when unified ingestion CLI has not run recently; check `make ingest-unified-status` |
 | `openai-contextualize` | SPAN with nested GENERATION (auto-traced via `langfuse.openai` drop-in) | Missing if `OpenAIContextualizer` uses plain `openai` clients; inner completions would become orphan `litellm-acompletion` traces |
 
 **Key distinction:** `litellm-acompletion` traces are created by the LiteLLM proxy's built-in Langfuse callback (`success_callback: ["langfuse"]`), not by the application's `@observe` decorators. They will never contain child spans, scores, or session attribution.
+
+> **Full census.** The matrix above is intentionally a curated subset of
+> the high-value families. The complete static census of every
+> `@observe(name=...)` declaration that ships with the codebase
+> (~190 named spans across 11 surface areas) is recorded in
+> [`docs/observability/TRACE_COVERAGE_AUDIT_2168.md`](../observability/TRACE_COVERAGE_AUDIT_2168.md)
+> and re-computable from `git grep '@observe(\s*name='`. When extending
+> the matrix, prefer adding rows for families that have observed runtime
+> failure modes; the audit document is the source of truth for "what
+> exists in code" while this matrix is the source of truth for "what
+> operators need to know to triage gaps".
 
 ### 5. Check Observability Module
 
