@@ -152,6 +152,11 @@ def isolate_otel_langfuse(monkeypatch):
     monkeypatch.setenv("LANGFUSE_HOST", "")
     monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+    # Disable the uvicorn-based metrics server in unit tests (#2139).
+    # bot.start() would otherwise try to bind a real listening port
+    # (TELEGRAM_BOT_METRICS_PORT / 9091), causing SystemExit when the
+    # port is unavailable (e.g. in CI with concurrent workers).
+    monkeypatch.setenv("TELEGRAM_BOT_METRICS_ENABLED", "0")
 
     # Create no-op mocks
     mock_noop = MagicMock()

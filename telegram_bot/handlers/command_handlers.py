@@ -106,7 +106,8 @@ async def cmd_help(bot: PropertyBot, message: Message) -> None:
         "/clear - Очистить историю диалога\n"
         "/stats - Показать статистику кеша\n"
         "/history <запрос> - Поиск по истории диалогов\n"
-        "/metrics - Метрики пайплайна (p50/p95)\n"
+        "/metrics - Метрики пайплайна (Prometheus)\n"
+        "HTTP: http://localhost:9091/metrics (Prometheus scrape endpoint)\n"
         "/clearcache - Очистить кеш Redis\n"
     )
 
