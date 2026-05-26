@@ -1085,3 +1085,199 @@ async def test_path_retrieve_colbert_skips_rerank():
 
     # Generate ran
     mocks["llm"].chat.completions.create.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Path 8c: voice error propagation — Whisper API failure (#1089)
+#        START → transcribe → (raises) → graph propagates exception
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_voice_transcribe_api_failure_propagates():
+    """Whisper API failure inside the transcribe node must propagate out
+    of ``graph.ainvoke`` rather than degrading to a silent empty-state.
+
+    The transcribe_node catches the exception, marks the Langfuse span as
+    ``ERROR``, and re-raises (see ``src/runtime/graph/nodes/transcribe.py``).
+    LangGraph propagates the exception to the caller. The bot layer relies
+    on this contract to surface a user-facing error message; if the graph
+    silently swallowed the failure we would respond "I don't know" instead
+    of the actual ``Voice service unavailable`` error.
+    """
+    mocks = _make_graph_mocks()
+    mocks["llm"].audio.transcriptions.create = AsyncMock(
+        side_effect=RuntimeError("Whisper proxy 503")
+    )
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+            show_transcription=False,
+            voice_language="ru",
+            stt_model="whisper",
+        )
+
+    state = make_initial_state(user_id=8, session_id="test-path8c", query="")
+    state["voice_audio"] = b"fake-ogg-data"
+    state["voice_duration_s"] = 4.0
+    state["input_type"] = "voice"
+
+    with _patch_graph_configs(mock_gc), pytest.raises(RuntimeError, match="Whisper proxy 503"):
+        await graph.ainvoke(state)
+
+    # Downstream nodes must NOT have run after transcribe failed.
+    mocks["qdrant"].hybrid_search_rrf.assert_not_awaited()
+    mocks["reranker"].rerank.assert_not_awaited()
+    mocks["llm"].chat.completions.create.assert_not_awaited()
+    mocks["cache"].store_semantic.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Path 8d: voice empty transcript — empty Whisper output (#1089)
+#        START → transcribe → (raises ValueError("Empty transcription"))
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_voice_empty_transcript_propagates():
+    """Empty transcription text must surface as a ValueError.
+
+    Whisper occasionally returns an empty string for inaudible audio. The
+    transcribe_node guards against this by raising
+    ``ValueError("Empty transcription from Whisper API")`` BEFORE
+    handing off to classify, so the downstream RAG path never runs with
+    ``query=""``. If the guard slipped the graph would call retrieve with
+    an empty query and waste an embedding round-trip plus a Qdrant search.
+    """
+    mocks = _make_graph_mocks()
+    empty_transcript = MagicMock(text="   ")  # whitespace only — strip() -> ""
+    mocks["llm"].audio.transcriptions.create = AsyncMock(return_value=empty_transcript)
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+            show_transcription=False,
+            voice_language="ru",
+            stt_model="whisper",
+        )
+
+    state = make_initial_state(user_id=8, session_id="test-path8d", query="")
+    state["voice_audio"] = b"silent-audio"
+    state["voice_duration_s"] = 1.0
+    state["input_type"] = "voice"
+
+    with (
+        _patch_graph_configs(mock_gc),
+        pytest.raises(ValueError, match="Empty transcription"),
+    ):
+        await graph.ainvoke(state)
+
+    mocks["llm"].audio.transcriptions.create.assert_awaited_once()
+    mocks["qdrant"].hybrid_search_rrf.assert_not_awaited()
+    mocks["llm"].chat.completions.create.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Path 8e: voice + rewrite loop — voice query triggers rewrite after retrieve (#1089)
+#        START → transcribe → classify → cache_check(MISS) → retrieve(empty)
+#             → grade(not relevant) → rewrite → retrieve(relevant)
+#             → grade(relevant) → rerank → generate → cache_store → respond → END
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_voice_then_rewrite_loop():
+    """Voice path correctly composes with the rewrite loop.
+
+    Voice queries flow through transcribe BEFORE classify, but everything
+    downstream is shared with the text path. This test pins that the
+    rewrite -> retrieve loop still fires when the FIRST retrieval (driven
+    by the transcribed query) returns no relevant docs, and that the
+    second retrieve uses the rewritten query, not the original transcript.
+    """
+    # First retrieval: irrelevant docs (low score). Second retrieval (after rewrite): relevant docs.
+    irrelevant_docs = [
+        {"text": "Нерелевантный текст", "score": 0.003, "id": "x1", "metadata": {}},
+    ]
+    relevant_docs = [
+        {
+            "text": "Квартира в Несебр, 85000 евро",
+            "score": 0.9,
+            "id": "1",
+            "metadata": {"title": "Квартира", "city": "Несебр", "price": 85000},
+        },
+    ]
+    _ok_meta = {"backend_error": False, "error_type": None, "error_message": None}
+
+    mocks = _make_graph_mocks(llm_response="Найдена 1 квартира.")
+    mocks["qdrant"].hybrid_search_rrf = AsyncMock(
+        side_effect=[
+            (irrelevant_docs, _ok_meta),
+            (relevant_docs, _ok_meta),
+        ]
+    )
+    mocks["reranker"].rerank = AsyncMock(return_value=[{"index": 0, "score": 0.95}])
+    transcript = MagicMock(text="квартира на побережье")
+    mocks["llm"].audio.transcriptions.create = AsyncMock(return_value=transcript)
+    # rewrite uses the same chat.completions client; first call is the rewrite,
+    # second call is the final generate.
+    rewrite_completion = _make_llm_completion("квартира в Несебре")
+    final_completion = _make_llm_completion("Найдена 1 квартира.")
+    mocks["llm"].chat.completions.create = AsyncMock(
+        side_effect=[rewrite_completion, final_completion]
+    )
+
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+    mock_gc.max_rewrite_attempts = 2
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+            show_transcription=False,
+            voice_language="ru",
+            stt_model="whisper",
+        )
+
+    state = make_initial_state(user_id=8, session_id="test-path8e", query="")
+    state["voice_audio"] = b"fake-ogg-data"
+    state["voice_duration_s"] = 3.0
+    state["input_type"] = "voice"
+    state["max_rewrite_attempts"] = 2
+
+    with _patch_graph_configs(mock_gc):
+        result = await graph.ainvoke(state)
+
+    # Transcribe ran first.
+    assert result["stt_text"] == "квартира на побережье"
+
+    # Two retrievals happened: one empty, one with results.
+    assert mocks["qdrant"].hybrid_search_rrf.await_count == 2
+
+    # Rewrite consumed one LLM call, final generate consumed another.
+    assert mocks["llm"].chat.completions.create.await_count >= 2
+
+    # Final state shows successful generation after the rewrite loop.
+    assert result["documents_relevant"] is True
+    assert result["response"] == "Найдена 1 квартира."
+    assert result["rewrite_count"] >= 1
