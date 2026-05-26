@@ -213,6 +213,7 @@ async def guard_node(
 __all__ = [
     "INJECTION_PATTERNS",
     "_BLOCKED_RESPONSE",
+    "_INJECTION_THRESHOLD",
     "detect_injection",
     "guard_node",
 ]

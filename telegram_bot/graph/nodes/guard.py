@@ -9,6 +9,7 @@ continue to work unchanged.
 
 from src.runtime.graph.nodes.guard import (
     _BLOCKED_RESPONSE,
+    _INJECTION_THRESHOLD,
     INJECTION_PATTERNS,
     detect_injection,
     guard_node,
@@ -18,6 +19,7 @@ from src.runtime.graph.nodes.guard import (
 __all__ = [
     "INJECTION_PATTERNS",
     "_BLOCKED_RESPONSE",
+    "_INJECTION_THRESHOLD",
     "detect_injection",
     "guard_node",
 ]
