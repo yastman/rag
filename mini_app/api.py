@@ -18,6 +18,7 @@ from mini_app.auth import validate_init_data
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
 from src.observability import get_client, observe, propagate_attributes
+from src.observability_sentry import initialize_sentry, set_runtime_tags
 from src.services.content_loader import load_mini_app_config
 
 
@@ -43,6 +44,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global) ensures graceful close on process shutdown and matches the
     FastAPI-native pattern (#1645).
     """
+    # Initialize Sentry FIRST so any subsequent startup error (Redis,
+    # config) is captured. No-op when SENTRY_DSN is unset (#1417).
+    if initialize_sentry():
+        set_runtime_tags(service="mini-app")
+        logger.info("Sentry error tracking enabled with PII redaction")
+
     import redis.asyncio as aioredis
 
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")

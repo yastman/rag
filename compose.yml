@@ -281,6 +281,12 @@ services:
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
       LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
+      # Sentry-compatible error tracking (optional; disabled when DSN is blank)
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+      SENTRY_TRACES_SAMPLE_RATE: "${SENTRY_TRACES_SAMPLE_RATE:-0.0}"
+      SENTRY_DEBUG: "${SENTRY_DEBUG:-false}"
       # CRM — Kommo integration
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
@@ -361,6 +367,11 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-mini-app-api}"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+      SENTRY_TRACES_SAMPLE_RATE: "${SENTRY_TRACES_SAMPLE_RATE:-0.0}"
+      SENTRY_DEBUG: "${SENTRY_DEBUG:-false}"
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
@@ -896,6 +907,11 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-voice-agent}"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+      SENTRY_TRACES_SAMPLE_RATE: "${SENTRY_TRACES_SAMPLE_RATE:-0.0}"
+      SENTRY_DEBUG: "${SENTRY_DEBUG:-false}"
     healthcheck:
       test: ["CMD", "python", "-m", "src.voice.healthcheck"]
       interval: 15s

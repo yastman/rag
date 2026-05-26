@@ -104,7 +104,9 @@ def _resolve(value: str | None, env_name: str, default: str | None = None) -> st
 
 def _resolve_dsn(explicit: str | None) -> str | None:
     """Return a non-blank DSN or ``None``."""
-    return _resolve(explicit, "SENTRY_DSN")
+    candidate = explicit if explicit is not None else os.getenv("SENTRY_DSN", "")
+    candidate = (candidate or "").strip()
+    return candidate or None
 
 
 def _resolve_traces_sample_rate(explicit: float | None) -> float:
@@ -121,15 +123,22 @@ def _resolve_traces_sample_rate(explicit: float | None) -> float:
 
 
 def _resolve_release(explicit: str | None) -> str:
-    explicit_value = _resolve(explicit, "SENTRY_RELEASE")
-    if explicit_value:
-        return explicit_value
+    candidate = explicit if explicit is not None else os.getenv("SENTRY_RELEASE", "")
+    candidate = (candidate or "").strip()
+    if candidate:
+        return candidate
     # Fall back to the installed package version so Bugsink/Sentry can group
     # events by release without operator-side configuration.
     try:
         return f"contextual-rag@{_metadata.version('contextual-rag')}"
     except _metadata.PackageNotFoundError:
         return "contextual-rag@unknown"
+
+
+def _resolve_environment(explicit: str | None) -> str:
+    candidate = explicit if explicit is not None else os.getenv("SENTRY_ENVIRONMENT", "")
+    candidate = (candidate or "").strip()
+    return candidate or "local"
 
 
 def _resolve_debug(explicit: bool | None) -> bool:
@@ -235,7 +244,7 @@ def initialize_sentry(
 
     init_kwargs: dict[str, Any] = {
         "dsn": resolved_dsn,
-        "environment": _resolve(environment, "SENTRY_ENVIRONMENT", default="local"),
+        "environment": _resolve_environment(environment),
         "release": _resolve_release(release),
         "traces_sample_rate": _resolve_traces_sample_rate(traces_sample_rate),
         # Hard-coded safety knobs:

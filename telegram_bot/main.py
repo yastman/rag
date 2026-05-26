@@ -19,6 +19,8 @@ from tenacity import (
     wait_exponential,
 )
 
+from src.observability_sentry import initialize_sentry, set_runtime_tags
+
 from .bot import PropertyBot
 from .config import BotConfig
 from .integrations.polling_lock import PollingLockBusy
@@ -80,6 +82,15 @@ async def main():
 
     # Load config
     config = BotConfig()
+
+    # Initialize Sentry FIRST so it captures any subsequent init failures
+    # (Langfuse, Postgres, Redis, etc.). No-op when SENTRY_DSN is unset
+    # (#1417). Verified via Context7 — sentry_sdk.init must run before any
+    # other SDK call.
+    sentry_enabled = initialize_sentry()
+    set_runtime_tags(service="telegram-bot")
+    if sentry_enabled:
+        logger.info("Sentry error tracking enabled with PII redaction")
 
     # Initialize Langfuse after BotConfig loaded .env / env vars
     _langfuse = initialize_langfuse(
