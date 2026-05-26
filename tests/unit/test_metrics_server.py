@@ -7,6 +7,7 @@ metrics endpoint served via uvicorn as a lightweight ASGI app.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import socket
 from contextlib import closing
 
@@ -16,6 +17,7 @@ from prometheus_client import REGISTRY, Histogram
 
 from telegram_bot.metrics_server import (
     create_metrics_app,
+    resolve_metrics_port,
     start_metrics_server,
     stop_metrics_server,
 )
@@ -80,6 +82,25 @@ class TestCreateMetricsApp:
             REGISTRY.unregister(test_histogram)
 
 
+class TestMetricsPortResolution:
+    def test_default_port_is_9091(self):
+        assert resolve_metrics_port() == 9091
+
+    def test_invalid_env_value_falls_back_without_import_crash(self, monkeypatch, caplog):
+        monkeypatch.setenv("TELEGRAM_BOT_METRICS_PORT", "not-an-int")
+        with caplog.at_level("WARNING"):
+            assert resolve_metrics_port() == 9091
+        assert "TELEGRAM_BOT_METRICS_PORT" in caplog.text
+
+        # Regression: this used to evaluate int(os.getenv(...)) at import time.
+        import telegram_bot.metrics_server as metrics_server
+
+        importlib.reload(metrics_server)
+        assert metrics_server.resolve_metrics_port() == 9091
+        monkeypatch.delenv("TELEGRAM_BOT_METRICS_PORT", raising=False)
+        importlib.reload(metrics_server)
+
+
 class TestMetricsServerLifecycle:
     """The uvicorn-based metrics server starts and stops cleanly."""
 
@@ -107,6 +128,24 @@ class TestMetricsServerLifecycle:
 
         # After stop, the port should be free again (give it a moment)
         await asyncio.sleep(0.3)
+
+    @pytest.mark.timeout(10)
+    async def test_occupied_port_does_not_raise_or_exit_process(self):
+        """A metrics port collision must disable /metrics, not kill the bot."""
+        port = _find_free_port()
+        blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        blocker.bind(("127.0.0.1", port))
+        blocker.listen(1)
+        try:
+            server = await start_metrics_server(
+                host="127.0.0.1",
+                port=port,
+                log_level="error",
+            )
+            assert server.should_exit is True
+            assert getattr(server, "_metrics_task", None) is None
+        finally:
+            blocker.close()
 
     @pytest.mark.timeout(10)
     async def test_custom_port(self):

@@ -11,16 +11,6 @@ Context7 baseline (``/prometheus/client_python``):
     default ``prometheus_client.REGISTRY``.  The canonical FastAPI/Starlette
     mounting pattern is ``app.mount("/metrics", make_asgi_app())``.
 
-The local pattern in ``services/bge-m3-api/app.py:588-589`` confirms the
-same approach is used across the repository:
-
-    .. code-block:: python
-
-        from prometheus_client import make_asgi_app
-
-        metrics_app = make_asgi_app()
-        app.mount("/metrics", metrics_app)
-
 For the bot the ASGI app is served standalone (no FastAPI parent) because
 the bot runtime is aiogram-based, not ASGI-based.
 
@@ -29,8 +19,11 @@ Refs #2057.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import os
+import socket
 from typing import Any
 
 import uvicorn
@@ -39,23 +32,49 @@ from prometheus_client import make_asgi_app
 
 logger = logging.getLogger(__name__)
 
-# Default port for the metrics endpoint.  Override with
-# TELEGRAM_BOT_METRICS_PORT environment variable.
-DEFAULT_METRICS_PORT: int = int(os.getenv("TELEGRAM_BOT_METRICS_PORT", "9091"))
+DEFAULT_METRICS_PORT = 9091
+
+
+def resolve_metrics_port(default: int = DEFAULT_METRICS_PORT) -> int:
+    """Resolve ``TELEGRAM_BOT_METRICS_PORT`` without import-time crashes."""
+    raw = os.getenv("TELEGRAM_BOT_METRICS_PORT", "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(
+            "TELEGRAM_BOT_METRICS_PORT=%r is not a valid integer; falling back to %d",
+            raw,
+            default,
+        )
+        return default
 
 
 def create_metrics_app() -> Any:
-    """Create an ASGI application that exposes Prometheus metrics.
-
-    Uses :func:`prometheus_client.make_asgi_app` with the package-wide
-    default ``prometheus_client.REGISTRY``.  No custom
-    ``CollectorRegistry`` is used.
-
-    Returns:
-        An ASGI application callable serving the Prometheus text format
-        at its root path (``/``).
-    """
+    """Create an ASGI application that exposes the default Prometheus registry."""
     return make_asgi_app()
+
+
+def _port_can_bind(host: str, port: int) -> bool:
+    """Return False when the configured metrics port is already occupied."""
+    if port == 0:
+        return True
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind((host, port))
+    except OSError as exc:
+        logger.warning(
+            "Cannot bind Prometheus metrics server on %s:%d: %s; /metrics disabled",
+            host,
+            port,
+            exc,
+        )
+        return False
+    finally:
+        probe.close()
+    return True
 
 
 async def start_metrics_server(
@@ -64,73 +83,71 @@ async def start_metrics_server(
     port: int | None = None,
     log_level: str | None = None,
 ) -> uvicorn.Server:
-    """Start a uvicorn ASGI server for the Prometheus ``/metrics`` endpoint.
+    """Start a background uvicorn server for Prometheus metrics.
 
-    The server runs as an asyncio background task so the aiogram polling
-    loop is not blocked.  Call :func:`stop_metrics_server` to shut it down
-    gracefully.
-
-    Args:
-        host: Bind address (default ``"127.0.0.1"`` — internal only).
-        port: Port to listen on (default ``TELEGRAM_BOT_METRICS_PORT``
-            env or ``9091``).
-        log_level: Uvicorn log level (default ``"info"``).
-
-    Returns:
-        A ``uvicorn.Server`` instance whose shutdown is controlled by
-        ``stop_metrics_server``.
+    The bot must keep polling even when metrics cannot bind, so bind
+    failures and uvicorn ``SystemExit`` are downgraded to warnings.
     """
     if port is None:
-        port = DEFAULT_METRICS_PORT
+        port = resolve_metrics_port()
     if log_level is None:
-        log_level = "info"
+        log_level = "warning"
 
-    app = create_metrics_app()
     config = uvicorn.Config(
-        app=app,
+        app=create_metrics_app(),
         host=host,
         port=port,
         log_level=log_level,
-        # The bot owns its own event loop (aiogram polling); avoid
-        # uvicorn trying to install its own signal handlers or manage
-        # event-loop lifecycle.
         loop="asyncio",
+        lifespan="off",
+        access_log=False,
     )
     server = uvicorn.Server(config)
+    server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
 
-    logger.info(
-        "Starting Prometheus metrics ASGI server on %s:%s",
-        host,
-        port,
-    )
+    if not _port_can_bind(host, port):
+        server.should_exit = True
+        return server
 
-    # Run the server as a concurrent task so the bot polling loop is not
-    # blocked.
-    import asyncio
+    logger.info("Starting Prometheus metrics ASGI server on %s:%s", host, port)
 
-    __metrics_server_task = asyncio.create_task(server.serve(), name="metrics-server")
-    # Store a reference on the server object so the task is not garbage-
-    # collected; the dunder prefix signals "internal — do not touch".
-    server._metrics_task = __metrics_server_task  # type: ignore[attr-defined]
+    async def _serve() -> None:
+        try:
+            await server.serve()
+        except SystemExit as exc:
+            logger.warning("Prometheus metrics server exited during startup: %s", exc)
+        except Exception:
+            logger.warning("Prometheus metrics server stopped unexpectedly", exc_info=True)
 
-    # Let the server bind its socket before returning.
-    await asyncio.sleep(0.1)
+    task = asyncio.create_task(_serve(), name="metrics-server")
+    server._metrics_task = task  # type: ignore[attr-defined]
 
+    # Wait briefly for the socket to bind so startup races are visible in logs.
+    for _ in range(50):
+        await asyncio.sleep(0.1)
+        servers = getattr(server, "servers", None) or []
+        if servers and any(getattr(s, "sockets", None) for s in servers):
+            return server
+        if task.done():
+            return server
+
+    logger.warning("Prometheus metrics server did not bind within timeout on %s:%s", host, port)
     return server
 
 
 async def stop_metrics_server(server: uvicorn.Server) -> None:
-    """Stop a running uvicorn metrics server gracefully.
-
-    Args:
-        server: The ``uvicorn.Server`` instance returned by
-            :func:`start_metrics_server`.
-    """
+    """Stop a running uvicorn metrics server gracefully."""
     if server is None:
         return
     logger.info("Stopping Prometheus metrics ASGI server")
     server.should_exit = True
-    # Give the server a moment to drain
-    import asyncio
-
-    await asyncio.sleep(0.1)
+    task = getattr(server, "_metrics_task", None)
+    if task is None:
+        return
+    with contextlib.suppress(asyncio.CancelledError):
+        try:
+            await asyncio.wait_for(task, timeout=5.0)
+        except TimeoutError:
+            task.cancel()
+            with contextlib.suppress(BaseException):
+                await task
