@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import langgraph.checkpoint.redis.aio  # noqa: F401 — ensure submodule for patch()
 import pytest
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import ensure_valid_checkpointer
 
 
 class TestCreateRedisCheckpointer:
@@ -84,6 +86,32 @@ class TestAgentCheckpointerTTL:
 
 
 class TestInstrumentedCheckpointer:
+    def test_is_subclass_of_base_checkpoint_saver(self):
+        """Regression #2147: LangGraph's ensure_valid_checkpointer uses
+        isinstance(BaseCheckpointSaver), so the wrapper must be a subclass.
+        """
+        from telegram_bot.integrations.memory import InstrumentedCheckpointer
+
+        saver = Mock(spec=BaseCheckpointSaver)
+        saver.serde = Mock()
+        wrapped = InstrumentedCheckpointer(saver)
+
+        assert isinstance(wrapped, BaseCheckpointSaver)
+        # ensure_valid_checkpointer must not raise for our wrapper.
+        assert ensure_valid_checkpointer(wrapped) is wrapped
+
+    def test_mirrors_underlying_saver_serde(self):
+        """The wrapper must expose the underlying saver's serde so framework
+        code that reads ``checkpointer.serde`` directly stays consistent.
+        """
+        from telegram_bot.integrations.memory import InstrumentedCheckpointer
+
+        saver = Mock(spec=BaseCheckpointSaver)
+        saver.serde = Mock(name="underlying-serde")
+        wrapped = InstrumentedCheckpointer(saver)
+
+        assert wrapped.serde is saver.serde
+
     def test_delegates_non_instrumented_attributes(self):
         """Wrapper preserves access to the underlying saver API surface."""
         from telegram_bot.integrations.memory import InstrumentedCheckpointer
