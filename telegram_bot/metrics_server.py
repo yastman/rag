@@ -103,7 +103,7 @@ async def start_metrics_server(
         access_log=False,
     )
     server = uvicorn.Server(config)
-    server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
+    server.install_signal_handlers = lambda: None  # type: ignore[attr-defined,method-assign]
 
     if not _port_can_bind(host, port):
         server.should_exit = True
