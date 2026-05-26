@@ -4577,16 +4577,20 @@ class PropertyBot:
             self._polling_lock_scheduler.start()
 
         # Start Prometheus metrics ASGI server on TELEGRAM_BOT_METRICS_PORT (#2057).
-        try:
-            from .metrics_server import start_metrics_server as _start_metrics
+        # Gated by TELEGRAM_BOT_METRICS_ENABLED so unit tests do not
+        # accidentally bind a real listening port.  The default is "1"
+        # (enabled) for backward-compatible production behaviour.
+        if os.getenv("TELEGRAM_BOT_METRICS_ENABLED", "1") in ("1", "true", "yes"):
+            try:
+                from .metrics_server import start_metrics_server as _start_metrics
 
-            self._metrics_server = await _start_metrics()
-        except Exception:
-            logger.warning(
-                "Failed to start Prometheus metrics ASGI server; /metrics HTTP "
-                "endpoint will be unavailable. Check TELEGRAM_BOT_METRICS_PORT.",
-                exc_info=True,
-            )
+                self._metrics_server = await _start_metrics()
+            except BaseException:
+                logger.warning(
+                    "Failed to start Prometheus metrics ASGI server; /metrics HTTP "
+                    "endpoint will be unavailable. Check TELEGRAM_BOT_METRICS_PORT.",
+                    exc_info=True,
+                )
 
         try:
             await self.dp.start_polling(self.bot)
