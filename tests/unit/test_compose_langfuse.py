@@ -82,7 +82,7 @@ class TestLangfuseSecretPosture:
     def test_base_compose_has_no_dev_public_key_default(self, compose_base: dict, service: str):
         env = _get_service_env(compose_base, service)
         val = str(env.get("LANGFUSE_PUBLIC_KEY", ""))
-        assert "[REDACTED-LANGFUSE-KEY] not in val, (
+        assert "pk-lf-dev" not in val, (
             f"compose.yml: {service}.LANGFUSE_PUBLIC_KEY must not hardcode dev defaults, got: {val!r}"
         )
 
@@ -90,7 +90,7 @@ class TestLangfuseSecretPosture:
     def test_base_compose_has_no_dev_secret_key_default(self, compose_base: dict, service: str):
         env = _get_service_env(compose_base, service)
         val = str(env.get("LANGFUSE_SECRET_KEY", ""))
-        assert "[REDACTED-LANGFUSE-KEY] not in val, (
+        assert "sk-lf-dev" not in val, (
             f"compose.yml: {service}.LANGFUSE_SECRET_KEY must not hardcode dev defaults, got: {val!r}"
         )
 
@@ -98,7 +98,7 @@ class TestLangfuseSecretPosture:
     def test_dev_compose_restores_public_key_default(self, compose_dev: dict, service: str):
         env = _get_service_env(compose_dev, service)
         val = str(env.get("LANGFUSE_PUBLIC_KEY", ""))
-        assert "[REDACTED-LANGFUSE-KEY] in val, (
+        assert "pk-lf-dev" in val, (
             f"compose.dev.yml: {service}.LANGFUSE_PUBLIC_KEY must provide dev default, got: {val!r}"
         )
 
@@ -106,7 +106,7 @@ class TestLangfuseSecretPosture:
     def test_dev_compose_restores_secret_key_default(self, compose_dev: dict, service: str):
         env = _get_service_env(compose_dev, service)
         val = str(env.get("LANGFUSE_SECRET_KEY", ""))
-        assert "[REDACTED-LANGFUSE-KEY] in val, (
+        assert "sk-lf-dev" in val, (
             f"compose.dev.yml: {service}.LANGFUSE_SECRET_KEY must provide dev default, got: {val!r}"
         )
 
@@ -132,8 +132,8 @@ class TestLangfuseSecretPosture:
         env = _get_service_env(compose_base, "langfuse")
         public = str(env.get("LANGFUSE_INIT_PROJECT_PUBLIC_KEY", ""))
         secret = str(env.get("LANGFUSE_INIT_PROJECT_SECRET_KEY", ""))
-        assert "[REDACTED-LANGFUSE-KEY] not in public
-        assert "[REDACTED-LANGFUSE-KEY] not in secret
+        assert "pk-lf-dev" not in public
+        assert "sk-lf-dev" not in secret
 
     def test_dev_langfuse_headless_init_matches_traced_service_keys(self, compose_dev: dict):
         langfuse_env = _get_service_env(compose_dev, "langfuse")
@@ -144,13 +144,13 @@ class TestLangfuseSecretPosture:
             "${LANGFUSE_INIT_PROJECT_ID:-dev-project}"
         )
         assert langfuse_env["LANGFUSE_INIT_PROJECT_PUBLIC_KEY"] == (
-            "${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-[REDACTED-LANGFUSE-KEY]
+            "${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-dev}"
         )
         assert langfuse_env["LANGFUSE_INIT_PROJECT_SECRET_KEY"] == (
-            "${LANGFUSE_INIT_PROJECT_SECRET_KEY:-[REDACTED-LANGFUSE-KEY]
+            "${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-dev}"
         )
-        assert bot_env["LANGFUSE_PUBLIC_KEY"] == "${LANGFUSE_PUBLIC_KEY:-[REDACTED-LANGFUSE-KEY]
-        assert bot_env["LANGFUSE_SECRET_KEY"] == "${LANGFUSE_SECRET_KEY:-[REDACTED-LANGFUSE-KEY]
+        assert bot_env["LANGFUSE_PUBLIC_KEY"] == "${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}"
+        assert bot_env["LANGFUSE_SECRET_KEY"] == "${LANGFUSE_SECRET_KEY:-sk-lf-dev}"
 
 
 class TestLitellmCallbacks:
