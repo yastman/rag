@@ -58,7 +58,7 @@ def _make_bot() -> AsyncMock:
 # ---------------------------------------------------------------------------
 
 
-async def test_stream_agent_to_draft_is_importable():
+def test_stream_agent_to_draft_is_importable():
     """_stream_agent_to_draft must be importable from telegram_bot.bot."""
     from telegram_bot.bot import _stream_agent_to_draft
 

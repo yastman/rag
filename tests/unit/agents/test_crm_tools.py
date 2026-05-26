@@ -561,7 +561,7 @@ async def test_crm_update_contact_no_kommo():
     assert "недоступен" in result.lower()
 
 
-async def test_get_crm_tools_count():
+def test_get_crm_tools_count():
     """get_crm_tools returns exactly 12 tools."""
     from telegram_bot.agents.crm_tools import get_crm_tools
 

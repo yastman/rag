@@ -195,7 +195,7 @@ def test_build_pagination_buttons_single_page():
 # --- KommoClient new methods ---
 
 
-async def test_kommo_client_has_update_task():
+def test_kommo_client_has_update_task():
     """KommoClient exposes update_task method."""
     from telegram_bot.services.kommo_client import KommoClient
 
@@ -203,7 +203,7 @@ async def test_kommo_client_has_update_task():
     assert callable(KommoClient.update_task)
 
 
-async def test_kommo_client_has_complete_task():
+def test_kommo_client_has_complete_task():
     """KommoClient exposes complete_task method."""
     from telegram_bot.services.kommo_client import KommoClient
 

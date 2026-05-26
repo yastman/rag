@@ -23,7 +23,7 @@ def mock_message():
     return msg
 
 
-async def test_handle_query_supervisor_imports_available():
+def test_handle_query_supervisor_imports_available():
     """Verify new imports are available in bot module."""
     from telegram_bot.agents.agent import create_bot_agent
     from telegram_bot.agents.context import BotContext
@@ -40,7 +40,7 @@ async def test_handle_query_supervisor_imports_available():
     assert BotContext is not None
 
 
-async def test_bot_context_has_required_fields():
+def test_bot_context_has_required_fields():
     """BotContext has all fields needed by _handle_query_supervisor."""
     from telegram_bot.agents.context import BotContext
 
@@ -63,7 +63,7 @@ async def test_bot_context_has_required_fields():
     assert ctx.language == "ru"
 
 
-async def test_get_crm_tools_returns_list():
+def test_get_crm_tools_returns_list():
     """get_crm_tools returns list of tool objects."""
     from telegram_bot.agents.crm_tools import get_crm_tools
 

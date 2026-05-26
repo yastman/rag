@@ -3,9 +3,9 @@
 
 URL/credential fixtures (``redis_url``, ``qdrant_url``, ``qdrant_api_key``,
 ``qdrant_collection``) are owned by ``tests/fixtures/config.py`` and
-registered globally in ``tests/conftest.py`` (issue #2066). This module
-only declares smoke-tier-specific fixtures (live-service guard, service
-clients).
+registered globally in ``tests/conftest.py`` (issues #2066, #1515 D4).
+This module only declares smoke-tier-specific fixtures (live-service
+guard, service clients).
 """
 
 import asyncio
@@ -20,11 +20,8 @@ from telegram_bot.services.qdrant import QdrantService
 
 
 @pytest.fixture(scope="module")
-def require_live_services(request):
+def require_live_services(qdrant_url, redis_url):
     """Skip if live services not available. Checks BOTH Qdrant AND Redis."""
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    redis_url = request.getfixturevalue("redis_url")
-
     # Check Qdrant
     try:
         resp = httpx.get(f"{qdrant_url}/collections", timeout=2)
@@ -59,25 +56,24 @@ async def voyage_service():
 
 
 @pytest.fixture(scope="module")
-async def qdrant_service():
-    """QdrantService for search."""
-    url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    api_key = os.getenv("QDRANT_API_KEY", "")
-    collection = os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge")
+async def qdrant_service(qdrant_url, qdrant_api_key, qdrant_collection):
+    """QdrantService for search.
 
+    Reuses the root URL / credential / collection fixtures from
+    ``tests/fixtures/config.py`` (issue #1515 D4).
+    """
     service = QdrantService(
-        url=url,
-        api_key=api_key or None,
-        collection_name=collection,
+        url=qdrant_url,
+        api_key=qdrant_api_key or None,
+        collection_name=qdrant_collection,
     )
     yield service
     await service.close()
 
 
 @pytest.fixture(scope="module")
-async def cache_service(request):
+async def cache_service(redis_url):
     """CacheLayerManager for caching."""
-    redis_url = request.getfixturevalue("redis_url")
     service = CacheLayerManager(redis_url=redis_url)
     await service.initialize()
     yield service

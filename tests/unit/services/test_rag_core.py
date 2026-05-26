@@ -451,7 +451,7 @@ class TestCheckSemanticCache:
         call_kwargs = cache.check_semantic.call_args.kwargs
         assert call_kwargs.get("agent_role") == "sales"
 
-    async def test_all_cacheable_types_are_checked(self):
+    def test_all_cacheable_types_are_checked(self):
         """CACHEABLE_QUERY_TYPES includes expected types."""
         assert "FAQ" in CACHEABLE_QUERY_TYPES
         assert "ENTITY" in CACHEABLE_QUERY_TYPES

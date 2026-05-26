@@ -639,14 +639,14 @@ class TestPerCycleCap:
         ]
         assert not cap_calls
 
-    async def test_cap_default_is_50(self):
+    def test_cap_default_is_50(self):
         """Default ``max_sessions_per_cycle`` keeps current behavior bounded."""
         from telegram_bot.services.session_summary_worker import SessionSummaryWorker
 
         worker = SessionSummaryWorker(redis=AsyncMock(), llm=AsyncMock())
         assert worker._max_sessions_per_cycle == 50
 
-    async def test_cap_clamps_at_minimum_one(self):
+    def test_cap_clamps_at_minimum_one(self):
         """A non-positive cap is normalized to 1 (must process at least one)."""
         from telegram_bot.services.session_summary_worker import SessionSummaryWorker
 

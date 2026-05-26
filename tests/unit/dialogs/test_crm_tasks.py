@@ -4,8 +4,38 @@ from __future__ import annotations
 
 import datetime
 import time
+import types
 
 import pytest
+
+
+def _freeze_crm_tasks_now(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime.datetime) -> None:
+    """Freeze ``datetime.datetime.now`` inside ``telegram_bot.dialogs.crm_tasks``.
+
+    ``filter_tasks_today`` calls ``datetime.datetime.now(tz=UTC)`` to compute
+    today's window. If the test runs across midnight UTC, the test's
+    ``today_ts`` (computed from a separate ``datetime.now()``) lands on a
+    different date than the production's ``today_start``/``today_end``,
+    causing a flake (#1515 S4). This helper replaces the ``datetime`` module
+    binding inside ``crm_tasks`` with a fake namespace whose ``datetime``
+    class returns ``fixed_now`` from ``now()``, so both the test setup and
+    production code see the same instant. ``freezegun`` is intentionally not
+    introduced as a new dep.
+    """
+    from telegram_bot.dialogs import crm_tasks as crm_tasks_mod
+
+    class _FrozenDatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            return fixed_now if tz is None else fixed_now.astimezone(tz)
+
+    fake_dt_module = types.SimpleNamespace(
+        datetime=_FrozenDatetime,
+        UTC=datetime.UTC,
+        timezone=datetime.timezone,
+        timedelta=datetime.timedelta,
+    )
+    monkeypatch.setattr(crm_tasks_mod, "datetime", fake_dt_module)
 
 
 # --- MyTasksSG states ---
@@ -79,13 +109,18 @@ def test_parse_due_date_past_raises():
 # --- filter_tasks helpers ---
 
 
-def test_filter_tasks_today_returns_only_todays_tasks():
+def test_filter_tasks_today_returns_only_todays_tasks(monkeypatch):
     """filter_tasks_today returns only tasks due today."""
     from telegram_bot.dialogs.crm_tasks import filter_tasks_today
     from telegram_bot.services.kommo_models import Task
 
-    now = datetime.datetime.now(tz=datetime.UTC)
-    today_ts = int(now.replace(hour=12, minute=0, second=0, microsecond=0).timestamp())
+    # Freeze production's "now" to a deterministic UTC noon so the test's
+    # today_ts/tomorrow_ts/yesterday_ts and the production's today_start/end
+    # observe the same date even if the test runs across midnight UTC.
+    fixed_now = datetime.datetime(2026, 6, 15, 12, 0, 0, tzinfo=datetime.UTC)
+    _freeze_crm_tasks_now(monkeypatch, fixed_now)
+
+    today_ts = int(fixed_now.timestamp())
     tomorrow_ts = today_ts + 86400
     yesterday_ts = today_ts - 86400
 
@@ -120,13 +155,15 @@ def test_filter_tasks_overdue_returns_only_overdue():
     assert result[0].id == 1
 
 
-def test_filter_tasks_today_skips_completed():
+def test_filter_tasks_today_skips_completed(monkeypatch):
     """filter_tasks_today skips completed tasks."""
     from telegram_bot.dialogs.crm_tasks import filter_tasks_today
     from telegram_bot.services.kommo_models import Task
 
-    now = datetime.datetime.now(tz=datetime.UTC)
-    today_ts = int(now.replace(hour=12, minute=0, second=0, microsecond=0).timestamp())
+    fixed_now = datetime.datetime(2026, 6, 15, 12, 0, 0, tzinfo=datetime.UTC)
+    _freeze_crm_tasks_now(monkeypatch, fixed_now)
+
+    today_ts = int(fixed_now.timestamp())
 
     tasks = [
         Task(id=1, text="Done today", complete_till=today_ts, is_completed=True),

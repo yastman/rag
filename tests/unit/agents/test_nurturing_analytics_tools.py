@@ -16,7 +16,7 @@ async def base_tool(message: str) -> str:
     return message
 
 
-async def test_manager_tools_hidden_for_client_role():
+def test_manager_tools_hidden_for_client_role():
     nurturing_tools = create_manager_nurturing_tools(
         analytics_service=AsyncMock(),
         nurturing_service=AsyncMock(),

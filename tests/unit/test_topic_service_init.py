@@ -2,11 +2,8 @@
 
 from unittest.mock import patch
 
-import pytest
 
-
-@pytest.mark.asyncio
-async def test_bot_has_topic_service_attr(monkeypatch):
+def test_bot_has_topic_service_attr(monkeypatch):
     """PropertyBot should have _topic_service after init."""
     monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
     monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)

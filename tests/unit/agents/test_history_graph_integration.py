@@ -21,7 +21,7 @@ def _patch_observe():
             yield mock_lf
 
 
-async def test_graph_compiles(_patch_observe):
+def test_graph_compiles(_patch_observe):
     """build_history_graph() returns a compiled graph."""
     from telegram_bot.agents.history_graph.graph import build_history_graph
 
