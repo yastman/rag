@@ -4,6 +4,9 @@ from pydantic import ValidationError
 from telegram_bot.config import BotConfig
 
 
+FAKE_TELEGRAM_BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+
+
 def test_handoff_enabled_defaults_to_false(monkeypatch):
     monkeypatch.delenv("HANDOFF_ENABLED", raising=False)
     cfg = BotConfig(telegram_bot_token=[REDACTED-TELEGRAM-TOKEN] _env_file=None)
