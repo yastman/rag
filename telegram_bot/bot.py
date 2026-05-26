@@ -3020,6 +3020,16 @@ class PropertyBot:
             accumulated = ""
             stream_messages: list[Any] = []
             latest_state: dict[str, Any] | None = None
+            # Throttle ``send_message_draft`` to at most one call per
+            # ``_AGENT_DRAFT_INTERVAL`` (#2159). The supervisor stream path
+            # was rewired to ``astream(..., stream_mode=['messages', 'values'],
+            # version='v2')`` in #952 and lost the throttle that the sibling
+            # helper ``_stream_agent_to_draft`` still uses. Without it every
+            # text-bearing chunk produces one Telegram Bot API round-trip,
+            # serializing into 3-6 s of tail latency on a 150-200 token
+            # answer. ``time.monotonic`` is the canonical clock for
+            # interval throttling — wall-clock jumps cannot starve drafts.
+            last_draft_at = 0.0
             stream = current_agent.astream(
                 payload,
                 config=config,
@@ -3049,6 +3059,9 @@ class PropertyBot:
                     continue
                 accumulated += text
                 stream_messages.append(message_chunk)
+                now = time.monotonic()
+                if now - last_draft_at < _AGENT_DRAFT_INTERVAL:
+                    continue
                 with contextlib.suppress(Exception):
                     draft_kwargs: dict[str, Any] = {
                         "chat_id": draft_state["chat_id"],
@@ -3058,6 +3071,7 @@ class PropertyBot:
                     if draft_state["thread_id"] is not None:
                         draft_kwargs["message_thread_id"] = draft_state["thread_id"]
                     await self.bot.send_message_draft(**draft_kwargs)
+                last_draft_at = now
 
             if accumulated:
                 # Finalize later in _handle_query_supervisor after feedback/sources assembly.
