@@ -87,37 +87,71 @@ def test_voice_bot_stores_trace_session_id():
     assert agent._session_id == "voice-call-xyz"
 
 
-def test_setup_langfuse_configures_langfuse_otel_headers(monkeypatch):
-    """Voice OTEL exporter uses Langfuse's current OTLP ingestion headers."""
+def test_setup_langfuse_delegates_to_canonical_initialize(monkeypatch):
+    """Voice OTEL setup reuses src.observability.initialize_langfuse instead of
+    building a parallel OTLP/TracerProvider/BatchSpanProcessor pipeline (#2059).
+
+    The canonical bootstrap already configures Langfuse with PII masking and
+    registers the global TracerProvider. The voice agent only needs to wire the
+    resulting provider into LiveKit's telemetry helper.
+    """
     import src.voice.agent as mod
 
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
-    monkeypatch.setenv("LANGFUSE_HOST", "https://cloud.langfuse.com/")
+    fake_provider = object()
+    fake_client = object()
 
     with (
-        patch("src.voice.agent.logger"),
-        patch(
-            "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter"
-        ) as exporter_cls,
-        patch("opentelemetry.sdk.trace.TracerProvider") as provider_cls,
-        patch("opentelemetry.sdk.trace.export.BatchSpanProcessor") as processor_cls,
+        patch("src.voice.agent.initialize_langfuse", return_value=fake_client) as init_mock,
+        patch("src.voice.agent.trace.get_tracer_provider", return_value=fake_provider),
         patch("livekit.agents.telemetry.set_tracer_provider") as set_provider,
     ):
-        provider = provider_cls.return_value
-
         mod._setup_langfuse()
 
-    exporter_cls.assert_called_once_with(
-        endpoint="https://cloud.langfuse.com/api/public/otel",
-        headers={
-            "Authorization": "Basic cGstdGVzdDpzay10ZXN0",
-            "x-langfuse-ingestion-version": "4",
-        },
-    )
-    processor_cls.assert_called_once_with(exporter_cls.return_value)
-    provider.add_span_processor.assert_called_once_with(processor_cls.return_value)
-    set_provider.assert_called_once_with(provider)
+    init_mock.assert_called_once_with()
+    set_provider.assert_called_once_with(fake_provider)
+
+
+def test_setup_langfuse_skips_livekit_wiring_when_disabled(monkeypatch):
+    """When initialize_langfuse() returns None (missing creds, unreachable host,
+    SDK unavailable), the voice agent must NOT register a tracer provider with
+    LiveKit. This avoids wiring an unconfigured provider into the agent runtime.
+    """
+    import src.voice.agent as mod
+
+    with (
+        patch("src.voice.agent.initialize_langfuse", return_value=None) as init_mock,
+        patch("livekit.agents.telemetry.set_tracer_provider") as set_provider,
+    ):
+        mod._setup_langfuse()
+
+    init_mock.assert_called_once_with()
+    set_provider.assert_not_called()
+
+
+def test_setup_langfuse_swallows_livekit_telemetry_import_error(monkeypatch):
+    """If livekit.agents.telemetry is unavailable (older LiveKit version), the
+    setup must still succeed silently. Langfuse spans continue to flow via the
+    global TracerProvider that initialize_langfuse() registered.
+    """
+    import sys
+
+    import src.voice.agent as mod
+
+    fake_client = object()
+    fake_provider = object()
+
+    saved = sys.modules.pop("livekit.agents.telemetry", None)
+    try:
+        with (
+            patch("src.voice.agent.initialize_langfuse", return_value=fake_client),
+            patch("src.voice.agent.trace.get_tracer_provider", return_value=fake_provider),
+            patch.dict(sys.modules, {"livekit.agents.telemetry": None}),
+        ):
+            # Should not raise even though the import fails.
+            mod._setup_langfuse()
+    finally:
+        if saved is not None:
+            sys.modules["livekit.agents.telemetry"] = saved
 
 
 async def test_voice_tool_propagates_langfuse_trace_id_to_api_payload():
