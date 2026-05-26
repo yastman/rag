@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -17,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 from mini_app.auth import validate_init_data
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
-from src.observability import get_client, observe, propagate_attributes
+from src.observability import get_client, initialize_langfuse, observe, propagate_attributes
 from src.observability_sentry import initialize_sentry, set_runtime_tags
 from src.services.content_loader import load_mini_app_config
 
@@ -43,12 +44,42 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     the connection lifecycle here (instead of a module-level lazy
     global) ensures graceful close on process shutdown and matches the
     FastAPI-native pattern (#1645).
+
+    Langfuse tracing is initialized explicitly here as well (#2161). The
+    Mini App process owns its own ``Langfuse()`` client built via
+    :func:`src.observability.initialize_langfuse` so ``@observe``-
+    decorated endpoints (``miniapp-start-expert``, ``miniapp-submit-phone``,
+    ``miniapp-kommo-create-lead``) actually emit traces. Without an
+    explicit init the Langfuse SDK lazy-builds a singleton on first
+    ``get_client()`` call; if env wasn't fully loaded by then (or if
+    ``auth_check`` would have failed) the singleton stays disabled
+    silently for the remainder of the process. Initializing in lifespan
+    surfaces credential / connectivity errors loudly at startup and
+    flushes pending spans on graceful shutdown.
     """
     # Initialize Sentry FIRST so any subsequent startup error (Redis,
     # config) is captured. No-op when SENTRY_DSN is unset (#1417).
     if initialize_sentry():
         set_runtime_tags(service="mini-app")
         logger.info("Sentry error tracking enabled with PII redaction")
+
+    # Initialize Langfuse explicitly (#2161). ``initialize_langfuse``
+    # logs the reason for any disable (missing keys, unreachable host,
+    # SDK import failure) at INFO/WARNING and never raises, so the API
+    # boots cleanly even when Langfuse is not configured. Stash the
+    # client on ``app.state.langfuse`` so it can be shut down on exit
+    # alongside Redis.
+    langfuse_client = initialize_langfuse()
+    if langfuse_client is not None:
+        try:
+            langfuse_client.auth_check()
+            logger.info("Langfuse initialized for mini-app-api")
+        except Exception:
+            logger.exception("Langfuse auth_check failed; tracing disabled for mini-app-api")
+            with contextlib.suppress(Exception):
+                langfuse_client.shutdown()
+            langfuse_client = None
+    app.state.langfuse = langfuse_client
 
     import redis.asyncio as aioredis
 
@@ -65,6 +96,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             result = close()
             if hasattr(result, "__await__"):
                 await result
+        # Flush + close Langfuse so pending spans land in the backend
+        # before the process exits (#2161). ``shutdown`` is idempotent
+        # and safe to call even when ``initialize_langfuse`` returned
+        # ``None`` (suppressed below).
+        if app.state.langfuse is not None:
+            with contextlib.suppress(Exception):
+                app.state.langfuse.shutdown()
 
 
 async def get_redis(request: Request) -> Any:
