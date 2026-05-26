@@ -11,6 +11,7 @@ import pytest
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from telegram_bot.config import BotConfig
+from telegram_bot.startup_status import StartupReport, StartupSeverity, StartupSignal
 
 
 def _make_config(**overrides) -> BotConfig:
@@ -160,36 +161,22 @@ def _start_patches(bot):
     stack.enter_context(patch("asyncpg.create_pool", new_callable=AsyncMock))
     stack.enter_context(patch.object(bot._cache, "initialize", new_callable=AsyncMock))
     stack.enter_context(patch.object(bot._redis_monitor, "start", new_callable=AsyncMock))
-    stack.enter_context(
-        patch.object(bot.bot, "me", new_callable=AsyncMock, return_value=mock_me)
-    )
+    stack.enter_context(patch.object(bot.bot, "me", new_callable=AsyncMock, return_value=mock_me))
     stack.enter_context(
         patch.object(bot.bot, "get_me", new_callable=AsyncMock, return_value=mock_me)
     )
-    stack.enter_context(
-        patch.object(bot.bot, "set_my_commands", new_callable=AsyncMock)
-    )
-    stack.enter_context(
-        patch.object(bot.bot, "set_chat_menu_button", new_callable=AsyncMock)
-    )
+    stack.enter_context(patch.object(bot.bot, "set_my_commands", new_callable=AsyncMock))
+    stack.enter_context(patch.object(bot.bot, "set_chat_menu_button", new_callable=AsyncMock))
     stack.enter_context(patch("telegram_bot.bot.HistoryService", mock_history_cls))
     # Prevent dialog router attachment errors (singletons already attached)
     stack.enter_context(patch.object(bot.dp, "include_router", MagicMock()))
-    stack.enter_context(
-        patch("telegram_bot.middlewares.i18n.setup_i18n_middleware", MagicMock())
-    )
+    stack.enter_context(patch("telegram_bot.middlewares.i18n.setup_i18n_middleware", MagicMock()))
     stack.enter_context(patch("aiogram_dialog.setup_dialogs", MagicMock()))
-    stack.enter_context(
-        patch.object(bot, "_warmup_bge", new_callable=AsyncMock)
-    )
+    stack.enter_context(patch.object(bot, "_warmup_bge", new_callable=AsyncMock))
     # Prevent start_polling from actually blocking
-    stack.enter_context(
-        patch.object(bot.dp, "start_polling", new_callable=AsyncMock)
-    )
+    stack.enter_context(patch.object(bot.dp, "start_polling", new_callable=AsyncMock))
     # Mock cache.redis as None to skip polling lock and handoff sections that need real Redis
-    stack.enter_context(
-        patch.object(bot._cache, "redis", None)
-    )
+    stack.enter_context(patch.object(bot._cache, "redis", None))
     return stack
 
 
@@ -254,7 +241,6 @@ class TestPropertyBotStart:
     async def test_preflight_failure_propagates(self):
         """When check_dependencies raises PreflightError, start() re-raises."""
         from telegram_bot.preflight import PreflightError
-        from telegram_bot.startup_status import StartupReport
 
         bot = _create_bot()
 
@@ -262,13 +248,39 @@ class TestPropertyBotStart:
             patch(
                 "telegram_bot.preflight.check_dependencies",
                 new_callable=AsyncMock,
-                side_effect=PreflightError(
-                    failed_deps=["redis"], report=StartupReport()
-                ),
+                side_effect=PreflightError(failed_deps=["redis"], report=StartupReport()),
             ),
             pytest.raises(SystemExit),
         ):
             await bot.start()
+
+    async def test_postgres_unavailable_adds_degraded_signal(self):
+        """When preflight marks postgres=False, startup_report gets postgres_runtime DEGRADED signal."""
+        bot = _create_bot()
+
+        signals: list[StartupSignal] = []
+
+        class _RecordingReport(StartupReport):
+            def add(self, signal: StartupSignal) -> None:
+                signals.append(signal)
+                super().add(signal)
+
+        with _start_patches(bot):
+            with (
+                patch(
+                    "telegram_bot.preflight.check_dependencies",
+                    new_callable=AsyncMock,
+                    return_value={"postgres": False, "redis": True, "qdrant": True},
+                ),
+                patch("telegram_bot.bot.StartupReport", _RecordingReport),
+            ):
+                await bot.start()
+
+        pg_signals = [s for s in signals if s.source == "postgres_runtime"]
+        assert len(pg_signals) == 1, (
+            f"Expected 1 postgres_runtime signal, got {len(pg_signals)}: {[s.summary for s in pg_signals]}"
+        )
+        assert pg_signals[0].severity == StartupSeverity.DEGRADED
 
 
 class TestResolveUserRole:
