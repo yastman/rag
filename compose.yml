@@ -429,8 +429,8 @@ services:
     stop_grace_period: 30s
     logging: *default-logging
     environment:
-      - LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY]
-      - LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY]
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-ingestion}
       - GDRIVE_SYNC_DIR=/data/drive-sync
