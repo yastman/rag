@@ -24,7 +24,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(llm=mock_llm, voice_language="ru", stt_model="whisper")
         state = _make_voice_state()
@@ -40,7 +40,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="тест запрос")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(llm=mock_llm, voice_language="ru", stt_model="whisper")
         state = _make_voice_state()
@@ -54,7 +54,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(llm=mock_llm, voice_language="ru", stt_model="whisper")
         state = _make_voice_state()
@@ -67,7 +67,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="тест")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(llm=mock_llm, voice_language="uk", stt_model="whisper")
         state = _make_voice_state()
@@ -82,7 +82,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.side_effect = Exception("API timeout")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(llm=mock_llm, voice_language="ru", stt_model="whisper")
         state = _make_voice_state()
@@ -96,7 +96,7 @@ class TestTranscribeNode:
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="тест")
         mock_message = AsyncMock()
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(
             llm=mock_llm,
@@ -118,7 +118,7 @@ class TestTranscribeNode:
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="тест")
         mock_message = AsyncMock()
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(
             llm=mock_llm,
@@ -137,7 +137,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(
             llm=mock_llm,
@@ -147,7 +147,7 @@ class TestTranscribeNode:
         )
         state = _make_voice_state()
 
-        with patch("telegram_bot.graph.nodes.transcribe.get_client") as mock_gc:
+        with patch("src.runtime.graph.nodes.transcribe.get_client") as mock_gc:
             mock_lf = MagicMock()
             mock_gc.return_value = mock_lf
             await node(state)
@@ -173,7 +173,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(
             llm=mock_llm,
@@ -191,7 +191,7 @@ class TestTranscribeNode:
         mock_lf = MagicMock()
         mock_lf.start_as_current_observation.return_value = mock_gen_ctx
 
-        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+        with patch("src.runtime.graph.nodes.transcribe.get_client", return_value=mock_lf):
             await node(state)
 
         mock_lf.start_as_current_observation.assert_called_once()
@@ -208,7 +208,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(
             llm=mock_llm,
@@ -221,7 +221,7 @@ class TestTranscribeNode:
         mock_lf = MagicMock()
         mock_lf.start_as_current_observation.side_effect = RuntimeError("Langfuse unavailable")
 
-        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+        with patch("src.runtime.graph.nodes.transcribe.get_client", return_value=mock_lf):
             result = await node(state)
 
         # STT still ran and returned text despite Langfuse observation failure
@@ -234,7 +234,7 @@ class TestTranscribeNode:
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="Привет мир")
 
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         node = make_transcribe_node(
             llm=mock_llm,
@@ -253,7 +253,7 @@ class TestTranscribeNode:
         mock_lf = MagicMock()
         mock_lf.start_as_current_observation.return_value = mock_gen_ctx
 
-        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+        with patch("src.runtime.graph.nodes.transcribe.get_client", return_value=mock_lf):
             result = await node(state)
 
         # Text is preserved even though observation.update raised

@@ -11,8 +11,8 @@ from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
-from telegram_bot.graph.context import GraphContext
-from telegram_bot.graph.edges import (
+from src.runtime.graph.context import GraphContext
+from src.runtime.graph.edges import (
     route_after_guard,
     route_by_query_type,
     route_cache,
@@ -75,14 +75,14 @@ def build_graph(
     Returns:
         Compiled StateGraph ready for .ainvoke() — context pre-bound.
     """
+    from src.runtime.graph.nodes.classify import classify_node
+    from src.runtime.graph.nodes.guard import guard_node
+    from src.runtime.graph.nodes.transcribe import make_transcribe_node
     from telegram_bot.graph.nodes.cache import cache_check_node, cache_store_node
-    from telegram_bot.graph.nodes.classify import classify_node
     from telegram_bot.graph.nodes.grade import grade_node
-    from telegram_bot.graph.nodes.guard import guard_node
     from telegram_bot.graph.nodes.rerank import rerank_node
     from telegram_bot.graph.nodes.retrieve import retrieve_node
     from telegram_bot.graph.nodes.rewrite import rewrite_node
-    from telegram_bot.graph.nodes.transcribe import make_transcribe_node
 
     # Build run-scoped dependency context — injected into nodes via Runtime.
     ctx: GraphContext = {

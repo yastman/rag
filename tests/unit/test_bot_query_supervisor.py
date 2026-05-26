@@ -74,7 +74,7 @@ class TestQuerySupervisorContentFilter:
         bot = _create_bot(config)
         message = _make_message("DROP TABLE users;")
 
-        from telegram_bot.graph.nodes.guard import _BLOCKED_RESPONSE
+        from src.runtime.graph.nodes.guard import _BLOCKED_RESPONSE
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -108,7 +108,7 @@ class TestQuerySupervisorContentFilter:
         bot = _create_bot(config)
         message = _make_message("harmless text")
 
-        from telegram_bot.graph.nodes.guard import _BLOCKED_RESPONSE
+        from src.runtime.graph.nodes.guard import _BLOCKED_RESPONSE
 
         with (
             patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
@@ -381,9 +381,7 @@ class TestQuerySupervisorSemanticCache:
                     return_value=None,
                 ),
             ):
-                mock_filter_signal.return_value = MagicMock(
-                    is_filter_sensitive=False, reasons=[]
-                )
+                mock_filter_signal.return_value = MagicMock(is_filter_sensitive=False, reasons=[])
 
                 result = await bot._handle_query_supervisor(
                     message, time.perf_counter(), locale="ru", root_trace_metadata={}
@@ -462,9 +460,7 @@ class TestQuerySupervisorSemanticCache:
                     return_value=None,
                 ),
             ):
-                mock_filter_signal.return_value = MagicMock(
-                    is_filter_sensitive=False, reasons=[]
-                )
+                mock_filter_signal.return_value = MagicMock(is_filter_sensitive=False, reasons=[])
 
                 result = await bot._handle_query_supervisor(
                     message, time.perf_counter(), locale="ru", root_trace_metadata={}

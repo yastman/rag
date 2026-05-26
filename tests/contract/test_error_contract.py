@@ -29,6 +29,7 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     # Voice transcription error path (Whisper / LiteLLM failure) — span is
     # re-raised so the outer voice-session trace records the failure (#1810).
     "telegram_bot/graph/nodes/transcribe.py": ["ERROR"],
+    "src/runtime/graph/nodes/transcribe.py": ["ERROR"],
     # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],

@@ -1,95 +1,24 @@
-"""Conditional edge functions for RAG LangGraph pipeline.
+"""Conditional edge functions — back-compat re-export.
 
-Five routing functions that control the graph flow:
-- route_start: START → transcribe or classify
-- route_by_query_type: classify → respond or guard
-- route_after_guard: guard → respond or cache_check
-- route_cache: cache_check → respond or retrieve
-- route_grade: grade → rerank, rewrite, or generate
+The canonical implementation moved to :mod:`src.runtime.graph.edges` as
+part of the reverse-layering Slice A (#1948 / #2049). This module remains
+so that existing ``from telegram_bot.graph.edges import …`` imports
+continue to work unchanged.
 """
 
-from __future__ import annotations
-
-import logging
-from typing import Any, Literal
-
-from telegram_bot.observability import observe
-
-
-logger = logging.getLogger(__name__)
+from src.runtime.graph.edges import (
+    route_after_guard,
+    route_by_query_type,
+    route_cache,
+    route_grade,
+    route_start,
+)
 
 
-@observe(name="edge-route-start")
-def route_start(
-    state: dict[str, Any],
-) -> Literal["transcribe", "classify"]:
-    """Route at START: voice messages → transcribe, text → classify."""
-    if state.get("voice_audio") is not None:
-        return "transcribe"
-    return "classify"
-
-
-@observe(name="edge-route-query-type")
-def route_by_query_type(
-    state: dict[str, Any],
-) -> Literal["respond", "guard"]:
-    """Route after classification: CHITCHAT/OFF_TOPIC → respond, else → guard."""
-    query_type = state.get("query_type", "GENERAL")
-    if query_type in ("CHITCHAT", "OFF_TOPIC"):
-        return "respond"
-    return "guard"
-
-
-@observe(name="edge-route-guard")
-def route_after_guard(
-    state: dict[str, Any],
-) -> Literal["respond", "cache_check"]:
-    """Route after guard: blocked → respond, allowed → cache_check."""
-    if state.get("guard_blocked", False):
-        return "respond"
-    return "cache_check"
-
-
-@observe(name="edge-route-cache")
-def route_cache(
-    state: dict[str, Any],
-) -> Literal["respond", "retrieve"]:
-    """Route after cache check: embedding error/hit → respond, miss → retrieve."""
-    if state.get("embedding_error", False):
-        return "respond"
-    if state.get("cache_hit", False):
-        return "respond"
-    return "retrieve"
-
-
-@observe(name="edge-route-grade")
-def route_grade(
-    state: dict[str, Any],
-) -> Literal["rerank", "rewrite", "generate"]:
-    """Route after grading: skip_rerank → generate, relevant → rerank, not relevant + retries → rewrite/generate.
-
-    Also enforces LLM call limit (#374): when llm_call_count >= max_llm_calls,
-    prevents further rewrites and routes to generate instead.
-    """
-    if state.get("documents_relevant", False):
-        if state.get("skip_rerank", False):
-            return "generate"
-        if state.get("rerank_applied", False):
-            return "generate"
-        return "rerank"
-
-    # LLM call limit check (#374) — prevent rewrite loops
-    max_llm = state.get("max_llm_calls", 5)
-    llm_count = state.get("llm_call_count", 0)
-    if llm_count >= max_llm:
-        logger.warning("LLM call limit reached (%d/%d), skipping rewrite", llm_count, max_llm)
-        return "generate"
-
-    max_attempts = state.get("max_rewrite_attempts", 1)
-    if (
-        state.get("rewrite_count", 0) < max_attempts
-        and state.get("rewrite_effective", True)
-        and state.get("score_improved", True)
-    ):
-        return "rewrite"
-    return "generate"
+__all__ = [
+    "route_after_guard",
+    "route_by_query_type",
+    "route_cache",
+    "route_grade",
+    "route_start",
+]

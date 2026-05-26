@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langgraph.runtime import Runtime
 
-from telegram_bot.graph.nodes.guard import (
+from src.runtime.graph.nodes.guard import (
     _BLOCKED_RESPONSE,
     INJECTION_PATTERNS,
     detect_injection,
@@ -127,7 +127,7 @@ class TestGuardNode:
     def _mock_langfuse(self):
         mock_client = MagicMock()
         mock_client.update_current_span = MagicMock()
-        with patch("telegram_bot.graph.nodes.guard.get_client", return_value=mock_client):
+        with patch("src.runtime.graph.nodes.guard.get_client", return_value=mock_client):
             yield mock_client
 
     @pytest.mark.asyncio()
@@ -206,7 +206,7 @@ class TestGuardNodeEdgeCases:
     def _mock_langfuse(self):
         mock_client = MagicMock()
         mock_client.update_current_span = MagicMock()
-        with patch("telegram_bot.graph.nodes.guard.get_client", return_value=mock_client):
+        with patch("src.runtime.graph.nodes.guard.get_client", return_value=mock_client):
             yield mock_client
 
     @pytest.mark.asyncio()

@@ -1,6 +1,6 @@
 """Security tests for injection detection and PII masking edge cases (#550)."""
 
-from telegram_bot.graph.nodes.guard import detect_injection
+from src.runtime.graph.nodes.guard import detect_injection
 from telegram_bot.observability import mask_pii
 
 

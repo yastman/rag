@@ -41,7 +41,7 @@ class TestHeavyNodesDisableAutoCapture:
             "telegram_bot.graph.nodes.cache",
             "telegram_bot.graph.nodes.respond",
             "telegram_bot.graph.nodes.rewrite",
-            "telegram_bot.graph.nodes.transcribe",
+            "src.runtime.graph.nodes.transcribe",
         ]
         for mod in node_modules:
             if mod in sys.modules:
@@ -54,12 +54,15 @@ class TestHeavyNodesDisableAutoCapture:
 
             return decorator
 
-        with patch("telegram_bot.observability.observe", side_effect=fake_observe):
+        with (
+            patch("telegram_bot.observability.observe", side_effect=fake_observe),
+            patch("src.observability.observe", side_effect=fake_observe),
+        ):
             # Force re-import with our mocked observe
             for mod in node_modules:
                 importlib.import_module(mod)
             # Trigger transcribe decorator via factory
-            from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+            from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
             make_transcribe_node(llm=None)
             yield
@@ -411,7 +414,7 @@ class TestCuratedSpanPayloads:
         assert gen_kwargs.get("model") == "gpt-4o-mini"
 
     async def test_transcribe_node_generation_observation(self):
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.return_value = MagicMock(text="тест")
@@ -434,7 +437,7 @@ class TestCuratedSpanPayloads:
         mock_lf = MagicMock()
         mock_lf.start_as_current_observation.return_value = mock_gen_ctx
 
-        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+        with patch("src.runtime.graph.nodes.transcribe.get_client", return_value=mock_lf):
             await node(state)
 
         mock_lf.start_as_current_observation.assert_called_once()
