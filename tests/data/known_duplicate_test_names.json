@@ -47,25 +47,6 @@
     "tests/unit/dialogs/test_filter_constants.py",
     "tests/unit/dialogs/test_funnel_results.py"
   ],
-  "test_contextualize_empty_chunks": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_handles_api_error_gracefully": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_multiple_chunks": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_single_chunk": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
   "test_contextualize_single_success": [
     "tests/unit/contextualization/test_claude.py",
     "tests/unit/contextualization/test_groq.py",
@@ -101,11 +82,6 @@
   ],
   "test_contextualize_sync_with_query": [
     "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_openai.py"
-  ],
-  "test_contextualize_with_query": [
-    "tests/unit/contextualization/test_claude.py",
-    "tests/unit/contextualization/test_groq.py",
     "tests/unit/contextualization/test_openai.py"
   ],
   "test_convert_nested_dict": [
@@ -342,10 +318,6 @@
   "test_missing_trace_id_returns_none": [
     "tests/unit/test_feedback.py",
     "tests/unit/test_feedback_handler.py"
-  ],
-  "test_multiple_results_numbered": [
-    "tests/unit/handlers/test_demo_search.py",
-    "tests/unit/services/test_apartment_formatter.py"
   ],
   "test_needs_agent_defaults_to_false": [
     "tests/unit/pipelines/test_client_pipeline.py",
