@@ -77,12 +77,7 @@ class TestQueryPreprocessorTranslitPrecompiled:
         with patch("re.compile", wraps=re.compile) as mock_compile:
             for q in queries:
                 pp.normalize_translit(q)
-            assert mock_compile.call_count == 0, (
-                "normalize_translit should not call re.compile in the hot path; "
-                f"got {mock_compile.call_count} compilations across "
-                f"{len(queries)} queries. Precompile patterns at class/module "
-                "load time."
-            )
+            mock_compile.assert_not_called()
 
     @pytest.mark.parametrize(
         ("latin_input", "expected_output"),
