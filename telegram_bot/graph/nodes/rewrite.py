@@ -50,6 +50,7 @@ async def rewrite_node(
         messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
     )
     rewrite_count = state.get("rewrite_count", 0)
+    rewrite_failed = False
 
     try:
         from telegram_bot.graph.config import GraphConfig
@@ -72,6 +73,7 @@ async def rewrite_node(
                 },
             )
     except Exception as e:
+        rewrite_failed = True
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
         get_client().update_current_span(
             level="ERROR",
@@ -90,17 +92,18 @@ async def rewrite_node(
         elapsed,
     )
 
-    # Safe span output with rewritten query metadata
-    with contextlib.suppress(Exception):
-        client = get_client()
-        client.update_current_span(
-            output={
-                "rewritten_preview": str(rewritten)[:240],
-                "rewrite_effective": effective,
-                "rewrite_provider_model": rewrite_actual_model,
-                "rewrite_latency_sec": round(elapsed, 3),
-            },
-        )
+    if not rewrite_failed:
+        # Safe span output with rewritten query metadata.
+        with contextlib.suppress(Exception):
+            client = get_client()
+            client.update_current_span(
+                output={
+                    "rewritten_preview": str(rewritten)[:240],
+                    "rewrite_effective": effective,
+                    "rewrite_provider_model": rewrite_actual_model,
+                    "rewrite_latency_sec": round(elapsed, 3),
+                },
+            )
 
     return {
         "messages": [HumanMessage(content=rewritten)],

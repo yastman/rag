@@ -362,7 +362,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             },
         )
 
-    result = await _generate_response_service(
+    return await _generate_response_service(
         query=query,
         needs_coverage=bool(state.get("needs_coverage")),
         documents=documents,
@@ -387,20 +387,3 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         extract_sent_message_ref=_extract_sent_message_ref,
         citation_instruction=_CITATION_INSTRUCTION,
     )
-
-    # Safe span output with response metadata
-    with contextlib.suppress(Exception):
-        lf = get_client()
-        lf.update_current_span(
-            output={
-                "response_length": len(str(result.get("response", ""))),
-                "llm_provider_model": str(result.get("llm_provider_model", "")),
-                "llm_ttft_ms": result.get("llm_ttft_ms"),
-                "fallback_used": bool(
-                    result.get("llm_provider_model", "") == "fallback"
-                    or result.get("llm_timeout", False)
-                ),
-            },
-        )
-
-    return result
