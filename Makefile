@@ -9,6 +9,7 @@
 	git-hygiene git-hygiene-fix pr-hygiene issue-hygiene repo-cleanup repo-cleanup-force \
 	docker-clean docker-clean-aggressive
 	test-contract \
+	preflight-bot \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
 	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
@@ -374,7 +375,12 @@ test-redis: ## Verify Redis Query Engine is available
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
 
-.PHONY: test-bot-health test-bot-health-vps
+.PHONY: test-bot-health test-bot-health-vps preflight-bot
+
+PREFLIGHT_BOT_FLAGS ?=
+
+preflight-bot: ## Check bot runtime env before starting (missing .env, invalid token, port issues)
+	@uv run python scripts/probe/check_bot_runtime_env.py $(PREFLIGHT_BOT_FLAGS)
 
 test-bot-health: ## Preflight: verify local native-bot prerequisites (Redis/Qdrant/LiteLLM + optional Postgres note)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
@@ -599,7 +605,7 @@ docker-core-up: ## Start default local compose stack (unprofiled services)
 	$(LOCAL_COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
-docker-bot-up: ## Start core + bot services (litellm, bot)
+docker-bot-up: preflight-bot ## Start core + bot services (litellm, bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
 	$(LOCAL_COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
@@ -719,7 +725,7 @@ local-up-ingest:  ## Start local services + docling for ingestion workflows
 run-bot:  ## Run bot locally (requires: make local-up)
 	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
-bot:  ## Alias: run bot and tee output to logs/bot-run.log
+bot: preflight-bot ## Alias: run bot and tee output to logs/bot-run.log
 	@mkdir -p logs
 	@bash -o pipefail -c 'uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
 	status=$$?; echo '[COMPLETE]'; exit $$status

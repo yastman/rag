@@ -482,3 +482,87 @@ def test_test_full_uses_bounded_parallelism_by_default() -> None:
         "test-full must NOT use $(PYTEST_PARALLEL_ARGS) (unbounded -n auto); "
         "use $(PYTEST_FULL_PARALLEL_ARGS) instead"
     )
+
+
+# --- #2123 / #2126 preflight-bot guardrail contract tests ---
+
+
+def test_preflight_bot_target_exists() -> None:
+    """`preflight-bot` must exist as a standalone Makefile target."""
+    text = _makefile_text()
+    assert re.search(r"^preflight-bot:", text, re.MULTILINE), (
+        "preflight-bot target must exist in Makefile"
+    )
+
+
+def test_preflight_bot_is_phony() -> None:
+    """`preflight-bot` must be declared .PHONY."""
+    text = _makefile_text()
+    phony_blocks = re.findall(r"^\.PHONY:.*(?:\\\n.*)*", text, re.MULTILINE)
+    combined = " ".join(phony_blocks)
+    assert "preflight-bot" in combined, "preflight-bot must be declared in .PHONY"
+
+
+def test_preflight_bot_runs_python_script() -> None:
+    """`preflight-bot` must invoke the check_bot_runtime_env.py script."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^preflight-bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "preflight-bot target not found in Makefile"
+    block = block_match.group(0)
+    assert "scripts/probe/check_bot_runtime_env.py" in block, (
+        "preflight-bot must invoke scripts/probe/check_bot_runtime_env.py"
+    )
+
+
+def test_preflight_bot_has_flag_override() -> None:
+    """`PREFLIGHT_BOT_FLAGS` must be a ?= variable so CI can pass `--no-fail`."""
+    text = _makefile_text()
+    match = re.search(r"^PREFLIGHT_BOT_FLAGS\s*\?=", text, re.MULTILINE)
+    assert match, "PREFLIGHT_BOT_FLAGS must use ?= so CI can override with --no-fail"
+
+
+def test_docker_bot_up_depends_on_preflight_bot() -> None:
+    """`docker-bot-up` must depend on `preflight-bot` so the env check
+    runs before starting the bot containers."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^docker-bot-up:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "docker-bot-up target not found in Makefile"
+    # The dependency line (first line of the target block).
+    first_line = block_match.group(0).split("\n")[0]
+    assert "preflight-bot" in first_line, (
+        "docker-bot-up must list preflight-bot as a dependency so the env "
+        f"check runs first. Found: {first_line!r}"
+    )
+
+
+def test_bot_target_depends_on_preflight_bot() -> None:
+    """`make bot` (native) must also depend on `preflight-bot` since
+    native bot startup requires real credentials."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "bot target not found in Makefile"
+    first_line = block_match.group(0).split("\n")[0]
+    assert "preflight-bot" in first_line, (
+        "bot target must list preflight-bot as a dependency so native bot "
+        f"launch fails fast when .env is missing. Found: {first_line!r}"
+    )
+
+
+def test_preflight_bot_script_exists() -> None:
+    """The script referenced by preflight-bot must actually exist."""
+    script = Path("scripts/probe/check_bot_runtime_env.py")
+    assert script.is_file(), (
+        f"{script} not found — preflight-bot target references a missing script"
+    )

@@ -82,6 +82,12 @@ curl -fsS http://localhost:8000/health
 curl -fsS http://localhost:5001/health
 ```
 
+Bot environment preflight (checks .env, token validity, port binding):
+
+```bash
+make preflight-bot
+```
+
 Bot preflight:
 
 ```bash
@@ -337,7 +343,10 @@ Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the 
 
 ## 11. Common Issues
 
-- `docker-bot-up` fails immediately: missing required env variables in `.env`.
+- `docker-bot-up` fails immediately: missing required env variables in `.env`. Run `make preflight-bot` for a diagnostic report.
+- Bot crash-loops with `TokenValidationError`: `.env` is missing and the CI fallback `TELEGRAM_BOT_TOKEN=123456789:ABC...fghi` is not a valid Telegram token. `cp .env.example .env` then set real `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and a provider key.
+- `curl localhost:4000` Connection Refused: LiteLLM port not published on host. See [`../DOCKER.md`](../DOCKER.md) "LiteLLM port recovery" — most often caused by a stray compose file at `/tmp/compose.postgres-root.yml` overriding the dev port mapping.
 - Slow first startup: BGE-M3 and Docling warm up and cache models.
 - Ingestion status empty: verify `GDRIVE_SYNC_DIR` and collection bootstrap.
 - Redis auth error (`WRONGPASS` / `NOAUTH`) after changing `.env` `REDIS_PASSWORD`: run `make local-redis-recreate`, then `make test-bot-health`.
+- `make docker-bot-up` or `make bot` exits before starting with no clear error: run `make preflight-bot` to see exactly what is missing. Use `PREFLIGHT_BOT_FLAGS='--no-fail'` to bypass the guardrail if you only need to start infrastructure.
