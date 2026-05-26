@@ -23,6 +23,9 @@ from src.runtime.services.metrics import record_pipeline_event
 
 logger = logging.getLogger(__name__)
 
+SearchResults = list[dict[Any, Any]]
+SearchReturn = SearchResults | tuple[SearchResults, dict[str, Any]]
+
 
 class QdrantService:
     """Smart Gateway for Qdrant with advanced search features.
@@ -577,7 +580,7 @@ class QdrantService:
         rrf_k: int,
         return_meta: bool,
         fallback_reason: str,
-    ) -> tuple[Any, list[dict]]:
+    ) -> tuple[SearchReturn, SearchResults]:
         """Run RRF as a fallback for ColBERT search and emit the standard span output.
 
         Extracted from ``hybrid_search_rrf_colbert`` (#1542) where the same
@@ -604,7 +607,7 @@ class QdrantService:
             ColBERT for the collection on a non-empty fallback) without
             re-doing the ``isinstance`` dance.
         """
-        fallback = await self.hybrid_search_rrf(
+        fallback: SearchReturn = await self.hybrid_search_rrf(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             filters=filters,
