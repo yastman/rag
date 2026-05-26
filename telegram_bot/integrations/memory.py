@@ -14,15 +14,27 @@ that wrap an ``ainvoke`` with :func:`begin_checkpoint_overhead_capture` /
 I/O time rather than the previous derived proxy
 (``ainvoke_wall_ms - sum_of_stage_latencies``) which also captured Pregel
 loop and ``@observe`` decorator overhead.
+
+LangGraph compatibility (#2147)
+-------------------------------
+:class:`InstrumentedCheckpointer` subclasses
+:class:`langgraph.checkpoint.base.BaseCheckpointSaver` so LangGraph's
+``ensure_valid_checkpointer`` (which uses ``isinstance``) accepts the wrapper.
+All :class:`BaseCheckpointSaver` methods are explicitly delegated to the
+wrapped saver; the four hot async I/O methods are intercepted to record
+direct latency. Saver-specific helpers (e.g. ``asetup`` on AsyncRedisSaver)
+are still resolved lazily via ``__getattr__``.
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncIterator, Collection, Iterator, Sequence
 from contextvars import ContextVar
 from typing import Any
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 
 
@@ -83,64 +95,178 @@ def sum_checkpoint_overhead_ms(bucket: dict[str, float] | None) -> float:
     return sum(float(v) for k, v in bucket.items() if k.endswith("_ms"))
 
 
-class InstrumentedCheckpointer:
+def _record(name: str, elapsed_ms: float) -> None:
+    """Accumulate a single instrumented call into the active capture bucket.
+
+    Fail-soft: any error here MUST NOT propagate into the wrapped call.
+    """
+    bucket = _checkpoint_op_bucket.get()
+    if bucket is None:
+        return
+    try:
+        bucket[f"{name}_ms"] = bucket.get(f"{name}_ms", 0.0) + elapsed_ms
+        bucket["calls"] = bucket.get("calls", 0.0) + 1.0
+    except Exception:  # pragma: no cover — defensive only
+        logger.debug(
+            "InstrumentedCheckpointer._record failed for %s",
+            name,
+            exc_info=True,
+        )
+
+
+class InstrumentedCheckpointer(BaseCheckpointSaver[Any]):
     """Time the four hot checkpoint methods and accumulate durations (#1258).
 
-    Delegates everything else to the underlying saver via ``__getattr__``.
-    The wrapper is transparent: LangGraph sees the same interface and treats
-    it identically. Capture is gated by the ``_checkpoint_op_bucket``
-    ContextVar so concurrent ``ainvoke`` calls in the same event loop each
-    accumulate into their own bucket without cross-talk.
+    Subclasses :class:`BaseCheckpointSaver` (#2147) so LangGraph's
+    ``ensure_valid_checkpointer`` (``isinstance``-based) accepts the wrapper.
+    Every :class:`BaseCheckpointSaver` method is explicitly delegated to the
+    wrapped saver. The four hot I/O methods (``aput``, ``aget``,
+    ``aput_writes``, ``aget_tuple``) record their wall time into the active
+    :data:`_checkpoint_op_bucket` ContextVar; capture is gated so concurrent
+    ``ainvoke`` calls in the same event loop each accumulate into their own
+    bucket without cross-talk.
     """
 
-    __slots__ = ("_saver",)
-
-    def __init__(self, saver: Any) -> None:
-        object.__setattr__(self, "_saver", saver)
+    def __init__(self, saver: BaseCheckpointSaver[Any]) -> None:
+        # Do NOT call ``super().__init__()`` — that would install a fresh
+        # JsonPlusSerializer on ``self``. We mirror the wrapped saver's
+        # serializer instead so behaviour stays identical.
+        self._saver = saver
+        self.serde = saver.serde
 
     def __repr__(self) -> str:  # pragma: no cover — debug only
         return f"InstrumentedCheckpointer({self._saver!r})"
 
     def __getattr__(self, name: str) -> Any:
-        # __getattr__ runs only when normal lookup misses (i.e. for any
-        # attribute that's not on InstrumentedCheckpointer itself).
-        attr = getattr(self._saver, name)
-        if name in _INSTRUMENTED_METHODS:
-            return self._wrap_async(name, attr)
-        return attr
+        # __getattr__ runs only when normal attribute lookup misses. This
+        # exposes saver-specific helpers like ``asetup`` (AsyncRedisSaver)
+        # without enumerating every concrete saver's API surface here.
+        # Use object.__getattribute__ to avoid recursion if ``_saver``
+        # itself is missing during init.
+        try:
+            saver = object.__getattribute__(self, "_saver")
+        except AttributeError:
+            raise AttributeError(name) from None
+        return getattr(saver, name)
 
-    @staticmethod
-    def _record(name: str, elapsed_ms: float) -> None:
-        bucket = _checkpoint_op_bucket.get()
-        if bucket is None:
-            return
-        bucket[f"{name}_ms"] = bucket.get(f"{name}_ms", 0.0) + elapsed_ms
-        bucket["calls"] = bucket.get("calls", 0.0) + 1.0
+    # -------------------------------------------------------------------
+    # Instrumented hot async methods (#1258)
+    # -------------------------------------------------------------------
 
-    def _wrap_async(self, name: str, fn: Any) -> Any:
-        async def _instrumented(*args: Any, **kwargs: Any) -> Any:
-            # Fast path: capture is off, skip timing entirely.
-            if _checkpoint_op_bucket.get() is None:
-                return await fn(*args, **kwargs)
-            start = time.perf_counter()
-            try:
-                return await fn(*args, **kwargs)
-            finally:
-                elapsed_ms = (time.perf_counter() - start) * 1000.0
-                # _record is fail-soft: if anything goes wrong (bucket
-                # mutated by another task etc.) instrumentation must NEVER
-                # break the underlying call.
-                try:
-                    InstrumentedCheckpointer._record(name, elapsed_ms)
-                except Exception:
-                    logger.debug(
-                        "InstrumentedCheckpointer._record failed for %s",
-                        name,
-                        exc_info=True,
-                    )
+    async def aput(self, *args: Any, **kwargs: Any) -> Any:
+        if _checkpoint_op_bucket.get() is None:
+            return await self._saver.aput(*args, **kwargs)
+        start = time.perf_counter()
+        try:
+            return await self._saver.aput(*args, **kwargs)
+        finally:
+            _record("aput", (time.perf_counter() - start) * 1000.0)
 
-        _instrumented.__name__ = name
-        return _instrumented
+    async def aget(self, *args: Any, **kwargs: Any) -> Any:
+        if _checkpoint_op_bucket.get() is None:
+            return await self._saver.aget(*args, **kwargs)
+        start = time.perf_counter()
+        try:
+            return await self._saver.aget(*args, **kwargs)
+        finally:
+            _record("aget", (time.perf_counter() - start) * 1000.0)
+
+    async def aput_writes(self, *args: Any, **kwargs: Any) -> Any:
+        if _checkpoint_op_bucket.get() is None:
+            return await self._saver.aput_writes(*args, **kwargs)
+        start = time.perf_counter()
+        try:
+            return await self._saver.aput_writes(*args, **kwargs)
+        finally:
+            _record("aput_writes", (time.perf_counter() - start) * 1000.0)
+
+    async def aget_tuple(self, *args: Any, **kwargs: Any) -> Any:
+        if _checkpoint_op_bucket.get() is None:
+            return await self._saver.aget_tuple(*args, **kwargs)
+        start = time.perf_counter()
+        try:
+            return await self._saver.aget_tuple(*args, **kwargs)
+        finally:
+            _record("aget_tuple", (time.perf_counter() - start) * 1000.0)
+
+    # -------------------------------------------------------------------
+    # Pass-through delegations (BaseCheckpointSaver surface)
+    # -------------------------------------------------------------------
+
+    @property
+    def config_specs(self) -> list[Any]:
+        return self._saver.config_specs
+
+    # Sync API
+    def get(self, config: Any) -> Any:
+        return self._saver.get(config)
+
+    def get_tuple(self, config: Any) -> Any:
+        return self._saver.get_tuple(config)
+
+    def list(
+        self,
+        config: Any,
+        *,
+        filter: dict[str, Any] | None = None,
+        before: Any = None,
+        limit: int | None = None,
+    ) -> Iterator[Any]:
+        return self._saver.list(config, filter=filter, before=before, limit=limit)
+
+    def put(self, *args: Any, **kwargs: Any) -> Any:
+        return self._saver.put(*args, **kwargs)
+
+    def put_writes(self, *args: Any, **kwargs: Any) -> Any:
+        return self._saver.put_writes(*args, **kwargs)
+
+    def delete_thread(self, thread_id: str) -> None:
+        return self._saver.delete_thread(thread_id)
+
+    def delete_for_runs(self, run_ids: Sequence[str]) -> None:
+        return self._saver.delete_for_runs(run_ids)
+
+    def copy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
+        return self._saver.copy_thread(source_thread_id, target_thread_id)
+
+    def prune(self, thread_ids: Sequence[str], *, strategy: str = "keep_latest") -> None:
+        return self._saver.prune(thread_ids, strategy=strategy)
+
+    # Async API (non-instrumented)
+    async def alist(
+        self,
+        config: Any,
+        *,
+        filter: dict[str, Any] | None = None,
+        before: Any = None,
+        limit: int | None = None,
+    ) -> AsyncIterator[Any]:
+        async for item in self._saver.alist(config, filter=filter, before=before, limit=limit):
+            yield item
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        return await self._saver.adelete_thread(thread_id)
+
+    async def adelete_for_runs(self, run_ids: Sequence[str]) -> None:
+        return await self._saver.adelete_for_runs(run_ids)
+
+    async def acopy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
+        return await self._saver.acopy_thread(source_thread_id, target_thread_id)
+
+    async def aprune(self, thread_ids: Sequence[str], *, strategy: str = "keep_latest") -> None:
+        return await self._saver.aprune(thread_ids, strategy=strategy)
+
+    # Versioning / allowlist
+    def get_next_version(self, current: Any, channel: Any = None) -> Any:
+        return self._saver.get_next_version(current, channel)
+
+    def with_allowlist(
+        self, extra_allowlist: Collection[tuple[str, ...]]
+    ) -> BaseCheckpointSaver[Any]:
+        new_saver = self._saver.with_allowlist(extra_allowlist)
+        if new_saver is self._saver:
+            return self
+        return InstrumentedCheckpointer(new_saver)
 
 
 def create_redis_checkpointer(
@@ -148,14 +274,16 @@ def create_redis_checkpointer(
     *,
     ttl_minutes: int | None = None,
     refresh_on_read: bool = True,
-) -> Any:
+) -> InstrumentedCheckpointer:
     """Create AsyncRedisSaver for persistent conversation memory (SDK).
 
     Returns an :class:`InstrumentedCheckpointer` wrapping the SDK saver so
     callers can opt into direct checkpoint overhead measurement (#1258) via
     :func:`begin_checkpoint_overhead_capture` /
-    :func:`end_checkpoint_overhead_capture`. The wrapper is transparent — its
-    other behaviour is identical to the underlying SDK saver.
+    :func:`end_checkpoint_overhead_capture`. The wrapper subclasses
+    :class:`BaseCheckpointSaver` (#2147) so LangGraph's
+    ``ensure_valid_checkpointer`` accepts it; all other behaviour is
+    identical to the underlying SDK saver.
 
     Args:
         redis_url: Redis connection string.
