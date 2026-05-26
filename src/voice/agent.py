@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import contextlib
 import functools
 import json
@@ -17,7 +16,9 @@ from typing import Any, cast
 
 import httpx
 from dotenv import load_dotenv
+from opentelemetry import trace
 
+from src.observability import initialize_langfuse
 from src.observability_sentry import initialize_sentry, set_runtime_tags
 from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
 from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
@@ -256,44 +257,39 @@ def _setup_sentry() -> None:
 
 
 def _setup_langfuse() -> None:
-    """Configure Langfuse tracing via OpenTelemetry."""
-    public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-    secret_key = os.getenv("LANGFUSE_SECRET_KEY", "")
-    host = os.getenv("LANGFUSE_HOST", "")
+    """Configure Langfuse tracing and forward the active provider to LiveKit.
 
-    if not public_key or not secret_key or not host:
-        logger.info("Langfuse not configured, skipping OTEL setup")
+    Delegates to :func:`src.observability.initialize_langfuse`, which is the
+    single source of truth for credentials, endpoint reachability checks and
+    PII masking (see issue #2059). The bootstrap registers a global
+    OpenTelemetry ``TracerProvider`` for us; the voice agent only needs to
+    forward that provider to LiveKit's telemetry helper so LiveKit-emitted
+    spans land on the same exporter as the rest of the runtime.
+
+    No-op when ``initialize_langfuse`` returns ``None`` (missing credentials,
+    unreachable Langfuse host, or SDK unavailable). LiveKit telemetry wiring
+    is skipped in that case to avoid registering an unconfigured provider.
+    """
+    client = initialize_langfuse()
+    if client is None:
+        # initialize_langfuse already logged the reason at INFO/WARNING.
+        return
+
+    provider = trace.get_tracer_provider()
+
+    try:
+        from livekit.agents.telemetry import set_tracer_provider
+    except ImportError:
+        # Older LiveKit versions or partial installs: spans still flow via the
+        # global provider that initialize_langfuse() registered.
+        logger.debug("livekit.agents.telemetry unavailable; relying on global provider")
         return
 
     try:
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-
-        auth = base64.b64encode(f"{public_key}:{secret_key}".encode()).decode()
-        exporter = OTLPSpanExporter(
-            endpoint=f"{host.rstrip('/')}/api/public/otel",
-            headers={
-                "Authorization": f"Basic {auth}",
-                "x-langfuse-ingestion-version": "4",
-            },
-        )
-        provider = TracerProvider()
-        provider.add_span_processor(BatchSpanProcessor(exporter))
-
-        # Try livekit's telemetry helper, fall back to global OTEL
-        try:
-            from livekit.agents.telemetry import set_tracer_provider
-
-            set_tracer_provider(provider)
-        except ImportError:
-            from opentelemetry import trace
-
-            trace.set_tracer_provider(provider)
-
-        logger.info("Langfuse OTEL tracing configured")
+        set_tracer_provider(provider)
+        logger.info("Langfuse OTEL tracing configured (LiveKit telemetry wired)")
     except Exception:
-        logger.exception("Failed to setup Langfuse OTEL")
+        logger.exception("Failed to wire LiveKit telemetry to Langfuse provider")
 
 
 class VoiceBot(Agent):

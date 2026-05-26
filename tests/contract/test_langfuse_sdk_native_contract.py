@@ -53,10 +53,6 @@ SCAN_DIRS: tuple[Path, ...] = (
 # ``opentelemetry.sdk.trace``. Frozen baseline — must shrink, never grow.
 OTEL_BOOTSTRAP_ALLOWLIST: frozenset[str] = frozenset(
     {
-        # LiveKit's set_tracer_provider helper requires an explicit
-        # SDK TracerProvider; this is the only legitimate manual OTEL
-        # bootstrap in the production runtime.
-        "src/voice/agent.py",
         # isinstance check on the active provider during graceful
         # shutdown — imports the symbol but never constructs it.
         # Lives in src/ since the observability bootstrap was unified there;
