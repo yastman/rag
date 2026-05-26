@@ -438,12 +438,21 @@ async def entrypoint(ctx: agents.JobContext):
     session_id = voice_session_id(call_id)
 
     lf_client = get_client()
+    resolved_langfuse_trace_id = langfuse_trace_id
     if lf_client is not None:
-        session_cm = lf_client.start_as_current_observation(
-            as_type="span",
-            name="voice-session",
-            input={"call_id": call_id, "session_id": session_id},
-        )
+        if not resolved_langfuse_trace_id:
+            with contextlib.suppress(Exception):
+                resolved_langfuse_trace_id = lf_client.create_trace_id(seed=session_id)
+        observation_kwargs: dict[str, Any] = {
+            "as_type": "span",
+            "name": "voice-session",
+            "input": {"call_id": call_id, "session_id": session_id},
+        }
+        if resolved_langfuse_trace_id:
+            observation_kwargs["trace_context"] = cast(
+                Any, {"trace_id": resolved_langfuse_trace_id}
+            )
+        session_cm = lf_client.start_as_current_observation(**observation_kwargs)
         attrs_cm = propagate_attributes(
             session_id=session_id,
             user_id="voice-agent",
@@ -461,7 +470,7 @@ async def entrypoint(ctx: agents.JobContext):
             lead_data=lead_data,
             phone=phone,
             callback_chat_id=callback_chat_id,
-            langfuse_trace_id=langfuse_trace_id,
+            langfuse_trace_id=resolved_langfuse_trace_id,
             session_id=session_id,
         )
 

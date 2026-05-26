@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
-from unittest.mock import patch
+import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.voice.observability import (
     build_voice_trace_metadata,
@@ -117,3 +120,35 @@ def test_entrypoint_opens_voice_session_via_start_as_current_observation() -> No
         "so child @observe spans nest under it"
     )
     assert "voice-session" in src, "entrypoint must name the outer span exactly 'voice-session'"
+    assert "trace_context" in src, (
+        "entrypoint must bind the outer voice-session span to the same "
+        "langfuse_trace_id that is propagated to the RAG API"
+    )
+
+
+async def test_entrypoint_reuses_one_trace_id_for_parent_span_and_rag_api() -> None:
+    """The parent voice span and downstream RAG API payload must share one trace id."""
+    import src.voice.agent as agent_mod
+
+    fake_ctx = SimpleNamespace(
+        job=SimpleNamespace(metadata=json.dumps({"call_id": "call-1"})),
+    )
+    fake_lf = MagicMock()
+    fake_lf.create_trace_id.return_value = "trace-voice-call-1"
+    fake_lf.start_as_current_observation.return_value = contextlib.nullcontext()
+
+    with (
+        patch.object(agent_mod, "_LIVEKIT_IMPORT_ERROR", None),
+        patch.object(agent_mod, "get_client", return_value=fake_lf),
+        patch.object(agent_mod, "propagate_attributes", return_value=contextlib.nullcontext()),
+        patch.object(agent_mod, "_entrypoint_body", new_callable=AsyncMock) as body,
+    ):
+        await agent_mod.entrypoint(fake_ctx)
+
+    fake_lf.create_trace_id.assert_called_once_with(seed="voice-call-1")
+    fake_lf.start_as_current_observation.assert_called_once()
+    observation_kwargs = fake_lf.start_as_current_observation.call_args.kwargs
+    assert observation_kwargs["name"] == "voice-session"
+    assert observation_kwargs["trace_context"] == {"trace_id": "trace-voice-call-1"}
+    body.assert_awaited_once()
+    assert body.call_args.kwargs["langfuse_trace_id"] == "trace-voice-call-1"

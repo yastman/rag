@@ -60,6 +60,9 @@ spans:
     - tool-daily-summary
     - tool-handoff
 
+  voice_tools:
+    - voice-tool-search-knowledge-base
+
   history_graph:
     - history-guard
     - history-retrieve
@@ -311,6 +314,8 @@ sensitive_spans:
   - tool-rag-search
   - tool-history-search
   - tool-apartment-search
+  # voice_tools
+  - voice-tool-search-knowledge-base
   # history_graph
   - history-retrieve
   - history-summarize
