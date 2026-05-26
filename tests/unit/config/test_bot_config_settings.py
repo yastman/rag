@@ -159,6 +159,15 @@ class TestBotConfigIsPydanticSettings:
         cfg = BotConfig(_env_file=None)
         assert cfg.handoff_enabled is False
 
+    def test_managers_group_id_empty_string_does_not_crash(self, monkeypatch):
+        """Empty MANAGERS_GROUP_ID should parse as None, not crash (#2149)."""
+        monkeypatch.setenv("MANAGERS_GROUP_ID", "")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.managers_group_id is None
+
     def test_redis_url_infers_password_loaded_from_env_file(self, monkeypatch, tmp_path):
         """REDIS_PASSWORD loaded from dotenv should drive the native local default URL."""
         monkeypatch.delenv("REDIS_URL", raising=False)

@@ -28,6 +28,13 @@ def _empty_str_to_false(v: object) -> object:
 EmptyStrBool = Annotated[bool, BeforeValidator(_empty_str_to_false)]
 
 
+def _empty_str_to_none(v: object) -> object:
+    """Convert empty string to None for optional int env vars (#2149)."""
+    if v == "":
+        return None
+    return v
+
+
 def _inject_local_redis_password(
     redis_url: str,
     *,
@@ -600,7 +607,7 @@ class BotConfig(BaseSettings):
         default=False,
         validation_alias=AliasChoices("handoff_enabled", "HANDOFF_ENABLED"),
     )
-    managers_group_id: int | None = Field(
+    managers_group_id: Annotated[int | None, BeforeValidator(_empty_str_to_none)] = Field(
         default=None,
         validation_alias=AliasChoices("managers_group_id", "MANAGERS_GROUP_ID"),
     )
