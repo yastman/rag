@@ -218,6 +218,10 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     "SALT": "Read by Langfuse server image",
     "ENCRYPTION_KEY": "Read by Langfuse server image",
     "LANGFUSE_DOCKER_HOST": "Container-network alias for langfuse; consumed by compose env_file",
+    "LANGFUSE_REDIS_PASSWORD": (
+        "Read by redis-langfuse / langfuse / langfuse-worker compose services "
+        "(REDIS_AUTH + redis-server --requirepass); not consumed by any Python code"
+    ),
     # --- Misc ops vars -----------------------------------------------------
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
 }
