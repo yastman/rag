@@ -100,6 +100,7 @@ from .integrations.polling_lock import RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
 )
+from .metrics_server import MetricsServer
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
@@ -544,6 +545,10 @@ class PropertyBot:
         # Track initialization state
         self._cache_initialized = False
         self._pre_agent_filter_extractor: Any | None = None
+
+        # Prometheus /metrics ASGI server (#2057). Bound during start(),
+        # released during stop().
+        self._metrics_server: MetricsServer | None = None
 
         # Setup middlewares (before handlers)
         self._setup_middlewares()
@@ -4007,6 +4012,16 @@ class PropertyBot:
             self._cache_initialized = True
             logger.info("Cache service ready")
 
+        # Bind the Prometheus /metrics ASGI server (#2057). Failure to bind
+        # is non-fatal: the bot keeps running with metrics scraping disabled
+        # and a WARNING is logged.
+        try:
+            self._metrics_server = MetricsServer()
+            await self._metrics_server.start_in_background()
+        except Exception:
+            logger.warning("Failed to start /metrics endpoint", exc_info=True)
+            self._metrics_server = None
+
         # Initialize conversation memory checkpointer (SDK)
         from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
 
@@ -4565,6 +4580,16 @@ class PropertyBot:
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
+        # Release the /metrics endpoint early so the port is freed even if a
+        # later teardown step raises (#2057).
+        if self._metrics_server is not None:
+            try:
+                await self._metrics_server.stop()
+            except Exception:
+                logger.warning("Failed to stop /metrics endpoint cleanly", exc_info=True)
+            finally:
+                self._metrics_server = None
+
         # Drain pending fire-and-forget history saves before tearing services down
         # so in-flight DB writes are not lost on shutdown (#1600). Bounded by
         # _history_save_drain_timeout_s so a stuck DB cannot block shutdown.
