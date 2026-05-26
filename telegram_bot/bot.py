@@ -528,6 +528,12 @@ class PropertyBot:
         self._polling_lock_consecutive_failures: int = 0
         self._polling_lock_owner: str | None = None
 
+        # Prometheus metrics ASGI server (#2057).
+        # Started in start() alongside the aiogram polling loop and
+        # exposes the default prometheus_client.REGISTRY on
+        # TELEGRAM_BOT_METRICS_PORT (default 9091).
+        self._metrics_server: Any | None = None
+
         # Bounded fan-out for fire-and-forget history persistence (#1600).
         # Without a bound the text path could accumulate unbounded background
         # tasks under burst traffic / slow DB writes. Track every spawned save
@@ -4508,7 +4514,7 @@ class PropertyBot:
                 BotCommand(command="clear", description="Очистить историю диалога"),
                 BotCommand(command="history", description="Поиск по истории диалогов"),
                 BotCommand(command="stats", description="Статистика кеша"),
-                BotCommand(command="metrics", description="Метрики пайплайна (p50/p95)"),
+                BotCommand(command="metrics", description="Метрики пайплайна (Prometheus)"),
                 BotCommand(command="clearcache", description="Очистить кеш Redis"),
             ]
         )
@@ -4570,6 +4576,18 @@ class PropertyBot:
             )
             self._polling_lock_scheduler.start()
 
+        # Start Prometheus metrics ASGI server on TELEGRAM_BOT_METRICS_PORT (#2057).
+        try:
+            from .metrics_server import start_metrics_server as _start_metrics
+
+            self._metrics_server = await _start_metrics()
+        except Exception:
+            logger.warning(
+                "Failed to start Prometheus metrics ASGI server; /metrics HTTP "
+                "endpoint will be unavailable. Check TELEGRAM_BOT_METRICS_PORT.",
+                exc_info=True,
+            )
+
         try:
             await self.dp.start_polling(self.bot)
         finally:
@@ -4612,6 +4630,21 @@ class PropertyBot:
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
+
+        # Stop Prometheus metrics ASGI server (#2057).
+        if self._metrics_server is not None:
+            try:
+                from .metrics_server import stop_metrics_server
+
+                await stop_metrics_server(self._metrics_server)
+            except Exception:
+                logger.warning(
+                    "Failed to stop metrics server cleanly",
+                    exc_info=True,
+                )
+            finally:
+                self._metrics_server = None
+
         # Drain pending fire-and-forget history saves before tearing services down
         # so in-flight DB writes are not lost on shutdown (#1600). Bounded by
         # _history_save_drain_timeout_s so a stuck DB cannot block shutdown.

@@ -397,6 +397,26 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - НЕ использовать для основной генерации — только через LiteLLM unified routing
   - Прямой вызов Anthropic API = обход трейсинга Langfuse
 
+## prometheus_client
+- **triggers:** prometheus, metrics, histogram, counter, /metrics, make_asgi_app, REGISTRY, scrape
+- **context7_id:** /prometheus/client_python
+- **как_у_нас:**
+  - `src/runtime/services/metrics.py` — canonical SDK-native ``pipeline_latency_seconds`` (Histogram) and ``rag_pipeline_events_total`` (Counter) with default ``prometheus_client.REGISTRY``
+  - `telegram_bot/services/metrics.py` — back-compat re-export shim (#2047)
+  - `telegram_bot/metrics_server.py` — standalone ASGI ``/metrics`` endpoint using ``make_asgi_app()`` (#2057)
+  - `services/bge-m3-api/app.py:588-589` — canonical mount pattern: ``make_asgi_app()`` + ``app.mount("/metrics", metrics_app)``
+  - `telegram_bot/handlers/command_handlers.py::cmd_metrics` — admin ``/metrics`` Telegram command uses ``generate_latest()``
+- **паттерны:**
+  - BСЕГДА использовать package-wide default ``prometheus_client.REGISTRY`` — не создавать кастомный ``CollectorRegistry``
+  - ASGI экспозиция через ``make_asgi_app()`` (SDK-native)
+  - ``generate_latest()`` для текстового дампа (Telegram команда или дебаг)
+  - Метрики зарегистрированы на уровне модуля, а не внутри request-handler
+- **gotchas:**
+  - НЕ создавать кастомный ``CollectorRegistry()`` — ломает скрапинг через ``make_asgi_app``
+  - НЕ писать кастомный HTTP-сервер для метрик — использовать ``make_asgi_app()`` + ``uvicorn``
+  - ``TELEGRAM_BOT_METRICS_PORT`` (default 9091) — internal-only exposure
+  - Контрактный тест: ``tests/contract/test_no_custom_metrics_registry_contract.py``
+
 ---
 
 ## Шаблон для нового SDK
