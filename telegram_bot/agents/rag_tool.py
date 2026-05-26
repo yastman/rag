@@ -160,8 +160,6 @@ async def rag_search(
                 result_store.get("semantic_cache_already_checked")
             )
 
-        trace_id = lf.get_current_trace_id() or ""
-
         invoke_start = time.perf_counter()
         # NOTE (#2157): do NOT forward `langfuse_trace_id` to rag_pipeline.
         # Per Langfuse SDK 4 docs (OpenTelemetry-based), @observe and
