@@ -13,8 +13,8 @@
 ## Method
 
 ```bash
-grep -rn '@observe(\s*name=' --include='*.py' . \
-  | grep -v test | grep -v __pycache__ | grep -v '\.venv/' \
+git grep -n '^[[:space:]]*@observe(\s*name=' -- '*.py' \
+  | grep -v test \
   | awk -F'"' '{print $2"|"$0}' \
   | sort -u
 ```
@@ -156,7 +156,8 @@ records:
 
 ## Static audit summary
 
-- **Total `@observe`-named spans in code:** ~190.
+- **Total `@observe`-named spans in code:** 212 on the merge candidate
+  (`dev` after Wave 2 plus this audit branch).
 - **Static gaps versus current runbook matrix:** 0.
   - Every family the runbook claims is present at the documented path.
   - Wave 2 additions (`rag-core-*`, `voice-tool-search-knowledge-base`,
@@ -164,7 +165,7 @@ records:
     decorators.
 - **Runbook gaps versus static reality:** the existing matrix in
   `LANGFUSE_TRACING_GAPS.md` enumerates only ~7 families. The static
-  reality is ~190 named spans grouped into 11 surface areas. The matrix
+  reality is 212 named spans grouped into 11 surface areas. The matrix
   is intentionally a curated subset focused on the high-value families;
   this audit document records the full census so reviewers can spot
   drift in either direction.
