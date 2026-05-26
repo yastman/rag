@@ -140,3 +140,80 @@ def test_start_expert_handler_uses_depends_get_redis() -> None:
         "start_expert must declare a Redis parameter via Depends(get_redis) "
         "for FastAPI-native dependency injection (#1645)"
     )
+
+
+# ---------------------------------------------------------------------------
+# #2161 — explicit Langfuse init in mini-app FastAPI lifespan
+# ---------------------------------------------------------------------------
+
+
+async def test_lifespan_initializes_langfuse_when_credentials_present() -> None:
+    """Lifespan must explicitly call ``initialize_langfuse`` + ``auth_check``.
+
+    Without an explicit init the SDK lazy-builds a singleton on the first
+    ``get_client()`` call. If env wasn't fully loaded by then (or the host is
+    unreachable) the singleton stays disabled silently for the rest of the
+    process and zero traces materialize for ``@observe``-decorated endpoints
+    (``miniapp-start-expert``, ``miniapp-submit-phone``,
+    ``miniapp-kommo-create-lead``). Closes #2161.
+    """
+    from mini_app import api as mod
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+
+    fake_lf_client = MagicMock(name="langfuse-client")
+    fake_lf_client.auth_check = MagicMock(return_value=True)
+    fake_lf_client.shutdown = MagicMock()
+
+    with (
+        patch("redis.asyncio.from_url", return_value=fake_redis),
+        patch("mini_app.api.initialize_langfuse", return_value=fake_lf_client) as init_lf,
+    ):
+        async with mod.lifespan(mod.app):
+            # Client is stashed on app state so it can be reused/shut down.
+            assert mod.app.state.langfuse is fake_lf_client
+            init_lf.assert_called_once()
+            fake_lf_client.auth_check.assert_called_once()
+
+        # Lifespan exit must flush+close the Langfuse client exactly once.
+        fake_lf_client.shutdown.assert_called_once()
+
+
+async def test_lifespan_disables_langfuse_when_credentials_missing() -> None:
+    """Missing/invalid credentials must gracefully disable tracing — never crash."""
+    from mini_app import api as mod
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+
+    with (
+        patch("redis.asyncio.from_url", return_value=fake_redis),
+        patch("mini_app.api.initialize_langfuse", return_value=None) as init_lf,
+    ):
+        async with mod.lifespan(mod.app):
+            assert mod.app.state.langfuse is None
+            init_lf.assert_called_once()
+
+
+async def test_lifespan_handles_auth_check_failure_gracefully() -> None:
+    """If ``auth_check`` raises, tracing is disabled but the API still boots."""
+    from mini_app import api as mod
+
+    fake_redis = MagicMock()
+    fake_redis.aclose = AsyncMock()
+
+    fake_lf_client = MagicMock(name="langfuse-client")
+    fake_lf_client.auth_check = MagicMock(side_effect=RuntimeError("bad credentials"))
+    fake_lf_client.shutdown = MagicMock()
+
+    with (
+        patch("redis.asyncio.from_url", return_value=fake_redis),
+        patch("mini_app.api.initialize_langfuse", return_value=fake_lf_client),
+    ):
+        async with mod.lifespan(mod.app):
+            # Auth failed — client must be reset to None so handlers no-op.
+            assert mod.app.state.langfuse is None
+            fake_lf_client.auth_check.assert_called_once()
+            # The failed client must be shut down on auth failure to release threads.
+            fake_lf_client.shutdown.assert_called_once()
