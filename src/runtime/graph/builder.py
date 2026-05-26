@@ -33,7 +33,7 @@ import importlib
 import logging
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 
 logger = logging.getLogger(__name__)
@@ -95,18 +95,19 @@ def resolve_pipeline_factory() -> Callable[..., Any]:
         ) from exc
 
     try:
-        factory = getattr(module, attr_name)
+        candidate = getattr(module, attr_name)
     except AttributeError as exc:
         raise PipelineFactoryError(
             f"Pipeline factory module {module_name!r} has no attribute "
             f"{attr_name!r} (spec={spec!r})"
         ) from exc
 
-    if not callable(factory):
+    if not callable(candidate):
         raise PipelineFactoryError(
-            f"Resolved pipeline factory {spec!r} is not callable (got {type(factory).__name__})"
+            f"Resolved pipeline factory {spec!r} is not callable (got {type(candidate).__name__})"
         )
 
+    factory = cast(Callable[..., Any], candidate)
     logger.debug("Resolved pipeline factory %s -> %r", spec, factory)
     return factory
 
