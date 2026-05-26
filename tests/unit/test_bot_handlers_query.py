@@ -90,7 +90,6 @@ class TestHandleVoiceRecursionLimit:
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot._write_voice_error_scores") as mock_error_scores,
@@ -129,7 +128,6 @@ class TestHandleVoiceRecursionLimit:
         caplog.set_level("INFO")
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot._write_voice_error_scores"),
         ):
