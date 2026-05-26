@@ -135,9 +135,7 @@ class TestLangfuseInitialization:
         with (
             patch("src.observability._is_endpoint_reachable", return_value=True),
             patch("src.observability.Langfuse", return_value=fake_client),
-            patch(
-                "src.observability.sync_langfuse_model_definitions", return_value=2
-            ) as sync,
+            patch("src.observability.sync_langfuse_model_definitions", return_value=2) as sync,
         ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
@@ -355,9 +353,7 @@ class TestEndpointReachability:
 
         observability._reset_langfuse_client_for_tests()
         with (
-            patch(
-                "src.observability._is_endpoint_reachable", return_value=False
-            ) as mock_check,
+            patch("src.observability._is_endpoint_reachable", return_value=False) as mock_check,
             patch("src.observability.Langfuse") as mock_langfuse,
         ):
             result = observability.initialize_langfuse(
@@ -912,3 +908,54 @@ class TestOtelServiceName:
             )
 
         assert os.environ.get("OTEL_SERVICE_NAME") == "custom-service"
+
+
+class TestOtelExportDefaults:
+    """Tests for conservative OTEL export defaults (#1408)."""
+
+    def test_initialize_langfuse_sets_otel_export_defaults_when_absent(self, monkeypatch):
+        import os
+
+        import src.observability as observability
+
+        for env_name in (
+            "OTEL_BSP_SCHEDULE_DELAY",
+            "OTEL_BSP_EXPORT_TIMEOUT",
+            "OTEL_EXPORTER_OTLP_TIMEOUT",
+        ):
+            monkeypatch.delenv(env_name, raising=False)
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+
+        with patch("src.observability.Langfuse", return_value=fake_client):
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert os.environ["OTEL_BSP_SCHEDULE_DELAY"] == "30000"
+        assert os.environ["OTEL_BSP_EXPORT_TIMEOUT"] == "10000"
+        assert os.environ["OTEL_EXPORTER_OTLP_TIMEOUT"] == "10000"
+
+    def test_initialize_langfuse_preserves_otel_export_overrides(self, monkeypatch):
+        import os
+
+        import src.observability as observability
+
+        monkeypatch.setenv("OTEL_BSP_SCHEDULE_DELAY", "60000")
+        monkeypatch.setenv("OTEL_BSP_EXPORT_TIMEOUT", "5000")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "5000")
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+
+        with patch("src.observability.Langfuse", return_value=fake_client):
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert os.environ["OTEL_BSP_SCHEDULE_DELAY"] == "60000"
+        assert os.environ["OTEL_BSP_EXPORT_TIMEOUT"] == "5000"
+        assert os.environ["OTEL_EXPORTER_OTLP_TIMEOUT"] == "5000"
