@@ -30,6 +30,30 @@ E2E naming contract:
   - `make test-unit`
   - `make test`
 
+## GitHub CI And Local Gate Contracts
+
+### Fast Tests lane (`.github/workflows/ci.yml`)
+- GitHub `fast-tests` runs `tests/unit/` + `tests/contract/` + critical graph-path
+  integration with `-m "not legacy_api and not requires_extras and not slow"`.
+- Keep new fast-lane tests free of `pytest.mark.slow`, `pytest.mark.requires_extras`,
+  and any marker that would exclude them from that expression.
+- Fast tests must not require Docker or live services.
+
+### Contract tests
+- Contract tests live in `tests/contract/`.
+- They are static analysis (no Docker) and run in the fast-lane gate.
+- Run them locally with `make test-contract`.
+
+### Runtime and heavy tests
+- Tests that need live services, Docker, credentials, or long durations belong in
+  `tests/integration/`, `tests/smoke/`, `tests/e2e/`, `tests/load/`, or
+  `tests/benchmark/`.
+- These are for local powerful-machine validation (`make test-full`) or nightly
+  gates (`.github/workflows/nightly-heavy.yml`), not the CI fast lane.
+- For the complete local validation ladder (including `make test-full`,
+  parallelism tuning, and WSL memory considerations), see
+  [`docs/LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
+
 ## Reliability Rules
 - Mock external APIs and non-deterministic boundaries in unit tests.
 - Freeze or control time/random inputs when behavior depends on them.
