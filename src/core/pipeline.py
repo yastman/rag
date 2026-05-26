@@ -1,7 +1,6 @@
 """Main RAG pipeline orchestrator."""
 
 import asyncio
-import contextvars
 from dataclasses import dataclass
 from typing import Any
 
@@ -115,32 +114,32 @@ class RAGPipeline:
         from src.retrieval import HybridRRFColBERTSearchEngine, HybridRRFSearchEngine
 
         if isinstance(self.search_engine, (HybridRRFSearchEngine, HybridRRFColBERTSearchEngine)):
-            # Pass query string directly for hybrid search (async handled inside)
-            loop = asyncio.get_running_loop()
-            search_results = await loop.run_in_executor(
-                None,
-                lambda: self.search_engine.search(
-                    query_embedding=query,
-                    top_k=top_k,
-                    score_threshold=self.settings.score_threshold,
-                ),
+            # Pass query string directly for hybrid search (async handled inside).
+            #
+            # ``self.search_engine.search`` is ``@observe``-decorated.
+            # ``asyncio.to_thread`` preserves the current contextvars.Context,
+            # keeping the worker span nested under the active Langfuse parent
+            # instead of emitting a top-level orphan trace (#2167).
+            search_results = await asyncio.to_thread(
+                self.search_engine.search,
+                query_embedding=query,
+                top_k=top_k,
+                score_threshold=self.settings.score_threshold,
             )
         else:
-            # For other engines, generate dense embedding (async)
-            loop = asyncio.get_running_loop()
-            ctx = contextvars.copy_context()
-            query_embedding = await loop.run_in_executor(
-                None, lambda: ctx.run(self._encode_query, query)
-            )
+            # For other engines, generate dense embedding (async).
+            #
+            # Both inner calls (``_encode_query`` and ``search_engine.search``)
+            # are ``@observe``-decorated, so both thread hops use
+            # ``asyncio.to_thread`` to preserve the active Langfuse context.
+            query_embedding = await asyncio.to_thread(self._encode_query, query)
 
             # Step 2: Search using configured search engine (async)
-            search_results = await loop.run_in_executor(
-                None,
-                lambda: self.search_engine.search(
-                    query_embedding=query_embedding,
-                    top_k=top_k,
-                    score_threshold=self.settings.score_threshold,
-                ),
+            search_results = await asyncio.to_thread(
+                self.search_engine.search,
+                query_embedding=query_embedding,
+                top_k=top_k,
+                score_threshold=self.settings.score_threshold,
             )
 
         # Step 3: Optional contextualization

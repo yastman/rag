@@ -1,5 +1,6 @@
 """Tests for RAG pipeline."""
 
+import asyncio
 import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -219,26 +220,80 @@ class TestRAGPipelineSearch:
         )
         assert isinstance(result, RAGResult)
 
-    async def test_search_propagates_context_to_encode_query(self, mock_pipeline):
-        """Test search uses contextvars.copy_context/ctx.run to preserve observe span hierarchy."""
-        import contextvars as cv
-
+    async def test_search_uses_to_thread_for_encode_query(self, mock_pipeline):
+        """Test search uses asyncio.to_thread so contextvars propagate to worker threads."""
         mock_pipeline.embedding_model.encode.return_value = MagicMock(
             tolist=lambda: [0.1, 0.2, 0.3]
         )
 
-        with patch.object(cv, "copy_context", wraps=cv.copy_context) as spy_copy_ctx:
+        original_to_thread = asyncio.to_thread
+        calls = []
+
+        async def recording_to_thread(func, *args, **kwargs):
+            calls.append((func, args, kwargs))
+            return await original_to_thread(func, *args, **kwargs)
+
+        with patch("src.core.pipeline.asyncio.to_thread", new=recording_to_thread):
             result = await mock_pipeline.search("test query")
 
-            # pytest-asyncio also calls copy_context for test runner setup.
-            # We verify our code path exercises it at least once.
-            assert spy_copy_ctx.call_count > 0
+            assert len(calls) == 2
             assert isinstance(result, RAGResult)
 
     def test_encode_query_method_exists(self, mock_pipeline):
         """Test _encode_query method exists and is callable."""
         assert hasattr(mock_pipeline, "_encode_query")
         assert callable(mock_pipeline._encode_query)
+
+
+class TestRAGPipelineExecutorContextPropagation:
+    """Pin the contract that every thread hop in ``search`` propagates context.
+
+    Closes #2167 (follow-up to #2157). ``self.search_engine.search`` and
+    ``self._encode_query`` are both ``@observe``-decorated. When they run
+    in a worker thread without context propagation, the worker sees an empty
+    OTEL context and emits a top-level orphan trace (e.g.
+    ``bge-m3-hybrid-embed``, ``hybrid-rrf-search``) instead of nesting under
+    whatever parent opened the surrounding ``rag-pipeline`` /
+    ``telegram-message`` span. ``asyncio.to_thread`` is the stdlib-native
+    thread hop here because it propagates the current ``contextvars.Context``.
+    """
+
+    def test_search_uses_to_thread_instead_of_raw_executor_hops(self) -> None:
+        """AST contract: ``RAGPipeline.search`` uses context-propagating ``to_thread``."""
+        import ast
+        import inspect
+        import textwrap
+
+        from src.core.pipeline import RAGPipeline
+
+        src = textwrap.dedent(inspect.getsource(RAGPipeline.search))
+        tree = ast.parse(src)
+
+        to_thread_calls: list[ast.Call] = []
+        run_in_executor_calls: list[ast.Call] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run_in_executor"
+            ):
+                run_in_executor_calls.append(node)
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "to_thread"
+            ):
+                to_thread_calls.append(node)
+
+        assert not run_in_executor_calls, (
+            "RAGPipeline.search must not use raw loop.run_in_executor; use "
+            "asyncio.to_thread so contextvars propagate into @observe-decorated "
+            "worker calls (#2167)."
+        )
+        assert len(to_thread_calls) == 3, (
+            "RAGPipeline.search must dispatch every sync worker call through "
+            "asyncio.to_thread: hybrid search, dense embedding, and dense search."
+        )
 
 
 class TestRAGPipelineStats:
