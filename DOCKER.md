@@ -89,6 +89,17 @@ For local development, the canonical local env file is `.env` in the repo root. 
 
 Local `make` targets that use `$(LOCAL_COMPOSE_CMD)` automatically fall back to `tests/fixtures/compose.ci.env` when `.env` is absent. This lets commands like `make docker-ps` and profile-gated `up` targets render Compose config without real secrets.
 
+When `.env` is present, Docker credentials must be set there. `compose.dev.yml`
+does not provide built-in password defaults for stateful services; local values
+still need to be throwaway/dev-only:
+
+- `POSTGRES_PASSWORD`
+- `REDIS_PASSWORD`
+- `CLICKHOUSE_PASSWORD`
+- `MINIO_ROOT_PASSWORD`
+- `LANGFUSE_REDIS_PASSWORD`
+- `LIVEKIT_API_SECRET` when using the `voice` profile
+
 ## Service Endpoints (Host)
 
 | Service | URL/Port |
@@ -177,9 +188,10 @@ match the traced service defaults:
 | `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | `[REDACTED-LANGFUSE-KEY] |
 | `LANGFUSE_INIT_PROJECT_SECRET_KEY` | `[REDACTED-LANGFUSE-KEY] |
 
-These defaults are local-only. Override them from `.env` when a dev stack should
-use a different local Langfuse project. Production and VPS environments must
-provide real Langfuse keys and must not rely on the dev defaults.
+These non-password defaults are local-only. Override them from `.env` when a dev
+stack should use a different local Langfuse project. Production and VPS
+environments must provide real Langfuse keys and must not rely on the dev
+defaults.
 
 If `bot` logs show OTLP `401` or Langfuse logs show `No key found for public
 key`, the local Langfuse database likely lacks the project key currently

@@ -89,6 +89,85 @@ def test_stack_doc_mentions_redis_auth_requirement():
 
 
 @pytest.mark.timeout(0)
+def test_compose_dev_yml_has_no_hardcoded_password_fallbacks():
+    """compose.dev.yml must not provide hardcoded fallback values for stateful passwords."""
+    import re
+    from pathlib import Path
+
+    project_root = Path(__file__).parent.parent.parent.parent
+    compose_dev = project_root / "compose.dev.yml"
+
+    content = compose_dev.read_text()
+
+    # Password variables that must use :? (required) pattern, not :- (fallback).
+    # These map to stateful/runtime credentials: Postgres, Redis, ClickHouse,
+    # MinIO, Langfuse Redis, and LiveKit API secret.
+    password_vars = [
+        "POSTGRES_PASSWORD",
+        "REDIS_PASSWORD",
+        "CLICKHOUSE_PASSWORD",
+        "MINIO_ROOT_PASSWORD",
+        "LANGFUSE_REDIS_PASSWORD",
+        "LIVEKIT_API_SECRET",
+    ]
+
+    errors = []
+    for var in password_vars:
+        # Check for :- fallback pattern on the exact variable
+        fallback_pattern = rf"\$\{{{re.escape(var)}:-"
+        if re.search(fallback_pattern, content):
+            errors.append(
+                f"compose.dev.yml: {var} uses ':-' fallback (hardcoded default). "
+                f"Must use ':?' (required) instead."
+            )
+
+        # Verify :? pattern is present (must be a required variable)
+        required_pattern = rf"\$\{{{re.escape(var)}:\?"
+        if not re.search(required_pattern, content):
+            errors.append(
+                f"compose.dev.yml: {var} missing ':?' required pattern. "
+                f"Must use '${{{var}:?{var} is required}}'."
+            )
+
+    assert not errors, (
+        "compose.dev.yml must not contain hardcoded password fallbacks:\n"
+        + "\n".join(f"  - {err}" for err in errors)
+    )
+
+
+@pytest.mark.timeout(0)
+def test_compose_ci_env_has_all_required_password_vars():
+    """tests/fixtures/compose.ci.env must declare every required password var."""
+    import re
+    from pathlib import Path
+
+    project_root = Path(__file__).parent.parent.parent.parent
+    ci_env = project_root / "tests" / "fixtures" / "compose.ci.env"
+    compose_dev = project_root / "compose.dev.yml"
+
+    ci_env_content = ci_env.read_text()
+    compose_dev_content = compose_dev.read_text()
+
+    # Collect all :? required vars from compose.dev.yml
+    required_vars = set()
+    for match in re.finditer(r"\$\{([A-Z_]+):\?", compose_dev_content):
+        required_vars.add(match.group(1))
+
+    errors = []
+    for var in sorted(required_vars):
+        if not re.search(rf"^{var}=", ci_env_content, re.MULTILINE):
+            errors.append(
+                f"compose.ci.env missing '{var}' — required by compose.dev.yml "
+                f"for config rendering. Add a CI-safe test value."
+            )
+
+    assert not errors, (
+        "tests/fixtures/compose.ci.env is missing required password variables:\n"
+        + "\n".join(f"  - {err}" for err in errors)
+    )
+
+
+@pytest.mark.timeout(0)
 def test_k8s_bot_redis_password_declared_before_redis_url():
     """K8s expands $(VAR) only from previously declared env vars in the same list."""
     from pathlib import Path
