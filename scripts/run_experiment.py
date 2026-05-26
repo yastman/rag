@@ -139,7 +139,7 @@ def main() -> None:
         run_name=run_name,
         description=args.description or f"Experiment {run_name}",
         task=rag_task,
-        evaluators=[retrieval_recall_eval],
+        evaluators=[retrieval_recall_eval],  # type: ignore[list-item]  # TODO #2146: align with Langfuse EvaluatorFunction protocol
         run_evaluators=[avg_scores_evaluator],
         max_concurrency=args.concurrency,
         metadata={

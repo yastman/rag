@@ -278,7 +278,7 @@ async def encode_dense(request: EncodeRequest):
 
         # Reconstruct full-cardinality response
         dense_sentinel = [0.0] * 1024
-        dense_vecs = [None] * len(request.texts)
+        dense_vecs: list[list[float]] = [[]] * len(request.texts)
         valid_iter = iter(valid_vecs)
         for i in valid_indices:
             dense_vecs[i] = next(valid_iter)
@@ -344,8 +344,8 @@ async def encode_sparse(request: EncodeRequest):
         encode_duration.labels(encode_type="sparse").observe(processing_time)
 
         # Reconstruct full-cardinality response
-        sparse_sentinel = {"indices": [], "values": []}
-        lexical_weights = [None] * len(request.texts)
+        sparse_sentinel: dict[str, list[Any]] = {"indices": [], "values": []}
+        lexical_weights: list[dict[str, Any]] = [{}] * len(request.texts)
         valid_iter = iter(valid_weights)
         for i in valid_indices:
             lexical_weights[i] = next(valid_iter)
@@ -411,7 +411,7 @@ async def encode_colbert(request: EncodeRequest):
 
         # Reconstruct full-cardinality response
         colbert_sentinel = [[0.0] * 1024]
-        colbert_vecs = [None] * len(request.texts)
+        colbert_vecs: list[list[list[float]]] = [[]] * len(request.texts)
         valid_iter = iter(valid_vecs)
         for i in valid_indices:
             colbert_vecs[i] = next(valid_iter)
@@ -482,12 +482,12 @@ async def encode_hybrid(request: EncodeRequest):
 
         # Reconstruct full-cardinality responses
         dense_sentinel = [0.0] * 1024
-        sparse_sentinel = {"indices": [], "values": []}
+        sparse_sentinel: dict[str, list[Any]] = {"indices": [], "values": []}
         colbert_sentinel = [[0.0] * 1024]
 
-        dense_vecs = [None] * len(request.texts)
-        lexical_weights = [None] * len(request.texts)
-        colbert_vecs = [None] * len(request.texts)
+        dense_vecs: list[list[float]] = [[]] * len(request.texts)
+        lexical_weights: list[dict[str, Any]] = [{}] * len(request.texts)
+        colbert_vecs: list[list[list[float]]] = [[]] * len(request.texts)
 
         dense_iter = iter(valid_dense)
         sparse_iter = iter(valid_sparse)

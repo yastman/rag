@@ -17,6 +17,7 @@ Content was rephrased for compliance with licensing restrictions.
 from __future__ import annotations
 
 import time
+from datetime import datetime
 from typing import Any
 
 from aiogram.utils.web_app import safe_parse_webapp_init_data
@@ -66,7 +67,7 @@ def validate_init_data(
         raise ValueError(msg) from exc
 
     auth_dt = webapp_data.auth_date
-    auth_ts = int(auth_dt.timestamp()) if hasattr(auth_dt, "timestamp") else int(auth_dt)
+    auth_ts = int(auth_dt.timestamp()) if isinstance(auth_dt, datetime) else int(auth_dt)
     if max_age and (time.time() - auth_ts) > max_age:
         msg = "initData expired"
         raise ValueError(msg)

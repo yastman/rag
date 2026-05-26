@@ -27,6 +27,7 @@ import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 
 # Regex to parse image references like:
@@ -220,7 +221,7 @@ def check_drift(compose_files: list[str], env_file: str) -> DriftReport:
     containers = get_running_containers(compose_files, env_file)
 
     for svc_name, svc_config in sorted(services.items()):
-        image_str = svc_config.get("image", "")
+        image_str = cast("str", svc_config.get("image", ""))
         has_build = "build" in svc_config
 
         # Skip custom-built services

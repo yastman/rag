@@ -6,6 +6,7 @@ Usage: uv run python scripts/update_advisor_prompts.py
 from __future__ import annotations
 
 import os
+from typing import cast
 
 from langfuse import Langfuse
 
@@ -76,11 +77,13 @@ def main() -> None:
     )
 
     for name, data in PROMPTS.items():
+        # Langfuse SDK overloads: list/labels/tags must be `list[str]`, not the
+        # generic Collection[str] inferred from PROMPTS literal.
         client.create_prompt(
             name=name,
-            prompt=data["prompt"],
+            prompt=cast("str", data["prompt"]),
             config=data["config"],
-            labels=data["labels"],
+            labels=cast("list[str]", data["labels"]),
             type="text",
         )
         print(f"✅ Updated: {name}")

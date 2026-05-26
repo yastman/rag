@@ -26,6 +26,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 from qdrant_client import AsyncQdrantClient, models
 
@@ -175,7 +176,10 @@ async def run_ab_test(
             print(f"  Warning: Collection {coll} not found: {e}")
             if name != "baseline":
                 print(f"  Skipping {name} collection")
-                collections[name] = None
+                # Setting to None signals "missing"; downstream uses
+                # `if not coll_name` to skip. cast() keeps the dict typed
+                # as dict[str, str] to satisfy other call sites.
+                collections[name] = cast("str", None)
 
     # Load ground truth
     ground_truth = {}
@@ -274,7 +278,7 @@ async def run_ab_test(
     await client.close()
 
     # Generate report
-    results = {
+    results: dict[str, Any] = {
         "config": {
             "base_collection": base_collection,
             "k": k,
@@ -294,7 +298,7 @@ async def run_ab_test(
     print(f"  {'Type':<10} {'OSF':>6} {'Avg':>10} {'vs Baseline':>15}")
     print("  " + "-" * 45)
 
-    best_config = {"type": None, "osf": None, "score": 0}
+    best_config: dict[str, Any] = {"type": None, "osf": None, "score": 0.0}
 
     for quant_type in ["scalar", "binary"]:
         results["metrics"][quant_type] = {}

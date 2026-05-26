@@ -22,6 +22,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Any, cast
 
 from telegram_bot.config import BotConfig
 from telegram_bot.services.qdrant import QdrantService
@@ -150,7 +151,11 @@ async def run_ab_test(
             baseline_search_time = time.time() - start
 
             baseline_latency = baseline_embed_time + baseline_search_time
-            baseline_ids = [r.get("id", str(r.get("point_id", ""))) for r in baseline_results]
+            # `return_meta=False` (default) yields list[dict] only.
+            baseline_ids = [
+                r.get("id", str(r.get("point_id", "")))
+                for r in cast("list[dict[str, Any]]", baseline_results)
+            ]
 
             # === CONTEXTUALIZED (voyage-context-3) ===
             start = time.time()
@@ -165,7 +170,10 @@ async def run_ab_test(
             ctx_search_time = time.time() - start
 
             ctx_latency = ctx_embed_time + ctx_search_time
-            ctx_ids = [r.get("id", str(r.get("point_id", ""))) for r in ctx_results]
+            ctx_ids = [
+                r.get("id", str(r.get("point_id", "")))
+                for r in cast("list[dict[str, Any]]", ctx_results)
+            ]
 
             # Calculate overlap between baseline and contextualized
             overlap = len(set(baseline_ids) & set(ctx_ids)) / k if k > 0 else 0

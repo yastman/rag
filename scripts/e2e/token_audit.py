@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import time
+from typing import Any
 
 from dotenv import load_dotenv
 from telethon import TelegramClient
@@ -56,7 +57,7 @@ async def main() -> int:
     me = await client.get_me()
     logger.info("Connected as: %s", me.username or me.phone)
 
-    results = []
+    results: list[dict[str, Any]] = []
     for i, query in enumerate(QUERIES, 1):
         logger.info("[%d/%d] Sending: %s", i, len(QUERIES), query)
         start = time.time()

@@ -16,7 +16,7 @@ import argparse
 import logging
 import sys
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from dotenv import load_dotenv
 
@@ -107,7 +107,7 @@ def get_or_create_annotation_queue(api: Any, queue_name: str) -> str:
         for queue in response.data or []:
             if queue.name == queue_name:
                 logger.info("Using existing annotation queue '%s' (id=%s)", queue_name, queue.id)
-                return queue.id
+                return cast("str", queue.id)
 
         meta = response.meta
         if meta is None or page >= meta.total_pages:
@@ -116,7 +116,7 @@ def get_or_create_annotation_queue(api: Any, queue_name: str) -> str:
 
     created = api.annotation_queues.create_queue(name=queue_name, score_config_ids=[])
     logger.info("Created annotation queue '%s' (id=%s)", queue_name, created.id)
-    return created.id
+    return cast("str", created.id)
 
 
 def add_traces_to_queue(api: Any, queue_id: str, trace_ids: list[str]) -> int:

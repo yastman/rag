@@ -47,7 +47,7 @@ def ingest(csv_path: str, qdrant_url: str, bge_url: str) -> None:
         print(f"  Embedded {min(i + BATCH_SIZE, len(descriptions))}/{len(descriptions)}")
 
     # Build points
-    points = []
+    points: list[PointStruct] = []
     for rec, dense, sparse, colbert in zip(
         records, all_dense, all_sparse, all_colbert, strict=True
     ):
@@ -69,8 +69,8 @@ def ingest(csv_path: str, qdrant_url: str, bge_url: str) -> None:
 
     # Upsert in batches
     for i in range(0, len(points), 100):
-        batch = points[i : i + 100]
-        client.upsert(collection_name=COLLECTION, points=batch)
+        point_batch = points[i : i + 100]
+        client.upsert(collection_name=COLLECTION, points=point_batch)
         print(f"  Upserted {min(i + 100, len(points))}/{len(points)}")
 
     print(f"Done. {len(points)} apartments in collection '{COLLECTION}'.")

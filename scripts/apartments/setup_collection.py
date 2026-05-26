@@ -55,12 +55,12 @@ def create_payload_indexes(client: QdrantClient) -> None:
     """Create indexes for apartment payload fields (top-level, no metadata. prefix)."""
     indexes = {
         # Keyword (facets + exact match)
-        "complex_name": "keyword",
-        "city": "keyword",
-        "section": "keyword",
-        "apartment_number": "keyword",
-        "view_primary": "keyword",
-        "view_tags": "keyword",
+        "complex_name": models.PayloadSchemaType.KEYWORD,
+        "city": models.PayloadSchemaType.KEYWORD,
+        "section": models.PayloadSchemaType.KEYWORD,
+        "apartment_number": models.PayloadSchemaType.KEYWORD,
+        "view_primary": models.PayloadSchemaType.KEYWORD,
+        "view_tags": models.PayloadSchemaType.KEYWORD,
         # Integer (lookup + range)
         "rooms": models.PayloadSchemaType.INTEGER,
         "floor": models.PayloadSchemaType.INTEGER,

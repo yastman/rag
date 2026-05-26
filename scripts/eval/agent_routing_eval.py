@@ -25,9 +25,9 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ def load_golden_set(path: Path | str) -> list[dict[str, Any]]:
     if not path.exists():
         raise FileNotFoundError(f"Golden set not found: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return data["examples"]
+    return cast("list[dict[str, Any]]", data["examples"])
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ def route_from_tools(tool_calls: list[dict[str, Any]]) -> str:
     """
     if not tool_calls:
         return "direct"
-    return tool_calls[0]["tool"]
+    return cast("str", tool_calls[0]["tool"])
 
 
 # ---------------------------------------------------------------------------

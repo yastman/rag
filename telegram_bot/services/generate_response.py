@@ -45,19 +45,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _CONNECTION_ERROR_TYPES: tuple[type[BaseException], ...]
+_HTTPX_CONNECT_ERROR: type[BaseException] | None
 try:
     from httpx import ConnectError
 
     _HTTPX_CONNECT_ERROR = ConnectError
 except ImportError:  # pragma: no cover
-    _HTTPX_CONNECT_ERROR = None  # type: ignore[assignment]
+    _HTTPX_CONNECT_ERROR = None
 
+_OPENAI_API_CONNECTION_ERROR: type[BaseException] | None
 try:
     from openai import APIConnectionError
 
     _OPENAI_API_CONNECTION_ERROR = APIConnectionError
 except ImportError:  # pragma: no cover
-    _OPENAI_API_CONNECTION_ERROR = None  # type: ignore[assignment]
+    _OPENAI_API_CONNECTION_ERROR = None
 
 _conn_errors: list[type[BaseException]] = []
 if _HTTPX_CONNECT_ERROR is not None:

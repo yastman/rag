@@ -15,7 +15,9 @@ import argparse
 import os
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any, cast
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
@@ -56,10 +58,13 @@ def get_source_collection_info(client: QdrantClient, collection_name: str) -> di
     """Get source collection metadata."""
     try:
         info = client.get_collection(collection_name)
+        # qdrant-client dropped the old `vectors_count` from CollectionInfo;
+        # fall back to None when the field is absent.
+        vectors_count = getattr(info, "vectors_count", None)
         return {
             "name": collection_name,
             "points_count": info.points_count,
-            "vectors_count": info.vectors_count,
+            "vectors_count": vectors_count,
             "status": str(info.status),
         }
     except Exception as e:
@@ -148,8 +153,10 @@ def reindex_to_binary(
             # Build points for upsert
             upsert_points = []
             for point in points:
-                # Handle different vector formats
-                vectors = point.vector
+                # Handle different vector formats. The SDK exposes a wide
+                # union for `point.vector`; in this collection it's always
+                # a dict of named vectors, so cast for indexing.
+                vectors = cast("Mapping[str, Any] | None", point.vector)
 
                 # Skip if no dense vector
                 if not vectors or "dense" not in vectors:
@@ -157,7 +164,7 @@ def reindex_to_binary(
                     continue
 
                 # Build point with only dense and bm42 (no colbert for Voyage)
-                point_vectors = {"dense": vectors["dense"]}
+                point_vectors: dict[str, Any] = {"dense": vectors["dense"]}
                 if "bm42" in vectors:
                     point_vectors["bm42"] = vectors["bm42"]
 
@@ -190,8 +197,9 @@ def reindex_to_binary(
             print(f"  Error in batch {batch_num}: {e}")
             stats.failed_points += len(points)
 
-        # Next batch
-        offset = next_offset
+        # Next batch: scroll() returns Qdrant's union point-id type for the
+        # offset; coerce to the str|None shape we keep locally.
+        offset = cast("str | None", next_offset)
         if offset is None:
             break
 

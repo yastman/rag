@@ -14,6 +14,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 from qdrant_client import QdrantClient
@@ -36,7 +37,7 @@ BGE_M3_URL = "http://localhost:8000"
 BATCH_SIZE = 8  # Texts per API call
 
 
-async def get_embeddings(texts: list[str]) -> list[dict]:
+async def get_embeddings(texts: list[str]) -> dict[str, Any]:
     """Get embeddings from BGE-M3 API."""
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
@@ -44,7 +45,7 @@ async def get_embeddings(texts: list[str]) -> list[dict]:
             json={"texts": texts},
         )
         response.raise_for_status()
-        return response.json()
+        return cast("dict[str, Any]", response.json())
 
 
 def create_collection(client: QdrantClient, collection_name: str, recreate: bool = False):
