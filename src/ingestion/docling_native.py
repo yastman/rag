@@ -115,12 +115,10 @@ class NativeDoclingAdapter(DoclingClient):
     ) -> list[DoclingChunk]:
         """Convert a document natively and chunk it via ``HybridChunker``.
 
-        The ``contextualize`` flag is part of the parent's signature; the
-        native path always emits the chunker's final text (which is itself
-        contextualized via ``HybridChunker.contextualize`` upstream).
+        The ``contextualize`` flag preserves the parent class contract:
+        contextualized embedding text uses ``HybridChunker.contextualize`` when
+        available, while callers can still request raw chunk text.
         """
-        del contextualize  # Native path emits final chunk text via HybridChunker.
-
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -133,10 +131,22 @@ class NativeDoclingAdapter(DoclingClient):
 
         chunker = self._get_chunker()
         raw_chunks = list(chunker.chunk(document))
+        contextualize_chunk = getattr(chunker, "contextualize", None)
+        if contextualize and not callable(contextualize_chunk):
+            logger.warning(
+                "Docling native chunker %s has no contextualize() method; falling back to raw "
+                "chunk text for %s",
+                type(chunker).__name__,
+                file_path.name,
+            )
 
         chunks: list[DoclingChunk] = []
         for raw_chunk in raw_chunks:
-            text = (getattr(raw_chunk, "text", "") or "").strip()
+            if contextualize and callable(contextualize_chunk):
+                text = contextualize_chunk(raw_chunk)
+            else:
+                text = getattr(raw_chunk, "text", "")
+            text = (text or "").strip()
             if not text:
                 continue
             meta = getattr(raw_chunk, "meta", None)
