@@ -18,7 +18,7 @@ import httpx
 from dotenv import load_dotenv
 from opentelemetry import trace
 
-from src.observability import initialize_langfuse
+from src.observability import get_client, initialize_langfuse, observe, propagate_attributes
 from src.observability_sentry import initialize_sentry, set_runtime_tags
 from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
 from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
@@ -341,11 +341,23 @@ class VoiceBot(Agent):
             logger.warning("Failed to append transcript entry (role=%s)", role, exc_info=True)
 
     @function_tool()
+    @observe(
+        name="voice-tool-search-knowledge-base",
+        capture_input=False,
+        capture_output=False,
+    )
     async def search_knowledge_base(self, context: RunContext, query: str) -> str:
         """Search the property knowledge base for relevant information.
 
         Args:
             query: The search query about properties, prices, locations, etc.
+
+        Decorator stacking (#2160) — outer ``@function_tool()`` keeps LiveKit's
+        tool-schema wrapper on top so the LLM can call this tool, while the
+        inner ``@observe`` adds a Langfuse span (`voice-tool-search-knowledge-
+        base`) under the active `voice-session` parent. ``capture_input=False``
+        / ``capture_output=False`` keeps raw user query and KB answer text out
+        of Langfuse — these are recorded via ``_append_transcript`` instead.
         """
         await self._append_transcript("user", query)
         try:
@@ -395,7 +407,16 @@ server = AgentServer(
 
 @server.rtc_session(agent_name="voice-bot")
 async def entrypoint(ctx: agents.JobContext):
-    """Entry point for voice bot agent."""
+    """Entry point for voice bot agent.
+
+    Opens a `voice-session` parent observation (#2160) so child @observe
+    spans (`voice-tool-search-knowledge-base`, downstream `rag-api-query`
+    propagated via ``langfuse_trace_id``) nest correctly into a single
+    Langfuse trace tree per LiveKit call. Without this outer context the
+    inner @observe spans would either become orphaned top-level traces or
+    materialize against a different OTEL provider than the SDK singleton,
+    which is the failure mode reported in #2160.
+    """
     if _LIVEKIT_IMPORT_ERROR is not None:
         raise RuntimeError(
             "LiveKit runtime is unavailable in this environment"
@@ -416,6 +437,51 @@ async def entrypoint(ctx: agents.JobContext):
     langfuse_trace_id = metadata.get("langfuse_trace_id")
     session_id = voice_session_id(call_id)
 
+    lf_client = get_client()
+    if lf_client is not None:
+        session_cm = lf_client.start_as_current_observation(
+            as_type="span",
+            name="voice-session",
+            input={"call_id": call_id, "session_id": session_id},
+        )
+        attrs_cm = propagate_attributes(
+            session_id=session_id,
+            user_id="voice-agent",
+            tags=["voice", "call-lifecycle"],
+            metadata={"call_id": call_id},
+        )
+    else:
+        session_cm = contextlib.nullcontext()
+        attrs_cm = contextlib.nullcontext()
+
+    with session_cm, attrs_cm:
+        await _entrypoint_body(
+            ctx,
+            call_id=call_id,
+            lead_data=lead_data,
+            phone=phone,
+            callback_chat_id=callback_chat_id,
+            langfuse_trace_id=langfuse_trace_id,
+            session_id=session_id,
+        )
+
+
+async def _entrypoint_body(
+    ctx: agents.JobContext,
+    *,
+    call_id: str,
+    lead_data: dict,
+    phone: str,
+    callback_chat_id: Any,
+    langfuse_trace_id: str | None,
+    session_id: str,
+) -> None:
+    """Body of the LiveKit voice entrypoint.
+
+    Extracted so the surrounding ``voice-session`` Langfuse span (#2160) can
+    wrap the entire call lifecycle without nesting the body under another
+    function-level decorator.
+    """
     store = await _get_transcript_store()
     if store is not None and phone:
         try:
