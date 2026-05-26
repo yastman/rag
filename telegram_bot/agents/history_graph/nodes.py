@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Any
 
-from telegram_bot.graph.nodes.guard import detect_injection
+from src.runtime.graph.nodes.guard import detect_injection
 from telegram_bot.observability import get_client, observe
 
 

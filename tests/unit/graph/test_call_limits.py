@@ -142,7 +142,7 @@ class TestNodeLLMCallCountIncrement:
     async def test_classify_node_increments_llm_call_count(self):
         from langgraph.runtime import Runtime
 
-        from telegram_bot.graph.nodes.classify import classify_node
+        from src.runtime.graph.nodes.classify import classify_node
         from telegram_bot.graph.state import make_initial_state
 
         state = make_initial_state(user_id=1, session_id="s", query="квартира в Несебре")
