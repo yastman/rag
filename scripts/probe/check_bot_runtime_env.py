@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 from typing import NoReturn
@@ -41,12 +41,12 @@ from typing import NoReturn
 # Well-known CI fallback values that are NEVER valid for real bot operation
 # ---------------------------------------------------------------------------
 
-_CI_TELEGRAM_BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+_CI_TELEGRAM_BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"  # nosec B105
 
 # Regex-based format check:  <bot_id>:<bot_token>
 # aiogram.aiogram.utils.token.TokenValidationError is the authoritative check,
 # but we also want to catch the exact CI placeholder value before any SDK call.
-_TOKEN_PATTERN = r"^\d+:[A-Za-z\d_-]{35,}$"
+_TOKEN_PATTERN = r"^\d+:[A-Za-z\d_-]{35,}$"  # nosec B105
 
 # ---------------------------------------------------------------------------
 # Env file resolution (mirrors Makefile LOCAL_COMPOSE_CMD / RUNTIME_ENV_FILE)
@@ -143,7 +143,8 @@ def _check_litellm_port() -> list[str]:
         return issues
 
     try:
-        cp = subprocess.run(
+        # nosec B603 B607: fixed docker subcommand with no shell expansion.
+        cp = subprocess.run(  # nosec B603
             [
                 "docker",
                 "inspect",
