@@ -213,6 +213,67 @@ For native bot startup it also resolves Redis in this order:
 2. `.env` value (`REDIS_URL=...`)
 3. derived local default from `REDIS_PASSWORD` as `redis://:REDIS_PASSWORD@localhost:6379`
 
+### Bot Runtime Environment Preflight
+
+```bash
+make preflight-bot
+```
+
+This target runs `scripts/probe/check_bot_runtime_env.py` and checks:
+
+* `.env` is present (otherwise the CI fallback `tests/fixtures/compose.ci.env`
+  is used — it contains **placeholder** credentials that are **not** valid for
+  real bot operation).
+* `TELEGRAM_BOT_TOKEN` is not the CI fallback value `123456789:ABC...fghi`.
+  Bot startup with this value will crash-loop with `TokenValidationError`.
+* LiteLLM port `4000` is published on the Docker host (if Docker is available).
+  A missing port binding is most often caused by a **stray third compose file**
+  that sets `litellm: {ports: []}`, overriding the `compose.dev.yml` mapping
+  of `"127.0.0.1:4000:4000"`.
+
+If issues are found `preflight-bot` exits non-zero, which blocks the
+`docker-bot-up` and `bot` targets. To run checks without blocking (e.g. in CI):
+
+```bash
+PREFLIGHT_BOT_FLAGS='--no-fail' make preflight-bot
+```
+
+The preflight is a **guardrail** — it explains what is wrong and how to fix
+it, but it cannot supply real credentials. You must provide a valid
+`TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and at least one provider key
+in `.env`.
+
+### Common `make bot` and `make docker-bot-up` failures
+
+| Symptom                                         | Likely cause                                    | Fix                                                                              |
+|-------------------------------------------------|-------------------------------------------------|----------------------------------------------------------------------------------|
+| Bot crash-loop, `TokenValidationError`          | `.env` is missing and CI fallback token is used | `cp .env.example .env` then set `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and a provider key |
+| `curl localhost:4000` Connection Refused        | LiteLLM port not published; stray compose file  | Remove any stray compose files (e.g. `/tmp/compose.postgres-root.yml`) that override `litellm` ports, then `make docker-bot-up` |
+| Redis auth `WRONGPASS` / `NOAUTH` after `.env` change | `REDIS_PASSWORD` differs between `.env` and running container | `make local-redis-recreate` then `make test-bot-health` |
+| `make docker-bot-up` exits before starting      | `preflight-bot` detected issues (see #2123, #2126) | `make preflight-bot` for details, or `PREFLIGHT_BOT_FLAGS='--no-fail' make docker-bot-up` to bypass |
+| `make bot` exits before starting                | `preflight-bot` detected issues (see #2123, #2126) | `make preflight-bot` for details, or `PREFLIGHT_BOT_FLAGS='--no-fail' make bot` to bypass |
+
+### LiteLLM port recovery (stray compose file)
+
+A stray Compose file at `/tmp/compose.postgres-root.yml` was observed to clear
+`litellm` host ports (`ports: []`), overriding the `compose.dev.yml` mapping.
+This blocks LLM-dependent commands (`make bot`, `make test-bot-health`).
+
+Recovery:
+
+```bash
+# 1. Remove the stray compose file
+rm /tmp/compose.postgres-root.yml
+
+# 2. Restart litellm without the stray file
+COMPOSE_FILE=compose.yml:compose.dev.yml docker compose --compatibility \
+  --env-file tests/fixtures/compose.ci.env \
+  --profile bot up -d --force-recreate litellm
+
+# 3. Verify the port
+curl -fsS http://localhost:4000/health/liveliness
+```
+
 ## Local Release Gate
 
 ```bash
