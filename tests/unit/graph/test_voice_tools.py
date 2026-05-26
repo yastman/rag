@@ -127,7 +127,7 @@ async def test_retrieve_tool_returns_empty_on_qdrant_error():
 # ---------------------------------------------------------------------------
 
 
-async def test_rerank_tool_is_a_basetool_and_named():
+def test_rerank_tool_is_a_basetool_and_named():
     async def _rerank(_query: str, docs: list[dict]) -> list[dict]:
         return docs[::-1]
 
@@ -170,7 +170,7 @@ async def test_rerank_tool_returns_input_on_error():
 # ---------------------------------------------------------------------------
 
 
-async def test_rewrite_tool_is_a_basetool_and_named():
+def test_rewrite_tool_is_a_basetool_and_named():
     async def _rewrite(_query: str) -> str:
         return "(rewritten)"
 
