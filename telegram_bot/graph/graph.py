@@ -11,8 +11,8 @@ from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
-from telegram_bot.graph.context import GraphContext
-from telegram_bot.graph.edges import (
+from src.runtime.graph.context import GraphContext
+from src.runtime.graph.edges import (
     route_after_guard,
     route_by_query_type,
     route_cache,

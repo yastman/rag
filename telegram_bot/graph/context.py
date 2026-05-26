@@ -1,46 +1,12 @@
-"""GraphContext — run-scoped dependency container for LangGraph Runtime.
+"""GraphContext — run-scoped dependency container (back-compat re-export).
 
-Passed via ``context_schema=GraphContext`` to ``StateGraph`` and injected
-into nodes as ``runtime: Runtime[GraphContext]``.
+The canonical implementation moved to :mod:`src.runtime.graph.context` as
+part of the reverse-layering Slice A (#1948 / #2049). This module remains
+so that existing ``from telegram_bot.graph.context import …`` imports
+continue to work unchanged.
 """
 
-from __future__ import annotations
-
-from typing import Any
-
-from typing_extensions import TypedDict
+from src.runtime.graph.context import GraphContext
 
 
-class GraphContext(TypedDict, total=False):
-    """Dependencies injected into RAG pipeline nodes via LangGraph Runtime.
-
-    All fields are optional at the TypedDict level; build_graph always provides
-    the required ones (cache, embeddings, sparse_embeddings, qdrant).
-    """
-
-    cache: Any
-    """CacheLayerManager instance."""
-
-    embeddings: Any
-    """BGEM3Embeddings instance for dense vectors."""
-
-    sparse_embeddings: Any
-    """BGEM3SparseEmbeddings instance for sparse vectors."""
-
-    qdrant: Any
-    """QdrantService instance for hybrid search."""
-
-    reranker: Any
-    """Optional reranker hook; deprecated ColbertRerankerService inputs are ignored."""
-
-    llm: Any
-    """Optional LLM/OpenAI async client for rewrite/transcribe."""
-
-    event_stream: Any
-    """Optional PipelineEventStream for observability logging."""
-
-    guard_mode: str
-    """Guard mode: 'hard' | 'soft' | 'log'."""
-
-    classifier: Any
-    """Optional SemanticClassifier instance."""
+__all__ = ["GraphContext"]

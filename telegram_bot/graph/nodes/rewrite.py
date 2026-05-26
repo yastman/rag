@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
-from telegram_bot.graph.context import GraphContext
+from src.runtime.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.rag_core import rewrite_query_via_llm
 

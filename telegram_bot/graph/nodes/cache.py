@@ -14,7 +14,7 @@ from typing import Any
 
 from langgraph.runtime import Runtime
 
-from telegram_bot.graph.context import GraphContext
+from src.runtime.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.cache_policy import (
     SEMANTIC_CACHE_SCHEMA_VERSION,
