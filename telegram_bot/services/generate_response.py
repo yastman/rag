@@ -40,6 +40,46 @@ from telegram_bot.services.telegram_formatting import (
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Connection-error detection (#1408)
+# ---------------------------------------------------------------------------
+
+_CONNECTION_ERROR_TYPES: tuple[type[BaseException], ...]
+try:
+    from httpx import ConnectError
+
+    _HTTPX_CONNECT_ERROR = ConnectError
+except ImportError:  # pragma: no cover
+    _HTTPX_CONNECT_ERROR = None  # type: ignore[assignment]
+
+try:
+    from openai import APIConnectionError
+
+    _OPENAI_API_CONNECTION_ERROR = APIConnectionError
+except ImportError:  # pragma: no cover
+    _OPENAI_API_CONNECTION_ERROR = None  # type: ignore[assignment]
+
+_conn_errors: list[type[BaseException]] = []
+if _HTTPX_CONNECT_ERROR is not None:
+    _conn_errors.append(_HTTPX_CONNECT_ERROR)
+if _OPENAI_API_CONNECTION_ERROR is not None:
+    _conn_errors.append(_OPENAI_API_CONNECTION_ERROR)
+_CONNECTION_ERROR_TYPES = tuple(_conn_errors)
+
+
+def _is_connection_error(exc: BaseException) -> bool:
+    """Return True when *exc* is a known LLM connection failure (#1408).
+
+    Connection failures (httpx.ConnectError, openai.APIConnectionError) are
+    routine infrastructure noise — full tracebacks add no diagnostic value
+    and flood logs with repeated stack frames.
+
+    """
+    if not _CONNECTION_ERROR_TYPES:
+        return False
+    return isinstance(exc, _CONNECTION_ERROR_TYPES)
+
+
 class StreamingPartialDeliveryError(Exception):
     """Raised when streaming delivered partial content to user then failed."""
 
@@ -838,12 +878,21 @@ async def generate_response(
                 response_sent = sent_msg is not None
             except Exception as stream_exc:
                 if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
-                    logger.warning(
-                        "Streaming failed after partial delivery (%d chars), "
-                        "falling back to non-streaming with edit",
-                        len(getattr(stream_exc, "partial_text", "")),
-                        exc_info=True,
-                    )
+                    _partial_len = len(getattr(stream_exc, "partial_text", ""))
+                    if _is_connection_error(stream_exc.__cause__ or stream_exc):
+                        logger.warning(
+                            "Streaming failed after partial delivery (%d chars) "
+                            "due to connection error (%s), falling back to non-streaming",
+                            _partial_len,
+                            type(stream_exc.__cause__ or stream_exc).__name__,
+                        )
+                    else:
+                        logger.warning(
+                            "Streaming failed after partial delivery (%d chars), "
+                            "falling back to non-streaming with edit",
+                            _partial_len,
+                            exc_info=True,
+                        )
                     sent_msg = getattr(stream_exc, "sent_msg", None)
                     t_llm_start = time.monotonic()
                     create_kwargs: dict[str, Any] = {
@@ -912,7 +961,17 @@ async def generate_response(
                                 )
                     response_sent = delivered
                 else:
-                    logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
+                    if _is_connection_error(stream_exc):
+                        logger.warning(
+                            "Streaming failed due to connection error (%s), "
+                            "falling back to non-streaming",
+                            type(stream_exc).__name__,
+                        )
+                    else:
+                        logger.warning(
+                            "Streaming failed, falling back to non-streaming",
+                            exc_info=True,
+                        )
                     # Recovery path succeeded below; keep normal-success span level.
                     # Degraded mode is tracked via llm_stream_recovery=True.
                     t_llm_start = time.monotonic()
@@ -975,7 +1034,13 @@ async def generate_response(
                     getattr(usage, "completion_tokens", None)
                 )
     except Exception as e:
-        logger.exception("generate_response: LLM call failed, using fallback")
+        if _is_connection_error(e):
+            logger.warning(
+                "generate_response: LLM connection failed (%s), using fallback",
+                type(e).__name__,
+            )
+        else:
+            logger.exception("generate_response: LLM call failed, using fallback")
         _update_current_span(
             lf_client,
             level="ERROR",

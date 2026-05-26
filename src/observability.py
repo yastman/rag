@@ -63,6 +63,11 @@ _MAX_PII_TEXT_LENGTH = 4000
 _MODEL_DEFINITIONS_ENV = "LANGFUSE_MODEL_DEFINITIONS_JSON"
 _MODEL_SYNC_ENABLED_ENV = "LANGFUSE_MODEL_SYNC_ENABLED"
 _MODEL_LIST_PAGE_SIZE = 100
+_OTEL_EXPORT_DEFAULTS = {
+    "OTEL_BSP_SCHEDULE_DELAY": "30000",
+    "OTEL_BSP_EXPORT_TIMEOUT": "10000",
+    "OTEL_EXPORTER_OTLP_TIMEOUT": "10000",
+}
 
 _pii_redactor = PIIRedactor()
 
@@ -163,6 +168,13 @@ def _ensure_otel_service_name(default: str) -> None:
     """Set OTEL_SERVICE_NAME to default when absent, preserving explicit config."""
     if not os.environ.get("OTEL_SERVICE_NAME"):
         os.environ["OTEL_SERVICE_NAME"] = default
+
+
+def _ensure_otel_export_defaults() -> None:
+    """Set conservative OTEL export defaults unless explicitly configured."""
+    for env_name, default in _OTEL_EXPORT_DEFAULTS.items():
+        if not os.environ.get(env_name):
+            os.environ[env_name] = default
 
 
 def _to_float(value: Any) -> float | None:
@@ -458,6 +470,7 @@ def initialize_langfuse(
         kwargs["environment"] = tracing_env
 
     _ensure_otel_service_name("telegram-bot")
+    _ensure_otel_export_defaults()
     try:
         kwargs["flush_at"] = int(os.environ.get("LANGFUSE_FLUSH_AT", "512"))
         kwargs["flush_interval"] = float(os.environ.get("LANGFUSE_FLUSH_INTERVAL", "5.0"))

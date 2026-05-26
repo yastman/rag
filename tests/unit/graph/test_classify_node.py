@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langgraph.runtime import Runtime
 
-from telegram_bot.graph.nodes.classify import (
+from src.runtime.graph.nodes.classify import (
     CHITCHAT,
     CHITCHAT_RESPONSES,
     ENTITY,
@@ -116,7 +116,7 @@ class TestClassifyNode:
         assert "classify" in result["latency_stages"]
 
     def test_chitchat_response_uses_secrets_choice(self):
-        with patch("telegram_bot.graph.nodes.classify.choice", return_value="secure hi") as mocked:
+        with patch("src.runtime.graph.nodes.classify.choice", return_value="secure hi") as mocked:
             response = _get_chitchat_response("Привет!")
 
         assert response == "secure hi"
@@ -126,7 +126,7 @@ class TestClassifyNode:
         state = make_initial_state(user_id=1, session_id="s", query="как написать код на python")
 
         with patch(
-            "telegram_bot.graph.nodes.classify.choice", return_value="secure off-topic"
+            "src.runtime.graph.nodes.classify.choice", return_value="secure off-topic"
         ) as mocked:
             result = await classify_node(state, _make_runtime())
 
@@ -224,7 +224,7 @@ class TestClassifyNodeSemanticMode:
             thread_calls.append((func, args, kwargs))
             return await original_to_thread(func, *args, **kwargs)
 
-        with patch("telegram_bot.graph.nodes.classify.asyncio.to_thread", new=recording_to_thread):
+        with patch("src.runtime.graph.nodes.classify.asyncio.to_thread", new=recording_to_thread):
             result = await classify_node(state, _make_runtime(classifier=classifier))
 
         # asyncio.to_thread must have been called with classifier.classify and the query

@@ -147,7 +147,7 @@ class TestTranscribeNodeErrorSpan:
     """transcribe_node sets ERROR span when Whisper API fails."""
 
     async def test_whisper_error_sets_error_span(self) -> None:
-        from telegram_bot.graph.nodes.transcribe import make_transcribe_node
+        from src.runtime.graph.nodes.transcribe import make_transcribe_node
 
         mock_llm = AsyncMock()
         mock_llm.audio.transcriptions.create.side_effect = RuntimeError("Whisper API error")
@@ -158,7 +158,7 @@ class TestTranscribeNodeErrorSpan:
         state["voice_duration_s"] = 3.0
 
         mock_lf = MagicMock()
-        with patch("telegram_bot.graph.nodes.transcribe.get_client", return_value=mock_lf):
+        with patch("src.runtime.graph.nodes.transcribe.get_client", return_value=mock_lf):
             with pytest.raises(RuntimeError, match="Whisper API error"):
                 await node(state)
 

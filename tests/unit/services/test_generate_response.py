@@ -1287,3 +1287,248 @@ async def test_generate_response_works_when_langfuse_client_unavailable() -> Non
 
     assert result["response"] == "Ответ без tracing"
     client.chat.completions.create.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# #1408 — reduce noisy tracebacks for LLM connection failures
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_connection_error_uses_logger_warning_not_exception() -> None:
+    """httpx.ConnectError must log via logger.warning() without a full traceback."""
+    from httpx import ConnectError
+
+    config, _ = _make_non_streaming_config()
+    config.create_llm.side_effect = ConnectError("connection refused")
+    lf = MagicMock()
+
+    with (
+        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
+        patch("telegram_bot.services.generate_response.logger") as mock_logger,
+    ):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+        )
+
+    assert "временно недоступен" in result["response"]
+    assert result["fallback_used"] is True
+    assert result["llm_provider_model"] == "fallback"
+
+    mock_logger.exception.assert_not_called()
+    mock_logger.warning.assert_called()
+    warning_msg = mock_logger.warning.call_args[0][0]
+    assert "LLM connection" in warning_msg or "connection" in warning_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_openai_connection_error_uses_logger_warning_not_exception() -> None:
+    """openai.APIConnectionError must log via logger.warning() without a full traceback."""
+    from openai import APIConnectionError
+
+    config, _ = _make_non_streaming_config()
+    config.create_llm.side_effect = APIConnectionError(
+        message="connection error", request=MagicMock()
+    )
+    lf = MagicMock()
+
+    with (
+        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
+        patch("telegram_bot.services.generate_response.logger") as mock_logger,
+    ):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+        )
+
+    assert "временно недоступен" in result["response"]
+    assert result["fallback_used"] is True
+    assert result["llm_provider_model"] == "fallback"
+
+    mock_logger.exception.assert_not_called()
+    mock_logger.warning.assert_called()
+    warning_msg = mock_logger.warning.call_args[0][0]
+    assert "LLM connection" in warning_msg or "connection" in warning_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_unexpected_error_still_uses_logger_exception() -> None:
+    """Non-connection exceptions (e.g. RuntimeError) must still log via logger.exception()."""
+    config, _ = _make_non_streaming_config()
+    config.create_llm.side_effect = RuntimeError("unexpected failure")
+    lf = MagicMock()
+
+    with (
+        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
+        patch("telegram_bot.services.generate_response.logger") as mock_logger,
+    ):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+        )
+
+    assert "временно недоступен" in result["response"]
+    assert result["fallback_used"] is True
+    assert result["llm_provider_model"] == "fallback"
+
+    mock_logger.exception.assert_called()
+    exception_msg = mock_logger.exception.call_args[0][0]
+    assert "LLM call failed" in exception_msg
+
+
+@pytest.mark.asyncio
+async def test_fallback_behavior_preserved_for_connection_error() -> None:
+    """Fallback response must still be generated when connection error occurs."""
+    from httpx import ConnectError
+
+    config, _ = _make_non_streaming_config()
+    config.create_llm.side_effect = ConnectError("connection refused")
+    lf = MagicMock()
+
+    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+        )
+
+    assert result["response"] == (
+        "⚠️ Извините, сервис временно недоступен.\n\nПопробуйте повторить запрос позже."
+    )
+    assert result["fallback_used"] is True
+    assert result["safe_fallback_used"] is False
+    assert result["llm_provider_model"] == "fallback"
+    assert result["llm_timeout"] is True
+
+
+@pytest.mark.asyncio
+async def test_fallback_with_documents_preserved_for_connection_error() -> None:
+    """Fallback with documents must still work when connection error occurs."""
+    from httpx import ConnectError
+
+    config, _ = _make_non_streaming_config()
+    config.create_llm.side_effect = ConnectError("connection refused")
+    lf = MagicMock()
+
+    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
+        result = await generate_response(
+            query="Запрос",
+            documents=[{"text": "Док", "score": 0.9, "metadata": {"title": "Тест"}}],
+            config=config,
+            lf_client=lf,
+        )
+
+    assert result["fallback_used"] is True
+    assert "Тест" in result["response"]
+    assert "Найденные результаты" in result["response"]
+
+
+@pytest.mark.asyncio
+async def test_connection_error_fallback_preserves_usage_and_timing_structure() -> None:
+    """Result dict structure (latency_stages, llm_call_count, etc.) preserved on connection error."""
+    from httpx import ConnectError
+
+    config, _ = _make_non_streaming_config()
+    config.create_llm.side_effect = ConnectError("connection refused")
+    lf = MagicMock()
+
+    with patch("telegram_bot.services.generate_response.get_client", return_value=lf):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+            llm_call_count=3,
+            latency_stages={"retrieve": 0.5},
+        )
+
+    assert result["fallback_used"] is True
+    assert result["llm_call_count"] == 4  # input count (3) + 1
+    assert "generate" in result["latency_stages"]
+    assert "retrieve" in result["latency_stages"]
+    assert result["response_sent"] is False
+    assert result["sent_message"] is None
+    assert result["llm_ttft_ms"] == 0.0
+    assert result["grounding_mode"] == "normal"
+
+
+@pytest.mark.asyncio
+async def test_streaming_connection_error_logs_concise_warning() -> None:
+    """Streaming path connection error must log via logger.warning() without full traceback."""
+    from httpx import ConnectError
+
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    client.chat.completions.create = AsyncMock(side_effect=ConnectError("connection refused"))
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+    message = AsyncMock()
+    message.chat = MagicMock(id=1)
+    message.bot = bot
+    message.answer = AsyncMock(return_value=None)
+
+    with (
+        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
+        patch("telegram_bot.services.generate_response.logger") as mock_logger,
+    ):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+            message=message,
+            raw_messages=[{"role": "user", "content": "Запрос"}],
+        )
+
+    assert result["fallback_used"] is True
+    assert result["llm_provider_model"] == "fallback"
+
+    mock_logger.exception.assert_not_called()
+    mock_logger.warning.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_streaming_non_connection_error_still_uses_exception() -> None:
+    """Streaming path unexpected error must still log via logger.exception() with full traceback."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    client.chat.completions.create = AsyncMock(side_effect=ValueError("invalid model"))
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+    message = AsyncMock()
+    message.chat = MagicMock(id=1)
+    message.bot = bot
+    message.answer = AsyncMock(return_value=None)
+
+    with (
+        patch("telegram_bot.services.generate_response.get_client", return_value=lf),
+        patch("telegram_bot.services.generate_response.logger") as mock_logger,
+    ):
+        result = await generate_response(
+            query="Запрос",
+            documents=[],
+            config=config,
+            lf_client=lf,
+            message=message,
+            raw_messages=[{"role": "user", "content": "Запрос"}],
+        )
+
+    assert result["fallback_used"] is True
+
+    mock_logger.exception.assert_called()
+    exception_msg = mock_logger.exception.call_args[0][0]
+    assert "LLM call failed" in exception_msg

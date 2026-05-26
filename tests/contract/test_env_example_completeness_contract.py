@@ -142,6 +142,9 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "OTEL_METRICS_EXPORTER": "OTel SDK env; set per-service in Compose",
     "OTEL_TRACES_EXPORTER": "OTel SDK env; set per-service in Compose",
     "OTEL_SDK_DISABLED": "OTel SDK kill-switch; tests set explicitly, prod via Compose",
+    "OTEL_BSP_SCHEDULE_DELAY": "OTel BSP tuning (#1408); code default 30000, override-able per service",
+    "OTEL_BSP_EXPORT_TIMEOUT": "OTel BSP tuning (#1408); code default 10000, override-able per service",
+    "OTEL_EXPORTER_OTLP_TIMEOUT": "OTel exporter HTTP timeout (#1408); code default 10000ms, override-able per service",
     # --- Compose / docker-internal hostnames (never operator-set) -----------
     "HOSTNAME": "Container HOSTNAME; never operator-set",
     "DOCKER_HOST": "Docker CLI; not bot config",

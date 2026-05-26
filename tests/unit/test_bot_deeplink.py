@@ -387,28 +387,30 @@ async def test_subscriber_loop_invalid_message(mock_config):
     mock_redis, _mock_pubsub = _make_mock_pubsub(mock_listen)
 
     with patch("redis.asyncio.from_url", return_value=mock_redis):
-        await bot._miniapp_subscriber_loop()
+        with pytest.raises(asyncio.CancelledError):
+            await bot._miniapp_subscriber_loop()
 
     # Only valid message processed
     bot._process_miniapp_start.assert_called_once_with(chat_id=123, uuid_str="abc")
 
 
 @pytest.mark.asyncio
-async def test_subscriber_loop_crash_logged(mock_config):
-    """Subscriber loop logs exception on unexpected crash and cleans up."""
+async def test_subscriber_loop_crash_cleans_up(mock_config):
+    """Subscriber loop cleans up Redis resources when SDK retry is exhausted (#1408)."""
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
     bot = _create_bot(mock_config)
 
     async def mock_listen():
-        raise ConnectionError("Redis gone")
+        raise RedisConnectionError("Redis gone")
         yield  # make it a generator
 
     mock_redis, mock_pubsub = _make_mock_pubsub(mock_listen)
 
     with patch("redis.asyncio.from_url", return_value=mock_redis):
-        # Should not raise — exception caught and logged
-        await bot._miniapp_subscriber_loop()
+        with pytest.raises(RedisConnectionError):
+            await bot._miniapp_subscriber_loop()
 
-    # Cleanup called
     mock_pubsub.unsubscribe.assert_called_once_with("miniapp:start")
     mock_redis.aclose.assert_called_once()
 
@@ -437,3 +439,80 @@ async def test_deeplink_create_topic_error(mock_config):
 
     msg.answer.assert_called_once()
     assert "не удалось" in msg.answer.call_args.args[0].lower()
+
+
+# ── Redis SDK retry config for _miniapp_subscriber_loop (#1408 Slice 2) ──
+
+
+@pytest.mark.asyncio
+async def test_subscriber_uses_redis_sdk_retry_config(mock_config):
+    """Subscriber configures redis-py Retry/ExponentialBackoff instead of custom sleeps."""
+    from redis.backoff import ExponentialBackoff
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from redis.exceptions import TimeoutError as RedisTimeoutError
+    from redis.retry import Retry
+
+    bot = _create_bot(mock_config)
+    bot._deeplink_redis = AsyncMock()
+    bot._topic_manager = AsyncMock()
+    bot._process_miniapp_start = AsyncMock()
+
+    async def mock_listen():
+        yield {"type": "subscribe", "data": None}
+        yield {"type": "message", "data": json.dumps({"uuid": "abc", "user_id": 123})}
+        raise asyncio.CancelledError  # clean stop after processing
+
+    mock_redis, _mock_pubsub = _make_mock_pubsub(mock_listen)
+
+    with patch("redis.asyncio.from_url", return_value=mock_redis) as from_url:
+        with pytest.raises(asyncio.CancelledError):
+            await bot._miniapp_subscriber_loop()
+
+    from_url.assert_called_once()
+    kwargs = from_url.call_args.kwargs
+    assert kwargs["decode_responses"] is True
+    assert kwargs["health_check_interval"] == 30
+    assert isinstance(kwargs["retry"], Retry)
+    assert isinstance(kwargs["retry"]._backoff, ExponentialBackoff)
+    assert kwargs["retry"]._retries == 10
+    assert kwargs["retry_on_error"] == [RedisConnectionError, RedisTimeoutError]
+    bot._process_miniapp_start.assert_called_once_with(chat_id=123, uuid_str="abc")
+
+
+@pytest.mark.asyncio
+async def test_subscriber_raises_connection_error_after_sdk_retry_exhausted(mock_config):
+    """If redis-py retry is exhausted, subscriber surfaces the connection error."""
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    bot = _create_bot(mock_config)
+
+    async def listen_always_fails():
+        raise RedisConnectionError("Redis gone")
+        yield  # make it a generator
+
+    mock_redis, _mock_pubsub = _make_mock_pubsub(listen_always_fails)
+
+    with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with pytest.raises(RedisConnectionError):
+            await bot._miniapp_subscriber_loop()
+
+
+@pytest.mark.asyncio
+async def test_subscriber_no_retry_on_auth_error(mock_config):
+    """AuthenticationError is permanent — subscriber loop exits immediately, no retries."""
+    from redis.exceptions import AuthenticationError as RedisAuthError
+
+    bot = _create_bot(mock_config)
+
+    from_url_calls = 0
+
+    def from_url_auth_fail(*args, **kwargs):
+        nonlocal from_url_calls
+        from_url_calls += 1
+        raise RedisAuthError("invalid username-password pair")
+
+    with patch("redis.asyncio.from_url", side_effect=from_url_auth_fail):
+        with pytest.raises(RedisAuthError):
+            await bot._miniapp_subscriber_loop()
+
+    assert from_url_calls == 1, "auth errors must not be retried"

@@ -1067,15 +1067,32 @@ class PropertyBot:
             )
 
     async def _miniapp_subscriber_loop(self) -> None:
-        """Subscribe to Redis miniapp:start channel and process requests."""
+        """Subscribe to Redis miniapp:start channel and process requests.
+
+        Redis-py handles transient reconnect/resubscribe through its SDK retry
+        strategy; authentication errors remain permanent.
+        """
         import redis.asyncio as aioredis
+        from redis.backoff import ExponentialBackoff
+        from redis.exceptions import AuthenticationError
+        from redis.exceptions import ConnectionError as RedisConnectionError
+        from redis.exceptions import TimeoutError as RedisTimeoutError
+        from redis.retry import Retry
 
-        sub_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
-        pubsub = sub_redis.pubsub()
-        await pubsub.subscribe("miniapp:start")
-        logger.info("Mini App pub/sub subscriber started")
-
+        pubsub = None
+        sub_redis = None
         try:
+            sub_redis = aioredis.from_url(
+                self.config.redis_url,
+                decode_responses=True,
+                health_check_interval=30,
+                retry=Retry(ExponentialBackoff(cap=60, base=1), 10),
+                retry_on_error=[RedisConnectionError, RedisTimeoutError],
+            )
+            pubsub = sub_redis.pubsub()
+            await pubsub.subscribe("miniapp:start")
+            logger.info("Mini App pub/sub subscriber started")
+
             async for raw_msg in pubsub.listen():
                 if raw_msg["type"] != "message":
                     continue
@@ -1091,11 +1108,30 @@ class PropertyBot:
                 await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
         except asyncio.CancelledError:
             logger.info("Mini App pub/sub subscriber stopped")
+            raise
+        except AuthenticationError:
+            logger.error("Mini App pub/sub: permanent Redis auth error, not retrying")
+            raise
         except Exception:
             logger.exception("Mini App pub/sub subscriber crashed")
+            raise
         finally:
-            await pubsub.unsubscribe("miniapp:start")
-            await sub_redis.aclose()
+            if pubsub is not None:
+                try:
+                    await pubsub.unsubscribe("miniapp:start")
+                except Exception:
+                    logger.debug(
+                        "Failed to unsubscribe during cleanup",
+                        exc_info=True,
+                    )
+            if sub_redis is not None:
+                try:
+                    await sub_redis.aclose()
+                except Exception:
+                    logger.debug(
+                        "Failed to close Redis connection during cleanup",
+                        exc_info=True,
+                    )
 
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
@@ -4269,6 +4305,17 @@ class PropertyBot:
                     )
                 )
         else:
+            startup_report.add(
+                StartupSignal(
+                    source="postgres_runtime",
+                    severity=StartupSeverity.DEGRADED,
+                    summary="PostgreSQL unavailable — preflight marked it as not reachable",
+                    remediation=(
+                        "restore PostgreSQL connectivity for favorites, search events, "
+                        "and user services"
+                    ),
+                )
+            )
             logger.info(
                 "Skipping PostgreSQL pool init because preflight already marked it unavailable"
             )
