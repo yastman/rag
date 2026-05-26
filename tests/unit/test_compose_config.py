@@ -65,6 +65,8 @@ def dev() -> dict:
 
 @pytest.fixture(scope="module")
 def vps() -> dict:
+    if not VPS_OVERRIDE.exists():
+        pytest.skip("compose.vps.yml is not tracked in the public repo")
     return _merge_compose(BASE_COMPOSE, VPS_OVERRIDE)
 
 
