@@ -83,6 +83,19 @@ class _FakeChunker:
         return list(self._chunks)
 
 
+class _ContextualizingFakeChunker(_FakeChunker):
+    """Fake chunker with the Docling contextualize API."""
+
+    def __init__(self, chunks: list[_FakeChunk]) -> None:
+        super().__init__(chunks)
+        self.contextualize_calls: list[_FakeChunk] = []
+
+    def contextualize(self, chunk: _FakeChunk) -> str:
+        self.contextualize_calls.append(chunk)
+        headings = " > ".join(chunk.meta.headings)
+        return f"{headings}\n{chunk.text}" if headings else chunk.text
+
+
 @pytest.fixture
 def sample_md_path(tmp_path: Path) -> Path:
     file_path = tmp_path / "sample.md"
@@ -139,6 +152,39 @@ def test_native_adapter_preserves_headings_from_chunk_meta(
 
     assert chunks[0].headings == ["Overview"]
     assert chunks[1].headings == ["Overview", "Details"]
+
+
+def test_native_adapter_contextualize_true_uses_chunker_contextualize(
+    sample_md_path: Path,
+) -> None:
+    """Default text path must use Docling contextualization for embedding text."""
+    converter = _FakeConverter()
+    raw_chunk = _FakeChunk(text="Intro block.", meta=_FakeChunkMeta(headings=["Overview"]))
+    chunker = _ContextualizingFakeChunker([raw_chunk])
+
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+    chunks = adapter.chunk_file_sync(sample_md_path, contextualize=True)
+
+    assert chunker.contextualize_calls == [raw_chunk]
+    assert chunks[0].text == "Overview\nIntro block."
+    assert chunks[0].headings == ["Overview"]
+    assert chunks[0].metadata == {"parser": "docling_native"}
+
+
+def test_native_adapter_contextualize_false_preserves_raw_text(
+    sample_md_path: Path,
+) -> None:
+    """Raw-text path must bypass chunker contextualization."""
+    converter = _FakeConverter()
+    raw_chunk = _FakeChunk(text="Intro block.", meta=_FakeChunkMeta(headings=["Overview"]))
+    chunker = _ContextualizingFakeChunker([raw_chunk])
+
+    adapter = NativeDoclingAdapter(max_tokens=80, converter=converter, chunker=chunker)
+    chunks = adapter.chunk_file_sync(sample_md_path, contextualize=False)
+
+    assert chunker.contextualize_calls == []
+    assert chunks[0].text == "Intro block."
+    assert chunks[0].headings == ["Overview"]
 
 
 def test_native_adapter_assigns_sequential_seq_numbers(
