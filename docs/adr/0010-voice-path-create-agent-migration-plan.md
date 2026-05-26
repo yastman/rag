@@ -134,6 +134,7 @@ Snippets above are paraphrased summaries (≤ 30 consecutive words from any sing
 - Issue [#1535](https://github.com/yastman/rag/issues/1535) — dual pipeline maintenance.
 - Issue [#1533](https://github.com/yastman/rag/issues/1533) — contextualisation duplication (same pattern).
 - ADR-0003 — voice/text split (will be superseded by this ADR upon Acceptance).
+- [`docs/engineering/voice-create-agent-migration-sequence.md`](../engineering/voice-create-agent-migration-sequence.md) — per-slice sequencing across #1535 / #2050 / #2051 / #2048; the canonical "what to do next" pointer for contributors picking up a child issue.
 - `telegram_bot/agents/agent.py` — current `create_agent` factory (text path).
 - `telegram_bot/agents/rag_pipeline.py` — shared RAG core invoked from `rag_search` tool.
 - `telegram_bot/graph/graph.py` — legacy 11-node `StateGraph` (voice path).
