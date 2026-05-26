@@ -243,6 +243,8 @@ def _encode_query(self, query: str):
 
 **Prevention:** All embedding spans (including `bge-m3-*`, `search-engine-*`, and pipeline spans) must keep `capture_input=False` and `capture_output=False` to avoid leaking raw vectors or query text into Langfuse.
 
+**Coverage of `RAGPipeline.search` (post #2167):** every `loop.run_in_executor(...)` hop inside `src/core/pipeline.py:RAGPipeline.search` — the encode-query path *and* both `search_engine.search(...)` paths (hybrid and non-hybrid) — must dispatch through `contextvars.copy_context().run(...)`. The `search_engine.search` methods are themselves `@observe`-decorated (`hybrid-rrf-search`, `hybrid-rrf-colbert-search`, etc.), so an executor hop without `ctx.run` would emit a top-level orphan trace instead of nesting under the active `rag-pipeline` / `telegram-message` parent. The contract is pinned by `tests/unit/core/test_pipeline.py::TestRAGPipelineExecutorContextPropagation`.
+
 ### Flat `litellm-acompletion` Traces Everywhere
 
 **Cause:** LiteLLM proxy is logging every LLM call as a standalone trace via its native Langfuse callback. This is expected behavior, but it produces flat traces with no pipeline context.

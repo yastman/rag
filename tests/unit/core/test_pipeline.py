@@ -241,6 +241,61 @@ class TestRAGPipelineSearch:
         assert callable(mock_pipeline._encode_query)
 
 
+class TestRAGPipelineExecutorContextPropagation:
+    """Pin the contract that every executor hop in ``search`` propagates context.
+
+    Closes #2167 (follow-up to #2157). ``self.search_engine.search`` and
+    ``self._encode_query`` are both ``@observe``-decorated. When they run
+    inside a ``loop.run_in_executor`` worker thread without
+    ``contextvars.copy_context().run(...)``, the worker sees an empty OTEL
+    context and emits a top-level orphan trace (e.g. ``bge-m3-hybrid-embed``,
+    ``hybrid-rrf-search``) instead of nesting under whatever parent opened
+    the surrounding ``rag-pipeline`` / ``telegram-message`` span.
+    """
+
+    def test_every_run_in_executor_call_uses_ctx_run(self) -> None:
+        """AST contract: every ``run_in_executor(...)`` in ``RAGPipeline.search`` runs via ``ctx.run``."""
+        import ast
+        import inspect
+        import textwrap
+
+        from src.core.pipeline import RAGPipeline
+
+        src = textwrap.dedent(inspect.getsource(RAGPipeline.search))
+        tree = ast.parse(src)
+
+        executor_calls: list[ast.Call] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run_in_executor"
+            ):
+                executor_calls.append(node)
+
+        assert executor_calls, (
+            "RAGPipeline.search must dispatch sync work through "
+            "loop.run_in_executor — no executor call found in source"
+        )
+
+        for call in executor_calls:
+            call_src = ast.unparse(call)
+            assert "ctx.run(" in call_src, (
+                "Every loop.run_in_executor(...) inside RAGPipeline.search must "
+                "wrap the callable with ``contextvars.copy_context().run(...)`` "
+                "so that @observe-decorated callees nest under the active OTEL "
+                "parent (#2167). Offending call:\n" + call_src
+            )
+
+    def test_search_module_imports_contextvars(self) -> None:
+        """``src.core.pipeline`` must import ``contextvars`` for the executor hops."""
+        import src.core.pipeline as pipeline_module
+
+        assert hasattr(pipeline_module, "contextvars"), (
+            "src.core.pipeline must import contextvars at module level"
+        )
+
+
 class TestRAGPipelineStats:
     """Tests for pipeline statistics methods."""
 
