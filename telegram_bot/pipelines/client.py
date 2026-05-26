@@ -10,6 +10,7 @@ import time
 from numbers import Real
 from typing import Any
 
+from src.observability_payloads import build_safe_input_payload
 from src.retrieval.topic_classifier import get_query_topic_hint
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
@@ -245,8 +246,14 @@ async def run_client_pipeline(
         try:
             with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
                 lf.update_current_span(
-                    input={"query": user_text},
-                    output={"response": response_text},
+                    input=build_safe_input_payload(
+                        content_type="text",
+                        text=user_text,
+                    ),
+                    output={
+                        "response_preview": str(response_text)[:240],
+                        "response_len": len(str(response_text)),
+                    },
                     metadata={
                         "route": "client_direct",
                         "pipeline_mode": "client_direct",
@@ -546,8 +553,14 @@ async def run_client_pipeline(
     try:
         with propagate_attributes(tags=["telegram", "rag", "client_direct"]):
             lf.update_current_span(
-                input={"query": user_text},
-                output={"response": response_text},
+                input=build_safe_input_payload(
+                    content_type="text",
+                    text=user_text,
+                ),
+                output={
+                    "response_preview": str(response_text)[:240],
+                    "response_len": len(str(response_text)),
+                },
                 metadata=trace_metadata,
             )
     except Exception:

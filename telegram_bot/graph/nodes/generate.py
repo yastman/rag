@@ -12,6 +12,7 @@ message.answer() for chat history persistence.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import logging
 import time
 from datetime import UTC, datetime
@@ -346,6 +347,19 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             last_msg.get("content", "")
             if isinstance(last_msg, dict)
             else getattr(last_msg, "content", "")
+        )
+
+    # Safe span input with query/context metadata
+    with contextlib.suppress(Exception):
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "query_preview": str(query)[:120],
+                "query_hash": hashlib.sha256(str(query).encode()).hexdigest()[:8],
+                "query_len": len(str(query)),
+                "context_docs_count": len(documents),
+                "style": "default",
+            },
         )
 
     return await _generate_response_service(
