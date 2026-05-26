@@ -143,8 +143,8 @@ def _check_litellm_port() -> list[str]:
         return issues
 
     try:
-        # nosec B603 B607: fixed docker subcommand with no shell expansion.
-        cp = subprocess.run(  # nosec B603
+        # fixed docker subcommand with no shell expansion.
+        cp = subprocess.run(  # nosec B603 B607
             [
                 "docker",
                 "inspect",
