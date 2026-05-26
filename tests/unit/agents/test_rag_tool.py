@@ -488,8 +488,28 @@ async def test_rag_search_falls_back_to_query_when_no_original(bot_context):
     assert guard_state["messages"][0]["content"] == "цены на квартиры"
 
 
-async def test_rag_search_forwards_active_trace_id_to_pipeline(bot_context):
-    """rag_search forwards active Langfuse trace id to rag_pipeline (#1253)."""
+async def test_rag_search_does_not_forward_langfuse_trace_id_to_pipeline(bot_context):
+    """rag_search MUST NOT pass langfuse_trace_id to rag_pipeline (#2157).
+
+    Per Langfuse SDK 4 docs (OpenTelemetry-based), @observe and
+    start_as_current_observation share the same OTEL context-propagation model
+    and nest automatically inside the same async call chain. The
+    ``langfuse_trace_id`` kwarg on an @observe-decorated function is the
+    contract for *external* trace context propagation (e.g., a W3C trace
+    context arriving on an HTTP request from another process). Passing it
+    inside an already-active OTEL parent span DETACHES the @observe-decorated
+    function from its parent and turns it into a new trace entrypoint —
+    which:
+
+    * removes the ``rag-pipeline`` observation from the trace tree,
+    * overrides ``trace.name`` to ``rag-pipeline``,
+    * orphans every nested @observe span inside ``rag_pipeline`` (cache-*,
+      bge-m3-*, classify-query) up to ``telegram-rag-supervisor`` instead of
+      keeping them under ``tool-rag-search → rag-pipeline``.
+
+    Reverts the wrong forwarding contract introduced in #1253; see #2157 for
+    the regression evidence and Langfuse SDK 4 reasoning.
+    """
     from telegram_bot.agents.rag_tool import rag_search
 
     mock_lf = MagicMock()
@@ -506,11 +526,20 @@ async def test_rag_search_forwards_active_trace_id_to_pipeline(bot_context):
         await rag_search.ainvoke({"query": "test"}, config=_make_config(bot_context))
 
     assert mock_pipeline.call_count == 1
-    assert mock_pipeline.call_args.kwargs.get("langfuse_trace_id") == "trace-active-123"
+    # The OTEL parent context must remain implicit; we never pass an explicit
+    # langfuse_trace_id to a @observe-decorated function from inside an
+    # active trace.
+    assert "langfuse_trace_id" not in mock_pipeline.call_args.kwargs
 
 
 async def test_rag_search_omits_langfuse_trace_id_when_no_active_trace(bot_context):
-    """rag_search omits langfuse_trace_id kwarg when no active trace (#1253)."""
+    """rag_search omits langfuse_trace_id kwarg when there is no active trace.
+
+    The original #1253 contract (always forward) was reverted in #2157; the
+    new contract is "never forward" regardless of trace presence. This test
+    pins the no-active-trace branch behavior to keep the absence guarantee
+    independent of ``get_current_trace_id`` return value.
+    """
     from telegram_bot.agents.rag_tool import rag_search
 
     mock_lf = MagicMock()
