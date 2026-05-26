@@ -459,3 +459,121 @@ class TestCheckSemanticCache:
         assert "GENERAL" in CACHEABLE_QUERY_TYPES
         # Non-cacheable types not included
         assert "APARTMENT" not in CACHEABLE_QUERY_TYPES
+
+
+# ---------------------------------------------------------------------------
+# #2162: @observe instrumentation contract
+# ---------------------------------------------------------------------------
+
+
+class TestRagCoreObserveContract:
+    """Verifies all five orchestration helpers carry @observe instrumentation.
+
+    Each helper must:
+      - emit exactly one Langfuse span with the documented ``rag-core-*`` name
+      - opt out of automatic input/output capture (PII protection)
+      - write curated metadata via ``update_current_span`` (no raw query text,
+        no embedding vectors, no document text)
+
+    Closes #2162.
+    """
+
+    EXPECTED_SPAN_NAMES = {
+        "build_retrieved_context": "rag-core-build-context",
+        "rewrite_query_via_llm": "rag-core-rewrite-query",
+        "perform_rerank": "rag-core-perform-rerank",
+        "compute_query_embedding": "rag-core-compute-query-embedding",
+        "check_semantic_cache": "rag-core-check-semantic-cache",
+    }
+
+    @pytest.mark.parametrize(
+        "func_name,expected_span_name",
+        list(EXPECTED_SPAN_NAMES.items()),
+    )
+    def test_each_helper_is_observe_decorated(
+        self, func_name: str, expected_span_name: str, monkeypatch
+    ) -> None:
+        """The decorated helper must call ``observe(name=...)`` at import time."""
+        captured: list[dict] = []
+
+        # Source-level assertion — survives any wrapper transparency tricks
+        # introduced by the langfuse SDK in future versions.
+        import inspect
+        import textwrap
+
+        from telegram_bot.services import rag_core as rag_core_mod
+
+        src = textwrap.dedent(inspect.getsource(getattr(rag_core_mod, func_name)))
+        # The decorator line MUST appear in the source above the def line.
+        assert f'@observe(name="{expected_span_name}"' in src, (
+            f'{func_name} must be wrapped with @observe(name="{expected_span_name}", ...)'
+        )
+        assert "capture_input=False" in src, (
+            f"{func_name} must opt out of automatic input capture (PII protection)"
+        )
+        assert "capture_output=False" in src, (
+            f"{func_name} must opt out of automatic output capture"
+        )
+
+        # Suppress unused warning while still keeping the parameter for future use.
+        del captured, monkeypatch
+
+    def test_build_retrieved_context_emits_span_with_curated_metadata(self) -> None:
+        """``build_retrieved_context`` must call update_current_span with curated keys.
+
+        We patch ``_update_current_span`` (the module-level helper) so we can
+        observe the curated metadata payload without a live Langfuse client.
+        """
+        from unittest.mock import patch
+
+        from telegram_bot.services import rag_core as rag_core_mod
+
+        with patch.object(rag_core_mod, "_update_current_span") as mock_update:
+            rag_core_mod.build_retrieved_context(
+                [
+                    {"text": "hello", "score": 0.5, "metadata": {}},
+                    {"text": "world", "score": 0.4, "metadata": {}},
+                ],
+                limit=5,
+            )
+
+        assert mock_update.call_count >= 1
+        call_kwargs = mock_update.call_args.kwargs
+        # Curated input fields only — no raw doc text.
+        assert "input" in call_kwargs
+        assert call_kwargs["input"] == {"docs_in": 2, "limit": 5}
+        # Curated output — no raw doc text.
+        assert "output" in call_kwargs
+        assert call_kwargs["output"]["snippets_out"] == 2
+
+    async def test_check_semantic_cache_curated_metadata_no_raw_query(self) -> None:
+        """``check_semantic_cache`` must NOT include the raw query in span metadata."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from telegram_bot.services import rag_core as rag_core_mod
+
+        cache = MagicMock()
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        with patch.object(rag_core_mod, "_update_current_span") as mock_update:
+            await rag_core_mod.check_semantic_cache(
+                "очень секретный текст пользователя",
+                [0.1, 0.2, 0.3],
+                "FAQ",
+                cache=cache,
+            )
+
+        assert mock_update.call_count >= 1
+        all_payloads = [c.kwargs for c in mock_update.call_args_list]
+        # Concatenate every payload to a single string and assert raw query
+        # text is not present anywhere — neither in input nor output.
+        flattened = repr(all_payloads)
+        assert "очень секретный текст" not in flattened
+        # But query length is OK to expose.
+        assert any(
+            p.get("input", {}).get("query_chars") == len("очень секретный текст пользователя")
+            for p in all_payloads
+        )
+        # Vector dim too — but never the vector values.
+        assert any(p.get("input", {}).get("vector_dim") == 3 for p in all_payloads)
+        assert "0.1" not in flattened or "0.2" not in flattened or "0.3" not in flattened

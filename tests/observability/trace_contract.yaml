@@ -52,6 +52,13 @@ spans:
     - query-rewrite
     - cache-store
 
+  rag_core:
+    - rag-core-build-context
+    - rag-core-rewrite-query
+    - rag-core-perform-rerank
+    - rag-core-compute-query-embedding
+    - rag-core-check-semantic-cache
+
   agent_tools:
     - tool-rag-search
     - tool-history-search
@@ -307,6 +314,12 @@ sensitive_spans:
   - retrieval.initial
   - retrieval.relax
   - cache-store
+  # rag_core (raw query text, document chunks, vectors, cache payloads)
+  - rag-core-build-context
+  - rag-core-rewrite-query
+  - rag-core-perform-rerank
+  - rag-core-compute-query-embedding
+  - rag-core-check-semantic-cache
   # agent_tools
   - tool-rag-search
   - tool-history-search
