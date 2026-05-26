@@ -6,6 +6,7 @@ Increments rewrite_count and resets query_embedding to force re-embedding.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from typing import Any
@@ -61,6 +62,15 @@ async def rewrite_node(
         )
         with contextlib.suppress(Exception):
             get_client().update_current_generation(model=rewrite_actual_model)
+        # Safe span input with query metadata
+        with contextlib.suppress(Exception):
+            get_client().update_current_span(
+                input={
+                    "query_preview": str(original_query)[:120],
+                    "query_hash": hashlib.sha256(str(original_query).encode()).hexdigest()[:8],
+                    "query_len": len(str(original_query)),
+                },
+            )
     except Exception as e:
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
         get_client().update_current_span(
@@ -79,6 +89,18 @@ async def rewrite_node(
         rewritten,
         elapsed,
     )
+
+    # Safe span output with rewritten query metadata
+    with contextlib.suppress(Exception):
+        client = get_client()
+        client.update_current_span(
+            output={
+                "rewritten_preview": str(rewritten)[:240],
+                "rewrite_effective": effective,
+                "rewrite_provider_model": rewrite_actual_model,
+                "rewrite_latency_sec": round(elapsed, 3),
+            },
+        )
 
     return {
         "messages": [HumanMessage(content=rewritten)],

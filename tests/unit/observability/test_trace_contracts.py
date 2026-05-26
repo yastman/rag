@@ -481,6 +481,155 @@ class TestVoiceLifecycleTraceContract:
         )
 
 
+class TestRewriteNodeSourceContracts:
+    """Source-level contract: rewrite_node must call update_current_span with safe I/O."""
+
+    def test_rewrite_source_has_update_current_span_input_call(self):
+        """Source must contain an update_current_span call with input= kwarg."""
+        import ast
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/graph/nodes/rewrite.py").read_text()
+        tree = ast.parse(src)
+
+        span_calls_with_input = []
+
+        class Visitor(ast.NodeVisitor):
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "update_current_span":
+                    for kw in node.keywords or []:
+                        if kw.arg == "input":
+                            span_calls_with_input.append(node)
+                self.generic_visit(node)
+
+        Visitor().visit(tree)
+        assert span_calls_with_input, (
+            "rewrite.py must have an update_current_span(input=...) call for success path"
+        )
+
+    def test_rewrite_source_has_update_current_span_output_call(self):
+        """Source must contain an update_current_span call with output= kwarg."""
+        import ast
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/graph/nodes/rewrite.py").read_text()
+        tree = ast.parse(src)
+
+        span_calls_with_output = []
+
+        class Visitor(ast.NodeVisitor):
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "update_current_span":
+                    for kw in node.keywords or []:
+                        if kw.arg == "output":
+                            span_calls_with_output.append(node)
+                self.generic_visit(node)
+
+        Visitor().visit(tree)
+        assert span_calls_with_output, (
+            "rewrite.py must have an update_current_span(output=...) call for success path"
+        )
+
+    def test_rewrite_source_does_not_pass_raw_text_to_span(self):
+        """Source must not contain update_current_span with naked user text variable."""
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/graph/nodes/rewrite.py").read_text()
+        # The source should not pass original_query or rewritten directly as input/output value
+        # without wrapping in a dict with preview/hash keys.
+        assert "update_current_span(input=original_query)" not in src, (
+            "must not pass raw original_query to span input"
+        )
+        assert "update_current_span(output=rewritten)" not in src, (
+            "must not pass raw rewritten to span output"
+        )
+
+    def test_rewrite_source_has_update_current_generation_model(self):
+        """Source must contain update_current_generation(model=...) on success path."""
+        import ast
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/graph/nodes/rewrite.py").read_text()
+        tree = ast.parse(src)
+
+        gen_calls_with_model = []
+
+        class Visitor(ast.NodeVisitor):
+            def visit_Call(self, node):
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "update_current_generation"
+                ):
+                    for kw in node.keywords or []:
+                        if kw.arg == "model":
+                            gen_calls_with_model.append(node)
+                self.generic_visit(node)
+
+        Visitor().visit(tree)
+        assert gen_calls_with_model, (
+            "rewrite.py must have update_current_generation(model=...) on success"
+        )
+
+
+class TestClientPipelineSourceContracts:
+    """Source-level contract: client-direct-pipeline must use safe payload for span I/O."""
+
+    def test_client_source_imports_build_safe_input_payload(self):
+        """client.py must import build_safe_input_payload for span safety."""
+        import ast
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/pipelines/client.py").read_text()
+        tree = ast.parse(src)
+
+        class Visitor(ast.NodeVisitor):
+            def visit_ImportFrom(self, node):
+                if (
+                    node.module == "src.observability_payloads"
+                    or node.module == "telegram_bot.observability"
+                ):
+                    for alias in node.names:
+                        if alias.name == "build_safe_input_payload":
+                            self._found = True
+                self.generic_visit(node)
+
+        visitor = Visitor()
+        visitor._found = False
+        visitor.visit(tree)
+        assert visitor._found, (
+            "client.py must import build_safe_input_payload (or similar safe payload helper)"
+        )
+
+    def test_client_source_span_input_uses_safe_payload(self):
+        """Span input must be built via safe payload helper, not raw query dict."""
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/pipelines/client.py").read_text()
+        # Current code passes raw query:
+        #   input={"query": user_text}
+        # After fix, it should use build_safe_input_payload or similar.
+        assert 'input={"query": user_text}' not in src, (
+            "client.py must not pass raw user_text to span input"
+        )
+
+    def test_generate_response_source_span_input_is_safe_dict(self):
+        """generate_response span input must be a dict with query_preview, not raw query string."""
+        import pathlib
+
+        src = pathlib.Path("telegram_bot/services/generate_response.py").read_text()
+        # Current code already uses a dict with query_preview — verify it exists and is safe
+        assert "query_preview" in src, "generate_response.py span input must include query_preview"
+        # Ensure no raw query leaks as standalone string
+        lines = src.split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("_update_current_span") and "input" in stripped:
+                # If input value is a string (not a dict), it might leak raw text
+                assert "{" in stripped.split("input")[-1][:10], (
+                    f"Line {i + 1}: update_current_span input must be a dict, not raw string: {stripped}"
+                )
+
+
 class TestSessionIdFormatContract:
     """Session id should keep `{type}-{hash}-{YYYYMMDD}` contract."""
 
