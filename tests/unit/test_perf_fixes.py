@@ -197,7 +197,7 @@ async def test_warmup_bge_failure_nonfatal():
             sys.modules.pop(mod, None)
 
 
-async def test_start_calls_warmup_bge():
+def test_start_calls_warmup_bge():
     """#953: PropertyBot.start() invokes _warmup_bge()."""
     import ast
     from pathlib import Path

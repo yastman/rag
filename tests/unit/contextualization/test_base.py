@@ -594,7 +594,7 @@ class TestContextualizeProviderImplementation:
         result = await mock_provider.contextualize([])
         assert result == []
 
-    async def test_inheritance_preserves_static_methods(self, mock_provider):
+    def test_inheritance_preserves_static_methods(self, mock_provider):
         """Test that static methods are inherited correctly."""
         # Should be accessible on instance
         system_prompt = mock_provider.get_system_prompt()

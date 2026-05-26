@@ -320,7 +320,7 @@ class TestCommandHandlers:
         for cmd in ["/history", "/metrics", "/clearcache"]:
             assert cmd in call_args, f"{cmd} missing from /help text"
 
-    async def test_no_handle_promotions_method(self, mock_config):
+    def test_no_handle_promotions_method(self, mock_config):
         """_handle_promotions removed as dead code (#863)."""
         bot, _ = _create_bot(mock_config)
         assert not hasattr(bot, "_handle_promotions")

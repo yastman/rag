@@ -852,7 +852,7 @@ class TestPostgresPreflight:
             assert result is True
             assert "auto-create" in caplog.text.lower()
 
-    async def test_postgres_in_dep_classification_as_optional(self):
+    def test_postgres_in_dep_classification_as_optional(self):
         """Postgres is OPTIONAL — bot degrades without it."""
         from telegram_bot.preflight import DEP_CLASSIFICATION, DepLevel
 

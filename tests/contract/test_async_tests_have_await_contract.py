@@ -1,4 +1,4 @@
-"""Contract: ``async def test_*`` functions must contain at least one ``await`` (#1515 S2).
+"""Contract: ``async def test_*`` functions must use at least one async feature (#1515 S2).
 
 Background
 ----------
@@ -14,9 +14,20 @@ This contract is a **ratchet**:
 * ``ALLOWLIST`` records every existing offender at the time #1515 Phase 4
   landed. The list must shrink — never grow — as offenders are migrated
   to plain ``def test_*``.
-* New ``async def test_*`` functions that lack ``await`` fail the
+* New ``async def test_*`` functions that lack any async usage fail the
   contract immediately, prompting the author to either remove ``async``
-  or add the missing ``await``.
+  or add the missing async usage.
+
+The detection accepts any of:
+
+* ``await EXPR`` (``ast.Await``)
+* ``async with CTX`` (``ast.AsyncWith``)
+* ``async for X in IT`` (``ast.AsyncFor``)
+* ``yield`` inside an async function (async generator)
+
+If a test legitimately exercises an async context manager via ``async
+with`` (e.g. FastAPI ``lifespan``), it is *not* an offender — keeping
+``async def`` is the only way to consume it.
 
 The shape mirrors the layering ratchet
 (``test_layering_no_telegram_bot_imports_contract.py``) and the chunker
@@ -37,38 +48,15 @@ SCAN_ROOT = REPO_ROOT / "tests" / "unit"
 # ``relative/path/to/file.py::test_function_name`` identifier.
 # This list MUST shrink as the offenders are migrated to plain
 # ``def test_*``. Never regenerate it to silence a failure.
-ALLOWLIST: frozenset[str] = frozenset(
-    {
-        "tests/unit/agents/test_bot_agent_integration.py::test_handle_query_supervisor_imports_available",
-        "tests/unit/agents/test_bot_agent_integration.py::test_bot_context_has_required_fields",
-        "tests/unit/agents/test_bot_agent_integration.py::test_get_crm_tools_returns_list",
-        "tests/unit/agents/test_crm_tools.py::test_get_crm_tools_count",
-        "tests/unit/agents/test_history_graph_integration.py::test_graph_compiles",
-        "tests/unit/agents/test_nurturing_analytics_tools.py::test_manager_tools_hidden_for_client_role",
-        "tests/unit/api/test_rag_api_runtime.py::test_lifespan_respects_rerank_provider_none",
-        "tests/unit/api/test_rag_api_runtime.py::test_lifespan_keeps_colbert_runtime_server_side",
-        "tests/unit/api/test_rag_api_runtime.py::test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings",
-        "tests/unit/contextualization/test_base.py::test_inheritance_preserves_static_methods",
-        "tests/unit/dialogs/test_crm_foundation.py::test_kommo_client_has_update_task",
-        "tests/unit/dialogs/test_crm_foundation.py::test_kommo_client_has_complete_task",
-        "tests/unit/mini_app/test_api_lifespan.py::test_lifespan_opens_and_closes_redis",
-        "tests/unit/observability/test_sentry_wiring.py::test_mini_app_lifespan_initializes_sentry_before_redis",
-        "tests/unit/services/test_nurturing_scheduler.py::test_scheduler_has_no_jobs_before_start",
-        "tests/unit/services/test_rag_core.py::test_all_cacheable_types_are_checked",
-        "tests/unit/services/test_session_summary_worker.py::test_cap_default_is_50",
-        "tests/unit/services/test_session_summary_worker.py::test_cap_clamps_at_minimum_one",
-        "tests/unit/test_agent_streaming.py::test_stream_agent_to_draft_is_importable",
-        "tests/unit/test_bot_handlers.py::test_no_handle_promotions_method",
-        "tests/unit/test_perf_fixes.py::test_start_calls_warmup_bge",
-        "tests/unit/test_preflight.py::test_postgres_in_dep_classification_as_optional",
-        "tests/unit/test_topic_service_init.py::test_bot_has_topic_service_attr",
-    }
-)
+ALLOWLIST: frozenset[str] = frozenset()
 
 
 def _collect_offenders() -> set[str]:
     """Return the set of ``relative_path::function_name`` for every async test
-    under ``tests/unit/`` whose body does not contain ``await``.
+    under ``tests/unit/`` whose body does not use any async feature.
+
+    "Async feature" means at least one of: ``await``, ``async with``,
+    ``async for``, or ``yield`` (async generator).
     """
     offenders: set[str] = set()
     if not SCAN_ROOT.exists():
@@ -86,24 +74,32 @@ def _collect_offenders() -> set[str]:
                 continue
             if not node.name.startswith("test_"):
                 continue
-            has_await = any(isinstance(child, ast.Await) for child in ast.walk(node))
-            if not has_await:
+            has_async_use = any(
+                isinstance(
+                    child,
+                    (ast.Await, ast.AsyncWith, ast.AsyncFor, ast.Yield, ast.YieldFrom),
+                )
+                for child in ast.walk(node)
+            )
+            if not has_async_use:
                 rel = path.relative_to(REPO_ROOT).as_posix()
                 offenders.add(f"{rel}::{node.name}")
     return offenders
 
 
 def test_no_new_async_tests_without_await() -> None:
-    """New ``async def test_*`` functions must contain at least one ``await``.
+    """New ``async def test_*`` functions must use at least one async feature.
 
-    Either drop ``async`` (the test is sync) or add the missing ``await``.
+    Either drop ``async`` (the test is sync) or add the missing async
+    usage (``await``, ``async with``, ``async for``, or ``yield``).
     """
     offenders = _collect_offenders()
     new_offenders = sorted(offenders - ALLOWLIST)
     assert not new_offenders, (
-        "#1515 S2: new async test(s) without `await` detected. "
+        "#1515 S2: new async test(s) without any async usage detected. "
         "Convert to a plain `def test_*` if the body is sync, or add the "
-        "missing `await` if it should genuinely exercise async code.\n"
+        "missing `await` / `async with` / `async for` if it should "
+        "genuinely exercise async code.\n"
         "New offenders:\n  - " + "\n  - ".join(new_offenders)
     )
 

@@ -34,8 +34,7 @@ async def test_scheduler_configures_single_instance_coalesced_jobs(fake_services
     await scheduler.stop()
 
 
-@pytest.mark.asyncio
-async def test_scheduler_has_no_jobs_before_start(fake_services):
+def test_scheduler_has_no_jobs_before_start(fake_services):
     scheduler = NurturingScheduler(**fake_services)
 
     assert not scheduler.has_job("nurturing-batch")
