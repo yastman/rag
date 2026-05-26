@@ -4569,7 +4569,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4607,7 +4606,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -4655,7 +4653,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
@@ -5033,7 +5030,6 @@ class TestPreAgentCacheCheck:
 
         with (
             patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.classify_query", return_value="FAQ"),
