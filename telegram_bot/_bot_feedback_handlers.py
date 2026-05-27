@@ -36,7 +36,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from telegram_bot.callback_data import FeedbackCB, FeedbackReasonCB
-from telegram_bot.observability import get_langfuse_client
 
 
 if TYPE_CHECKING:  # pragma: no cover — typing-only
@@ -46,6 +45,20 @@ if TYPE_CHECKING:  # pragma: no cover — typing-only
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_langfuse_client() -> Any:
+    """Resolve ``get_langfuse_client`` via ``telegram_bot.bot`` module.
+
+    Existing tests patch ``telegram_bot.bot.get_langfuse_client`` directly
+    (``patch.object(bot_module, "get_langfuse_client", ...)``). Looking the
+    function up through the bot module preserves that patch contract after
+    the PR-9a extraction. The lazy import is also necessary to avoid a
+    circular import: ``bot.py`` imports this helper module at startup.
+    """
+    from telegram_bot import bot as _bot_module
+
+    return _bot_module.get_langfuse_client()
 
 
 # Time-to-live for the post-feedback confirmation keyboard before it is
@@ -122,7 +135,7 @@ async def handle_feedback(
     user_id = callback.from_user.id if callback.from_user else 0
 
     try:
-        lf_client = get_langfuse_client()
+        lf_client = _get_langfuse_client()
         if lf_client is not None:
             lf_client.create_score(
                 trace_id=trace_id,
@@ -176,7 +189,7 @@ async def handle_feedback_reason(
     user_id = callback.from_user.id if callback.from_user else 0
 
     try:
-        lf_client = get_langfuse_client()
+        lf_client = _get_langfuse_client()
         if lf_client is not None:
             lf_client.create_score(
                 trace_id=trace_id,
