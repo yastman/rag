@@ -5,7 +5,8 @@ migrate from the bespoke StateGraph to ``create_agent`` (umbrella #1535).
 The legacy node modules stay in place; new code lives here.
 """
 
+from telegram_bot.graph.middleware.classify import ClassifyMiddleware
 from telegram_bot.graph.middleware.guard import GuardMiddleware
 
 
-__all__ = ["GuardMiddleware"]
+__all__ = ["ClassifyMiddleware", "GuardMiddleware"]
