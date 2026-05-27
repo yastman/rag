@@ -320,6 +320,33 @@ class TestCommandHandlers:
         for cmd in ["/history", "/metrics", "/clearcache"]:
             assert cmd in call_args, f"{cmd} missing from /help text"
 
+    async def test_cmd_help_metrics_port_default_is_9092(self, mock_config, monkeypatch):
+        """/help shows the default metrics port 9092 (#2190 — 9091 collides with MinIO)."""
+        monkeypatch.delenv("TELEGRAM_BOT_METRICS_PORT", raising=False)
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
+
+        await cmd_help(bot, message)
+
+        call_args = message.answer.call_args[0][0]
+        assert "http://localhost:9092/metrics" in call_args, (
+            "/help must use default 9092 metrics port (not 9091, MinIO conflict)"
+        )
+        assert "9091" not in call_args, "/help must not advertise 9091 (MinIO console port)"
+
+    async def test_cmd_help_metrics_port_respects_env_override(self, mock_config, monkeypatch):
+        """/help respects TELEGRAM_BOT_METRICS_PORT override (#2190)."""
+        monkeypatch.setenv("TELEGRAM_BOT_METRICS_PORT", "9099")
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
+
+        await cmd_help(bot, message)
+
+        call_args = message.answer.call_args[0][0]
+        assert "http://localhost:9099/metrics" in call_args, (
+            "/help must reflect TELEGRAM_BOT_METRICS_PORT env override"
+        )
+
     def test_no_handle_promotions_method(self, mock_config):
         """_handle_promotions removed as dead code (#863)."""
         bot, _ = _create_bot(mock_config)

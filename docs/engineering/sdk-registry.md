@@ -414,7 +414,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 - **gotchas:**
   - НЕ создавать кастомный ``CollectorRegistry()`` — ломает скрапинг через ``make_asgi_app``
   - НЕ писать кастомный HTTP-сервер для метрик — использовать ``make_asgi_app()`` + ``uvicorn``
-  - ``TELEGRAM_BOT_METRICS_PORT`` (default 9091) — internal-only exposure
+  - ``TELEGRAM_BOT_METRICS_PORT`` (default 9092) — internal-only exposure
   - Контрактный тест: ``tests/contract/test_no_custom_metrics_registry_contract.py``
 
 ---

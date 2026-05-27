@@ -83,20 +83,20 @@ class TestCreateMetricsApp:
 
 
 class TestMetricsPortResolution:
-    def test_default_port_is_9091(self):
-        assert resolve_metrics_port() == 9091
+    def test_default_port_is_9092(self):
+        assert resolve_metrics_port() == 9092
 
     def test_invalid_env_value_falls_back_without_import_crash(self, monkeypatch, caplog):
         monkeypatch.setenv("TELEGRAM_BOT_METRICS_PORT", "not-an-int")
         with caplog.at_level("WARNING"):
-            assert resolve_metrics_port() == 9091
+            assert resolve_metrics_port() == 9092
         assert "TELEGRAM_BOT_METRICS_PORT" in caplog.text
 
         # Regression: this used to evaluate int(os.getenv(...)) at import time.
         import telegram_bot.metrics_server as metrics_server
 
         importlib.reload(metrics_server)
-        assert metrics_server.resolve_metrics_port() == 9091
+        assert metrics_server.resolve_metrics_port() == 9092
         monkeypatch.delenv("TELEGRAM_BOT_METRICS_PORT", raising=False)
         importlib.reload(metrics_server)
 

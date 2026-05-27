@@ -531,7 +531,8 @@ class PropertyBot:
         # Prometheus metrics ASGI server (#2057).
         # Started in start() alongside the aiogram polling loop and
         # exposes the default prometheus_client.REGISTRY on
-        # TELEGRAM_BOT_METRICS_PORT (default 9091).
+        # TELEGRAM_BOT_METRICS_PORT (default 9092 — 9091 collides with
+        # MinIO console; see #2190).
         self._metrics_server: Any | None = None
 
         # Bounded fan-out for fire-and-forget history persistence (#1600).

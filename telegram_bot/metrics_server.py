@@ -3,7 +3,7 @@
 Issue #2057: expose the SDK-native ``prometheus_client`` default registry
 via a lightweight ASGI ``/metrics`` endpoint using
 :func:`prometheus_client.make_asgi_app`.  The server runs on
-``TELEGRAM_BOT_METRICS_PORT`` (default 9091) alongside the aiogram
+``TELEGRAM_BOT_METRICS_PORT`` (default 9092) alongside the aiogram
 polling loop and is exposed only on localhost / internal networking.
 
 Context7 baseline (``/prometheus/client_python``):
@@ -32,7 +32,7 @@ from prometheus_client import make_asgi_app
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_METRICS_PORT = 9091
+DEFAULT_METRICS_PORT = 9092
 
 
 def resolve_metrics_port(default: int = DEFAULT_METRICS_PORT) -> int:
