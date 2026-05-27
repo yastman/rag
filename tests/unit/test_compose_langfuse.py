@@ -79,15 +79,14 @@ class TestLangfuseSecretPosture:
         CAP_DAC_OVERRIDE and CAP_FOWNER. If the process runs as root, it cannot
         write to /data which is owned by uid 999 (redis user from the official
         redis:8.x image), and BGSAVE fails with "Permission denied" → MISCONF
-        cascades into langfuse-worker queues. The sibling redis: service uses
-        the same pattern (compose.yml:50). See issue #2186.
+        cascades into langfuse-worker queues. See issue #2186.
         """
         svc = compose_base["services"]["redis-langfuse"]
         assert svc.get("user") == "999:999", (
             'compose.yml: redis-langfuse must set user: "999:999" to match the '
             "redis user (uid 999) baked into redis:8.x and the langfuse_redis_data "
             "volume owner; otherwise cap_drop:[ALL] + root → BGSAVE Permission denied. "
-            "See issue #2186 and the existing redis: service precedent."
+            "See issue #2186."
         )
 
     def test_base_redis_langfuse_healthcheck_handles_optional_password(self, compose_base: dict):

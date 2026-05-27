@@ -544,7 +544,7 @@ services:
     image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
     # Match the redis user (uid 999) baked into redis:8.x so the process can
     # write /data with cap_drop:[ALL] (no CAP_DAC_OVERRIDE/CAP_FOWNER to bypass
-    # the redis-owned volume). Same pattern as the sibling redis: service.
+    # the redis-owned volume).
     # See issue #2186.
     user: "999:999"
     restart: unless-stopped
