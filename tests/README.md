@@ -112,7 +112,13 @@ make test-nightly            # chaos + smoke + slow unit
 make e2e-test                # pytest E2E suite (live services)
 make e2e-telegram-test       # Telegram userbot runner
 make e2e-test-traces-core    # required #1307 core Telethon trace gate
+make bot-response-smoke      # #2192: prove make bot actually answers
 ```
+
+`make bot-response-smoke` runs five preflight stages (env vars, Telethon
+session file, `getMe` username match, `getWebhookInfo` empty, polling
+lock state) before delegating to `scripts.e2e.quick_test` for one safe
+query. Use it to gate "make bot is healthy" against "make bot answers".
 
 The `e2e-test-traces-core` target runs the required #1307 Telethon scenarios with Langfuse validation (`E2E_VALIDATE_LANGFUSE=1`). Ensure the bot is running locally (`make bot`) before executing this gate.
 
