@@ -12,14 +12,32 @@ stages so the operator can spot incomplete pipelines.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from scripts.probe.langfuse_latency_audit import (
     DEFAULT_LATENCY_BUCKETS,
     LatencyReport,
+    _collect_from_langfuse,
     aggregate_latencies,
     classify_observation_name,
 )
+
+
+SCRIPT = Path("scripts/probe/langfuse_latency_audit.py")
+
+
+def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT.resolve()), *args],
+        capture_output=True,
+        text=True,
+        cwd=SCRIPT.parents[2],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -122,3 +140,59 @@ def test_report_has_render_method() -> None:
     rendered = report.render()
     assert "retrieve" in rendered
     assert "p50" in rendered.lower() or "p95" in rendered.lower()
+
+
+def test_live_collection_uses_langfuse_observations_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Langfuse v4 exposes observation pages via api.observations.get_many()."""
+    calls: dict[str, object] = {}
+
+    class FakeObservations:
+        def get_many(self, **kwargs: object) -> object:
+            calls.update(kwargs)
+            return SimpleNamespace(
+                data=[
+                    SimpleNamespace(name="retrieve", latency=0.125),
+                    SimpleNamespace(name="litellm-acompletion", latency=1.5),
+                    SimpleNamespace(name=None, latency=99),
+                    SimpleNamespace(name="cache", latency=None),
+                ]
+            )
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.api = SimpleNamespace(observations=FakeObservations())
+
+        def shutdown(self) -> None:
+            calls["shutdown"] = True
+
+    monkeypatch.setitem(sys.modules, "langfuse", SimpleNamespace(get_client=FakeClient))
+
+    observations = _collect_from_langfuse(limit=7)
+
+    assert calls["limit"] == 7
+    assert calls["fields"] == "core,basic"
+    assert calls["shutdown"] is True
+    assert observations == [
+        {"name": "retrieve", "latency_ms": 125.0},
+        {"name": "litellm-acompletion", "latency_ms": 1500.0},
+    ]
+
+
+def test_langfuse_latency_cli_reports_missing_input_file_without_traceback(
+    tmp_path: Path,
+) -> None:
+    cp = _run_script("--from-file", str(tmp_path / "missing.json"))
+
+    combined = cp.stdout + cp.stderr
+    assert cp.returncode == 2
+    assert "missing.json" in combined
+    assert "Traceback" not in combined
+
+
+def test_cli_rejects_non_positive_limit() -> None:
+    cp = _run_script("--limit", "0")
+
+    combined = cp.stdout + cp.stderr
+    assert cp.returncode == 2
+    assert "--limit" in combined
+    assert "positive" in combined.lower()

@@ -165,17 +165,18 @@ def _load_observations_from_file(path: Path) -> list[dict[str, object]]:
 def _collect_from_langfuse(limit: int) -> list[dict[str, object]]:
     """Best-effort live collection via the Langfuse SDK; returns [] on errors."""
     try:
-        from langfuse import Langfuse  # type: ignore[import-not-found]
+        from langfuse import get_client  # type: ignore[import-not-found]
     except ImportError:
         return []
+    client = None
     try:
-        client = Langfuse()
-        traces = client.api.trace.list(limit=limit)
+        client = get_client()
+        observations = client.api.observations.get_many(fields="core,basic", limit=limit)
     except Exception:
         return []
     out: list[dict[str, object]] = []
-    for trace in getattr(traces, "data", []) or []:
-        for obs in getattr(trace, "observations", []) or []:
+    try:
+        for obs in getattr(observations, "data", []) or []:
             name = getattr(obs, "name", None)
             latency = getattr(obs, "latency", None)
             if isinstance(name, str) and latency is not None:
@@ -185,7 +186,11 @@ def _collect_from_langfuse(limit: int) -> list[dict[str, object]]:
                 except (TypeError, ValueError):
                     continue
                 out.append({"name": name, "latency_ms": latency_ms})
-    return out
+        return out
+    finally:
+        shutdown = getattr(client, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -204,7 +209,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.limit < 1:
+        parser.error("--limit must be a positive integer")
+
     if args.from_file is not None:
+        if not args.from_file.is_file():
+            parser.error(f"--from-file does not exist: {args.from_file}")
         observations = _load_observations_from_file(args.from_file)
     else:
         observations = _collect_from_langfuse(args.limit)
