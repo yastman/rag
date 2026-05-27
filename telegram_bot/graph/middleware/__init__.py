@@ -6,7 +6,8 @@ The legacy node modules stay in place; new code lives here.
 """
 
 from telegram_bot.graph.middleware.cache import SemanticCacheMiddleware
+from telegram_bot.graph.middleware.classify import ClassifyMiddleware
 from telegram_bot.graph.middleware.guard import GuardMiddleware
 
 
-__all__ = ["GuardMiddleware", "SemanticCacheMiddleware"]
+__all__ = ["ClassifyMiddleware", "GuardMiddleware", "SemanticCacheMiddleware"]
