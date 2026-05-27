@@ -62,15 +62,16 @@ def chat_openai_stub(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     return fake_class
 
 
-@pytest.mark.asyncio
-async def test_factory_returns_compiled_agent_with_three_middleware(
+def test_factory_returns_compiled_agent_with_three_middleware(
     chat_openai_stub: MagicMock,
 ) -> None:
     cache = MagicMock()
     embeddings = MagicMock()
     captured: dict[str, Any] = {}
 
-    real_create_agent = __import__("langchain.agents", fromlist=["create_agent"]).create_agent
+    real_create_agent = __import__(
+        "langchain.agents", fromlist=["create_agent"]
+    ).create_agent
 
     def spy_create_agent(**kwargs: Any) -> Any:
         captured.update(kwargs)
