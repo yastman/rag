@@ -71,6 +71,7 @@ from src.retrieval.topic_classifier import get_query_topic_hint
 
 from . import (
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
+    _bot_feedback_handlers,  # #2048 PR-9a: extracted feedback callback handlers
     _bot_kommo,  # #1265 Slice 1 PR-6: extracted Kommo startup helpers
     _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048: extracted lifecycle helpers
     _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
@@ -105,7 +106,7 @@ from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     create_callback_handler,
     get_client,
-    get_langfuse_client,
+    get_langfuse_client,  # noqa: F401 — re-export kept so legacy tests can patch telegram_bot.bot.get_langfuse_client (#2048 PR-9a)
     observe,
     propagate_attributes,
 )
@@ -3572,161 +3573,21 @@ class PropertyBot:
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:
-        """Handle feedback like/dislike/done callback (#229, #755).
-
-        Supports CallbackData injection from aiogram DI, with legacy string fallback
-        for backward compatibility with tests and old-format buttons.
-        """
-        from .feedback import (
-            build_dislike_reason_keyboard,
-            build_feedback_confirmation,
-            parse_feedback_callback,
-        )
-
-        if callback_data is not None:
-            # New CallbackData path (aiogram DI injection)
-            if callback_data.action == "done":
-                await callback.answer()
-                return
-            if callback_data.action == "dislike":
-                # Step 1: show reason keyboard, score written in handle_feedback_reason
-                await callback.answer()
-                try:
-                    msg = callback.message
-                    if msg is not None and hasattr(msg, "edit_reply_markup"):
-                        await msg.edit_reply_markup(
-                            reply_markup=build_dislike_reason_keyboard(callback_data.trace_id)
-                        )
-                except Exception:
-                    logger.debug("Failed to show dislike reason keyboard", exc_info=True)
-                return
-            # "like" action: write score below
-            value: float = 1.0
-            trace_id: str = callback_data.trace_id
-            reason: str | None = None
-        else:
-            # Legacy fallback (tests and old-format buttons: fb:1/0:, fb:r:)
-            data = callback.data or ""
-            if data in ("fb:done", "fb:done:"):
-                await callback.answer()
-                return
-            parsed = parse_feedback_callback(data)
-            if parsed is None:
-                await callback.answer()
-                return
-            value, trace_id, reason = parsed
-
-            # Legacy dislike without reason → show reason keyboard
-            if value == 0.0 and reason is None:
-                await callback.answer()
-                try:
-                    msg = callback.message
-                    if msg is not None and hasattr(msg, "edit_reply_markup"):
-                        await msg.edit_reply_markup(
-                            reply_markup=build_dislike_reason_keyboard(trace_id)
-                        )
-                except Exception:
-                    logger.debug("Failed to show dislike reason keyboard", exc_info=True)
-                return
-
-        # Write score (like, or legacy reason path)
-        await callback.answer("Спасибо за отзыв!")
-        user_id = callback.from_user.id if callback.from_user else 0
-
-        try:
-            lf_client = get_langfuse_client()
-            if lf_client is not None:
-                lf_client.create_score(
-                    trace_id=trace_id,
-                    name="user_feedback",
-                    value=value,
-                    data_type="NUMERIC",
-                    comment=f"user_id:{user_id}",
-                    score_id=f"{trace_id}-user_feedback",
-                )
-                if reason is not None:
-                    lf_client.create_score(
-                        trace_id=trace_id,
-                        name="user_feedback_reason",
-                        value=reason,
-                        data_type="CATEGORICAL",
-                        comment=f"user_id:{user_id}",
-                        score_id=f"{trace_id}-user_feedback_reason",
-                    )
-        except Exception:
-            logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
-
-        # Update keyboard to confirmation
-        liked = value > 0
-        try:
-            msg = callback.message
-            if msg is not None and hasattr(msg, "edit_reply_markup"):
-                await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=liked))
-                cleanup_task = asyncio.create_task(
-                    self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
-                )
-                cleanup_task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
-        except Exception:
-            logger.debug("Failed to update feedback keyboard", exc_info=True)
+        """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
+        await _bot_feedback_handlers.handle_feedback(self, callback, callback_data)
 
     @observe(name="cb-feedback-reason", capture_input=False, capture_output=False)
     async def handle_feedback_reason(
         self, callback: CallbackQuery, callback_data: FeedbackReasonCB
     ) -> None:
-        """Handle dislike reason selection callback (#755)."""
-        from .feedback import _REASON_CODES, build_feedback_confirmation
-
-        reason = _REASON_CODES.get(callback_data.code)
-        if reason is None:
-            await callback.answer()
-            return
-
-        trace_id = callback_data.trace_id
-        await callback.answer("Спасибо за отзыв!")
-        user_id = callback.from_user.id if callback.from_user else 0
-
-        try:
-            lf_client = get_langfuse_client()
-            if lf_client is not None:
-                lf_client.create_score(
-                    trace_id=trace_id,
-                    name="user_feedback",
-                    value=0.0,
-                    data_type="NUMERIC",
-                    comment=f"user_id:{user_id}",
-                    score_id=f"{trace_id}-user_feedback",
-                )
-                lf_client.create_score(
-                    trace_id=trace_id,
-                    name="user_feedback_reason",
-                    value=reason,
-                    data_type="CATEGORICAL",
-                    comment=f"user_id:{user_id}",
-                    score_id=f"{trace_id}-user_feedback_reason",
-                )
-        except Exception:
-            logger.warning("Failed to write feedback reason score to Langfuse", exc_info=True)
-
-        try:
-            msg = callback.message
-            if msg is not None and hasattr(msg, "edit_reply_markup"):
-                await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=False))
-                cleanup_task = asyncio.create_task(
-                    self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
-                )
-                cleanup_task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
-        except Exception:
-            logger.debug("Failed to update feedback keyboard after reason", exc_info=True)
+        """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
+        await _bot_feedback_handlers.handle_feedback_reason(self, callback, callback_data)
 
     async def _clear_feedback_confirmation_later(
         self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S
     ) -> None:
-        """Clear feedback confirmation button after a short delay."""
-        await asyncio.sleep(delay_s)
-        try:
-            await message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
+        """Thin wrapper — see ``_bot_feedback_handlers`` (#2048 PR-9a)."""
+        await _bot_feedback_handlers.clear_feedback_confirmation_later(message, delay_s)
 
     @observe(name="cb-clearcache", capture_input=False, capture_output=False)
     async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
