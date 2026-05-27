@@ -33,6 +33,23 @@ docker compose logs --no-color --tail 200 langfuse-worker > /tmp/lf.log
 uv run python -m scripts.probe.observability_diagnostic --from-file /tmp/lf.log
 ```
 
+For SDK-native config checks, keep live API validation separate from the
+log classifier:
+
+```bash
+uv run python - <<'PY'
+from langfuse import Langfuse
+
+lf = Langfuse()
+print("langfuse_auth_check", lf.auth_check())
+lf.shutdown()
+PY
+
+curl -fsS \
+  -H "Authorization: Bearer ${LITELLM_MASTER_KEY}" \
+  http://localhost:4000/v1/models | jq '.data | length'
+```
+
 ## Categories
 
 ### langfuse_queue_timeout
@@ -80,7 +97,8 @@ the master key, and LiteLLM logs the rejection at WARNING. The bot uses
 the same proxy with `LITELLM_MASTER_KEY` and is unaffected.
 
 Remediation: either pass the master key from the probe source or filter
-the log line at the LiteLLM proxy. A reproducible diagnostic call is:
+the log line at the LiteLLM proxy. A reproducible SDK-compatible diagnostic
+call is:
 
 ```bash
 curl -fsS \

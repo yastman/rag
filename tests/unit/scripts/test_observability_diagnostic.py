@@ -17,6 +17,10 @@ The classifier is pure (no I/O) so it is unit-testable.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from scripts.probe.observability_diagnostic import (
@@ -24,6 +28,18 @@ from scripts.probe.observability_diagnostic import (
     classify_log_line,
     summarize_classifications,
 )
+
+
+SCRIPT = Path("scripts/probe/observability_diagnostic.py")
+
+
+def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT.resolve()), *args],
+        capture_output=True,
+        text=True,
+        cwd=SCRIPT.parents[2],
+    )
 
 
 @pytest.mark.parametrize(
@@ -111,3 +127,35 @@ def test_summary_threshold_for_queue_timeouts() -> None:
     # Above threshold → degraded.
     summary[DiagnosticCategory.LANGFUSE_QUEUE_TIMEOUT] = QUEUE_TIMEOUT_NOISE_THRESHOLD + 1
     assert is_degraded(summary) is True
+
+
+def test_cli_reports_missing_input_file_without_traceback(tmp_path: Path) -> None:
+    cp = _run_script("--from-file", str(tmp_path / "missing.log"))
+
+    combined = cp.stdout + cp.stderr
+    assert cp.returncode == 2
+    assert "missing.log" in combined
+    assert "Traceback" not in combined
+
+
+def test_cli_rejects_non_positive_tail() -> None:
+    cp = _run_script("--tail", "0")
+
+    combined = cp.stdout + cp.stderr
+    assert cp.returncode == 2
+    assert "--tail" in combined
+    assert "positive" in combined.lower()
+
+
+def test_script_does_not_import_observability_runtime_sdks() -> None:
+    """The probe is an out-of-process log classifier.
+
+    SDK-native live checks belong in the runbook, not in this script, so the
+    diagnostic keeps working when Langfuse/LiteLLM packages are unavailable.
+    """
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "from langfuse" not in text
+    assert "import langfuse" not in text
+    assert "from litellm" not in text
+    assert "import litellm" not in text

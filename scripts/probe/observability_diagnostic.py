@@ -213,7 +213,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.tail < 1:
+        parser.error("--tail must be a positive integer")
+
     if args.from_file is not None:
+        if not args.from_file.is_file():
+            parser.error(f"--from-file does not exist: {args.from_file}")
         lines = args.from_file.read_text(encoding="utf-8").splitlines()
     else:
         lines = collect_compose_logs(tail=args.tail)
