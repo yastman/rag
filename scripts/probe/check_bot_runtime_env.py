@@ -144,7 +144,7 @@ def _check_polling_lock_probe(env_file: Path) -> list[str]:
     try:
         import redis
 
-        from telegram_bot.integrations.polling_lock import POLLING_LOCK_KEY
+        from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
 
         r = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=3)
         owner = r.get(POLLING_LOCK_KEY)

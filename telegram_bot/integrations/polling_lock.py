@@ -4,11 +4,10 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
 
-# Canonical Redis key for the bot polling lock. Single source of truth shared
-# between the lock implementation, preflight probe (telegram_bot.preflight.
-# check_polling_lock), and PropertyBot.start (#2189).
-POLLING_LOCK_KEY = "telegram-bot:polling"
+
+__all__ = ["POLLING_LOCK_KEY", "PollingLockBusy", "RedisPollingLock"]
 
 
 class PollingLockBusy(RuntimeError):
