@@ -13,6 +13,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Redis / cache degradation (Russian: "сломался redis") | `COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml exec redis sh -lc 'redis-cli -a "$REDIS_PASSWORD" ping'` → [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
 | LiteLLM / provider failure (Russian: "сломался litellm") | `curl -s http://localhost:4000/health` → [`LITEllm_FAILURE.md`](LITEllm_FAILURE.md) |
 | Compose service health | `make docker-ps` → [`DOCKER.md`](../../DOCKER.md) |
+| `docker compose ls` shows mixed sources / `/tmp/compose.*.yml` overrides | `docker compose ls --format json` → [`COMPOSE_SOURCE_CLEANUP.md`](COMPOSE_SOURCE_CLEANUP.md) |
 | Self-hosted runner offline / nightly-heavy queued | `scripts/check_self_hosted_runner.sh` → [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
 | Telegram bot is down / restarting / high error rate | `docker compose ps bot` → [`TELEGRAM_BOT_FAILURE.md`](TELEGRAM_BOT_FAILURE.md) |
 | Embedding service (BGE-M3 / BM42 / Voyage) errors | `docker compose ps bge-m3` → [`EMBEDDING_SERVICE_FAILURE.md`](EMBEDDING_SERVICE_FAILURE.md) |
@@ -31,6 +32,7 @@ Operator entrypoint for container/service investigations and incident response. 
 | Redis cache degradation, eviction, or latency | [`REDIS_CACHE_DEGRADATION.md`](REDIS_CACHE_DEGRADATION.md) |
 | Qdrant health, collection, or vector search issues | [`QDRANT_TROUBLESHOOTING.md`](QDRANT_TROUBLESHOOTING.md) |
 | Postgres WAL recovery or replication issues | [`POSTGRESQL_WAL_RECOVERY.md`](POSTGRESQL_WAL_RECOVERY.md) |
+| Compose project drifted across worktrees / `/tmp` overrides | [`COMPOSE_SOURCE_CLEANUP.md`](COMPOSE_SOURCE_CLEANUP.md) |
 | VPS / Google Drive ingestion recovery | [`vps-gdrive-ingestion-recovery.md`](vps-gdrive-ingestion-recovery.md) |
 | Self-hosted GitHub Actions runner for `nightly-heavy.yml` is offline | [`SELF_HOSTED_RUNNER.md`](SELF_HOSTED_RUNNER.md) |
 | Telegram bot container, Telegram API, or query-processing alerts | [`TELEGRAM_BOT_FAILURE.md`](TELEGRAM_BOT_FAILURE.md) |
