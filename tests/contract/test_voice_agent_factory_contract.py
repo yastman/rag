@@ -99,7 +99,7 @@ def test_create_voice_agent_signature_takes_cache_and_embeddings() -> None:
         assert params[name].kind == inspect.Parameter.KEYWORD_ONLY
 
 
-def test_module_has_no_forbidden_top_imports() -> None:
+def test_voice_agent_module_has_no_forbidden_top_imports() -> None:
     tree = _parse(MODULE_PATH)
     offenders: list[str] = []
     for node in ast.iter_child_nodes(tree):

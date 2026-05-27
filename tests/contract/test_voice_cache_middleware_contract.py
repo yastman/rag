@@ -55,7 +55,7 @@ def _parse(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
-def test_module_exists_and_exports_required_symbols() -> None:
+def test_cache_middleware_module_exists_and_exports_required_symbols() -> None:
     assert MODULE_PATH.is_file(), (
         f"{MODULE_PATH.relative_to(REPO_ROOT)} must exist (#2051 Slice 2)."
     )
@@ -64,7 +64,7 @@ def test_module_exists_and_exports_required_symbols() -> None:
         assert hasattr(module, name), f"{MODULE_NAME} must export {name}."
 
 
-def test_middleware_subclasses_AgentMiddleware() -> None:
+def test_cache_middleware_subclasses_AgentMiddleware() -> None:
     from langchain.agents.middleware import AgentMiddleware
 
     module = importlib.import_module(MODULE_NAME)
@@ -130,7 +130,7 @@ def test_constructor_takes_cache_and_embeddings_keyword_only() -> None:
         )
 
 
-def test_module_has_no_forbidden_top_imports() -> None:
+def test_cache_module_has_no_forbidden_top_imports() -> None:
     tree = _parse(MODULE_PATH)
     offenders: list[str] = []
     for node in ast.iter_child_nodes(tree):
@@ -154,7 +154,7 @@ def test_module_has_no_forbidden_top_imports() -> None:
     )
 
 
-def test_package_init_re_exports_middleware() -> None:
+def test_package_init_re_exports_cache_middleware() -> None:
     init_text = PKG_INIT_PATH.read_text(encoding="utf-8")
     assert "SemanticCacheMiddleware" in init_text, (
         "telegram_bot/graph/middleware/__init__.py must re-export "
