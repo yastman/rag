@@ -99,7 +99,6 @@ injection inside `propagate_attributes`.
 uv run --python 3.12 pytest \
   tests/unit/graph/ \
   tests/unit/test_bot_handlers.py \
-  tests/contract/test_bot_lifecycle_extraction_contract.py \
   -q --timeout=30
 ```
 
