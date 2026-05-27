@@ -144,14 +144,16 @@ def _check_polling_lock_probe(env_file: Path) -> list[str]:
     try:
         import redis
 
+        from telegram_bot.integrations.polling_lock import POLLING_LOCK_KEY
+
         r = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=3)
-        owner = r.get("telegram-bot:polling")
+        owner = r.get(POLLING_LOCK_KEY)
         if owner is None:
             issues.append("  Polling lock: free  ✓")
         else:
-            pttl = r.pttl("telegram-bot:polling")
+            pttl = r.pttl(POLLING_LOCK_KEY)
             issues.append("  Polling lock: BUSY  ✗")
-            issues.append("    key: telegram-bot:polling")
+            issues.append(f"    key: {POLLING_LOCK_KEY}")
             issues.append(f"    owner: {owner}")
             issues.append(f"    pttl_ms: {pttl}")
             issues.append(

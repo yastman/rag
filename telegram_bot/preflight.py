@@ -16,6 +16,7 @@ from qdrant_client import AsyncQdrantClient, models
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .config import BotConfig
+from .integrations.polling_lock import POLLING_LOCK_KEY
 from .startup_status import DependencyCheckResult, StartupReport, StartupSeverity, StartupSignal
 
 
@@ -618,8 +619,6 @@ async def check_dependencies(
 # ---------------------------------------------------------------------------
 # Polling lock pre-start guard (issue #2189)
 # ---------------------------------------------------------------------------
-
-POLLING_LOCK_KEY = "telegram-bot:polling"
 
 
 async def check_polling_lock(
