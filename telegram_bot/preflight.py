@@ -6,6 +6,7 @@ import logging
 import os
 import re
 from enum import StrEnum
+from typing import Any
 from urllib.parse import urlparse
 
 import asyncpg
@@ -15,6 +16,7 @@ from qdrant_client import AsyncQdrantClient, models
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .config import BotConfig
+from .integrations.polling_lock import POLLING_LOCK_KEY
 from .startup_status import DependencyCheckResult, StartupReport, StartupSeverity, StartupSignal
 
 
@@ -612,3 +614,26 @@ async def check_dependencies(
         raise PreflightError(critical_failures, report=report)
 
     return DependencyCheckResult(results, report=report)
+
+
+# ---------------------------------------------------------------------------
+# Polling lock pre-start guard (issue #2189)
+# ---------------------------------------------------------------------------
+
+
+async def check_polling_lock(
+    redis: Any,
+    key: str = POLLING_LOCK_KEY,
+) -> dict[str, Any] | None:
+    """Check if a Redis polling lock is held without acquiring or deleting it.
+
+    Returns None when no lock exists, or a diagnostics dict with key, owner,
+    and pttl_ms when the lock is active.
+    """
+    owner = await redis.get(key)
+    if owner is None:
+        return None
+    if isinstance(owner, bytes):
+        owner = owner.decode("utf-8", errors="replace")
+    pttl = await redis.pttl(key)
+    return {"key": key, "owner": owner, "pttl_ms": pttl}

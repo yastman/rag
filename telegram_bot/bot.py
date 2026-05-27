@@ -96,7 +96,7 @@ from .integrations.memory import (
     end_checkpoint_overhead_capture,
     sum_checkpoint_overhead_ms,
 )
-from .integrations.polling_lock import RedisPollingLock
+from .integrations.polling_lock import POLLING_LOCK_KEY, RedisPollingLock
 from .keyboards.client_keyboard import (
     parse_menu_button,
 )
@@ -4263,7 +4263,7 @@ class PropertyBot:
         if self._cache.redis is not None:
             self._polling_lock = RedisPollingLock(
                 redis=self._cache.redis,
-                key="telegram-bot:polling",
+                key=POLLING_LOCK_KEY,
             )
             self._polling_lock_owner = f"{socket.gethostname()}:{os.getpid()}"
             await self._polling_lock.acquire(self._polling_lock_owner)

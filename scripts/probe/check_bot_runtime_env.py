@@ -128,6 +128,48 @@ def _check_telegram_token(env_file: Path) -> list[str]:
     return issues
 
 
+def _check_polling_lock_probe(env_file: Path) -> list[str]:
+    """Check if a Redis polling lock is held by another bot instance (issue #2189)."""
+    issues: list[str] = []
+    redis_url = _read_env_var(env_file, "REDIS_URL")
+    if not redis_url:
+        redis_password = _read_env_var(env_file, "REDIS_PASSWORD") or ""
+        redis_host = _read_env_var(env_file, "REDIS_HOST") or "localhost"
+        redis_port = _read_env_var(env_file, "REDIS_PORT") or "6379"
+        if redis_password:
+            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
+        else:
+            redis_url = f"redis://{redis_host}:{redis_port}/0"
+
+    try:
+        import redis
+
+        from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
+
+        r = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=3)
+        owner = r.get(POLLING_LOCK_KEY)
+        if owner is None:
+            issues.append("  Polling lock: free  ✓")
+        else:
+            pttl = r.pttl(POLLING_LOCK_KEY)
+            issues.append("  Polling lock: BUSY  ✗")
+            issues.append(f"    key: {POLLING_LOCK_KEY}")
+            issues.append(f"    owner: {owner}")
+            issues.append(f"    pttl_ms: {pttl}")
+            issues.append(
+                "    Remediation: stop the other bot process if alive, "
+                "or wait for TTL expiry. Do NOT delete the key manually "
+                "unless you are certain the owner process is dead."
+            )
+        r.close()
+    except ImportError:
+        issues.append("  Polling lock: skipped (redis package not available)")
+    except Exception as exc:
+        issues.append(f"  Polling lock: skipped (Redis unreachable: {exc})")
+
+    return issues
+
+
 def _check_litellm_port() -> list[str]:
     """Check whether LiteLLM port 4000 is published on the Docker host.
 
@@ -267,6 +309,14 @@ def main(argv: list[str] | None = None) -> NoReturn:
 
     # TELEGRAM_BOT_TOKEN
     all_issues.extend(_check_telegram_token(env_file))
+
+    all_issues.append("")
+
+    # Polling lock (issue #2189)
+    if args.skip_docker:
+        all_issues.append("  Polling lock: skipped (--skip-docker)")
+    else:
+        all_issues.extend(_check_polling_lock_probe(env_file))
 
     all_issues.append("")
 

@@ -216,6 +216,14 @@ def test_script_has_shebang_and_main_guard() -> None:
     )
 
 
+def test_script_does_not_import_telegram_bot_runtime_modules() -> None:
+    """Scripts are out-of-process tools and must not import telegram_bot runtime modules."""
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "from telegram_bot" not in text
+    assert "import telegram_bot" not in text
+
+
 def test_script_provides_help() -> None:
     """The script must support --help for operator documentation."""
     cp = subprocess.run(

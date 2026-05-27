@@ -4,6 +4,11 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
+
+
+__all__ = ["POLLING_LOCK_KEY", "PollingLockBusy", "RedisPollingLock"]
+
 
 class PollingLockBusy(RuntimeError):
     """Raised when another polling owner is already active."""
