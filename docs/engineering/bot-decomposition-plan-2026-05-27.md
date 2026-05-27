@@ -63,41 +63,68 @@ guiding rule from Slice 1 still holds: every PR must be byte-for-byte
 behaviour-preserving and pinned by a new contract test under
 `tests/contract/`.
 
-### PR-8 — Lifecycle extraction (tracked by [#2048](https://github.com/yastman/rag/issues/2048))
+### PR-8 — Lifecycle helper extraction (tracked by [#2048](https://github.com/yastman/rag/issues/2048))
 
 **Move target:** `telegram_bot/_bot_lifecycle.py`
 
 **Methods extracted from `PropertyBot`:**
 
-- `start` (lines 3873–4447, ~575 LOC)
 - `_warmup_bge` (4448–4455, ~8 LOC)
 - `_polling_lock_heartbeat_tick` (4456–4479, ~24 LOC)
+
+**Approach:**
+
+- Lift `_warmup_bge` and `_polling_lock_heartbeat_tick` to module-level
+  helpers that receive their narrow collaborators explicitly.
+- Keep `PropertyBot._warmup_bge` and
+  `PropertyBot._polling_lock_heartbeat_tick` as thin async delegates so
+  existing call sites and tests do not change.
+- Leave `start` / `stop` in `bot.py` for a follow-up PR: those methods
+  are much larger, mix runtime wiring concerns, and deserve their own
+  characterization tests before moving.
+
+**Acceptance:**
+
+- `_bot_lifecycle.py` owns the two warmup/heartbeat helpers and
+  `bot.py` delegates to them without changing method signatures.
+- `_bot_lifecycle.py` has no `aiogram` / `langgraph` import at module
+  scope (lazy imports allowed inside function bodies).
+- New `tests/contract/test_bot_lifecycle_extraction_contract.py`
+  asserts the lifecycle helpers exist, are async, the class methods
+  delegate to them, and the import graph is clean.
+- Existing tests under `tests/unit/test_bot_handlers.py` and
+  `tests/unit/test_bot_scores.py` keep passing without changes.
+
+### PR-9 — Start/stop lifecycle extraction (proposed new child issue)
+
+**Move target:** `telegram_bot/_bot_lifecycle.py`
+
+**Methods extracted:**
+
+- `start` (lines 3873–4447, ~575 LOC)
 - `stop` (4480–end, ~100 LOC)
 
 **Approach:**
 
 - Convert `start`/`stop` into module-level functions that take
   `(self) -> Awaitable[None]` so tests can mock the wiring without
-  instantiating `PropertyBot`. (Or keep them as bound methods and
-  delegate to module-level helpers — pick whichever passes the
-  characterization test with the smallest call-site delta.)
-- Lift `_warmup_bge` and `_polling_lock_heartbeat_tick` to module level
-  with `(config, logger)` signatures.
+  instantiating `PropertyBot`.
 - Keep the `PropertyBot.start`/`stop` methods on the class as thin
-  wrappers (`return await _bot_lifecycle.start(self)`).
+  wrappers (`return await _bot_lifecycle.start_property_bot(self)` or
+  equivalent).
+- Preserve local imports inside the moved functions when they prevent
+  heavy module-scope dependencies.
 
 **Acceptance:**
 
-- `bot.py` shrinks by ~700 lines.
-- `_bot_lifecycle.py` has no `aiogram` / `langgraph` import at module
-  scope (lazy imports allowed inside function bodies).
-- New `tests/contract/test_bot_lifecycle_extraction_contract.py`
-  asserts `bot.start is _bot_lifecycle.start_property_bot` (or the
-  thin-wrapper equivalent) and that the import graph is clean.
-- Existing tests under `tests/unit/test_bot_handlers.py` and
-  `tests/unit/test_bot_scores.py` keep passing without changes.
+- `bot.py` shrinks by ~675 lines.
+- `_bot_lifecycle.py` still has no `aiogram` / `langgraph` import at
+  module scope.
+- Contract tests pin the thin-wrapper delegation and import graph.
+- Existing bot lifecycle, startup/import, and handler tests keep
+  passing without signature changes.
 
-### PR-9 — Handlers extraction (proposed new child issue)
+### PR-10 — Handlers extraction (proposed new child issue)
 
 **Move target:** `telegram_bot/_bot_handlers.py`
 
@@ -133,7 +160,7 @@ sub-PRs: callbacks + menu first, query/voice last.
   `tests/unit/test_bot_handlers.py` (the largest single test file in
   the repo) keep passing without signature changes.
 
-### PR-10 — Supervisor recovery extraction (proposed)
+### PR-11 — Supervisor recovery extraction (proposed)
 
 **Move target:** `telegram_bot/_bot_supervisor_recovery.py`
 
@@ -154,12 +181,12 @@ sub-PRs: callbacks + menu first, query/voice last.
 - `bot.py` shrinks by ~225 lines.
 - Contract test pins both helpers as module-level callables.
 
-### PR-11 — Optional: scoring/Langfuse glue (low priority)
+### PR-12 — Optional: scoring/Langfuse glue (low priority)
 
 The `bot_scoring.py` mentioned in #1265's target decomposition already
 exists outside `bot.py` as `telegram_bot/scoring.py` (31 LOC). Only the
 `PropertyBot._spawn_history_save` and a handful of inline score writes
-remain inside `bot.py`. Defer until PR-8 / PR-9 / PR-10 land — the
+remain inside `bot.py`. Defer until PR-8 / PR-9 / PR-10 / PR-11 land — the
 remaining glue may end up small enough to leave in place.
 
 ## Testing strategy — TDD characterization
@@ -198,10 +225,11 @@ uv run --python 3.12 pytest \
 
 ## Sequencing
 
-1. PR-8 (lifecycle, #2048) — first, smallest delta, sets the pattern for `_bot_*.py` extraction with `self` argument.
-2. PR-9 (handlers, new child) — split into PR-9a (callbacks/menu/feedback/HITL) and PR-9b (query/voice). PR-9b is the biggest piece of work in the plan.
-3. PR-10 (supervisor recovery) — independent of the others; can land in parallel once the lifecycle pattern is set.
-4. PR-11 (scoring glue) — only if the residual `bot.py` size still merits it.
+1. PR-8 (lifecycle helpers, #2048) — first, smallest delta, sets the pattern for `_bot_*.py` extraction with explicit collaborators.
+2. PR-9 (start/stop lifecycle, new child) — larger runtime-wiring move, after PR-8 proves the lifecycle module pattern.
+3. PR-10 (handlers, new child) — split into PR-10a (callbacks/menu/feedback/HITL) and PR-10b (query/voice). PR-10b is the biggest piece of work in the plan.
+4. PR-11 (supervisor recovery) — independent of the others; can land in parallel once the lifecycle pattern is set.
+5. PR-12 (scoring glue) — only if the residual `bot.py` size still merits it.
 
 ## Out of scope
 
@@ -211,11 +239,11 @@ uv run --python 3.12 pytest \
 - Splitting `bot.py` into a package directory. That is a larger
   follow-up that should only be considered after Slice 2 lands.
 - Voice path migration to `create_agent` — tracked separately by #2051
-  on top of PR-9b.
+  on top of PR-10b.
 
 ## Decision
 
 Adopt this plan. Execute PR-8 under #2048, then file follow-up child
-issues for PR-9 / PR-10 / PR-11. Keep #1265 open as the umbrella for
-the decomposition and close it only after the residual `bot.py` is at
-or below 1500 lines.
+issues for PR-9 / PR-10 / PR-11 / PR-12. Keep #1265 open as the
+umbrella for the decomposition and close it only after the residual
+`bot.py` is at or below 1500 lines.
