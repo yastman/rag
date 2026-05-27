@@ -106,6 +106,7 @@ from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     create_callback_handler,
     get_client,
+    get_langfuse_client,  # noqa: F401 — re-export kept so legacy tests can patch telegram_bot.bot.get_langfuse_client (#2048 PR-9a)
     observe,
     propagate_attributes,
 )
