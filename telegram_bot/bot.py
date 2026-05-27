@@ -72,6 +72,7 @@ from src.retrieval.topic_classifier import get_query_topic_hint
 from . import (
     _bot_error_classification,  # #1265 Slice 1 PR-3: extracted error-classification helpers
     _bot_kommo,  # #1265 Slice 1 PR-6: extracted Kommo startup helpers
+    _bot_lifecycle,  # #1265 Slice 2 PR-8 / #2048: extracted lifecycle helpers
     _bot_observability,  # #1265 Slice 1 PR-2: extracted observability helpers
     _bot_pre_agent,  # #1265 Slice 1 PR-5: extracted pre-agent helpers
     _bot_state_helpers,  # #1265 Slice 1 PR-1: extracted state-shape helpers
@@ -4446,36 +4447,27 @@ class PropertyBot:
                 self._polling_lock_scheduler = None
 
     async def _warmup_bge(self) -> None:
-        """Warm up BGE-M3 connection pool (#953)."""
-        try:
-            await self._hybrid.aembed_query("warmup")
-            logger.info("BGE-M3 warmup complete")
-        except Exception:
-            logger.warning("BGE-M3 warmup failed (will retry on first query)", exc_info=True)
+        """Warm up BGE-M3 connection pool (#953).
+
+        Thin delegate to :func:`telegram_bot._bot_lifecycle.warmup_bge_pool`
+        — see ``docs/engineering/bot-decomposition-plan-2026-05-27.md``
+        (#1265 / #2048 PR-8).
+        """
+        await _bot_lifecycle.warmup_bge_pool(self._hybrid, log=logger)
 
     async def _polling_lock_heartbeat_tick(self) -> None:
-        """Single heartbeat tick: refresh the Redis polling lock."""
-        if self._polling_lock is None:
-            return
-        try:
-            await self._polling_lock.refresh()
-            self._polling_lock_consecutive_failures = 0
-        except Exception:
-            self._polling_lock_consecutive_failures += 1
-            if self._polling_lock_consecutive_failures < _POLLING_LOCK_MAX_REFRESH_FAILURES:
-                logger.warning(
-                    "Polling lock heartbeat refresh failed (%d/%d); retrying",
-                    self._polling_lock_consecutive_failures,
-                    _POLLING_LOCK_MAX_REFRESH_FAILURES,
-                    exc_info=True,
-                )
-                return
-            logger.exception(
-                "Polling lock heartbeat failed %d times; stopping polling",
-                _POLLING_LOCK_MAX_REFRESH_FAILURES,
-            )
-            with contextlib.suppress(Exception):
-                await self.dp.stop_polling()
+        """Single heartbeat tick: refresh the Redis polling lock.
+
+        Thin delegate to
+        :func:`telegram_bot._bot_lifecycle.polling_lock_heartbeat_tick` —
+        see ``docs/engineering/bot-decomposition-plan-2026-05-27.md``
+        (#1265 / #2048 PR-8).
+        """
+        await _bot_lifecycle.polling_lock_heartbeat_tick(
+            self,
+            log=logger,
+            max_refresh_failures=_POLLING_LOCK_MAX_REFRESH_FAILURES,
+        )
 
     async def stop(self):
         """Stop bot and cleanup."""
