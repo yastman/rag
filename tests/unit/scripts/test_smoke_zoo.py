@@ -45,6 +45,13 @@ def test_script_exists_and_executable() -> None:
     assert SCRIPT.is_file(), f"{SCRIPT} not found"
 
 
+def test_script_uses_required_shell_safety_flags() -> None:
+    """scripts/AGENTS.override.md requires shell scripts to use e/u/pipefail."""
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert "set -euo pipefail" in text
+
+
 def test_script_passes_shellcheck() -> None:
     """Lint guard: shellcheck (if available) must be clean on the script."""
     if shutil.which("shellcheck") is None:

@@ -8,10 +8,7 @@
 # the Redis check is reported as a dependency failure (not a Redis outage)
 # and the script continues with the remaining independent service checks.
 
-# NOTE: do NOT use `set -e` here — a single failing CLI dependency must not
-# abort the loop of independent service checks. Use `pipefail` for safer
-# pipelines and `nounset` to catch typos.
-set -uo pipefail
+set -euo pipefail
 
 QUIET="${1:-}"
 FAILED=0
