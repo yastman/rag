@@ -186,7 +186,7 @@ class SemanticCacheMiddleware(AgentMiddleware):
         self.agent_role = agent_role
 
     @hook_config(can_jump_to=["end"])
-    async def before_agent(
+    async def abefore_agent(
         self,
         state: _CacheAwareState,
         runtime: Runtime,
@@ -346,13 +346,13 @@ class SemanticCacheMiddleware(AgentMiddleware):
             },
         }
 
-    async def after_agent(
+    async def aafter_agent(
         self,
         state: _CacheAwareState,
         runtime: Runtime,
     ) -> dict[str, Any] | None:
         """Persist the agent's final response into the semantic cache."""
-        # Cache HITs already routed through before_agent's jump_to=end and
+        # Cache HITs already routed through abefore_agent's jump_to=end and
         # left the response in place; we must not store the cached response
         # back as a fresh entry (would race with TTL bookkeeping).
         if state.get("cache_hit"):

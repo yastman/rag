@@ -13,10 +13,10 @@ The contract pins:
 2. ``SemanticCacheMiddleware`` is a subclass of
    :class:`langchain.agents.middleware.AgentMiddleware`.
 3. The class declares the two SDK-native hooks required for the
-   cache-hit short-circuit: ``before_agent`` (runs once at the start;
-   may ``jump_to=end`` on cache HIT) and ``after_agent`` (runs once at
+   cache-hit short-circuit: ``abefore_agent`` (runs once at the start;
+   may ``jump_to=end`` on cache HIT) and ``aafter_agent`` (runs once at
    the end; persists the agent's final response).
-4. ``before_agent`` is decorated with ``@hook_config(can_jump_to=["end"])``
+4. ``abefore_agent`` is decorated with ``@hook_config(can_jump_to=["end"])``
    so the SDK knows the hook may short-circuit.
 5. The constructor takes ``cache`` and ``embeddings`` keyword-only — no
    reading from ``runtime.context`` for these heavy collaborators, so
@@ -78,14 +78,14 @@ def test_middleware_subclasses_AgentMiddleware() -> None:
 def test_middleware_declares_required_hooks() -> None:
     module = importlib.import_module(MODULE_NAME)
     cls = module.SemanticCacheMiddleware
-    for hook in ("before_agent", "after_agent"):
+    for hook in ("abefore_agent", "aafter_agent"):
         member = inspect.getattr_static(cls, hook, None)
         assert member is not None, (
             f"SemanticCacheMiddleware must define {hook} (Slice 2 cache lifecycle)."
         )
 
 
-def test_before_agent_is_hook_config_with_jump_to_end() -> None:
+def test_abefore_agent_is_hook_config_with_jump_to_end() -> None:
     """``@hook_config(can_jump_to=['end'])`` is required so the SDK
     permits the cache-hit short-circuit. Detect via AST so the test
     does not depend on runtime decorator metadata."""
@@ -94,7 +94,7 @@ def test_before_agent_is_hook_config_with_jump_to_end() -> None:
     for node in ast.walk(tree):
         if not (
             isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-            and node.name == "before_agent"
+            and node.name == "abefore_agent"
         ):
             continue
         for deco in node.decorator_list:
@@ -111,7 +111,7 @@ def test_before_agent_is_hook_config_with_jump_to_end() -> None:
                 ):
                     found = True
     assert found, (
-        "SemanticCacheMiddleware.before_agent must be decorated with "
+        "SemanticCacheMiddleware.abefore_agent must be decorated with "
         "@hook_config(can_jump_to=['end']) so the SDK allows jump_to='end' on cache HIT."
     )
 

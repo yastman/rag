@@ -109,7 +109,7 @@ async def test_before_agent_returns_none_for_empty_messages(
     middleware: SemanticCacheMiddleware,
 ) -> None:
     """No human message → middleware is a no-op (no embedding, no jump)."""
-    result = await middleware.before_agent({"messages": []}, _runtime_stub())
+    result = await middleware.abefore_agent({"messages": []}, _runtime_stub())
     assert result is None
 
 
@@ -120,7 +120,7 @@ async def test_before_agent_skips_cache_for_non_cacheable_query_type(
 ) -> None:
     """CHITCHAT / OFF_TOPIC bypass cache (matches legacy classify routing)."""
     state = _state(query_type="CHITCHAT")
-    result = await middleware.before_agent(state, _runtime_stub())
+    result = await middleware.abefore_agent(state, _runtime_stub())
     assert result is None
     patched_rag_core["compute"].assert_not_called()
     patched_rag_core["check"].assert_not_called()
@@ -136,7 +136,7 @@ async def test_before_agent_short_circuits_on_cache_hit(
     cached_response = "ВНЖ оформляется в течение 30 рабочих дней."
     patched_rag_core["check"].return_value = (True, cached_response)
 
-    result = await middleware.before_agent(_state(), _runtime_stub())
+    result = await middleware.abefore_agent(_state(), _runtime_stub())
 
     assert result is not None
     assert result["jump_to"] == "end"
@@ -157,7 +157,7 @@ async def test_before_agent_returns_embedding_on_cache_miss(
 ) -> None:
     """Cache MISS must surface the freshly-computed embedding so downstream
     tools (rag_search) reuse it rather than recomputing."""
-    result = await middleware.before_agent(_state(), _runtime_stub())
+    result = await middleware.abefore_agent(_state(), _runtime_stub())
 
     assert result is not None
     assert "jump_to" not in result
@@ -178,7 +178,7 @@ async def test_before_agent_skips_cache_for_contextual_query(
     the no-hit branch; only the ``check_semantic_cache`` call is gated.
     """
     monkeypatch.setattr("telegram_bot.graph.middleware.cache.is_contextual_query", lambda _q: True)
-    result = await middleware.before_agent(_state(), _runtime_stub())
+    result = await middleware.abefore_agent(_state(), _runtime_stub())
 
     assert result is not None
     assert result["cache_hit"] is False
@@ -206,7 +206,7 @@ async def test_before_agent_skips_cache_when_filter_sensitive_without_signature(
         lambda **_: None,
     )
 
-    result = await middleware.before_agent(_state(), _runtime_stub())
+    result = await middleware.abefore_agent(_state(), _runtime_stub())
 
     assert result is not None
     assert result["cache_hit"] is False
@@ -222,7 +222,7 @@ async def test_before_agent_short_circuits_on_embedding_failure(
     the agent loop (matches the early-return shape of cache_check_node)."""
     patched_rag_core["compute"].side_effect = TimeoutError("BGE timeout")
 
-    result = await middleware.before_agent(_state(), _runtime_stub())
+    result = await middleware.abefore_agent(_state(), _runtime_stub())
 
     assert result is not None
     assert result["jump_to"] == "end"
@@ -270,7 +270,7 @@ async def test_after_agent_persists_response_for_cacheable_query(
         cache_hit=False,
     )
 
-    update = await middleware.after_agent(state, _runtime_stub())
+    update = await middleware.aafter_agent(state, _runtime_stub())
 
     patched_store.assert_awaited_once()
     kwargs = patched_store.await_args.kwargs
@@ -295,7 +295,7 @@ async def test_after_agent_noop_on_cache_hit(
         query_embedding=[0.1] * 8,
         cache_hit=True,
     )
-    result = await middleware.after_agent(state, _runtime_stub())
+    result = await middleware.aafter_agent(state, _runtime_stub())
     assert result is None
     patched_store.assert_not_called()
 
@@ -307,7 +307,7 @@ async def test_after_agent_skips_when_response_missing(
 ) -> None:
     """No assistant message → nothing to store."""
     state = _state(messages=[HumanMessage(content="x")], query_embedding=[0.1] * 8)
-    result = await middleware.after_agent(state, _runtime_stub())
+    result = await middleware.aafter_agent(state, _runtime_stub())
     assert result is None
     patched_store.assert_not_called()
 
@@ -321,7 +321,7 @@ async def test_after_agent_skips_when_embedding_missing(
         messages=[HumanMessage(content="x"), AIMessage(content="hi")],
         query_embedding=None,
     )
-    result = await middleware.after_agent(state, _runtime_stub())
+    result = await middleware.aafter_agent(state, _runtime_stub())
     assert result is None
     patched_store.assert_not_called()
 
@@ -337,7 +337,7 @@ async def test_after_agent_skips_for_non_cacheable_query_type(
         messages=[HumanMessage(content="x"), AIMessage(content="off-topic answer")],
         query_embedding=[0.1] * 8,
     )
-    result = await middleware.after_agent(state, _runtime_stub())
+    result = await middleware.aafter_agent(state, _runtime_stub())
     assert result is None
     patched_store.assert_not_called()
 
@@ -356,7 +356,7 @@ async def test_after_agent_swallows_store_failure(
         query_embedding=[0.1] * 8,
     )
 
-    update = await middleware.after_agent(state, _runtime_stub())
+    update = await middleware.aafter_agent(state, _runtime_stub())
 
     # Response is preserved despite the store crash.
     assert update is not None
