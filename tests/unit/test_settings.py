@@ -115,23 +115,27 @@ class TestAPIKeyValidation:
 class TestDefaultModelSelection:
     """Test default model selection for providers."""
 
-    def test_claude_default_model(self):
+    def test_claude_default_model(self, monkeypatch):
         """Test default model for Claude provider."""
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}, clear=False):
-            settings = Settings(api_provider="claude")
-            assert settings.model_name == ModelName.CLAUDE_SONNET.value
+        # #2197: delenv MODEL_NAME so a local .env value does not leak in.
+        monkeypatch.delenv("MODEL_NAME", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        settings = Settings(api_provider="claude")
+        assert settings.model_name == ModelName.CLAUDE_SONNET.value
 
-    def test_openai_default_model(self):
+    def test_openai_default_model(self, monkeypatch):
         """Test default model for OpenAI provider."""
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=False):
-            settings = Settings(api_provider="openai")
-            assert settings.model_name == ModelName.GPT_4_TURBO.value
+        monkeypatch.delenv("MODEL_NAME", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        settings = Settings(api_provider="openai")
+        assert settings.model_name == ModelName.GPT_4_TURBO.value
 
-    def test_groq_default_model(self):
+    def test_groq_default_model(self, monkeypatch):
         """Test default model for Groq provider."""
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False):
-            settings = Settings(api_provider="groq")
-            assert settings.model_name == ModelName.GROQ_LLAMA3_70B.value
+        monkeypatch.delenv("MODEL_NAME", raising=False)
+        monkeypatch.setenv("GROQ_API_KEY", "test-key")
+        settings = Settings(api_provider="groq")
+        assert settings.model_name == ModelName.GROQ_LLAMA3_70B.value
 
     def test_custom_model_override(self):
         """Test that custom model overrides default."""
