@@ -154,6 +154,118 @@ Critical. Bot embedding calls have exhausted retries and are surfacing failures 
 2. If Voyage is optional, switch to local BGE-M3 fallback for ingestion.
 3. Coordinate with the API key owner before bumping the Voyage tier.
 
+### Canonical bge-m3 endpoint forwarding stuck on port 8000 (#2188 / #2182)
+
+> **Symptom:** `make bot` preflight fails with
+> `Preflight FAIL: bge_m3 [CRITICAL] ... Unreachable after 3 attempts: bge_m3`,
+> `curl http://localhost:8000/health` returns `Connection refused`, and
+> `docker compose ... ps bge-m3` shows no `dev-bge-m3-1` container — even
+> though the image is healthy and the model cache is warm. Tracked under
+> #2188; the upstream Docker Desktop port-forwarding-API stall is #2182.
+
+In this state operators commonly side-load a temporary container as a
+workaround:
+
+```bash
+# Workaround only — bge-m3-tmp binds 127.0.0.1:8888 -> container :8000
+docker run -d --rm --name bge-m3-tmp \
+  -p 127.0.0.1:8888:8000 \
+  -v dev_hf_cache:/models \
+  dev_bge-m3
+# .env (workaround line — must be removed after canonical restore):
+#   BGE_M3_URL=http://localhost:8888
+```
+
+The workaround unblocks `make bot` but leaves the canonical endpoint
+broken. Use the steps below to restore canonical `127.0.0.1:8000`
+forwarding so the side-load and the `.env` override can be retired.
+
+#### 1. Confirm the failure mode
+
+```bash
+# Canonical port should be free; canonical service should be missing.
+ss -lntp | awk '$4 ~ /:8000$|:8888$/ {print}'
+docker compose --env-file .env -f compose.yml -f compose.dev.yml ps bge-m3
+docker ps --filter name=bge-m3 --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+curl -fsS --max-time 3 http://localhost:8000/health || echo "canonical endpoint down"
+```
+
+If the workaround container `bge-m3-tmp` shows up on `127.0.0.1:8888`
+and `dev-bge-m3-1` is missing from `compose ps`, you are in the #2188
+state and the recovery below applies.
+
+#### 2. Restart Docker forwarding
+
+```bash
+# macOS (Docker Desktop)
+osascript -e 'quit app "Docker"' && open -a Docker
+# Linux (Docker Engine)
+sudo systemctl restart docker
+# Windows (Docker Desktop)
+# Restart Docker Desktop from the tray icon, or:
+#   wsl --shutdown && start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+```
+
+Wait for the daemon to come back (`docker info` succeeds) before moving on.
+
+#### 3. Stop the workaround container
+
+```bash
+docker stop bge-m3-tmp 2>/dev/null || true
+docker rm   bge-m3-tmp 2>/dev/null || true
+ss -lntp | awk '$4 ~ /:8000$|:8888$/ {print}'   # both ports should now be free
+```
+
+#### 4. Recreate the canonical compose service
+
+```bash
+docker compose --env-file .env -f compose.yml -f compose.dev.yml up -d --force-recreate --no-deps bge-m3
+docker compose --env-file .env -f compose.yml -f compose.dev.yml ps bge-m3
+```
+
+The first cold start can take several minutes while the model download
+completes; the compose healthcheck has a `start_period: 420s` budget.
+
+#### 5. Verify the canonical endpoint
+
+```bash
+curl -fsS http://localhost:8000/health
+curl -fsS -X POST http://localhost:8000/encode/dense \
+  -H 'content-type: application/json' \
+  -d '{"texts": ["recovery probe"], "max_length": 64, "batch_size": 1}' | head -c 200
+```
+
+Both calls must succeed before continuing.
+
+#### 6. Remove the `.env` workaround override
+
+Edit `.env` and delete the temporary line plus its workaround comment so
+the bot picks up the canonical compose-internal default
+(`http://bge-m3:8000` for compose runs; `http://localhost:8000` for
+native bot runs):
+
+```diff
+- # Workaround: Docker Desktop forwards-API stuck on port 8000 (issue #2182).
+- # Temp bge-m3 container is bound to 8888. Remove this line after Docker daemon
+- # restart + `docker compose up -d --force-recreate --no-deps bge-m3`.
+- BGE_M3_URL=http://localhost:8888
+```
+
+`.env.example` documents the canonical default
+(`# BGE_M3_URL=http://localhost:8000`) — leave it commented out for
+local dev.
+
+#### 7. Re-validate the bot path
+
+```bash
+make test-bot-health
+make bot   # expect "Startup verdict: OK" without referencing port 8888
+```
+
+If `make test-bot-health` still flags `bge_m3`, repeat steps 1-5 with
+fresh diagnostics — do not re-introduce the `8888` override or the
+`bge-m3-tmp` container, or #2188 will silently recur.
+
 ## Prevention
 
 - Pre-warm the BGE-M3 model on container start so the first request after deploy is not slow.
