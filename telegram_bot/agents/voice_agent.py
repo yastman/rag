@@ -38,7 +38,7 @@ module scope) so the factory is unit testable in isolation.
 from __future__ import annotations
 
 import logging
-from typing import Any, NotRequired
+from typing import Any, NotRequired, cast
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware, AgentState
@@ -195,7 +195,7 @@ def create_voice_agent(
     if extra_middleware:
         middleware.extend(extra_middleware)
 
-    agent = create_agent(
+    agent = cast(Any, create_agent)(
         model=llm,
         tools=tools if tools is not None else _build_default_tools(),
         system_prompt=system_prompt or _VOICE_SYSTEM_PROMPT,

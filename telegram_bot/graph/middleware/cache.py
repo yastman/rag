@@ -128,18 +128,56 @@ def _extract_query_text(state: AgentState | dict[str, Any]) -> str:
 
 
 def _resolve_filter_signature(
-    state: dict[str, Any] | AgentState, query: str
+    state: dict[str, Any] | AgentState[Any], query: str
 ) -> tuple[bool, str | None]:
     """Mirror ``_resolve_graph_filter_signature`` from the legacy node."""
     filter_sensitive = detect_filter_sensitive_query(query).is_filter_sensitive
+    filters_value = state.get("filters")
+    filters = filters_value if isinstance(filters_value, dict) else None
+    explicit_value = state.get("semantic_cache_filter_signature")
+    explicit_signature = explicit_value if isinstance(explicit_value, str) else None
     filter_signature = resolve_semantic_cache_signature(
-        filters=state.get("filters"),
-        explicit_signature=state.get("semantic_cache_filter_signature"),
+        filters=filters,
+        explicit_signature=explicit_signature,
     )
     return filter_sensitive, filter_signature
 
 
-def _final_response_text(state: AgentState | dict[str, Any]) -> str:
+def _state_str(state: AgentState[Any], key: str, default: str = "") -> str:
+    value = state.get(key)
+    return value if isinstance(value, str) else default
+
+
+def _latency_stages(state: AgentState[Any]) -> dict[str, float]:
+    value = state.get("latency_stages")
+    return value if isinstance(value, dict) else {}
+
+
+def _query_embedding(state: AgentState[Any]) -> list[float] | None:
+    value = state.get("query_embedding")
+    if not isinstance(value, list):
+        return None
+    return [float(item) for item in value]
+
+
+def _documents(state: AgentState[Any]) -> list[dict[str, Any]]:
+    value = state.get("documents")
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _state_float(state: AgentState[Any], key: str, default: float = 0.0) -> float:
+    value = state.get(key)
+    if isinstance(value, int | float | str):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _final_response_text(state: AgentState[Any] | dict[str, Any]) -> str:
     """Return the latest assistant message content, falling back to ``response``."""
     messages = state.get("messages") or []
     for message in reversed(messages):
@@ -150,10 +188,12 @@ def _final_response_text(state: AgentState | dict[str, Any]) -> str:
             content = getattr(message, "content", None)
             if content is None and isinstance(message, dict):
                 content = message.get("content", "")
-            if content:
+            if isinstance(content, str) and content:
                 return content
+            if content:
+                return str(content)
     fallback = state.get("response") if isinstance(state, dict) else None
-    return fallback or ""
+    return fallback if isinstance(fallback, str) else ""
 
 
 class SemanticCacheMiddleware(AgentMiddleware):
@@ -188,14 +228,14 @@ class SemanticCacheMiddleware(AgentMiddleware):
     @hook_config(can_jump_to=["end"])
     async def abefore_agent(
         self,
-        state: _CacheAwareState,
-        runtime: Runtime,
+        state: AgentState[Any],
+        runtime: Runtime[Any],
     ) -> dict[str, Any] | None:
         """Cache-check hook; short-circuits the agent loop on HIT."""
         query = _extract_query_text(state)
         if not query:
             return None
-        query_type = state.get("query_type") or _DEFAULT_QUERY_TYPE
+        query_type = _state_str(state, "query_type", _DEFAULT_QUERY_TYPE)
         if query_type not in CACHEABLE_QUERY_TYPES:
             # Non-cacheable query types skip the cache layer entirely so we do
             # not pay the embedding cost on chit-chat / off-topic flows. This
@@ -254,7 +294,7 @@ class SemanticCacheMiddleware(AgentMiddleware):
                 "embedding_error": True,
                 "embedding_error_type": embedding_error_type,
                 "latency_stages": {
-                    **(state.get("latency_stages") or {}),
+                    **_latency_stages(state),
                     "cache_check": latency,
                 },
             }
@@ -300,7 +340,7 @@ class SemanticCacheMiddleware(AgentMiddleware):
                 "colbert_query": None,
                 "response": cached or "",
                 "latency_stages": {
-                    **(state.get("latency_stages") or {}),
+                    **_latency_stages(state),
                     "cache_check": latency,
                 },
             }
@@ -341,15 +381,15 @@ class SemanticCacheMiddleware(AgentMiddleware):
             "embedding_error_type": None,
             "colbert_query": colbert_query,
             "latency_stages": {
-                **(state.get("latency_stages") or {}),
+                **_latency_stages(state),
                 "cache_check": latency,
             },
         }
 
     async def aafter_agent(
         self,
-        state: _CacheAwareState,
-        runtime: Runtime,
+        state: AgentState[Any],
+        runtime: Runtime[Any],
     ) -> dict[str, Any] | None:
         """Persist the agent's final response into the semantic cache."""
         # Cache HITs already routed through abefore_agent's jump_to=end and
@@ -364,10 +404,10 @@ class SemanticCacheMiddleware(AgentMiddleware):
         response = _final_response_text(state)
         if not response:
             return None
-        embedding = state.get("query_embedding")
+        embedding = _query_embedding(state)
         if not embedding:
             return None
-        query_type = state.get("query_type") or _DEFAULT_QUERY_TYPE
+        query_type = _state_str(state, "query_type", _DEFAULT_QUERY_TYPE)
         if query_type not in CACHEABLE_QUERY_TYPES:
             return None
 
@@ -381,11 +421,11 @@ class SemanticCacheMiddleware(AgentMiddleware):
         decision = build_cacheability_decision(
             result=dict(state),
             query_type=query_type,
-            grounding_mode=str(state.get("grounding_mode") or "normal"),
-            documents=state.get("documents") or [],
+            grounding_mode=_state_str(state, "grounding_mode", "normal"),
+            documents=_documents(state),
             cache_hit=False,
             contextual=is_contextual_query(query),
-            grade_confidence=float(state.get("grade_confidence") or 0.0),
+            grade_confidence=_state_float(state, "grade_confidence"),
             confidence_threshold=0.0,
             schema_version=SEMANTIC_CACHE_SCHEMA_VERSION,
         )

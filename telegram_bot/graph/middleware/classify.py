@@ -48,6 +48,11 @@ from telegram_bot.observability import get_client
 logger = logging.getLogger(__name__)
 
 
+def _latency_stages(state: AgentState[Any]) -> dict[str, float]:
+    value = state.get("latency_stages")
+    return value if isinstance(value, dict) else {}
+
+
 class _ClassifyAwareState(AgentState):
     """Adds the classification slot to the agent state."""
 
@@ -78,7 +83,7 @@ def _canned_response(query: str, query_type: str) -> str:
 
         from telegram_bot.graph.nodes.classify import OFF_TOPIC_RESPONSES
 
-        return choice(OFF_TOPIC_RESPONSES)
+        return choice(OFF_TOPIC_RESPONSES)  # nosec B311 - non-security canned reply rotation
     return ""
 
 
@@ -105,8 +110,8 @@ class ClassifyMiddleware(AgentMiddleware):
     @hook_config(can_jump_to=["end"])
     def before_agent(
         self,
-        state: _ClassifyAwareState,
-        runtime: Runtime,
+        state: AgentState[Any],
+        runtime: Runtime[Any],
     ) -> dict[str, Any] | None:
         query = _extract_query_text(state)
         if not query:
@@ -123,7 +128,7 @@ class ClassifyMiddleware(AgentMiddleware):
         except Exception:  # pragma: no cover — observability must never raise
             logger.debug("classify update_current_span failed", exc_info=True)
 
-        latency_stages = {**(state.get("latency_stages") or {}), "classify": latency}
+        latency_stages = {**_latency_stages(state), "classify": latency}
 
         if query_type in {CHITCHAT, OFF_TOPIC}:
             if self.skip_canned_response:
