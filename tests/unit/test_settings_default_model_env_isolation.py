@@ -16,6 +16,8 @@ environment, the provider default applies regardless of what the host
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from src.config.constants import ModelName
@@ -35,6 +37,7 @@ def test_provider_default_applies_when_model_name_env_isolated(
     key_name: str,
     expected_model: str,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """When MODEL_NAME is removed from env, the provider default applies.
 
@@ -42,11 +45,13 @@ def test_provider_default_applies_when_model_name_env_isolated(
     (MODEL_NAME=zai-glm-4.7), then explicitly delenv it, then construct
     Settings. The provider default must win.
     """
+    empty_env = tmp_path / ".env"
+    empty_env.write_text("", encoding="utf-8")
     monkeypatch.setenv("MODEL_NAME", "zai-glm-4.7")  # simulate .env pollution
     monkeypatch.delenv("MODEL_NAME", raising=False)  # the isolation contract
     monkeypatch.setenv(key_name, "test-key")
 
-    settings = Settings(api_provider=provider)
+    settings = Settings(env_file=str(empty_env), api_provider=provider)
 
     assert settings.model_name == expected_model, (
         f"provider default for {provider} regressed under env isolation "
