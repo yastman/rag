@@ -71,6 +71,8 @@ The remaining `build_graph` migration is the slice-5 target of #2049 and natural
 
 Slice 4 needs a live runtime to verify (`curl http://localhost:9091/metrics`); it correctly stays open as a separate runtime-verify issue. Closing #1648 with handoff to #2057 minimises duplication.
 
+> Note (#2190, 2026-05-27): the default metrics port has since moved to **9092** to avoid the MinIO console collision. The 9091 example above is preserved as the historical state at the time #2057 was scoped.
+
 ### #1538 — informational audit, conclusions pinned in ADR-0015 ✅
 
 The audit's "SDK-native baseline" / "tracked migrations" / "justified custom code" tables are reproduced in `docs/adr/0015-sdk-native-baseline.md` so the policy survives the issue closing. Active migrations are referenced via their own tracker issues (#1535, #2050-2052).

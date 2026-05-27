@@ -27,6 +27,7 @@ from aiogram.types import (
     Message,
 )
 
+from telegram_bot.metrics_server import resolve_metrics_port
 from telegram_bot.observability import get_client, observe, propagate_attributes
 from telegram_bot.scoring import write_history_scores
 from telegram_bot.tracing_context import make_session_id
@@ -87,6 +88,7 @@ async def cmd_start(
 
 async def cmd_help(bot: PropertyBot, message: Message) -> None:
     """Handle /help command."""
+    metrics_port = resolve_metrics_port()
     await message.answer(
         "\U0001f50d Примеры запросов:\n\n"
         "По цене:\n"
@@ -107,7 +109,7 @@ async def cmd_help(bot: PropertyBot, message: Message) -> None:
         "/stats - Показать статистику кеша\n"
         "/history <запрос> - Поиск по истории диалогов\n"
         "/metrics - Метрики пайплайна (Prometheus)\n"
-        "HTTP: http://localhost:9091/metrics (Prometheus scrape endpoint)\n"
+        f"HTTP: http://localhost:{metrics_port}/metrics (Prometheus scrape endpoint)\n"
         "/clearcache - Очистить кеш Redis\n"
     )
 
