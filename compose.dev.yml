@@ -134,10 +134,11 @@ services:
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=1536}
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
 
   ingestion:
     profiles: ["ingest", "full"]
