@@ -26,6 +26,10 @@ ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
     "telegram_bot/graph/nodes/rerank.py": ["ERROR"],
     "telegram_bot/graph/nodes/respond.py": ["ERROR"],
     "telegram_bot/graph/nodes/cache.py": ["ERROR"],
+    # SDK-native counterpart of cache_check_node — records ERROR on the
+    # embedding-failure path before short-circuiting the agent loop with
+    # a graceful fallback message (#2051 Slice 2).
+    "telegram_bot/graph/middleware/cache.py": ["ERROR"],
     # Voice transcription error path (Whisper / LiteLLM failure) — span is
     # re-raised so the outer voice-session trace records the failure (#1810).
     "telegram_bot/graph/nodes/transcribe.py": ["ERROR"],
