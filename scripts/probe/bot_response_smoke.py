@@ -44,12 +44,13 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY
+
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SESSION_PATH = Path("e2e_tester.session")
 TELEGRAM_API_BASE = "https://api.telegram.org"
-POLLING_LOCK_KEY = "telegram-bot:polling"
 
 
 class PreflightStage(StrEnum):

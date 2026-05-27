@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from scripts.probe.bot_response_smoke import (
+    POLLING_LOCK_KEY,
     PreflightError,
     PreflightStage,
     check_env_vars,
@@ -47,8 +48,8 @@ def test_check_env_vars_fails_when_api_id_missing(monkeypatch) -> None:
     result = check_env_vars()
     assert result.ok is False
     assert "TELEGRAM_API_ID" in result.detail
-    # Remediation must point at .env / my.telegram.org
-    assert "my.telegram.org" in result.remediation or ".env" in result.remediation
+    # Remediation must point operators back to local env setup.
+    assert ".env" in result.remediation
 
 
 def test_check_env_vars_does_not_print_secret_values(
@@ -167,6 +168,13 @@ async def test_polling_lock_check_passes_when_lock_free() -> None:
     redis.get = AsyncMock(return_value=None)
     result = await check_polling_lock_free(redis=redis)
     assert result.ok is True
+
+
+def test_polling_lock_key_uses_shared_runtime_constant() -> None:
+    """Probe and bot preflight must share the canonical polling-lock key."""
+    from src.runtime.integrations.polling_lock import POLLING_LOCK_KEY as SHARED_KEY
+
+    assert POLLING_LOCK_KEY == SHARED_KEY
 
 
 @pytest.mark.asyncio
