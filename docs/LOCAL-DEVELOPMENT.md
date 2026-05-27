@@ -100,6 +100,19 @@ Bot preflight:
 make test-bot-health
 ```
 
+End-to-end smoke (proves `make bot` actually answers a Telegram message,
+issue #2192):
+
+```bash
+make bot-response-smoke
+```
+
+The target runs five preflight stages — env vars, Telethon session file,
+`getMe` username match, `getWebhookInfo` empty, and the Redis polling lock
+state — before delegating to `scripts.e2e.quick_test` for a single safe
+query. It never deletes the polling lock and never re-authorizes the
+userbot; missing session redirects to `scripts.e2e.auth`.
+
 Bot-local LangChain/LangGraph dependency smoke:
 
 ```bash

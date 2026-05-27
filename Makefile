@@ -375,12 +375,18 @@ test-redis: ## Verify Redis Query Engine is available
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
 
-.PHONY: test-bot-health test-bot-health-vps preflight-bot
+.PHONY: test-bot-health test-bot-health-vps preflight-bot bot-response-smoke
 
 PREFLIGHT_BOT_FLAGS ?=
+BOT_RESPONSE_SMOKE_FLAGS ?=
 
 preflight-bot: ## Check bot runtime env before starting (missing .env, invalid token, port issues)
 	@uv run python scripts/probe/check_bot_runtime_env.py $(PREFLIGHT_BOT_FLAGS)
+
+bot-response-smoke: ## End-to-end gate: prove `make bot` actually answers a Telegram message (#2192)
+	@echo "$(BLUE)Running bot response smoke gate...$(NC)"
+	@uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m scripts.probe.bot_response_smoke $(BOT_RESPONSE_SMOKE_FLAGS)
+	@echo "$(GREEN)✓ Bot response smoke gate passed$(NC)"
 
 test-bot-health: ## Preflight: verify local native-bot prerequisites (Redis/Qdrant/LiteLLM + optional Postgres note)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
