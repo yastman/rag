@@ -21,7 +21,6 @@ These tests pin the post-deletion state:
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -39,8 +38,59 @@ _NOISE_PARTS: frozenset[str] = frozenset(
         ".pytest_cache",
         ".ruff_cache",
         ".worktrees",
+        ".git",
     }
 )
+
+# Production source roots scanned for draft_streamer references (#2198).
+# Bounded list — adding ``REPO_ROOT.rglob('*.py')`` walks .venv, worktrees,
+# and caches before filtering, which exceeds the 30s pytest-timeout on
+# local checkouts.
+_PRODUCTION_SOURCE_ROOTS: tuple[str, ...] = ("telegram_bot", "src")
+
+_BANNED_TOKENS: tuple[str, ...] = (
+    "telegram_bot.services.draft_streamer",
+    " draft_streamer ",
+    "from .draft_streamer",
+)
+
+
+def _iter_production_python_files(repo_root: Path):
+    """Yield .py files under known production source roots, pruning noise
+    directories at the directory level (not after rglob)."""
+    for source_root in _PRODUCTION_SOURCE_ROOTS:
+        root = repo_root / source_root
+        if not root.is_dir():
+            continue
+        for dirpath, dirnames, filenames in __import__("os").walk(root):
+            # Prune noise dirs in-place so os.walk stops descending.
+            dirnames[:] = [d for d in dirnames if d not in _NOISE_PARTS]
+            for fname in filenames:
+                if fname.endswith(".py"):
+                    yield Path(dirpath) / fname
+
+
+def _scan_production_for_draft_streamer_references(repo_root: Path) -> list[str]:
+    """Return repo-relative paths of production files referencing the
+    deleted ``telegram_bot.services.draft_streamer`` module.
+
+    Bounded scanner (#2198): only walks ``_PRODUCTION_SOURCE_ROOTS`` and
+    prunes ``_NOISE_PARTS`` at the directory level. Test/script files
+    are not scanned because they may legitimately mention the deleted
+    module name.
+    """
+    bad: list[str] = []
+    for py_file in _iter_production_python_files(repo_root):
+        rel = py_file.relative_to(repo_root)
+        if rel.name in {"test_draft_streamer.py", "test_draft_streamer_removed.py"}:
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if any(token in text for token in _BANNED_TOKENS):
+            bad.append(str(rel))
+    return bad
 
 
 def test_draft_streamer_module_file_is_gone() -> None:
@@ -84,30 +134,12 @@ def test_new_draft_id_returns_positive_31bit_int() -> None:
 def test_no_production_references_to_draft_streamer_module() -> None:
     """No production module imports `telegram_bot.services.draft_streamer` (#1671).
 
-    Tests are scanned separately; only `tests/` may legitimately mention the
-    deleted module name (e.g. these regression locks). Production code must
-    not depend on it.
+    Bounded to known production source roots (#2198) so a local checkout
+    with .venv / worktrees / caches present cannot exceed the pytest-timeout.
+    Tests and scripts are scanned separately; only production code under
+    ``telegram_bot/`` and ``src/`` is checked here.
     """
-    bad_files: list[str] = []
-    for py_file in REPO_ROOT.rglob("*.py"):
-        rel = py_file.relative_to(REPO_ROOT)
-        rel_str = str(rel)
-        if any(part in _NOISE_PARTS for part in rel.parts):
-            continue
-        if rel_str.startswith(("tests/", ".venv/", "scripts/")):
-            continue
-        if rel.name in {"test_draft_streamer.py", "test_draft_streamer_removed.py"}:
-            continue
-        try:
-            text = py_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        if (
-            "telegram_bot.services.draft_streamer" in text
-            or " draft_streamer " in text
-            or "from .draft_streamer" in text
-        ):
-            bad_files.append(rel_str)
+    bad_files = _scan_production_for_draft_streamer_references(REPO_ROOT)
     assert not bad_files, (
         f"Production code still references the deleted draft_streamer module: {bad_files}"
     )
@@ -123,9 +155,8 @@ def test_production_reference_scanner_excludes_noise_dirs(
         noise_file.parent.mkdir(parents=True, exist_ok=True)
         noise_file.write_text("import telegram_bot.services.draft_streamer\n", encoding="utf-8")
 
-    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
-
-    test_no_production_references_to_draft_streamer_module()
+    refs = _scan_production_for_draft_streamer_references(tmp_path)
+    assert refs == [], f"scanner descended into noise dirs: {refs}"
 
 
 def test_streaming_path_still_uses_send_message_draft_directly() -> None:
