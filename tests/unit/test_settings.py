@@ -1,6 +1,7 @@
 """Unit tests for src/config/settings.py."""
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -115,26 +116,32 @@ class TestAPIKeyValidation:
 class TestDefaultModelSelection:
     """Test default model selection for providers."""
 
-    def test_claude_default_model(self, monkeypatch):
+    def test_claude_default_model(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         """Test default model for Claude provider."""
         # #2197: delenv MODEL_NAME so a local .env value does not leak in.
+        empty_env = tmp_path / ".env"
+        empty_env.write_text("", encoding="utf-8")
         monkeypatch.delenv("MODEL_NAME", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        settings = Settings(api_provider="claude")
+        settings = Settings(env_file=str(empty_env), api_provider="claude")
         assert settings.model_name == ModelName.CLAUDE_SONNET.value
 
-    def test_openai_default_model(self, monkeypatch):
+    def test_openai_default_model(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         """Test default model for OpenAI provider."""
+        empty_env = tmp_path / ".env"
+        empty_env.write_text("", encoding="utf-8")
         monkeypatch.delenv("MODEL_NAME", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        settings = Settings(api_provider="openai")
+        settings = Settings(env_file=str(empty_env), api_provider="openai")
         assert settings.model_name == ModelName.GPT_4_TURBO.value
 
-    def test_groq_default_model(self, monkeypatch):
+    def test_groq_default_model(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         """Test default model for Groq provider."""
+        empty_env = tmp_path / ".env"
+        empty_env.write_text("", encoding="utf-8")
         monkeypatch.delenv("MODEL_NAME", raising=False)
         monkeypatch.setenv("GROQ_API_KEY", "test-key")
-        settings = Settings(api_provider="groq")
+        settings = Settings(env_file=str(empty_env), api_provider="groq")
         assert settings.model_name == ModelName.GROQ_LLAMA3_70B.value
 
     def test_custom_model_override(self):
