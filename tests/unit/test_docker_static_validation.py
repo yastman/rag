@@ -318,26 +318,18 @@ def _ci_env_keys() -> frozenset[str]:
     return _CI_ENV_KEYS
 
 
-def test_bge_m3_has_onnx_bind_mount() -> None:
-    """bge-m3 must have an explicit ONNX model bind mount at ``/models/onnx``
-    (read-only) so the ONNX INT8 runtime can find its artifacts (#2229)."""
+def test_bge_m3_build_uses_onnx_model_context() -> None:
+    """bge-m3 must bake ONNX INT8 artifacts into the image at build time (#2229)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
     bge_m3 = compose["services"]["bge-m3"]
-    volumes = bge_m3.get("volumes", [])
-    has_onnx_bind = False
-    for vol in volumes:
-        if (
-            isinstance(vol, dict)
-            and vol.get("target") == "/models/onnx"
-            and vol.get("read_only") is True
-        ):
-            has_onnx_bind = True
-            break
-    assert has_onnx_bind, (
-        "bge-m3 must have a read-only bind mount at /models/onnx "
-        "with source BGE_M3_ONNX_MODEL_HOST_DIR for ONNX INT8 artifacts"
+    build = bge_m3["build"]
+    assert build["additional_contexts"]["bge_m3_onnx_model"].startswith(
+        "${BGE_M3_ONNX_MODEL_HOST_DIR:"
+    ), (
+        "bge-m3 build must use BGE_M3_ONNX_MODEL_HOST_DIR as a named build "
+        "context for ONNX INT8 artifacts"
     )
 
 
@@ -356,6 +348,10 @@ def test_bge_m3_has_hf_subdirectory_mount() -> None:
     assert "/models/hf" in targets, (
         "bge-m3 needs a narrow HF cache mount at /models/hf so "
         "/models/onnx for ONNX artifacts is not masked"
+    )
+    assert "/models/onnx" not in targets, (
+        "bge-m3 must not mount /models/onnx at runtime; the INT8 model is "
+        "baked into the Docker image during build"
     )
 
 
@@ -376,6 +372,15 @@ def test_bge_m3_dockerfile_prepares_model_dirs_for_appuser() -> None:
     dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
     assert "mkdir -p /models/hf /models/onnx" in dockerfile
     assert "chown -R appuser:appgroup /models" in dockerfile
+
+
+def test_bge_m3_dockerfile_bakes_int8_model_from_build_context() -> None:
+    """The Docker image must contain the ONNX INT8 artifacts, not require a runtime mount."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
+    assert "from=bge_m3_onnx_model" in dockerfile
+    assert "model.int8.onnx" in dockerfile
+    assert "model.int8.onnx.data" in dockerfile
+    assert "cp /tmp/bge-m3-onnx/model.int8.onnx" in dockerfile
 
 
 def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:

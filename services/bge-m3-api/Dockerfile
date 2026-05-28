@@ -44,6 +44,12 @@ RUN groupadd -g 1001 appgroup && \
     mkdir -p /models/hf /models/onnx && \
     chown -R appuser:appgroup /models
 
+RUN --mount=type=bind,from=bge_m3_onnx_model,target=/tmp/bge-m3-onnx,readonly \
+    test -f /tmp/bge-m3-onnx/model.int8.onnx && \
+    test -f /tmp/bge-m3-onnx/model.int8.onnx.data && \
+    cp /tmp/bge-m3-onnx/model.int8.onnx /tmp/bge-m3-onnx/model.int8.onnx.data /models/onnx/ && \
+    chown appuser:appgroup /models/onnx/model.int8.onnx /models/onnx/model.int8.onnx.data
+
 WORKDIR /app
 
 COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv

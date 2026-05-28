@@ -207,7 +207,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
 ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
     # --- Docker Compose top-level controls ----------------------------------
     "COMPOSE_FILE": "Read by docker compose CLI, not Python",
-    "BGE_M3_ONNX_MODEL_HOST_DIR": "Consumed by Compose bind-mount interpolation (compose.yml); not read by Python",
+    "BGE_M3_ONNX_MODEL_HOST_DIR": "Consumed by Compose named-context interpolation (compose.yml) at build time; not read by Python",
     # --- Service credentials consumed by service entrypoints ---------------
     "REDIS_MAXMEMORY": "Read by redis container CMD args, not Python",
     "CLICKHOUSE_PASSWORD": "Read by clickhouse image entrypoint",

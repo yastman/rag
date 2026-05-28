@@ -13,14 +13,12 @@ Used by the ingestion pipeline and query contextualization to produce multi-vect
 
 ## Model Deployment
 
-The ONNX INT8 model (`model.int8.onnx` + `model.int8.onnx.data`) must be placed in a directory accessible to the container. Three deployment strategies:
+The ONNX INT8 model (`model.int8.onnx` + `model.int8.onnx.data`) is baked into the Docker image at build time via a BuildKit named context. The container does not require a runtime bind mount.
 
-1. **Compose bind mount** (local dev, default): `BGE_M3_ONNX_MODEL_HOST_DIR` env var points to the host directory; mounted read-only at `/models/onnx` in `compose.yml`
-2. **Docker COPY** (prod): bake the artifacts into the image by adding `COPY model.int8.onnx model.int8.onnx.data /models/onnx/` to the Dockerfile
-3. **Config-driven**: set `ONNX_MODEL_DIR` env var to the model directory path (defaults to `/models/onnx` via Dockerfile and `config.py`)
+- **Build-time baking (default)**: The Dockerfile uses `RUN --mount=type=bind,from=bge_m3_onnx_model,...` to copy the artifacts into `/models/onnx` inside the image. `BGE_M3_ONNX_MODEL_HOST_DIR` points Docker BuildKit to the host directory containing the ONNX artifacts and is consumed during `docker compose build`, NOT at `docker compose up`.
+- **Config-driven**: The default `ONNX_MODEL_DIR` is `/models/onnx` (set in the Dockerfile and `config.py`). Override via the `ONNX_MODEL_DIR` env var if using a non-standard path.
 
-The default `ONNX_MODEL_DIR` is `/models/onnx` (override via `ONNX_MODEL_DIR` env).
-For local development with Docker, set `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env` to the host path containing the model artifacts.
+For local development with Docker, set `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env` to the absolute host path containing `model.int8.onnx` and `model.int8.onnx.data`.
 
 ## Docker
 
