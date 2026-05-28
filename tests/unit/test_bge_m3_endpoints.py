@@ -6,8 +6,10 @@ Covers /encode/sparse, /encode/colbert, /encode/hybrid, /encode/dense,
 All sys.modules mocking is fixture-scoped (no module-level pollution).
 """
 
+import inspect
 import sys
 from pathlib import Path
+from typing import get_args
 from unittest.mock import MagicMock
 
 import httpx
@@ -78,6 +80,7 @@ def bge_app():
         mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
         mock_lf = MagicMock()
         mock_lf.observe = lambda *_a, **_k: lambda f: f
+        mock_lf.get_client = MagicMock(return_value=MagicMock())
 
         mp.setitem(sys.modules, "onnxruntime", mock_ort)
         mp.setitem(sys.modules, "transformers", mock_transformers)
@@ -162,6 +165,43 @@ class TestEncodeHybrid:
         assert "dense_vecs" in data
         assert "lexical_weights" in data
         assert "colbert_vecs" in data
+
+    async def test_hybrid_updates_langfuse_service_span_model_metadata(
+        self, client, bge_app, monkeypatch
+    ):
+        app_module = bge_app["app_module"]
+        fake_lf = MagicMock()
+        monkeypatch.setattr(app_module, "get_client", MagicMock(return_value=fake_lf))
+
+        resp = await client.post("/encode/hybrid", json={"texts": ["hello"]})
+
+        assert resp.status_code == 200
+        metadata_calls = [
+            call.kwargs["metadata"]
+            for call in fake_lf.update_current_span.call_args_list
+            if "metadata" in call.kwargs
+        ]
+        assert metadata_calls
+        assert all(metadata["model"] == "BAAI/bge-m3" for metadata in metadata_calls)
+        assert any(metadata["runtime"] == "onnx-int8" for metadata in metadata_calls)
+        assert any(metadata["encode_type"] == "hybrid" for metadata in metadata_calls)
+
+    @pytest.mark.parametrize(
+        "handler_name",
+        ["encode_dense", "encode_sparse", "encode_colbert", "encode_hybrid", "rerank"],
+    )
+    def test_langfuse_trace_headers_are_declared_for_observe(self, bge_app, handler_name):
+        app_module = bge_app["app_module"]
+        signature = inspect.signature(getattr(app_module, handler_name))
+
+        trace_param = signature.parameters["langfuse_trace_id"]
+        parent_param = signature.parameters["langfuse_parent_observation_id"]
+
+        trace_header = get_args(trace_param.annotation)[1]
+        parent_header = get_args(parent_param.annotation)[1]
+
+        assert trace_header.alias == "x-langfuse-trace-id"
+        assert parent_header.alias == "x-langfuse-parent-observation-id"
 
     async def test_traceparent_header_is_extracted(self, client, bge_app, monkeypatch):
         app_module = bge_app["app_module"]

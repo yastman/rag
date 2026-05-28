@@ -27,12 +27,34 @@ DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_MAX_LENGTH = 512
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+LANGFUSE_TRACE_ID_HEADER = "x-langfuse-trace-id"
+LANGFUSE_PARENT_OBSERVATION_ID_HEADER = "x-langfuse-parent-observation-id"
 
 
 def _trace_context_headers() -> dict[str, str]:
-    """Return W3C trace context headers for downstream BGE service calls."""
+    """Return trace context headers for downstream BGE service calls."""
     headers: dict[str, str] = {}
     inject(headers)
+    headers.update(_langfuse_trace_context_headers())
+    return headers
+
+
+def _langfuse_trace_context_headers() -> dict[str, str]:
+    """Return Langfuse context headers consumed by BGE service @observe spans."""
+    try:
+        lf = get_client()
+        trace_id = lf.get_current_trace_id() if hasattr(lf, "get_current_trace_id") else None
+        parent_id = (
+            lf.get_current_observation_id() if hasattr(lf, "get_current_observation_id") else None
+        )
+    except Exception:
+        return {}
+
+    headers: dict[str, str] = {}
+    if trace_id:
+        headers[LANGFUSE_TRACE_ID_HEADER] = str(trace_id)
+    if parent_id:
+        headers[LANGFUSE_PARENT_OBSERVATION_ID_HEADER] = str(parent_id)
     return headers
 
 
