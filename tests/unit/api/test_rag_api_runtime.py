@@ -106,6 +106,7 @@ async def test_query_updates_current_observation_and_propagates_api_attributes()
         user_id="42",
         metadata={"source": "voice"},
         tags=["api", "rag", "voice"],
+        as_baggage=True,
     )
     lf.update_current_span.assert_called_once()
     call_kwargs = lf.update_current_span.call_args.kwargs

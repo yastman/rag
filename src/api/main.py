@@ -378,6 +378,14 @@ async def _execute_query(req: QueryRequest) -> QueryResponse:
         "user_id": str(req.user_id),
         "metadata": {"source": req.channel},
         "tags": ["api", "rag", req.channel],
+        # Inject user_id/session_id/tags into the W3C 'baggage' HTTP header
+        # so downstream calls (bge-m3, user-base, kommo, qdrant) carry the
+        # Langfuse trace attributes automatically. HTTPXClientInstrumentor
+        # (#2225) injects the default OTEL propagator (which includes
+        # baggage by default) on every outbound request — no per-call
+        # plumbing needed (replaces the manual #2229 inject(headers)
+        # pattern; see #2226).
+        "as_baggage": True,
     }
 
     with propagate_attributes(**trace_kwargs):
