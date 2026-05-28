@@ -163,6 +163,33 @@ class TestEncodeHybrid:
         assert "lexical_weights" in data
         assert "colbert_vecs" in data
 
+    async def test_traceparent_header_is_extracted(self, client, bge_app, monkeypatch):
+        app_module = bge_app["app_module"]
+        captured: dict[str, str | object] = {}
+
+        def fake_extract(headers):
+            captured["traceparent"] = headers.get("traceparent")
+            return "extracted-context"
+
+        attach = MagicMock(return_value="attached-token")
+        detach = MagicMock()
+        monkeypatch.setattr(app_module.propagate, "extract", fake_extract)
+        monkeypatch.setattr(app_module, "attach", attach)
+        monkeypatch.setattr(app_module, "detach", detach)
+
+        resp = await client.post(
+            "/encode/hybrid",
+            json={"texts": ["hello"]},
+            headers={"traceparent": "00-11111111111111111111111111111111-2222222222222222-01"},
+        )
+
+        assert resp.status_code == 200
+        assert captured["traceparent"] == (
+            "00-11111111111111111111111111111111-2222222222222222-01"
+        )
+        attach.assert_called_once_with("extracted-context")
+        detach.assert_called_once_with("attached-token")
+
 
 class TestEncodeDense:
     async def test_dense_empty_texts(self, client):

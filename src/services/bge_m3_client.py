@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+from opentelemetry.propagate import inject
 
 from src.observability import get_client, observe
 from src.services._retry import bge_retry
@@ -26,6 +27,13 @@ DEFAULT_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_MAX_LENGTH = 512
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+
+
+def _trace_context_headers() -> dict[str, str]:
+    """Return W3C trace context headers for downstream BGE service calls."""
+    headers: dict[str, str] = {}
+    inject(headers)
+    return headers
 
 
 @dataclass
@@ -164,6 +172,7 @@ class BGEM3Client:
         resp = await client.post(
             f"{self.base_url}/encode/dense",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -204,6 +213,7 @@ class BGEM3Client:
         resp = await client.post(
             f"{self.base_url}/encode/sparse",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -239,6 +249,7 @@ class BGEM3Client:
         resp = await client.post(
             f"{self.base_url}/encode/hybrid",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -289,6 +300,7 @@ class BGEM3Client:
                 "top_k": top_k,
                 "max_length": self.max_length,
             },
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -330,6 +342,7 @@ class BGEM3Client:
         resp = await client.post(
             f"{self.base_url}/encode/colbert",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -385,6 +398,7 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/dense",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -397,6 +411,7 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/sparse",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -411,6 +426,7 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/colbert",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()
@@ -430,6 +446,7 @@ class BGEM3SyncClient:
         resp = self._client.post(
             f"{self.base_url}/encode/hybrid",
             json={"texts": texts, "batch_size": self.batch_size, "max_length": self.max_length},
+            headers=_trace_context_headers(),
         )
         resp.raise_for_status()
         data = resp.json()

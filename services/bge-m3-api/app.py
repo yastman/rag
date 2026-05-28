@@ -12,8 +12,10 @@ from typing import Any
 
 import numpy as np
 import onnxruntime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from langfuse import observe
+from opentelemetry import propagate
+from opentelemetry.context import attach, detach
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 from transformers import AutoTokenizer
@@ -196,6 +198,17 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def extract_trace_context(request: Request, call_next):
+    """Attach incoming W3C trace context so service spans join caller traces."""
+    context = propagate.extract(request.headers)
+    token = attach(context)
+    try:
+        return await call_next(request)
+    finally:
+        detach(token)
 
 
 def get_model():
