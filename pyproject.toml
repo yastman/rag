@@ -17,6 +17,18 @@ dependencies = [
     "requests",
     "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
+    # OTEL auto-instrumentation packages (#2225). These live in base deps
+    # because initialize_langfuse() is shared by bot, mini-app, ingestion, and
+    # RAG API runtimes; putting them behind a single extra silently disables
+    # SDK-native child spans for the other containers.
+    "opentelemetry-instrumentation-httpx>=0.58b0",
+    "opentelemetry-instrumentation-asyncpg>=0.58b0",
+    "opentelemetry-instrumentation-redis>=0.58b0",
+    "opentelemetry-instrumentation-grpc>=0.58b0",
+    "opentelemetry-instrumentation-aiohttp-client>=0.58b0",
+    "opentelemetry-instrumentation-requests>=0.58b0",
+    "opentelemetry-instrumentation-logging>=0.58b0",
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
     # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
     # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
     # contextualized-embedding paths.
@@ -94,18 +106,6 @@ voice = [
     "httpx>=0.27.0",
     "opentelemetry-sdk>=1.39.0",
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
-    # OTEL auto-instrumentation packages (#2225). Each is optional — the
-    # observability_otel.activate_otel_instrumentations() helper tolerates
-    # missing packages (logged at DEBUG). Adding them here makes the
-    # "@observe -> auto child spans" path the default for every service.
-    "opentelemetry-instrumentation-httpx>=0.58b0",
-    "opentelemetry-instrumentation-asyncpg>=0.58b0",
-    "opentelemetry-instrumentation-redis>=0.58b0",
-    "opentelemetry-instrumentation-grpc>=0.58b0",
-    "opentelemetry-instrumentation-aiohttp-client>=0.58b0",
-    "opentelemetry-instrumentation-requests>=0.58b0",
-    "opentelemetry-instrumentation-logging>=0.58b0",
-    "opentelemetry-instrumentation-fastapi>=0.58b0",
 ]
 
 # Docling service (standalone docling-serve image)
