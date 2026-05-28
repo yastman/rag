@@ -194,8 +194,80 @@ def _redact_breadcrumbs(event: dict[str, Any]) -> None:
                 crumb[key] = _redact(crumb[key])
 
 
+def _get_langfuse_client() -> Any | None:
+    """Return the active Langfuse v4 client or ``None``.
+
+    Tolerates missing Langfuse SDK (e.g. minimal CI envs without the optional
+    extra) and uninitialised clients. Used by ``_make_before_send`` to attach
+    the active trace ID to every Sentry event so on-call can pivot from a
+    Sentry incident → Langfuse trace → Loki logs in one click (#2218).
+    """
+    try:
+        from langfuse import get_client
+    except ImportError:
+        return None
+    try:
+        return get_client()
+    except Exception:
+        # Langfuse may raise when no client has been initialised yet — that
+        # is the documented v4 SDK behaviour. Treat it as "no active trace".
+        return None
+
+
+def _attach_langfuse_trace_to_event(event: dict[str, Any]) -> None:
+    """Attach the active Langfuse trace_id / observation_id to a Sentry event.
+
+    SDK-native: reads ``langfuse.get_client().get_current_trace_id()`` (v4)
+    which returns the OTEL trace ID for the active ``@observe`` context.
+    The Langfuse SDK runs on top of OpenTelemetry, so this trace_id matches
+    the one ``otelTraceID`` is injected into structured logs (Epic G #2217)
+    and the one ``traceparent`` carries across HTTP boundaries (Epic O+P).
+
+    Result: Sentry UI shows a clickable ``langfuse_trace_id`` tag on every
+    captured event + a ``langfuse`` context block with a deep-link URL.
+
+    Failures are swallowed: a broken Langfuse SDK must NEVER block a Sentry
+    event from being captured.
+    """
+    try:
+        client = _get_langfuse_client()
+        if client is None:
+            return
+        trace_id = client.get_current_trace_id()
+        if not trace_id:
+            return
+
+        observation_id = client.get_current_observation_id()
+
+        tags = event.setdefault("tags", {})
+        if isinstance(tags, dict):
+            tags["langfuse_trace_id"] = trace_id
+
+        contexts = event.setdefault("contexts", {})
+        if isinstance(contexts, dict):
+            langfuse_ctx: dict[str, str] = {"trace_id": trace_id}
+            if observation_id:
+                langfuse_ctx["observation_id"] = observation_id
+            host = (os.getenv("LANGFUSE_HOST", "") or "").strip().rstrip("/")
+            if host:
+                langfuse_ctx["url"] = f"{host}/trace/{trace_id}"
+            contexts["langfuse"] = langfuse_ctx
+    except Exception:
+        # Cross-link is a best-effort enrichment; never let it kill the event.
+        logger.debug("Sentry <-> Langfuse cross-link failed", exc_info=True)
+
+
 def _make_before_send():
-    """Return a ``before_send`` callable that masks PII before egress."""
+    """Return a ``before_send`` callable that masks PII before egress.
+
+    Two-stage hook:
+
+    1. PII redaction (existing — unchanged).
+    2. Langfuse trace cross-link enrichment (#2218): attaches
+       ``langfuse_trace_id`` tag + ``langfuse`` context block when an
+       ``@observe`` span is active. Runs after PII scrub so the trace IDs
+       (which are 16-char hex, never PII) are not accidentally masked.
+    """
 
     def before_send(event: dict[str, Any], hint: Any | None = None) -> dict[str, Any] | None:
         try:
@@ -208,6 +280,7 @@ def _make_before_send():
             _redact_breadcrumbs(event)
         except Exception:
             logger.warning("Sentry before_send PII scrub failed", exc_info=True)
+        _attach_langfuse_trace_to_event(event)
         return event
 
     return before_send
