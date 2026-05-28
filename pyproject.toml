@@ -17,6 +17,18 @@ dependencies = [
     "requests",
     "qdrant-client>=1.17.1",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=4.0.0,<5.0",  # Native v4 observability migration
+    # OTEL auto-instrumentation packages (#2225). These live in base deps
+    # because initialize_langfuse() is shared by bot, mini-app, ingestion, and
+    # RAG API runtimes; putting them behind a single extra silently disables
+    # SDK-native child spans for the other containers.
+    "opentelemetry-instrumentation-httpx>=0.58b0",
+    "opentelemetry-instrumentation-asyncpg>=0.58b0",
+    "opentelemetry-instrumentation-redis>=0.58b0",
+    "opentelemetry-instrumentation-grpc>=0.58b0",
+    "opentelemetry-instrumentation-aiohttp-client>=0.58b0",
+    "opentelemetry-instrumentation-requests>=0.58b0",
+    "opentelemetry-instrumentation-logging>=0.58b0",
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
     # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
     # Install via `uv sync --extra voyage` only for legacy GDrive ingestion or
     # contextualized-embedding paths.

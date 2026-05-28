@@ -480,6 +480,21 @@ def initialize_langfuse(
         synced = sync_langfuse_model_definitions(_langfuse_client)
         if synced > 0:
             logger.info("Langfuse model definitions synced: %d", synced)
+        # Activate OTEL auto-instrumentations once the Langfuse client (and
+        # therefore the global TracerProvider + OTLP exporter) is wired (#2225).
+        # This adds child spans for outbound httpx, asyncpg, redis, grpc, and
+        # injects ``traceparent`` on every cross-service HTTP request — the
+        # SDK-native replacement for the manual plumbing in #2229.
+        try:
+            from src.observability_otel import activate_otel_instrumentations
+
+            activate_otel_instrumentations()
+        except Exception:
+            logger.warning(
+                "Failed to activate OTEL auto-instrumentations; @observe spans "
+                "still flow but HTTP/DB/cache child spans will be missing (#2225)",
+                exc_info=True,
+            )
         logger.info("Langfuse observability initialized")
         return _langfuse_client
     except Exception:

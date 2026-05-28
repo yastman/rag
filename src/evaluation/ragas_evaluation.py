@@ -186,12 +186,15 @@ def _log_ragas_scores_to_langfuse(
 
     try:
         thresholds_metadata = {
-            "thresholds": {
-                "faithfulness": FAITHFULNESS_THRESHOLD,
-                "context_precision": CONTEXT_PRECISION_THRESHOLD,
-                "context_recall": CONTEXT_RECALL_THRESHOLD,
-                "answer_relevancy": ANSWER_RELEVANCY_THRESHOLD,
-            }
+            "thresholds": json.dumps(
+                {
+                    "faithfulness": FAITHFULNESS_THRESHOLD,
+                    "context_precision": CONTEXT_PRECISION_THRESHOLD,
+                    "context_recall": CONTEXT_RECALL_THRESHOLD,
+                    "answer_relevancy": ANSWER_RELEVANCY_THRESHOLD,
+                },
+                sort_keys=True,
+            )
         }
 
         with (

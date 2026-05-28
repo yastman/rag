@@ -18,6 +18,14 @@ dependencies = [
     # Observability
     "langfuse>=4.0.0,<5.0",
     "opentelemetry-api>=1.39.0",
+    # OTEL auto-instrumentation (#2225). FastAPIInstrumentor closes the gap
+    # between the manual @app.middleware('http') below and the SDK-native
+    # ASGI instrumentation that adds http.* semantic attributes for free.
+    # HTTPX/Redis instrumentors trace any outbound calls this service makes
+    # in the future (none today, kept for parity).
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
+    "opentelemetry-instrumentation-httpx>=0.58b0",
+    "opentelemetry-instrumentation-logging>=0.58b0",
     # Utilities
     "numpy==2.4.6",
     "scipy==1.17.1",

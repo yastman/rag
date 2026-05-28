@@ -81,6 +81,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             langfuse_client = None
     app.state.langfuse = langfuse_client
 
+    # Activate FastAPI OTEL auto-instrumentation (#2225). Adds standard
+    # ASGI server spans with http.method / http.route / http.status_code
+    # semantic attributes; auto-extracts traceparent / baggage from incoming
+    # requests so any @observe span downstream nests under the originating
+    # cross-service trace. Idempotent and best-effort — never blocks boot.
+    from src.observability_otel import instrument_fastapi_app
+
+    instrument_fastapi_app(app)
+
     import redis.asyncio as aioredis
 
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")

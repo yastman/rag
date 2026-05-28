@@ -18,6 +18,17 @@ dependencies = [
     "cachetools>=5.3.0",
     "python-dotenv>=1.0.0",
     "langfuse>=4.0.0,<5.0",
+    # OTEL auto-instrumentation packages (#2225). The bot uses its own
+    # pyproject/uv.lock in Docker, so root dependencies do not reach this
+    # runtime.
+    "opentelemetry-instrumentation-httpx>=0.58b0",
+    "opentelemetry-instrumentation-asyncpg>=0.58b0",
+    "opentelemetry-instrumentation-redis>=0.58b0",
+    "opentelemetry-instrumentation-grpc>=0.58b0",
+    "opentelemetry-instrumentation-aiohttp-client>=0.58b0",
+    "opentelemetry-instrumentation-requests>=0.58b0",
+    "opentelemetry-instrumentation-logging>=0.58b0",
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
     "openai>=1.10.0",
     "langchain>=1.2",  # create_agent, ToolRuntime, middleware
     "langchain-core>=1.2",

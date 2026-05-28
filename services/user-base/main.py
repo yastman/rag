@@ -87,6 +87,25 @@ def _load_model() -> SentenceTransformer:
 async def lifespan(app: FastAPI):
     """Load model on startup, cleanup on shutdown."""
     global model
+    # Activate OTEL auto-instrumentation (#2225). FastAPIInstrumentor adds
+    # http.* semantic attributes and extracts traceparent so @observe spans
+    # below nest under any incoming cross-service trace.
+    try:  # pragma: no cover — exercised via service smoke tests
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        if not getattr(app, "_is_instrumented_by_opentelemetry", False):
+            FastAPIInstrumentor.instrument_app(app)
+            logger.info("FastAPIInstrumentor activated (#2225)")
+    except Exception:
+        logger.warning("FastAPIInstrumentor activation skipped", exc_info=True)
+
+    try:  # pragma: no cover
+        from opentelemetry.instrumentation.logging import LoggingInstrumentor
+
+        LoggingInstrumentor().instrument(set_logging_format=False)
+    except Exception:
+        logger.debug("LoggingInstrumentor activation skipped", exc_info=True)
+
     model = _load_model()
     logger.info(
         f"{MODEL_NAME} loaded (backend={_active_backend}, "
