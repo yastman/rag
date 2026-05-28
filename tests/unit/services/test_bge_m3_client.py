@@ -121,6 +121,16 @@ class TestBGEM3Client:
             headers["traceparent"] = "00-11111111111111111111111111111111-2222222222222222-01"
 
         monkeypatch.setattr(mod, "inject", fake_inject)
+        monkeypatch.setattr(
+            mod,
+            "get_client",
+            lambda: MagicMock(
+                get_current_trace_id=MagicMock(
+                    return_value="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                ),
+                get_current_observation_id=MagicMock(return_value="bbbbbbbbbbbbbbbb"),
+            ),
+        )
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -140,6 +150,8 @@ class TestBGEM3Client:
 
         headers = mock_http.post.call_args.kwargs["headers"]
         assert headers["traceparent"] == ("00-11111111111111111111111111111111-2222222222222222-01")
+        assert headers["x-langfuse-trace-id"] == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        assert headers["x-langfuse-parent-observation-id"] == "bbbbbbbbbbbbbbbb"
 
     async def test_encode_hybrid_empty_input(self, client):
         result = await client.encode_hybrid([])
@@ -399,6 +411,16 @@ class TestBGEM3SyncClient:
             headers["traceparent"] = "00-33333333333333333333333333333333-4444444444444444-01"
 
         monkeypatch.setattr(mod, "inject", fake_inject)
+        monkeypatch.setattr(
+            mod,
+            "get_client",
+            lambda: mock.MagicMock(
+                get_current_trace_id=mock.MagicMock(
+                    return_value="cccccccccccccccccccccccccccccccc",
+                ),
+                get_current_observation_id=mock.MagicMock(return_value="dddddddddddddddd"),
+            ),
+        )
 
         mock_resp = mock.MagicMock()
         mock_resp.json.return_value = {
@@ -414,6 +436,8 @@ class TestBGEM3SyncClient:
 
         headers = mock_post.call_args.kwargs["headers"]
         assert headers["traceparent"] == ("00-33333333333333333333333333333333-4444444444444444-01")
+        assert headers["x-langfuse-trace-id"] == "cccccccccccccccccccccccccccccccc"
+        assert headers["x-langfuse-parent-observation-id"] == "dddddddddddddddd"
 
     def test_encode_hybrid_empty_input(self, sync_client):
         """Empty input returns empty HybridResult without HTTP call."""

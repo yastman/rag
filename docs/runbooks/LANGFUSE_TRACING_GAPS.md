@@ -37,6 +37,63 @@ For cache regression checks:
 2. Immediate repeat of the same query should be a semantic cache hit path only and must not add fresh `bge-m3-encode-*`, Qdrant, or LLM spans.
 3. The semantic-hit replay should not emit new `results_count=0` / `no_results=1` scoring artifacts.
 
+### BGE-M3 hybrid trace check
+
+For BGE-M3 hybrid retrieval regressions, verify the Langfuse trace through the
+Langfuse API/CLI, not only by querying ClickHouse directly. The same trace must
+contain:
+
+- a workflow/root span such as `validation-query`, `rag-pipeline`, or `telegram-rag-query`
+- `bge-m3-encode-*` client span
+- matching `bge-m3-service-encode-*` service span
+- `qdrant-hybrid-search-rrf` or `qdrant-hybrid-search-rrf-colbert`
+
+Generate or select a fresh trace, then run:
+
+```bash
+TRACE_ID=<trace-id>
+LF_ENV_FILE="${LF_ENV_FILE:-.env}" ./scripts/lf trace "$TRACE_ID" > /tmp/lf_trace.json
+```
+
+Required BGE/Qdrant families:
+
+```bash
+jq -e '(.observations | map(.name)) as $n
+  | any($n[]; test("^bge-m3-encode-"))
+  and any($n[]; test("^bge-m3-service-encode-"))
+  and any($n[]; test("^qdrant-hybrid-search-rrf"))
+' /tmp/lf_trace.json
+```
+
+BGE service spans must include curated model/runtime metadata and IO counters,
+while keeping raw user text out of embedding spans:
+
+```bash
+jq -e '.observations
+  | map(select(.name | test("^bge-m3-service-encode-"))) as $svc
+  | ($svc | length) > 0
+  and all($svc[];
+    .metadata.model == "BAAI/bge-m3"
+    and .metadata.runtime == "onnx-int8"
+    and ((.metadata.encode_type // "") | length > 0)
+    and ((.input.texts_count // 0) > 0)
+    and ((.output.processing_time // 0) > 0)
+  )
+' /tmp/lf_trace.json
+```
+
+The service span must be nested under its client span in the same trace:
+
+```bash
+jq -e '.observations as $obs
+  | ($obs | map(select(.id != null) | {key:.id, value:.name}) | from_entries) as $idx
+  | all($obs[] | select(.name | test("^bge-m3-service-"));
+      (.parentObservationId // "") != ""
+      and (($idx[.parentObservationId] // "") | test("^bge-m3-(encode|rerank)"))
+    )
+' /tmp/lf_trace.json
+```
+
 ## Diagnosis
 
 ### 1. Check Langfuse Connectivity
