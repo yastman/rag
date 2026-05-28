@@ -394,6 +394,19 @@ def test_bot_uses_runtime_env_file_fallback() -> None:
     assert "--env-file .env" not in block
 
 
+def test_bot_depends_on_local_health_preflight() -> None:
+    """`make bot` must gate startup on local health checks to fail fast on Redis drift/outage."""
+    text = _makefile_text()
+    match = re.search(r"^bot:\s*(.+?)\s*##", text, re.MULTILINE)
+    assert match, "bot target not found in Makefile"
+    prerequisites = match.group(1).split()
+    assert "preflight-bot" in prerequisites, "bot target must keep env preflight gate"
+    assert "test-bot-health" in prerequisites, (
+        "bot target must depend on test-bot-health so Redis/Qdrant/LLM readiness "
+        "fails before runtime deep-checks"
+    )
+
+
 def test_bot_preserves_pipeline_failure_exit_code() -> None:
     """`make bot` must not hide Python startup failures behind tee/echo."""
     text = _makefile_text()

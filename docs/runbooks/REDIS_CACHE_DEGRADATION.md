@@ -97,6 +97,7 @@ Check for:
 |---|---|---|
 | `redis-cli ping` from **inside** the container fails | Service failure | Restart container, check disk/memory on host |
 | `redis-cli ping` works, but bot logs show `Connection refused` | App bug | Verify `REDIS_URL` in bot env; check password encoding |
+| Redis container restarts with `can't open the RDB file dump.rdb for reading: Permission denied` | Container user/capability drift against the `redis_data` volume | Recreate Redis from current Compose (`make local-redis-recreate`) and verify `compose.yml` runs `redis` as uid `999:999` |
 | Bot preflight shows `invalid username-password pair` / `WRONGPASS` / `NOAUTH` after local `.env` edit | Local auth drift | Run `make local-redis-recreate`, then `make test-bot-health` |
 | Redis memory is near limit and `evicted_keys` is rising | Service failure / capacity | Scale `maxmemory` or reduce TTL; see Remediation |
 | Cache hit rate is 0% but Redis is healthy and has keys | App bug | Check semantic cache threshold, query_type mapping, or `CACHE_VERSION` drift in `telegram_bot/integrations/cache.py` |
@@ -142,6 +143,16 @@ Use a canonical query twice, once with a cleared cache and once immediately afte
    ```bash
    COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml ps redis
    ```
+
+   If the status is `Restarting`, inspect startup logs before debugging the bot:
+   ```bash
+   COMPOSE_PROJECT_NAME=dev docker compose --env-file tests/fixtures/compose.ci.env -f compose.yml -f compose.dev.yml logs --tail=120 redis
+   ```
+
+   `Fatal error: can't open the RDB file dump.rdb for reading: Permission denied`
+   means the Redis process cannot read the persisted `redis_data` volume. The
+   Compose contract is that app Redis runs as uid `999:999`, matching the
+   official Redis image volume owner.
 
 2. Restart Redis:
    ```bash

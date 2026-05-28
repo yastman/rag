@@ -72,6 +72,20 @@ class TestLangfuseSecretPosture:
             "LANGFUSE_REDIS_PASSWORD is unset"
         )
 
+    def test_base_app_redis_runs_as_redis_uid_999(self, compose_base: dict):
+        """App Redis must run as uid 999 to read/write the official image /data volume.
+
+        With cap_drop:[ALL], root lacks CAP_DAC_OVERRIDE and cannot read a
+        redis-owned 0600 dump.rdb. That leaves local Redis in a restart loop and
+        native bot preflight fails later with localhost:6379 connection refused.
+        """
+        svc = compose_base["services"]["redis"]
+        assert svc.get("user") == "999:999", (
+            'compose.yml: redis must set user: "999:999" to match the redis user '
+            "baked into redis:8.x and the redis_data volume owner; otherwise "
+            "cap_drop:[ALL] + root can fail to read redis-owned dump.rdb."
+        )
+
     def test_base_redis_langfuse_runs_as_redis_uid_999(self, compose_base: dict):
         """redis-langfuse must declare user: "999:999" matching the volume owner.
 

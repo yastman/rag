@@ -731,7 +731,7 @@ local-up-ingest:  ## Start local services + docling for ingestion workflows
 run-bot:  ## Run bot locally (requires: make local-up)
 	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
-bot: preflight-bot ## Alias: run bot and tee output to logs/bot-run.log
+bot: preflight-bot test-bot-health ## Alias: run bot and tee output to logs/bot-run.log
 	@mkdir -p logs
 	@bash -o pipefail -c 'uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
 	status=$$?; echo '[COMPLETE]'; exit $$status
