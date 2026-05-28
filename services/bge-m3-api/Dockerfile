@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-# BGE-M3 Embedding Service — uv sync (2026 best practices)
+# BGE-M3 Embedding Service — ONNX INT8 runtime (uv sync)
 
 # ====== BUILD STAGE ======
 # Base images pinned — checked 2026-02-09
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libgomp1 libxml2-dev libxslt1-dev zlib1g-dev
 
-# Deps layer
+# Deps layer — ONNX runtime (no PyTorch/FlagEmbedding)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -51,6 +51,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HF_HOME=/models/hf \
     TRANSFORMERS_CACHE=/models/hf \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence-transformers \
+    ONNX_MODEL_DIR=/models/onnx \
     OMP_NUM_THREADS=2 \
     MKL_NUM_THREADS=2 \
     PYTHONUNBUFFERED=1 \

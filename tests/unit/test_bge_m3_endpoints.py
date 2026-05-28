@@ -24,11 +24,15 @@ _COLBERT_DIM = 1024
 _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 
 
-def _make_fake_model():
-    """Return a mock BGEM3FlagModel with a working .encode()."""
-    model = MagicMock()
+class FakeONNXModel:
+    """Fake ONNXEmbeddingModel with a working .encode()."""
 
-    def fake_encode(
+    def __init__(self, session, tokenizer):
+        self.session = session
+        self.tokenizer = tokenizer
+
+    def encode(
+        self,
         texts,
         *,
         batch_size=12,
@@ -42,17 +46,16 @@ def _make_fake_model():
         if return_dense:
             result["dense_vecs"] = np.random.rand(n, _DENSE_DIM).astype(np.float32)
         if return_sparse:
+            # Return Qdrant sparse format directly (indices + values)
             result["lexical_weights"] = [
-                {str(i): 0.5 + i * 0.1 for i in range(3)} for _ in range(n)
+                {"indices": list(range(3)), "values": [0.5 + i * 0.1 for i in range(3)]}
+                for _ in range(n)
             ]
         if return_colbert_vecs:
             result["colbert_vecs"] = [
                 np.random.rand(5, _COLBERT_DIM).astype(np.float32) for _ in range(n)
             ]
         return result
-
-    model.encode = MagicMock(side_effect=fake_encode)
-    return model
 
 
 @pytest.fixture(scope="module")
@@ -62,13 +65,22 @@ def bge_app():
     Uses MonkeyPatch.context() for automatic teardown of sys.modules entries.
     """
     with pytest.MonkeyPatch.context() as mp:
-        mock_flag = MagicMock()
+        mock_ort = MagicMock()
+        mock_ort.InferenceSession = MagicMock()
+        mock_ort.GraphOptimizationLevel = MagicMock()
+        mock_ort.GraphOptimizationLevel.ORT_ENABLE_ALL = 1
+        mock_ort.SessionOptions = MagicMock
+
+        mock_transformers = MagicMock()
+        mock_transformers.AutoTokenizer.from_pretrained = MagicMock(return_value=MagicMock())
+
         mock_prom = MagicMock()
         mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
         mock_lf = MagicMock()
         mock_lf.observe = lambda *_a, **_k: lambda f: f
 
-        mp.setitem(sys.modules, "FlagEmbedding", mock_flag)
+        mp.setitem(sys.modules, "onnxruntime", mock_ort)
+        mp.setitem(sys.modules, "transformers", mock_transformers)
         mp.setitem(sys.modules, "prometheus_client", mock_prom)
         mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
@@ -78,8 +90,9 @@ def bge_app():
 
         import config as _cfg
 
-        fake_model = _make_fake_model()
-        app_module._model = fake_model
+        fake_model = FakeONNXModel(session=MagicMock(), tokenizer=MagicMock())
+        app_module._onnx_session = MagicMock()
+        app_module._tokenizer = MagicMock()
         app_module.get_model = MagicMock(return_value=fake_model)
 
         yield {
@@ -172,7 +185,6 @@ class TestConfigDefaults:
         _cfg = bge_app["config"]
         assert _cfg.settings.MAX_LENGTH == 2048
         assert _cfg.settings.BATCH_SIZE == 12
-        assert _cfg.settings.USE_FP16 is True
         assert _cfg.settings.RERANK_MAX_DOCS == 30
         assert _cfg.settings.RERANK_MAX_LENGTH == 512
 
@@ -274,13 +286,13 @@ class TestPartialFailureIsolation:
     async def test_model_exception_still_returns_500(self, client, bge_app):
         """Infrastructure/model errors still produce HTTP 500."""
         fake_model = bge_app["fake_model"]
-        original_side_effect = fake_model.encode.side_effect
-        fake_model.encode.side_effect = RuntimeError("GPU OOM")
+        original_encode = fake_model.encode
+        fake_model.encode = MagicMock(side_effect=RuntimeError("ONNX session error"))
         try:
             resp = await client.post("/encode/dense", json={"texts": ["hello", "world"]})
             assert resp.status_code == 500
         finally:
-            fake_model.encode.side_effect = original_side_effect
+            fake_model.encode = original_encode  # restore original method
 
 
 class TestWarmup:
@@ -289,16 +301,21 @@ class TestWarmup:
         app_module = bge_app["app_module"]
         fake_model = bge_app["fake_model"]
 
-        fake_model.encode.reset_mock()
+        from unittest.mock import MagicMock as MM
+
+        wrapped_encode = MM(side_effect=fake_model.encode)
+        orig_encode = fake_model.encode
+        fake_model.encode = wrapped_encode
 
         # Run the lifespan startup directly (no ASGI runner needed)
         gen = app_module.lifespan(None)
         await gen.__aenter__()
         await gen.__aexit__(None, None, None)
 
-        assert fake_model.encode.called, "Warmup must call model.encode()"
-        warmup_kwargs = fake_model.encode.call_args.kwargs
+        assert wrapped_encode.called, "Warmup must call model.encode()"
+        warmup_kwargs = wrapped_encode.call_args.kwargs
         assert warmup_kwargs.get("return_colbert_vecs") is False, (
             f"Warmup must use return_colbert_vecs=False to reduce startup memory, "
             f"got return_colbert_vecs={warmup_kwargs.get('return_colbert_vecs')}"
         )
+        fake_model.encode = orig_encode

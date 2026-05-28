@@ -13,9 +13,14 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # Model Configuration
-    MODEL_NAME: str = "BAAI/bge-m3"
+    MODEL_NAME: str = "BAAI/bge-m3"  # HuggingFace model ID (tokenizer only with ONNX)
     MODEL_CACHE_DIR: str = "/models"
-    USE_FP16: bool = True  # FP16 для экономии памяти (2-3GB вместо 4-6GB)
+    USE_FP16: bool = True  # FP16 for CPU memory savings (legacy; ONNX INT8 ignores this)
+
+    # ONNX Runtime Configuration
+    ONNX_MODEL_DIR: str = os.getenv(
+        "ONNX_MODEL_DIR", "/models/onnx"
+    )  # Directory containing model.int8.onnx + model.int8.onnx.data
 
     # Performance Settings
     MAX_LENGTH: int = 2048  # For documents (typical chunk size)
