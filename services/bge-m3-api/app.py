@@ -175,6 +175,30 @@ def compute_maxsim_scores(
 async def lifespan(app: FastAPI):
     """Eager model loading + bounded warmup encode at startup."""
     global _warmed_up
+    # Activate OTEL auto-instrumentation (#2225). The SDK-native
+    # FastAPIInstrumentor.instrument_app(app) replaces the bespoke
+    # @app.middleware('http') extract_trace_context defined below with a
+    # standard ASGI middleware that:
+    #   * extracts traceparent / baggage from incoming headers automatically;
+    #   * adds http.method / http.route / http.status_code semantic attrs;
+    #   * sets the OTEL context for every @observe span downstream.
+    # Activation is best-effort so a missing optional dep does not block boot.
+    try:  # pragma: no cover — exercised via service smoke tests
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        if not getattr(app, "_is_instrumented_by_opentelemetry", False):
+            FastAPIInstrumentor.instrument_app(app)
+            logger.info("FastAPIInstrumentor activated (#2225)")
+    except Exception:
+        logger.warning("FastAPIInstrumentor activation skipped", exc_info=True)
+
+    try:  # pragma: no cover
+        from opentelemetry.instrumentation.logging import LoggingInstrumentor
+
+        LoggingInstrumentor().instrument(set_logging_format=False)
+    except Exception:
+        logger.debug("LoggingInstrumentor activation skipped", exc_info=True)
+
     logger.info("Starting model warmup...")
     start = time.time()
     model = get_model()

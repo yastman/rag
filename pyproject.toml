@@ -94,6 +94,18 @@ voice = [
     "httpx>=0.27.0",
     "opentelemetry-sdk>=1.39.0",
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
+    # OTEL auto-instrumentation packages (#2225). Each is optional — the
+    # observability_otel.activate_otel_instrumentations() helper tolerates
+    # missing packages (logged at DEBUG). Adding them here makes the
+    # "@observe -> auto child spans" path the default for every service.
+    "opentelemetry-instrumentation-httpx>=0.58b0",
+    "opentelemetry-instrumentation-asyncpg>=0.58b0",
+    "opentelemetry-instrumentation-redis>=0.58b0",
+    "opentelemetry-instrumentation-grpc>=0.58b0",
+    "opentelemetry-instrumentation-aiohttp-client>=0.58b0",
+    "opentelemetry-instrumentation-requests>=0.58b0",
+    "opentelemetry-instrumentation-logging>=0.58b0",
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
 ]
 
 # Docling service (standalone docling-serve image)

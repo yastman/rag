@@ -49,6 +49,16 @@ async def lifespan(app: FastAPI):
 
     cfg = GraphConfig.from_env()
 
+    # Activate FastAPI OTEL auto-instrumentation (#2225). The SDK-native
+    # FastAPIInstrumentor.instrument_app(app) adds standard ASGI server
+    # spans with http.method / http.route / http.status_code semantic
+    # attrs and auto-extracts traceparent / baggage from incoming headers
+    # so any @observe span downstream nests under the originating
+    # cross-service trace. Idempotent and best-effort — never blocks boot.
+    from src.observability_otel import instrument_fastapi_app
+
+    instrument_fastapi_app(app)
+
     cache = CacheLayerManager(
         redis_url=cfg.redis_url,
         cache_thresholds=cfg.cache_thresholds,

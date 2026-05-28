@@ -10,6 +10,13 @@ dependencies = [
     "pydantic>=2.0.0",
     "torch>=2.0.0",
     "langfuse>=4.0.0,<5.0",
+    # OTEL auto-instrumentation (#2225) — same SDK-native package set as
+    # services/bge-m3-api so HTTP server spans and (future) outbound HTTP
+    # client spans nest under @observe spans automatically.
+    "opentelemetry-api>=1.39.0",
+    "opentelemetry-instrumentation-fastapi>=0.58b0",
+    "opentelemetry-instrumentation-httpx>=0.58b0",
+    "opentelemetry-instrumentation-logging>=0.58b0",
 ]
 
 [project.optional-dependencies]
