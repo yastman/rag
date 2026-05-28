@@ -182,3 +182,54 @@ class TestHybridSearch:
         payload = hits[0].get("payload", {})
         text = payload.get("text") or payload.get("page_content", "")
         assert text, f"Top result payload has no searchable text field: {list(payload.keys())}"
+
+    def test_hybrid_search_via_encode_hybrid_returns_results(self) -> None:
+        """Full hybrid path: single /encode/hybrid -> Qdrant RRF -> results.
+
+        Validates that the containerized BGE-M3 /encode/hybrid endpoint produces
+        dense, sparse (Qdrant format), and colbert vectors in one call, and that
+        these vectors fed into a Qdrant RRF query return meaningful results.
+        """
+        _require_qdrant()
+        _require_bge_m3()
+
+        hybrid = _http_post(f"{BGE_M3_URL}/encode/hybrid", {"texts": [self.QUERY]})
+
+        # Validate response structure
+        dense_vec = hybrid["dense_vecs"][0]
+        sparse = hybrid["lexical_weights"][0]
+        colbert_vec = hybrid["colbert_vecs"][0]
+
+        assert len(dense_vec) == 1024, (
+            f"Dense vector dim mismatch: expected 1024, got {len(dense_vec)}"
+        )
+        assert isinstance(sparse, dict), f"lexical_weights row is not a dict: {type(sparse)}"
+        assert sparse.get("indices"), f"sparse.indices missing or empty: {sparse}"
+        assert sparse.get("values"), f"sparse.values missing or empty: {sparse}"
+        assert len(colbert_vec) > 0, "ColBERT vecs empty"
+        assert isinstance(colbert_vec[0], list), (
+            f"ColBERT first token is not a list: {type(colbert_vec[0])}"
+        )
+
+        # Build RRF query using dense + sparse from the single /encode/hybrid response
+        query_payload = {
+            "prefetch": [
+                {"query": dense_vec, "using": "dense", "limit": 10},
+                {
+                    "query": {"indices": sparse["indices"], "values": sparse["values"]},
+                    "using": "bm42",
+                    "limit": 10,
+                },
+            ],
+            "query": {"fusion": "rrf"},
+            "limit": 5,
+            "with_payload": True,
+        }
+        hits = _http_post(f"{QDRANT_URL}/collections/{COLLECTION}/points/query", query_payload)
+        points = hits.get("result", {}).get("points", [])
+        assert len(points) > 0, (
+            f"Hybrid search via /encode/hybrid returned no results for: '{self.QUERY}'"
+        )
+        payload = points[0].get("payload", {})
+        text = payload.get("text") or payload.get("page_content", "")
+        assert text, f"Top result payload has no searchable text field: {list(payload.keys())}"
