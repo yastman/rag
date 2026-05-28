@@ -29,7 +29,21 @@ def _get_service_env(compose: dict, service: str) -> dict[str, str]:
 
 
 # Сервисы которые ДОЛЖНЫ иметь LANGFUSE vars
-TRACED_SERVICES = ["bge-m3", "bot", "litellm", "rag-api", "voice-agent", "ingestion"]
+#
+# Includes every micro-service whose code carries ``@observe`` decorators.
+# A service that emits ``@observe`` spans without these env vars in its compose
+# block will silently no-op the SDK at startup — see #2210 (bge-m3 was the same
+# class of bug fixed in #2229; user-base + mini-app-api close the rest).
+TRACED_SERVICES = [
+    "bge-m3",
+    "bot",
+    "ingestion",
+    "litellm",
+    "mini-app-api",
+    "rag-api",
+    "user-base",
+    "voice-agent",
+]
 
 # Минимальный набор vars для трейсинга
 REQUIRED_LANGFUSE_VARS = [
@@ -70,6 +84,20 @@ class TestLangfuseSecretPosture:
         assert "redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}" not in str(command), (
             "compose.yml: redis-langfuse command must not render a bare --requirepass when "
             "LANGFUSE_REDIS_PASSWORD is unset"
+        )
+
+    def test_base_app_redis_runs_as_redis_uid_999(self, compose_base: dict):
+        """App Redis must run as uid 999 to read/write the official image /data volume.
+
+        With cap_drop:[ALL], root lacks CAP_DAC_OVERRIDE and cannot read a
+        redis-owned 0600 dump.rdb. That leaves local Redis in a restart loop and
+        native bot preflight fails later with localhost:6379 connection refused.
+        """
+        svc = compose_base["services"]["redis"]
+        assert svc.get("user") == "999:999", (
+            'compose.yml: redis must set user: "999:999" to match the redis user '
+            "baked into redis:8.x and the redis_data volume owner; otherwise "
+            "cap_drop:[ALL] + root can fail to read redis-owned dump.rdb."
         )
 
     def test_base_redis_langfuse_runs_as_redis_uid_999(self, compose_base: dict):

@@ -48,6 +48,10 @@ services:
   redis:
     <<: *security-defaults
     image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
+    # Match the redis user (uid 999) baked into redis:8.x so the process can
+    # read/write /data with cap_drop:[ALL]. Running as root without
+    # CAP_DAC_OVERRIDE cannot read redis-owned dump.rdb and causes startup loops.
+    user: "999:999"
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
@@ -150,6 +154,10 @@ services:
       HF_HOME: /models/hf
       TRANSFORMERS_CACHE: /models/hf
       SENTENCE_TRANSFORMERS_HOME: /models/sentence-transformers
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-user-base}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s

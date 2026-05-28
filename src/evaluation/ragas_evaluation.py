@@ -131,95 +131,138 @@ def _get_langfuse_client():
         return None
 
 
+# Langfuse v4 SDK imports for ``_log_ragas_scores_to_langfuse``.
+# The ``langfuse`` dependency is pinned ``>=4.0.0,<5.0`` in ``pyproject.toml``,
+# so a v3-style ``langfuse_client.trace(...)`` API call no longer exists.
+# The previous implementation passed unit tests via ``MagicMock`` only — a real
+# RAGAS run raised ``AttributeError`` and the broad ``except`` swallowed it,
+# producing zero scores in Langfuse. See issue #2211 for details.
+try:  # pragma: no cover — import-time fallback for optional dep
+    from langfuse import propagate_attributes  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover
+    propagate_attributes = None  # type: ignore[assignment]
+
+
 def _log_ragas_scores_to_langfuse(
     langfuse_client: Any,
     metrics: dict[str, float],
     session_id: str,
     trace_name: str = "ragas-evaluation",
 ) -> str | None:
-    """
-    Log RAGAS evaluation scores to Langfuse.
+    """Log RAGAS evaluation scores to Langfuse using the v4 SDK.
+
+    SDK-native pattern (see ``src/evaluation/langfuse_integration.py`` for the
+    canonical reference and Langfuse v3-to-v4 upgrade guide):
+
+    1. Open the root span via ``langfuse.start_as_current_observation(
+       as_type="span", name="ragas-evaluation")`` as a context manager so
+       ``observation.update(...)`` and ``langfuse.score_current_trace(...)``
+       resolve against the active observation.
+    2. Set trace attributes (``session_id``, ``tags``) inside the same context
+       via ``propagate_attributes(...)`` rather than passing them as
+       ``trace(...)`` kwargs (those are removed in v4).
+    3. Publish each metric via ``langfuse.score_current_trace(name=, value=,
+       data_type="NUMERIC")`` — the v4 trace-level score API.
+    4. Set the final trace I/O via ``observation.update(output=...)``.
+    5. Flush once at the end so short-lived ``make eval-rag`` runs do not lose
+       scores to ``BatchSpanProcessor`` buffering.
 
     Args:
-        langfuse_client: Langfuse client instance
-        metrics: Dictionary of RAGAS metrics
-        session_id: Session ID for grouping traces
-        trace_name: Name for the trace
+        langfuse_client: Langfuse v4 client instance.
+        metrics: Dictionary of RAGAS metrics (faithfulness, context_precision,
+            context_recall, answer_relevancy, eval_duration_seconds,
+            queries_evaluated).
+        session_id: Session ID for grouping traces in the Langfuse UI.
+        trace_name: Name for the root span (default ``ragas-evaluation``).
 
     Returns:
-        Trace ID if successful, None otherwise
+        Trace ID if successful, ``None`` if the client is missing or the SDK
+        call fails (graceful degradation — does not raise).
     """
     if langfuse_client is None:
         return None
+    if propagate_attributes is None:  # pragma: no cover — defensive
+        return None
 
     try:
-        # Create trace for this evaluation
-        trace = langfuse_client.trace(
-            name=trace_name,
-            session_id=session_id,
-            input={"evaluation_type": "ragas", "metrics_count": len(metrics)},
-            tags=["ragas", "evaluation", "quality"],
-            metadata={
-                "thresholds": {
-                    "faithfulness": FAITHFULNESS_THRESHOLD,
-                    "context_precision": CONTEXT_PRECISION_THRESHOLD,
-                    "context_recall": CONTEXT_RECALL_THRESHOLD,
-                    "answer_relevancy": ANSWER_RELEVANCY_THRESHOLD,
-                }
-            },
-        )
+        thresholds_metadata = {
+            "thresholds": {
+                "faithfulness": FAITHFULNESS_THRESHOLD,
+                "context_precision": CONTEXT_PRECISION_THRESHOLD,
+                "context_recall": CONTEXT_RECALL_THRESHOLD,
+                "answer_relevancy": ANSWER_RELEVANCY_THRESHOLD,
+            }
+        }
 
-        # Log each RAGAS metric as a score
-        score_names = [
-            "faithfulness",
-            "context_precision",
-            "context_recall",
-            "answer_relevancy",
-        ]
+        with (
+            langfuse_client.start_as_current_observation(
+                as_type="span",
+                name=trace_name,
+            ) as observation,
+            propagate_attributes(
+                session_id=session_id,
+                tags=["ragas", "evaluation", "quality"],
+                metadata=thresholds_metadata,
+            ),
+        ):
+            # Step 3: publish each metric via v4 ``score_current_trace``.
+            ragas_metric_names = (
+                "faithfulness",
+                "context_precision",
+                "context_recall",
+                "answer_relevancy",
+            )
+            for metric_name in ragas_metric_names:
+                if metric_name in metrics:
+                    langfuse_client.score_current_trace(
+                        name=metric_name,
+                        value=float(metrics[metric_name]),
+                        data_type="NUMERIC",
+                        comment=f"RAGAS {metric_name} score",
+                    )
 
-        for score_name in score_names:
-            if score_name in metrics:
-                trace.score(
-                    name=score_name,
-                    value=metrics[score_name],
-                    comment=f"RAGAS {score_name} score",
+            if "eval_duration_seconds" in metrics:
+                langfuse_client.score_current_trace(
+                    name="eval_duration_seconds",
+                    value=float(metrics["eval_duration_seconds"]),
+                    data_type="NUMERIC",
+                    comment="Evaluation duration in seconds",
                 )
 
-        # Log additional metrics
-        if "eval_duration_seconds" in metrics:
-            trace.score(
-                name="eval_duration_seconds",
-                value=metrics["eval_duration_seconds"],
-                comment="Evaluation duration in seconds",
+            if "queries_evaluated" in metrics:
+                langfuse_client.score_current_trace(
+                    name="queries_evaluated",
+                    value=float(metrics["queries_evaluated"]),
+                    data_type="NUMERIC",
+                    comment="Number of queries evaluated",
+                )
+
+            passed = metrics.get("faithfulness", 0) >= FAITHFULNESS_THRESHOLD
+            langfuse_client.score_current_trace(
+                name="acceptance_passed",
+                value=1.0 if passed else 0.0,
+                data_type="NUMERIC",
+                comment=(
+                    f"Faithfulness threshold {FAITHFULNESS_THRESHOLD} "
+                    f"{'met' if passed else 'not met'}"
+                ),
             )
 
-        if "queries_evaluated" in metrics:
-            trace.score(
-                name="queries_evaluated",
-                value=float(metrics["queries_evaluated"]),
-                comment="Number of queries evaluated",
+            # Step 4: write final I/O on the root observation.
+            observation.update(
+                input={"evaluation_type": "ragas", "metrics_count": len(metrics)},
+                output={
+                    "metrics": metrics,
+                    "acceptance_passed": passed,
+                },
             )
 
-        # Log pass/fail status
-        passed = metrics.get("faithfulness", 0) >= FAITHFULNESS_THRESHOLD
-        trace.score(
-            name="acceptance_passed",
-            value=1.0 if passed else 0.0,
-            comment=f"Faithfulness threshold {FAITHFULNESS_THRESHOLD} {'met' if passed else 'not met'}",
-        )
+            trace_id = getattr(observation, "trace_id", None)
 
-        # Update trace output
-        trace.update(
-            output={
-                "metrics": metrics,
-                "acceptance_passed": passed,
-            }
-        )
-
-        # Flush to ensure scores are sent
+        # Step 5: flush so short-lived ``make eval-rag`` runs do not drop scores.
         langfuse_client.flush()
 
-        return str(trace.id)
+        return str(trace_id) if trace_id is not None else None
 
     except Exception as e:
         print(f"   Langfuse scoring failed: {e}")
