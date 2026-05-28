@@ -199,22 +199,27 @@ async def test_phone_with_valid_init_data_succeeds() -> None:
     mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
 
     with (
-        patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
         patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN}, clear=False),
     ):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
-                "/api/phone",
-                # Caller-supplied user_id 12345 must be IGNORED in favour of the
-                # initData-derived value (42). We do not assert on the request
-                # body's user_id; we assert on what reached the CRM.
-                json={
-                    "phone": "+359888123456",
-                    "source": "test",
-                    "user_id": 12345,
-                },
-                headers={"X-Init-Data": valid_init_data},
-            )
+        app.state.kommo_client = mock_kommo
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.post(
+                    "/api/phone",
+                    # Caller-supplied user_id 12345 must be IGNORED in favour of the
+                    # initData-derived value (42). We do not assert on the request
+                    # body's user_id; we assert on what reached the CRM.
+                    json={
+                        "phone": "+359888123456",
+                        "source": "test",
+                        "user_id": 12345,
+                    },
+                    headers={"X-Init-Data": valid_init_data},
+                )
+        finally:
+            app.state.kommo_client = None
 
     assert resp.status_code == 200, (
         f"Expected 200 for valid initData on /api/phone, got {resp.status_code}: {resp.text}"

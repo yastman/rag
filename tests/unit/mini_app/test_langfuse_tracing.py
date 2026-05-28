@@ -184,11 +184,9 @@ class TestPropagateAttributesContract:
         _, mock_propagate = _make_propagate_recorder()
 
         app.dependency_overrides[get_validated_init_data] = lambda: _stub_init_data(7)
+        app.state.kommo_client = mock_kommo
         try:
-            with (
-                patch.object(api_mod, "propagate_attributes", mock_propagate),
-                patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
-            ):
+            with patch.object(api_mod, "propagate_attributes", mock_propagate):
                 async with AsyncClient(
                     transport=ASGITransport(app=app), base_url="http://test"
                 ) as client:
@@ -202,6 +200,7 @@ class TestPropagateAttributesContract:
                     )
         finally:
             app.dependency_overrides.pop(get_validated_init_data, None)
+            app.state.kommo_client = None
         assert resp.status_code == 200, resp.text
         assert mock_propagate.call_count >= 1
         kwargs = mock_propagate.call_args.kwargs
@@ -226,12 +225,13 @@ class TestKommoFailureSpan:
         mock_lf = MagicMock()
         mock_lf.update_current_span = MagicMock()
 
-        with (
-            patch("mini_app.phone.get_client", return_value=mock_lf),
-            patch("mini_app.phone.get_kommo_client", side_effect=Exception("CRM down")),
-        ):
+        failing_kommo = MagicMock()
+        failing_kommo.upsert_contact = AsyncMock(side_effect=Exception("CRM down"))
+
+        with patch("mini_app.phone.get_client", return_value=mock_lf):
             await submit_phone(
-                PhoneRequest(phone="+359888123456", source="viewing_consultant", user_id=99)
+                PhoneRequest(phone="+359888123456", source="viewing_consultant", user_id=99),
+                client=failing_kommo,
             )
 
         error_calls = [
@@ -259,12 +259,10 @@ class TestKommoFailureSpan:
         mock_lf = MagicMock()
         mock_lf.update_current_span = MagicMock()
 
-        with (
-            patch("mini_app.phone.get_client", return_value=mock_lf),
-            patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
-        ):
+        with patch("mini_app.phone.get_client", return_value=mock_lf):
             await submit_phone(
-                PhoneRequest(phone="+359888123456", source="viewing_consultant", user_id=99)
+                PhoneRequest(phone="+359888123456", source="viewing_consultant", user_id=99),
+                client=mock_kommo,
             )
 
         error_calls = [
@@ -284,17 +282,15 @@ class TestKommoFailureSpan:
         mock_lf = MagicMock()
         mock_lf.update_current_span = MagicMock()
 
-        with (
-            patch("mini_app.phone.get_client", return_value=mock_lf),
-            patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
-        ):
+        with patch("mini_app.phone.get_client", return_value=mock_lf):
             await submit_phone(
                 PhoneRequest(
                     phone="+359888123456",
                     name="Иван",
                     source="viewing_consultant",
                     user_id=99,
-                )
+                ),
+                client=mock_kommo,
             )
 
         for call in mock_lf.update_current_span.call_args_list:

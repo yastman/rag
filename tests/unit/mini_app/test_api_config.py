@@ -43,17 +43,18 @@ async def test_phone_endpoint_returns_json():
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
     mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
     app.dependency_overrides[get_validated_init_data] = _stub_init_data
+    app.state.kommo_client = mock_kommo
     try:
-        with patch("mini_app.phone.get_kommo_client", return_value=mock_kommo):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                resp = await client.post(
-                    "/api/phone",
-                    json={"phone": "+359888123456", "source": "test", "user_id": 123},
-                )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/phone",
+                json={"phone": "+359888123456", "source": "test", "user_id": 123},
+            )
     finally:
         app.dependency_overrides.pop(get_validated_init_data, None)
+        app.state.kommo_client = None
     assert resp.status_code == 200
     assert resp.json()["success"] is True
 
