@@ -150,6 +150,10 @@ services:
       HF_HOME: /models/hf
       TRANSFORMERS_CACHE: /models/hf
       SENTENCE_TRANSFORMERS_HOME: /models/sentence-transformers
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-user-base}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s

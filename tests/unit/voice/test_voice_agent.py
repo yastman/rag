@@ -87,6 +87,61 @@ def test_voice_bot_stores_trace_session_id():
     assert agent._session_id == "voice-call-xyz"
 
 
+def test_setup_langfuse_calls_auth_check_when_client_is_initialized(monkeypatch):
+    """When a Langfuse client is returned, _setup_langfuse must call
+    ``client.auth_check()`` and warn-log on failure (#2210).
+
+    Without auth_check, an unreachable Langfuse host or rotated keys would
+    silently degrade to no-op tracing and the operator would have no signal
+    in the voice-agent logs. ``mini_app/api.py:73-105`` is the canonical
+    lifespan reference.
+    """
+    import src.voice.agent as mod
+
+    fake_provider = object()
+    fake_client = MagicMock()
+    fake_client.auth_check.return_value = True
+
+    with (
+        patch("src.voice.agent.initialize_langfuse", return_value=fake_client),
+        patch("src.voice.agent.trace.get_tracer_provider", return_value=fake_provider),
+        patch("livekit.agents.telemetry.set_tracer_provider"),
+    ):
+        mod._setup_langfuse()
+
+    fake_client.auth_check.assert_called_once_with()
+
+
+def test_setup_langfuse_logs_warning_when_auth_check_fails(monkeypatch, caplog):
+    """auth_check() failure must produce a WARNING log (not crash). #2210."""
+    import logging
+
+    import src.voice.agent as mod
+
+    fake_provider = object()
+    fake_client = MagicMock()
+    fake_client.auth_check.side_effect = RuntimeError("Langfuse unreachable")
+
+    with (
+        patch("src.voice.agent.initialize_langfuse", return_value=fake_client),
+        patch("src.voice.agent.trace.get_tracer_provider", return_value=fake_provider),
+        patch("livekit.agents.telemetry.set_tracer_provider"),
+        caplog.at_level(logging.WARNING, logger="src.voice.agent"),
+    ):
+        mod._setup_langfuse()  # must not raise
+
+    fake_client.auth_check.assert_called_once_with()
+    # Warning log must surface so operators see "Langfuse degraded"
+    assert any(
+        "auth_check" in record.message.lower() or "langfuse" in record.message.lower()
+        for record in caplog.records
+        if record.levelno >= logging.WARNING
+    ), (
+        "Voice agent must log a WARNING when Langfuse auth_check fails so the "
+        "operator gets a signal instead of silent no-op tracing (#2210)."
+    )
+
+
 def test_setup_langfuse_delegates_to_canonical_initialize(monkeypatch):
     """Voice OTEL setup reuses src.observability.initialize_langfuse instead of
     building a parallel OTLP/TracerProvider/BatchSpanProcessor pipeline (#2059).
