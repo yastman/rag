@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Model Configuration
     MODEL_NAME: str = "BAAI/bge-m3"  # HuggingFace model ID (tokenizer only with ONNX)
+    MODEL_REVISION: str = "5617a9f61b028005a4858fdac845db406aefb181"
     MODEL_CACHE_DIR: str = "/models"
     USE_FP16: bool = True  # FP16 for CPU memory savings (legacy; ONNX INT8 ignores this)
 
@@ -29,7 +30,7 @@ class Settings(BaseSettings):
     NUM_THREADS: int = int(os.getenv("OMP_NUM_THREADS", "4"))
 
     # API Settings
-    HOST: str = "0.0.0.0"
+    HOST: str = "0.0.0.0"  # nosec B104 - container service must bind all interfaces
     PORT: int = 8000  # Внутренний порт контейнера (8001 на хосте)
     WORKERS: int = 1  # Один worker для экономии памяти
 

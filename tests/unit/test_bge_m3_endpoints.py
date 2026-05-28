@@ -185,6 +185,7 @@ class TestConfigDefaults:
         _cfg = bge_app["config"]
         assert _cfg.settings.MAX_LENGTH == 2048
         assert _cfg.settings.BATCH_SIZE == 12
+        assert _cfg.settings.MODEL_REVISION == "5617a9f61b028005a4858fdac845db406aefb181"
         assert _cfg.settings.RERANK_MAX_DOCS == 30
         assert _cfg.settings.RERANK_MAX_LENGTH == 512
 
