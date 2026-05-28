@@ -320,8 +320,7 @@ def _ci_env_keys() -> frozenset[str]:
 
 def test_bge_m3_has_onnx_bind_mount() -> None:
     """bge-m3 must have an explicit ONNX model bind mount at ``/models/onnx``
-    (read-only) that overlays the ``hf_cache:/models`` volume mount so the
-    ONNX INT8 runtime can find its artifacts (#2229)."""
+    (read-only) so the ONNX INT8 runtime can find its artifacts (#2229)."""
     import yaml
 
     compose = yaml.safe_load(COMPOSE_FILE.read_text())
@@ -354,10 +353,29 @@ def test_bge_m3_has_hf_subdirectory_mount() -> None:
     for vol in volumes:
         target = vol.split(":")[1].split("@")[0] if isinstance(vol, str) else vol.get("target", "")
         targets.add(target)
-    assert any(t.startswith("/models/") and t != "/models" for t in targets), (
-        "bge-m3 needs a narrow HF cache mount (e.g. /models/hf) so "
+    assert "/models/hf" in targets, (
+        "bge-m3 needs a narrow HF cache mount at /models/hf so "
         "/models/onnx for ONNX artifacts is not masked"
     )
+
+
+def test_bge_m3_model_cache_dir_uses_writable_hf_cache() -> None:
+    """The tokenizer cache must use the HF volume, not /models root (#2229)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    environment = bge_m3["environment"]
+    assert environment["MODEL_CACHE_DIR"] == "/models/hf"
+    assert environment["HF_HOME"] == "/models/hf"
+    assert environment["TRANSFORMERS_CACHE"] == "/models/hf"
+
+
+def test_bge_m3_dockerfile_prepares_model_dirs_for_appuser() -> None:
+    """Named volumes inherit target ownership on first use; prepare /models."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
+    assert "mkdir -p /models/hf /models/onnx" in dockerfile
+    assert "chown -R appuser:appgroup /models" in dockerfile
 
 
 def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:

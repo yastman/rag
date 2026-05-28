@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Model Configuration
     MODEL_NAME: str = "BAAI/bge-m3"  # HuggingFace model ID (tokenizer only with ONNX)
     MODEL_REVISION: str = "5617a9f61b028005a4858fdac845db406aefb181"
-    MODEL_CACHE_DIR: str = "/models"
+    MODEL_CACHE_DIR: str = "/models/hf"
     USE_FP16: bool = True  # FP16 for CPU memory savings (legacy; ONNX INT8 ignores this)
 
     # ONNX Runtime Configuration
