@@ -306,15 +306,20 @@ def test_qdrant_stack_doc_matches_compose_version() -> None:
 _CI_ENV_KEYS: frozenset[str] | None = None
 
 
+def _ci_env_map() -> dict[str, str]:
+    """Parse key/value pairs from the deterministic Compose CI env fixture."""
+    return dict(
+        line.split("=", 1)
+        for line in COMPOSE_CI_ENV.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+
+
 def _ci_env_keys() -> frozenset[str]:
     """Lazily parsed set of env var keys from the CI env fixture."""
     global _CI_ENV_KEYS
     if _CI_ENV_KEYS is None:
-        _CI_ENV_KEYS = frozenset(
-            line.split("=", 1)[0]
-            for line in COMPOSE_CI_ENV.read_text(encoding="utf-8").splitlines()
-            if line and not line.startswith("#") and "=" in line
-        )
+        _CI_ENV_KEYS = frozenset(_ci_env_map())
     return _CI_ENV_KEYS
 
 
@@ -399,9 +404,23 @@ def test_bge_m3_dockerfile_bakes_int8_model_from_build_context() -> None:
 def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:
     """tests/fixtures/compose.ci.env must define BGE_M3_ONNX_MODEL_HOST_DIR so
     Compose config rendering can resolve the bind-mount source (#2229)."""
-    assert "BGE_M3_ONNX_MODEL_HOST_DIR" in _ci_env_keys(), (
+    ci_env = _ci_env_map()
+    assert "BGE_M3_ONNX_MODEL_HOST_DIR" in ci_env, (
         "BGE_M3_ONNX_MODEL_HOST_DIR is missing from tests/fixtures/compose.ci.env; "
         "Compose config rendering requires it for the ONNX model bind mount"
+    )
+    model_dir = Path(ci_env["BGE_M3_ONNX_MODEL_HOST_DIR"])
+    assert not model_dir.is_absolute(), (
+        "tests/fixtures/compose.ci.env must use a repo-relative ONNX fixture path, "
+        f"not a host-specific absolute path: {model_dir}"
+    )
+    assert (model_dir / "model.int8.onnx").is_file(), (
+        "Compose CI BGE model context must include model.int8.onnx so "
+        "`docker compose build bge-m3` does not depend on host-local artifacts"
+    )
+    assert (model_dir / "model.int8.onnx.data").is_file(), (
+        "Compose CI BGE model context must include model.int8.onnx.data so "
+        "`docker compose build bge-m3` does not depend on host-local artifacts"
     )
 
 
@@ -412,6 +431,9 @@ def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
     assert "BGE_M3_ONNX_MODEL_HOST_DIR" in text, (
         "BGE_M3_ONNX_MODEL_HOST_DIR must be documented in .env.example "
         "for local ONNX model provisioning"
+    )
+    assert "/home/user/" not in text, (
+        ".env.example must not hardcode developer-local absolute paths"
     )
 
 
