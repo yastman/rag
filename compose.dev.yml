@@ -59,6 +59,10 @@ services:
   user-base:
     ports:
       - "127.0.0.1:8003:8000"
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-user-base}"
 
   docling:
     ports:

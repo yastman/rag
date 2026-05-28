@@ -29,7 +29,21 @@ def _get_service_env(compose: dict, service: str) -> dict[str, str]:
 
 
 # Сервисы которые ДОЛЖНЫ иметь LANGFUSE vars
-TRACED_SERVICES = ["bge-m3", "bot", "litellm", "rag-api", "voice-agent", "ingestion"]
+#
+# Includes every micro-service whose code carries ``@observe`` decorators.
+# A service that emits ``@observe`` spans without these env vars in its compose
+# block will silently no-op the SDK at startup — see #2210 (bge-m3 was the same
+# class of bug fixed in #2229; user-base + mini-app-api close the rest).
+TRACED_SERVICES = [
+    "bge-m3",
+    "bot",
+    "ingestion",
+    "litellm",
+    "mini-app-api",
+    "rag-api",
+    "user-base",
+    "voice-agent",
+]
 
 # Минимальный набор vars для трейсинга
 REQUIRED_LANGFUSE_VARS = [

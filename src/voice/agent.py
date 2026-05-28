@@ -275,6 +275,17 @@ def _setup_langfuse() -> None:
         # initialize_langfuse already logged the reason at INFO/WARNING.
         return
 
+    # Verify credentials/host reachability and surface a WARNING log on failure
+    # so operators see "Langfuse degraded" instead of silent no-op tracing.
+    # mini_app/api.py:73-105 is the canonical lifespan reference (#2210).
+    try:
+        client.auth_check()
+    except Exception:
+        logger.warning(
+            "Langfuse auth_check failed; voice traces may not reach the backend",
+            exc_info=True,
+        )
+
     provider = trace.get_tracer_provider()
 
     try:
