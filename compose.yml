@@ -48,6 +48,10 @@ services:
   redis:
     <<: *security-defaults
     image: redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
+    # Match the redis user (uid 999) baked into redis:8.x so the process can
+    # read/write /data with cap_drop:[ALL]. Running as root without
+    # CAP_DAC_OVERRIDE cannot read redis-owned dump.rdb and causes startup loops.
+    user: "999:999"
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false
