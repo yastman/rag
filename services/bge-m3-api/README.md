@@ -15,11 +15,12 @@ Used by the ingestion pipeline and query contextualization to produce multi-vect
 
 The ONNX INT8 model (`model.int8.onnx` + `model.int8.onnx.data`) must be placed in a directory accessible to the container. Three deployment strategies:
 
-1. **Docker bind mount** (dev): `-v /path/to/model:/models/onnx:ro`
+1. **Compose bind mount** (local dev, default): `BGE_M3_ONNX_MODEL_HOST_DIR` env var points to the host directory; mounted read-only at `/models/onnx` in `compose.yml`
 2. **Docker COPY** (prod): bake the artifacts into the image by adding `COPY model.int8.onnx model.int8.onnx.data /models/onnx/` to the Dockerfile
-3. **Config-driven**: set `ONNX_MODEL_DIR` env var to the model directory path
+3. **Config-driven**: set `ONNX_MODEL_DIR` env var to the model directory path (defaults to `/models/onnx` via Dockerfile and `config.py`)
 
 The default `ONNX_MODEL_DIR` is `/models/onnx` (override via `ONNX_MODEL_DIR` env).
+For local development with Docker, set `BGE_M3_ONNX_MODEL_HOST_DIR` in `.env` to the host path containing the model artifacts.
 
 ## Docker
 

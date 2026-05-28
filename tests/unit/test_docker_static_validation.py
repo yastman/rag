@@ -301,6 +301,105 @@ def test_qdrant_stack_doc_matches_compose_version() -> None:
     )
 
 
+# ── BGE-M3 ONNX runtime packaging gate (PR #2229) ──────────────────────────
+
+_CI_ENV_KEYS: frozenset[str] | None = None
+
+
+def _ci_env_keys() -> frozenset[str]:
+    """Lazily parsed set of env var keys from the CI env fixture."""
+    global _CI_ENV_KEYS
+    if _CI_ENV_KEYS is None:
+        _CI_ENV_KEYS = frozenset(
+            line.split("=", 1)[0]
+            for line in COMPOSE_CI_ENV.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#") and "=" in line
+        )
+    return _CI_ENV_KEYS
+
+
+def test_bge_m3_has_onnx_bind_mount() -> None:
+    """bge-m3 must have an explicit ONNX model bind mount at ``/models/onnx``
+    (read-only) that overlays the ``hf_cache:/models`` volume mount so the
+    ONNX INT8 runtime can find its artifacts (#2229)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    volumes = bge_m3.get("volumes", [])
+    has_onnx_bind = False
+    for vol in volumes:
+        if (
+            isinstance(vol, dict)
+            and vol.get("target") == "/models/onnx"
+            and vol.get("read_only") is True
+        ):
+            has_onnx_bind = True
+            break
+    assert has_onnx_bind, (
+        "bge-m3 must have a read-only bind mount at /models/onnx "
+        "with source BGE_M3_ONNX_MODEL_HOST_DIR for ONNX INT8 artifacts"
+    )
+
+
+def test_bge_m3_has_hf_subdirectory_mount() -> None:
+    """bge-m3 should mount a narrower HF-only subdirectory (e.g. /models/hf)
+    so the ONNX path ``/models/onnx`` remains usable (#2229)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    volumes = bge_m3.get("volumes", [])
+    targets: set[str] = set()
+    for vol in volumes:
+        target = vol.split(":")[1].split("@")[0] if isinstance(vol, str) else vol.get("target", "")
+        targets.add(target)
+    assert any(t.startswith("/models/") and t != "/models" for t in targets), (
+        "bge-m3 needs a narrow HF cache mount (e.g. /models/hf) so "
+        "/models/onnx for ONNX artifacts is not masked"
+    )
+
+
+def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:
+    """tests/fixtures/compose.ci.env must define BGE_M3_ONNX_MODEL_HOST_DIR so
+    Compose config rendering can resolve the bind-mount source (#2229)."""
+    assert "BGE_M3_ONNX_MODEL_HOST_DIR" in _ci_env_keys(), (
+        "BGE_M3_ONNX_MODEL_HOST_DIR is missing from tests/fixtures/compose.ci.env; "
+        "Compose config rendering requires it for the ONNX model bind mount"
+    )
+
+
+def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
+    """.env.example must document BGE_M3_ONNX_MODEL_HOST_DIR as a local-dev
+    path for the ONNX INT8 artifact bind mount (#2229)."""
+    text = ENV_EXAMPLE.read_text()
+    assert "BGE_M3_ONNX_MODEL_HOST_DIR" in text, (
+        "BGE_M3_ONNX_MODEL_HOST_DIR must be documented in .env.example "
+        "for local ONNX model provisioning"
+    )
+
+
+def test_compose_dev_bge_m3_renders_with_ci_env() -> None:
+    """Compose dev config rendering must succeed for ``bge-m3`` with the CI env fixture."""
+    result = _run_docker_command(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "config",
+            "bge-m3",
+        ],
+    )
+    assert result.returncode == 0, (
+        f"Compose bge-m3 config rendering failed:\n{result.stderr or result.stdout}"
+    )
+
+
 # ── voice-agent healthcheck runtime safety (#1510) ─────────────────────────
 
 

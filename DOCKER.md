@@ -93,6 +93,7 @@ When `.env` is present, Docker credentials must be set there. `compose.dev.yml`
 does not provide built-in password defaults for stateful services; local values
 still need to be throwaway/dev-only:
 
+- `BGE_M3_ONNX_MODEL_HOST_DIR` — host path to the ONNX INT8 model artifacts
 - `POSTGRES_PASSWORD`
 - `REDIS_PASSWORD`
 - `CLICKHOUSE_PASSWORD`
@@ -120,6 +121,15 @@ still need to be throwaway/dev-only:
 | LiveKit | `ws://localhost:7880` |
 
 ## Required Environment Variables
+
+### Core stack (unprofiled services)
+
+- `BGE_M3_ONNX_MODEL_HOST_DIR` — host path to the ONNX INT8 model directory
+  containing `model.int8.onnx` and `model.int8.onnx.data`. Mounted read-only
+  into the `bge-m3` container at `/models/onnx`. Must be an absolute path.
+  This is required for all Compose operations that include `bge-m3`.
+- `POSTGRES_PASSWORD`
+- `REDIS_PASSWORD`
 
 ### Bot path (`make docker-bot-up`)
 

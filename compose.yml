@@ -111,6 +111,14 @@ services:
     logging: *default-logging
     volumes:
       - hf_cache:/models
+      # ONNX INT8 artifacts (model.int8.onnx + model.int8.onnx.data).
+      # The bind mount overlays /models/onnx on top of the hf_cache volume
+      # mount, so the ONNX runtime finds its artifacts without the HF cache
+      # masking them. Production image-layer packaging is the follow-up.
+      - type: bind
+        source: "${BGE_M3_ONNX_MODEL_HOST_DIR:?BGE_M3_ONNX_MODEL_HOST_DIR must point to the local ONNX model directory}"
+        target: /models/onnx
+        read_only: true
     environment:
       OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
       MKL_NUM_THREADS: ${MKL_NUM_THREADS:-4}
