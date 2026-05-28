@@ -47,6 +47,10 @@ services:
   bge-m3:
     ports:
       - "127.0.0.1:8000:8000"
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-bge-m3}"
     deploy:
       resources:
         limits:

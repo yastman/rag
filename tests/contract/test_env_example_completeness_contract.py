@@ -370,6 +370,17 @@ def _parse_env_example(*, include_commented: bool = True) -> set[str]:
     return keys
 
 
+def _parse_env_file(path: Path) -> set[str]:
+    keys: set[str] = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if (m := _KEY_LINE.match(line)) is not None:
+            keys.add(m.group(1))
+    return keys
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -457,3 +468,13 @@ def test_allowlists_have_no_overlap_with_documented_keys() -> None:
         f" {sorted(bogus_not_in_code)}. Remove them from the allowlist;"
         " they belong in .env.example as documented variables."
     )
+
+
+def test_langfuse_container_env_surface_is_documented_and_fixture_backed() -> None:
+    """Containerized services, including bge-m3, use the Docker Langfuse host."""
+    env_example_keys = _parse_env_example()
+    ci_env_keys = _parse_env_file(REPO_ROOT / "tests/fixtures/compose.ci.env")
+
+    required = {"LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_DOCKER_HOST"}
+    assert required <= env_example_keys
+    assert required <= ci_env_keys

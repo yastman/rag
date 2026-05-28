@@ -367,6 +367,19 @@ def test_bge_m3_model_cache_dir_uses_writable_hf_cache() -> None:
     assert environment["TRANSFORMERS_CACHE"] == "/models/hf"
 
 
+def test_bge_m3_has_langfuse_observation_env_defaults() -> None:
+    """bge-m3 server-side @observe spans must be enabled in local Compose."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    environment = bge_m3["environment"]
+    assert environment["LANGFUSE_PUBLIC_KEY"] == "${LANGFUSE_PUBLIC_KEY:-}"
+    assert environment["LANGFUSE_SECRET_KEY"] == "${LANGFUSE_SECRET_KEY:-}"
+    assert environment["LANGFUSE_HOST"] == "${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}"
+    assert environment["OTEL_SERVICE_NAME"] == "${OTEL_SERVICE_NAME:-bge-m3}"
+
+
 def test_bge_m3_dockerfile_prepares_model_dirs_for_appuser() -> None:
     """Named volumes inherit target ownership on first use; prepare /models."""
     dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
@@ -400,6 +413,14 @@ def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
         "BGE_M3_ONNX_MODEL_HOST_DIR must be documented in .env.example "
         "for local ONNX model provisioning"
     )
+
+
+def test_compose_ci_langfuse_env_has_bge_m3_inputs() -> None:
+    """CI compose env must provide the local Langfuse inputs bge-m3 consumes."""
+    keys = _ci_env_keys()
+    assert "LANGFUSE_PUBLIC_KEY" in keys
+    assert "LANGFUSE_SECRET_KEY" in keys
+    assert "LANGFUSE_DOCKER_HOST" in keys
 
 
 def test_compose_dev_bge_m3_renders_with_ci_env() -> None:
