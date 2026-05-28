@@ -195,6 +195,7 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-voice-agent}"
 
   mini-app-api:
     ports:

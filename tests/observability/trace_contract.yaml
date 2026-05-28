@@ -3,6 +3,49 @@
 # score keys, and expected error allowlist entries.
 # Used by tests/contract/test_trace_families_contract.py for static verification.
 
+# Services that contain @observe decorators in their source code AND
+# therefore MUST receive LANGFUSE_* env vars in compose so the SDK
+# initializes correctly (#2219). Each entry maps the source root that
+# owns @observe-decorated code to the compose service name and the
+# canonical OTEL_SERVICE_NAME default.
+#
+# A bidirectional contract test (tests/contract/
+# test_compose_observe_coverage_contract.py) walks every source root,
+# fails the build if a root contains @observe but is missing here, AND
+# fails if a listed compose service is missing the four required env
+# vars in compose.yml or compose.dev.yml. Closes the Epic A class of
+# bug from #2210 / #2229: a new micro-service with @observe but no
+# env passthrough cannot land silently.
+services_with_observe:
+  bge-m3-api:
+    source_root: services/bge-m3-api
+    compose_service: bge-m3
+    otel_service_name: bge-m3
+  user-base:
+    source_root: services/user-base
+    compose_service: user-base
+    otel_service_name: user-base
+  rag-api:
+    source_root: src/api
+    compose_service: rag-api
+    otel_service_name: rag-api
+  mini-app-api:
+    source_root: mini_app
+    compose_service: mini-app-api
+    otel_service_name: mini-app-api
+  voice-agent:
+    source_root: src/voice
+    compose_service: voice-agent
+    otel_service_name: voice-agent
+  bot:
+    source_root: telegram_bot
+    compose_service: bot
+    otel_service_name: telegram-bot
+  ingestion:
+    source_root: src/ingestion
+    compose_service: ingestion
+    otel_service_name: ingestion
+
 required_families:
   - telegram-rag-query
   - telegram-rag-supervisor
