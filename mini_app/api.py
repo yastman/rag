@@ -237,6 +237,7 @@ async def start_expert(
         user_id=str(user_id),
         tags=["miniapp", "start-expert", request.expert_id],
         metadata={"surface": "miniapp"},
+        as_baggage=True,
     ):
         _update_current_span(
             input={
@@ -412,6 +413,7 @@ async def phone(
         user_id=str(user_id),
         tags=["miniapp", "submit-phone", request.source],
         metadata={"surface": "miniapp"},
+        as_baggage=True,
     ):
         _update_current_span(input={"source": request.source, "has_name": request.name is not None})
         result = await submit_phone(verified_request)

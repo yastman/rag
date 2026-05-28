@@ -236,4 +236,5 @@ class TestLangfuseContextMiddleware:
             session_id="session-123",
             user_id="42",
             tags=["telegram", "message"],
+            as_baggage=True,
         )

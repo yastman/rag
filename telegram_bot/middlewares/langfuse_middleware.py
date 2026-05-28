@@ -82,6 +82,7 @@ class LangfuseContextMiddleware(BaseMiddleware):
                 session_id=session_id,
                 user_id=str(user_id) if user_id is not None else None,
                 tags=["telegram", action_type],
+                as_baggage=True,
             ),
         ):
             return await handler(event, data)
