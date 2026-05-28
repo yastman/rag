@@ -34,4 +34,5 @@ test = [
     "qdrant-client>=1.17",
     "aiogram>=3.0",
     "langfuse>=4.0.0",
+    "langchain-core>=1.2",
 ]

@@ -319,3 +319,103 @@ class TestWarmup:
             f"got return_colbert_vecs={warmup_kwargs.get('return_colbert_vecs')}"
         )
         fake_model.encode = orig_encode
+
+
+# ── Unit tests for _onnx_sparse_to_qdrant converter ──
+
+
+class Tok:
+    """Minimal tokenizer stub for ``_onnx_sparse_to_qdrant`` unit tests."""
+
+    cls_token_id: int | None = 0
+    eos_token_id: int | None = 1
+    pad_token_id: int | None = None
+    unk_token_id: int | None = None
+
+
+class TestOnnxSparseToQdrant:
+    """Focused unit tests for ``_onnx_sparse_to_qdrant`` (#2209)."""
+
+    def test_special_token_filtering(self, bge_app):
+        """Special token IDs (cls=0, eos=1) must be excluded."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.8], [0.9]]], dtype=np.float32)
+        ids = np.array([[0, 10, 1]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Only token 10 should remain; cls=0 and eos=1 are special
+        assert result == [{"indices": [10], "values": [0.800000011920929]}]
+
+    def test_non_positive_weight_filtering(self, bge_app):
+        """Zero and negative weights must be excluded."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.0], [-0.3], [0.7]]], dtype=np.float32)
+        ids = np.array([[10, 11, 12, 13]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Zero-weight token 11 and negative-weight token 12 must be filtered
+        assert result == [{"indices": [10, 13], "values": [0.5, 0.699999988079071]}]
+
+    def test_duplicate_token_id_keeps_max_positive(self, bge_app):
+        """Duplicate token IDs must keep the max positive weight."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.3], [0.9]]], dtype=np.float32)
+        ids = np.array([[10, 10, 10]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # All three positions map to token 10, keep max weight 0.9
+        assert result == [{"indices": [10], "values": [0.8999999761581421]}]
+
+    def test_acceptance_case_sparse_conversion(self, bge_app):
+        """Exact acceptance case from review-fix prompt."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.0], [0.5], [-0.2], [0.7], [0.9]]], dtype=np.float32)
+        ids = np.array([[0, 10, 11, 10, 1]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Expected: skip special (0=cls, 1=eos), skip zero (idx 0), skip
+        # negative (-0.2 at idx 11), keep max positive for duplicate token 10 (0.7).
+        assert result == [{"indices": [10], "values": [0.699999988079071]}]
+
+    def test_multi_batch_item(self, bge_app):
+        """Two batch items return one dict each."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.3]], [[0.1], [0.9]]], dtype=np.float32)
+        ids = np.array([[10, 11], [10, 10]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Item 0: tokens 10=0.5, 11=0.3
+        # Item 1: token 10 appears twice → max(0.1, 0.9) = 0.9
+        assert len(result) == 2
+        assert result[0] == {"indices": [10, 11], "values": [0.5, 0.30000001192092896]}
+        assert result[1] == {"indices": [10], "values": [0.8999999761581421]}
+
+    def test_mixed_positive_zero_negative_with_duplicates(self, bge_app):
+        """Combine special-token, non-positive, and dedup in one pass."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        # cls=0, eos=1: special.  weights: 0(zero), -0.5(negative), +0.3, +0.7
+        sparse = np.array([[[0.0], [-0.5], [0.3], [0.7]]], dtype=np.float32)
+        ids = np.array([[0, 1, 10, 10]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # cls=0 and eos=1 are special → filtered
+        # duplicate token 10 → max(0.3, 0.7) = 0.7
+        assert result == [{"indices": [10], "values": [0.699999988079071]}]

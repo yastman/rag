@@ -139,6 +139,8 @@ def _onnx_sparse_to_qdrant(
             if tid in special_ids:
                 continue
             weight = float(sparse_vecs[i, j, 0])
+            if weight <= 0:
+                continue
             token_weights[tid] = max(token_weights.get(tid, weight), weight)
 
         indices = list(token_weights.keys())
