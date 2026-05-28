@@ -11,6 +11,7 @@ Features: RRF fusion, freshness boosting, MMR diversity.
 """
 
 import logging
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -492,6 +493,7 @@ class QdrantService:
 
         # Execute RRF fusion search with graceful degradation
         try:
+            t_start = time.monotonic()
             if group_by:
                 group_result = await self._client.query_points_groups(
                     collection_name=self._collection_name,
@@ -505,11 +507,15 @@ class QdrantService:
                     search_params=search_params,
                 )
                 results = self._format_group_results(group_result)
+                t_elapsed_ms = (time.monotonic() - t_start) * 1000
                 lf.update_current_span(
                     output={
                         "results_count": len(results),
                         "top_score": results[0]["score"] if results else None,
                         "grouped": True,
+                        "rrf_k": rrf_k,
+                        "prefetch_multiplier": prefetch_multiplier,
+                        "processing_time_ms": round(t_elapsed_ms, 3),
                     },
                     metadata={
                         "collection": self._collection_name,
@@ -530,11 +536,15 @@ class QdrantService:
                 search_params=search_params,
             )
             results = self._format_results(result.points)
+            t_elapsed_ms = (time.monotonic() - t_start) * 1000
             lf.update_current_span(
                 output={
                     "results_count": len(results),
                     "top_score": results[0]["score"] if results else None,
                     "grouped": False,
+                    "rrf_k": rrf_k,
+                    "prefetch_multiplier": prefetch_multiplier,
+                    "processing_time_ms": round(t_elapsed_ms, 3),
                 },
                 metadata={
                     "collection": self._collection_name,
@@ -768,6 +778,7 @@ class QdrantService:
         }
 
         try:
+            t_start = time.monotonic()
             # Outer stage: ColBERT MaxSim reranking on pre-stored multivectors
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -811,6 +822,11 @@ class QdrantService:
                     "fallback_reason": None,
                     "results_count": len(results),
                     "top_score": results[0]["score"] if results else None,
+                    "dense_limit": effective_dense_limit,
+                    "sparse_limit": effective_sparse_limit,
+                    "rrf_limit": rrf_limit,
+                    "rrf_k": rrf_k,
+                    "processing_time_ms": round((time.monotonic() - t_start) * 1000, 3),
                 },
                 metadata={
                     "collection": self._collection_name,
@@ -943,6 +959,7 @@ class QdrantService:
             )
 
         try:
+            t_start = time.monotonic()
             responses = await self._client.query_batch_points(
                 collection_name=self._collection_name,
                 requests=requests,
@@ -965,11 +982,13 @@ class QdrantService:
 
             merged = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
             result = merged[:top_k]
+            t_elapsed_ms = (time.monotonic() - t_start) * 1000
             lf.update_current_span(
                 output={
                     "results_count": len(result),
                     "unique_points": len(seen),
                     "top_score": result[0]["score"] if result else None,
+                    "processing_time_ms": round(t_elapsed_ms, 3),
                 },
                 metadata={
                     "collection": self._collection_name,

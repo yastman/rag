@@ -107,16 +107,22 @@ services:
     build:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
+      additional_contexts:
+        bge_m3_onnx_model: "${BGE_M3_ONNX_MODEL_HOST_DIR:?BGE_M3_ONNX_MODEL_HOST_DIR must point to the local ONNX model directory}"
     restart: unless-stopped
     logging: *default-logging
     volumes:
-      - hf_cache:/models
+      - hf_cache:/models/hf
     environment:
       OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
       MKL_NUM_THREADS: ${MKL_NUM_THREADS:-4}
       HF_HOME: /models/hf
       TRANSFORMERS_CACHE: /models/hf
-      MODEL_CACHE_DIR: /models
+      MODEL_CACHE_DIR: /models/hf
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-bge-m3}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s

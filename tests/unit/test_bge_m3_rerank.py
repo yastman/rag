@@ -22,9 +22,20 @@ _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 def bge_rerank_app():
     """Mock heavy deps and add bge-m3-api to sys.path for imports."""
     with pytest.MonkeyPatch.context() as mp:
+        mock_ort = MagicMock()
+        mock_ort.InferenceSession = MagicMock()
+        mock_ort.GraphOptimizationLevel = MagicMock()
+        mock_ort.GraphOptimizationLevel.ORT_ENABLE_ALL = 1
+        mock_ort.SessionOptions = MagicMock
+
+        mock_transformers = MagicMock()
+        mock_transformers.AutoTokenizer.from_pretrained = MagicMock(return_value=MagicMock())
+
         mock_lf = MagicMock()
         mock_lf.observe = lambda *_a, **_k: lambda f: f
-        mp.setitem(sys.modules, "FlagEmbedding", MagicMock())
+
+        mp.setitem(sys.modules, "onnxruntime", mock_ort)
+        mp.setitem(sys.modules, "transformers", mock_transformers)
         mp.setitem(sys.modules, "prometheus_client", MagicMock())
         mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
@@ -63,7 +74,7 @@ class TestRerankEndpoint:
         assert response.results[0].score == 0.95
 
     def test_maxsim_score_calculation(self, bge_rerank_app):
-        """Test MaxSim scoring function."""
+        """Test numpy MaxSim scoring function (pure numpy, no FlagEmbedding)."""
         from app import compute_maxsim_scores
 
         # Mock ColBERT vectors: query (2 tokens x 4 dim), doc (3 tokens x 4 dim)
@@ -75,7 +86,7 @@ class TestRerankEndpoint:
 
         scores = compute_maxsim_scores(query_vecs, doc_vecs)
 
-        # Doc 0: token0 matches perfectly (1.0), token1 no match (0.0) → sum=1.0
-        # Doc 1: token0 no match (0.0), token1 matches (1.0) → sum=1.0
+        # Doc 0: query token0 matches (1.0), token1 no match (0.0) → max per dim [1.0, 0.0] → sum=1.0
+        # Doc 1: query token0 no match (0.0), token1 matches (1.0) → max per dim [0.0, 1.0] → sum=1.0
         assert len(scores) == 2
         assert all(isinstance(s, float) for s in scores)

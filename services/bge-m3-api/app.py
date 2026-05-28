@@ -1,19 +1,24 @@
 """
 BGE-M3 Embeddings API
 Multi-vector embeddings: dense + sparse + colbert
+ONNX INT8 runtime (philipchung/bge-m3-onnx)
 """
 
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
-from FlagEmbedding import BGEM3FlagModel
+import onnxruntime
+from fastapi import FastAPI, HTTPException, Request
 from langfuse import observe
+from opentelemetry import propagate
+from opentelemetry.context import attach, detach
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
+from transformers import AutoTokenizer
 
 from config import settings
 
@@ -36,13 +41,139 @@ encode_partial_failures_total = Counter(
 model_loaded = Gauge("bge_model_loaded", "Model loaded status (1=loaded, 0=not loaded)")
 
 # Global model instance
-_model = None
+_onnx_session = None
+_tokenizer = None
 _warmed_up = False
+
+
+class ONNXEmbeddingModel:
+    """ONNX INT8 BGE-M3 embedding model wrapper.
+
+    Replaces ``FlagEmbedding.BGEM3FlagModel`` with the same interface:
+    ``encode()`` returns a dict with ``dense_vecs``, ``lexical_weights``,
+    and ``colbert_vecs`` keys, preserving the existing endpoint contracts.
+    """
+
+    def __init__(self, session: onnxruntime.InferenceSession, tokenizer):
+        self.session = session
+        self.tokenizer = tokenizer
+        self._input_names = [inp.name for inp in session.get_inputs()]
+        self._output_names = [out.name for out in session.get_outputs()]
+        logger.info("ONNX inputs: %s, outputs: %s", self._input_names, self._output_names)
+
+    def encode(
+        self,
+        texts: list[str],
+        *,
+        batch_size: int = 12,
+        max_length: int = 2048,
+        return_dense: bool = False,
+        return_sparse: bool = False,
+        return_colbert_vecs: bool = False,
+    ) -> dict[str, Any]:
+        """Encode texts to multi-vector embeddings via ONNX INT8.
+
+        Returns a dict with the same shape contract as ``BGEM3FlagModel.encode``:
+        - ``dense_vecs``: ``np.ndarray`` of shape ``[B, 1024]`` (float32)
+        - ``lexical_weights``: ``list[dict[int, float]]`` (Qdrant sparse format)
+        - ``colbert_vecs``: ``list[np.ndarray]``, each ``[seq_len, 1024]`` (float32)
+        """
+        result: dict[str, Any] = {}
+
+        encoded = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="np",
+        )
+        input_ids = encoded["input_ids"].astype(np.int64)
+        attention_mask = encoded["attention_mask"].astype(np.int64)
+
+        onnx_inputs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+
+        onnx_outputs = self.session.run(None, onnx_inputs)
+        # Output order verified: dense_vecs [B, 1024], sparse_vecs [B, L, 1], colbert_vecs [B, L, 1024]
+        dense, sparse, colbert = onnx_outputs
+
+        if return_dense:
+            result["dense_vecs"] = dense
+        if return_sparse:
+            result["lexical_weights"] = _onnx_sparse_to_qdrant(sparse, input_ids, self.tokenizer)
+        if return_colbert_vecs:
+            result["colbert_vecs"] = [colbert[i] for i in range(colbert.shape[0])]
+
+        return result
+
+
+def _onnx_sparse_to_qdrant(
+    sparse_vecs: np.ndarray,
+    input_ids: np.ndarray,
+    tokenizer,
+) -> list[dict[str, list]]:
+    """Convert ONNX sparse token weights to Qdrant sparse format (#2209).
+
+    Args:
+        sparse_vecs: ONNX ``sparse_vecs`` output ``[batch, seq_len, 1]``.
+        input_ids: Tokenized input IDs ``[batch, seq_len]``.
+        tokenizer: HuggingFace tokenizer for special-token ID lookups.
+
+    Returns:
+        ``[{"indices": [int token ids], "values": [float weights]}, ...]``
+        — one dict per batch item. Special tokens (cls/eos/pad/unk) are
+        skipped and duplicate token IDs keep the max positive weight.
+    """
+    batch_size = sparse_vecs.shape[0]
+    special_ids: set[int] = set()
+    for attr in ("cls_token_id", "eos_token_id", "pad_token_id", "unk_token_id"):
+        tid = getattr(tokenizer, attr, None)
+        if tid is not None:
+            special_ids.add(int(tid))
+
+    converted: list[dict[str, list]] = []
+    for i in range(batch_size):
+        token_weights: dict[int, float] = {}
+        for j, token_id in enumerate(input_ids[i]):
+            tid = int(token_id)
+            if tid in special_ids:
+                continue
+            weight = float(sparse_vecs[i, j, 0])
+            if weight <= 0:
+                continue
+            token_weights[tid] = max(token_weights.get(tid, weight), weight)
+
+        indices = list(token_weights.keys())
+        values = [token_weights[k] for k in indices]
+        converted.append({"indices": indices, "values": values})
+
+    return converted
+
+
+def compute_maxsim_scores(
+    query_vecs: np.ndarray,
+    doc_vecs_list: list[np.ndarray],
+) -> list[float]:
+    """Compute MaxSim (ColBERT late-interaction) scores via numpy.
+
+    Replaces ``BGEM3FlagModel.colbert_score()`` with pure numpy:
+    ``(query_vecs @ doc_vecs.T).max(axis=1).sum()`` per document.
+
+    Args:
+        query_vecs: Query ColBERT vectors ``(num_query_tokens, dim)``.
+        doc_vecs_list: List of document ColBERT vectors.
+
+    Returns:
+        List of MaxSim scores, one per document, in input order.
+    """
+    return [float((query_vecs @ doc_vecs.T).max(axis=1).sum()) for doc_vecs in doc_vecs_list]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Eager model loading + warmup encode at startup."""
+    """Eager model loading + bounded warmup encode at startup."""
     global _warmed_up
     logger.info("Starting model warmup...")
     start = time.time()
@@ -63,27 +194,55 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="BGE-M3 Embeddings API",
-    description="Multi-vector embeddings API (dense + sparse + colbert)",
-    version="1.0.0",
+    description="Multi-vector embeddings API (dense + sparse + colbert) — ONNX INT8",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
 
+@app.middleware("http")
+async def extract_trace_context(request: Request, call_next):
+    """Attach incoming W3C trace context so service spans join caller traces."""
+    context = propagate.extract(request.headers)
+    token = attach(context)
+    try:
+        return await call_next(request)
+    finally:
+        detach(token)
+
+
 def get_model():
-    """Lazy model loading"""
-    global _model
-    if _model is None:
-        logger.info(f"Loading BGE-M3 model: {settings.MODEL_NAME}")
-        logger.info(f"FP16: {settings.USE_FP16}, Cache dir: {settings.MODEL_CACHE_DIR}")
+    """Load ONNX session and tokenizer (lazy, cached)."""
+    global _onnx_session, _tokenizer
+    if _onnx_session is None:
+        logger.info("Loading BGE-M3 ONNX model from %s", settings.ONNX_MODEL_DIR)
+
+        onnx_path = os.path.join(settings.ONNX_MODEL_DIR, "model.int8.onnx")
+        if not os.path.isfile(onnx_path):
+            raise FileNotFoundError(f"ONNX model not found at {onnx_path}")
 
         start_time = time.time()
-        _model = BGEM3FlagModel(settings.MODEL_NAME, use_fp16=settings.USE_FP16)
-        load_time = time.time() - start_time
 
-        logger.info(f"Model loaded successfully in {load_time:.2f}s")
+        sess_options = onnxruntime.SessionOptions()
+        sess_options.intra_op_num_threads = settings.NUM_THREADS
+        sess_options.inter_op_num_threads = 1
+        sess_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        _onnx_session = onnxruntime.InferenceSession(onnx_path, sess_options)
+        load_time = time.time() - start_time
+        logger.info("ONNX session loaded in %.2fs", load_time)
+
+        # Load tokenizer from HuggingFace (model config only, no weights)
+        logger.info("Loading tokenizer for %s", settings.MODEL_NAME)
+        _tokenizer = AutoTokenizer.from_pretrained(
+            settings.MODEL_NAME,
+            cache_dir=settings.MODEL_CACHE_DIR,
+            revision=settings.MODEL_REVISION,
+        )
+        logger.info("Tokenizer loaded")
         model_loaded.set(1)
 
-    return _model
+    return ONNXEmbeddingModel(_onnx_session, _tokenizer)
 
 
 # Pydantic models
@@ -181,16 +340,18 @@ def _validate_texts(texts: list[str]) -> tuple[list[int], list[int], list[str]]:
 def _lexical_weights_to_qdrant_sparse(
     lexical_weights: list[dict[Any, Any]],
 ) -> list[dict[str, list]]:
-    """Convert FlagEmbedding ``lexical_weights`` rows to Qdrant sparse format (#1237).
+    """Convert ``lexical_weights`` rows to Qdrant sparse format.
 
-    Extracted from ``encode_sparse`` and ``encode_hybrid``; previously each
-    site rebuilt the same ``{indices, values}`` shape with a hand-rolled
-    loop. Centralising the conversion eliminates the duplication called out
-    in #1237 and provides a single place to evolve the format if Qdrant
-    changes its API.
+    Maps each ``{token_id: weight}`` dict to ``{"indices": [int], "values": [float]}``.
+    When ONNX sparse output is already in Qdrant format (via ``_onnx_sparse_to_qdrant``),
+    this function is a no-op passthrough.
     """
     converted: list[dict[str, list]] = []
     for row in lexical_weights:
+        if "indices" in row and "values" in row:
+            # Already in Qdrant sparse format — pass through
+            converted.append(row)
+            continue
         indices: list[int] = []
         values: list[float] = []
         for idx, val in row.items():
@@ -200,34 +361,13 @@ def _lexical_weights_to_qdrant_sparse(
     return converted
 
 
-def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray]) -> list[float]:
-    """Compute MaxSim (ColBERT late-interaction) scores via FlagEmbedding (#1237).
-
-    Delegates to :meth:`BGEM3FlagModel.colbert_score`, the SDK-native MaxSim
-    implementation that ships with FlagEmbedding 1.2+. Replaces the previous
-    from-scratch ``query_vecs @ doc_vecs.T`` / ``max(axis=1).sum()`` numpy
-    implementation. Behaviour is identical (same MaxSim formula on the same
-    BGE-M3 normalised vectors), but the SDK path is the upstream-maintained
-    one and removes ~10 lines of hand-rolled linear algebra.
-
-    Args:
-        query_vecs: Query ColBERT vectors (num_query_tokens, dim).
-        doc_vecs_list: List of document ColBERT vectors.
-
-    Returns:
-        List of MaxSim scores, one per document, in input order.
-    """
-    model = get_model()
-    # ``BGEM3FlagModel.colbert_score`` accepts a single (query, doc) pair and
-    # returns a torch scalar; cast to float for JSON-serialisable output.
-    return [float(model.colbert_score(query_vecs, doc_vecs)) for doc_vecs in doc_vecs_list]
+# ── Endpoints ──
 
 
-# Endpoints
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "model_loaded": _model is not None, "warmed_up": _warmed_up}
+    return {"status": "ok", "model_loaded": _onnx_session is not None, "warmed_up": _warmed_up}
 
 
 @app.post("/encode/dense", response_model=DenseResponse)
@@ -258,7 +398,6 @@ async def encode_dense(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -324,7 +463,6 @@ async def encode_sparse(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -335,7 +473,7 @@ async def encode_sparse(request: EncodeRequest):
                 return_sparse=True,
                 return_colbert_vecs=False,
             )
-            # Convert sparse vectors to Qdrant format
+            # ONNX already returns Qdrant sparse format
             valid_weights = _lexical_weights_to_qdrant_sparse(embeddings["lexical_weights"])
         else:
             valid_weights = []
@@ -391,7 +529,6 @@ async def encode_colbert(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -458,7 +595,6 @@ async def encode_hybrid(request: EncodeRequest):
         model = get_model()
         start_time = time.time()
 
-        # Encode only valid texts
         if valid_indices:
             valid_texts = [request.texts[i] for i in valid_indices]
             embeddings = model.encode(
@@ -563,7 +699,7 @@ async def rerank(request: RerankRequest):
         query_vecs = colbert_vecs[0]  # First is query
         doc_vecs_list = colbert_vecs[1:]  # Rest are documents
 
-        # Compute MaxSim scores
+        # Compute MaxSim scores (pure numpy, no FlagEmbedding dependency)
         scores = compute_maxsim_scores(query_vecs, doc_vecs_list)
 
         # Sort by score descending and take top_k

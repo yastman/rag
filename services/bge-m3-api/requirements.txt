@@ -1,4 +1,4 @@
-FlagEmbedding>=1.2.0
+onnxruntime>=1.22.0
 transformers==5.9.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0

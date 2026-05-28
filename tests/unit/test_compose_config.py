@@ -379,6 +379,7 @@ class TestOtelServiceNameDefaults:
     """Services that emit Langfuse/OTel traces must have stable OTEL_SERVICE_NAME defaults (#1370)."""
 
     _EXPECTED = {
+        "bge-m3": "bge-m3",
         "bot": "telegram-bot",
         "mini-app-api": "mini-app-api",
         "ingestion": "ingestion",

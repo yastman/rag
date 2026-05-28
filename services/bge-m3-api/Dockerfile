@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
-# BGE-M3 Embedding Service — uv sync (2026 best practices)
+# BGE-M3 Embedding Service — ONNX INT8 runtime (uv sync)
 
 # ====== BUILD STAGE ======
 # Base images pinned — checked 2026-02-09
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libgomp1 libxml2-dev libxslt1-dev zlib1g-dev
 
-# Deps layer
+# Deps layer — ONNX runtime (no PyTorch/FlagEmbedding)
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -40,7 +40,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 appgroup && \
-    useradd -u 1001 -g appgroup -m -d /app -s /bin/false appuser
+    useradd -u 1001 -g appgroup -m -d /app -s /bin/false appuser && \
+    mkdir -p /models/hf /models/onnx && \
+    chown -R appuser:appgroup /models
+
+RUN --mount=type=bind,from=bge_m3_onnx_model,target=/tmp/bge-m3-onnx,readonly \
+    test -f /tmp/bge-m3-onnx/model.int8.onnx && \
+    test -f /tmp/bge-m3-onnx/model.int8.onnx.data && \
+    cp /tmp/bge-m3-onnx/model.int8.onnx /tmp/bge-m3-onnx/model.int8.onnx.data /models/onnx/ && \
+    chown appuser:appgroup /models/onnx/model.int8.onnx /models/onnx/model.int8.onnx.data
 
 WORKDIR /app
 
@@ -51,6 +59,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     HF_HOME=/models/hf \
     TRANSFORMERS_CACHE=/models/hf \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence-transformers \
+    ONNX_MODEL_DIR=/models/onnx \
     OMP_NUM_THREADS=2 \
     MKL_NUM_THREADS=2 \
     PYTHONUNBUFFERED=1 \

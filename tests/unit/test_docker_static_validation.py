@@ -301,6 +301,171 @@ def test_qdrant_stack_doc_matches_compose_version() -> None:
     )
 
 
+# ── BGE-M3 ONNX runtime packaging gate (PR #2229) ──────────────────────────
+
+_CI_ENV_KEYS: frozenset[str] | None = None
+
+
+def _ci_env_map() -> dict[str, str]:
+    """Parse key/value pairs from the deterministic Compose CI env fixture."""
+    return dict(
+        line.split("=", 1)
+        for line in COMPOSE_CI_ENV.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+
+
+def _ci_env_keys() -> frozenset[str]:
+    """Lazily parsed set of env var keys from the CI env fixture."""
+    global _CI_ENV_KEYS
+    if _CI_ENV_KEYS is None:
+        _CI_ENV_KEYS = frozenset(_ci_env_map())
+    return _CI_ENV_KEYS
+
+
+def test_bge_m3_build_uses_onnx_model_context() -> None:
+    """bge-m3 must bake ONNX INT8 artifacts into the image at build time (#2229)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    build = bge_m3["build"]
+    assert build["additional_contexts"]["bge_m3_onnx_model"].startswith(
+        "${BGE_M3_ONNX_MODEL_HOST_DIR:"
+    ), (
+        "bge-m3 build must use BGE_M3_ONNX_MODEL_HOST_DIR as a named build "
+        "context for ONNX INT8 artifacts"
+    )
+
+
+def test_bge_m3_has_hf_subdirectory_mount() -> None:
+    """bge-m3 should mount a narrower HF-only subdirectory (e.g. /models/hf)
+    so the ONNX path ``/models/onnx`` remains usable (#2229)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    volumes = bge_m3.get("volumes", [])
+    targets: set[str] = set()
+    for vol in volumes:
+        target = vol.split(":")[1].split("@")[0] if isinstance(vol, str) else vol.get("target", "")
+        targets.add(target)
+    assert "/models/hf" in targets, (
+        "bge-m3 needs a narrow HF cache mount at /models/hf so "
+        "/models/onnx for ONNX artifacts is not masked"
+    )
+    assert "/models/onnx" not in targets, (
+        "bge-m3 must not mount /models/onnx at runtime; the INT8 model is "
+        "baked into the Docker image during build"
+    )
+
+
+def test_bge_m3_model_cache_dir_uses_writable_hf_cache() -> None:
+    """The tokenizer cache must use the HF volume, not /models root (#2229)."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    environment = bge_m3["environment"]
+    assert environment["MODEL_CACHE_DIR"] == "/models/hf"
+    assert environment["HF_HOME"] == "/models/hf"
+    assert environment["TRANSFORMERS_CACHE"] == "/models/hf"
+
+
+def test_bge_m3_has_langfuse_observation_env_defaults() -> None:
+    """bge-m3 server-side @observe spans must be enabled in local Compose."""
+    import yaml
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text())
+    bge_m3 = compose["services"]["bge-m3"]
+    environment = bge_m3["environment"]
+    assert environment["LANGFUSE_PUBLIC_KEY"] == "${LANGFUSE_PUBLIC_KEY:-}"
+    assert environment["LANGFUSE_SECRET_KEY"] == "${LANGFUSE_SECRET_KEY:-}"
+    assert environment["LANGFUSE_HOST"] == "${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}"
+    assert environment["OTEL_SERVICE_NAME"] == "${OTEL_SERVICE_NAME:-bge-m3}"
+
+
+def test_bge_m3_dockerfile_prepares_model_dirs_for_appuser() -> None:
+    """Named volumes inherit target ownership on first use; prepare /models."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
+    assert "mkdir -p /models/hf /models/onnx" in dockerfile
+    assert "chown -R appuser:appgroup /models" in dockerfile
+
+
+def test_bge_m3_dockerfile_bakes_int8_model_from_build_context() -> None:
+    """The Docker image must contain the ONNX INT8 artifacts, not require a runtime mount."""
+    dockerfile = Path("services/bge-m3-api/Dockerfile").read_text()
+    assert "from=bge_m3_onnx_model" in dockerfile
+    assert "model.int8.onnx" in dockerfile
+    assert "model.int8.onnx.data" in dockerfile
+    assert "cp /tmp/bge-m3-onnx/model.int8.onnx" in dockerfile
+
+
+def test_bge_m3_onnx_model_dir_env_in_ci_env() -> None:
+    """tests/fixtures/compose.ci.env must define BGE_M3_ONNX_MODEL_HOST_DIR so
+    Compose config rendering can resolve the bind-mount source (#2229)."""
+    ci_env = _ci_env_map()
+    assert "BGE_M3_ONNX_MODEL_HOST_DIR" in ci_env, (
+        "BGE_M3_ONNX_MODEL_HOST_DIR is missing from tests/fixtures/compose.ci.env; "
+        "Compose config rendering requires it for the ONNX model bind mount"
+    )
+    model_dir = Path(ci_env["BGE_M3_ONNX_MODEL_HOST_DIR"])
+    assert not model_dir.is_absolute(), (
+        "tests/fixtures/compose.ci.env must use a repo-relative ONNX fixture path, "
+        f"not a host-specific absolute path: {model_dir}"
+    )
+    assert (model_dir / "model.int8.onnx").is_file(), (
+        "Compose CI BGE model context must include model.int8.onnx so "
+        "`docker compose build bge-m3` does not depend on host-local artifacts"
+    )
+    assert (model_dir / "model.int8.onnx.data").is_file(), (
+        "Compose CI BGE model context must include model.int8.onnx.data so "
+        "`docker compose build bge-m3` does not depend on host-local artifacts"
+    )
+
+
+def test_bge_m3_onnx_model_dir_env_in_env_example() -> None:
+    """.env.example must document BGE_M3_ONNX_MODEL_HOST_DIR as a local-dev
+    path for the ONNX INT8 artifact bind mount (#2229)."""
+    text = ENV_EXAMPLE.read_text()
+    assert "BGE_M3_ONNX_MODEL_HOST_DIR" in text, (
+        "BGE_M3_ONNX_MODEL_HOST_DIR must be documented in .env.example "
+        "for local ONNX model provisioning"
+    )
+    assert "/home/user/" not in text, (
+        ".env.example must not hardcode developer-local absolute paths"
+    )
+
+
+def test_compose_ci_langfuse_env_has_bge_m3_inputs() -> None:
+    """CI compose env must provide the local Langfuse inputs bge-m3 consumes."""
+    keys = _ci_env_keys()
+    assert "LANGFUSE_PUBLIC_KEY" in keys
+    assert "LANGFUSE_SECRET_KEY" in keys
+    assert "LANGFUSE_DOCKER_HOST" in keys
+
+
+def test_compose_dev_bge_m3_renders_with_ci_env() -> None:
+    """Compose dev config rendering must succeed for ``bge-m3`` with the CI env fixture."""
+    result = _run_docker_command(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(COMPOSE_CI_ENV),
+            "-f",
+            "compose.yml",
+            "-f",
+            "compose.dev.yml",
+            "config",
+            "bge-m3",
+        ],
+    )
+    assert result.returncode == 0, (
+        f"Compose bge-m3 config rendering failed:\n{result.stderr or result.stdout}"
+    )
+
+
 # ── voice-agent healthcheck runtime safety (#1510) ─────────────────────────
 
 

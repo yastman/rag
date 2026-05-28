@@ -29,7 +29,7 @@ def _get_service_env(compose: dict, service: str) -> dict[str, str]:
 
 
 # Сервисы которые ДОЛЖНЫ иметь LANGFUSE vars
-TRACED_SERVICES = ["bot", "litellm", "rag-api", "voice-agent", "ingestion"]
+TRACED_SERVICES = ["bge-m3", "bot", "litellm", "rag-api", "voice-agent", "ingestion"]
 
 # Минимальный набор vars для трейсинга
 REQUIRED_LANGFUSE_VARS = [
@@ -59,7 +59,7 @@ class TestLangfuseEnvVarsPresent:
         assert var in env, f"compose.yml: {service} missing {var} in environment block"
 
 
-SERVICES_WITH_DEV_DEFAULTS = ["bot", "litellm", "rag-api", "voice-agent", "ingestion"]
+SERVICES_WITH_DEV_DEFAULTS = ["bge-m3", "bot", "litellm", "rag-api", "voice-agent", "ingestion"]
 
 
 class TestLangfuseSecretPosture:

@@ -24,11 +24,15 @@ _COLBERT_DIM = 1024
 _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 
 
-def _make_fake_model():
-    """Return a mock BGEM3FlagModel with a working .encode()."""
-    model = MagicMock()
+class FakeONNXModel:
+    """Fake ONNXEmbeddingModel with a working .encode()."""
 
-    def fake_encode(
+    def __init__(self, session, tokenizer):
+        self.session = session
+        self.tokenizer = tokenizer
+
+    def encode(
+        self,
         texts,
         *,
         batch_size=12,
@@ -42,17 +46,16 @@ def _make_fake_model():
         if return_dense:
             result["dense_vecs"] = np.random.rand(n, _DENSE_DIM).astype(np.float32)
         if return_sparse:
+            # Return Qdrant sparse format directly (indices + values)
             result["lexical_weights"] = [
-                {str(i): 0.5 + i * 0.1 for i in range(3)} for _ in range(n)
+                {"indices": list(range(3)), "values": [0.5 + i * 0.1 for i in range(3)]}
+                for _ in range(n)
             ]
         if return_colbert_vecs:
             result["colbert_vecs"] = [
                 np.random.rand(5, _COLBERT_DIM).astype(np.float32) for _ in range(n)
             ]
         return result
-
-    model.encode = MagicMock(side_effect=fake_encode)
-    return model
 
 
 @pytest.fixture(scope="module")
@@ -62,13 +65,22 @@ def bge_app():
     Uses MonkeyPatch.context() for automatic teardown of sys.modules entries.
     """
     with pytest.MonkeyPatch.context() as mp:
-        mock_flag = MagicMock()
+        mock_ort = MagicMock()
+        mock_ort.InferenceSession = MagicMock()
+        mock_ort.GraphOptimizationLevel = MagicMock()
+        mock_ort.GraphOptimizationLevel.ORT_ENABLE_ALL = 1
+        mock_ort.SessionOptions = MagicMock
+
+        mock_transformers = MagicMock()
+        mock_transformers.AutoTokenizer.from_pretrained = MagicMock(return_value=MagicMock())
+
         mock_prom = MagicMock()
         mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
         mock_lf = MagicMock()
         mock_lf.observe = lambda *_a, **_k: lambda f: f
 
-        mp.setitem(sys.modules, "FlagEmbedding", mock_flag)
+        mp.setitem(sys.modules, "onnxruntime", mock_ort)
+        mp.setitem(sys.modules, "transformers", mock_transformers)
         mp.setitem(sys.modules, "prometheus_client", mock_prom)
         mp.setitem(sys.modules, "langfuse", mock_lf)
         mp.syspath_prepend(_BGE_SERVICE_DIR)
@@ -78,8 +90,9 @@ def bge_app():
 
         import config as _cfg
 
-        fake_model = _make_fake_model()
-        app_module._model = fake_model
+        fake_model = FakeONNXModel(session=MagicMock(), tokenizer=MagicMock())
+        app_module._onnx_session = MagicMock()
+        app_module._tokenizer = MagicMock()
         app_module.get_model = MagicMock(return_value=fake_model)
 
         yield {
@@ -150,6 +163,33 @@ class TestEncodeHybrid:
         assert "lexical_weights" in data
         assert "colbert_vecs" in data
 
+    async def test_traceparent_header_is_extracted(self, client, bge_app, monkeypatch):
+        app_module = bge_app["app_module"]
+        captured: dict[str, str | object] = {}
+
+        def fake_extract(headers):
+            captured["traceparent"] = headers.get("traceparent")
+            return "extracted-context"
+
+        attach = MagicMock(return_value="attached-token")
+        detach = MagicMock()
+        monkeypatch.setattr(app_module.propagate, "extract", fake_extract)
+        monkeypatch.setattr(app_module, "attach", attach)
+        monkeypatch.setattr(app_module, "detach", detach)
+
+        resp = await client.post(
+            "/encode/hybrid",
+            json={"texts": ["hello"]},
+            headers={"traceparent": "00-11111111111111111111111111111111-2222222222222222-01"},
+        )
+
+        assert resp.status_code == 200
+        assert captured["traceparent"] == (
+            "00-11111111111111111111111111111111-2222222222222222-01"
+        )
+        attach.assert_called_once_with("extracted-context")
+        detach.assert_called_once_with("attached-token")
+
 
 class TestEncodeDense:
     async def test_dense_empty_texts(self, client):
@@ -172,7 +212,7 @@ class TestConfigDefaults:
         _cfg = bge_app["config"]
         assert _cfg.settings.MAX_LENGTH == 2048
         assert _cfg.settings.BATCH_SIZE == 12
-        assert _cfg.settings.USE_FP16 is True
+        assert _cfg.settings.MODEL_REVISION == "5617a9f61b028005a4858fdac845db406aefb181"
         assert _cfg.settings.RERANK_MAX_DOCS == 30
         assert _cfg.settings.RERANK_MAX_LENGTH == 512
 
@@ -274,13 +314,13 @@ class TestPartialFailureIsolation:
     async def test_model_exception_still_returns_500(self, client, bge_app):
         """Infrastructure/model errors still produce HTTP 500."""
         fake_model = bge_app["fake_model"]
-        original_side_effect = fake_model.encode.side_effect
-        fake_model.encode.side_effect = RuntimeError("GPU OOM")
+        original_encode = fake_model.encode
+        fake_model.encode = MagicMock(side_effect=RuntimeError("ONNX session error"))
         try:
             resp = await client.post("/encode/dense", json={"texts": ["hello", "world"]})
             assert resp.status_code == 500
         finally:
-            fake_model.encode.side_effect = original_side_effect
+            fake_model.encode = original_encode  # restore original method
 
 
 class TestWarmup:
@@ -289,16 +329,121 @@ class TestWarmup:
         app_module = bge_app["app_module"]
         fake_model = bge_app["fake_model"]
 
-        fake_model.encode.reset_mock()
+        from unittest.mock import MagicMock as MM
+
+        wrapped_encode = MM(side_effect=fake_model.encode)
+        orig_encode = fake_model.encode
+        fake_model.encode = wrapped_encode
 
         # Run the lifespan startup directly (no ASGI runner needed)
         gen = app_module.lifespan(None)
         await gen.__aenter__()
         await gen.__aexit__(None, None, None)
 
-        assert fake_model.encode.called, "Warmup must call model.encode()"
-        warmup_kwargs = fake_model.encode.call_args.kwargs
+        assert wrapped_encode.called, "Warmup must call model.encode()"
+        warmup_kwargs = wrapped_encode.call_args.kwargs
         assert warmup_kwargs.get("return_colbert_vecs") is False, (
             f"Warmup must use return_colbert_vecs=False to reduce startup memory, "
             f"got return_colbert_vecs={warmup_kwargs.get('return_colbert_vecs')}"
         )
+        fake_model.encode = orig_encode
+
+
+# ── Unit tests for _onnx_sparse_to_qdrant converter ──
+
+
+class Tok:
+    """Minimal tokenizer stub for ``_onnx_sparse_to_qdrant`` unit tests."""
+
+    cls_token_id: int | None = 0
+    eos_token_id: int | None = 1
+    pad_token_id: int | None = None
+    unk_token_id: int | None = None
+
+
+class TestOnnxSparseToQdrant:
+    """Focused unit tests for ``_onnx_sparse_to_qdrant`` (#2209)."""
+
+    def test_special_token_filtering(self, bge_app):
+        """Special token IDs (cls=0, eos=1) must be excluded."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.8], [0.9]]], dtype=np.float32)
+        ids = np.array([[0, 10, 1]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Only token 10 should remain; cls=0 and eos=1 are special
+        assert result == [{"indices": [10], "values": [0.800000011920929]}]
+
+    def test_non_positive_weight_filtering(self, bge_app):
+        """Zero and negative weights must be excluded."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.0], [-0.3], [0.7]]], dtype=np.float32)
+        ids = np.array([[10, 11, 12, 13]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Zero-weight token 11 and negative-weight token 12 must be filtered
+        assert result == [{"indices": [10, 13], "values": [0.5, 0.699999988079071]}]
+
+    def test_duplicate_token_id_keeps_max_positive(self, bge_app):
+        """Duplicate token IDs must keep the max positive weight."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.3], [0.9]]], dtype=np.float32)
+        ids = np.array([[10, 10, 10]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # All three positions map to token 10, keep max weight 0.9
+        assert result == [{"indices": [10], "values": [0.8999999761581421]}]
+
+    def test_acceptance_case_sparse_conversion(self, bge_app):
+        """Exact acceptance case from review-fix prompt."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.0], [0.5], [-0.2], [0.7], [0.9]]], dtype=np.float32)
+        ids = np.array([[0, 10, 11, 10, 1]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Expected: skip special (0=cls, 1=eos), skip zero (idx 0), skip
+        # negative (-0.2 at idx 11), keep max positive for duplicate token 10 (0.7).
+        assert result == [{"indices": [10], "values": [0.699999988079071]}]
+
+    def test_multi_batch_item(self, bge_app):
+        """Two batch items return one dict each."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        sparse = np.array([[[0.5], [0.3]], [[0.1], [0.9]]], dtype=np.float32)
+        ids = np.array([[10, 11], [10, 10]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # Item 0: tokens 10=0.5, 11=0.3
+        # Item 1: token 10 appears twice → max(0.1, 0.9) = 0.9
+        assert len(result) == 2
+        assert result[0] == {"indices": [10, 11], "values": [0.5, 0.30000001192092896]}
+        assert result[1] == {"indices": [10], "values": [0.8999999761581421]}
+
+    def test_mixed_positive_zero_negative_with_duplicates(self, bge_app):
+        """Combine special-token, non-positive, and dedup in one pass."""
+        import numpy as np
+        from app import _onnx_sparse_to_qdrant
+
+        # cls=0, eos=1: special.  weights: 0(zero), -0.5(negative), +0.3, +0.7
+        sparse = np.array([[[0.0], [-0.5], [0.3], [0.7]]], dtype=np.float32)
+        ids = np.array([[0, 1, 10, 10]], dtype=np.int64)
+        tok = Tok()
+
+        result = _onnx_sparse_to_qdrant(sparse, ids, tok)
+        # cls=0 and eos=1 are special → filtered
+        # duplicate token 10 → max(0.3, 0.7) = 0.7
+        assert result == [{"indices": [10], "values": [0.699999988079071]}]
