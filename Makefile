@@ -749,8 +749,13 @@ local-up-ingest:  ## Start local services + docling for ingestion workflows
 run-bot:  ## Run bot locally (requires: make local-up)
 	$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
-bot: preflight-bot test-bot-health ## Alias: run bot and tee output to logs/bot-run.log
+bot: preflight-bot test-bot-health ## Alias: run bot (fail-fast when Qdrant is down; tee output to logs/bot-run.log)
 	@mkdir -p logs
+	@if ! timeout 1 bash -c 'echo >/dev/tcp/localhost/6333' 2>/dev/null; then \
+		echo "$(RED)✗ Qdrant is not reachable on localhost:6333$(NC)" >&2; \
+		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3, litellm)$(NC)" >&2; \
+		exit 1; \
+	fi
 	@bash -o pipefail -c '$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
 	status=$$?; echo '[COMPLETE]'; exit $$status
 
