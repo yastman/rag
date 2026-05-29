@@ -68,6 +68,134 @@ coverage_tiers:
   opportunistic_for_1307:
     - voice-session
 
+# Canonical end-to-end trace flows for #2244.
+#
+# These are not live fixtures. They are the runtime coverage contract that
+# validates what a live Langfuse trace must eventually prove: one user workflow
+# should appear as one distributed trace, with W3C TraceContext carrying parent
+# span identity and W3C Baggage carrying Langfuse user/session/tags across
+# service and background boundaries.
+end_to_end_trace_flows:
+  telegram_text_rag:
+    description: "Telegram text request through RAG, retrieval, embeddings, rerank, generation, logs, and scores."
+    root_family: telegram-rag-query
+    entry_service: bot
+    required_services:
+      - bot
+      - rag-api
+      - bge-m3-api
+    propagation:
+      carrier: w3c_tracecontext_baggage
+      requires_trace_context: true
+      requires_baggage: true
+      forbid_manual_langfuse_trace_id: true
+      propagation_entrypoints:
+        - telegram_bot/middlewares/langfuse_middleware.py
+        - src/api/main.py
+    required_spans:
+      root:
+        - telegram-rag-query
+      graph:
+        - node-classify
+        - node-retrieve
+        - node-grade
+        - node-rerank
+        - node-generate
+        - node-respond
+      retrieval:
+        - tool-rag-search
+        - rag-pipeline
+        - hybrid-retrieve
+        - retrieval.initial
+      backend:
+        - cache-semantic-check
+        - bge-m3-encode-hybrid
+        - bge-m3-rerank
+        - qdrant-hybrid-search-rrf
+      generation:
+        - service-generate-response
+    required_score_groups:
+      - core_rag
+    required_log_fields:
+      - otelTraceID
+      - otelSpanID
+    validation_commands:
+      - make validate-traces-fast
+
+  voice_rag_api:
+    description: "Voice session that continues user/session context into the RAG API and downstream retrieval services."
+    root_family: voice-session
+    entry_service: voice-agent
+    required_services:
+      - voice-agent
+      - rag-api
+      - bge-m3-api
+    propagation:
+      carrier: w3c_tracecontext_baggage
+      requires_trace_context: true
+      requires_baggage: true
+      forbid_manual_langfuse_trace_id: true
+      propagation_entrypoints:
+        - src/voice/agent.py
+        - src/api/main.py
+    required_spans:
+      root:
+        - voice-session
+      api:
+        - rag-api-query
+      voice:
+        - voice-tool-search-knowledge-base
+      retrieval:
+        - rag-pipeline
+        - hybrid-retrieve
+        - retrieval.initial
+      backend:
+        - bge-m3-encode-hybrid
+        - bge-m3-rerank
+        - qdrant-hybrid-search-rrf
+      generation:
+        - service-generate-response
+    required_score_groups:
+      - core_rag
+    required_log_fields:
+      - otelTraceID
+      - otelSpanID
+    validation_commands:
+      - make validate-traces-fast
+
+  crm_handoff_write:
+    description: "CRM handoff/write path where success spans and scores are emitted only after confirmed Kommo writes."
+    root_family: telegram-hitl-callback
+    entry_service: bot
+    required_services:
+      - bot
+    propagation:
+      carrier: w3c_tracecontext_baggage
+      requires_trace_context: true
+      requires_baggage: true
+      forbid_manual_langfuse_trace_id: true
+      requires_confirmed_write_success: true
+      propagation_entrypoints:
+        - telegram_bot/middlewares/langfuse_middleware.py
+    required_spans:
+      root:
+        - telegram-hitl-callback
+      handoff:
+        - tool-handoff
+        - handoff-generate-summary
+      crm:
+        - kommo-create-lead
+        - kommo-upsert-contact
+        - kommo-add-note
+        - kommo-create-task
+    required_score_groups:
+      - crm
+    required_log_fields:
+      - otelTraceID
+      - otelSpanID
+    validation_commands:
+      - make validate-traces-fast
+
 spans:
   graph_nodes:
     - node-guard

@@ -140,7 +140,9 @@ async def test_entrypoint_reuses_one_trace_id_for_parent_span_and_rag_api() -> N
     with (
         patch.object(agent_mod, "_LIVEKIT_IMPORT_ERROR", None),
         patch.object(agent_mod, "get_client", return_value=fake_lf),
-        patch.object(agent_mod, "propagate_attributes", return_value=contextlib.nullcontext()),
+        patch.object(
+            agent_mod, "propagate_attributes", return_value=contextlib.nullcontext()
+        ) as propagate,
         patch.object(agent_mod, "_entrypoint_body", new_callable=AsyncMock) as body,
     ):
         await agent_mod.entrypoint(fake_ctx)
@@ -150,5 +152,7 @@ async def test_entrypoint_reuses_one_trace_id_for_parent_span_and_rag_api() -> N
     observation_kwargs = fake_lf.start_as_current_observation.call_args.kwargs
     assert observation_kwargs["name"] == "voice-session"
     assert observation_kwargs["trace_context"] == {"trace_id": "trace-voice-call-1"}
+    propagate.assert_called_once()
+    assert propagate.call_args.kwargs["as_baggage"] is True
     body.assert_awaited_once()
     assert body.call_args.kwargs["langfuse_trace_id"] == "trace-voice-call-1"
