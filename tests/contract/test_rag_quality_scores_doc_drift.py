@@ -135,3 +135,38 @@ def test_main_query_score_count_is_above_legacy_14() -> None:
         f"Expected scoring.py to emit more than 30 distinct score names, found {len(code_names)}: "
         f"{sorted(code_names)}"
     )
+
+
+
+# --- #2213: document WHEN scores are written ---
+
+_WHEN_SECTION_RE = re.compile(r"^#{2,3}\s+When are scores written", re.MULTILINE | re.IGNORECASE)
+
+
+def test_doc_documents_when_scores_are_written() -> None:
+    """#2213: the doc must explain the score write *timing*.
+
+    New contributors look for ``score_current_trace`` calls in the cache node
+    and find none (the cache node uses ``update_current_span`` for real-time
+    hit/miss). The doc must state that quality scores are written once per
+    query at the end of the pipeline via ``write_langfuse_scores`` while
+    per-node observability uses ``update_current_span``.
+    """
+    text = DOC_PATH.read_text(encoding="utf-8")
+    assert _WHEN_SECTION_RE.search(text), (
+        "docs/RAG_QUALITY_SCORES.md must contain a 'When are scores written' "
+        "section (#2213) explaining once-per-query end-of-pipeline writes vs "
+        "per-node update_current_span."
+    )
+    assert "write_langfuse_scores" in text, (
+        "The 'when written' section must name write_langfuse_scores as the "
+        "once-per-query writer (#2213)."
+    )
+    assert "update_current_span" in text, (
+        "The 'when written' section must mention update_current_span as the "
+        "per-node real-time hit/miss mechanism (#2213)."
+    )
+    assert "src/scoring.py" in text, (
+        "The doc must point to the canonical scoring module src/scoring.py "
+        "(not only the telegram_bot/scoring.py re-export shim) (#2213)."
+    )

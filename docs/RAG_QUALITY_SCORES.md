@@ -4,7 +4,8 @@ Observability metrics written to Langfuse for every query.
 
 ## Score Writing
 
-Scores are computed and written via `telegram_bot/scoring.py`:
+Scores are computed and written via `src/scoring.py` (re-exported through the
+`telegram_bot/scoring.py` shim for historical bot imports):
 - `write_langfuse_scores()` — main query scores
 - `write_history_scores()` — history search scores
 - `write_crm_scores()` — CRM tool usage scores
@@ -13,6 +14,32 @@ Scores are computed and written via `telegram_bot/scoring.py`:
 > [`tests/contract/test_rag_quality_scores_doc_drift.py`](../tests/contract/test_rag_quality_scores_doc_drift.py).
 > Whenever a new `name=...` is added to `scoring.py`, add a row below or
 > entry in `DOC_EXEMPT_SCORE_NAMES`.
+
+## When are scores written
+
+Quality scores and per-node observability use **two different** Langfuse
+mechanisms with different timing:
+
+- **Quality scores are written once per query, at the end of the pipeline**, by
+  `write_langfuse_scores()` (`src/scoring.py`). It reads the final graph
+  `result` state and emits every score in one pass via the `score(...)` helper,
+  which calls `lf.create_score(trace_id=..., score_id="<trace_id>-<name>")` —
+  explicit trace scoping plus an idempotency key (#435). The bot calls it after
+  the supervisor run completes (`telegram_bot/bot.py`); the RAG API calls it at
+  the end of `/query` (`src/api/main.py`). `write_history_scores()` and
+  `write_crm_scores()` follow the same once-per-flow pattern.
+- **Per-node hit/miss and grade signals are NOT scores.** Nodes such as the
+  cache node (`telegram_bot/graph/nodes/cache.py`) report real-time state with
+  `lf.update_current_span(input=..., output=..., metadata=...)`, not
+  `score_current_trace` / `create_score`. That is why you will not find a
+  `score_current_trace` call inside `cache_check_node`: the cache hit/miss is
+  surfaced on the span in real time and the corresponding `semantic_cache_hit` /
+  `embeddings_cache_hit` / `search_cache_hit` *scores* are written later, in the
+  single end-of-query `write_langfuse_scores()` pass.
+
+In short: span `input`/`output`/`metadata` is the live, per-node channel;
+Langfuse **scores** are the end-of-query summary. Entry point and ordering:
+`write_langfuse_scores(lf, result, trace_id=...)` in `src/scoring.py`.
 
 ## Main Query Scores
 
@@ -117,6 +144,7 @@ Required trace families validated by `make validate-traces-fast`:
 
 | File | Purpose |
 |------|---------|
-| `telegram_bot/scoring.py` | Score computation and writing |
+| `src/scoring.py` | Canonical score computation and writing (`write_langfuse_scores`, `write_history_scores`, `write_crm_scores`, `score`) |
+| `telegram_bot/scoring.py` | Re-export shim for historical bot imports |
 | `telegram_bot/observability.py` | Langfuse client setup |
 | `docker/monitoring/rules/` | Alert rules |
