@@ -45,6 +45,7 @@ export TMPDIR TMP TEMP
 # Pin to 3.12 to match requires-python floor.
 # Override: PYTHON_VERSION=3.13 make test-unit
 PYTHON_VERSION ?= 3.12
+UV_RUN_NO_SYNC ?= uv run --no-sync
 PYTEST_PARALLEL_ARGS ?= -n auto --dist=worksteal
 PYTEST_FULL_PARALLEL_ARGS ?= -n 2 --dist=worksteal
 PYTEST_FULL_PARALLEL_DIRS ?= tests/baseline/ tests/benchmark/ tests/chaos/ tests/contract/ tests/unit/
@@ -185,7 +186,7 @@ all-checks: lint type-check security ## Run all code quality checks
 
 test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 	@echo "$(BLUE)Running fast test gate (unit + graph_paths)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
 
 test-full: ## Run full test suite with hybrid parallelism (all tiers)
@@ -205,12 +206,12 @@ test-cov: ## Run tests with coverage
 
 test-unit: ## Run core unit tests locally in parallel (fast default gate)
 	@echo "$(BLUE)Running core unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
 
 test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
@@ -227,7 +228,7 @@ test-unit-extras: ## Run optional-extra unit tests only
 
 test-contract: ## Run trace contract tests (static analysis, no Docker)
 	@echo "$(BLUE)Running trace contract tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
 	@echo "$(GREEN)Trace contract tests complete$(NC)"
 
 test-benchmark: ## Run benchmark suite with the live ColBERT gate enabled (#1618)
@@ -237,12 +238,12 @@ test-benchmark: ## Run benchmark suite with the live ColBERT gate enabled (#1618
 
 test-fast: ## Run unit tests in parallel (honours $(PYTEST_PARALLEL_ARGS))
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
 test-all-fast: ## Run unit tests + critical graph-path integration tests in parallel (no smoke; smoke needs live services via 'make test-smoke')
 	@echo "$(BLUE)Running unit + critical graph-path integration tests in parallel...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ tests/integration/test_graph_paths.py $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ All fast tests complete$(NC)"
 
 test-lf: ## Run only last failed tests (parallel)
@@ -257,7 +258,7 @@ test-ff: ## Run failed first, then rest
 
 test-profile: ## Profile slowest tests (find bottlenecks) — measures the same lane as test-unit
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) $(PYTEST_PARALLEL_ARGS) --durations=20 --durations-min=0.5 -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
 test-integration: ## Run graph path integration tests (no Docker, ~5s)
@@ -286,7 +287,7 @@ test-nightly: ## Run heavy test suites (chaos, smoke, slow unit) — schedule ov
 
 test-store-durations: ## Update .test_durations for pytest-split CI sharding
 	@echo "$(BLUE)Generating test duration data...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
+	PYTHONDONTWRITEBYTECODE=1 $(UV_RUN_NO_SYNC) --python $(PYTHON_VERSION) pytest tests/unit/ $(PYTEST_REQUIRES_EXTRAS_IGNORE) --store-durations $(PYTEST_PARALLEL_ARGS) --timeout=30 -m "not legacy_api and not requires_extras and not slow" -q
 	@echo "$(GREEN)✓ .test_durations updated — commit this file$(NC)"
 
 test-all: ## Run all tests with coverage threshold (CI mode)

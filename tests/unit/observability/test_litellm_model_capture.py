@@ -118,9 +118,14 @@ class TestLangfuseOpenAIRuntimeContract:
             f"{params!r}; re-evaluate #1665 against the new shape."
         )
 
-        # The function source should still read response.get("model").
-        fn_source = inspect.getsource(extract_fn)
-        assert 'response.get("model"' in fn_source, (
+        # The function source should still read response.get("model"). Use the
+        # module source instead of inspect.getsource(function): after uv syncs in
+        # a reused local venv, function linecache can temporarily point at an
+        # adjacent nested helper under xdist even though the module source is
+        # correct.
+        module_source = inspect.getsource(langfuse.openai)
+        fn_source = module_source.split("def _get_langfuse_data_from_default_response", 1)[1]
+        assert 'response.get("model"' in fn_source.split("def _extract_usage", 1)[0], (
             "_get_langfuse_data_from_default_response no longer reads "
             "response.get('model', ...) — re-evaluate #1665."
         )

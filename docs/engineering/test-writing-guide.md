@@ -30,18 +30,19 @@ E2E naming contract:
   - `make test-unit`
   - `make test`
 
-## GitHub CI And Local Gate Contracts
+## CI And Local Gate Contracts
 
-### Fast Tests lane (`.github/workflows/ci.yml`)
-- GitHub `fast-tests` runs `tests/unit/` + `tests/contract/` + critical graph-path
-  integration with `-m "not legacy_api and not requires_extras and not slow"`.
+### Local fast lane
+- The local fast lane runs `tests/unit/` and critical graph-path integration via
+  `make test` with `-m "not legacy_api and not requires_extras and not slow"`.
 - Keep new fast-lane tests free of `pytest.mark.slow`, `pytest.mark.requires_extras`,
   and any marker that would exclude them from that expression.
 - Fast tests must not require Docker or live services.
 
 ### Contract tests
 - Contract tests live in `tests/contract/`.
-- They are static analysis (no Docker) and run in the fast-lane gate.
+- They are static analysis (no Docker) and run locally with the PR readiness
+  ladder when the touched surface needs contract coverage.
 - Run them locally with `make test-contract`.
 
 ### Runtime and heavy tests
@@ -49,7 +50,7 @@ E2E naming contract:
   `tests/integration/`, `tests/smoke/`, `tests/e2e/`, `tests/load/`, or
   `tests/benchmark/`.
 - These are for local powerful-machine validation (`make test-full`) or nightly
-  gates (`.github/workflows/nightly-heavy.yml`), not the CI fast lane.
+  gates (`.github/workflows/nightly-heavy.yml`), not the local fast lane.
 - For the complete local validation ladder (including `make test-full`,
   parallelism tuning, and WSL memory considerations), see
   [`docs/LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md).
