@@ -92,10 +92,22 @@ def _create_semantic_cache(
     distance_threshold: float,
     ttl: int,
     vectorizer: Any,
+    async_redis_client: Any = None,
 ) -> SemanticCache | None:
-    """Create RedisVL SemanticCache instance. Returns None on failure."""
+    """Create RedisVL SemanticCache instance. Returns None on failure.
+
+    When ``async_redis_client`` is provided it is forwarded to RedisVL so the
+    cache reuses our already-connected client. This avoids RedisVL's deprecated
+    lazy ``RedisConnectionFactory.get_async_redis_connection`` path (which emits
+    a DeprecationWarning and "will become async in the next major release"),
+    mirroring how ``_create_embed_cache`` is wired (#2277).
+    """
     try:
         from redisvl.extensions.cache.llm import SemanticCache
+
+        extra_kwargs: dict[str, Any] = {}
+        if async_redis_client is not None:
+            extra_kwargs["async_redis_client"] = async_redis_client
 
         cache = SemanticCache(
             name=f"sem:{SEMANTIC_CACHE_VERSION}:bge1024",
@@ -116,6 +128,7 @@ def _create_semantic_cache(
                 {"name": "cache_eligible", "type": "tag"},
                 {"name": "schema_version", "type": "tag"},
             ],
+            **extra_kwargs,
         )
         logger.info("SemanticCache initialized (threshold=%.2f, ttl=%ds)", distance_threshold, ttl)
         return cache
@@ -230,6 +243,7 @@ class CacheLayerManager:
                 distance_threshold=default_threshold,
                 ttl=default_ttl,
                 vectorizer=vectorizer,
+                async_redis_client=self.redis,
             )
         except Exception as e:
             logger.warning("Semantic cache setup skipped: %s: %s", type(e).__name__, e)
