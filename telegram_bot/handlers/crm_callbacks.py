@@ -163,18 +163,23 @@ async def on_task_complete(
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:task:complete:{id} — complete task immediately (no dialog)."""
+    lf = get_client()
     if kommo_client is None:
+        _update_current_span(lf, output={"action": "cancelled"})
         await callback.answer(_NO_CRM, show_alert=True)
         return
     assert callback.data is not None
     task_id = int(callback.data.split(":")[3])
+    _update_current_span(lf, input={"task_id": task_id, "action": "complete"})
     try:
         await kommo_client.complete_task(task_id)
+        _update_current_span(lf, output={"task_id": task_id, "status": "completed"})
         await callback.answer("✅ Задача завершена.")
         if callback.message and not isinstance(callback.message, InaccessibleMessage):
             await callback.message.edit_text("✅ Задача завершена.")
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to complete task %d", task_id)
+        _update_current_span(lf, level="ERROR", status_message=str(exc)[:200])
         await callback.answer("⚠️ Ошибка при завершении задачи.", show_alert=True)
 
 
