@@ -151,6 +151,33 @@ Update → ThrottlingMiddleware → ErrorMiddleware → I18nMiddleware → Handl
 - Loads user locale from DB
 - Injects `i18n`, `locale`, `property_bot`, `apartments_service`
 
+## Tracing identifiers: `thread_id` vs `session_id`
+
+A conversation has two identifiers that look similar but are intentionally
+**not** the same string:
+
+| Identifier | Source | Format | Lifetime |
+|---|---|---|---|
+| LangGraph `thread_id` | `_supervisor_thread_id(chat_id, forum_thread_id)` (`telegram_bot/services/checkpointer_utils.py`) | `tg_<chat_id>` / `tg_<chat_id>:<forum_thread_id>` | **persistent** — the checkpointer key for conversation memory |
+| Langfuse `session_id` | `make_session_id("chat", chat_id)` (`telegram_bot/tracing_context.py`) | `chat-<hash>-<YYYYMMDD>` | **date-rotating** — groups a day's traces |
+
+Both are placed in the supervisor invoke `config["configurable"]` together, and
+the checkpointer `thread_id` is also recorded on the Langfuse trace as
+`langgraph_thread_id` metadata via `propagate_attributes`. So from a Langfuse
+trace an operator can read `langgraph_thread_id` and query the LangGraph
+checkpointer for that conversation's state.
+
+**Why they are not unified (#2224):** `session_id` carries a `YYYYMMDD`
+component, so using it as the checkpointer `thread_id` would rotate the thread
+daily and reset conversation memory every midnight. The persistent
+`_supervisor_thread_id` must remain the checkpointer key; the two are therefore
+*linked* via trace metadata rather than made equal. The co-location and the
+metadata linkage are enforced by
+`tests/contract/test_thread_session_link_contract.py`.
+
+The voice path and the HITL `Command(resume=...)` path manage their own
+thread/session identifiers and are out of scope of that contract.
+
 ## Finding Code
 
 Due to file size, use `rg` recipes instead of line-number maps:

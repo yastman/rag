@@ -2230,10 +2230,12 @@ class PropertyBot:
 
         rag_result_store: dict[str, Any] = {}
         pre_agent_start = time.perf_counter()
+        langgraph_thread_id = _supervisor_thread_id(message.chat.id, forum_thread_id)
 
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
+            metadata={"langgraph_thread_id": langgraph_thread_id},
             tags=["telegram", "rag", "agent"],
         ):
             # --- Pre-agent content filter (#439) ---
