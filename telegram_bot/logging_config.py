@@ -35,6 +35,25 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
+        # Logs <-> Traces correlation (#2217 / Epic G).
+        # ``opentelemetry.instrumentation.logging.LoggingInstrumentor`` (activated
+        # in src/observability_otel.py per #2225) injects ``otelTraceID`` and
+        # ``otelSpanID`` into every LogRecord from the active OTEL context.
+        # Langfuse v4 SDK runs on top of OTEL, so these IDs match
+        # ``langfuse.get_current_trace_id()`` / ``get_current_observation_id()``
+        # — the same values that:
+        #   * land in Sentry events as ``langfuse_trace_id`` tag (#2218);
+        #   * carry ``traceparent`` across HTTP boundaries (#2225 + #2226).
+        # The OTEL "no active trace" sentinel is the literal string ``"0"``
+        # — treat it as absence so Loki queries can use ``| trace_id != ""``
+        # without matching every line.
+        otel_trace_id = getattr(record, "otelTraceID", None)
+        if otel_trace_id and otel_trace_id != "0":
+            log_data["trace_id"] = otel_trace_id
+        otel_span_id = getattr(record, "otelSpanID", None)
+        if otel_span_id and otel_span_id != "0":
+            log_data["span_id"] = otel_span_id
+
         # Add exception info if present
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
