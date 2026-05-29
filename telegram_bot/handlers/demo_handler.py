@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from typing import Any
 
 from aiogram import F, Router
@@ -90,7 +91,18 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
         data.seek(0)
         data.name = "voice.ogg"  # type: ignore[attr-defined]
 
-        client = llm if llm is not None else AsyncOpenAI()
+        # #2214: route the default client through the LiteLLM proxy. model="whisper"
+        # is a LiteLLM alias, so a bare AsyncOpenAI() (public OpenAI) would 404 and
+        # bypass the proxy's success_callback=["langfuse"]. Honour LLM_BASE_URL /
+        # LLM_API_KEY (the canonical proxy env, e.g. http://litellm:4000/v1).
+        client = (
+            llm
+            if llm is not None
+            else AsyncOpenAI(
+                api_key=os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "sk-dev",
+                base_url=os.getenv("LLM_BASE_URL", "http://localhost:4000/v1"),
+            )
+        )
         transcript = await client.audio.transcriptions.create(
             model="whisper",
             file=data,
