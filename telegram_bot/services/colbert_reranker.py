@@ -12,7 +12,6 @@ import logging
 import os
 import warnings
 
-from telegram_bot.observability import observe
 from telegram_bot.services.bge_m3_client import BGEM3Client
 
 
@@ -49,7 +48,6 @@ class ColbertRerankerService:
         self._client = client or BGEM3Client(base_url=base_url, timeout=timeout)
         logger.info("ColbertRerankerService initialized: %s (timeout=%ss)", base_url, timeout)
 
-    @observe(name="colbert-rerank")
     async def rerank(
         self,
         query: str,

@@ -346,7 +346,6 @@ spans:
     - get-prompt
     - kommo-token-refresh
     - cross-encoder-rerank
-    - colbert-rerank
     - session-summary-check
     - lead-score-upsert
     - funnel-rollup
