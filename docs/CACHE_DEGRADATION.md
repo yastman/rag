@@ -78,6 +78,12 @@ use `cache_scope="rag"`; history lookups use `cache_scope="history"`.
 | `cache_error_total` | Cache errors by tier |
 | `cache_latency_ms` | Cache operation latency |
 
+> Cache hit/miss is also surfaced per-query on the Langfuse trace. The cache
+> node reports live hit/miss via `update_current_span(...)`, while the
+> `semantic_cache_hit` / `embeddings_cache_hit` / `search_cache_hit` **scores**
+> are written once per query at the end of the pipeline. See
+> [`docs/RAG_QUALITY_SCORES.md` → "When are scores written"](RAG_QUALITY_SCORES.md#when-are-scores-written).
+
 ## Configuration
 
 Environment variables:
