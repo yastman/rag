@@ -3489,7 +3489,9 @@ class PropertyBot:
         action = "approve" if data == "hitl:approve" else "cancel"
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
-        thread_id = _supervisor_thread_id(chat_id)
+        _raw_thread_id = callback.message.message_thread_id
+        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
+        thread_id = _supervisor_thread_id(chat_id, forum_thread_id)
 
         # #2224: link this resume trace back to the interrupt trace stored at
         # confirmation time. Langfuse trace metadata values are strings.
@@ -3584,7 +3586,10 @@ class PropertyBot:
         if response_text:
             bot = callback.message.bot  # type: ignore[union-attr]
             for chunk in _split_telegram_response(response_text):
-                await bot.send_message(chat_id=chat_id, text=chunk)  # type: ignore[union-attr]
+                send_kwargs: dict[str, Any] = {"chat_id": chat_id, "text": chunk}
+                if forum_thread_id is not None:
+                    send_kwargs["message_thread_id"] = forum_thread_id
+                await bot.send_message(**send_kwargs)  # type: ignore[union-attr]
 
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")

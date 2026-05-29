@@ -84,6 +84,14 @@ def _records_resume_trace_link(source: str) -> bool:
     )
 
 
+def _resume_preserves_forum_thread_id(source: str) -> bool:
+    """HITL callbacks in forum topics must resume the same topic-scoped thread."""
+    return (
+        "callback.message.message_thread_id" in source
+        and "thread_id = _supervisor_thread_id(chat_id, forum_thread_id)" in source
+    )
+
+
 class TestSupervisorThreadSessionColocation:
     def test_bot_py_exists(self) -> None:
         assert BOT_PY.exists(), f"missing: {BOT_PY}"
@@ -134,6 +142,15 @@ class TestHitlResumeTraceLinkage:
             "propagate_attributes) so interrupted/resumed runs are linked (#2224)."
         )
 
+    def test_hitl_callback_uses_topic_scoped_thread_id(self) -> None:
+        source = BOT_PY.read_text(encoding="utf-8")
+        assert _resume_preserves_forum_thread_id(source), (
+            "handle_hitl_callback must recover callback.message.message_thread_id "
+            "and call _supervisor_thread_id(chat_id, forum_thread_id). Otherwise "
+            "forum-topic HITL resumes pop a different pending-resume key than "
+            "the interrupt stored, so resumes_trace_id is lost (#2224)."
+        )
+
 
 class TestDetectorSelfChecks:
     _COLOCATED = (
@@ -181,3 +198,11 @@ class TestDetectorSelfChecks:
         assert not _records_resume_trace_link(
             "set_pending_resume_trace_id(tid, parent)\npop_pending_resume_trace_id(tid)\n"
         )
+
+    def test_forum_thread_resume_detector(self) -> None:
+        good = (
+            "forum_thread_id = callback.message.message_thread_id\n"
+            "thread_id = _supervisor_thread_id(chat_id, forum_thread_id)\n"
+        )
+        assert _resume_preserves_forum_thread_id(good)
+        assert not _resume_preserves_forum_thread_id("thread_id = _supervisor_thread_id(chat_id)\n")
