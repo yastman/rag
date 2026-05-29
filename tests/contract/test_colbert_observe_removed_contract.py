@@ -62,7 +62,7 @@ def _all_catalog_spans(contract: dict) -> set[str]:
 
 
 class TestColbertObserveRemoved:
-    def test_module_exists(self) -> None:
+    def test_colbert_module_exists(self) -> None:
         assert COLBERT_MODULE.exists(), f"missing: {COLBERT_MODULE}"
 
     def test_no_observe_decorator_in_deprecated_module(self) -> None:
@@ -91,12 +91,12 @@ class TestColbertObserveRemoved:
 
 
 class TestDetectorSelfChecks:
-    def test_detects_observe_decorator(self) -> None:
+    def test_colbert_detector_detects_observe(self) -> None:
         src = "from telegram_bot.observability import observe\n@observe(name='x')\ndef f():\n    pass\n"
         assert _observe_calls(src) == ["x"]
         assert _imports_observe(src)
 
-    def test_clean_module_has_none(self) -> None:
+    def test_colbert_detector_clean_module_has_none(self) -> None:
         src = "def f():\n    return 1\n"
         assert _observe_calls(src) == []
         assert not _imports_observe(src)
