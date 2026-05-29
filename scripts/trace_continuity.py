@@ -37,6 +37,7 @@ Interpreting failures locally (no production / VPS / secrets / live CRM writes):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,8 @@ import yaml  # type: ignore[import-untyped]
 TRACE_CONTRACT_PATH = (
     Path(__file__).resolve().parent.parent / "tests" / "observability" / "trace_contract.yaml"
 )
+_FRAGMENT_LOOKBACK = timedelta(minutes=5)
+_FRAGMENT_LOOKAHEAD = timedelta(minutes=15)
 
 
 def load_end_to_end_trace_flows(path: Path | str = TRACE_CONTRACT_PATH) -> dict[str, Any]:
@@ -183,6 +186,7 @@ def fetch_flow_observations(
     root_id = getattr(root, "id", None) or getattr(root, "trace_id", None)
     if not root_id:
         return None, []
+    root_timestamp = getattr(root, "timestamp", None)
     try:
         full = lf.api.trace.get(root_id)
     except Exception:
@@ -195,6 +199,37 @@ def fetch_flow_observations(
         }
         for o in observations
     ]
+
+    # Trace.get(root_id) only returns observations already attached to the root
+    # trace. To distinguish "missing" from "fragmented", also look for required
+    # span names that appeared in nearby sibling traces. Keep this bounded to
+    # the root trace time window to avoid old observations causing false alarms.
+    seen_names = {obs["name"] for obs in normalized if obs.get("name")}
+    try:
+        flows = load_end_to_end_trace_flows()
+        required_names = {
+            span
+            for flow in flows.values()
+            if str(flow.get("root_family", "")) == root_family
+            for span in flatten_required_spans(flow)
+        }
+        missing_names = sorted(required_names - seen_names)
+        if root_timestamp is not None and missing_names:
+            for span_name in missing_names:
+                page = lf.api.observations.get_many(
+                    name=span_name,
+                    from_start_time=root_timestamp - _FRAGMENT_LOOKBACK,
+                    to_start_time=root_timestamp + _FRAGMENT_LOOKAHEAD,
+                    limit=20,
+                )
+                for obs in getattr(page, "data", []) or []:
+                    trace_id = _obs_attr(obs, "trace_id")
+                    if trace_id and trace_id != root_id:
+                        normalized.append({"name": _obs_attr(obs, "name"), "trace_id": trace_id})
+    except Exception:
+        # Fragment search is best-effort; the root trace still provides an
+        # explicit incomplete/unavailable result instead of a silent pass.
+        return root_id, normalized
     return root_id, normalized
 
 
