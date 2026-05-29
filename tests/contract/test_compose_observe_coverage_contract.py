@@ -212,6 +212,35 @@ class TestServicesWithObserveYamlIsHonest:
             + "\n".join(f"  - {svc}" for svc in missing)
         )
 
+    def test_each_listed_compose_service_has_resource_attributes(
+        self,
+        services_with_observe: dict[str, dict[str, str]],
+        compose_base: dict,
+    ) -> None:
+        """Every traced service must carry OTEL_RESOURCE_ATTRIBUTES so spans
+        get service.version / service.namespace / deployment.environment for
+        Langfuse "Aggregate by version" + multi-instance triage (#2227).
+
+        Closes the contract drift where
+        test_env_example_completeness_contract.py claimed the var was "set
+        per-service in compose" but no compose service actually carried it.
+        """
+        missing: list[str] = []
+        for entry, meta in services_with_observe.items():
+            compose_service = meta["compose_service"]
+            env = _get_service_env(compose_base, compose_service)
+            if "OTEL_RESOURCE_ATTRIBUTES" not in env:
+                missing.append(f"{compose_service} (entry {entry!r})")
+
+        assert not missing, (
+            "compose.yml: services with @observe decorators missing "
+            "OTEL_RESOURCE_ATTRIBUTES:\n"
+            + "\n".join(f"  - {svc}" for svc in missing)
+            + "\n\nAdd OTEL_RESOURCE_ATTRIBUTES so every span carries "
+            "service.version / service.namespace / deployment.environment "
+            "(#2227). The OTEL SDK reads this env var natively."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Direction 2: every services/<X>/ with @observe is listed in YAML

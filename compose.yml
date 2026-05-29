@@ -127,6 +127,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-bge-m3}"
+      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -158,6 +159,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-user-base}"
+      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -295,6 +297,7 @@ services:
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
       LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-telegram-bot}"
+      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
       # Sentry-compatible error tracking (optional; disabled when DSN is blank)
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
@@ -381,6 +384,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-mini-app-api}"
+      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
       SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
@@ -458,6 +462,7 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-ingestion}
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -822,6 +827,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-rag-api}"
+      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
     depends_on:
       redis:
         condition: service_healthy
@@ -926,6 +932,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_DOCKER_HOST:-http://langfuse:3000}
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-voice-agent}"
+      OTEL_RESOURCE_ATTRIBUTES: "${OTEL_RESOURCE_ATTRIBUTES:-service.version=${GIT_SHA:-},service.namespace=rag,deployment.environment=${LANGFUSE_TRACING_ENVIRONMENT:-dev}}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-local}"
       SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
