@@ -139,7 +139,7 @@ class TestNoUnguardedIngestionThreadHops:
     """Ingestion raw-thread hops that start a fresh event loop must
     propagate the active OTEL/Langfuse context via copy_context (#2251)."""
 
-    def test_no_offending_files(self, offending_files: list[Path]) -> None:
+    def test_no_unguarded_ingestion_threadhop_files(self, offending_files: list[Path]) -> None:
         if not offending_files:
             return
         report = "\n".join(f"  - {p.relative_to(REPO_ROOT).as_posix()}" for p in offending_files)
