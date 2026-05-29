@@ -170,6 +170,84 @@ def _ensure_otel_service_name(default: str) -> None:
         os.environ["OTEL_SERVICE_NAME"] = default
 
 
+def _resolve_release(explicit: str | None = None) -> str:
+    """Resolve the release/version string for Langfuse + OTEL resource (#2227).
+
+    Order of precedence:
+      1. explicit argument,
+      2. ``LANGFUSE_RELEASE`` env var,
+      3. installed package version (``contextual-rag@<version>``),
+      4. ``unknown`` sentinel.
+
+    Mirrors ``src/observability_sentry.py::_resolve_release`` so Sentry and
+    Langfuse group events by the same release string. Never returns ``None``
+    / empty so Langfuse always has a value to power "Aggregate by version".
+    """
+    candidate = explicit if explicit is not None else os.getenv("LANGFUSE_RELEASE", "")
+    candidate = (candidate or "").strip()
+    if candidate:
+        return candidate
+    try:
+        from importlib import metadata as _metadata
+
+        return f"contextual-rag@{_metadata.version('contextual-rag')}"
+    except Exception:
+        return "contextual-rag@unknown"
+
+
+def _ensure_otel_resource_attributes(*, service_namespace: str = "rag") -> None:
+    """Merge OTEL resource attributes into ``OTEL_RESOURCE_ATTRIBUTES`` (#2227).
+
+    The OpenTelemetry SDK reads ``OTEL_RESOURCE_ATTRIBUTES`` natively via the
+    ``OTELResourceDetector`` inside ``Resource.create()``, so every span the
+    Langfuse v4 SDK emits picks these up without touching the TracerProvider.
+
+    We *merge* rather than overwrite: keys an operator already set (e.g. in
+    ``compose.yml``) win, and we only fill the gaps. This adds:
+
+      * ``service.version``        — release string (see ``_resolve_release``),
+        powers Langfuse "Aggregate by version" / release-regression views.
+      * ``service.namespace``      — logical app grouping (bot+rag-api+bge-m3).
+      * ``deployment.environment`` — OTEL semantic env (mirrors
+        ``LANGFUSE_TRACING_ENVIRONMENT``), distinct from the Langfuse-specific
+        ``environment`` kwarg.
+      * ``host.name``              — emitting container/instance hostname, for
+        multi-replica triage.
+    """
+    existing_raw = os.environ.get("OTEL_RESOURCE_ATTRIBUTES", "")
+    merged: dict[str, str] = {}
+    for pair in existing_raw.split(","):
+        pair = pair.strip()
+        if pair and "=" in pair:
+            key, val = pair.split("=", 1)
+            key, val = key.strip(), val.strip()
+            # Skip empty values (e.g. ``service.version=`` when ${GIT_SHA} is
+            # unset in compose) so our defaults can fill them. A non-empty
+            # operator value always wins.
+            if val:
+                merged[key] = val
+
+    defaults: dict[str, str] = {
+        "service.version": _resolve_release(),
+        "service.namespace": service_namespace,
+    }
+    tracing_env = (os.environ.get("LANGFUSE_TRACING_ENVIRONMENT", "") or "").strip()
+    if tracing_env:
+        defaults["deployment.environment"] = tracing_env
+    try:
+        import socket
+
+        defaults["host.name"] = socket.gethostname()
+    except Exception:
+        pass
+
+    # Operator-set keys win; defaults only fill gaps.
+    for key, val in defaults.items():
+        merged.setdefault(key, val)
+
+    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = ",".join(f"{k}={v}" for k, v in sorted(merged.items()))
+
+
 def _ensure_otel_export_defaults() -> None:
     """Set conservative OTEL export defaults unless explicitly configured."""
     for env_name, default in _OTEL_EXPORT_DEFAULTS.items():
@@ -469,7 +547,15 @@ def initialize_langfuse(
     if tracing_env:
         kwargs["environment"] = tracing_env
 
+    # Release tag powers Langfuse "Aggregate by version" dashboards (#2227).
+    kwargs["release"] = _resolve_release()
+
     _ensure_otel_service_name("telegram-bot")
+    # Merge service.version / service.namespace / deployment.environment /
+    # host.name into OTEL_RESOURCE_ATTRIBUTES so every emitted span carries
+    # release + env + namespace for Langfuse UI grouping (#2227). OTEL SDK
+    # reads this env var natively via OTELResourceDetector.
+    _ensure_otel_resource_attributes()
     _ensure_otel_export_defaults()
     try:
         kwargs["flush_at"] = int(os.environ.get("LANGFUSE_FLUSH_AT", "512"))
