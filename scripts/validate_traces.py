@@ -42,6 +42,12 @@ from tenacity import (
 # Ensure project root importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.log_correlation import (
+    check_log_correlation,
+    has_log_correlation_failure,
+    load_log_records,
+    summarize_log_correlation,
+)
 from scripts.trace_continuity import (
     check_trace_continuity,
     has_continuity_failure,
@@ -1601,6 +1607,28 @@ def check_trace_continuity_for_report() -> list[Any]:
     return check_trace_continuity(lf, flows)
 
 
+def check_log_correlation_for_report(continuity_results: list[Any]) -> list[Any]:
+    """Evaluate log<->trace correlation for canonical end-to-end flows (#2255).
+
+    Reads newline-delimited JSON logs from ``LOG_CORRELATION_SOURCE`` (when set)
+    and uses the root trace ids discovered by the continuity check as the
+    expected trace ids. Degrades to ``unavailable`` when no log source is
+    configured, so the boundary is reported explicitly rather than passed
+    silently.
+    """
+    flows = load_end_to_end_trace_flows()
+    if not flows:
+        return []
+    source = os.getenv("LOG_CORRELATION_SOURCE")
+    records = load_log_records(source) if source else []
+    expected = {
+        r.flow_name: r.root_trace_id
+        for r in continuity_results
+        if getattr(r, "root_trace_id", None)
+    }
+    return check_log_correlation(flows, records, expected_trace_ids=expected)
+
+
 async def run_validation(args: argparse.Namespace) -> None:
     """Main validation orchestrator."""
     run_id = str(uuid.uuid4())
@@ -1702,11 +1730,15 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Runtime trace_id continuity across service/thread boundaries (#2252).
     # Proves each canonical flow is one trace tree, not several partial traces.
     continuity_results: list[Any] = []
+    log_correlation_results: list[Any] = []
     if not getattr(args, "no_continuity_gate", False):
         logger.info("Checking trace_id continuity for canonical flows...")
         continuity_results = check_trace_continuity_for_report()
         if continuity_results:
             logger.info("%s", summarize_continuity(continuity_results))
+        log_correlation_results = check_log_correlation_for_report(continuity_results)
+        if log_correlation_results:
+            logger.info("%s", summarize_log_correlation(log_correlation_results))
 
     # Evaluate Go/No-Go criteria
     go_no_go = evaluate_go_no_go(
@@ -1750,6 +1782,16 @@ async def run_validation(args: argparse.Namespace) -> None:
             "Trace continuity FAILED: a canonical flow fragmented across a "
             "service/thread boundary (W3C TraceContext/Baggage lost). See #2244.\n%s",
             summarize_continuity(continuity_results),
+        )
+        sys.exit(1)
+
+    # Single-trace gate (#2255): fail only when a sampled log carries a trace_id
+    # that does not match its flow trace. incomplete/unavailable are reported.
+    if has_log_correlation_failure(log_correlation_results):
+        logger.error(
+            "Log<->trace correlation FAILED: a canonical flow logged a trace_id "
+            "that does not match its trace. See #2255.\n%s",
+            summarize_log_correlation(log_correlation_results),
         )
         sys.exit(1)
 
@@ -1814,6 +1856,18 @@ async def run_validation(args: argparse.Namespace) -> None:
                 "cross_trace": r.cross_trace,
             }
             for r in continuity_results
+        ],
+        "log_correlation": [
+            {
+                "flow": r.flow_name,
+                "status": r.status,
+                "sampled": r.sampled,
+                "correlated": r.correlated,
+                "trace_id_mismatches": r.trace_id_mismatches,
+                "missing_fields": r.missing_fields,
+                "expected_trace_id": r.expected_trace_id,
+            }
+            for r in log_correlation_results
         ],
         "traces": [
             {
