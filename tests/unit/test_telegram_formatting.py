@@ -18,7 +18,7 @@ class TestRecordLangfuseResponseOutput:
 
     def test_builds_safe_output_payload(self):
         mock_lf = MagicMock()
-        mock_lf.set_current_trace_io = MagicMock()
+        mock_lf.update_current_span = MagicMock()
 
         with (
             patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf),
@@ -30,19 +30,20 @@ class TestRecordLangfuseResponseOutput:
             record_langfuse_response_output("hello", 2)
 
         mock_build.assert_called_once_with("hello", 2)
-        mock_lf.set_current_trace_io.assert_called_once_with(output={"mock": "payload"})
+        mock_lf.update_current_span.assert_called_once_with(output={"mock": "payload"})
 
-    def test_uses_set_current_trace_io_when_present(self):
+    def test_prefers_update_current_span_when_present(self):
+        """Issue #2280: update_current_span is the SDK-native API; prefer it."""
         mock_lf = MagicMock()
-        mock_lf.set_current_trace_io = MagicMock()
         mock_lf.update_current_span = MagicMock()
+        mock_lf.set_current_trace_io = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             record_langfuse_response_output("hello world", 1)
 
-        mock_lf.set_current_trace_io.assert_called_once()
-        mock_lf.update_current_span.assert_not_called()
-        call_kwargs = mock_lf.set_current_trace_io.call_args.kwargs
+        mock_lf.update_current_span.assert_called_once()
+        mock_lf.set_current_trace_io.assert_not_called()
+        call_kwargs = mock_lf.update_current_span.call_args.kwargs
         assert "output" in call_kwargs
         output = call_kwargs["output"]
         assert "answer_preview" in output
@@ -50,16 +51,17 @@ class TestRecordLangfuseResponseOutput:
         assert output["chunks_count"] == 1
         assert output["delivery_status"] == "sent"
 
-    def test_falls_back_to_update_current_span(self):
+    def test_falls_back_to_set_current_trace_io(self):
+        """Issue #2280: set_current_trace_io is the legacy fallback."""
         mock_lf = MagicMock()
-        del mock_lf.set_current_trace_io
-        mock_lf.update_current_span = MagicMock()
+        del mock_lf.update_current_span
+        mock_lf.set_current_trace_io = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             record_langfuse_response_output("fallback", 3)
 
-        mock_lf.update_current_span.assert_called_once()
-        call_kwargs = mock_lf.update_current_span.call_args.kwargs
+        mock_lf.set_current_trace_io.assert_called_once()
+        call_kwargs = mock_lf.set_current_trace_io.call_args.kwargs
         assert "output" in call_kwargs
         output = call_kwargs["output"]
         assert "answer_preview" in output
@@ -67,27 +69,29 @@ class TestRecordLangfuseResponseOutput:
 
     def test_no_op_when_both_methods_missing(self):
         mock_lf = MagicMock()
-        del mock_lf.set_current_trace_io
         del mock_lf.update_current_span
+        del mock_lf.set_current_trace_io
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             record_langfuse_response_output("answer", 1)
 
-    def test_trace_io_failure_falls_back_to_span(self):
+    def test_span_failure_falls_back_to_trace_io(self):
+        """Issue #2280: update_current_span failure falls back to set_current_trace_io."""
         mock_lf = MagicMock()
-        mock_lf.set_current_trace_io = MagicMock(side_effect=RuntimeError("trace io error"))
-        mock_lf.update_current_span = MagicMock()
+        mock_lf.update_current_span = MagicMock(side_effect=RuntimeError("span error"))
+        mock_lf.set_current_trace_io = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             record_langfuse_response_output("answer", 1)
 
-        mock_lf.set_current_trace_io.assert_called_once()
         mock_lf.update_current_span.assert_called_once()
+        mock_lf.set_current_trace_io.assert_called_once()
 
     def test_span_failure_is_silent(self):
+        """Issue #2280: Both methods failing is silent fallthrough."""
         mock_lf = MagicMock()
-        mock_lf.set_current_trace_io = MagicMock(side_effect=RuntimeError("trace io error"))
         mock_lf.update_current_span = MagicMock(side_effect=RuntimeError("span error"))
+        mock_lf.set_current_trace_io = MagicMock(side_effect=RuntimeError("trace io error"))
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             # Should not raise
@@ -95,13 +99,13 @@ class TestRecordLangfuseResponseOutput:
 
     def test_preview_truncated_to_safe_limit(self):
         mock_lf = MagicMock()
-        mock_lf.set_current_trace_io = MagicMock()
+        mock_lf.update_current_span = MagicMock()
 
         long_text = "x" * 2000
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             record_langfuse_response_output(long_text, 1)
 
-        call_args = mock_lf.set_current_trace_io.call_args.kwargs
+        call_args = mock_lf.update_current_span.call_args.kwargs
         output = call_args["output"]
         # _preview limit is 240 chars; redactor may append a short suffix
         assert len(output["answer_preview"]) <= 260
@@ -110,12 +114,12 @@ class TestRecordLangfuseResponseOutput:
 
     def test_none_text_handled(self):
         mock_lf = MagicMock()
-        mock_lf.set_current_trace_io = MagicMock()
+        mock_lf.update_current_span = MagicMock()
 
         with patch("telegram_bot.services.telegram_formatting.get_client", return_value=mock_lf):
             record_langfuse_response_output(None, 1)
 
-        call_args = mock_lf.set_current_trace_io.call_args.kwargs
+        call_args = mock_lf.update_current_span.call_args.kwargs
         output = call_args["output"]
         assert output["answer_preview"] == ""
         assert output["answer_len"] == 0
