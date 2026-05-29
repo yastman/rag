@@ -72,7 +72,6 @@ LIGHT_SPANS = [
     "grade-documents",
     "rerank",
     "query-rewrite",
-    "colbert-rerank",
 ]
 
 
