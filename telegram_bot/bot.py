@@ -3489,7 +3489,7 @@ class PropertyBot:
         action = "approve" if data == "hitl:approve" else "cancel"
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
-        _raw_thread_id = callback.message.message_thread_id
+        _raw_thread_id = getattr(callback.message, "message_thread_id", None)
         forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
         thread_id = _supervisor_thread_id(chat_id, forum_thread_id)
 

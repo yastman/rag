@@ -87,7 +87,7 @@ def _records_resume_trace_link(source: str) -> bool:
 def _resume_preserves_forum_thread_id(source: str) -> bool:
     """HITL callbacks in forum topics must resume the same topic-scoped thread."""
     return (
-        "callback.message.message_thread_id" in source
+        'getattr(callback.message, "message_thread_id", None)' in source
         and "thread_id = _supervisor_thread_id(chat_id, forum_thread_id)" in source
     )
 
@@ -201,7 +201,7 @@ class TestDetectorSelfChecks:
 
     def test_forum_thread_resume_detector(self) -> None:
         good = (
-            "forum_thread_id = callback.message.message_thread_id\n"
+            '_raw_thread_id = getattr(callback.message, "message_thread_id", None)\n'
             "thread_id = _supervisor_thread_id(chat_id, forum_thread_id)\n"
         )
         assert _resume_preserves_forum_thread_id(good)
