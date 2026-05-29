@@ -107,6 +107,7 @@ def test_summarize_mentions_flow_and_status() -> None:
 def test_check_log_correlation_uses_flow_required_log_fields() -> None:
     flows = {
         "telegram_text_rag": {
+            "root_family": "telegram-rag-query",
             "required_log_fields": ["otelTraceID", "otelSpanID"],
         }
     }
@@ -120,6 +121,53 @@ def test_check_log_correlation_unavailable_without_logs() -> None:
     flows = {"telegram_text_rag": {"required_log_fields": list(REQUIRED)}}
     results = check_log_correlation(flows, [])
     assert results[0].status == "unavailable"
+
+
+def test_check_log_correlation_does_not_cross_match_shared_log_dump() -> None:
+    flows = {
+        "telegram_text_rag": {
+            "root_family": "telegram-rag-query",
+            "required_log_fields": list(REQUIRED),
+        },
+        "voice_rag_api": {
+            "root_family": "voice-session",
+            "required_log_fields": list(REQUIRED),
+        },
+    }
+    records = [
+        {"trace_id": "trace-text", "span_id": "span-text"},
+        {"trace_id": "trace-voice", "span_id": "span-voice"},
+    ]
+    results = check_log_correlation(
+        flows,
+        records,
+        expected_trace_ids={
+            "telegram_text_rag": "trace-text",
+            "voice_rag_api": "trace-voice",
+        },
+    )
+    assert {r.flow_name: r.status for r in results} == {
+        "telegram_text_rag": "ok",
+        "voice_rag_api": "ok",
+    }
+    assert all(r.trace_id_mismatches == 0 for r in results)
+
+
+def test_check_log_correlation_keeps_explicit_flow_mismatch() -> None:
+    flows = {
+        "telegram_text_rag": {
+            "root_family": "telegram-rag-query",
+            "required_log_fields": list(REQUIRED),
+        },
+    }
+    records = [{"flow_name": "telegram_text_rag", "trace_id": "wrong", "span_id": "span-1"}]
+    results = check_log_correlation(
+        flows,
+        records,
+        expected_trace_ids={"telegram_text_rag": "trace-text"},
+    )
+    assert results[0].status == "mismatch"
+    assert results[0].trace_id_mismatches == 1
 
 
 def test_load_log_records_parses_ndjson_and_skips_bad_lines(tmp_path) -> None:

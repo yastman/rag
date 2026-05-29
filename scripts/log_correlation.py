@@ -57,6 +57,8 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
 _ABSENT_VALUES = {"", "0"}
 
 DEFAULT_REQUIRED_FIELDS: tuple[str, ...] = ("otelTraceID", "otelSpanID")
+FLOW_NAME_KEYS: tuple[str, ...] = ("flow", "flow_name", "trace_flow")
+ROOT_FAMILY_KEYS: tuple[str, ...] = ("root_family", "langfuse_root_family")
 
 
 def get_correlation_value(record: Any, logical_field: str) -> str | None:
@@ -76,6 +78,69 @@ def get_correlation_value(record: Any, logical_field: str) -> str | None:
 
 def record_has_fields(record: Any, fields: tuple[str, ...]) -> bool:
     return all(get_correlation_value(record, f) is not None for f in fields)
+
+
+def _record_value(record: Any, key: str) -> str | None:
+    val = record.get(key) if isinstance(record, dict) else getattr(record, key, None)
+    if val is None:
+        return None
+    text = str(val)
+    return text or None
+
+
+def _record_identifies_flow(record: Any, flow_name: str, flow: dict[str, Any]) -> bool | None:
+    """Return explicit flow match when the log carries flow metadata.
+
+    ``None`` means the record has no flow discriminator, so callers must fall
+    back to trace-id based sampling.
+    """
+    saw_discriminator = False
+    for key in FLOW_NAME_KEYS:
+        value = _record_value(record, key)
+        if value is not None:
+            saw_discriminator = True
+            if value == flow_name:
+                return True
+
+    root_family = str(flow.get("root_family") or "")
+    if root_family:
+        for key in ROOT_FAMILY_KEYS:
+            value = _record_value(record, key)
+            if value is not None:
+                saw_discriminator = True
+                if value == root_family:
+                    return True
+
+    return False if saw_discriminator else None
+
+
+def filter_flow_log_records(
+    flow_name: str,
+    flow: dict[str, Any],
+    log_records: list[Any],
+    expected_trace_id: str | None,
+) -> list[Any]:
+    """Return records attributable to one canonical flow.
+
+    A shared JSON dump can contain several flow traces. When an expected trace id
+    is known, records from other traces must not be treated as mismatches for
+    this flow. Explicit flow/root-family metadata still wins, so a tagged record
+    with a different trace id remains a hard mismatch.
+    """
+    if expected_trace_id is None:
+        return log_records
+
+    selected: list[Any] = []
+    for rec in log_records:
+        flow_match = _record_identifies_flow(rec, flow_name, flow)
+        if flow_match is True:
+            selected.append(rec)
+            continue
+        if flow_match is False:
+            continue
+        if get_correlation_value(rec, "otelTraceID") == expected_trace_id:
+            selected.append(rec)
+    return selected
 
 
 @dataclass
@@ -193,12 +258,14 @@ def check_log_correlation(
         if only is not None and flow_name not in only:
             continue
         required = tuple(flow.get("required_log_fields") or DEFAULT_REQUIRED_FIELDS)
+        expected_trace_id = expected_trace_ids.get(flow_name)
+        flow_records = filter_flow_log_records(flow_name, flow, log_records, expected_trace_id)
         results.append(
             evaluate_log_correlation(
                 flow_name,
                 required,
-                log_records,
-                expected_trace_id=expected_trace_ids.get(flow_name),
+                flow_records,
+                expected_trace_id=expected_trace_id,
             )
         )
     return results
