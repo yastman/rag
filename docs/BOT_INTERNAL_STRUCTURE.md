@@ -163,7 +163,7 @@ A conversation has two identifiers that look similar but are intentionally
 
 Both are placed in the supervisor invoke `config["configurable"]` together, and
 the checkpointer `thread_id` is also recorded on the Langfuse trace as
-`langgraph_thread_id` metadata (via `update_current_trace`). So from a Langfuse
+`langgraph_thread_id` metadata via `propagate_attributes`. So from a Langfuse
 trace an operator can read `langgraph_thread_id` and query the LangGraph
 checkpointer for that conversation's state.
 

@@ -2230,10 +2230,12 @@ class PropertyBot:
 
         rag_result_store: dict[str, Any] = {}
         pre_agent_start = time.perf_counter()
+        langgraph_thread_id = _supervisor_thread_id(message.chat.id, forum_thread_id)
 
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
+            metadata={"langgraph_thread_id": langgraph_thread_id},
             tags=["telegram", "rag", "agent"],
         ):
             # --- Pre-agent content filter (#439) ---
@@ -3001,17 +3003,6 @@ class PropertyBot:
             },
         }
 
-        # #2224: link the LangGraph checkpointer thread_id onto the Langfuse
-        # trace so an operator can jump from a trace to the conversation state.
-        # thread_id is intentionally NOT unified with session_id: session_id is
-        # date-rotating (chat-<hash>-<YYYYMMDD>) while the checkpointer thread
-        # must persist across days, so they are correlated via metadata.
-        _lf = get_client()
-        if _lf is not None:
-            _lf.update_current_trace(
-                metadata={"langgraph_thread_id": config["configurable"]["thread_id"]}
-            )
-
         async def _run_once(current_agent: Any) -> tuple[str, dict[str, Any]]:
             can_stream = use_streaming and callable(getattr(current_agent, "astream", None))
             if not can_stream:
@@ -3158,17 +3149,6 @@ class PropertyBot:
                 "session_id": bot_context.session_id,
             },
         }
-
-        # #2224: link the LangGraph checkpointer thread_id onto the Langfuse
-        # trace so an operator can jump from a trace to the conversation state.
-        # thread_id is intentionally NOT unified with session_id: session_id is
-        # date-rotating (chat-<hash>-<YYYYMMDD>) while the checkpointer thread
-        # must persist across days, so they are correlated via metadata.
-        _lf = get_client()
-        if _lf is not None:
-            _lf.update_current_trace(
-                metadata={"langgraph_thread_id": config["configurable"]["thread_id"]}
-            )
 
         # --- Streaming path (#952) ---
         streaming_enabled = bool(getattr(self._graph_config, "streaming_enabled", False))

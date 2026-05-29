@@ -14,8 +14,9 @@ Two things are locked:
    ``_supervisor_thread_id`` thread_id must also carry ``session_id`` so the
    LangGraph<->Langfuse mapping is always recoverable.
 2. **Trace linkage** — ``telegram_bot/bot.py`` records the checkpointer
-   ``thread_id`` on the Langfuse trace as ``langgraph_thread_id`` metadata (via
-   ``update_current_trace``), so the correlation is visible from the trace.
+   ``thread_id`` on the Langfuse trace as ``langgraph_thread_id`` metadata via
+   ``propagate_attributes`` at the supervisor entry-point, so the correlation
+   is visible from the trace.
 
 Design note (see ``docs/BOT_INTERNAL_STRUCTURE.md``): ``thread_id`` is
 **intentionally not unified** with ``session_id``. ``make_session_id`` is
@@ -71,7 +72,7 @@ def _supervisor_configurable_keysets(tree: ast.AST) -> list[set[str]]:
 
 
 def _emits_thread_id_to_trace(source: str) -> bool:
-    return "update_current_trace" in source and "langgraph_thread_id" in source
+    return "propagate_attributes" in source and "langgraph_thread_id" in source
 
 
 class TestSupervisorThreadSessionColocation:
@@ -98,8 +99,8 @@ class TestTraceLinkage:
         assert _emits_thread_id_to_trace(source), (
             "telegram_bot/bot.py must record the checkpointer thread_id on the "
             "Langfuse trace as langgraph_thread_id metadata via "
-            "update_current_trace(...) so operators can correlate a trace to the "
-            "LangGraph conversation state (#2224)."
+            "propagate_attributes(...) so operators can correlate a trace to "
+            "the LangGraph conversation state (#2224)."
         )
 
 
@@ -132,6 +133,8 @@ class TestDetectorSelfChecks:
 
     def test_trace_linkage_detector(self) -> None:
         assert _emits_thread_id_to_trace(
-            "lf.update_current_trace(metadata={'langgraph_thread_id': tid})"
+            "with propagate_attributes(metadata={'langgraph_thread_id': tid}): pass"
         )
-        assert not _emits_thread_id_to_trace("lf.update_current_span(metadata={'x': 1})")
+        assert not _emits_thread_id_to_trace(
+            "lf.update_current_generation(metadata={'langgraph_thread_id': tid})"
+        )
