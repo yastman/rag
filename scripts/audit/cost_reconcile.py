@@ -168,7 +168,8 @@ def _build_client() -> Any | None:
     try:
         from langfuse import get_client
 
-        return get_client()
+        client = get_client()
+        return client if hasattr(client, "api") else None
     except Exception:
         return None
 

@@ -19,7 +19,7 @@ These tests pin the pure functions; the live Langfuse fetch is mocked.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -142,6 +142,16 @@ class TestFetchGenerations:
             cr.fetch_generations(client, since=datetime(2026, 5, 1), until=datetime(2026, 5, 8))
             == []
         )
+
+
+class TestBuildClient:
+    def test_disabled_langfuse_client_is_treated_as_unavailable(self) -> None:
+        with patch.dict("sys.modules", {"langfuse": MagicMock()}):
+            import langfuse
+
+            langfuse.get_client.return_value = SimpleNamespace()
+
+            assert cr._build_client() is None
 
 
 class TestFormatReport:
