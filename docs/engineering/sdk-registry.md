@@ -102,6 +102,11 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
   - Qdrant остаётся поисковым бекендом — не переносить векторный поиск на RedisVL
   - Apartments: payload filters без metadata. prefix
   - QDRANT_TIMEOUT=30 для тяжёлых запросов
+  - `grpcio` НЕ объявляется как прямая зависимость (#2241). `qdrant-client`
+    жёстко требует `grpcio>=1.41.0`, поэтому при `prefer_grpc=True` он
+    подтягивается транзитивно. Прямой pin (`grpcio>=...`) — избыточен и только
+    создаёт лишнюю работу резолверу/сборке в PR-проверках. Контракт:
+    `tests/contract/test_grpcio_dependency_audit_contract.py`.
 
 ## instructor
 - **triggers:** structured extraction, LLM parsing, response_model, Pydantic extraction, фильтры квартир
