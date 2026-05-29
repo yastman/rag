@@ -516,8 +516,8 @@ def test_preflight_bot_is_phony() -> None:
     assert "preflight-bot" in combined, "preflight-bot must be declared in .PHONY"
 
 
-def test_preflight_bot_runs_python_script() -> None:
-    """`preflight-bot` must invoke the check_bot_runtime_env.py script."""
+def test_preflight_bot_runs_no_sync_module() -> None:
+    """`preflight-bot` must invoke the env checker without uv auto-sync."""
     text = _makefile_text()
     block_match = re.search(
         r"^preflight-bot:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
@@ -526,9 +526,30 @@ def test_preflight_bot_runs_python_script() -> None:
     )
     assert block_match, "preflight-bot target not found in Makefile"
     block = block_match.group(0)
-    assert "scripts/probe/check_bot_runtime_env.py" in block, (
-        "preflight-bot must invoke scripts/probe/check_bot_runtime_env.py"
+    assert "$(UV_RUN_NO_SYNC) python -m scripts.probe.check_bot_runtime_env" in block, (
+        "preflight-bot must invoke scripts.probe.check_bot_runtime_env via "
+        "$(UV_RUN_NO_SYNC) so bot startup checks do not mutate .venv"
     )
+
+
+def test_candidate_check_is_read_only_frozen_gate() -> None:
+    """`make candidate-check` must fail on stale env before no-sync lint/type checks."""
+    text = _makefile_text()
+    assert re.search(r"^candidate-check:\s*check-frozen\b", text, re.MULTILINE), (
+        "candidate-check must depend on check-frozen"
+    )
+    block_match = re.search(
+        r"^check-frozen:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "check-frozen target not found in Makefile"
+    block = block_match.group(0)
+    assert "uv sync --frozen --check" in block
+    assert "$(UV_RUN_NO_SYNC) ruff check $(LINT_PATHS)" in block
+    assert "$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS)" in block
+    assert "uv run ruff" not in block
+    assert "uv run mypy" not in block
 
 
 def test_preflight_bot_has_flag_override() -> None:

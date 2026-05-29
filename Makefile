@@ -382,7 +382,7 @@ PREFLIGHT_BOT_FLAGS ?=
 BOT_RESPONSE_SMOKE_FLAGS ?=
 
 preflight-bot: ## Check bot runtime env before starting (missing .env, invalid token, port issues)
-	@uv run python scripts/probe/check_bot_runtime_env.py $(PREFLIGHT_BOT_FLAGS)
+	@$(UV_RUN_NO_SYNC) python -m scripts.probe.check_bot_runtime_env $(PREFLIGHT_BOT_FLAGS)
 
 bot-response-smoke: ## End-to-end gate: prove `make bot` actually answers a Telegram message (#2192)
 	@echo "$(BLUE)Running bot response smoke gate...$(NC)"
@@ -700,8 +700,25 @@ docs-check: ## Check Markdown relative links for broken targets
 # QUICK COMMANDS
 # =============================================================================
 
+.PHONY: check-frozen candidate-check
+
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
+
+check-frozen: ## Read-only check: fail if .venv is stale, then lint + type-check without uv sync
+	@echo "$(BLUE)Checking frozen uv environment...$(NC)"
+	@uv sync --frozen --check || { \
+		echo "$(RED)Environment is stale. Run 'uv sync --frozen' in an isolated worktree .venv, then retry.$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(BLUE)Running Ruff lint without uv auto-sync...$(NC)"
+	@$(UV_RUN_NO_SYNC) ruff check $(LINT_PATHS)
+	@echo "$(GREEN)✓ Ruff check complete$(NC)"
+	@echo "$(BLUE)Running MyPy type-check without uv auto-sync...$(NC)"
+	@$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
+	@echo "$(GREEN)✓ Frozen check complete$(NC)"
+
+candidate-check: check-frozen ## Candidate/review check alias (read-only after env preflight)
 
 pre-push: lint format-check ## Pre-push gate (lint + format-check)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
@@ -730,11 +747,11 @@ local-up-ingest:  ## Start local services + docling for ingestion workflows
 	@echo "$(GREEN)✓ Local services + docling started$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
-	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
+	$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
 bot: preflight-bot test-bot-health ## Alias: run bot and tee output to logs/bot-run.log
 	@mkdir -p logs
-	@bash -o pipefail -c 'uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
+	@bash -o pipefail -c '$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
 	status=$$?; echo '[COMPLETE]'; exit $$status
 
 # =============================================================================
