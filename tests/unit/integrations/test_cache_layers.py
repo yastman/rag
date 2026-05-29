@@ -101,9 +101,10 @@ class TestCacheLayerManagerInitialize:
         filterable_fields = mock_semantic_cache.call_args.kwargs["filterable_fields"]
         assert {"name": "filter_signature", "type": "tag"} in filterable_fields
 
-    def test_create_semantic_cache_forwards_async_redis_client(self):
-        """#2277: pass async_redis_client so redisvl reuses our client instead of
-        lazily calling the deprecated RedisConnectionFactory.get_async_redis_connection."""
+    def test_create_semantic_cache_installs_async_redis_client(self):
+        """#2277: store async_redis_client on the RedisVL cache instance so it
+        reuses our client instead of lazily calling the deprecated
+        RedisConnectionFactory.get_async_redis_connection."""
         fake_cache = MagicMock()
         mock_async_client = MagicMock()
 
@@ -120,25 +121,35 @@ class TestCacheLayerManagerInitialize:
             )
 
         assert cache is fake_cache
-        call_kwargs = mock_semantic_cache.call_args.kwargs
-        assert call_kwargs["async_redis_client"] is mock_async_client
+        assert mock_semantic_cache.call_count == 1
+        assert fake_cache._async_redis_client is mock_async_client
+        assert fake_cache._owns_redis_client is False
 
-    def test_create_semantic_cache_no_deprecation_warning_with_client(self):
-        """With async_redis_client supplied, constructing the real SemanticCache
-        must not emit the redisvl get_async_redis_connection DeprecationWarning."""
+    def test_create_semantic_cache_real_cache_stores_async_client(self):
+        """With async_redis_client supplied, the real RedisVL SemanticCache must
+        retain that client before any async cache operation asks RedisVL for one."""
         import warnings
 
+        from redisvl.utils.vectorize.base import BaseVectorizer
+
         mock_async_client = AsyncMock()
-        with warnings.catch_warnings():
+        mock_index = MagicMock()
+        mock_index.exists.return_value = False
+        with (
+            warnings.catch_warnings(),
+            patch("redisvl.extensions.cache.llm.semantic.SearchIndex", return_value=mock_index),
+        ):
             warnings.simplefilter("error", DeprecationWarning)
-            # Real SemanticCache construction; must not hit the deprecated lazy path.
-            _create_semantic_cache(
+            cache = _create_semantic_cache(
                 redis_url="redis://localhost:6379",
                 distance_threshold=0.08,
                 ttl=3600,
-                vectorizer=MagicMock(),
+                vectorizer=BaseVectorizer(model="test-vectorizer", dims=3),
                 async_redis_client=mock_async_client,
             )
+        assert cache is not None
+        assert cache._async_redis_client is mock_async_client
+        assert cache._owns_redis_client is False
 
     async def test_initialize_passes_redis_client_to_semantic_cache(self):
         """CacheLayerManager.initialize wires its connected client into the
