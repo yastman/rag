@@ -101,6 +101,76 @@ class TestCacheLayerManagerInitialize:
         filterable_fields = mock_semantic_cache.call_args.kwargs["filterable_fields"]
         assert {"name": "filter_signature", "type": "tag"} in filterable_fields
 
+    def test_create_semantic_cache_installs_async_redis_client(self):
+        """#2277: store async_redis_client on the RedisVL cache instance so it
+        reuses our client instead of lazily calling the deprecated
+        RedisConnectionFactory.get_async_redis_connection."""
+        fake_cache = MagicMock()
+        mock_async_client = MagicMock()
+
+        with patch(
+            "redisvl.extensions.cache.llm.SemanticCache",
+            return_value=fake_cache,
+        ) as mock_semantic_cache:
+            cache = _create_semantic_cache(
+                redis_url="redis://localhost:6379",
+                distance_threshold=0.08,
+                ttl=3600,
+                vectorizer=MagicMock(),
+                async_redis_client=mock_async_client,
+            )
+
+        assert cache is fake_cache
+        assert mock_semantic_cache.call_count == 1
+        assert fake_cache._async_redis_client is mock_async_client
+        assert fake_cache._owns_redis_client is False
+
+    def test_create_semantic_cache_real_cache_stores_async_client(self):
+        """With async_redis_client supplied, the real RedisVL SemanticCache must
+        retain that client before any async cache operation asks RedisVL for one."""
+        import warnings
+
+        from redisvl.utils.vectorize.base import BaseVectorizer
+
+        mock_async_client = AsyncMock()
+        mock_index = MagicMock()
+        mock_index.exists.return_value = False
+        with (
+            warnings.catch_warnings(),
+            patch("redisvl.extensions.cache.llm.semantic.SearchIndex", return_value=mock_index),
+        ):
+            warnings.simplefilter("error", DeprecationWarning)
+            cache = _create_semantic_cache(
+                redis_url="redis://localhost:6379",
+                distance_threshold=0.08,
+                ttl=3600,
+                vectorizer=BaseVectorizer(model="test-vectorizer", dims=3),
+                async_redis_client=mock_async_client,
+            )
+        assert cache is not None
+        assert cache._async_redis_client is mock_async_client
+        assert cache._owns_redis_client is False
+
+    async def test_initialize_passes_redis_client_to_semantic_cache(self):
+        """CacheLayerManager.initialize wires its connected client into the
+        semantic cache (so the deprecated lazy connection path is never taken)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+
+        with (
+            patch("src.runtime.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch(
+                "src.runtime.integrations.cache._create_semantic_cache", return_value=None
+            ) as mock_create,
+            patch("src.runtime.integrations.cache._create_embed_cache", return_value=None),
+            patch("src.services.vectorizers.BgeM3CacheVectorizer", return_value=MagicMock()),
+        ):
+            await mgr.initialize()
+
+        assert mock_create.call_args is not None
+        assert mock_create.call_args.kwargs.get("async_redis_client") is mock_redis
+
     async def test_initialize_uses_hardened_connection_params(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
 
