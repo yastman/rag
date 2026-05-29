@@ -226,10 +226,10 @@ async def test_phone_with_valid_init_data_succeeds() -> None:
     )
     # The CRM upsert call's default name is f"Mini App User {user_id}"; verify
     # the SDK-validated id was used rather than the spoofed body value.
-    upsert_kwargs = mock_kommo.upsert_contact.await_args.kwargs
-    assert upsert_kwargs["name"] == "Mini App User 42", (
+    _phone, contact_payload = mock_kommo.upsert_contact.await_args.args
+    assert contact_payload.first_name == "Mini App User 42", (
         f"submit_phone must use SDK-validated user_id (42) not body value (12345); "
-        f"got name={upsert_kwargs['name']!r}"
+        f"got name={contact_payload.first_name!r}"
     )
 
 

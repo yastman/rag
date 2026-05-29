@@ -28,14 +28,17 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from mini_app.phone import PhoneRequest, submit_phone
+from src.services.kommo_client import KommoClient
+from src.services.kommo_models import Contact, ContactCreate, Lead, LeadCreate
 
 
 @pytest.fixture
 def fake_kommo_client() -> MagicMock:
     """Build a Kommo client whose CRM operations succeed by default."""
-    client = MagicMock(name="KommoClient")
-    client.upsert_contact = AsyncMock(return_value={"id": 999})
-    client.create_lead = AsyncMock(return_value={"id": 12345})
+    client = MagicMock(name="KommoClient", spec=KommoClient)
+    client.upsert_contact = AsyncMock(return_value=Contact(id=999, first_name="Alice"))
+    client.create_lead = AsyncMock(return_value=Lead(id=12345, name="Mini App: hot"))
+    client.link_contact_to_lead = AsyncMock(return_value=None)
     return client
 
 
@@ -60,10 +63,13 @@ class TestSubmitPhoneDI:
         result = await submit_phone(phone_request, client=fake_kommo_client)
 
         fake_kommo_client.upsert_contact.assert_awaited_once_with(
-            phone="+380501112233",
-            name="Alice",
+            "+380501112233",
+            ContactCreate(first_name="Alice", phone="+380501112233"),
         )
-        fake_kommo_client.create_lead.assert_awaited_once()
+        fake_kommo_client.create_lead.assert_awaited_once_with(
+            LeadCreate(name="Mini App: hot", budget=None)
+        )
+        fake_kommo_client.link_contact_to_lead.assert_awaited_once_with(12345, 999)
         assert result == {"success": True, "lead_id": 12345}
 
     async def test_returns_failure_when_client_is_none(self, phone_request: PhoneRequest) -> None:

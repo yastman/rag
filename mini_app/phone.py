@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+from inspect import isawaitable
 from typing import Any
 
 from pydantic import BaseModel, field_validator
 
 from src.observability import get_client, observe
 from src.phone_utils import normalize_phone
+from src.services.kommo_models import ContactCreate, LeadCreate
 
 
 logger = logging.getLogger(__name__)
@@ -93,14 +95,19 @@ async def submit_phone(request: PhoneRequest, *, client: Any | None = None) -> d
         }
 
     try:
+        contact_name = request.name or f"Mini App User {request.user_id}"
         contact = await client.upsert_contact(
-            phone=request.phone,
-            name=request.name or f"Mini App User {request.user_id}",
+            request.phone,
+            ContactCreate(first_name=contact_name, phone=request.phone),
         )
-        lead = await client.create_lead(
-            name=f"Mini App: {request.source}",
-            contact_id=contact["id"],
-        )
+        lead = await client.create_lead(LeadCreate(name=f"Mini App: {request.source}", budget=None))
+        contact_id = _get_model_id(contact)
+        lead_id = _get_model_id(lead)
+        link_contact_to_lead = getattr(client, "link_contact_to_lead", None)
+        if contact_id is not None and lead_id is not None and link_contact_to_lead is not None:
+            maybe_awaitable = link_contact_to_lead(lead_id, contact_id)
+            if isawaitable(maybe_awaitable):
+                await maybe_awaitable
     except Exception as exc:
         logger.exception("CRM submission failed")
         if lf is not None:
@@ -121,8 +128,14 @@ async def submit_phone(request: PhoneRequest, *, client: Any | None = None) -> d
         lf.update_current_span(
             output={
                 "crm_ok": True,
-                "lead_created": lead.get("id") is not None,
-                "contact_resolved": contact.get("id") is not None,
+                "lead_created": lead_id is not None,
+                "contact_resolved": contact_id is not None,
             }
         )
-    return {"success": True, "lead_id": lead["id"]}
+    return {"success": True, "lead_id": lead_id}
+
+
+def _get_model_id(value: Any) -> int | None:
+    """Return ``id`` from Kommo Pydantic models, with dict support for tests."""
+    raw = value.get("id") if isinstance(value, dict) else getattr(value, "id", None)
+    return raw if isinstance(raw, int) else None

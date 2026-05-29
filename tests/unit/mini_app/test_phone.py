@@ -12,6 +12,8 @@ from httpx import ASGITransport, AsyncClient
 
 from mini_app.api import app, get_validated_init_data
 from mini_app.phone import PhoneRequest, submit_phone
+from src.services.kommo_client import KommoClient
+from src.services.kommo_models import Contact, ContactCreate, Lead, LeadCreate
 
 
 # The endpoint enforces SDK-validated Telegram initData (#1595). Tests in
@@ -32,9 +34,10 @@ def _bypass_auth_for_phone_tests():
 
 def _build_kommo_mock(*, contact_id: int = 1, lead_id: int = 2) -> MagicMock:
     """Build a Kommo client mock used by DI in #2212."""
-    mock_kommo = MagicMock()
-    mock_kommo.upsert_contact = AsyncMock(return_value={"id": contact_id})
-    mock_kommo.create_lead = AsyncMock(return_value={"id": lead_id})
+    mock_kommo = MagicMock(spec=KommoClient)
+    mock_kommo.upsert_contact = AsyncMock(return_value=Contact(id=contact_id))
+    mock_kommo.create_lead = AsyncMock(return_value=Lead(id=lead_id))
+    mock_kommo.link_contact_to_lead = AsyncMock(return_value=None)
     return mock_kommo
 
 
@@ -147,7 +150,8 @@ async def test_submit_phone_formats_name():
         client=mock_kommo,
     )
     mock_kommo.upsert_contact.assert_called_once_with(
-        phone="+359888123456", name="Mini App User 456"
+        "+359888123456",
+        ContactCreate(first_name="Mini App User 456", phone="+359888123456"),
     )
 
 
@@ -159,5 +163,6 @@ async def test_submit_phone_source_in_lead():
         client=mock_kommo,
     )
     mock_kommo.create_lead.assert_called_once_with(
-        name="Mini App: viewing_consultant", contact_id=7
+        LeadCreate(name="Mini App: viewing_consultant", budget=None)
     )
+    mock_kommo.link_contact_to_lead.assert_called_once_with(99, 7)
