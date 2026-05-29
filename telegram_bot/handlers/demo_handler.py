@@ -99,8 +99,8 @@ async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
             llm
             if llm is not None
             else AsyncOpenAI(
-                api_key=os.getenv("LLM_API_KEY"),
-                base_url=os.getenv("LLM_BASE_URL"),
+                api_key=os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "sk-dev",
+                base_url=os.getenv("LLM_BASE_URL", "http://localhost:4000/v1"),
             )
         )
         transcript = await client.audio.transcriptions.create(

@@ -46,3 +46,37 @@ class TestTranscribeVoiceLiteLLMRouting:
         assert result == "привет"
         assert created.get("kwargs", {}).get("api_key") == "test-key"
         assert created.get("kwargs", {}).get("base_url") == "http://litellm:4000/v1"
+
+    async def test_transcribe_voice_default_client_falls_back_to_local_proxy(
+        self, monkeypatch
+    ) -> None:
+        import langfuse.openai as lf_openai
+
+        from telegram_bot.handlers.demo_handler import transcribe_voice
+
+        monkeypatch.delenv("LLM_API_KEY", raising=False)
+        monkeypatch.delenv("LLM_BASE_URL", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        created: dict = {}
+        mock_client = MagicMock()
+        mock_client.audio.transcriptions.create = AsyncMock(return_value=MagicMock(text="привет"))
+
+        def _factory(*args, **kwargs):
+            created["kwargs"] = kwargs
+            return mock_client
+
+        monkeypatch.setattr(lf_openai, "AsyncOpenAI", _factory)
+
+        message = AsyncMock()
+        message.voice = MagicMock(file_id="f1")
+        message.bot = AsyncMock()
+        file_mock = AsyncMock()
+        file_mock.file_path = "voice/test.ogg"
+        message.bot.get_file.return_value = file_mock
+
+        result = await transcribe_voice(message)
+
+        assert result == "привет"
+        assert created.get("kwargs", {}).get("api_key") == "sk-dev"
+        assert created.get("kwargs", {}).get("base_url") == "http://localhost:4000/v1"
