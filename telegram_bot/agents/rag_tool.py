@@ -56,7 +56,7 @@ def _format_context(result: dict) -> str:
 
 
 @tool
-@observe(name="tool-rag-search", capture_input=False, capture_output=False)
+@observe(name="tool-rag-search", capture_input=False, capture_output=False, as_type="tool")
 async def rag_search(
     query: str,
     config: RunnableConfig,

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-@observe(name="tool-apartment-search", capture_input=False, capture_output=False)
+@observe(name="tool-apartment-search", capture_input=False, capture_output=False, as_type="tool")
 async def apartment_search(
     query: str,
     config: RunnableConfig,

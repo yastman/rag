@@ -27,7 +27,7 @@ _HISTORY_BLOCKED_RESPONSE = (
 # --- Guard ---
 
 
-@observe(name="history-guard")
+@observe(name="history-guard", as_type="guardrail")
 async def history_guard_node(
     state: dict[str, Any],
     *,
