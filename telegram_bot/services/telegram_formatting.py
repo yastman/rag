@@ -146,12 +146,12 @@ def build_html_messages(
 
 
 def record_langfuse_response_output(answer_text: str | None, chunks_count: int) -> None:
-    """Best-effort update of the current Langfuse trace/span output after a send.
+    """Best-effort update of the current Langfuse observation output after a send.
 
-    Prefers ``update_current_span`` (SDK-native in Langfuse v4+), falls back to
-    ``set_current_trace_io`` for older clients, and is a no-op when the client or
-    all methods are missing so Telegram sending never breaks because of
-    observability.
+    Records response metadata via span-level IO (``update_current_span``).
+    Trace-level IO (``set_current_trace_io``) is deprecated in Langfuse v4 and
+    intentionally not used. No-op when the client or method is missing so
+    Telegram sending never breaks because of observability.
     """
     lf = get_client()
     if lf is None:
@@ -163,18 +163,8 @@ def record_langfuse_response_output(answer_text: str | None, chunks_count: int) 
     if callable(update_span):
         try:
             update_span(output=output)
-            return
         except Exception:
-            logger.debug(
-                "update_current_span failed, falling back to set_current_trace_io", exc_info=True
-            )
-
-    set_trace_io = getattr(lf, "set_current_trace_io", None)
-    if callable(set_trace_io):
-        try:
-            set_trace_io(output=output)
-        except Exception:
-            logger.debug("set_current_trace_io failed", exc_info=True)
+            logger.debug("update_current_span failed", exc_info=True)
 
 
 _record_langfuse_response_output = record_langfuse_response_output

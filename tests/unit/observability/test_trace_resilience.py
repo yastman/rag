@@ -57,9 +57,6 @@ class TestSdkDisabledClientResilience:
 
         return get_client()
 
-    def test_set_current_trace_io_no_raise(self):
-        self._client().set_current_trace_io(input={"query": "test"}, output={"response": "ok"})
-
     def test_update_current_span_no_raise(self):
         self._client().update_current_span(
             input={"x": 1}, output={"y": 2}, level="WARNING", status_message="msg"
