@@ -35,6 +35,51 @@ _DEEPLINK_TTL = 300  # seconds
 _TEST_TOKEN_SENTINEL = "TEST"  # nosec B105 - explicit non-secret CI sentinel
 
 
+def _build_kommo_client(*, redis_client: Any) -> Any | None:
+    """Construct a ``KommoClient`` from environment, or ``None`` if Kommo
+    is not configured.
+
+    Pre-#2212 ``mini_app/phone.py::get_kommo_client()`` called
+    ``KommoClient()`` with no args — every Mini App phone submission
+    raised ``TypeError`` because the SDK requires keyword-only
+    ``subdomain`` and ``token_store``. This helper centralises the
+    correct construction once at boot, so handlers receive a ready
+    client by DI (or ``None`` when env is missing).
+
+    Returns ``None`` (no warning, no raise) when ``KOMMO_SUBDOMAIN`` is
+    blank — Mini App must continue to serve health / start-expert /
+    auth flows even without Kommo. The ``/api/phone`` endpoint surfaces
+    a 503 in that state via ``submit_phone(client=None)``.
+    """
+    subdomain = (os.environ.get("KOMMO_SUBDOMAIN", "") or "").strip()
+    if not subdomain:
+        logger.info(
+            "Kommo CRM disabled in mini-app-api: KOMMO_SUBDOMAIN not set; "
+            "/api/phone will return 503 kommo_unconfigured (#2212)"
+        )
+        return None
+
+    client_id = (os.environ.get("KOMMO_CLIENT_ID", "") or "").strip()
+    client_secret = (os.environ.get("KOMMO_CLIENT_SECRET", "") or "").strip()
+    redirect_uri = (os.environ.get("KOMMO_REDIRECT_URI", "") or "").strip()
+
+    try:
+        from src.services.kommo_client import KommoClient
+        from src.services.kommo_tokens import KommoTokenStore
+
+        token_store = KommoTokenStore(
+            redis=redis_client,
+            client_id=client_id,
+            client_secret=client_secret,
+            subdomain=subdomain,
+            redirect_uri=redirect_uri,
+        )
+        return KommoClient(subdomain=subdomain, token_store=token_store)
+    except Exception:
+        logger.exception("Failed to build KommoClient — /api/phone will return 503 (#2212)")
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Open the Redis client on startup and close it on shutdown.
@@ -95,6 +140,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
     client = aioredis.from_url(redis_url, decode_responses=True)
     app.state.redis = client
+
+    # Build Kommo client once, per Mini App process (#2212). The handler
+    # receives this via ``request.app.state.kommo_client`` instead of
+    # constructing one inline (which raised TypeError pre-#2212).
+    app.state.kommo_client = _build_kommo_client(redis_client=client)
+
     try:
         yield
     finally:
@@ -402,13 +453,20 @@ async def remote_log(
 @observe(name="miniapp-submit-phone", capture_input=False, capture_output=False)
 async def phone(
     request: PhoneRequest,
-    init_data: dict = Depends(get_validated_init_data),
+    init_data: Annotated[dict, Depends(get_validated_init_data)],
+    http_request: Request,
 ) -> Any:
     """Collect phone and create CRM lead.
 
     ``user_id`` is overridden with the SDK-validated value from initData
     so a forged JSON body cannot attribute leads to a different Telegram
     user (#1595).
+
+    The Kommo client is resolved from ``http_request.app.state.kommo_client``
+    (built once in the FastAPI ``lifespan`` via ``_build_kommo_client``) —
+    NOT constructed inline. Pre-#2212 the inline construction always
+    raised ``TypeError`` and every Mini App phone submission emitted a
+    Langfuse error span.
     """
     from fastapi.responses import JSONResponse
 
@@ -416,6 +474,9 @@ async def phone(
     # Recreate the request with the verified user_id; submit_phone's
     # signature stays unchanged.
     verified_request = request.model_copy(update={"user_id": user_id})
+
+    # Resolve injected Kommo client from app.state (populated by lifespan).
+    kommo_client = getattr(http_request.app.state, "kommo_client", None)
 
     with propagate_attributes(
         session_id=f"miniapp-{user_id}",
@@ -425,13 +486,24 @@ async def phone(
         as_baggage=True,
     ):
         _update_current_span(input={"source": request.source, "has_name": request.name is not None})
-        result = await submit_phone(verified_request)
+        result = await submit_phone(verified_request, client=kommo_client)
         if not result.get("success"):
-            _update_current_span(level="ERROR", status_message="crm_submission_failed")
-            return JSONResponse(status_code=502, content=result)
+            error_code = result.get("error", "crm_submission_failed")
+            _update_current_span(level="ERROR", status_message=error_code)
+            # 503 for "Kommo not wired" (boot-time misconfig) so monitoring
+            # can distinguish it from 502 transient CRM-side failures.
+            status = 503 if error_code == "kommo_unconfigured" else 502
+            return JSONResponse(status_code=status, content=result)
         return result
 
 
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+# Backward-compat alias for tests that import the new symbolic name (#2212).
+# The route is registered under ``phone`` (existing contract tests and the
+# OpenAPI schema reference it). New code targets ``submit_phone_endpoint``
+# for discoverability — both names refer to the same coroutine.
+submit_phone_endpoint = phone

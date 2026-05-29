@@ -199,32 +199,37 @@ async def test_phone_with_valid_init_data_succeeds() -> None:
     mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
 
     with (
-        patch("mini_app.phone.get_kommo_client", return_value=mock_kommo),
         patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN}, clear=False),
     ):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
-                "/api/phone",
-                # Caller-supplied user_id 12345 must be IGNORED in favour of the
-                # initData-derived value (42). We do not assert on the request
-                # body's user_id; we assert on what reached the CRM.
-                json={
-                    "phone": "+359888123456",
-                    "source": "test",
-                    "user_id": 12345,
-                },
-                headers={"X-Init-Data": valid_init_data},
-            )
+        app.state.kommo_client = mock_kommo
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.post(
+                    "/api/phone",
+                    # Caller-supplied user_id 12345 must be IGNORED in favour of the
+                    # initData-derived value (42). We do not assert on the request
+                    # body's user_id; we assert on what reached the CRM.
+                    json={
+                        "phone": "+359888123456",
+                        "source": "test",
+                        "user_id": 12345,
+                    },
+                    headers={"X-Init-Data": valid_init_data},
+                )
+        finally:
+            app.state.kommo_client = None
 
     assert resp.status_code == 200, (
         f"Expected 200 for valid initData on /api/phone, got {resp.status_code}: {resp.text}"
     )
     # The CRM upsert call's default name is f"Mini App User {user_id}"; verify
     # the SDK-validated id was used rather than the spoofed body value.
-    upsert_kwargs = mock_kommo.upsert_contact.await_args.kwargs
-    assert upsert_kwargs["name"] == "Mini App User 42", (
+    _phone, contact_payload = mock_kommo.upsert_contact.await_args.args
+    assert contact_payload.first_name == "Mini App User 42", (
         f"submit_phone must use SDK-validated user_id (42) not body value (12345); "
-        f"got name={upsert_kwargs['name']!r}"
+        f"got name={contact_payload.first_name!r}"
     )
 
 

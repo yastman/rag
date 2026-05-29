@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from inspect import isawaitable
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 
 from src.observability import get_client, observe
 from src.phone_utils import normalize_phone
+from src.services.kommo_models import ContactCreate, LeadCreate
 
 
 logger = logging.getLogger(__name__)
@@ -37,39 +40,74 @@ class PhoneRequest(BaseModel):
 
 
 def get_kommo_client():
-    """Get Kommo client (lazy import)."""
+    """Get Kommo client (lazy import).
+
+    Deprecated since #2212: kept for backward compat with callers that
+    haven't migrated to dependency injection. New callers must construct
+    a :class:`KommoClient` via ``mini_app.api._build_kommo_client(...)``
+    in the FastAPI ``lifespan`` and pass it explicitly to
+    :func:`submit_phone`.
+    """
     from src.services.kommo_client import KommoClient  # type: ignore[import-untyped]
 
     return KommoClient()
 
 
 @observe(name="miniapp-kommo-create-lead", capture_input=False, capture_output=False)
-async def submit_phone(request: PhoneRequest) -> dict:
+async def submit_phone(request: PhoneRequest, *, client: Any | None = None) -> dict:
     """Submit phone to CRM.
 
-    Returns
-    -------
-    dict
+    Args:
+        request: Validated phone request from the Mini App.
+        client: Pre-built ``KommoClient`` instance, injected by the
+            FastAPI lifespan. ``None`` means Kommo is not configured —
+            in which case we return a structured ``kommo_unconfigured``
+            failure (HTTP 503 surface) instead of constructing a client
+            inline. The previous implementation called ``KommoClient()``
+            without args, which raised ``TypeError`` because the SDK
+            requires keyword-only ``subdomain`` and ``token_store`` —
+            every Mini App phone submission emitted a Langfuse error
+            span and the user saw a generic failure (#2212).
+
+    Returns:
         ``{"success": True, "lead_id": <int>}`` on success.
-        ``{"success": False, "lead_id": None, "error": "crm_submission_failed"}``
-        on any CRM failure. Returning ``success: True`` for a swallowed
-        exception (#1596) made it impossible for clients to distinguish a
-        real captured lead from a dropped one. The error code is stable so
-        the frontend can show a retry/contact-support state without parsing
-        free-form text. The ``@observe`` wrapper records success/failure
-        metadata without capturing PII.
+        ``{"success": False, "lead_id": None, "error": "kommo_unconfigured"}``
+        when ``client`` is ``None`` (Mini App boot did not wire Kommo).
+        ``{"success": False, "lead_id": None, "error":
+        "kommo_submission_failed"}`` on any CRM-side exception.
     """
     lf = get_client()
+
+    if client is None:
+        # Misconfigured Mini App — fail loudly via a stable error code so
+        # the frontend can surface "CRM unavailable, please retry" without
+        # parsing free-form text. The Langfuse span carries the same code.
+        if lf is not None:
+            lf.update_current_span(
+                level="ERROR",
+                status_message="kommo_unconfigured",
+                output={"crm_ok": False, "lead_created": False},
+            )
+        return {
+            "success": False,
+            "lead_id": None,
+            "error": "kommo_unconfigured",
+        }
+
     try:
-        client = get_kommo_client()
+        contact_name = request.name or f"Mini App User {request.user_id}"
         contact = await client.upsert_contact(
-            phone=request.phone,
-            name=request.name or f"Mini App User {request.user_id}",
+            request.phone,
+            ContactCreate(first_name=contact_name, phone=request.phone),
         )
-        lead = await client.create_lead(
-            name=f"Mini App: {request.source}",
-            contact_id=contact["id"],
-        )
+        lead = await client.create_lead(LeadCreate(name=f"Mini App: {request.source}", budget=None))
+        contact_id = _get_model_id(contact)
+        lead_id = _get_model_id(lead)
+        link_contact_to_lead = getattr(client, "link_contact_to_lead", None)
+        if contact_id is not None and lead_id is not None and link_contact_to_lead is not None:
+            maybe_awaitable = link_contact_to_lead(lead_id, contact_id)
+            if isawaitable(maybe_awaitable):
+                await maybe_awaitable
     except Exception as exc:
         logger.exception("CRM submission failed")
         if lf is not None:
@@ -82,7 +120,7 @@ async def submit_phone(request: PhoneRequest) -> dict:
         return {
             "success": False,
             "lead_id": None,
-            "error": "crm_submission_failed",
+            "error": "kommo_submission_failed",
         }
 
     # Curated success output — no phone, no name, no raw Kommo IDs.
@@ -90,8 +128,14 @@ async def submit_phone(request: PhoneRequest) -> dict:
         lf.update_current_span(
             output={
                 "crm_ok": True,
-                "lead_created": lead.get("id") is not None,
-                "contact_resolved": contact.get("id") is not None,
+                "lead_created": lead_id is not None,
+                "contact_resolved": contact_id is not None,
             }
         )
-    return {"success": True, "lead_id": lead["id"]}
+    return {"success": True, "lead_id": lead_id}
+
+
+def _get_model_id(value: Any) -> int | None:
+    """Return ``id`` from Kommo Pydantic models, with dict support for tests."""
+    raw = value.get("id") if isinstance(value, dict) else getattr(value, "id", None)
+    return raw if isinstance(raw, int) else None
