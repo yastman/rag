@@ -241,6 +241,12 @@ spans:
   voice_tools:
     - voice-tool-search-knowledge-base
 
+  supervisor_recovery:
+    # bot.py supervisor agent-loop wrappers with checkpointer-error recovery.
+    # capture disabled (also under sensitive_spans); as_type=agent.
+    - telegram-rag-agent-invoke
+    - telegram-rag-agent-stream
+
   history_graph:
     - history-guard
     - history-retrieve
@@ -599,6 +605,9 @@ sensitive_spans:
   - cb-clearcache
   - telegram-rag-query
   - telegram-rag-supervisor
+  # supervisor agent-loop recovery wrappers (capture disabled, as_type=agent)
+  - telegram-rag-agent-invoke
+  - telegram-rag-agent-stream
   # dialog/handler spans with capture disabled
   - dialog-crm-create-note
   - dialog-crm-create-contact
