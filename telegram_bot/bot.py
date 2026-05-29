@@ -2201,7 +2201,11 @@ class PropertyBot:
             return None  # caller falls through to sdk_agent path
         return result.answer
 
-    @observe(name="telegram-rag-supervisor", capture_input=False, capture_output=False)
+    @observe(
+        name="telegram-rag-supervisor",
+        capture_input=False,
+        capture_output=False,
+    )
     async def _handle_query_supervisor(
         self,
         message: Message,
@@ -2975,6 +2979,12 @@ class PropertyBot:
 
         return response_text
 
+    @observe(
+        name="telegram-rag-agent-stream",
+        capture_input=False,
+        capture_output=False,
+        as_type="agent",
+    )
     async def _astream_supervisor_with_recovery(
         self,
         *,
@@ -3117,6 +3127,12 @@ class PropertyBot:
         )
         return await _run_once(fallback_agent)
 
+    @observe(
+        name="telegram-rag-agent-invoke",
+        capture_input=False,
+        capture_output=False,
+        as_type="agent",
+    )
     async def _ainvoke_supervisor_with_recovery(
         self,
         *,
@@ -3476,7 +3492,7 @@ class PropertyBot:
             reply_markup=keyboard,
         )
 
-    @observe(name="telegram-hitl-callback")
+    @observe(name="telegram-hitl-callback", as_type="agent")
     async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
         """Handle HITL approve/cancel button click (#443)."""
         from .agents.context import BotContext
