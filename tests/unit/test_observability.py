@@ -1,6 +1,8 @@
 # tests/unit/test_observability.py
 """Unit tests for PII masking and Langfuse client initialization."""
 
+import threading
+import time
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -318,6 +320,112 @@ class TestLangfuseFlushConfig:
 
         assert result is None
         mock_atexit.register.assert_not_called()
+
+
+class TestFlushLangfuse:
+    """Tests for flush_langfuse() shutdown helper (#2214)."""
+
+    def test_flush_calls_client_flush_when_initialized(self):
+        import src.observability as observability
+
+        fake_client = MagicMock()
+        observability._langfuse_client = fake_client
+        try:
+            observability.flush_langfuse()
+            fake_client.flush.assert_called_once_with()
+        finally:
+            observability._reset_langfuse_client_for_tests()
+
+    def test_flush_is_noop_and_does_not_lazy_init_when_no_client(self):
+        """flush_langfuse() must not trigger a lazy init just to flush."""
+        import src.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        with patch("src.observability.initialize_langfuse") as mock_init:
+            observability.flush_langfuse()  # should not raise
+            mock_init.assert_not_called()
+
+    def test_flush_swallows_client_errors(self):
+        """A failing flush on shutdown must never propagate to the caller."""
+        import src.observability as observability
+
+        fake_client = MagicMock()
+        fake_client.flush.side_effect = RuntimeError("boom")
+        observability._langfuse_client = fake_client
+        try:
+            observability.flush_langfuse()  # must not raise
+            fake_client.flush.assert_called_once_with()
+        finally:
+            observability._reset_langfuse_client_for_tests()
+
+
+class TestLangfuseInitThreadSafety:
+    """initialize_langfuse() must be safe under concurrent startup (#2214)."""
+
+    def test_concurrent_init_creates_single_client(self, monkeypatch):
+        """Many threads racing into init must build exactly one Langfuse client.
+
+        Without a lock, multiple threads pass the ``_langfuse_client is None``
+        check together and each construct a client + register an atexit hook.
+        A slow constructor widens that race window so the test is deterministic.
+        """
+        import src.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.delenv("LANGFUSE_HOST", raising=False)
+
+        construct_count = 0
+        count_lock = threading.Lock()
+
+        def _slow_factory(*_args, **_kwargs):
+            nonlocal construct_count
+            with count_lock:
+                construct_count += 1
+            time.sleep(0.05)  # widen the race window
+            return MagicMock()
+
+        n_threads = 8
+        barrier = threading.Barrier(n_threads)
+        results: list[object] = []
+        results_lock = threading.Lock()
+
+        def _worker():
+            barrier.wait()  # release all threads simultaneously
+            client = observability.initialize_langfuse()
+            with results_lock:
+                results.append(client)
+
+        with (
+            patch("src.observability.Langfuse", side_effect=_slow_factory),
+            patch("src.observability.sync_langfuse_model_definitions", return_value=0),
+            patch("src.observability.atexit") as mock_atexit,
+            patch(
+                "src.observability_otel.activate_otel_instrumentations",
+                lambda: None,
+            ),
+        ):
+            threads = [threading.Thread(target=_worker) for _ in range(n_threads)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            try:
+                assert construct_count == 1, (
+                    f"Langfuse client constructed {construct_count} times under "
+                    "concurrency; initialize_langfuse must be serialized (#2214)."
+                )
+                assert mock_atexit.register.call_count == 1, (
+                    "atexit shutdown hook registered "
+                    f"{mock_atexit.register.call_count} times; only the single "
+                    "surviving client should register one (#2214)."
+                )
+                # Every caller observes the same single client instance.
+                assert len({id(r) for r in results}) == 1
+            finally:
+                observability._reset_langfuse_client_for_tests()
 
 
 class TestEndpointReachability:

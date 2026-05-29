@@ -975,3 +975,44 @@ class TestMainDispatch:
             main()
 
         mock_logging.assert_called_once_with(True)
+
+
+
+# ---------------------------------------------------------------------------
+# main() lifecycle flush (#2214)
+# ---------------------------------------------------------------------------
+
+
+class TestMainFlushesIngestionTraces:
+    """main() must flush buffered ingestion traces in a finally block (#2214).
+
+    The BatchSpanProcessor only auto-flushes on a clean atexit; a command that
+    raises (or an abrupt exit) would otherwise drop buffered ingestion spans.
+    """
+
+    def test_main_flushes_on_success(self):
+        from src.ingestion.unified import cli
+
+        with (
+            patch.object(cli, "cmd_run", return_value=0) as mock_cmd,
+            patch.object(cli, "flush_ingestion_traces") as mock_flush,
+            patch("sys.argv", ["unified", "run"]),
+        ):
+            result = cli.main()
+
+        assert result == 0
+        mock_cmd.assert_called_once()
+        mock_flush.assert_called_once_with()
+
+    def test_main_flushes_even_when_command_raises(self):
+        from src.ingestion.unified import cli
+
+        with (
+            patch.object(cli, "cmd_run", side_effect=RuntimeError("boom")),
+            patch.object(cli, "flush_ingestion_traces") as mock_flush,
+            patch("sys.argv", ["unified", "run"]),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            cli.main()
+
+        mock_flush.assert_called_once_with()
