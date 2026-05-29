@@ -3453,6 +3453,13 @@ class PropertyBot:
         """Send inline keyboard for HITL confirmation (#443)."""
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+        from .agents.hitl import set_pending_resume_trace_id
+
+        # #2224: remember the trace that raised this interrupt so the later
+        # Command(resume=...) trace can back-link to it via resumes_trace_id.
+        with contextlib.suppress(Exception):
+            set_pending_resume_trace_id(thread_id, get_client().get_current_trace_id())
+
         preview = payload.get("preview", "Подтвердите операцию")
 
         keyboard = InlineKeyboardMarkup(
@@ -3482,7 +3489,18 @@ class PropertyBot:
         action = "approve" if data == "hitl:approve" else "cancel"
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
-        thread_id = _supervisor_thread_id(chat_id)
+        _raw_thread_id = getattr(callback.message, "message_thread_id", None)
+        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
+        thread_id = _supervisor_thread_id(chat_id, forum_thread_id)
+
+        # #2224: link this resume trace back to the interrupt trace stored at
+        # confirmation time. Langfuse trace metadata values are strings.
+        from .agents.hitl import pop_pending_resume_trace_id
+
+        _parent_trace_id = pop_pending_resume_trace_id(thread_id)
+        _resume_trace_metadata = (
+            {"resumes_trace_id": _parent_trace_id} if _parent_trace_id else None
+        )
 
         await callback.answer("Принято" if action == "approve" else "Отменено")
 
@@ -3541,6 +3559,7 @@ class PropertyBot:
             session_id=session_id,
             user_id=str(user_id),
             tags=["telegram", "hitl", "resume"],
+            metadata=_resume_trace_metadata,
         ):
             from langgraph.types import Command
 
@@ -3567,7 +3586,10 @@ class PropertyBot:
         if response_text:
             bot = callback.message.bot  # type: ignore[union-attr]
             for chunk in _split_telegram_response(response_text):
-                await bot.send_message(chat_id=chat_id, text=chunk)  # type: ignore[union-attr]
+                send_kwargs: dict[str, Any] = {"chat_id": chat_id, "text": chunk}
+                if forum_thread_id is not None:
+                    send_kwargs["message_thread_id"] = forum_thread_id
+                await bot.send_message(**send_kwargs)  # type: ignore[union-attr]
 
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")

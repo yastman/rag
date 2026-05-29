@@ -175,8 +175,25 @@ daily and reset conversation memory every midnight. The persistent
 metadata linkage are enforced by
 `tests/contract/test_thread_session_link_contract.py`.
 
-The voice path and the HITL `Command(resume=...)` path manage their own
-thread/session identifiers and are out of scope of that contract.
+### Interrupted/resumed (HITL) trace linkage
+
+A HITL confirmation pauses the graph with `interrupt()` and emits one Langfuse
+trace; the later `Command(resume=...)` click (`handle_hitl_callback`) emits a
+*separate* trace. To keep them correlated:
+
+- At confirmation time, `_send_hitl_confirmation` stores the interrupt trace id
+  keyed by `thread_id` via
+  `telegram_bot.agents.hitl.set_pending_resume_trace_id(...)`.
+- On resume, `handle_hitl_callback` reads it back with
+  `pop_pending_resume_trace_id(...)` and records `resumes_trace_id` metadata on
+  the resume trace via `propagate_attributes(metadata=...)`.
+
+So an operator can filter Langfuse by `resumes_trace_id` to walk from a resume
+trace to its originating interrupt (and from an interrupt forward to its
+resume). The store is a bounded, in-memory, best-effort map: if it is empty
+(tracing was off at interrupt time, or the entry was evicted) no link is
+recorded and the resume trace is simply unlinked. The voice path manages its
+own thread/session identifiers and is out of scope here.
 
 ## Finding Code
 
