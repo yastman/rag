@@ -247,7 +247,7 @@ def _ensure_otel_resource_attributes(*, service_namespace: str = "rag") -> None:
 
         defaults["host.name"] = socket.gethostname()
     except Exception:
-        pass
+        defaults["host.name"] = "unknown"
 
     # Operator-set keys win; defaults only fill gaps.
     for key, val in defaults.items():
