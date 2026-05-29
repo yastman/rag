@@ -13,6 +13,7 @@ import contextlib
 import json
 import logging
 import os
+import threading
 import warnings
 from datetime import UTC, datetime
 from typing import Any
@@ -120,6 +121,13 @@ except Exception as _e:
 
 _langfuse_client: Langfuse | None = None
 _langfuse_init_attempted = False
+# #2214: guard the lazy singleton init. Without a lock, two startup threads can
+# both pass the ``_langfuse_client is None`` check and each construct a Langfuse
+# client + register an atexit shutdown; the second client overwrites the global
+# and the first leaks (its buffered spans are never flushed). Use a re-entrant
+# lock so a thread already inside ``initialize_langfuse`` can call it again
+# (e.g. via ``get_langfuse_client``) without deadlocking.
+_langfuse_init_lock = threading.RLock()
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +497,32 @@ def initialize_langfuse(
 
     Returns None when credentials are missing, endpoint unreachable, or client creation fails.
     When the endpoint is unreachable, logs a WARNING once and skips OTEL exporter registration.
+
+    Thread-safe (#2214): initialization is serialized by ``_langfuse_init_lock``
+    so concurrent startup threads cannot each build a client and
+    double-register the atexit shutdown hook (the second client would
+    overwrite the global and the first would never flush).
     """
+    # Fast path: already initialized — avoid lock contention on the hot path.
+    if _langfuse_client is not None and not force:
+        return _langfuse_client
+    with _langfuse_init_lock:
+        return _initialize_langfuse_locked(
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host,
+            force=force,
+        )
+
+
+def _initialize_langfuse_locked(
+    *,
+    public_key: str | None,
+    secret_key: str | None,
+    host: str | None,
+    force: bool,
+) -> Langfuse | None:
+    """Body of :func:`initialize_langfuse`; must run while holding the lock."""
     global _langfuse_client
     global _langfuse_init_attempted
     global _langfuse_endpoint_warned
@@ -596,6 +629,24 @@ def get_langfuse_client() -> Langfuse | None:
     if _langfuse_client is not None:
         return _langfuse_client
     return initialize_langfuse()
+
+
+def flush_langfuse() -> None:
+    """Flush buffered spans/scores on the initialized client, if one exists.
+
+    #2214: the ``BatchSpanProcessor`` flushes on a clean ``atexit``, but a hard
+    ``os._exit()`` or a signal kill drops whatever is still buffered. Long-lived
+    CLI entry points (e.g. ingestion) should call this in a ``finally`` block so
+    their lifecycle traces are not silently lost on abrupt shutdown.
+
+    This is a no-op when no client has been initialized (so it never triggers a
+    lazy init just to flush) and swallows flush errors — losing observability on
+    shutdown must never crash the caller.
+    """
+    if _langfuse_client is None:
+        return
+    with contextlib.suppress(Exception):
+        _langfuse_client.flush()
 
 
 def traced_pipeline(

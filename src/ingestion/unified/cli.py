@@ -17,7 +17,11 @@ from src.ingestion.unified.colbert_backfill import (
     compute_colbert_coverage,
     inspect_collection_schema,
 )
-from src.ingestion.unified.observability import observe, try_update_ingestion_trace
+from src.ingestion.unified.observability import (
+    flush_ingestion_traces,
+    observe,
+    try_update_ingestion_trace,
+)
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -721,24 +725,30 @@ def main() -> int:
     args = parser.parse_args()
     setup_logging(args.verbose)
 
-    if args.command == "run":
-        return cmd_run(args)
-    if args.command == "status":
-        return asyncio.run(cmd_status(args))
-    if args.command == "preflight":
-        return asyncio.run(cmd_preflight(args))
-    if args.command == "bootstrap":
-        return asyncio.run(cmd_bootstrap(args))
-    if args.command == "schema-check":
-        return asyncio.run(cmd_schema_check(args))
-    if args.command == "coverage-check":
-        return asyncio.run(cmd_coverage_check(args))
-    if args.command == "backfill-colbert":
-        return cmd_backfill_colbert(args)
-    if args.command == "reprocess":
-        return asyncio.run(cmd_reprocess(args))
+    # #2214: ensure buffered ingestion traces are flushed even if a command
+    # raises or exits abruptly (the BatchSpanProcessor only auto-flushes on a
+    # clean atexit). flush_ingestion_traces() is a no-op when tracing is off.
+    try:
+        if args.command == "run":
+            return cmd_run(args)
+        if args.command == "status":
+            return asyncio.run(cmd_status(args))
+        if args.command == "preflight":
+            return asyncio.run(cmd_preflight(args))
+        if args.command == "bootstrap":
+            return asyncio.run(cmd_bootstrap(args))
+        if args.command == "schema-check":
+            return asyncio.run(cmd_schema_check(args))
+        if args.command == "coverage-check":
+            return asyncio.run(cmd_coverage_check(args))
+        if args.command == "backfill-colbert":
+            return cmd_backfill_colbert(args)
+        if args.command == "reprocess":
+            return asyncio.run(cmd_reprocess(args))
 
-    return 1
+        return 1
+    finally:
+        flush_ingestion_traces()
 
 
 if __name__ == "__main__":

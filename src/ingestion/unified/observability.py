@@ -5,16 +5,32 @@ from __future__ import annotations
 from contextlib import suppress
 from typing import Any
 
-from src.observability import make_lifecycle_session_id, observe, update_lifecycle_trace
+from src.observability import (
+    flush_langfuse,
+    make_lifecycle_session_id,
+    observe,
+    update_lifecycle_trace,
+)
 
 
 INGESTION_TAGS = ["ingestion", "unified"]
 __all__ = [
+    "flush_ingestion_traces",
     "ingestion_session_id",
     "observe",
     "try_update_ingestion_trace",
     "update_ingestion_trace",
 ]
+
+
+def flush_ingestion_traces() -> None:
+    """Flush buffered ingestion traces on shutdown (best-effort, #2214).
+
+    Wraps :func:`src.observability.flush_langfuse` so CLI entry points can call
+    a single ingestion-scoped helper in a ``finally`` block without reaching
+    across module boundaries. No-op when tracing was never initialized.
+    """
+    flush_langfuse()
 
 
 def ingestion_session_id(command: str) -> str:
