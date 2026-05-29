@@ -703,6 +703,20 @@ docs-check: ## Check Markdown relative links for broken targets
 check: lint type-check ## Quick check (lint + types)
 	@echo "$(GREEN)✓ Quick check complete$(NC)"
 
+check-frozen: ## Read-only candidate validation (lint + types, no .venv mutation) (#2285)
+	@echo "$(BLUE)Preflight: verifying environment matches uv.lock (read-only)...$(NC)"
+	@uv sync --frozen --check || { \
+		echo "$(YELLOW)✗ Environment is stale or does not match uv.lock.$(NC)"; \
+		echo "$(YELLOW)  This is a read-only candidate gate; it will not mutate .venv.$(NC)"; \
+		echo "$(YELLOW)  Run 'uv sync --frozen' (or use an isolated per-worktree .venv) and retry.$(NC)"; \
+		exit 1; \
+	}
+	@echo "$(BLUE)Running Ruff linter (no-sync)...$(NC)"
+	$(UV_RUN_NO_SYNC) ruff check $(LINT_PATHS)
+	@echo "$(BLUE)Running MyPy type checking (no-sync)...$(NC)"
+	$(UV_RUN_NO_SYNC) mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
+	@echo "$(GREEN)✓ Frozen check complete (.venv untouched)$(NC)"
+
 pre-push: lint format-check ## Pre-push gate (lint + format-check)
 	@echo "$(GREEN)✓ Pre-push gate passed$(NC)"
 

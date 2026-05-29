@@ -73,6 +73,11 @@ E2E naming contract:
 - Then run repository baseline:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+- For candidate/review validation on a shared or reused `.venv`, prefer the
+  read-only gate `make check-frozen` (#2285): it preflights with
+  `uv sync --frozen --check` and runs lint/type-check via `uv run --no-sync`,
+  so it fails on a stale env instead of silently mutating `.venv`. Use plain
+  `make check` for everyday local work where auto-sync is fine.
 - If skipping a relevant check, document it explicitly in the report.
 
 ## References
