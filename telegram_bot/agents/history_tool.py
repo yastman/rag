@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-@observe(name="tool-history-search", capture_input=False, capture_output=False)
+@observe(name="tool-history-search", capture_input=False, capture_output=False, as_type="tool")
 async def history_search(
     query: str,
     config: RunnableConfig,

@@ -165,7 +165,9 @@ Each Langfuse-instrumented service sets a stable `OTEL_SERVICE_NAME` default in 
 
 | Service | Default `OTEL_SERVICE_NAME` |
 | --- | --- |
+| `bge-m3` | `bge-m3` |
 | `bot` | `telegram-bot` |
+| `user-base` | `user-base` |
 | `mini-app-api` | `mini-app-api` |
 | `ingestion` | `ingestion` |
 | `rag-api` | `rag-api` |
@@ -177,6 +179,22 @@ To override, export `OTEL_SERVICE_NAME` in the shell or set it in `.env` before 
 
 ```bash
 export OTEL_SERVICE_NAME=custom-bot-name
+make docker-bot-up
+```
+
+### OpenTelemetry Propagation (`OTEL_PROPAGATORS`)
+
+Each Compose service that initializes the OpenTelemetry SDK declares
+`OTEL_PROPAGATORS=${OTEL_PROPAGATORS:-tracecontext,baggage}`. This keeps W3C
+TraceContext and Baggage propagation explicit for cross-service trace
+continuity; Langfuse user, session, and tag attributes rely on Baggage when
+requests cross service boundaries.
+
+Leave the default in place unless a deployment needs an additional propagator,
+for example `b3` for Zipkin interoperability:
+
+```bash
+export OTEL_PROPAGATORS=tracecontext,baggage,b3
 make docker-bot-up
 ```
 
