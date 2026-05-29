@@ -44,6 +44,24 @@ def test_doc_describes_real_interrupt_resume_mechanism() -> None:
         )
 
 
+def test_doc_describes_agent_taxonomy_without_mistyping_parent_span() -> None:
+    text = _doc_text()
+    assert 'telegram-rag-supervisor`, `as_type="agent"' not in text, (
+        "docs/HITL_CRM_FLOW.md must not claim telegram-rag-supervisor is an "
+        "agent span: that parent can return from pre-agent cache/direct-pipeline "
+        "paths before any create_agent invocation (#2213/#2216)."
+    )
+    for token in ("telegram-rag-agent-stream", "telegram-rag-agent-invoke"):
+        assert token in text, (
+            "docs/HITL_CRM_FLOW.md must name the actual SDK agent invocation "
+            f"span {token!r} as the as_type='agent' observation (#2213/#2216)."
+        )
+    assert "generic parent span" in text, (
+        "docs/HITL_CRM_FLOW.md must explain that telegram-rag-supervisor stays "
+        "a generic parent span around orchestration/pre-agent paths (#2213/#2216)."
+    )
+
+
 def test_doc_lists_real_hitl_wrapped_tools() -> None:
     """The doc's trigger list must be the tools that actually call hitl_guard."""
     text = _doc_text()

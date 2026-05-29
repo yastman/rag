@@ -79,11 +79,16 @@ flow — pause/resume rides entirely on the LangGraph checkpointer keyed by
 
 ## Tracing
 
-A HITL turn produces a **linear** trace: the supervisor span
-(`telegram-rag-supervisor`, `as_type="agent"`) contains the CRM tool span
-(e.g. `crm-create-lead`, `as_type="tool"`); the confirmation keyboard is sent
-and the run pauses. The resume click is a **separate** trace
-(`telegram-hitl-callback`, `as_type="agent"`) that scores `hitl_action`.
+A HITL turn produces a **linear** trace. `telegram-rag-supervisor` stays a
+generic parent span because it also covers pre-agent guard, semantic-cache, and
+client-direct paths that can return before any SDK agent invocation. The actual
+agent execution is typed separately as `as_type="agent"`:
+`telegram-rag-agent-stream` for the streaming supervisor path and
+`telegram-rag-agent-invoke` for the non-streaming/menu invoke path. The CRM tool
+span (e.g. `crm-create-lead`, `as_type="tool"`) is nested under the agent run;
+the confirmation keyboard is sent and the run pauses. The resume click is a
+**separate** trace (`telegram-hitl-callback`, `as_type="agent"`) that scores
+`hitl_action`.
 
 The two traces are linked: at interrupt time the bot stores the parent trace id
 and the resume trace records it as `resumes_trace_id` metadata. See
