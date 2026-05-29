@@ -31,6 +31,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+BOT_PY = REPO_ROOT / "telegram_bot" / "bot.py"
 
 # observe-name -> required as_type. Exact-match on the @observe(name=...) value.
 _REQUIRED_AS_TYPE: dict[str, str] = {
@@ -153,4 +154,62 @@ class TestAgentToolAndGuardTaxonomy:
         assert not missing, (
             "Taxonomy contract could not locate these @observe names "
             f"(scanner regression or renamed spans): {sorted(missing)}"
+        )
+
+
+# observe-name -> required as_type for the agent-loop entry points in bot.py.
+# These wrap ``create_agent`` invocations (ainvoke / astream / Command(resume)),
+# so Langfuse v4 should group them under the ``agent`` taxonomy (#2216).
+_REQUIRED_AGENT_AS_TYPE: dict[str, str] = {
+    "telegram-rag-supervisor": "agent",
+    "telegram-hitl-callback": "agent",
+}
+
+
+def _collect_bot_py_observe_as_types() -> dict[str, str | None]:
+    """Map every @observe(name=...) in bot.py (functions/methods) to its as_type."""
+    found: dict[str, str | None] = {}
+    tree = ast.parse(BOT_PY.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        for dec in node.decorator_list:
+            call = _is_observe_call(dec)
+            if call is None:
+                continue
+            name_value, kwargs = _decorator_name_and_kwargs(call)
+            if name_value is None:
+                continue
+            as_type_node = kwargs.get("as_type")
+            found[name_value] = (
+                as_type_node.value if isinstance(as_type_node, ast.Constant) else None
+            )
+    return found
+
+
+@pytest.fixture(scope="module")
+def bot_py_observe_as_types() -> dict[str, str | None]:
+    return _collect_bot_py_observe_as_types()
+
+
+class TestAgentEntrypointTaxonomy:
+    """The supervisor / HITL-resume agent-loop entry points must be ``agent`` (#2216)."""
+
+    @pytest.mark.parametrize("observe_name,expected_type", _REQUIRED_AGENT_AS_TYPE.items())
+    def test_agent_entrypoint_has_agent_as_type(
+        self,
+        bot_py_observe_as_types: dict[str, str | None],
+        observe_name: str,
+        expected_type: str,
+    ) -> None:
+        assert observe_name in bot_py_observe_as_types, (
+            f"@observe(name={observe_name!r}) not found in telegram_bot/bot.py — "
+            f"the taxonomy contract expects this agent-loop entry point (#2216). "
+            "Did the span get renamed?"
+        )
+        actual = bot_py_observe_as_types[observe_name]
+        assert actual == expected_type, (
+            f"@observe(name={observe_name!r}) must set as_type={expected_type!r} so "
+            f"the Langfuse UI groups the agent invocation under the {expected_type!r} "
+            f"taxonomy (#2216); found as_type={actual!r}."
         )
