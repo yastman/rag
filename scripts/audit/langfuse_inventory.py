@@ -167,7 +167,12 @@ def fetch_remote_prompt_names(client: Any) -> set[str]:
     """Return the set of prompt names from ``langfuse.api.prompts.list()``."""
     try:
         items = _paginate(client.api.prompts.list)
-        return {getattr(p, "name", None) for p in items if getattr(p, "name", None)}
+        names: set[str] = set()
+        for prompt in items:
+            name = getattr(prompt, "name", None)
+            if isinstance(name, str) and name:
+                names.add(name)
+        return names
     except Exception:
         return set()
 
@@ -177,7 +182,12 @@ def fetch_remote_score_config_names(client: Any) -> set[str]:
     ``langfuse.api.score_configs.get()``."""
     try:
         items = _paginate(client.api.score_configs.get)
-        return {getattr(c, "name", None) for c in items if getattr(c, "name", None)}
+        names: set[str] = set()
+        for config in items:
+            name = getattr(config, "name", None)
+            if isinstance(name, str) and name:
+                names.add(name)
+        return names
     except Exception:
         return set()
 
