@@ -108,7 +108,7 @@ class TestFetchRemotePromptNames:
         assert names == {"generate", "client_agent", "manager_agent"}
         assert client.api.prompts.list.call_count == 2
 
-    def test_returns_empty_on_error(self) -> None:
+    def test_fetch_remote_prompt_names_returns_empty_on_error(self) -> None:
         client = MagicMock()
         client.api.prompts.list.side_effect = RuntimeError("network down")
         # Best-effort: a failed fetch yields an empty set, never raises.
@@ -130,14 +130,16 @@ class TestFetchRemoteScoreConfigNames:
         names = inventory.fetch_remote_score_config_names(client)
         assert names == {"confidence_score", "grounded"}
 
-    def test_returns_empty_on_error(self) -> None:
+    def test_fetch_remote_score_config_names_returns_empty_on_error(self) -> None:
         client = MagicMock()
         client.api.score_configs.get.side_effect = RuntimeError("boom")
         assert inventory.fetch_remote_score_config_names(client) == set()
 
 
 class TestBuildClient:
-    def test_disabled_langfuse_client_is_treated_as_unavailable(self) -> None:
+    def test_inventory_build_client_treats_disabled_langfuse_client_as_unavailable(
+        self,
+    ) -> None:
         with patch.dict("sys.modules", {"langfuse": MagicMock()}):
             import langfuse
 

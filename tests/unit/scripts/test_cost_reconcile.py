@@ -133,7 +133,7 @@ class TestFetchGenerations:
         first_call = client.api.observations.get_many.call_args_list[0]
         assert first_call.kwargs.get("type") == "GENERATION"
 
-    def test_returns_empty_on_error(self) -> None:
+    def test_fetch_generations_returns_empty_on_error(self) -> None:
         from datetime import datetime
 
         client = MagicMock()
@@ -145,7 +145,9 @@ class TestFetchGenerations:
 
 
 class TestBuildClient:
-    def test_disabled_langfuse_client_is_treated_as_unavailable(self) -> None:
+    def test_cost_reconcile_build_client_treats_disabled_langfuse_client_as_unavailable(
+        self,
+    ) -> None:
         with patch.dict("sys.modules", {"langfuse": MagicMock()}):
             import langfuse
 

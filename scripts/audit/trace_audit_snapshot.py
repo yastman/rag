@@ -26,7 +26,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import subprocess
+import subprocess  # nosec B404
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -57,6 +57,9 @@ AUDIT_STEPS: list[tuple[str, list[str]]] = [
 ]
 
 _STEP_TIMEOUT_SEC = 300
+
+# subprocess usage is limited to fixed AUDIT_STEPS commands; no shell=True and
+# no user-provided argv enter the runner.
 
 
 @dataclass
