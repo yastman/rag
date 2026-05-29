@@ -72,4 +72,4 @@ validate-traces-fast` + the #2252 continuity check), then deprecate the manual
 
 - Single-trace gate: #2244 · Audit: #2246 · Cross-service contract: #2256
 - Manual-propagation cleanup pattern: #2253 · Voice-session root span: #2160
-- Cross-service tracing contract doc: [`CROSS_SERVICE_TRACING.md`](CROSS_SERVICE_TRACING.md)
+- Cross-service tracing contract (inbound FastAPIInstrumentor / outbound HTTPXClientInstrumentor): #2256
