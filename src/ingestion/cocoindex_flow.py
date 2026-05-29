@@ -8,6 +8,7 @@ Milestone J: Document Ingestion Pipeline (2026-02-02)
 """
 
 import asyncio
+import contextvars
 import logging
 import os
 import threading
@@ -126,8 +127,14 @@ class VoyageEmbedFunction:
             # so we can spin up a fresh loop via asyncio.run without re-entering.
             import concurrent.futures
 
+            # Raw worker threads start with a clean contextvars.Context and
+            # asyncio.run spins a fresh loop, so the active OTEL/Langfuse parent
+            # span would be lost. Capture the current context and re-activate it
+            # inside the worker via ctx.run(...) so child spans nest correctly
+            # (asyncio.run's Task copies the active context). See #2251.
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, _embed())
+                ctx = contextvars.copy_context()
+                future = pool.submit(ctx.run, asyncio.run, _embed())
                 embeddings = future.result()
         else:
             # Called from purely sync context — own the loop for this call.
@@ -252,6 +259,11 @@ def _run_update_all_flows_blocking(options: Any) -> None:
 
     result: dict[str, BaseException | None] = {"error": None}
 
+    # Propagate the active OTEL/Langfuse context into the worker thread so the
+    # spans emitted under asyncio.run nest under the current ingestion trace
+    # instead of orphaning into a new root trace (#2251).
+    ctx = contextvars.copy_context()
+
     def _runner() -> None:
         try:
             asyncio.run(_update())
@@ -259,7 +271,7 @@ def _run_update_all_flows_blocking(options: Any) -> None:
             result["error"] = exc
 
     thread = threading.Thread(
-        target=_runner,
+        target=lambda: ctx.run(_runner),
         name="cocoindex-flow-blocking-runner",
         daemon=False,
     )
@@ -308,11 +320,15 @@ def setup_and_run_flow(
         if blocking:
             _run_update_all_flows_blocking(cocoindex.FlowLiveUpdaterOptions(live_mode=False))
         else:
+            # Carry the active context into the live-updater thread so its
+            # spans stay attached to the ingestion trace (#2251).
+            ctx = contextvars.copy_context()
             threading.Thread(
-                target=lambda: asyncio.run(
+                target=lambda: ctx.run(
+                    asyncio.run,
                     cocoindex.update_all_flows_async(
                         cocoindex.FlowLiveUpdaterOptions(live_mode=True)
-                    )
+                    ),
                 ),
                 name="cocoindex-flow-updater",
                 daemon=True,
