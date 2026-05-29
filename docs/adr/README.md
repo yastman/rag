@@ -19,6 +19,9 @@ This directory is the canonical entrypoint for architecture decision records. [`
 - [0013 - CocoIndex + Docling ingestion pipeline](0013-cocoindex-docling-ingestion.md)
 - [0014 - Properties CSV as source of truth (no admin panel)](0014-properties-csv-as-source-of-truth.md)
 - [0015 - SDK-native baseline (aiogram, LangGraph, Langfuse, Qdrant)](0015-sdk-native-baseline.md)
+- [0016 - OpenTelemetry Metrics vs Prometheus](0016-otel-metrics-vs-prometheus.md)
+- [0017 - OpenTelemetry trace sampling roadmap](0017-otel-trace-sampling-roadmap.md)
+- [0018 - W3C Baggage vs `propagate_attributes`](0018-w3c-baggage-vs-propagate-attributes.md)
 
 ## When To Use
 
