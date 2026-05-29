@@ -39,6 +39,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 - [`BOT_INTERNAL_STRUCTURE.md`](BOT_INTERNAL_STRUCTURE.md) — Bot internal component structure.
 - [`PIPELINE_OVERVIEW.md`](PIPELINE_OVERVIEW.md) — Ingestion, query, and voice runtime flows.
 - [`observability/CROSS_SERVICE_TRACING.md`](observability/CROSS_SERVICE_TRACING.md) — Cross-service W3C TraceContext/Baggage propagation contract.
+- [`observability/VOICE_TRACING_BASELINE.md`](observability/VOICE_TRACING_BASELINE.md) — Voice/LiveKit W3C TraceContext SDK baseline.
 - [`PIPELINE_ROUTING.md`](PIPELINE_ROUTING.md) — Query routing and state machine design.
 - [`CONTEXTUALIZED_EMBEDDINGS.md`](CONTEXTUALIZED_EMBEDDINGS.md) — Embedding strategy and contextualization.
 - [`RAG_API.md`](RAG_API.md) — FastAPI RAG API contract.
