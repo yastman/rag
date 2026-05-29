@@ -102,6 +102,9 @@ async def start_metrics_server(
         lifespan="off",
         access_log=False,
     )
+    # uvicorn 0.44 h11_impl reads this attribute but Config does not assign it.
+    # Newer uvicorn versions expose it from __init__, so setting it is harmless.
+    config.reset_contextvars = False  # type: ignore[attr-defined]
     server = uvicorn.Server(config)
     server.install_signal_handlers = lambda: None  # type: ignore[attr-defined,method-assign]
 

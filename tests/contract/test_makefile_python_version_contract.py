@@ -56,8 +56,15 @@ def test_python_version_default_is_312() -> None:
     src = _read_makefile()
     m = re.search(r"PYTHON_VERSION\s*\?=\s*(\S+)", src)
     assert m is not None, "PYTHON_VERSION variable not found"
-    assert m.group(1) == "3.12", (
-        f"PYTHON_VERSION default must be 3.12, got {m.group(1)!r}"
+    assert m.group(1) == "3.12", f"PYTHON_VERSION default must be 3.12, got {m.group(1)!r}"
+
+
+def test_uv_run_no_sync_variable_is_uv_run() -> None:
+    """``UV_RUN_NO_SYNC`` must remain an uv-run wrapper for fast local gates."""
+    src = _read_makefile()
+    assert re.search(r"UV_RUN_NO_SYNC\s*\?=\s*uv run --no-sync", src), (
+        "Makefile must define UV_RUN_NO_SYNC ?= uv run --no-sync so local "
+        "fast pytest targets avoid mutating the shared venv during xdist runs."
     )
 
 
@@ -90,9 +97,10 @@ def test_fast_targets_use_pinned_python() -> None:
     ``uv run --python $(PYTHON_VERSION) python -m pytest`` patterns.
     """
     src = _read_makefile()
-    # Pattern: uv run --python <something> ... pytest
+    # Pattern: uv run --python <something> ... pytest, or an equivalent
+    # variable wrapper such as $(UV_RUN_NO_SYNC) --python <something>.
     pinned_pattern = re.compile(
-        r"uv run\s+--python\s+\$\(PYTHON_VERSION\)"
+        r"(?:uv run|\$\(UV_RUN_NO_SYNC\))\s+--python\s+\$\(PYTHON_VERSION\)"
     )
     # Bare uv run pytest (NOT pinned) — to detect violations.
     bare_pattern = re.compile(r"\buv run pytest\b")
@@ -107,8 +115,7 @@ def test_fast_targets_use_pinned_python() -> None:
         has_bare = bool(bare_pattern.search(body))
         if not has_pinned:
             failures.append(
-                f"{target}: recipe does not use "
-                f"'uv run --python $(PYTHON_VERSION) pytest'"
+                f"{target}: recipe does not use 'uv run --python $(PYTHON_VERSION) pytest'"
             )
         if has_bare:
             failures.append(

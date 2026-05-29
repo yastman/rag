@@ -203,22 +203,21 @@ make test-full
 
 ### CI vs Local Test Gates
 
-GitHub Fast Tests (`.github/workflows/ci.yml` `fast-tests` job) runs unit,
-contract, and critical graph-path integration tests with an 80% coverage
-threshold. Local test gates are layered and do not automatically replicate that
-full CI surface.
+GitHub CI runs repository hygiene gates such as secret scanning, Ruff lint, Ruff
+format, and CodeQL. Python test gates are local/manual so failures can be
+debugged against the developer environment that owns the runtime state.
 
-| Local Command | vs GitHub Fast Tests | What It Covers |
-|---|---|---|
-| `make test` | Partial | unit + critical graph paths; no contract, no coverage |
-| `make test-contract` | Partial | contract trace tests only (static, no Docker) |
-| `make test` + `make test-contract` | Test-surface match | same test selection as GitHub Fast Tests but without the coverage gate |
-| `make local-pr-ready` | Narrower | `make check` (lint + types) then `make test-unit`; skips contract and graph-path integration tests |
-| `make check` + `make test` + `make test-contract` | Recommended for merge readiness | lint + types + unit + graph paths + contract; run this on a powerful local machine before merge when you need CI-like test coverage |
+| Local Command | What It Covers |
+|---|---|
+| `make test` | unit + critical graph paths; no contract, no coverage |
+| `make test-contract` | contract trace tests only (static, no Docker) |
+| `make test` + `make test-contract` | local test-surface match for unit + contract + graph-path checks |
+| `make local-pr-ready` | `make check` (lint + types) then `make test-unit`; skips contract and graph-path integration tests |
+| `make check` + `make test` + `make test-contract` | recommended merge-readiness ladder on a powerful local machine |
 
 `make local-pr-ready` is a quick local gate that catches most regressions early
-but is not equivalent to GitHub Fast Tests. For CI-like merge readiness on a
-powerful local machine, use:
+but is narrower than the full local merge-readiness ladder. Before merging a
+test-sensitive change on a powerful local machine, use:
 
 ```bash
 make check

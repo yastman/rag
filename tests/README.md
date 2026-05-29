@@ -40,8 +40,7 @@ These are the default gate for PRs and local development.
 |------|-------|--------------------|
 | `make test` | unit + critical graph paths (`tests/unit/`, `tests/integration/test_graph_paths.py`) | none |
 | `make test-contract` | contract only (`tests/contract/`) | none |
-| GitHub Fast Tests | unit + contract + critical graph paths | 80% (`--cov-fail-under=80`) |
-| Local CI-like validation | `make test && make test-contract` | coverage remains a separate `make test-cov` or CI check |
+| Local PR readiness | `make check && make test && make test-contract` | coverage remains a separate `make test-cov` check |
 
 ### Heavy / runtime checks (services or credentials required)
 Run these selectively, not on every save.
