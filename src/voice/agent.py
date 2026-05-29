@@ -469,6 +469,7 @@ async def entrypoint(ctx: agents.JobContext):
             user_id="voice-agent",
             tags=["voice", "call-lifecycle"],
             metadata={"call_id": call_id},
+            as_baggage=True,
         )
     else:
         session_cm = contextlib.nullcontext()
