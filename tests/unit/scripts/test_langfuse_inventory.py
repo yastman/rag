@@ -24,7 +24,8 @@ Langfuse fetch is mocked.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -133,6 +134,16 @@ class TestFetchRemoteScoreConfigNames:
         client = MagicMock()
         client.api.score_configs.get.side_effect = RuntimeError("boom")
         assert inventory.fetch_remote_score_config_names(client) == set()
+
+
+class TestBuildClient:
+    def test_disabled_langfuse_client_is_treated_as_unavailable(self) -> None:
+        with patch.dict("sys.modules", {"langfuse": MagicMock()}):
+            import langfuse
+
+            langfuse.get_client.return_value = SimpleNamespace()
+
+            assert inventory._build_client() is None
 
 
 class TestFormatReport:
