@@ -2205,7 +2205,6 @@ class PropertyBot:
         name="telegram-rag-supervisor",
         capture_input=False,
         capture_output=False,
-        as_type="agent",
     )
     async def _handle_query_supervisor(
         self,
@@ -2980,6 +2979,12 @@ class PropertyBot:
 
         return response_text
 
+    @observe(
+        name="telegram-rag-agent-stream",
+        capture_input=False,
+        capture_output=False,
+        as_type="agent",
+    )
     async def _astream_supervisor_with_recovery(
         self,
         *,
@@ -3122,6 +3127,12 @@ class PropertyBot:
         )
         return await _run_once(fallback_agent)
 
+    @observe(
+        name="telegram-rag-agent-invoke",
+        capture_input=False,
+        capture_output=False,
+        as_type="agent",
+    )
     async def _ainvoke_supervisor_with_recovery(
         self,
         *,

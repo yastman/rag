@@ -157,13 +157,21 @@ class TestAgentToolAndGuardTaxonomy:
         )
 
 
-# observe-name -> required as_type for the agent-loop entry points in bot.py.
-# These wrap ``create_agent`` invocations (ainvoke / astream / Command(resume)),
-# so Langfuse v4 should group them under the ``agent`` taxonomy (#2216).
+# observe-name -> required as_type for actual agent-loop invocations in bot.py.
+# These spans directly wrap ``create_agent`` SDK execution (ainvoke / astream /
+# Command(resume)), so Langfuse v4 should group them under the ``agent``
+# taxonomy (#2216).
 _REQUIRED_AGENT_AS_TYPE: dict[str, str] = {
-    "telegram-rag-supervisor": "agent",
+    "telegram-rag-agent-stream": "agent",
+    "telegram-rag-agent-invoke": "agent",
     "telegram-hitl-callback": "agent",
 }
+
+# Parent/orchestration spans that may return before any agent SDK invocation
+# (pre-agent guard, semantic cache hit, client direct pipeline) must stay as the
+# default span type. Marking these as ``agent`` would make non-agent requests
+# look like agent-loop traces in Langfuse (#2216).
+_REQUIRED_DEFAULT_SPAN_TYPE: tuple[str, ...] = ("telegram-rag-supervisor",)
 
 
 def _collect_bot_py_observe_as_types() -> dict[str, str | None]:
@@ -193,7 +201,7 @@ def bot_py_observe_as_types() -> dict[str, str | None]:
 
 
 class TestAgentEntrypointTaxonomy:
-    """The supervisor / HITL-resume agent-loop entry points must be ``agent`` (#2216)."""
+    """Only actual SDK agent-loop entry points are ``agent`` (#2216)."""
 
     @pytest.mark.parametrize("observe_name,expected_type", _REQUIRED_AGENT_AS_TYPE.items())
     def test_agent_entrypoint_has_agent_as_type(
@@ -212,4 +220,20 @@ class TestAgentEntrypointTaxonomy:
             f"@observe(name={observe_name!r}) must set as_type={expected_type!r} so "
             f"the Langfuse UI groups the agent invocation under the {expected_type!r} "
             f"taxonomy (#2216); found as_type={actual!r}."
+        )
+
+    @pytest.mark.parametrize("observe_name", _REQUIRED_DEFAULT_SPAN_TYPE)
+    def test_orchestration_parent_stays_default_span(
+        self,
+        bot_py_observe_as_types: dict[str, str | None],
+        observe_name: str,
+    ) -> None:
+        assert observe_name in bot_py_observe_as_types, (
+            f"@observe(name={observe_name!r}) not found in telegram_bot/bot.py."
+        )
+        actual = bot_py_observe_as_types[observe_name]
+        assert actual is None, (
+            f"@observe(name={observe_name!r}) must stay at the default span type "
+            "because it includes pre-agent cache/direct-pipeline return paths; "
+            f"found as_type={actual!r}."
         )
