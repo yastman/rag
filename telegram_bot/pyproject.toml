@@ -9,7 +9,10 @@ dependencies = [
     "httpx>=0.28.0",
     "instructor>=1.7.0",  # Structured LLM extraction for apartment filters
     "qdrant-client>=1.14.0",  # v1.14+ for FormulaQuery score boosting
-    "grpcio>=1.60.0",
+    # grpcio is intentionally NOT declared directly (#2241). qdrant-client
+    # pins grpcio>=1.41.0 as a hard dependency, so the Qdrant gRPC transport
+    # (prefer_grpc=True) keeps it available transitively. A redundant direct
+    # pin only triggers extra resolver/build work in PR checks.
     "redis>=5.0.0",
     "redisvl>=0.3.0",
     # Voyage AI is OPTIONAL (#1773): not used by default bot/retrieval runtime.
