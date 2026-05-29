@@ -7,9 +7,9 @@ signature of a LiteLLM cost-map gap (model present in
 ``docker/litellm/config.yaml`` but missing from the LiteLLM pricing map, so
 ``cost_details.total`` stays 0 despite traffic).
 
-Cost is read from ``cost_details.total`` (the LiteLLM proxy populates this via
-``success_callback: ["langfuse"]``), falling back to
-``calculated_total_cost`` (Langfuse's own model-pricing calculation).
+Cost is read from Langfuse v4 ``cost_details.total_cost`` / ``total_cost``
+(the LiteLLM proxy populates this via ``success_callback: ["langfuse"]``),
+with legacy fallbacks for older response shapes.
 
 Usage::
 
@@ -68,10 +68,16 @@ def _as_float(value: Any) -> float:
 
 
 def _obs_cost(obs: Any) -> float:
-    """Read total cost: cost_details.total, fall back to calculated_total_cost."""
+    """Read total cost from Langfuse v4 observations with legacy fallbacks."""
     cost_details = getattr(obs, "cost_details", None)
-    if isinstance(cost_details, dict) and "total" in cost_details:
-        return _as_float(cost_details.get("total"))
+    if isinstance(cost_details, dict):
+        if "total_cost" in cost_details:
+            return _as_float(cost_details.get("total_cost"))
+        if "total" in cost_details:
+            return _as_float(cost_details.get("total"))
+    total_cost = getattr(obs, "total_cost", None)
+    if total_cost is not None:
+        return _as_float(total_cost)
     return _as_float(getattr(obs, "calculated_total_cost", None))
 
 
@@ -79,13 +85,17 @@ def aggregate_by_model(observations: list[Any]) -> dict[str, ModelCost]:
     """Aggregate a list of GENERATION observations into per-model totals."""
     agg: dict[str, ModelCost] = {}
     for obs in observations:
-        model = getattr(obs, "model", None) or _UNKNOWN_MODEL
+        model = (
+            getattr(obs, "provided_model_name", None)
+            or getattr(obs, "model", None)
+            or _UNKNOWN_MODEL
+        )
         bucket = agg.setdefault(model, ModelCost())
         bucket.calls += 1
         usage = getattr(obs, "usage_details", None) or {}
         if isinstance(usage, dict):
-            bucket.input_tokens += _as_int(usage.get("input"))
-            bucket.output_tokens += _as_int(usage.get("output"))
+            bucket.input_tokens += _as_int(usage.get("input", usage.get("prompt_tokens")))
+            bucket.output_tokens += _as_int(usage.get("output", usage.get("completion_tokens")))
         bucket.total_cost += _obs_cost(obs)
     return agg
 
@@ -117,7 +127,7 @@ def fetch_generations(client: Any, *, since: datetime, until: datetime) -> list[
             )
             out.extend(getattr(resp, "data", []) or [])
             meta = getattr(resp, "meta", None)
-            cursor = getattr(meta, "next_cursor", None)
+            cursor = getattr(meta, "cursor", None) or getattr(meta, "next_cursor", None)
             if not cursor:
                 break
         return out

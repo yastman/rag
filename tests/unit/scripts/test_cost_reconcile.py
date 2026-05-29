@@ -6,7 +6,7 @@ check that the cost Langfuse reports actually reflects real provider spend.
 
 Failure modes this audit catches:
 * a model in docker/litellm/config.yaml NOT in the LiteLLM cost map ->
-  silent zero-cost (cost_details.total == 0 despite real token traffic);
+  silent zero-cost (cost_details.total_cost == 0 despite real token traffic);
 * a typo'd / renamed model that stops accumulating cost.
 
 The script aggregates type=GENERATION observations over a window into
@@ -31,13 +31,13 @@ cr = pytest.importorskip(
 
 
 def _obs(model, *, in_tok=0, out_tok=0, total_cost=0.0):
-    """Build an ObservationsView-like object."""
+    """Build a Langfuse v4 ObservationV2-like object."""
     return SimpleNamespace(
         type="GENERATION",
-        model=model,
+        provided_model_name=model,
         usage_details={"input": in_tok, "output": out_tok, "total": in_tok + out_tok},
-        cost_details={"total": total_cost},
-        calculated_total_cost=total_cost,
+        cost_details={"total_cost": total_cost},
+        total_cost=total_cost,
     )
 
 
@@ -59,26 +59,37 @@ class TestAggregateByModel:
     def test_handles_missing_cost_details(self) -> None:
         obs = SimpleNamespace(
             type="GENERATION",
-            model="m",
+            provided_model_name="m",
             usage_details=None,
             cost_details=None,
-            calculated_total_cost=None,
+            total_cost=None,
         )
         agg = cr.aggregate_by_model([obs])
         assert agg["m"].calls == 1
         assert agg["m"].total_cost == 0.0
         assert agg["m"].input_tokens == 0
 
-    def test_falls_back_to_calculated_total_cost(self) -> None:
+    def test_reads_langfuse_v4_total_cost_field(self) -> None:
         obs = SimpleNamespace(
             type="GENERATION",
-            model="m",
+            provided_model_name="m",
+            usage_details={"input": 1, "output": 1},
+            cost_details=None,
+            total_cost=0.42,
+        )
+        agg = cr.aggregate_by_model([obs])
+        assert agg["m"].total_cost == pytest.approx(0.42)
+
+    def test_keeps_legacy_field_fallbacks(self) -> None:
+        obs = SimpleNamespace(
+            type="GENERATION",
+            model="legacy-model",
             usage_details={"input": 1, "output": 1},
             cost_details=None,
             calculated_total_cost=0.42,
         )
         agg = cr.aggregate_by_model([obs])
-        assert agg["m"].total_cost == pytest.approx(0.42)
+        assert agg["legacy-model"].total_cost == pytest.approx(0.42)
 
     def test_groups_none_model_under_unknown(self) -> None:
         agg = cr.aggregate_by_model([_obs(None, in_tok=10, total_cost=0.0)])
@@ -107,10 +118,10 @@ class TestFetchGenerations:
         client = MagicMock()
         page1 = MagicMock()
         page1.data = [_obs("gpt-4o", total_cost=0.01)]
-        page1.meta = SimpleNamespace(next_cursor="cur2")
+        page1.meta = SimpleNamespace(cursor="cur2")
         page2 = MagicMock()
         page2.data = [_obs("voyage-3", total_cost=0.002)]
-        page2.meta = SimpleNamespace(next_cursor=None)
+        page2.meta = SimpleNamespace(cursor=None)
         client.api.observations.get_many.side_effect = [page1, page2]
 
         from datetime import datetime
