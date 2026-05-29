@@ -42,6 +42,12 @@ from tenacity import (
 # Ensure project root importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from scripts.trace_continuity import (
+    check_trace_continuity,
+    has_continuity_failure,
+    load_end_to_end_trace_flows,
+    summarize_continuity,
+)
 from scripts.validate_queries import (
     ValidationQuery,
     get_cache_hit_queries,
@@ -1569,6 +1575,32 @@ def generate_report(
 # ---------------------------------------------------------------------------
 
 
+def check_trace_continuity_for_report() -> list[Any]:
+    """Evaluate single-trace continuity for canonical end-to-end flows (#2252).
+
+    Loads ``end_to_end_trace_flows`` from the trace contract and, for each flow,
+    asserts the required downstream spans belong to the same trace tree as the
+    root. Degrades gracefully: when flows or runtime data are unavailable the
+    boundary is reported as ``incomplete``/``unavailable`` (never a silent pass)
+    and an empty list is returned so the validator continues.
+    """
+    flows = load_end_to_end_trace_flows()
+    if not flows:
+        logger.info("No end_to_end_trace_flows declared in trace contract; skipping continuity.")
+        return []
+    try:
+        from telegram_bot.observability import get_langfuse_client
+
+        lf = get_langfuse_client()
+    except Exception as exc:  # pragma: no cover - import/runtime guard
+        logger.debug("Langfuse client unavailable for continuity check: %s", exc)
+        return []
+    if lf is None:
+        logger.info("Langfuse disabled; skipping trace continuity check.")
+        return []
+    return check_trace_continuity(lf, flows)
+
+
 async def run_validation(args: argparse.Namespace) -> None:
     """Main validation orchestrator."""
     run_id = str(uuid.uuid4())
@@ -1667,6 +1699,15 @@ async def run_validation(args: argparse.Namespace) -> None:
     logger.info("Checking required trace family coverage...")
     required_trace_coverage = check_required_trace_coverage()
 
+    # Runtime trace_id continuity across service/thread boundaries (#2252).
+    # Proves each canonical flow is one trace tree, not several partial traces.
+    continuity_results: list[Any] = []
+    if not getattr(args, "no_continuity_gate", False):
+        logger.info("Checking trace_id continuity for canonical flows...")
+        continuity_results = check_trace_continuity_for_report()
+        if continuity_results:
+            logger.info("%s", summarize_continuity(continuity_results))
+
     # Evaluate Go/No-Go criteria
     go_no_go = evaluate_go_no_go(
         aggregates,
@@ -1698,6 +1739,17 @@ async def run_validation(args: argparse.Namespace) -> None:
         logger.error(
             "Missing required trace families: %s",
             required_coverage_gate.get("actual", "unknown"),
+        )
+        sys.exit(1)
+
+    # Single-trace gate (#2244/#2252): fail only on a genuine fragmentation —
+    # a required span observed under a DIFFERENT trace than its flow root.
+    # incomplete/unavailable boundaries are reported but do not fail locally.
+    if has_continuity_failure(continuity_results):
+        logger.error(
+            "Trace continuity FAILED: a canonical flow fragmented across a "
+            "service/thread boundary (W3C TraceContext/Baggage lost). See #2244.\n%s",
+            summarize_continuity(continuity_results),
         )
         sys.exit(1)
 
@@ -1751,6 +1803,18 @@ async def run_validation(args: argparse.Namespace) -> None:
         "payload_summary": payload_summary,
         "orphan_rate": orphan_rate,
         "required_trace_coverage": required_trace_coverage,
+        "trace_continuity": [
+            {
+                "flow": r.flow_name,
+                "root_family": r.root_family,
+                "root_trace_id": r.root_trace_id,
+                "status": r.status,
+                "present": r.present,
+                "missing": r.missing,
+                "cross_trace": r.cross_trace,
+            }
+            for r in continuity_results
+        ],
         "traces": [
             {
                 "trace_id": r.trace_id,
@@ -1793,6 +1857,16 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Fail if git worktree is dirty (default: warn only)",
+    )
+    parser.add_argument(
+        "--no-continuity-gate",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable the #2244 single-trace continuity check "
+            "(by default the run fails if a canonical flow fragments across a "
+            "service/thread boundary)."
+        ),
     )
     args = parser.parse_args()
     asyncio.run(run_validation(args))
