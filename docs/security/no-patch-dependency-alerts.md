@@ -1,6 +1,6 @@
 # No-patch dependency alerts — exposure assessment
 
-**Last reviewed:** 2026-05-22
+**Last reviewed:** 2026-05-29
 **Source artifacts:**
 `logs/NO-PATCH-DEPENDENCY-MITIGATION.audit.md`,
 `logs/SECURITY-ISSUE-POSTMERGE.audit.md`,
@@ -116,6 +116,23 @@ exploitable.
 alerts. The intent is to keep them visible as a monitoring signal — when a
 patched version ships, Dependabot will clear the alert automatically, serving
 as a prompt to upgrade.
+
+---
+
+## Monitoring log
+
+Periodic upstream checks for a patched release (issue #2043 — "Monitor upstream
+for patched releases"). Each entry records the latest version available on PyPI
+at check time and whether it clears the vulnerable range.
+
+| Date | diskcache (vuln `<=5.6.3`) | ragas (vuln `>=0.2.3,<=0.4.3`) | Verdict |
+|------|----------------------------|-------------------------------|---------|
+| 2026-05-22 | 5.6.3 — no patch | 0.4.3 — no patch | Isolation stance holds |
+| 2026-05-29 | 5.6.3 (latest on PyPI) — no patch | 0.4.3 (latest on PyPI) — no patch | No upstream fix; isolation stance holds |
+
+No upstream patch is available for either package as of the latest check, so the
+isolation mitigation above remains the active stance. When Dependabot clears
+either alert (a patched version ships), follow the upgrade criteria above.
 
 ---
 
