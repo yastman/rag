@@ -40,7 +40,7 @@ def _fmt(value: float) -> str:
 
 
 @tool
-@observe(name="tool-mortgage-calculator")
+@observe(name="tool-mortgage-calculator", as_type="tool")
 async def mortgage_calculator(
     loan_amount: float,
     annual_rate: float,
@@ -129,7 +129,7 @@ async def _summarize_with_llm(data: str, llm: Any, model: str = _DEFAULT_SUMMARY
 
 
 @tool
-@observe(name="tool-daily-summary")
+@observe(name="tool-daily-summary", as_type="tool")
 async def daily_summary(
     config: RunnableConfig,
     date: str = "today",
@@ -184,7 +184,7 @@ async def daily_summary(
 
 
 @tool
-@observe(name="tool-handoff")
+@observe(name="tool-handoff", as_type="tool")
 async def handoff(
     reason: str,
     config: RunnableConfig,

@@ -223,6 +223,11 @@ ALLOWLIST_NOT_IN_CODE: dict[str, str] = {
         "Read by redis-langfuse / langfuse / langfuse-worker compose services "
         "(REDIS_AUTH + redis-server --requirepass); not consumed by any Python code"
     ),
+    # --- OpenTelemetry SDK env consumed by instrumented service runtimes ----
+    "OTEL_PROPAGATORS": (
+        "Read by OpenTelemetry SDK from Compose service env; documented in "
+        ".env.example as an operator override for tracecontext+baggage"
+    ),
     # --- Misc ops vars -----------------------------------------------------
     "MLFLOW_TRACKING_URI": "Read by mlflow CLI tooling, not the bot",
 }
