@@ -143,7 +143,7 @@ def detect_injection(text: str) -> tuple[bool, float, str | None]:
     return (max_risk > 0, max_risk, max_category)
 
 
-@observe(name="node-guard")
+@observe(name="node-guard", as_type="guardrail")
 async def guard_node(
     state: dict[str, Any],
     runtime: Runtime[GraphContext],
