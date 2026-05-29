@@ -47,7 +47,7 @@ def _get_ctx(config: RunnableConfig):
 
 
 @tool
-@observe(name="crm-get-deal")
+@observe(name="crm-get-deal", as_type="tool")
 async def crm_get_deal(deal_id: int, config: RunnableConfig) -> str:
     """Get deal details from CRM by deal ID.
 
@@ -67,7 +67,7 @@ async def crm_get_deal(deal_id: int, config: RunnableConfig) -> str:
 
 
 @tool
-@observe(name="crm-get-contacts")
+@observe(name="crm-get-contacts", as_type="tool")
 async def crm_get_contacts(query: str, config: RunnableConfig) -> str:
     """Search contacts in CRM by name or phone.
 
@@ -93,7 +93,7 @@ async def crm_get_contacts(query: str, config: RunnableConfig) -> str:
 
 
 @tool
-@observe(name="crm-create-lead")
+@observe(name="crm-create-lead", as_type="tool")
 async def crm_create_lead(
     name: str,
     config: RunnableConfig,
@@ -148,7 +148,7 @@ async def crm_create_lead(
 
 
 @tool
-@observe(name="crm-update-lead")
+@observe(name="crm-update-lead", as_type="tool")
 async def crm_update_lead(
     deal_id: int,
     config: RunnableConfig,
@@ -186,7 +186,7 @@ async def crm_update_lead(
 
 
 @tool
-@observe(name="crm-upsert-contact")
+@observe(name="crm-upsert-contact", as_type="tool")
 async def crm_upsert_contact(
     phone: str,
     first_name: str,
@@ -225,7 +225,7 @@ async def crm_upsert_contact(
 
 
 @tool
-@observe(name="crm-add-note")
+@observe(name="crm-add-note", as_type="tool")
 async def crm_add_note(
     entity_type: str,
     entity_id: int,
@@ -252,7 +252,7 @@ async def crm_add_note(
 
 
 @tool
-@observe(name="crm-create-task")
+@observe(name="crm-create-task", as_type="tool")
 async def crm_create_task(
     text: str,
     entity_id: int,
@@ -288,7 +288,7 @@ async def crm_create_task(
 
 
 @tool
-@observe(name="crm-link-contact-to-deal")
+@observe(name="crm-link-contact-to-deal", as_type="tool")
 async def crm_link_contact_to_deal(
     lead_id: int,
     contact_id: int,
@@ -313,7 +313,7 @@ async def crm_link_contact_to_deal(
 
 
 @tool
-@observe(name="crm-search-leads")
+@observe(name="crm-search-leads", as_type="tool")
 async def crm_search_leads(query: str, config: RunnableConfig) -> str:
     """Search deals/leads in CRM by name, keywords, or phone.
 
@@ -339,7 +339,7 @@ async def crm_search_leads(query: str, config: RunnableConfig) -> str:
 
 
 @tool
-@observe(name="crm-get-my-leads")
+@observe(name="crm-get-my-leads", as_type="tool")
 async def crm_get_my_leads(config: RunnableConfig) -> str:
     """Get leads assigned to the current manager."""
     kommo = _get_kommo(config)
@@ -366,7 +366,7 @@ async def crm_get_my_leads(config: RunnableConfig) -> str:
 
 
 @tool
-@observe(name="crm-get-my-tasks")
+@observe(name="crm-get-my-tasks", as_type="tool")
 async def crm_get_my_tasks(
     config: RunnableConfig,
     include_completed: bool = False,
@@ -406,7 +406,7 @@ async def crm_get_my_tasks(
 
 
 @tool
-@observe(name="crm-update-contact")
+@observe(name="crm-update-contact", as_type="tool")
 async def crm_update_contact(
     contact_id: int,
     config: RunnableConfig,

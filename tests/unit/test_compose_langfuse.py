@@ -198,6 +198,60 @@ class TestLangfuseSecretPosture:
         assert bot_env["LANGFUSE_SECRET_KEY"] == "${LANGFUSE_SECRET_KEY:-sk-lf-dev}"
 
 
+# Services that initialize the OpenTelemetry SDK (they declare OTEL_SERVICE_NAME).
+# These must also declare OTEL_PROPAGATORS so W3C TraceContext + Baggage
+# propagation cannot be silently dropped by a base-image/env change.
+# OpenTelemetry Python defaults to ``tracecontext,baggage``; declaring it makes
+# cross-service trace + baggage continuity a contract, not an implicit default
+# (#2254, child of #2246 F3; policy tracked in #2228).
+OTEL_SDK_SERVICES = [
+    "bge-m3",
+    "bot",
+    "ingestion",
+    "mini-app-api",
+    "rag-api",
+    "user-base",
+    "voice-agent",
+]
+
+
+class TestOtelPropagatorsDeclared:
+    """Every OTEL-SDK service must declare OTEL_PROPAGATORS=tracecontext,baggage."""
+
+    @pytest.mark.parametrize("service", OTEL_SDK_SERVICES)
+    def test_service_declares_otel_propagators(self, compose_base: dict, service: str):
+        env = _get_service_env(compose_base, service)
+        assert "OTEL_PROPAGATORS" in env, (
+            f"compose.yml: {service} declares OTEL_SERVICE_NAME but is missing "
+            f"OTEL_PROPAGATORS. W3C TraceContext+Baggage propagation must be declared "
+            f"explicitly so it cannot be silently dropped by an env/base-image change (#2254)."
+        )
+
+    @pytest.mark.parametrize("service", OTEL_SDK_SERVICES)
+    def test_otel_propagators_include_tracecontext_and_baggage(
+        self, compose_base: dict, service: str
+    ):
+        env = _get_service_env(compose_base, service)
+        val = str(env.get("OTEL_PROPAGATORS", ""))
+        assert "tracecontext" in val, (
+            f"compose.yml: {service}.OTEL_PROPAGATORS must include 'tracecontext', got {val!r}"
+        )
+        assert "baggage" in val, (
+            f"compose.yml: {service}.OTEL_PROPAGATORS must include 'baggage' so Langfuse "
+            f"user/session/tags cross service boundaries, got {val!r}"
+        )
+
+    @pytest.mark.parametrize("service", OTEL_SDK_SERVICES)
+    def test_otel_propagators_overridable_via_env(self, compose_base: dict, service: str):
+        """Value must use ${OTEL_PROPAGATORS:-...} so operators can override per deploy."""
+        env = _get_service_env(compose_base, service)
+        val = str(env.get("OTEL_PROPAGATORS", ""))
+        assert val.startswith("${OTEL_PROPAGATORS:-"), (
+            f"compose.yml: {service}.OTEL_PROPAGATORS should be overridable via "
+            f"${{OTEL_PROPAGATORS:-tracecontext,baggage}}, got {val!r}"
+        )
+
+
 class TestLitellmCallbacks:
     """LiteLLM config must have langfuse callbacks configured."""
 
