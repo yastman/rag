@@ -221,9 +221,11 @@ async def handoff(
     if context_summary:
         text += f"Контекст: {context_summary}\n"
 
+    delivered = 0
     for mid in manager_ids:
         try:
             await bot.send_message(chat_id=mid, text=text)
+            delivered += 1
         except Exception:
             logger.warning("Failed to notify manager %s", mid, exc_info=True)
 
@@ -232,11 +234,26 @@ async def handoff(
     # implemented). Manager notification above remains the single handoff
     # surface until lead_id resolution lands as a separate behavioural change.
 
+    # Honest scoring (#2212): handoff_triggered must reflect a REAL action — at
+    # least one manager actually notified — not merely that the tool ran. If no
+    # notification succeeded, emit handoff_delivery_failed instead of a false
+    # success so the CRM/ops dashboard is not misled. Guard get_client() which
+    # may be None when Langfuse is disabled.
     lf = get_client()
-    lf.score_current_trace(name="handoff_triggered", value=1, data_type="BOOLEAN")
-    lf.score_current_trace(name="handoff_urgency", value=urgency, data_type="CATEGORICAL")
+    if delivered > 0:
+        if lf is not None:
+            lf.score_current_trace(name="handoff_triggered", value=1, data_type="BOOLEAN")
+            lf.score_current_trace(name="handoff_urgency", value=urgency, data_type="CATEGORICAL")
+        return "Ваш запрос передан менеджеру. Ожидайте ответа."
 
-    return "Ваш запрос передан менеджеру. Ожидайте ответа."
+    if lf is not None:
+        lf.score_current_trace(name="handoff_delivery_failed", value=1, data_type="BOOLEAN")
+    logger.error(
+        "handoff: all %d manager notification(s) failed for user %s",
+        len(manager_ids),
+        ctx.telegram_user_id,
+    )
+    return "К сожалению, не удалось связаться с менеджером. Попробуйте позже."
 
 
 # ---------------------------------------------------------------------------

@@ -125,6 +125,9 @@ class SessionSummaryWorker:
         now = time.time()
         threshold = self._idle_timeout_min * 60
         count = 0
+        kommo_written = 0
+        kommo_skipped = 0
+        kommo_failed = 0
         scanned = 0
         deferred = 0
         cap = self._max_sessions_per_cycle
@@ -164,8 +167,14 @@ class SessionSummaryWorker:
 
                 summary = await self._generate_summary(history)
                 if summary:
-                    await self._write_summary(user_id, summary)
+                    outcome = await self._write_summary(user_id, summary)
                     count += 1
+                    if outcome == "written":
+                        kommo_written += 1
+                    elif outcome == "skipped_no_lead":
+                        kommo_skipped += 1
+                    elif outcome == "failed":
+                        kommo_failed += 1
 
                 await self._redis.delete(key)
 
@@ -188,6 +197,19 @@ class SessionSummaryWorker:
                     name="session_summary_generated", value=1, data_type="BOOLEAN"
                 )
                 lf.score_current_trace(name="session_summary_count", value=float(count))
+            # Honest CRM outcome scores (#2212): "generated" != "written to Kommo".
+            if kommo_written > 0:
+                lf.score_current_trace(
+                    name="session_summary_kommo_written", value=float(kommo_written)
+                )
+            if kommo_skipped > 0:
+                lf.score_current_trace(
+                    name="session_summary_kommo_skipped", value=float(kommo_skipped)
+                )
+            if kommo_failed > 0:
+                lf.score_current_trace(
+                    name="session_summary_kommo_failed", value=float(kommo_failed)
+                )
             if cap_hit:
                 lf.score_current_trace(name="session_summary_cap_hit", value=1, data_type="BOOLEAN")
 
@@ -266,20 +288,47 @@ class SessionSummaryWorker:
                 )
             raise
 
-    async def _write_summary(self, user_id: str, summary: str) -> None:
-        """Log the summary and write to Kommo if available."""
+    async def _resolve_lead_id(self, user_id: str) -> int | None:
+        """Resolve the Kommo ``lead_id`` for ``user_id``.
+
+        Placeholder pending lead-scoring-store integration (#445/#2212). Returns
+        ``None`` until resolution lands. Kept as an overridable seam so the
+        honest-scoring path can distinguish a real CRM write from a drop, and so
+        tests can simulate a resolved lead.
+        """
+        return None
+
+    async def _write_summary(self, user_id: str, summary: str) -> str:
+        """Log the summary and write it to Kommo when possible.
+
+        Returns the truthful CRM outcome so the caller can score it honestly
+        (#2212) — we must never imply a CRM write happened when it did not:
+
+        * ``"no_kommo"``        — no Kommo client configured (no CRM claim).
+        * ``"skipped_no_lead"`` — generated but dropped: lead_id unresolved (#445).
+        * ``"written"``         — note successfully added to Kommo.
+        * ``"failed"``          — Kommo write attempted but raised.
+        """
         logger.info("Session summary for user %s: %s", user_id, summary[:100])
-        if self._kommo:
-            # TODO: resolve lead_id from user_id via lead scoring store (#445)
-            lead_id: int | None = None
-            if lead_id:
-                try:
-                    await self._kommo.add_note(
-                        entity_type="leads",
-                        entity_id=lead_id,
-                        text=f"[Auto-summary]\n{summary}",
-                    )
-                except Exception:
-                    logger.warning("Failed to write summary to Kommo", exc_info=True)
-            else:
-                logger.debug("Skipping Kommo note for user %s: lead_id not yet resolved", user_id)
+        if not self._kommo:
+            return "no_kommo"
+
+        lead_id = await self._resolve_lead_id(user_id)
+        if not lead_id:
+            logger.info(
+                "Session summary for user %s generated but NOT written to Kommo: "
+                "lead_id unresolved (#445); scored as session_summary_kommo_skipped.",
+                user_id,
+            )
+            return "skipped_no_lead"
+
+        try:
+            await self._kommo.add_note(
+                entity_type="leads",
+                entity_id=lead_id,
+                text=f"[Auto-summary]\n{summary}",
+            )
+            return "written"
+        except Exception:
+            logger.warning("Failed to write summary to Kommo", exc_info=True)
+            return "failed"
