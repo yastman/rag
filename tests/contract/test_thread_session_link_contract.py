@@ -75,6 +75,15 @@ def _emits_thread_id_to_trace(source: str) -> bool:
     return "propagate_attributes" in source and "langgraph_thread_id" in source
 
 
+def _records_resume_trace_link(source: str) -> bool:
+    """bot.py stores the interrupt trace id and back-links it on resume (#2224)."""
+    return (
+        "set_pending_resume_trace_id" in source
+        and "pop_pending_resume_trace_id" in source
+        and "resumes_trace_id" in source
+    )
+
+
 class TestSupervisorThreadSessionColocation:
     def test_bot_py_exists(self) -> None:
         assert BOT_PY.exists(), f"missing: {BOT_PY}"
@@ -101,6 +110,28 @@ class TestTraceLinkage:
             "Langfuse trace as langgraph_thread_id metadata via "
             "propagate_attributes(...) so operators can correlate a trace to "
             "the LangGraph conversation state (#2224)."
+        )
+
+
+class TestHitlResumeTraceLinkage:
+    """Interrupt -> resume traces must be linked via metadata (#2224).
+
+    A HITL interrupt emits one Langfuse trace; the later
+    ``Command(resume=...)`` click emits a *separate* trace. Without a link an
+    operator cannot tell the resume continued an earlier interrupted run. The
+    bot stores the interrupt trace id at confirmation time
+    (``set_pending_resume_trace_id``) and back-links it on the resume trace as
+    ``resumes_trace_id`` metadata (``pop_pending_resume_trace_id`` +
+    ``propagate_attributes``).
+    """
+
+    def test_bot_py_links_resume_trace_to_parent(self) -> None:
+        source = BOT_PY.read_text(encoding="utf-8")
+        assert _records_resume_trace_link(source), (
+            "telegram_bot/bot.py must store the interrupt trace id "
+            "(set_pending_resume_trace_id) and record resumes_trace_id metadata "
+            "on the resume trace (pop_pending_resume_trace_id + "
+            "propagate_attributes) so interrupted/resumed runs are linked (#2224)."
         )
 
 
@@ -137,4 +168,16 @@ class TestDetectorSelfChecks:
         )
         assert not _emits_thread_id_to_trace(
             "lf.update_current_generation(metadata={'langgraph_thread_id': tid})"
+        )
+
+    def test_resume_link_detector(self) -> None:
+        good = (
+            "set_pending_resume_trace_id(tid, parent)\n"
+            "p = pop_pending_resume_trace_id(tid)\n"
+            "propagate_attributes(metadata={'resumes_trace_id': p})\n"
+        )
+        assert _records_resume_trace_link(good)
+        # Missing the back-link metadata key -> not satisfied.
+        assert not _records_resume_trace_link(
+            "set_pending_resume_trace_id(tid, parent)\npop_pending_resume_trace_id(tid)\n"
         )

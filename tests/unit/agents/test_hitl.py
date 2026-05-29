@@ -239,3 +239,78 @@ async def test_crm_update_contact_cancel():
         )
     assert "Операция отменена" in result
     mock_kommo.update_contact.assert_not_called()
+
+
+
+# --- pending resume trace-id store (#2224) ---
+
+
+def _clear_pending_store() -> None:
+    from telegram_bot.agents import hitl
+
+    hitl._PENDING_RESUME_TRACE_IDS.clear()
+
+
+def test_pending_resume_trace_id_roundtrip():
+    """set then pop returns the stored parent trace id for a thread."""
+    from telegram_bot.agents.hitl import (
+        pop_pending_resume_trace_id,
+        set_pending_resume_trace_id,
+    )
+
+    _clear_pending_store()
+    set_pending_resume_trace_id("tg_42", "trace-abc")
+    assert pop_pending_resume_trace_id("tg_42") == "trace-abc"
+
+
+def test_pending_resume_trace_id_pop_is_one_shot():
+    """A second pop returns None — the entry is cleared on first read."""
+    from telegram_bot.agents.hitl import (
+        pop_pending_resume_trace_id,
+        set_pending_resume_trace_id,
+    )
+
+    _clear_pending_store()
+    set_pending_resume_trace_id("tg_42", "trace-abc")
+    assert pop_pending_resume_trace_id("tg_42") == "trace-abc"
+    assert pop_pending_resume_trace_id("tg_42") is None
+
+
+def test_pending_resume_trace_id_missing_returns_none():
+    from telegram_bot.agents.hitl import pop_pending_resume_trace_id
+
+    _clear_pending_store()
+    assert pop_pending_resume_trace_id("tg_does_not_exist") is None
+
+
+def test_pending_resume_trace_id_ignores_empty_inputs():
+    """Empty thread_id or trace_id must not create an entry."""
+    from telegram_bot.agents.hitl import (
+        pop_pending_resume_trace_id,
+        set_pending_resume_trace_id,
+    )
+
+    _clear_pending_store()
+    set_pending_resume_trace_id("", "trace-abc")
+    set_pending_resume_trace_id("tg_42", None)
+    set_pending_resume_trace_id("tg_42", "")
+    assert pop_pending_resume_trace_id("tg_42") is None
+
+
+def test_pending_resume_trace_id_store_is_bounded():
+    """The store evicts oldest entries past its cap (no unbounded growth)."""
+    from telegram_bot.agents import hitl
+    from telegram_bot.agents.hitl import (
+        pop_pending_resume_trace_id,
+        set_pending_resume_trace_id,
+    )
+
+    _clear_pending_store()
+    with patch.object(hitl, "_PENDING_RESUME_MAX", 3):
+        for i in range(5):
+            set_pending_resume_trace_id(f"tg_{i}", f"trace-{i}")
+        # Oldest two (tg_0, tg_1) evicted; newest three retained.
+        assert pop_pending_resume_trace_id("tg_0") is None
+        assert pop_pending_resume_trace_id("tg_1") is None
+        assert pop_pending_resume_trace_id("tg_4") == "trace-4"
+    _clear_pending_store()

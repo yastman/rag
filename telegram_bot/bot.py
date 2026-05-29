@@ -3453,6 +3453,13 @@ class PropertyBot:
         """Send inline keyboard for HITL confirmation (#443)."""
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+        from .agents.hitl import set_pending_resume_trace_id
+
+        # #2224: remember the trace that raised this interrupt so the later
+        # Command(resume=...) trace can back-link to it via resumes_trace_id.
+        with contextlib.suppress(Exception):
+            set_pending_resume_trace_id(thread_id, get_client().get_current_trace_id())
+
         preview = payload.get("preview", "Подтвердите операцию")
 
         keyboard = InlineKeyboardMarkup(
@@ -3483,6 +3490,15 @@ class PropertyBot:
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
         thread_id = _supervisor_thread_id(chat_id)
+
+        # #2224: link this resume trace back to the interrupt trace stored at
+        # confirmation time. Langfuse trace metadata values are strings.
+        from .agents.hitl import pop_pending_resume_trace_id
+
+        _parent_trace_id = pop_pending_resume_trace_id(thread_id)
+        _resume_trace_metadata = (
+            {"resumes_trace_id": _parent_trace_id} if _parent_trace_id else None
+        )
 
         await callback.answer("Принято" if action == "approve" else "Отменено")
 
@@ -3541,6 +3557,7 @@ class PropertyBot:
             session_id=session_id,
             user_id=str(user_id),
             tags=["telegram", "hitl", "resume"],
+            metadata=_resume_trace_metadata,
         ):
             from langgraph.types import Command
 
