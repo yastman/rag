@@ -158,6 +158,27 @@ This runs expanded lint (covering `src/` and `telegram_bot/` to match CI),
 and format verification. Run `make check` when you also need the current
 lint + MyPy gate; it may surface known baseline type drift until that is fixed.
 
+For candidate or review validation where the project `.venv` must not be
+changed implicitly, use:
+
+```bash
+make candidate-check
+```
+
+This is a read-only frozen check that runs `uv sync --frozen --check` first to
+detect whether `.venv` matches the lockfile, then runs Ruff lint and MyPy with
+`uv run --no-sync` to prevent implicit environment updates. It does NOT create
+or modify `.venv`. If the environment is absent or stale, it fails with
+guidance instead of uninstalling or installing packages. Keep ordinary
+developer loops on `make check` when auto-sync is acceptable.
+
+Stale `.venv` remediation:
+- If `.venv` exists but is stale (lockfile changed): `uv sync --frozen`
+- If `.venv` is absent or was polluted by another worktree: recreate with
+  `uv sync --frozen` (or `uv sync` for full dev install)
+- When switching between worktrees that share a lockfile, run
+  `make candidate-check` in each before committing changes
+
 ### Hooks and uv environments
 
 Pre-commit hooks use their own isolated virtualenvs managed by the pre-commit
@@ -292,9 +313,17 @@ Docker images that import `telegram_bot.observability` (and therefore `langfuse`
 
 ## 7. Running Components Without Docker Wrapper
 
+`make bot`, `make run-bot`, and `make preflight-bot` now use
+`uv run --no-sync` to prevent implicit venv updates during runtime loops.
+This keeps the runtime environment stable and avoids lockfile drift when
+the development venv is already in sync.
+
 ```bash
-# Telegram bot
-uv run python -m telegram_bot.main
+# Telegram bot (no-sync)
+make bot                 # tee output to logs/bot-run.log
+
+# Telegram bot without tee
+make run-bot
 
 # Unified ingestion
 uv run python -m src.ingestion.unified.cli
@@ -302,6 +331,9 @@ uv run python -m src.ingestion.unified.cli
 # RAG API
 uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
+
+If your venv is stale and the bot startup fails with a missing import,
+run `uv sync --frozen` before restarting.
 
 ## 8. Minimal Stack (Fast Iteration)
 
@@ -368,3 +400,5 @@ Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the 
 - Ingestion status empty: verify `GDRIVE_SYNC_DIR` and collection bootstrap.
 - Redis auth error (`WRONGPASS` / `NOAUTH`) after changing `.env` `REDIS_PASSWORD`: run `make local-redis-recreate`, then `make test-bot-health`.
 - `make docker-bot-up` or `make bot` exits before starting with no clear error: run `make preflight-bot` to see exactly what is missing. Use `PREFLIGHT_BOT_FLAGS='--no-fail'` to bypass the guardrail if you only need to start infrastructure.
+- `make candidate-check` fails with "Environment is stale": run `uv sync --frozen` to align `.venv` with the current lockfile, then retry. If `.venv` was polluted by another worktree sharing the same lockfile, delete `.venv` and recreate with `uv sync --frozen`.
+- `make bot` fails with a missing import at startup: the venv is stale. Run `uv sync --frozen` before restarting the bot.
