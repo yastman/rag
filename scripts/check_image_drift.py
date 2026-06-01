@@ -250,9 +250,13 @@ def get_container_image_digest(container_id: str) -> tuple[str, str]:
 
 
 def _int_or_zero(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if not isinstance(value, str):
+        return 0
     try:
-        return int(value or 0)
-    except (TypeError, ValueError):
+        return int(value or "0")
+    except ValueError:
         return 0
 
 
@@ -416,11 +420,11 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
 
     if report.port_drift:
         print(f"\n\033[31m✗ {len(report.port_drift)} services have port publish drift:\033[0m")
-        for r in report.port_drift:
-            expected = ", ".join(port.render() for port in r.expected) or "(none)"
-            actual = ", ".join(port.render() for port in r.actual) or "(none)"
-            missing = ", ".join(port.render() for port in r.missing)
-            print(f"\n  \033[1m{r.service}\033[0m")
+        for port_result in report.port_drift:
+            expected = ", ".join(port.render() for port in port_result.expected) or "(none)"
+            actual = ", ".join(port.render() for port in port_result.actual) or "(none)"
+            missing = ", ".join(port.render() for port in port_result.missing)
+            print(f"\n  \033[1m{port_result.service}\033[0m")
             print(f"    Expected: {expected}")
             print(f"    Running:  {actual}")
             print(f"    \033[31m→ Missing runtime publishers: {missing}\033[0m")

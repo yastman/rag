@@ -49,7 +49,8 @@ class PullRequest:
 def _load_event(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {}
 
 
 def _pull_request_from_event(event: dict[str, Any]) -> PullRequest | None:
@@ -57,16 +58,20 @@ def _pull_request_from_event(event: dict[str, Any]) -> PullRequest | None:
     if not isinstance(raw_pr, dict):
         return None
     labels = tuple(
-        label.get("name", "") for label in raw_pr.get("labels", []) if isinstance(label, dict)
+        str(label.get("name", "")) for label in raw_pr.get("labels", []) if isinstance(label, dict)
     )
-    base = raw_pr.get("base") if isinstance(raw_pr.get("base"), dict) else {}
-    head = raw_pr.get("head") if isinstance(raw_pr.get("head"), dict) else {}
+    raw_base = raw_pr.get("base")
+    raw_head = raw_pr.get("head")
+    base = raw_base if isinstance(raw_base, dict) else {}
+    head = raw_head if isinstance(raw_head, dict) else {}
+    base_sha = base.get("sha")
+    head_sha = head.get("sha")
     return PullRequest(
         title=str(raw_pr.get("title") or ""),
         body=str(raw_pr.get("body") or ""),
         labels=labels,
-        base_sha=base.get("sha"),
-        head_sha=head.get("sha"),
+        base_sha=str(base_sha) if base_sha else None,
+        head_sha=str(head_sha) if head_sha else None,
     )
 
 
