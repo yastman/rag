@@ -122,7 +122,7 @@ def _is_duplicate_or_bug_class(pr: PullRequest) -> bool:
 
 
 def _has_filled_field(body: str, field: str) -> bool:
-    pattern = re.compile(rf"(?im)^\s*{re.escape(field)}\s*:\s*(.+)$")
+    pattern = re.compile(rf"(?im)^\s*>?\s*{re.escape(field)}\s*:\s*(.+)$")
     match = pattern.search(body)
     if match is None:
         return False
@@ -130,8 +130,12 @@ def _has_filled_field(body: str, field: str) -> bool:
     return bool(value and value not in {"-", "n/a", "N/A", "none", "None"})
 
 
+def _has_filled_any_field(body: str, fields: tuple[str, ...]) -> bool:
+    return any(_has_filled_field(body, field) for field in fields)
+
+
 def _field_value(body: str, field: str) -> str | None:
-    pattern = re.compile(rf"(?im)^\s*{re.escape(field)}\s*:\s*(.+)$")
+    pattern = re.compile(rf"(?im)^\s*>?\s*{re.escape(field)}\s*:\s*(.+)$")
     match = pattern.search(body)
     if match is None:
         return None
@@ -198,7 +202,7 @@ def validate(pr: PullRequest | None, files: list[str], *, large_threshold: int) 
 
     bugfix = _is_bugfix(pr)
     if bugfix:
-        if not _has_filled_field(pr.body, "Regression guardrail"):
+        if not _has_filled_any_field(pr.body, ("Regression guardrail", "Guardrail")):
             failures.append("bugfix PR must fill `Regression guardrail:` in the PR body")
         if not _has_filled_field(pr.body, "Checks run"):
             failures.append("bugfix PR must fill `Checks run:` in the PR body")

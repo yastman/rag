@@ -24,9 +24,26 @@ def test_bugfix_with_guardrail_and_test_change_passes() -> None:
         _pr(
             "fix: repair retrieval regression",
             "Fixes #123\n\n"
-            "Bug class: RAG quality regression\n"
-            "Regression guardrail: tests/contract/test_rag_contract.py\n"
-            "Checks run: uv run pytest tests/contract/test_rag_contract.py -q\n",
+            "> Bug class: RAG quality regression\n"
+            "> Regression guardrail: tests/contract/test_rag_contract.py\n"
+            "> Checks run: uv run pytest tests/contract/test_rag_contract.py -q\n",
+        ),
+        ["telegram_bot/services/search.py", "tests/contract/test_rag_contract.py"],
+        large_threshold=25,
+    )
+
+    assert failures == []
+
+
+def test_bugfix_accepts_legacy_guardrail_alias_from_template_drift() -> None:
+    """Older PR bodies that used `Guardrail:` must not fail the regression gate."""
+    failures = validate(
+        _pr(
+            "fix: repair retrieval regression",
+            "Fixes #123\n\n"
+            "> Bug class: RAG quality regression\n"
+            "> Guardrail: tests/contract/test_rag_contract.py\n"
+            "> Checks run: uv run pytest tests/contract/test_rag_contract.py -q\n",
         ),
         ["telegram_bot/services/search.py", "tests/contract/test_rag_contract.py"],
         large_threshold=25,

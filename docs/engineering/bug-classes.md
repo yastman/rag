@@ -71,3 +71,7 @@ implemented in the first wave:
 - **Maintainer**: engineering process owner (see [`docs/engineering/README.md`](README.md)).
 - **Update rule**: add new bug classes after confirmed recurrence (>=2 occurrences).
 - **Review trigger**: every PR that touches a registered area must reference this registry.
+- **Recurrence rule**: a repeated class must include a canonical issue, related
+  issues, a guardrail path, and the required CI/check that executes the guardrail.
+- **Disposition rule**: duplicate issues close against the canonical issue;
+  recurrences stay open until the guardrail is added or strengthened.

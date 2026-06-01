@@ -197,9 +197,9 @@ def test_pr_template_has_regression_guardrail_field() -> None:
     """The PR template must include a 'Regression guardrail' field."""
     pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
     text = pr_template.read_text(encoding="utf-8")
-    assert "Regression guardrail" in text, (
+    assert "Regression guardrail:" in text, (
         ".github/pull_request_template.md must include a 'Regression guardrail' "
-        "field so contributors document which guardrail their fix enforces."
+        "field in the same literal format enforced by validate_pr_guardrails.py."
     )
 
 
@@ -211,3 +211,34 @@ def test_pr_template_has_checks_run_field() -> None:
         ".github/pull_request_template.md must include a 'Checks run' field "
         "so contributors document their validation ladder."
     )
+
+
+def test_pr_template_has_duplicate_disposition_fields() -> None:
+    """The PR template must capture duplicate/recurrence closure metadata."""
+    pr_template = REPO_ROOT / ".github" / "pull_request_template.md"
+    text = pr_template.read_text(encoding="utf-8")
+    for field in (
+        "Duplicate / Recurring Issue Handling",
+        "Canonical issue:",
+        "Related issues to close/update:",
+        "Closing comment summary:",
+    ):
+        assert field in text, (
+            ".github/pull_request_template.md must keep duplicate/recurrence "
+            f"metadata field {field!r} so issue disposition is not lost."
+        )
+
+
+def test_bug_issue_template_collects_duplicate_and_bug_class_metadata() -> None:
+    """Bug reports must collect enough metadata for duplicate/recurrence triage."""
+    issue_template = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"
+    text = issue_template.read_text(encoding="utf-8")
+    for field in (
+        "id: issue_kind",
+        "id: possible_duplicates",
+        "id: suspected_bug_class",
+    ):
+        assert field in text, (
+            ".github/ISSUE_TEMPLATE/bug_report.yml must include duplicate and "
+            f"bug-class triage field {field!r}."
+        )

@@ -25,6 +25,34 @@
 - Use this when structure, ownership, or contracts are still ambiguous.
 - Route through `@brainstorming`, write a short spec, get user review, then plan.
 
+## Duplicate and Recurring Bugs
+- **Duplicate**: same symptom, scenario, and root cause as an existing issue, with
+  no new evidence. Close it with the canonical issue link.
+- **Recurrence**: same bug class with new evidence, environment, path, or failure
+  mode. Keep it actionable, link the canonical bug class, and add or strengthen
+  the guardrail before closing.
+- **Umbrella**: broad parent issue that owns multiple child issues or a cluster
+  map. Close it only after child issues and verification are resolved.
+- **New bug**: no matching root cause or registered bug class. Triage normally.
+
+For any duplicate or recurrence, record:
+
+```text
+Type: duplicate | recurrence | umbrella | new
+Canonical issue:
+Related issues:
+Bug class:
+Missing or weak guardrail:
+Verification:
+```
+
+Root cause is defined by the failing contract boundary, not by title wording.
+Examples: "BGE-M3 service is unreachable because the Compose port contract is
+wrong" and "Langfuse trace context is lost across raw executor boundaries" are
+root causes. If a recurrence is confirmed, update
+[`docs/engineering/bug-classes.md`](bug-classes.md) or explain why the existing
+guardrail already covers it.
+
 ## DRY, SOLID, and Reuse
 - Prefer local fixes when the shared shape is still evolving.
 - Extract shared logic only after the repeated shape is stable and clearly reduces change risk.

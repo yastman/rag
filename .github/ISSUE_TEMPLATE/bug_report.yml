@@ -36,6 +36,36 @@ body:
         - Branch: dev
     validations:
       required: false
+  - type: dropdown
+    id: issue_kind
+    attributes:
+      label: Issue Kind
+      description: Is this a new bug, duplicate, recurrence, or umbrella issue?
+      options:
+        - New bug
+        - Possible duplicate
+        - Recurrence of known bug class
+        - Umbrella / tracking issue
+    validations:
+      required: true
+  - type: textarea
+    id: possible_duplicates
+    attributes:
+      label: Possible Duplicate / Related Issues
+      description: Link issues that look related, even if the root cause is not confirmed.
+      placeholder: |
+        - #2182
+        - #2188
+    validations:
+      required: false
+  - type: input
+    id: suspected_bug_class
+    attributes:
+      label: Suspected Bug Class
+      description: If this looks recurring, use the canonical name from docs/engineering/bug-classes.md.
+      placeholder: Docker/compose drift
+    validations:
+      required: false
   - type: textarea
     id: logs
     attributes:

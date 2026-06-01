@@ -14,7 +14,16 @@ Reference the canonical registry at [`docs/engineering/bug-classes.md`](../docs/
 
 What permanent guardrail (contract test, CI gate, automated check) does this PR add or strengthen to prevent this bug class from recurring?
 
-> Guardrail: ___________
+> Regression guardrail: ___________
+
+## Duplicate / Recurring Issue Handling
+
+If this PR handles duplicate issues, a recurrence, or an umbrella issue, record the disposition.
+
+> Type: duplicate | recurrence | umbrella | new
+> Canonical issue: ___________
+> Related issues to close/update: ___________
+> Closing comment summary: ___________
 
 ## Scope
 

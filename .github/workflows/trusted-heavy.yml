@@ -26,6 +26,7 @@ concurrency:
 jobs:
   heavy-contract-tests-shadow:
     name: Heavy Contract Tests (shadow)
+    continue-on-error: true
     if: >
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -48,11 +49,11 @@ jobs:
         run: uv sync --frozen
 
       - name: Run contract tests in shadow mode
-        continue-on-error: true
         run: make test-contract
 
   fast-tests-shadow:
     name: Fast Tests (shadow)
+    continue-on-error: true
     if: >
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -75,5 +76,4 @@ jobs:
         run: uv sync --frozen
 
       - name: Run fast tests in shadow mode
-        continue-on-error: true
         run: make test
