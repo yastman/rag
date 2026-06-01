@@ -1,0 +1,63 @@
+rules:
+  - id: python.no-datetime-utcnow
+    message: Use timezone-aware datetime.now(UTC) instead of datetime.utcnow().
+    severity: ERROR
+    languages:
+      - python
+    pattern-either:
+      - pattern: datetime.utcnow(...)
+      - pattern: datetime.datetime.utcnow(...)
+    paths:
+      include:
+        - /src/**
+        - /telegram_bot/**
+        - /scripts/**
+
+  - id: python.no-subprocess-shell-true
+    message: Avoid subprocess shell=True; pass an argv list with shell=False.
+    severity: ERROR
+    languages:
+      - python
+    patterns:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+    paths:
+      include:
+        - /src/**
+        - /telegram_bot/**
+        - /scripts/**
+
+  - id: python.no-os-system
+    message: Avoid os.system/os.popen; use subprocess.run with an argv list.
+    severity: ERROR
+    languages:
+      - python
+    pattern-either:
+      - pattern: os.system(...)
+      - pattern: os.popen(...)
+    paths:
+      include:
+        - /src/**
+        - /telegram_bot/**
+        - /scripts/**
+
+  - id: github-actions.no-pull-request-target
+    message: Avoid pull_request_target workflows unless a dedicated security review approves them.
+    severity: ERROR
+    languages:
+      - yaml
+    pattern-regex: '^\s*pull_request_target\s*:'
+    paths:
+      include:
+        - /.github/workflows/*.yml
+        - /.github/workflows/*.yaml
+
+  - id: compose.no-latest-image
+    message: Compose images must not use the mutable :latest tag.
+    severity: ERROR
+    languages:
+      - yaml
+    pattern-regex: '^\s*image\s*:\s*["'']?[^"''\s#]+:latest(?:@sha256:[a-fA-F0-9]+)?["'']?\s*(?:#.*)?$'
+    paths:
+      include:
+        - /compose.yml
+        - /compose.*.yml
