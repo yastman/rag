@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Detect Docker image drift between compose config and running containers.
+"""Detect Docker image/runtime drift between compose config and running containers.
 
 Compares image tags and digests pinned in docker-compose files against
 the images actually used by running containers. Reports mismatches that
 indicate stale containers running older/different image versions.
+
+Also compares host port publications declared by Compose against the running
+container publishers. This catches stale containers that predate a compose
+``ports:`` change, such as the BGE-M3 ``localhost:8000`` drift from #2182/#2188.
 
 Usage:
     python scripts/check_image_drift.py                         # Human-readable
@@ -85,6 +89,35 @@ class DriftResult:
         return not self.tag_match
 
 
+@dataclass(frozen=True)
+class PortBinding:
+    """A normalized host-to-container port publication."""
+
+    target: int
+    published: int
+    protocol: str = "tcp"
+    host_ip: str = ""
+
+    @property
+    def key(self) -> tuple[int, int, str]:
+        return (self.target, self.published, self.protocol)
+
+    def render(self) -> str:
+        host = f"{self.host_ip}:" if self.host_ip else ""
+        return f"{host}{self.published}->{self.target}/{self.protocol}"
+
+
+@dataclass(frozen=True)
+class PortDriftResult:
+    """A service whose runtime port publishers do not match compose config."""
+
+    service: str
+    container: str
+    expected: list[PortBinding]
+    actual: list[PortBinding]
+    missing: list[PortBinding]
+
+
 @dataclass
 class DriftReport:
     """Aggregated drift findings."""
@@ -92,6 +125,8 @@ class DriftReport:
     compose_file: str
     compose_files: list[str] = field(default_factory=list)
     checked: list[DriftResult] = field(default_factory=list)
+    port_checked: list[str] = field(default_factory=list)
+    port_drift: list[PortDriftResult] = field(default_factory=list)
     skipped_build: list[str] = field(default_factory=list)
     skipped_not_running: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -106,7 +141,11 @@ class DriftReport:
 
     @property
     def has_checked_containers(self) -> bool:
-        return bool(self.checked)
+        return bool(self.checked or self.port_checked)
+
+    @property
+    def has_drift(self) -> bool:
+        return bool(self.drifted or self.port_drift)
 
 
 def _run(cmd: list[str], *, check: bool = True) -> str:
@@ -210,8 +249,69 @@ def get_container_image_digest(container_id: str) -> tuple[str, str]:
         return "", ""
 
 
+def _int_or_zero(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if not isinstance(value, str):
+        return 0
+    try:
+        return int(value or "0")
+    except ValueError:
+        return 0
+
+
+def _expected_ports(service_config: dict[str, object]) -> list[PortBinding]:
+    """Extract normalized compose ``ports`` entries from config JSON."""
+    raw_ports = service_config.get("ports", [])
+    if not isinstance(raw_ports, list):
+        return []
+
+    ports: list[PortBinding] = []
+    for item in raw_ports:
+        if not isinstance(item, dict):
+            continue
+        target = _int_or_zero(item.get("target"))
+        published = _int_or_zero(item.get("published"))
+        if not target or not published:
+            continue
+        ports.append(
+            PortBinding(
+                target=target,
+                published=published,
+                protocol=str(item.get("protocol") or "tcp"),
+                host_ip=str(item.get("host_ip") or item.get("host_ip_address") or ""),
+            )
+        )
+    return ports
+
+
+def _actual_ports(container: dict[str, object]) -> list[PortBinding]:
+    """Extract normalized runtime publishers from ``docker compose ps`` JSON."""
+    raw_publishers = container.get("Publishers", [])
+    if not isinstance(raw_publishers, list):
+        return []
+
+    ports: list[PortBinding] = []
+    for item in raw_publishers:
+        if not isinstance(item, dict):
+            continue
+        target = _int_or_zero(item.get("TargetPort"))
+        published = _int_or_zero(item.get("PublishedPort"))
+        if not target or not published:
+            continue
+        ports.append(
+            PortBinding(
+                target=target,
+                published=published,
+                protocol=str(item.get("Protocol") or "tcp"),
+                host_ip=str(item.get("URL") or ""),
+            )
+        )
+    return ports
+
+
 def check_drift(compose_files: list[str], env_file: str) -> DriftReport:
-    """Compare compose-pinned images against running containers."""
+    """Compare compose-pinned images and ports against running containers."""
     report = DriftReport(
         compose_file=":".join(compose_files),
         compose_files=compose_files,
@@ -224,15 +324,36 @@ def check_drift(compose_files: list[str], env_file: str) -> DriftReport:
         image_str = cast("str", svc_config.get("image", ""))
         has_build = "build" in svc_config
 
-        # Skip custom-built services
+        expected_ports = _expected_ports(svc_config)
+        container = containers.get(svc_name)
+        if expected_ports:
+            if container:
+                actual_ports = _actual_ports(container)
+                actual_keys = {port.key for port in actual_ports}
+                missing = [port for port in expected_ports if port.key not in actual_keys]
+                report.port_checked.append(svc_name)
+                if missing:
+                    report.port_drift.append(
+                        PortDriftResult(
+                            service=svc_name,
+                            container=str(container.get("ID") or container.get("Name") or ""),
+                            expected=expected_ports,
+                            actual=actual_ports,
+                            missing=missing,
+                        )
+                    )
+            elif svc_name not in report.skipped_not_running:
+                report.skipped_not_running.append(svc_name)
+
+        # Skip custom-built services for image drift only; still check ports above.
         if not image_str or has_build:
             report.skipped_build.append(svc_name)
             continue
 
         # Check if container is running
-        container = containers.get(svc_name)
         if not container:
-            report.skipped_not_running.append(svc_name)
+            if svc_name not in report.skipped_not_running:
+                report.skipped_not_running.append(svc_name)
             continue
 
         expected = ImageRef.parse(image_str)
@@ -297,6 +418,17 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
             if r.expected_digest and not r.digest_match:
                 print("    \033[31m→ Digest mismatch\033[0m")
 
+    if report.port_drift:
+        print(f"\n\033[31m✗ {len(report.port_drift)} services have port publish drift:\033[0m")
+        for port_result in report.port_drift:
+            expected = ", ".join(port.render() for port in port_result.expected) or "(none)"
+            actual = ", ".join(port.render() for port in port_result.actual) or "(none)"
+            missing = ", ".join(port.render() for port in port_result.missing)
+            print(f"\n  \033[1m{port_result.service}\033[0m")
+            print(f"    Expected: {expected}")
+            print(f"    Running:  {actual}")
+            print(f"    \033[31m→ Missing runtime publishers: {missing}\033[0m")
+
     # Skipped
     if report.skipped_build:
         print(f"\n\033[33m⊘ {len(report.skipped_build)} custom-build services (skipped):\033[0m")
@@ -330,8 +462,11 @@ def print_report(report: DriftReport, *, show_fix: bool = False) -> None:
     print(f"\n{'─' * 60}")
     total = len(report.checked)
     ok = len(report.ok)
-    drifted = len(report.drifted)
-    print(f"  Checked: {total}  OK: {ok}  Drifted: {drifted}")
+    drifted = len(report.drifted) + len(report.port_drift)
+    print(
+        f"  Checked images: {total}  OK: {ok}  "
+        f"Image drift: {len(report.drifted)}  Port drift: {len(report.port_drift)}"
+    )
     if drifted:
         print("  \033[31mResult: DRIFT DETECTED\033[0m")
     elif total:
@@ -359,12 +494,25 @@ def print_json(report: DriftReport) -> None:
             }
             for r in report.checked
         ],
+        "port_checked": report.port_checked,
+        "port_drift": [
+            {
+                "service": r.service,
+                "container": r.container,
+                "expected": [port.render() for port in r.expected],
+                "actual": [port.render() for port in r.actual],
+                "missing": [port.render() for port in r.missing],
+            }
+            for r in report.port_drift
+        ],
         "skipped_build": report.skipped_build,
         "skipped_not_running": report.skipped_not_running,
         "summary": {
             "total": len(report.checked),
             "ok": len(report.ok),
             "drifted": len(report.drifted),
+            "port_checked": len(report.port_checked),
+            "port_drift": len(report.port_drift),
         },
     }
     print(json.dumps(data, indent=2))
@@ -422,7 +570,7 @@ def main() -> None:
     else:
         print_report(report, show_fix=args.fix)
 
-    sys.exit(1 if report.drifted or not report.has_checked_containers else 0)
+    sys.exit(1 if report.has_drift or not report.has_checked_containers else 0)
 
 
 if __name__ == "__main__":

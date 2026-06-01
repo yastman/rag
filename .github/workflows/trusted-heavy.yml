@@ -1,0 +1,81 @@
+name: Trusted Heavy Checks
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "src/**"
+      - "telegram_bot/**"
+      - "mini_app/**"
+      - "services/**"
+      - "tests/**"
+      - "compose*.yml"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trusted-heavy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  heavy-contract-tests-shadow:
+    name: Heavy Contract Tests (shadow)
+    continue-on-error: true
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create Python 3.12 virtualenv
+        run: uv venv --python 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run contract tests in shadow mode
+        continue-on-error: true
+        run: make test-contract
+
+  fast-tests-shadow:
+    name: Fast Tests (shadow)
+    continue-on-error: true
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create Python 3.12 virtualenv
+        run: uv venv --python 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run fast tests in shadow mode
+        continue-on-error: true
+        run: make test

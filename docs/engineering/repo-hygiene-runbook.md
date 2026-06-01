@@ -180,6 +180,31 @@ Buckets:
 | `stale`        | Older than `--stale-days` (default 60). Confirm or close.     |
 | `triaged`      | Already has labels + assignee + lane. No action.              |
 
+### Duplicate and recurrence pass
+
+During issue hygiene, cluster suspected duplicate bugs before implementation:
+
+1. Search by failing surface, service name, command, error text, and root cause.
+2. Classify each match as `duplicate`, `recurrence`, `umbrella`, or `new` using
+   [`issue-triage.md`](issue-triage.md#duplicate-and-recurring-bugs).
+3. For duplicates, close with the canonical issue link and no new PR.
+4. For recurrences, keep the issue open until the fix adds or strengthens a
+   guardrail in [`bug-classes.md`](bug-classes.md).
+5. For umbrellas, list child issues and the verification command that closes the
+   cluster.
+
+Use this closing comment shape:
+
+```text
+Type: duplicate | recurrence | umbrella
+Canonical link: #NNN
+Decision:
+- Same root cause/surface, or new recurrence under bug class <name>.
+Evidence/Checks:
+- <command/result>
+- <PR>
+```
+
 ### Splitting issues
 
 A single issue should:

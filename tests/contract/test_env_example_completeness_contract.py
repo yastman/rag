@@ -90,6 +90,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "GITHUB_WORKSPACE": "GitHub Actions auto-detect",
     "GITHUB_OUTPUT": "GitHub Actions output channel",
     "GITHUB_ENV": "GitHub Actions env channel",
+    "GITHUB_EVENT_PATH": "GitHub Actions event payload path; CI-only",
     "GITHUB_STEP_SUMMARY": "GitHub Actions step summary channel",
     "RUNNER_OS": "GitHub Actions self-hosted runner detection",
     "RUNNER_TEMP": "GitHub Actions temp dir",
@@ -125,6 +126,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "JUDGE_MODEL": "LLM-judge runtime override; eval-suite only",
     "JUDGE_SAMPLE_RATE": "LLM-judge runtime sampling rate; eval-suite only",
     "REPO_BASE_BRANCH": "scripts/lib base-branch resolver; CI/dev tooling",
+    "PR_GUARDRAILS_CHANGED_FILES": "PR guardrails test override; CI/dev tooling",
     # --- OpenTelemetry SDK internals (set per-service in Compose, not .env) -
     "UV_LINK_MODE": "uv-only; documented in CONTRIBUTING/Makefile",
     "UV_PROJECT_ENVIRONMENT": "uv-only; managed by uv",
