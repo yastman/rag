@@ -50,7 +50,8 @@ Root cause is defined by the failing contract boundary, not by title wording.
 Examples: "BGE-M3 service is unreachable because the Compose port contract is
 wrong" and "Langfuse trace context is lost across raw executor boundaries" are
 root causes. If a recurrence is confirmed, update
-[`docs/engineering/bug-classes.md`](bug-classes.md) or explain why the existing
+the source registry [`.github/bug-classes.yml`](../../.github/bug-classes.yml)
+or the human mirror [`docs/engineering/bug-classes.md`](bug-classes.md), or explain why the existing
 guardrail already covers it.
 
 ## DRY, SOLID, and Reuse

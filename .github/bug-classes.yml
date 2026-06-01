@@ -1,0 +1,104 @@
+version: 1
+source_of_truth: true
+markdown_mirror: docs/engineering/bug-classes.md
+
+guardrail_standards:
+  regression_driven_tdd: >
+    Regression-driven TDD means bug -> failing regression test -> minimal fix
+    -> permanent gate. The test becomes the prevention mechanism.
+  guardrail: >
+    A guardrail is a permanent executable rule that prevents a recurring bug
+    class. Automated guardrails are checks, not comments or manual review
+    conventions.
+  quality_gate: >
+    A quality gate is a CI or branch-protection enforcement point that blocks
+    merge when a guardrail fails.
+  principle: Every recurring bug must become a permanent guardrail.
+  native_first: >
+    Use native platform/tool features first, configure tools second, and write
+    custom project code only for project-specific root-cause memory or
+    cross-file invariants.
+
+bug_classes:
+  - name: Langfuse/OTEL/contextvars loss
+    guardrail: >
+      Context propagation contract in
+      tests/contract/test_observability_contextvars_contract.py; span metadata
+      coverage in tests/unit/test_observability_span_metadata.py; CI gate via
+      make test-contract.
+    canonical_issue: "#2301"
+    related_issues:
+      - "#2302"
+      - "#2246"
+      - "#2272"
+      - "#2266"
+      - "#2256"
+      - "#2253"
+      - "#2223"
+      - "#2222"
+      - "#2221"
+      - "#2216"
+      - "#2215"
+      - "#2214"
+      - "#2166"
+      - "#2064"
+    first_seen: "2025"
+    last_confirmed: "2026"
+
+  - name: uv .venv mutation
+    guardrail: >
+      Review-safe gates use check-frozen / candidate-check: uv sync --frozen
+      --check first, then $(UV_RUN_NO_SYNC) (uv run --no-sync) for Ruff/MyPy;
+      bot startup preflight also uses $(UV_RUN_NO_SYNC); contract coverage in
+      tests/contract/test_makefile_review_gate_no_autosync_contract.py and
+      tests/unit/test_makefile_contract.py; CI gate via make test-contract.
+    canonical_issue: "#2296"
+    related_issues:
+      - "#2285"
+      - "#2289"
+    first_seen: "2025"
+    last_confirmed: "2026"
+
+  - name: Docker/compose drift
+    guardrail: >
+      tests/unit/test_compose_runtime_contract.py pins service profile
+      expectations; tests/unit/test_check_image_drift.py locks the read-only
+      runtime drift checker; make verify-compose-runtime compares running image
+      digests and published host ports against Compose source.
+    canonical_issue: "#2185"
+    related_issues:
+      - "#2123"
+      - "#2182"
+      - "#2188"
+      - "#2103"
+      - "#2124"
+    first_seen: "2025"
+    last_confirmed: "2026"
+
+  - name: RAG quality regression
+    guardrail: >
+      Evaluation pipeline (make eval-rag, make eval-rag-quick,
+      make eval-rag-full) gates quality score thresholds; regression is
+      detected if score drops below baseline. Preventive/backlog pending first
+      concrete duplicate cluster.
+    canonical_issue: preventive/backlog
+    related_issues: []
+    first_seen: "2025"
+    last_confirmed: "2026"
+
+  - name: Testing hygiene/tautological assertions
+    guardrail: >
+      tests/contract/test_ingestion_e2e_assertions_contract.py enforces
+      assertion quality for ingestion flows; docs/engineering/test-writing-guide.md
+      defines review traps and anti-duplication rules; make test gates these
+      checks on every push.
+    canonical_issue: "#1515"
+    related_issues:
+      - "#1539"
+      - "#1944"
+      - "#1978"
+      - "#1508"
+      - "#1617"
+      - "#1626"
+    first_seen: "2025"
+    last_confirmed: "2026"

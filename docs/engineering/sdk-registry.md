@@ -142,7 +142,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - Результат extraction merge с regex (regex wins на числовых полях).
 - **gotchas:**
   - НЕ писать кастомный JSON parsing из LLM — использовать instructor + Pydantic model.
-  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой клиент и ломает `langfuse.openai` auto-trace. Регрессионный тест: `tests/unit/services/test_instructor_sdk_contract.py`.
+  - НЕ использовать `instructor.from_provider("openai/...", async_client=True)` — это строит свой клиент и ломает `langfuse.openai` auto-trace. Semgrep authority: `python.no-instructor-from-provider`; positive shape remains locked by `tests/unit/services/test_instructor_sdk_contract.py`.
   - Streaming primitives `client.create_partial` / `client.create_iterable` сейчас **отключены** проектным решением — см. [ADR-0008](../adr/0008-instructor-create-partial-deferred.md). Не вводить без обновления ADR.
   - response_model = Pydantic v2 модель с `Field(description=)` для каждого поля.
 
@@ -205,7 +205,7 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - PII masking через mask= параметр при Langfuse()
 - **gotchas:**
   - Для основного bot/query/runtime path использовать `langfuse.openai.AsyncOpenAI`
-  - НЕ возвращаться к manual `client.api.prompts.get(...)` probing, пока `client.get_prompt(...)` покрывает нужный path
+  - НЕ возвращаться к manual `client.api.prompts.get(...)` probing, пока `client.get_prompt(...)` покрывает нужный path. Semgrep authority: `python.no-langfuse-prompts-api-get`.
   - propagate_attributes() ПЕРЕД любым @observe кодом
   - capture_input/output=False на тяжёлых нодах (payload bloat prevention)
   - Для полной локальной диагностики в Langfuse v3 лучше `langfuse api traces get <id> --fields core,io,scores,observations,metrics --json`; `traces list` иногда хватает, а `observations list` может быть 404

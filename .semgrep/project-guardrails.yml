@@ -1,17 +1,73 @@
 rules:
   - id: python.no-datetime-utcnow
-    message: Use timezone-aware datetime.now(UTC) instead of datetime.utcnow().
+    message: Use timezone-aware datetime.now(UTC) instead of naive UTC constructors.
     severity: ERROR
     languages:
       - python
     pattern-either:
-      - pattern: datetime.utcnow(...)
-      - pattern: datetime.datetime.utcnow(...)
+      - pattern: $X.utcnow(...)
+      - pattern: $X.utcfromtimestamp(...)
+    paths:
+      include:
+        - /scripts/**
+        - /src/**
+        - /telegram_bot/**
+        - /mini_app/**
+        - /services/**
+
+  - id: python.no-instructor-from-provider
+    message: Use instructor.from_openai(langfuse.openai.AsyncOpenAI(...)); from_provider builds its own client and breaks Langfuse auto-tracing.
+    severity: ERROR
+    languages:
+      - python
+    pattern: instructor.from_provider(...)
+    paths:
+      include:
+        - /src/**
+        - /telegram_bot/**
+        - /mini_app/**
+
+  - id: python.no-langfuse-set-current-trace-io
+    message: Langfuse set_current_trace_io is deprecated; update the current span/observation instead.
+    severity: ERROR
+    languages:
+      - python
+    pattern: $CLIENT.set_current_trace_io(...)
     paths:
       include:
         - /src/**
         - /telegram_bot/**
         - /scripts/**
+
+  - id: python.no-langfuse-prompts-api-get
+    message: Use Langfuse client.get_prompt(...) through the project prompt manager; do not probe client.api.prompts.get(...).
+    severity: ERROR
+    languages:
+      - python
+    pattern: $CLIENT.api.prompts.get(...)
+    paths:
+      include:
+        - /src/**
+        - /telegram_bot/**
+        - /scripts/**
+
+  - id: python.no-qdrant-client-search
+    message: Qdrant client.search(...) is deprecated; use query_points(...).
+    severity: ERROR
+    languages:
+      - python
+    patterns:
+      - pattern: $CLIENT.search(...)
+      - metavariable-regex:
+          metavariable: $CLIENT
+          regex: '(?i).*(client|qdrant).*'
+    paths:
+      include:
+        - /src/ingestion/unified/qdrant_writer.py
+        - /telegram_bot/services/apartments_service.py
+        - /telegram_bot/services/qdrant.py
+        - /src/retrieval/search_engines.py
+        - /src/evaluation/search_engines.py
 
   - id: python.no-subprocess-shell-true
     message: Avoid subprocess shell=True; pass an argv list with shell=False.

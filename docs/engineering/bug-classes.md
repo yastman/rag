@@ -1,12 +1,16 @@
 # Bug-Class Registry
 
+> Machine-readable source of truth: [`.github/bug-classes.yml`](../../.github/bug-classes.yml).
+> This Markdown file is the human-readable mirror.
+
 ## Purpose
 
-This is the canonical registry of recurring bug classes discovered through issue
-triage, regression analysis, and operational incidents. When a bug pattern repeats,
-it is promoted from a one-off fix to a named class with a permanent guardrail.
-Every new PR that touches an area listed here must either reference the relevant
-class or explain why the class does not apply.
+This is the human-readable mirror of the recurring bug classes discovered
+through issue triage, regression analysis, and operational incidents. The
+machine-readable source of truth is `.github/bug-classes.yml`. When a bug
+pattern repeats, it is promoted from a one-off fix to a named class with a
+permanent guardrail. Every new PR that touches an area listed here must either
+reference the relevant class or explain why the class does not apply.
 
 ## Registry
 

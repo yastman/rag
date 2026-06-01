@@ -38,8 +38,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
       - name: Validate PR guardrails
-        run: python3 scripts/ci/validate_pr_guardrails.py
+        run: uv run --with pyyaml --no-project python scripts/ci/validate_pr_guardrails.py
 
   semgrep:
     name: Semgrep
@@ -61,6 +66,8 @@ jobs:
           src
           telegram_bot
           scripts
+          mini_app
+          services
           .github/workflows
           compose.yml
           compose.dev.yml

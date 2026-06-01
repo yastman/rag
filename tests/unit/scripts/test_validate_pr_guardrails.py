@@ -159,7 +159,7 @@ def test_duplicate_work_requires_registered_bug_class() -> None:
 
     assert (
         "Bug class `random local wording` is not registered in "
-        "docs/engineering/bug-classes.md; use an existing canonical "
+        ".github/bug-classes.yml; use an existing canonical "
         "class or update the registry"
     ) in failures
 
@@ -177,7 +177,7 @@ def test_duplicate_work_may_add_new_bug_class_registry_entry() -> None:
         [
             "src/observability.py",
             "tests/contract/test_unknown.py",
-            "docs/engineering/bug-classes.md",
+            ".github/bug-classes.yml",
         ],
         large_threshold=25,
     )
