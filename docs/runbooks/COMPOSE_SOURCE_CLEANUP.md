@@ -97,6 +97,42 @@ uv run --python 3.12 pytest tests/contract/test_compose_source_cleanup_contract.
 The contract test skips when Docker is unavailable or the `dev` project
 is not running, so it is safe in CI; locally it surfaces drift.
 
+## BGE-M3 Closure Check
+
+For BGE-M3 endpoint regressions such as #2182 and #2188, do not close the
+issue only because the Compose file declares the right port. Close it after the
+running local stack proves the canonical endpoint and startup path.
+
+```bash
+# Canonical project source only:
+docker compose ls --format json
+
+# Canonical BGE-M3 endpoint is healthy:
+curl -fsS http://localhost:8000/health
+
+# No port-8888 workaround:
+grep '^BGE_M3_URL=' .env
+
+# The canonical Compose container publishes host port 8000:
+docker inspect dev-bge-m3-1 --format '{{json .NetworkSettings.Ports}}'
+
+# Runtime drift and bot startup guards:
+make verify-compose-runtime
+make test-bot-health
+PREFLIGHT_BOT_FLAGS="--env-file /home/user/projects/rag-fresh/.env" make preflight-bot
+make bot
+```
+
+Expected evidence:
+
+- `curl` returns `status=ok`, `model_loaded=true`, and `warmed_up=true`.
+- `BGE_M3_URL` points to `http://localhost:8000`, not a temporary port such as
+  `8888`.
+- `dev-bge-m3-1` publishes `127.0.0.1:8000->8000/tcp`.
+- `make verify-compose-runtime` reports zero image drift and zero port drift.
+- `make bot` reaches polling with `bge_m3 [CRITICAL]` passing. A degraded
+  optional Langfuse check is not the BGE-M3 root cause; track it separately.
+
 ## Volume safety
 
 `docker compose down` (without `-v`) leaves named volumes intact. Persistent
