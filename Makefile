@@ -1320,13 +1320,15 @@ k3s-push-%: ## Build and push a versioned GHCR image: make k3s-push-bot K3S_IMAG
 # DOCKER IMAGE DRIFT (#322)
 # =============================================================================
 
-.PHONY: verify-compose-images verify-compose-images-json
+.PHONY: verify-compose-images verify-compose-images-json verify-compose-runtime
 
-verify-compose-images: ## Check running containers match compose-pinned images
-	@uv run python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --fix
+verify-compose-images: ## Check running containers match compose-pinned images and published ports
+	@python3 scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --fix
 
-verify-compose-images-json: ## Check image drift (JSON output for CI)
-	@uv run python scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --json
+verify-compose-images-json: ## Check image/port drift (JSON output for CI)
+	@python3 scripts/check_image_drift.py -f compose.yml -f compose.dev.yml --json
+
+verify-compose-runtime: verify-compose-images ## Alias: read-only local runtime drift guard (#2182/#2188)
 
 # =============================================================================
 # GIT HYGIENE

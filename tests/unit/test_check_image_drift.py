@@ -90,6 +90,102 @@ def test_main_exits_zero_when_checked_containers_have_no_drift(
     assert exc_info.value.code == 0
 
 
+def test_main_exits_nonzero_when_compose_port_is_not_published(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for #2182/#2188: healthy stale container, but no host port."""
+    module = _load_module()
+    monkeypatch.setattr(module, "_run", lambda *_args, **_kwargs: "27.0.0")
+    monkeypatch.setattr(
+        module,
+        "get_compose_services",
+        lambda *_args, **_kwargs: {
+            "bge-m3": {
+                "build": {"context": "./services/bge-m3-api"},
+                "ports": [
+                    {
+                        "target": 8000,
+                        "published": "8000",
+                        "protocol": "tcp",
+                        "host_ip": "127.0.0.1",
+                    }
+                ],
+            }
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "get_running_containers",
+        lambda *_args, **_kwargs: {
+            "bge-m3": {
+                "ID": "dev-bge-m3-1",
+                "Name": "dev-bge-m3-1",
+                "Service": "bge-m3",
+                "Publishers": [],
+            }
+        },
+    )
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main()
+
+    assert exc_info.value.code == 1
+
+    report = module.check_drift(["compose.yml"], "tests/fixtures/compose.ci.env")
+    assert [drift.service for drift in report.port_drift] == ["bge-m3"]
+    assert report.port_drift[0].missing[0].render() == "127.0.0.1:8000->8000/tcp"
+
+
+def test_main_exits_zero_when_compose_port_is_published(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    monkeypatch.setattr(module, "_run", lambda *_args, **_kwargs: "27.0.0")
+    monkeypatch.setattr(
+        module,
+        "get_compose_services",
+        lambda *_args, **_kwargs: {
+            "bge-m3": {
+                "build": {"context": "./services/bge-m3-api"},
+                "ports": [
+                    {
+                        "target": 8000,
+                        "published": "8000",
+                        "protocol": "tcp",
+                        "host_ip": "127.0.0.1",
+                    }
+                ],
+            }
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "get_running_containers",
+        lambda *_args, **_kwargs: {
+            "bge-m3": {
+                "ID": "dev-bge-m3-1",
+                "Name": "dev-bge-m3-1",
+                "Service": "bge-m3",
+                "Publishers": [
+                    {
+                        "URL": "127.0.0.1",
+                        "TargetPort": 8000,
+                        "PublishedPort": 8000,
+                        "Protocol": "tcp",
+                    }
+                ],
+            }
+        },
+    )
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main()
+
+    assert exc_info.value.code == 0
+
+
 def test_compose_ci_env_fixture_has_project_name() -> None:
     """Blocker 2: verify the CI env fixture sets COMPOSE_PROJECT_NAME=dev so that
     docker compose ps targets the canonical dev project from any worktree."""
