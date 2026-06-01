@@ -30,7 +30,6 @@ jobs:
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64]
-    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -49,6 +48,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run contract tests in shadow mode
+        continue-on-error: true
         run: make test-contract
 
   fast-tests-shadow:
@@ -57,7 +57,6 @@ jobs:
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, X64]
-    continue-on-error: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -76,4 +75,5 @@ jobs:
         run: uv sync --frozen
 
       - name: Run fast tests in shadow mode
+        continue-on-error: true
         run: make test
