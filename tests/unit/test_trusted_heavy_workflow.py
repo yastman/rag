@@ -33,6 +33,14 @@ def test_trusted_heavy_is_shadow_mode_until_baseline_green() -> None:
         assert job.get("continue-on-error") is True, (
             f"{job_key} must stay shadow mode until baseline is green"
         )
+        test_steps = [
+            step for step in job.get("steps", []) if str(step.get("name", "")).startswith("Run ")
+        ]
+        assert test_steps, f"{job_key} must include a test execution step"
+        for step in test_steps:
+            assert step.get("continue-on-error") is True, (
+                f"{job_key} step {step.get('name')!r} must not redline the PR in shadow mode"
+            )
 
 
 def test_trusted_heavy_skips_untrusted_fork_prs() -> None:

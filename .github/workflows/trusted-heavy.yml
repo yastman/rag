@@ -49,6 +49,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run contract tests in shadow mode
+        continue-on-error: true
         run: make test-contract
 
   fast-tests-shadow:
@@ -76,4 +77,5 @@ jobs:
         run: uv sync --frozen
 
       - name: Run fast tests in shadow mode
+        continue-on-error: true
         run: make test
