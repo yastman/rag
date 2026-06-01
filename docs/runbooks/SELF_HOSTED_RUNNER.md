@@ -172,6 +172,20 @@ setsid ./run.sh > runner.log 2>&1 < /dev/null &
 tail -f runner.log
 ```
 
+For automatic startup when a WSL login shell opens, use an idempotent user
+script and call it from `~/.zprofile`:
+
+```bash
+~/bin/start-github-runner-rag.sh
+```
+
+The startup script should:
+
+- exit if `~/actions-runner-rag/run.sh` is missing;
+- exit if `Runner.Listener` is already running;
+- wait briefly for `docker ps` to succeed;
+- start `setsid ./run.sh > runner.log 2>&1 < /dev/null &`.
+
 Verify GitHub sees it:
 
 ```bash
