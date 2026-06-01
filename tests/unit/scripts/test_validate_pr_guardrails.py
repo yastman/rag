@@ -100,10 +100,43 @@ def test_workflow_change_with_policy_test_passes() -> None:
     assert failures == []
 
 
+def test_workflow_change_with_semgrep_policy_test_passes() -> None:
+    failures = validate(
+        _pr("ci: add semgrep workflow", "Checks run: pytest semgrep policy tests"),
+        [".github/workflows/ci.yml", "tests/unit/test_semgrep_guardrails.py"],
+        large_threshold=25,
+    )
+
+    assert failures == []
+
+
 def test_duplicate_work_requires_bug_class() -> None:
     failures = validate(
         _pr("fix: duplicate Langfuse context loss", "Fixes #2302", labels=("bug",)),
         ["src/observability.py", "tests/contract/test_observability_contextvars_contract.py"],
+        large_threshold=25,
+    )
+
+    assert "duplicate/bug-class PR must fill `Bug class:`" in failures
+
+
+def test_duplicate_process_wording_without_disposition_does_not_require_bug_class() -> None:
+    failures = validate(
+        _pr(
+            "ci: add project guardrail",
+            "This keeps project-specific duplicate/root-cause logic in Python.",
+        ),
+        [".github/workflows/ci.yml", "tests/unit/test_semgrep_guardrails.py"],
+        large_threshold=25,
+    )
+
+    assert "duplicate/bug-class PR must fill `Bug class:`" not in failures
+
+
+def test_duplicate_disposition_type_requires_bug_class() -> None:
+    failures = validate(
+        _pr("docs: close issue cluster", "Type: duplicate\nBug class: ___________"),
+        ["docs/engineering/issue-triage.md"],
         large_threshold=25,
     )
 

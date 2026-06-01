@@ -41,6 +41,30 @@ jobs:
       - name: Validate PR guardrails
         run: python3 scripts/ci/validate_pr_guardrails.py
 
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Run project Semgrep guardrails
+        run: >
+          uvx --from semgrep==1.163.0 semgrep scan
+          --config .semgrep/project-guardrails.yml
+          --error
+          --metrics=off
+          src
+          telegram_bot
+          scripts
+          .github/workflows
+          compose.yml
+          compose.dev.yml
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

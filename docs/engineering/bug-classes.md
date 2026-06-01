@@ -38,6 +38,9 @@ A guardrail is a permanent executable rule that prevents a recurring bug class.
 Guardrails take the form of contract tests, CI gates, or automated checks that
 run on every push and PR. A guardrail is not a comment, not a code-review
 convention, and not a manual checklist -- it is automated and enforced.
+Semgrep is the generic code-pattern guardrail engine for repeated forbidden
+patterns; project-specific root-cause, bug-class, and cross-file contracts stay
+in Python/pytest checks.
 
 ### Quality Gate
 

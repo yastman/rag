@@ -20,6 +20,8 @@ from typing import Any
 BUGFIX_RE = re.compile(r"\b(fix|bug|bugfix|regression|hotfix)\b", re.IGNORECASE)
 FIXES_RE = re.compile(r"\b(fixes|closes|resolves)\s+#\d+\b", re.IGNORECASE)
 DUPLICATE_RE = re.compile(r"\b(duplicate|duplicates|dup)\b", re.IGNORECASE)
+DISPOSITION_TYPE_RE = re.compile(r"(?im)^\s*>?\s*Type\s*:\s*(duplicate|recurrence|umbrella)\b")
+EMPTY_FIELD_VALUES = {"-", "n/a", "N/A", "none", "None", "___________", "____________"}
 
 DEPENDENCY_FILES = {
     "pyproject.toml",
@@ -32,6 +34,7 @@ WORKFLOW_POLICY_TESTS = {
     "tests/unit/test_ci_workflow_guardrails.py",
     "tests/unit/test_ci_deploy_workflow.py",
     "tests/unit/test_codeowners_contract.py",
+    "tests/unit/test_semgrep_guardrails.py",
 }
 
 BUG_CLASS_REGISTRY = Path("docs/engineering/bug-classes.md")
@@ -122,8 +125,12 @@ def _is_bugfix(pr: PullRequest) -> bool:
 
 
 def _is_duplicate_or_bug_class(pr: PullRequest) -> bool:
-    haystack = " ".join((pr.title, pr.body, " ".join(pr.labels)))
-    return bool(DUPLICATE_RE.search(haystack) or "Bug class:" in pr.body)
+    title_and_labels = " ".join((pr.title, " ".join(pr.labels)))
+    return bool(
+        DUPLICATE_RE.search(title_and_labels)
+        or DISPOSITION_TYPE_RE.search(pr.body)
+        or _field_value(pr.body, "Bug class") is not None
+    )
 
 
 def _has_filled_field(body: str, field: str) -> bool:
@@ -132,7 +139,7 @@ def _has_filled_field(body: str, field: str) -> bool:
     if match is None:
         return False
     value = match.group(1).strip()
-    return bool(value and value not in {"-", "n/a", "N/A", "none", "None"})
+    return bool(value and value not in EMPTY_FIELD_VALUES)
 
 
 def _has_filled_any_field(body: str, fields: tuple[str, ...]) -> bool:
@@ -145,7 +152,7 @@ def _field_value(body: str, field: str) -> str | None:
     if match is None:
         return None
     value = match.group(1).strip()
-    if not value or value in {"-", "n/a", "N/A", "none", "None"}:
+    if not value or value in EMPTY_FIELD_VALUES:
         return None
     return value
 

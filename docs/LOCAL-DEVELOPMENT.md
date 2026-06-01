@@ -224,9 +224,10 @@ make test-full
 
 ### CI vs Local Test Gates
 
-GitHub CI runs repository hygiene gates such as secret scanning, Ruff lint, Ruff
-format, and CodeQL. Python test gates are local/manual so failures can be
-debugged against the developer environment that owns the runtime state.
+GitHub CI runs repository hygiene gates such as secret scanning, Semgrep project
+guardrails, Ruff lint, Ruff format, and CodeQL. Python test gates are
+local/manual so failures can be debugged against the developer environment that
+owns the runtime state.
 
 | Local Command | What It Covers |
 |---|---|
@@ -235,6 +236,16 @@ debugged against the developer environment that owns the runtime state.
 | `make test` + `make test-contract` | local test-surface match for unit + contract + graph-path checks |
 | `make local-pr-ready` | `make check` (lint + types) then `make test-unit`; skips contract and graph-path integration tests |
 | `make check` + `make test` + `make test-contract` | recommended merge-readiness ladder on a powerful local machine |
+
+Run the same generic code-pattern guardrails as the `Semgrep` CI job:
+
+```bash
+uvx --from semgrep==1.163.0 semgrep scan \
+  --config .semgrep/project-guardrails.yml \
+  --error \
+  --metrics=off \
+  src telegram_bot scripts .github/workflows compose.yml compose.dev.yml
+```
 
 `make local-pr-ready` is a quick local gate that catches most regressions early
 but is narrower than the full local merge-readiness ladder. Before merging a
