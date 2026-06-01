@@ -10,6 +10,7 @@
 	docker-clean docker-clean-aggressive
 	test-contract \
 	preflight-bot \
+	preflight-qdrant \
 	docs-check \
 	remote-docker-status remote-compose-config remote-docker-ps remote-env-sync remote-env-check \
 	remote-active-up remote-core-up remote-core-ps remote-core-logs remote-core-health remote-core-env-check \
@@ -136,7 +137,7 @@ local-pr-ready: ## Full PR readiness gate (check + unit tests) - run manually
 
 lint: ## Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
-	uv run ruff check $(LINT_PATHS)
+	uv run --frozen ruff check $(LINT_PATHS)
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
 
 lint-fix: ## Run Ruff linter with auto-fix
@@ -156,7 +157,7 @@ format-check: ## Check if code is formatted
 
 type-check: ## Run MyPy type checking
 	@echo "$(BLUE)Running MyPy type checking...$(NC)"
-	uv run mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
+	uv run --frozen mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Type check complete$(NC)"
 
 pylint: ## Run Pylint (comprehensive linting)
@@ -380,6 +381,14 @@ test-redis: ## Verify Redis Query Engine is available
 
 PREFLIGHT_BOT_FLAGS ?=
 BOT_RESPONSE_SMOKE_FLAGS ?=
+
+preflight-qdrant: ## Fail fast when localhost:6333 is unreachable (run before preflight-bot and bot)
+	@if ! timeout 1 bash -c 'echo >/dev/tcp/localhost/6333' 2>/dev/null; then \
+		echo "$(RED)✗ Qdrant is not reachable on localhost:6333$(NC)" >&2; \
+		echo "$(YELLOW)Run 'make local-up' to start required local services (redis, qdrant, bge-m3, litellm)$(NC)" >&2; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✓ Qdrant reachable$(NC)"
 
 preflight-bot: ## Check bot runtime env before starting (missing .env, invalid token, port issues)
 	@$(UV_RUN_NO_SYNC) python -m scripts.probe.check_bot_runtime_env $(PREFLIGHT_BOT_FLAGS)
@@ -749,7 +758,7 @@ local-up-ingest:  ## Start local services + docling for ingestion workflows
 run-bot:  ## Run bot locally (requires: make local-up)
 	$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main
 
-bot: preflight-bot test-bot-health ## Alias: run bot and tee output to logs/bot-run.log
+bot: preflight-qdrant preflight-bot test-bot-health ## Alias: run bot (fail-fast when Qdrant is down; tee output to logs/bot-run.log)
 	@mkdir -p logs
 	@bash -o pipefail -c '$(UV_RUN_NO_SYNC) --env-file "$$RAG_RUNTIME_ENV_FILE" python -m telegram_bot.main 2>&1 | tee logs/bot-run.log'; \
 	status=$$?; echo '[COMPLETE]'; exit $$status

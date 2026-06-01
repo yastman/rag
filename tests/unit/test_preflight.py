@@ -887,6 +887,17 @@ class TestPostgresOptionalBehavior:
 # ===========================================================================
 
 
+class TestQdrantRemediationHint:
+    """Qdrant remediation tells users about make local-up."""
+
+    def test_qdrant_remediation_mentions_make_local_up(self):
+        from telegram_bot.preflight import _DEP_REMEDIATION
+
+        assert "make local-up" in _DEP_REMEDIATION["qdrant"].lower(), (
+            f"Qdrant remediation should mention 'make local-up', got: {_DEP_REMEDIATION['qdrant']}"
+        )
+
+
 class TestQdrantPreflightEnsureCollection:
     """Preflight auto-creates Qdrant collection when it is missing."""
 

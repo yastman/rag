@@ -101,7 +101,7 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
 _DEP_REMEDIATION: dict[str, str] = {
     "redis": "start Redis and verify REDIS_PASSWORD / redis_url",
     "redis_cache": "restore Redis cache write/read path",
-    "qdrant": "start Qdrant and verify collection configuration",
+    "qdrant": "Run `make local-up` to start Qdrant, then verify collection configuration",
     "bge_m3": "start the repo-local BGE-M3 service and verify /health and /encode/dense",
     "postgres": "start PostgreSQL or accept degraded user-feature mode",
     "litellm": "restore LiteLLM proxy readiness or accept degraded generation path",
