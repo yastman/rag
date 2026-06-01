@@ -5,7 +5,8 @@ Concise index for engineering process docs. These pages describe workflow, valid
 ## Active Workflow Docs
 
 | Doc | Use When |
-|---|---|
+|---|---|---|
+| [`bug-classes.md`](bug-classes.md) | Looking up known recurring bug classes and their permanent guardrails. |
 | [`test-writing-guide.md`](test-writing-guide.md) | Writing or changing tests, choosing markers, and selecting focused validation. |
 | [`issue-triage.md`](issue-triage.md) | Classifying issue scope, risk, SDK coverage, and execution lane. |
 | [`sdk-registry.md`](sdk-registry.md) | Checking SDK/framework ownership and preferred project patterns before code changes. |
@@ -20,5 +21,5 @@ No active historical notes at this time.
 ## Fast Search
 
 ```bash
-rg -n "validation|test|triage|SDK|dependency|docs maintenance" docs/engineering/ docs/indexes/engineering-workflows.md
+rg -n "validation|test|triage|SDK|dependency|docs maintenance|bug class|regression|guardrail" docs/engineering/ docs/indexes/engineering-workflows.md
 ```

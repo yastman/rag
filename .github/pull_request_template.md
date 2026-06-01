@@ -2,6 +2,20 @@
 
 What does this PR do and why?
 
+## Bug class
+
+Does this PR fix or prevent a known recurring bug class?
+
+Reference the canonical registry at [`docs/engineering/bug-classes.md`](../docs/engineering/bug-classes.md).
+
+> Addressed bug class(es): ___________
+
+## Regression guardrail
+
+What permanent guardrail (contract test, CI gate, automated check) does this PR add or strengthen to prevent this bug class from recurring?
+
+> Guardrail: ___________
+
 ## Scope
 
 - [ ] Bug fix
@@ -15,7 +29,7 @@ What does this PR do and why?
 List the main files or modules changed (one per line):
 - `...`
 
-## Validation
+## Validation / Checks Run
 
 What did you run to verify this change?
 
@@ -24,6 +38,9 @@ What did you run to verify this change?
 - [ ] `make test`
 - [ ] Focused pytest on touched files (`uv run pytest <path> -q`)
 - [ ] Other: ___________
+
+Checks run (paste the command and output summary):
+> ___________
 
 If any check above was skipped, state the reason explicitly:
 > ___________

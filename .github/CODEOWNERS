@@ -1,0 +1,30 @@
+# CODEOWNERS -- Risky zone coverage
+#
+# These patterns gate changes to CI infrastructure, deployment surface,
+# observability wiring, contract tests, and Compose configuration.
+# Each zone must have an explicit reviewer before merge and every
+# addition must stay in sync with tests/unit/test_codeowners_contract.py.
+
+# CODEOWNERS self-ownership (governance)
+.github/CODEOWNERS                        @yastman
+
+# CI/CD workflows
+.github/workflows/*                      @yastman
+
+# Compose service surface
+compose*.yml                             @yastman
+
+# Makefile (CI contract, fast-lane gates, pre-push)
+Makefile                                 @yastman
+
+# Contract test suite
+tests/contract/*                         @yastman
+
+# Observability -- tests, docs, source modules
+tests/unit/observability/                @yastman
+docs/observability/                      @yastman
+src/observability/                       @yastman
+telegram_bot/observability/              @yastman
+
+# Self-hosted runner policy docs
+docs/runbooks/SELF_HOSTED_RUNNER.md      @yastman
