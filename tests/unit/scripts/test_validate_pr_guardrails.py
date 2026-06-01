@@ -93,6 +93,48 @@ def test_duplicate_work_requires_bug_class() -> None:
     assert "duplicate/bug-class PR must fill `Bug class:`" in failures
 
 
+def test_duplicate_work_requires_registered_bug_class() -> None:
+    failures = validate(
+        _pr(
+            "fix: duplicate unknown failure",
+            "Fixes #2302\n\n"
+            "Bug class: random local wording\n"
+            "Regression guardrail: tests/contract/test_unknown.py\n"
+            "Checks run: pytest tests/contract/test_unknown.py\n",
+            labels=("bug",),
+        ),
+        ["src/observability.py", "tests/contract/test_unknown.py"],
+        large_threshold=25,
+    )
+
+    assert (
+        "Bug class `random local wording` is not registered in "
+        "docs/engineering/bug-classes.md; use an existing canonical "
+        "class or update the registry"
+    ) in failures
+
+
+def test_duplicate_work_may_add_new_bug_class_registry_entry() -> None:
+    failures = validate(
+        _pr(
+            "fix: duplicate unknown failure",
+            "Fixes #2302\n\n"
+            "Bug class: random local wording\n"
+            "Regression guardrail: tests/contract/test_unknown.py\n"
+            "Checks run: pytest tests/contract/test_unknown.py\n",
+            labels=("bug",),
+        ),
+        [
+            "src/observability.py",
+            "tests/contract/test_unknown.py",
+            "docs/engineering/bug-classes.md",
+        ],
+        large_threshold=25,
+    )
+
+    assert failures == []
+
+
 def test_large_pr_requires_plan_or_spec() -> None:
     files = [f"src/file_{idx}.py" for idx in range(25)]
     failures = validate(

@@ -34,6 +34,8 @@ WORKFLOW_POLICY_TESTS = {
     "tests/unit/test_codeowners_contract.py",
 }
 
+BUG_CLASS_REGISTRY = Path("docs/engineering/bug-classes.md")
+
 
 @dataclass(frozen=True)
 class PullRequest:
@@ -128,6 +130,31 @@ def _has_filled_field(body: str, field: str) -> bool:
     return bool(value and value not in {"-", "n/a", "N/A", "none", "None"})
 
 
+def _field_value(body: str, field: str) -> str | None:
+    pattern = re.compile(rf"(?im)^\s*{re.escape(field)}\s*:\s*(.+)$")
+    match = pattern.search(body)
+    if match is None:
+        return None
+    value = match.group(1).strip()
+    if not value or value in {"-", "n/a", "N/A", "none", "None"}:
+        return None
+    return value
+
+
+def _registered_bug_classes(path: Path = BUG_CLASS_REGISTRY) -> set[str]:
+    if not path.exists():
+        return set()
+
+    classes: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("| ") or line.startswith(("| Bug Class", "|---")):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells:
+            classes.add(cells[0])
+    return classes
+
+
 def _has_no_test_reason(body: str) -> bool:
     return _has_filled_field(body, "No regression test")
 
@@ -181,15 +208,17 @@ def validate(pr: PullRequest | None, files: list[str], *, large_threshold: int) 
             )
 
     if _is_duplicate_or_bug_class(pr):
-        if not _has_filled_field(pr.body, "Bug class"):
+        bug_class = _field_value(pr.body, "Bug class")
+        if bug_class is None:
             failures.append("duplicate/bug-class PR must fill `Bug class:`")
-        if "docs/engineering/bug-classes.md" not in files and not _has_filled_field(
-            pr.body, "Bug class"
-        ):
-            failures.append(
-                "duplicate bug work must update docs/engineering/bug-classes.md "
-                "or name an existing `Bug class:`"
-            )
+        elif "docs/engineering/bug-classes.md" not in files:
+            registered = _registered_bug_classes()
+            if registered and bug_class not in registered:
+                failures.append(
+                    f"Bug class `{bug_class}` is not registered in "
+                    "docs/engineering/bug-classes.md; use an existing canonical "
+                    "class or update the registry"
+                )
 
     if _has_dependency_change(files) and not _has_lockfile_change(files):
         failures.append("dependency changes must include `uv.lock`")
