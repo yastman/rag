@@ -136,7 +136,7 @@ local-pr-ready: ## Full PR readiness gate (check + unit tests) - run manually
 
 lint: ## Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
-	uv run ruff check $(LINT_PATHS)
+	uv run --frozen ruff check $(LINT_PATHS)
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
 
 lint-fix: ## Run Ruff linter with auto-fix
@@ -156,7 +156,7 @@ format-check: ## Check if code is formatted
 
 type-check: ## Run MyPy type checking
 	@echo "$(BLUE)Running MyPy type checking...$(NC)"
-	uv run mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
+	uv run --frozen mypy $(LINT_PATHS) --ignore-missing-imports --no-error-summary
 	@echo "$(GREEN)✓ Type check complete$(NC)"
 
 pylint: ## Run Pylint (comprehensive linting)
