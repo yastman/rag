@@ -155,6 +155,36 @@ Native Windows runners are possible later, but they need a separate workflow
 or shell/tooling contract for PowerShell, `make`, Docker Desktop paths, and
 line endings.
 
+Verify Docker Desktop is visible from WSL before starting the runner:
+
+```bash
+docker --version
+docker compose version
+docker ps
+```
+
+Start the WSL runner detached from the current terminal:
+
+```bash
+cd ~/actions-runner-rag
+rm -f runner.log
+setsid ./run.sh > runner.log 2>&1 < /dev/null &
+tail -f runner.log
+```
+
+Verify GitHub sees it:
+
+```bash
+gh api repos/yastman/rag/actions/runners \
+  --jq '.runners[] | {name,status,os,labels:[.labels[].name],busy}'
+```
+
+Expected labels for this first rollout:
+
+```text
+self-hosted, Linux, X64
+```
+
 ### Local foreground start
 
 Use foreground mode only for first-time smoke tests or debugging:
