@@ -24,6 +24,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
+PYTHON_VERSION_FILE = REPO_ROOT / ".python-version"
 
 # Fast targets that must use the pinned runtime.
 FAST_TARGETS = [
@@ -57,6 +58,21 @@ def test_python_version_default_is_312() -> None:
     m = re.search(r"PYTHON_VERSION\s*\?=\s*(\S+)", src)
     assert m is not None, "PYTHON_VERSION variable not found"
     assert m.group(1) == "3.12", f"PYTHON_VERSION default must be 3.12, got {m.group(1)!r}"
+
+
+def test_repo_python_version_file_pins_uv_default_to_312() -> None:
+    """Bare ``uv sync`` must not select a newer installed interpreter.
+
+    Without a repo-level ``.python-version``, uv can pick CPython 3.14 on
+    machines that have it installed. That forces packages such as ``grpcio``
+    down the source-build path when the pinned version has no cp314 wheel.
+    """
+    assert PYTHON_VERSION_FILE.exists(), (
+        "Repository must include .python-version so bare `uv sync` uses the "
+        "same Python as Makefile fast gates instead of selecting newer local "
+        "interpreters."
+    )
+    assert PYTHON_VERSION_FILE.read_text(encoding="utf-8").strip() == "3.12"
 
 
 def test_uv_run_no_sync_variable_is_uv_run() -> None:

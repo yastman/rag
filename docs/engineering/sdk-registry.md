@@ -1,5 +1,5 @@
 ---
-paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
+paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workflows/**"
 ---
 
 # SDK Registry — rag-fresh
@@ -17,6 +17,27 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
 > **Scope:** this registry is mandatory for paths listed in the `paths:` frontmatter above.
 > For `scripts/`, `tests/`, CI/ops, and one-off local utilities, treat it as a strong hint
 > but verify actual code and current workflows separately.
+
+## uv
+- **triggers:** uv, venv, .venv, lockfile, pyproject, dependency, dependency group, make check, candidate-check, CI install, worktree
+- **context7_id:** /astral-sh/uv
+- **как_у_нас:**
+  - `Makefile` — local install/update/check/test targets and review-safe gates.
+  - `.github/workflows/ci.yml` — GitHub-hosted lockfile and lightweight CI gates.
+  - `.github/workflows/trusted-heavy.yml` — self-hosted heavy test setup with `uv sync --frozen`.
+  - `docs/LOCAL-DEVELOPMENT.md` — local and worktree validation guidance.
+- **паттерны:**
+  - Normal developer install/update commands may use `uv sync`, `uv lock`, and plain `uv run`.
+  - Review/candidate gates use `uv sync --frozen --check` first, then `uv run --no-sync` through `$(UV_RUN_NO_SYNC)`.
+  - `uv run --frozen` prevents lockfile updates but can still sync/mutate the project environment.
+  - `uv run --no-sync` is the native uv flag for running without environment sync.
+  - Use `UV_PROJECT_ENVIRONMENT=/absolute/path` only intentionally; the same absolute env reused across projects/worktrees will be overwritten by each project.
+- **gotchas:**
+  - НЕ заменять uv своим env manager/wrapper unless there is a documented uv gap.
+  - НЕ использовать bare `uv run` in review-safe gates (`check-frozen`, `candidate-check`, bot preflight); use `$(UV_RUN_NO_SYNC)`.
+  - НЕ считать `uv run --frozen` read-only for `.venv`; it freezes lockfile behavior, not environment sync.
+  - Shared `.venv` across worktrees is risky. Prefer isolated worktree envs, or run review-safe gates with `UV_PROJECT_ENVIRONMENT` only when the shared env has been prechecked.
+  - Contracts: `tests/contract/test_makefile_review_gate_no_autosync_contract.py`, `tests/unit/test_makefile_contract.py`.
 
 ## aiogram (core)
 - **triggers:** bot, handler, router, middleware, filter, dispatcher, FSM, message, callback, command

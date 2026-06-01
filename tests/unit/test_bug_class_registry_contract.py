@@ -167,6 +167,33 @@ def test_observability_guardrail_refers_to_contextvars_contract() -> None:
     )
 
 
+def test_uv_venv_mutation_guardrail_refers_to_review_safe_gates() -> None:
+    """uv mutation guardrail must cite the actual no-sync review gates.
+
+    The #2296 guardrail protects review/candidate workflows through
+    ``check-frozen`` / ``candidate-check`` and ``UV_RUN_NO_SYNC``. The registry
+    must not over-claim that every developer-friendly ``make check`` invocation
+    is no-sync.
+    """
+    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    assert "check-frozen" in text, (
+        "docs/engineering/bug-classes.md uv .venv mutation row must reference "
+        "the check-frozen review gate."
+    )
+    assert "candidate-check" in text, (
+        "docs/engineering/bug-classes.md uv .venv mutation row must reference "
+        "the candidate-check review gate."
+    )
+    assert "test_makefile_review_gate_no_autosync_contract.py" in text, (
+        "docs/engineering/bug-classes.md uv .venv mutation row must reference "
+        "tests/contract/test_makefile_review_gate_no_autosync_contract.py."
+    )
+    assert "UV_RUN_NO_SYNC" in text, (
+        "docs/engineering/bug-classes.md uv .venv mutation row must cite "
+        "UV_RUN_NO_SYNC / uv run --no-sync as the no-mutation mechanism."
+    )
+
+
 # ------------- Guardrail terminology --------------------------------------------
 
 
