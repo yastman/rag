@@ -207,6 +207,32 @@ def test_pr_guardrails_uses_validator_script() -> None:
     )
 
 
+def test_pr_guardrails_installs_yaml_dependency_without_project_sync() -> None:
+    """pr-guardrails must provide PyYAML without syncing the whole project env."""
+    data = _load_workflow()
+    job = data["jobs"]["pr-guardrails"]
+    steps = job.get("steps", [])
+    commands: list[str] = []
+    uses: list[str] = []
+    for step in steps:
+        run = step.get("run", "")
+        if isinstance(run, str):
+            commands.append(run)
+        use = step.get("uses", "")
+        if isinstance(use, str):
+            uses.append(use)
+    combined = "\n".join(commands)
+    assert any("astral-sh/setup-uv" in use for use in uses), (
+        "pr-guardrails imports YAML; install uv so CI can fetch PyYAML deterministically."
+    )
+    assert "--with pyyaml" in combined, (
+        "pr-guardrails must run with PyYAML available for .github/bug-classes.yml."
+    )
+    assert "--no-project" in combined, (
+        "pr-guardrails must not sync the whole project just to validate PR metadata."
+    )
+
+
 def test_pr_guardrails_uses_github_hosted_runner() -> None:
     """pr-guardrails must run on a GitHub-hosted runner."""
     data = _load_workflow()

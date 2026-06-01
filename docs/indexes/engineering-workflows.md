@@ -12,7 +12,7 @@ Task-oriented entrypoint for engineering process docs. Use this when the request
 
 | Task | Start With | Then Check |
 |---|---|---|
-| Bug-class lookup | [`../engineering/bug-classes.md`](../engineering/bug-classes.md) | PR template guardrail fields, contract test locks |
+| Bug-class lookup | [`.github/bug-classes.yml`](../../.github/bug-classes.yml), [`../engineering/bug-classes.md`](../engineering/bug-classes.md) | PR template guardrail fields, contract test locks |
 | Testing and validation | [`../engineering/test-writing-guide.md`](../engineering/test-writing-guide.md) | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md), `Makefile`, `pyproject.toml` |
 | Issue triage | [`../engineering/issue-triage.md`](../engineering/issue-triage.md) | Current issue, nearest folder `README.md`, nearest `AGENTS.override.md` |
 | SDK/framework lookup | [`../engineering/sdk-registry.md`](../engineering/sdk-registry.md) | Current code usage, Context7 or official docs for version-sensitive behavior |

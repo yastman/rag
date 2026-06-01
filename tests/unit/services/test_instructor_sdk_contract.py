@@ -2,17 +2,17 @@
 
 These contracts pin the project decision to:
 
-1. Construct ``instructor`` clients **only** via
-   ``instructor.from_openai(langfuse.openai.AsyncOpenAI(...))``. The
-   ``instructor.from_provider("openai/...", async_client=True)`` shape silently
-   strips the ``langfuse.openai`` auto-trace wrap and is forbidden in
-   production code paths.
+1. Construct known ``instructor`` clients via
+   ``instructor.from_openai(langfuse.openai.AsyncOpenAI(...))`` so the
+   ``langfuse.openai`` auto-trace wrap stays active. The generic
+   ``instructor.from_provider(...)`` denylist is enforced by Semgrep rule
+   ``python.no-instructor-from-provider``.
 
 2. Defer adoption of ``create_partial`` / ``create_iterable`` streaming
    primitives until a real consumer (voice agent, Mini App live chat) ships.
    See ``docs/adr/0008-instructor-create-partial-deferred.md``.
 
-If a future PR legitimately needs to relax either rule, update the ADR,
+If a future PR legitimately needs to relax these rules, update the ADR,
 SDK registry entry, and these locks together — never silently.
 """
 
@@ -62,27 +62,6 @@ def _is_attr_call(call: ast.Call, root: str, attr: str) -> bool:
 
 
 @pytest.mark.parametrize("path", _iter_python_files(), ids=lambda p: str(p.relative_to(REPO_ROOT)))
-def test_no_instructor_from_provider_in_production(path: Path) -> None:
-    """``instructor.from_provider(...)`` must not appear in production code.
-
-    It builds its own OpenAI client and breaks ``langfuse.openai`` auto-trace.
-    Use ``instructor.from_openai(langfuse.openai.AsyncOpenAI(...))`` instead.
-    """
-    source = path.read_text(encoding="utf-8")
-    if "instructor" not in source:
-        return  # Fast path: file does not touch instructor at all.
-
-    tree = ast.parse(source, filename=str(path))
-    offenders = [
-        call for call in _calls_in(tree) if _is_attr_call(call, "instructor", "from_provider")
-    ]
-    assert not offenders, (
-        f"{path.relative_to(REPO_ROOT)}: forbidden `instructor.from_provider(...)` call. "
-        f"See docs/adr/0008-instructor-create-partial-deferred.md."
-    )
-
-
-@pytest.mark.parametrize("path", _iter_python_files(), ids=lambda p: str(p.relative_to(REPO_ROOT)))
 def test_no_instructor_streaming_primitives_in_production(path: Path) -> None:
     """``create_partial`` / ``create_iterable`` are deferred per ADR-0008.
 
@@ -111,8 +90,8 @@ def test_known_instructor_call_sites_use_from_openai() -> None:
     """The two known instructor consumers must use ``instructor.from_openai(...)``.
 
     Drift here means a service reverted to a non-langfuse-aware construction
-    path. This is a positive lock complementing
-    :func:`test_no_instructor_from_provider_in_production`.
+    path. The negative ``from_provider`` denylist lives in Semgrep so simple
+    SDK pattern checks stay in the standard static-analysis layer.
 
     NOTE: ``telegram_bot/services/llm.py`` was removed in #1541 (residual
     slice). The remaining two consumers are still on this list.

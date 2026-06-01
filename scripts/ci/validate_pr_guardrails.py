@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml  # type: ignore[import-untyped]
+
 
 BUGFIX_RE = re.compile(r"\b(fix|bug|bugfix|regression|hotfix)\b", re.IGNORECASE)
 FIXES_RE = re.compile(r"\b(fixes|closes|resolves)\s+#\d+\b", re.IGNORECASE)
@@ -37,7 +39,8 @@ WORKFLOW_POLICY_TESTS = {
     "tests/unit/test_semgrep_guardrails.py",
 }
 
-BUG_CLASS_REGISTRY = Path("docs/engineering/bug-classes.md")
+BUG_CLASS_REGISTRY = Path(".github/bug-classes.yml")
+BUG_CLASS_DOC = Path("docs/engineering/bug-classes.md")
 
 
 @dataclass(frozen=True)
@@ -160,15 +163,19 @@ def _field_value(body: str, field: str) -> str | None:
 def _registered_bug_classes(path: Path = BUG_CLASS_REGISTRY) -> set[str]:
     if not path.exists():
         return set()
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return set()
+    entries = data.get("bug_classes")
+    if not isinstance(entries, list):
+        return set()
+    return {
+        str(item.get("name")) for item in entries if isinstance(item, dict) and item.get("name")
+    }
 
-    classes: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.startswith("| ") or line.startswith(("| Bug Class", "|---")):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if cells:
-            classes.add(cells[0])
-    return classes
+
+def _has_bug_class_registry_change(files: list[str]) -> bool:
+    return str(BUG_CLASS_REGISTRY) in files or str(BUG_CLASS_DOC) in files
 
 
 def _has_no_test_reason(body: str) -> bool:
@@ -227,12 +234,12 @@ def validate(pr: PullRequest | None, files: list[str], *, large_threshold: int) 
         bug_class = _field_value(pr.body, "Bug class")
         if bug_class is None:
             failures.append("duplicate/bug-class PR must fill `Bug class:`")
-        elif "docs/engineering/bug-classes.md" not in files:
+        elif not _has_bug_class_registry_change(files):
             registered = _registered_bug_classes()
             if registered and bug_class not in registered:
                 failures.append(
                     f"Bug class `{bug_class}` is not registered in "
-                    "docs/engineering/bug-classes.md; use an existing canonical "
+                    ".github/bug-classes.yml; use an existing canonical "
                     "class or update the registry"
                 )
 

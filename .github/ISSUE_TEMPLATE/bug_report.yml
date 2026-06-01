@@ -62,7 +62,7 @@ body:
     id: suspected_bug_class
     attributes:
       label: Suspected Bug Class
-      description: If this looks recurring, use the canonical name from docs/engineering/bug-classes.md.
+      description: If this looks recurring, use the canonical name from .github/bug-classes.yml.
       placeholder: Docker/compose drift
     validations:
       required: false

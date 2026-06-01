@@ -1,8 +1,9 @@
-"""Contract locks for the canonical bug-class registry and guardrail standards.
+"""Contract locks for the YAML bug-class registry and guardrail standards.
 
-The registry at ``docs/engineering/bug-classes.md`` is the single source of truth
-for recurring bug classes. Every recurring bug discovered through issue triage or
-regression must be registered there so future PRs can reference it.
+The registry at ``.github/bug-classes.yml`` is the machine-readable source of
+truth for recurring bug classes. ``docs/engineering/bug-classes.md`` is the
+human-readable mirror. Every recurring bug discovered through issue triage or
+regression must be registered in YAML so future PRs can reference it.
 
 These contract tests lock the registry shape, required bug classes, and guardrail
 terminology so silent drift is caught at CI time.
@@ -11,11 +12,14 @@ terminology so silent drift is caught at CI time.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+YAML_BUG_CLASSES = REPO_ROOT / ".github" / "bug-classes.yml"
 DOC_BUG_CLASSES = REPO_ROOT / "docs" / "engineering" / "bug-classes.md"
 
 # Bug classes the registry must always cover (worker prompt contract).
@@ -41,11 +45,81 @@ GUARDRAIL_TERMS = [
 # ------------- Existence and shape ------------------------------------------------
 
 
+def _load_registry() -> dict[str, Any]:
+    assert YAML_BUG_CLASSES.exists(), (
+        ".github/bug-classes.yml is missing; create the canonical machine-readable "
+        "bug-class registry."
+    )
+    data = yaml.safe_load(YAML_BUG_CLASSES.read_text(encoding="utf-8"))
+    assert isinstance(data, dict), ".github/bug-classes.yml must contain a YAML mapping."
+    return data
+
+
+def _bug_classes() -> list[dict[str, Any]]:
+    data = _load_registry()
+    classes = data.get("bug_classes")
+    assert isinstance(classes, list) and classes, (
+        ".github/bug-classes.yml must define a non-empty `bug_classes` list."
+    )
+    for item in classes:
+        assert isinstance(item, dict), "each bug_classes entry must be a mapping."
+    return classes
+
+
+def _class_names() -> set[str]:
+    names = {str(item.get("name", "")) for item in _bug_classes()}
+    assert "" not in names, "every bug_classes entry must include a non-empty `name`."
+    return names
+
+
+def _entry(name: str) -> dict[str, Any]:
+    for item in _bug_classes():
+        if item.get("name") == name:
+            return item
+    raise AssertionError(f"missing bug class {name!r}")
+
+
+def _flatten_text(value: Any) -> str:
+    if isinstance(value, dict):
+        return " ".join(_flatten_text(v) for v in value.values())
+    if isinstance(value, list):
+        return " ".join(_flatten_text(v) for v in value)
+    return str(value)
+
+
+def test_bug_classes_yaml_exists() -> None:
+    """The canonical machine-readable bug-class registry must exist."""
+    assert YAML_BUG_CLASSES.exists(), (
+        ".github/bug-classes.yml is missing; create the canonical machine-readable "
+        "bug-class registry."
+    )
+    assert YAML_BUG_CLASSES.stat().st_size > 0, ".github/bug-classes.yml exists but is empty."
+
+
+def test_bug_classes_yaml_has_required_shape() -> None:
+    """The YAML registry must carry standards and registered classes."""
+    data = _load_registry()
+    assert data.get("version"), ".github/bug-classes.yml must include a version."
+    assert isinstance(data.get("guardrail_standards"), dict), (
+        ".github/bug-classes.yml must define `guardrail_standards`."
+    )
+    for item in _bug_classes():
+        for field in (
+            "name",
+            "guardrail",
+            "canonical_issue",
+            "related_issues",
+            "first_seen",
+            "last_confirmed",
+        ):
+            assert field in item, f"bug class {item.get('name')!r} missing `{field}`."
+
+
 def test_bug_classes_doc_exists() -> None:
-    """The canonical bug-class registry must exist."""
+    """The human-readable bug-class mirror must exist."""
     assert DOC_BUG_CLASSES.exists(), (
-        "docs/engineering/bug-classes.md is missing; create the canonical "
-        "bug-class registry per the anti-regression guardrails worker contract."
+        "docs/engineering/bug-classes.md is missing; create the human-readable "
+        "mirror of .github/bug-classes.yml."
     )
     assert DOC_BUG_CLASSES.stat().st_size > 0, (
         "docs/engineering/bug-classes.md exists but is empty."
@@ -86,21 +160,17 @@ def test_bug_classes_doc_has_guardrail_standards_section() -> None:
     sorted(REQUIRED_BUG_CLASSES),
 )
 def test_registry_covers_every_required_bug_class(bug_class: str) -> None:
-    """The seeded bug classes must all appear in the registry."""
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
-    assert bug_class in text, (
-        f"docs/engineering/bug-classes.md must register '{bug_class}'; "
+    """The seeded bug classes must all appear in the YAML registry."""
+    assert bug_class in _class_names(), (
+        f".github/bug-classes.yml must register '{bug_class}'; "
         "this bug class is part of the seeded registry contract."
     )
 
 
 def test_registry_table_has_issue_column() -> None:
-    """The registry table must have a column for issue provenance."""
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
-    assert "Canonical Issue" in text or "Issues" in text, (
-        "docs/engineering/bug-classes.md registry table must include a "
-        "'Canonical Issue' or 'Issues' column for concrete issue provenance."
-    )
+    """Every YAML entry must preserve concrete issue provenance."""
+    for item in _bug_classes():
+        assert "canonical_issue" in item, f"{item['name']} missing canonical issue provenance."
 
 
 # ------------- Issue provenance for duplicated classes ---------------------------
@@ -117,10 +187,10 @@ def test_registry_table_has_issue_column() -> None:
 )
 def test_registry_includes_concrete_issue_refs(bug_class: str, min_issue_refs: list[str]) -> None:
     """Each recurrent bug class must cite concrete issue references from intake."""
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    text = _flatten_text(_entry(bug_class))
     missing = [ref for ref in min_issue_refs if ref not in text]
     assert not missing, (
-        f"Bug class '{bug_class}' in docs/engineering/bug-classes.md "
+        f"Bug class '{bug_class}' in .github/bug-classes.yml "
         f"is missing concrete issue references: {missing}. "
         "Every recurrent bug class must cite real issue numbers."
     )
@@ -128,12 +198,11 @@ def test_registry_includes_concrete_issue_refs(bug_class: str, min_issue_refs: l
 
 def test_rag_quality_regression_marked_preventive() -> None:
     """RAG quality regression has no duplicate cluster; must be marked preventive."""
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    text = _flatten_text(_entry("RAG quality regression"))
     assert "preventive" in text.lower() or "backlog" in text.lower(), (
-        "docs/engineering/bug-classes.md must mark RAG quality regression "
+        ".github/bug-classes.yml must mark RAG quality regression "
         "as 'preventive/backlog' since no concrete duplicate cluster exists."
     )
-    assert "RAG quality regression" in text
 
 
 # ------------- Testing hygiene guardrail factuality ---------------------------------
@@ -147,22 +216,22 @@ def test_testing_hygiene_guardrail_refers_to_factual_contract() -> None:
     guardrails: ``tests/contract/test_ingestion_e2e_assertions_contract.py``
     and ``docs/engineering/test-writing-guide.md``.
     """
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    text = _flatten_text(_entry("Testing hygiene/tautological assertions"))
     assert "test_ingestion_e2e_assertions_contract.py" in text, (
-        "docs/engineering/bug-classes.md Testing hygiene guardrail must "
+        ".github/bug-classes.yml Testing hygiene guardrail must "
         "reference tests/contract/test_ingestion_e2e_assertions_contract.py"
     )
     assert "test-writing-guide.md" in text, (
-        "docs/engineering/bug-classes.md Testing hygiene guardrail must "
+        ".github/bug-classes.yml Testing hygiene guardrail must "
         "reference docs/engineering/test-writing-guide.md"
     )
 
 
 def test_observability_guardrail_refers_to_contextvars_contract() -> None:
     """Observability bug class must cite the context propagation contract test."""
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    text = _flatten_text(_entry("Langfuse/OTEL/contextvars loss"))
     assert "test_observability_contextvars_contract.py" in text, (
-        "docs/engineering/bug-classes.md Langfuse/OTEL/contextvars row must "
+        ".github/bug-classes.yml Langfuse/OTEL/contextvars row must "
         "reference tests/contract/test_observability_contextvars_contract.py"
     )
 
@@ -175,21 +244,20 @@ def test_uv_venv_mutation_guardrail_refers_to_review_safe_gates() -> None:
     must not over-claim that every developer-friendly ``make check`` invocation
     is no-sync.
     """
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    text = _flatten_text(_entry("uv .venv mutation"))
     assert "check-frozen" in text, (
-        "docs/engineering/bug-classes.md uv .venv mutation row must reference "
-        "the check-frozen review gate."
+        ".github/bug-classes.yml uv .venv mutation row must reference the check-frozen review gate."
     )
     assert "candidate-check" in text, (
-        "docs/engineering/bug-classes.md uv .venv mutation row must reference "
+        ".github/bug-classes.yml uv .venv mutation row must reference "
         "the candidate-check review gate."
     )
     assert "test_makefile_review_gate_no_autosync_contract.py" in text, (
-        "docs/engineering/bug-classes.md uv .venv mutation row must reference "
+        ".github/bug-classes.yml uv .venv mutation row must reference "
         "tests/contract/test_makefile_review_gate_no_autosync_contract.py."
     )
     assert "UV_RUN_NO_SYNC" in text, (
-        "docs/engineering/bug-classes.md uv .venv mutation row must cite "
+        ".github/bug-classes.yml uv .venv mutation row must cite "
         "UV_RUN_NO_SYNC / uv run --no-sync as the no-mutation mechanism."
     )
 
@@ -200,10 +268,20 @@ def test_uv_venv_mutation_guardrail_refers_to_review_safe_gates() -> None:
 @pytest.mark.parametrize("term", GUARDRAIL_TERMS)
 def test_registry_defines_guardrail_term(term: str) -> None:
     """Core guardrail terms must be present in the standards section."""
-    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    text = _flatten_text(_load_registry().get("guardrail_standards", {}))
     assert term in text, (
-        f"docs/engineering/bug-classes.md must define or reference '{term}' "
+        f".github/bug-classes.yml must define or reference '{term}' "
         "in the guardrail standards contract."
+    )
+
+
+def test_bug_classes_doc_mirrors_yaml_class_names() -> None:
+    """The Markdown mirror must include every YAML bug class name."""
+    text = DOC_BUG_CLASSES.read_text(encoding="utf-8")
+    missing = sorted(name for name in _class_names() if name not in text)
+    assert not missing, (
+        "docs/engineering/bug-classes.md must mirror every YAML bug class name: "
+        + ", ".join(missing)
     )
 
 
@@ -216,7 +294,7 @@ def test_pr_template_has_bug_class_field() -> None:
     text = pr_template.read_text(encoding="utf-8")
     assert "Bug class" in text, (
         ".github/pull_request_template.md must include a 'Bug class' field "
-        "so contributors can reference the canonical bug-class registry."
+        "so contributors can reference the canonical YAML bug-class registry."
     )
 
 

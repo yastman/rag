@@ -6,7 +6,7 @@ What does this PR do and why?
 
 Does this PR fix or prevent a known recurring bug class?
 
-Reference the canonical registry at [`docs/engineering/bug-classes.md`](../docs/engineering/bug-classes.md).
+Reference the source of truth at [`.github/bug-classes.yml`](bug-classes.yml) and the human mirror at [`docs/engineering/bug-classes.md`](../docs/engineering/bug-classes.md).
 
 > Addressed bug class(es): ___________
 
