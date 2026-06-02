@@ -109,6 +109,20 @@ bug_classes:
     first_seen: "2026"
     last_confirmed: "2026"
 
+  - name: History-rewrite syntactic corruption
+    guardrail: >
+      make baseline-compile runs compileall over tests/baseline/ to catch
+      unterminated string literals and other syntactic breakage caused by
+      secret-scrub history rewrites; wired into nightly-heavy.yml as an
+      early gate.
+    canonical_issue: "#2320"
+    related_issues:
+      - "#2319"
+      - "#1982"
+      - "#1580"
+    first_seen: "2026"
+    last_confirmed: "2026"
+
   - name: RAG quality regression
     guardrail: >
       Evaluation pipeline (make eval-rag, make eval-rag-quick,

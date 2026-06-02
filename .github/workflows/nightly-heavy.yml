@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      - name: Baseline compile gate (#2320)
+        run: uv run python -m compileall -q tests/baseline/
+
       - name: Run integration, smoke, and baseline tests
         run: >
           PYTHONDONTWRITEBYTECODE=1

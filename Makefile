@@ -909,7 +909,7 @@ trace-audit-snapshot: ## One-command runtime trace-data audit -> docs/engineerin
 # BASELINE & OBSERVABILITY
 # =============================================================================
 
-.PHONY: baseline-smoke baseline-load baseline-compare baseline-set baseline-report baseline-check
+.PHONY: baseline-smoke baseline-load baseline-compile baseline-compare baseline-set baseline-report baseline-check
 
 # Generate unique session ID from git commit
 BASELINE_SESSION := smoke-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
@@ -935,6 +935,11 @@ baseline-load: ## Run load tests with Langfuse tracing
 	uv run pytest tests/load/ -v --tb=short
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
+
+baseline-compile: ## Compileall gate for baseline Python syntax (#2320)
+	@echo "$(BLUE)Checking baseline Python syntax...$(NC)"
+	uv run python -m compileall -q tests/baseline/
+	@echo "$(GREEN)✓ Baseline Python syntax OK$(NC)"
 
 baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_SESSION=...)
 ifndef BASELINE_TAG
@@ -975,7 +980,7 @@ endif
 		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
 	@echo "$(GREEN)Report saved to reports/$(NC)"
 
-baseline-check: baseline-smoke ## Quick baseline check (smoke + compare with main)
+baseline-check: baseline-compile baseline-smoke ## Quick baseline check (smoke + compare with main)
 	@echo "$(BLUE)Comparing with main baseline...$(NC)"
 	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
 
