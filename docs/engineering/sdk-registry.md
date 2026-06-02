@@ -368,10 +368,12 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
 - **паттерны:**
   - Основной bot/query/runtime path: `langfuse.openai.AsyncOpenAI` + `LLM_BASE_URL` → LiteLLM proxy
   - Структурированный output: `response_format=` / Instructor-compatible контракты в основном runtime
+  - OpenAI SDK-native chat kwargs остаются top-level (`reasoning_effort`); provider-specific OpenAI-compatible controls (`disable_reasoning`, `reasoning_format`) идут через `extra_body={...}`.
   - Raw `openai.AsyncOpenAI` / `OpenAI` допустим только в изолированных совместимых/compatibility paths (например, instructor-экстракшн/оценка)
 - **gotchas:**
   - Для основного runtime path НЕ импортировать raw `openai.AsyncOpenAI`; использовать Langfuse wrapper
   - Direct OpenAI SDK не является основным runtime path; использовать только в изолированных contextualization/eval/Instructor-compatibility paths
+  - НЕ прокидывать нестандартные provider kwargs (`disable_reasoning`, `reasoning_format`) напрямую в `chat.completions.create(...)`; OpenAI SDK отвергнет их как unexpected keyword arguments.
   - НЕ хардкодить runtime model name — брать из config/env (`LLM_MODEL`)
   - `LLM_BASE_URL` обязателен для unified routing там, где path идет через LiteLLM
 

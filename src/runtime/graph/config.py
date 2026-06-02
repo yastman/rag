@@ -100,14 +100,23 @@ class GraphConfig:
     )
 
     def get_reasoning_kwargs(self) -> dict[str, Any]:
-        """Return non-None reasoning params for chat.completions.create()."""
+        """Return SDK-shaped reasoning params for chat.completions.create().
+
+        ``reasoning_effort`` is part of the OpenAI Python SDK chat completions
+        schema. Provider-specific LiteLLM/Cerebras/Z.ai controls must travel in
+        ``extra_body`` so the OpenAI-compatible client does not reject them as
+        unexpected top-level kwargs.
+        """
         kwargs: dict[str, Any] = {}
         if self.reasoning_effort is not None:
             kwargs["reasoning_effort"] = self.reasoning_effort
+        extra_body: dict[str, Any] = {}
         if self.reasoning_format is not None:
-            kwargs["reasoning_format"] = self.reasoning_format
+            extra_body["reasoning_format"] = self.reasoning_format
         if self.disable_reasoning is not None:
-            kwargs["disable_reasoning"] = self.disable_reasoning
+            extra_body["disable_reasoning"] = self.disable_reasoning
+        if extra_body:
+            kwargs["extra_body"] = extra_body
         return kwargs
 
     @classmethod
