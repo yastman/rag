@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-all lint format type-check security test test-full test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
@@ -177,6 +177,14 @@ dead-code: ## Find dead code with Vulture (alias for security)
 	@echo "$(BLUE)Checking for dead code...$(NC)"
 	uv run vulture $(LINT_PATHS) --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
+
+compile-python: ## Compile all repo-tracked Python files (#2320)
+	@echo "$(BLUE)Checking repo-tracked Python syntax...$(NC)"
+	@tmp_file="$$(mktemp)"; \
+	trap 'rm -f "$$tmp_file"' EXIT; \
+	git ls-files '*.py' > "$$tmp_file"; \
+	uv run python -m compileall -q -i "$$tmp_file"
+	@echo "$(GREEN)✓ Repo-tracked Python syntax OK$(NC)"
 
 all-checks: lint type-check security ## Run all code quality checks
 	@echo "$(GREEN)✓✓✓ All checks passed! ✓✓✓$(NC)"
@@ -936,10 +944,7 @@ baseline-load: ## Run load tests with Langfuse tracing
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
 
-baseline-compile: ## Compileall gate for baseline Python syntax (#2320)
-	@echo "$(BLUE)Checking baseline Python syntax...$(NC)"
-	uv run python -m compileall -q tests/baseline/
-	@echo "$(GREEN)✓ Baseline Python syntax OK$(NC)"
+baseline-compile: compile-python ## Backward-compatible baseline syntax gate (#2320)
 
 baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_SESSION=...)
 ifndef BASELINE_TAG

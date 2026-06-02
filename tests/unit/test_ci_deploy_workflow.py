@@ -228,6 +228,26 @@ def test_nightly_heavy_jobs_have_timeouts() -> None:
     )
 
 
+def test_nightly_full_runs_repo_compile_gate_before_test_suites() -> None:
+    """Nightly full must use the same repo-wide syntax gate as PR fast-lane."""
+    data = yaml.safe_load(Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8"))
+    nightly_full = data["jobs"].get("nightly-full")
+    assert nightly_full is not None, "nightly-heavy.yml must define nightly-full"
+
+    run_commands = [
+        step.get("run", "")
+        for step in nightly_full.get("steps", [])
+        if isinstance(step.get("run", ""), str)
+    ]
+    assert "make compile-python" in run_commands, (
+        "nightly-full must run the repo-wide compile-python guardrail before suites."
+    )
+    suite_run_index = next(
+        i for i, command in enumerate(run_commands) if "uv run pytest" in command
+    )
+    assert run_commands.index("make compile-python") < suite_run_index
+
+
 def test_runbook_documents_runner_policy_essentials() -> None:
     """Runbook must document: permissions, workspace cleanup, no-secrets rule."""
     runbook = Path("docs/runbooks/SELF_HOSTED_RUNNER.md")

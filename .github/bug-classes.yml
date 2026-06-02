@@ -111,10 +111,11 @@ bug_classes:
 
   - name: History-rewrite syntactic corruption
     guardrail: >
-      make baseline-compile runs compileall over tests/baseline/ to catch
-      unterminated string literals and other syntactic breakage caused by
-      secret-scrub history rewrites; wired into nightly-heavy.yml as an
-      early gate.
+      make compile-python runs compileall over every repo-tracked Python file
+      to catch unterminated string literals and other syntactic breakage caused
+      by secret-scrub history rewrites; wired into trusted-heavy.yml Fast Tests
+      and nightly-heavy.yml as early gates. make baseline-compile remains a
+      compatibility alias for this repo-wide guardrail.
     canonical_issue: "#2320"
     related_issues:
       - "#2319"
