@@ -109,6 +109,10 @@ def test_ci_semgrep_job_uses_pinned_cli_and_project_rules() -> None:
 
 def test_ci_semgrep_job_uses_read_only_permissions() -> None:
     data = _load_yaml(CI_WORKFLOW)
-    assert data["permissions"] == {"contents": "read"}
+    permissions = data["permissions"]
+    assert permissions["contents"] == "read"
+    assert all(value == "read" for value in permissions.values())
+    assert "actions" not in permissions
+    assert "id-token" not in permissions
     semgrep_job = data["jobs"]["semgrep"]
     assert semgrep_job.get("permissions") in (None, {"contents": "read"})

@@ -76,6 +76,7 @@ async def test_creates_span_when_langfuse_enabled(middleware, handler, message_e
     assert call_kwargs["name"] == "telegram-cmd-start"
     input_payload = call_kwargs["input"]
     assert input_payload["action"] == "cmd-start"
+    assert input_payload["route"] == "cmd-start"
     assert input_payload["content_type"] == "text"
     assert "query_preview" in input_payload
     assert "query_hash" in input_payload
@@ -128,6 +129,7 @@ async def test_callback_action_type(middleware, handler, event_data):
     assert call_kwargs["name"] == "telegram-callback-fav"
     input_payload = call_kwargs["input"]
     assert input_payload["action"] == "callback-fav"
+    assert input_payload["route"] == "callback-fav"
     assert input_payload["content_type"] == "callback"
     assert "query_preview" in input_payload
     assert "query_hash" in input_payload

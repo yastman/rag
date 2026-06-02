@@ -1,10 +1,67 @@
 from __future__ import annotations
 
-from scripts.ci.validate_pr_guardrails import PullRequest, validate
+import json
+from unittest.mock import patch
+
+from scripts.ci.validate_pr_guardrails import (
+    PullRequest,
+    _pull_request_from_event,
+    _refresh_pull_request_from_github,
+    validate,
+)
 
 
 def _pr(title: str, body: str, labels: tuple[str, ...] = ()) -> PullRequest:
     return PullRequest(title=title, body=body, labels=labels)
+
+
+def test_refresh_pull_request_from_github_uses_current_body_and_keeps_event_shas(
+    monkeypatch,
+) -> None:
+    event = {
+        "pull_request": {
+            "url": "https://api.github.com/repos/acme/rag/pulls/123",
+            "title": "fix: stale event",
+            "body": "Fixes #123",
+            "labels": [{"name": "bug"}],
+            "base": {"sha": "base-sha"},
+            "head": {"sha": "head-sha"},
+        }
+    }
+    event_pr = _pull_request_from_event(event)
+    assert event_pr is not None
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+
+    class Response:
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "title": "fix: stale event",
+                    "body": (
+                        "Fixes #123\n"
+                        "Bug class: Observability trace-family coverage drift\n"
+                        "Regression guardrail: tests/unit/test_validate_pr_guardrails.py\n"
+                        "Checks run: pytest tests/unit/scripts/test_validate_pr_guardrails.py\n"
+                    ),
+                    "labels": [{"name": "bug"}, {"name": "observability"}],
+                }
+            ).encode()
+
+    with patch("scripts.ci.validate_pr_guardrails.urllib.request.urlopen", return_value=Response()):
+        refreshed = _refresh_pull_request_from_github(event, event_pr)
+
+    assert refreshed is not None
+    assert refreshed.body != event_pr.body
+    assert "Regression guardrail:" in refreshed.body
+    assert refreshed.labels == ("bug", "observability")
+    assert refreshed.base_sha == "base-sha"
+    assert refreshed.head_sha == "head-sha"
 
 
 def test_bugfix_requires_regression_guardrail_checks_and_test_change() -> None:

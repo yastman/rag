@@ -25,6 +25,7 @@ class TestExtractEventInput:
         msg.content_type = "text"
         result = _extract_event_input(msg, "message")
         assert result["action"] == "message"
+        assert result["route"] == "message"
         assert result["content_type"] == "text"
         assert "query_preview" in result
         assert "query_hash" in result
@@ -77,6 +78,7 @@ class TestExtractEventInput:
         cb.data = "menu:search"
         result = _extract_event_input(cb, "callback-menu")
         assert result["action"] == "callback-menu"
+        assert result["route"] == "callback-menu"
         assert result["content_type"] == "callback"
         assert "query_preview" in result
         assert result["query_len"] == 11
@@ -91,6 +93,7 @@ class TestExtractEventInput:
         event = MagicMock()
         result = _extract_event_input(event, "update")
         assert result["action"] == "update"
+        assert result["route"] == "update"
         assert result["content_type"] == "unknown"
 
 
@@ -138,6 +141,7 @@ class TestLangfuseContextMiddleware:
         assert call_kwargs["name"] == "telegram-message"
         input_payload = call_kwargs["input"]
         assert input_payload["action"] == "message"
+        assert input_payload["route"] == "message"
         assert input_payload["content_type"] == "text"
         assert "query_preview" in input_payload
         assert "text_preview" not in input_payload
@@ -170,6 +174,7 @@ class TestLangfuseContextMiddleware:
         assert call_kwargs["name"] == "telegram-rag-voice"
         input_payload = call_kwargs["input"]
         assert input_payload["action"] == "rag-voice"
+        assert input_payload["route"] == "rag-voice"
         assert input_payload["content_type"] == "voice"
         mock_prop.assert_called_once()
         handler.assert_called_once_with(msg, data)
@@ -200,6 +205,7 @@ class TestLangfuseContextMiddleware:
         assert call_kwargs["name"] == "telegram-callback-filter"
         input_payload = call_kwargs["input"]
         assert input_payload["action"] == "callback-filter"
+        assert input_payload["route"] == "callback-filter"
         assert input_payload["content_type"] == "callback"
         assert "query_preview" in input_payload
         assert "text_preview" not in input_payload
