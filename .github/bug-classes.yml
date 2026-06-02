@@ -151,3 +151,19 @@ bug_classes:
       - "#1626"
     first_seen: "2025"
     last_confirmed: "2026"
+
+  - name: Test service-dependency lane drift
+    guardrail: >
+      Every tests/integration/test_*.py and tests/smoke/test_*.py file must
+      carry exactly one file-level no_services or requires_services marker
+      via pytestmark; both markers must be registered in
+      [tool.pytest.ini_options].markers; contract coverage in
+      tests/contract/test_service_dependency_markers_contract.py;
+      CI gate via make test-contract.
+    canonical_issue: "#2324"
+    related_issues:
+      - "#2319"
+      - "#2320"
+      - "#2325"
+    first_seen: "2026"
+    last_confirmed: "2026"

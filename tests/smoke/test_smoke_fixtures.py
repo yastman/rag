@@ -9,6 +9,9 @@ silently regress to fixture-not-found errors or HumanMessage subscript bugs.
 import pytest
 
 
+pytestmark = pytest.mark.no_services
+
+
 @pytest.mark.smoke
 def test_redis_url_fixture_is_provided(redis_url: str) -> None:
     """Smoke conftest must expose a `redis_url` fixture.

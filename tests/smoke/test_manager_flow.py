@@ -13,6 +13,9 @@ import pytest
 from telegram_bot.agents.manager_tools import build_tools_for_role
 
 
+pytestmark = pytest.mark.no_services
+
+
 @pytest.fixture
 def manager_config():
     """BotConfig with CRM enabled and manager IDs."""

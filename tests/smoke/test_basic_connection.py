@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
 # Настройки из .env
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")

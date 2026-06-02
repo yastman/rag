@@ -447,6 +447,8 @@ markers = [
     "baseline: Baseline comparison tests (regression guard)",
     "performance: Performance benchmarks (latency, throughput, resource usage)",
     "regression: Regression guard tests (baseline comparisons, golden sets)",
+    "no_services: Tests that do NOT require Docker or external services (mocks, pure logic, fixture-shape)",
+    "requires_services: Tests that require Docker, service fixtures, network ports, or live-service guards",
 ]
 filterwarnings = [
     # trustcall 0.0.39 imports Send from deprecated langgraph.constants;

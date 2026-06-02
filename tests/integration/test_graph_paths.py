@@ -21,6 +21,9 @@ from telegram_bot.graph.state import make_initial_state
 from telegram_bot.observability import traced_pipeline
 
 
+pytestmark = pytest.mark.no_services
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------

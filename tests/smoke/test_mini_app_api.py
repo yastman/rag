@@ -16,6 +16,9 @@ import httpx
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
+
 def _api_url() -> str:
     return os.getenv("MINI_APP_URL", "http://localhost:8090")
 

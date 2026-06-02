@@ -14,6 +14,9 @@ from telegram_bot.graph.state import make_initial_state
 from telegram_bot.observability import traced_pipeline
 
 
+pytestmark = pytest.mark.no_services
+
+
 @pytest.mark.smoke
 async def test_full_graph_builds_without_error():
     """Graph should compile without errors given mock services."""

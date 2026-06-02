@@ -22,6 +22,9 @@ from src.config import Settings
 from src.retrieval import HybridRRFSearchEngine
 
 
+pytestmark = pytest.mark.requires_services
+
+
 def _run_hybrid_search_with_sparse() -> bool:
     """Run hybrid search flow using dense + sparse vectors."""
 

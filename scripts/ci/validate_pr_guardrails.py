@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess  # nosec B404
+import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -28,11 +29,19 @@ DISPOSITION_TYPE_RE = re.compile(r"(?im)^\s*>?\s*Type\s*:\s*(duplicate|recurrenc
 EMPTY_FIELD_VALUES = {"-", "n/a", "N/A", "none", "None", "___________", "____________"}
 
 DEPENDENCY_FILES = {
-    "pyproject.toml",
     "uv.lock",
     "requirements.txt",
     "requirements-dev.txt",
 }
+PYPROJECT_FILE = "pyproject.toml"
+PYPROJECT_LOCK_RELEVANT_KEYS = (
+    ("build-system", "requires"),
+    ("project", "dependencies"),
+    ("project", "optional-dependencies"),
+    ("project", "requires-python"),
+    ("dependency-groups",),
+    ("tool", "uv"),
+)
 
 WORKFLOW_POLICY_TESTS = {
     "tests/unit/test_ci_workflow_guardrails.py",
@@ -238,8 +247,71 @@ def _has_test_change(files: list[str]) -> bool:
     return any(path.startswith("tests/") for path in files)
 
 
-def _has_dependency_change(files: list[str]) -> bool:
-    return any(path in DEPENDENCY_FILES for path in files)
+def _nested_get(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    current: Any = data
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    return current
+
+
+def _read_git_file(ref: str, path: str) -> str | None:
+    result = subprocess.run(  # nosec B603 B607
+        ["git", "show", f"{ref}:{path}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _pyproject_projection(text: str) -> tuple[Any, ...]:
+    data = tomllib.loads(text)
+    return tuple(_nested_get(data, keys) for keys in PYPROJECT_LOCK_RELEVANT_KEYS)
+
+
+def _pyproject_dependency_metadata_changed(
+    base_sha: str | None,
+    head_sha: str | None,
+) -> bool:
+    """True when pyproject edits touch lock-relevant dependency metadata.
+
+    ``pyproject.toml`` also carries tool configuration such as pytest markers.
+    Those edits must be checked by their native tool/contract tests, not forced
+    through a meaningless ``uv.lock`` diff.
+    """
+    if not base_sha:
+        return True
+
+    before = _read_git_file(base_sha, PYPROJECT_FILE)
+    if before is None:
+        return True
+
+    after = _read_git_file(head_sha, PYPROJECT_FILE) if head_sha else None
+    if after is None:
+        path = Path(PYPROJECT_FILE)
+        if not path.exists():
+            return True
+        after = path.read_text(encoding="utf-8")
+
+    try:
+        return _pyproject_projection(before) != _pyproject_projection(after)
+    except tomllib.TOMLDecodeError:
+        return True
+
+
+def _has_dependency_change(files: list[str], pr: PullRequest | None) -> bool:
+    if any(path in DEPENDENCY_FILES for path in files):
+        return True
+    if PYPROJECT_FILE not in files:
+        return False
+    return _pyproject_dependency_metadata_changed(
+        pr.base_sha if pr else None,
+        pr.head_sha if pr else None,
+    )
 
 
 def _has_lockfile_change(files: list[str]) -> bool:
@@ -295,7 +367,7 @@ def validate(pr: PullRequest | None, files: list[str], *, large_threshold: int) 
                     "class or update the registry"
                 )
 
-    if _has_dependency_change(files) and not _has_lockfile_change(files):
+    if _has_dependency_change(files, pr) and not _has_lockfile_change(files):
         failures.append("dependency changes must include `uv.lock`")
 
     if _has_compose_or_workflow_change(files) and not _has_policy_test_change(files):

@@ -16,6 +16,8 @@ import redis.asyncio as redis
 from redis.exceptions import AuthenticationError
 
 
+pytestmark = pytest.mark.requires_services
+
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 
 

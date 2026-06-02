@@ -10,6 +10,8 @@ from qdrant_client import QdrantClient
 from redis.exceptions import AuthenticationError as RedisAuthError
 
 
+pytestmark = pytest.mark.requires_services
+
 asyncpg = pytest.importorskip("asyncpg", reason="asyncpg not installed")
 
 

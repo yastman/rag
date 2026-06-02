@@ -135,6 +135,25 @@ def test_dependency_change_requires_uv_lock() -> None:
     assert "dependency changes must include `uv.lock`" in failures
 
 
+def test_pyproject_tooling_change_does_not_require_uv_lock(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "scripts.ci.validate_pr_guardrails._pyproject_dependency_metadata_changed",
+        lambda _base_sha, _head_sha: False,
+    )
+
+    failures = validate(
+        _pr(
+            "test: classify service dependency markers",
+            "Regression guardrail: tests/contract/test_service_dependency_markers_contract.py\n"
+            "Checks run: pytest service marker contract\n",
+        ),
+        ["pyproject.toml", "tests/contract/test_service_dependency_markers_contract.py"],
+        large_threshold=25,
+    )
+
+    assert "dependency changes must include `uv.lock`" not in failures
+
+
 def test_workflow_change_requires_policy_test() -> None:
     failures = validate(
         _pr("ci: update workflow", "Checks run: yaml lint"),

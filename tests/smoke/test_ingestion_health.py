@@ -8,6 +8,8 @@ import urllib.request
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 BGE_M3_URL = os.getenv("BGE_M3_URL", "http://localhost:8000")
 COLLECTION = os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")

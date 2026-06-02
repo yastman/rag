@@ -11,6 +11,9 @@ from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
 
 
+pytestmark = pytest.mark.no_services
+
+
 def _make_config() -> BotConfig:
     return BotConfig(
         _env_file=None,

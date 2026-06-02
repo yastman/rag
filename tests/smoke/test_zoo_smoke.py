@@ -8,6 +8,9 @@ import httpx
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
+
 def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     """Check if a TCP port is accepting connections."""
     try:

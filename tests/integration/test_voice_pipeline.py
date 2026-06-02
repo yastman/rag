@@ -6,6 +6,8 @@ import httpx
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
 RAG_URL = "http://localhost:8080"
 
 
