@@ -1232,12 +1232,12 @@ validate-traces-fast: ## No rebuild; trace validation fails if required trace fa
 	QDRANT_URL="$(or $(QDRANT_URL),http://localhost:6333)" \
 	BGE_M3_URL="$(or $(BGE_M3_URL),http://localhost:8000)" \
 	REDIS_URL="$(or $(REDIS_URL),redis://localhost:6379)" \
-	REDIS_PASSWORD="$(or $(REDIS_PASSWORD),dev_redis_pass)" \
 	LLM_BASE_URL="$(or $(LLM_BASE_URL),http://localhost:4000)" \
 	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
 	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
 	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	uv run python scripts/validate_traces.py --report
+	uv run dotenv -f "$$TRACE_ENV_FILE" run --no-override -- \
+		uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
 langfuse-latency-audit: ## #2179: per-stage observation latencies (retrieve/cache/checkpoint/llm) from recent traces

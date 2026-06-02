@@ -265,7 +265,7 @@ class TestGraphConfig:
         from telegram_bot.graph.config import GraphConfig
 
         cfg = GraphConfig(disable_reasoning=True)
-        assert cfg.get_reasoning_kwargs() == {"disable_reasoning": True}
+        assert cfg.get_reasoning_kwargs() == {"extra_body": {"disable_reasoning": True}}
 
     def test_get_reasoning_kwargs_combined(self):
         from telegram_bot.graph.config import GraphConfig
@@ -273,7 +273,23 @@ class TestGraphConfig:
         cfg = GraphConfig(reasoning_effort="high", reasoning_format="hidden")
         assert cfg.get_reasoning_kwargs() == {
             "reasoning_effort": "high",
-            "reasoning_format": "hidden",
+            "extra_body": {"reasoning_format": "hidden"},
+        }
+
+    def test_get_reasoning_kwargs_provider_specific_extra_body(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig(
+            reasoning_effort="high",
+            reasoning_format="hidden",
+            disable_reasoning=True,
+        )
+        assert cfg.get_reasoning_kwargs() == {
+            "reasoning_effort": "high",
+            "extra_body": {
+                "reasoning_format": "hidden",
+                "disable_reasoning": True,
+            },
         }
 
     def test_from_env_reasoning_effort(self):
