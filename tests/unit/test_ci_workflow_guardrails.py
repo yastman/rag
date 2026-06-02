@@ -70,6 +70,16 @@ def test_top_level_permissions_contents_read() -> None:
     assert permissions.get("contents") == "read", f"expected `contents: read`, got {permissions}"
 
 
+def test_top_level_permissions_pull_requests_read() -> None:
+    """pr-guardrails reads current PR metadata via GitHub API."""
+    data = _load_workflow()
+    permissions = data.get("permissions")
+    assert permissions is not None, "missing top-level `permissions` key"
+    assert permissions.get("pull-requests") == "read", (
+        f"expected `pull-requests: read`, got {permissions}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Job secrets safety
 # ---------------------------------------------------------------------------
@@ -231,6 +241,20 @@ def test_pr_guardrails_installs_yaml_dependency_without_project_sync() -> None:
     assert "--no-project" in combined, (
         "pr-guardrails must not sync the whole project just to validate PR metadata."
     )
+
+
+def test_pr_guardrails_passes_ephemeral_github_token_for_live_pr_metadata() -> None:
+    """Rerun jobs must see current PR body, not only the stale event payload."""
+    data = _load_workflow()
+    job = data["jobs"]["pr-guardrails"]
+    validate_steps = [
+        step
+        for step in job.get("steps", [])
+        if "validate_pr_guardrails.py" in str(step.get("run", ""))
+    ]
+    assert len(validate_steps) == 1
+    env = validate_steps[0].get("env", {})
+    assert env.get("GITHUB_TOKEN") == "${{ github.token }}"
 
 
 def test_pr_guardrails_uses_github_hosted_runner() -> None:

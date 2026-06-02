@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,6 +46,8 @@ jobs:
 
       - name: Validate PR guardrails
         run: uv run --with pyyaml --no-project python scripts/ci/validate_pr_guardrails.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   semgrep:
     name: Semgrep
