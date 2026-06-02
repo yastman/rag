@@ -1235,8 +1235,8 @@ validate-traces-fast: ## No rebuild; trace validation fails if required trace fa
 	REDIS_PASSWORD="$(or $(REDIS_PASSWORD),dev_redis_pass)" \
 	LLM_BASE_URL="$(or $(LLM_BASE_URL),http://localhost:4000)" \
 	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
-	LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY] $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY] $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
+	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
+	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
@@ -1246,8 +1246,8 @@ langfuse-latency-audit: ## #2179: per-stage observation latencies (retrieve/cach
 validate-voice-traces: ## Voice trace validation gate (reads Langfuse, validates presence + attribution)
 	@echo "$(BLUE)Voice trace validation gate...$(NC)"
 	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
-	LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY] $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY] $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
+	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
+	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
 	uv run python scripts/validate_voice_traces.py
 	@echo "$(GREEN)Voice trace validation complete$(NC)"
 

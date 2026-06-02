@@ -515,6 +515,10 @@ services:
   clickhouse:
     <<: *security-defaults
     image: clickhouse/clickhouse-server:26.5.1@sha256:07afc18d8a9706eb9d85c5c5d2752e5270f91bbc2894caeaecb73e4d0f603bf5
+    # Official ClickHouse entrypoint chowns /var/lib/clickhouse and drops to
+    # the clickhouse user. Keep cap_drop:[ALL] but restore only these startup
+    # capabilities so named volumes can boot.
+    cap_add: ["CHOWN", "SETGID", "SETUID"]
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: false

@@ -73,6 +73,28 @@ def test_clickhouse_command_has_no_invalid_listen_host_flag() -> None:
     )
 
 
+def test_clickhouse_keeps_startup_capabilities_for_named_volumes() -> None:
+    """ClickHouse entrypoint must be able to chown its named data/log volumes.
+
+    The shared security defaults intentionally use cap_drop:[ALL]. The official
+    ClickHouse image still runs an entrypoint that chowns /var/lib/clickhouse on
+    startup and then drops to the clickhouse user; without these capabilities
+    the local Langfuse stack crash-loops before trace validation can start.
+    """
+    compose = _load_compose()
+    clickhouse = compose["services"]["clickhouse"]
+
+    assert "ALL" in clickhouse.get("cap_drop", []), (
+        "compose.yml: clickhouse must keep cap_drop:[ALL] from the shared security defaults."
+    )
+    assert clickhouse.get("cap_add") == ["CHOWN", "SETGID", "SETUID"], (
+        "compose.yml: clickhouse must add only CHOWN/SETGID/SETUID so the "
+        "official entrypoint can chown /var/lib/clickhouse named volumes and "
+        "drop to the clickhouse user. Without this, `make validate-traces-fast` "
+        "fails with ClickHouse `chown` or `setgid` Operation not permitted errors."
+    )
+
+
 # =============================================================================
 # BGE-M3 compose contract — guardrail for #2182 / #2188 / #2185 (Docker/compose drift)
 # =============================================================================

@@ -123,6 +123,20 @@ def test_workflow_change_with_trusted_heavy_policy_test_passes() -> None:
     assert failures == []
 
 
+def test_compose_change_with_compose_runtime_policy_test_passes() -> None:
+    failures = validate(
+        _pr(
+            "fix: repair compose runtime contract",
+            "Regression guardrail: tests/unit/test_compose_runtime_contract.py\n"
+            "Checks run: pytest compose policy tests",
+        ),
+        ["compose.yml", "tests/unit/test_compose_runtime_contract.py"],
+        large_threshold=25,
+    )
+
+    assert failures == []
+
+
 def test_duplicate_work_requires_bug_class() -> None:
     failures = validate(
         _pr("fix: duplicate Langfuse context loss", "Fixes #2302", labels=("bug",)),
