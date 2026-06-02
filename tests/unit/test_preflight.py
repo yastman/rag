@@ -970,3 +970,155 @@ class TestQdrantPreflightEnsureCollection:
         assert "colbert" in vectors_config
         sparse_config = call_kwargs["sparse_vectors_config"]
         assert "bm42" in sparse_config
+
+
+# ===========================================================================
+# BGE-M3 URL guardrail (_validate_bge_m3_url)
+# ===========================================================================
+
+
+class TestBgeM3UrlGuardrail:
+    """Guardrail validates BGE-M3 URLs before any network call."""
+
+    def test_localhost_8000_passes(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://localhost:8000")
+        assert ok is True
+        assert err == ""
+
+    def test_localhost_ipv4_8000_passes(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://127.0.0.1:8000")
+        assert ok is True
+        assert err == ""
+
+    def test_localhost_ipv6_8000_passes(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://[::1]:8000")
+        assert ok is True
+        assert err == ""
+
+    def test_container_host_bge_m3_8000_passes(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://bge-m3:8000")
+        assert ok is True
+        assert err == ""
+
+    def test_container_host_bge_m3_wrong_port_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://bge-m3:8888")
+        assert ok is False
+        assert "8000" in err
+
+    def test_container_host_bge_m3_no_port_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://bge-m3")
+        assert ok is False
+        assert "8000" in err
+
+    def test_non_local_host_passes_any_port(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://embedding.example.com:9090")
+        assert ok is True
+        assert err == ""
+
+    def test_localhost_8888_rejects_and_does_not_call_network(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("http://localhost:8888")
+        assert ok is False
+        assert "non-canonical port" in err or "port" in err.lower()
+
+    def test_localhost_8080_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("http://localhost:8080")
+        assert ok is False
+
+    def test_ipv4_9000_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("http://127.0.0.1:9000")
+        assert ok is False
+
+    def test_ipv6_9999_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("http://[::1]:9999")
+        assert ok is False
+
+    def test_localhost_no_port_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("http://localhost")
+        assert ok is False
+
+    def test_valid_url_malformed_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("not-a-valid-url://")
+        assert ok is False
+
+    def test_empty_url_rejects(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("")
+        assert ok is False
+
+    def test_https_localhost_8000_passes(self):
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, err = _validate_bge_m3_url("https://localhost:8000")
+        assert ok is True
+        assert err == ""
+
+    def test_localhost_abc_port_rejects_and_does_not_call_network(self):
+        """Malformed port like 'http://localhost:abc' rejects without network call."""
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("http://localhost:abc")
+        assert ok is False
+
+    def test_localhost_99999_port_rejects_and_does_not_call_network(self):
+        """Out-of-range port like 'http://localhost:99999' rejects without network call."""
+        from telegram_bot.preflight import _validate_bge_m3_url
+
+        ok, _err = _validate_bge_m3_url("http://localhost:99999")
+        assert ok is False
+
+    async def test_check_single_dep_rejects_localhost_8888_before_network(self):
+        config = _make_config(bge_m3_url="http://localhost:8888")
+        client = AsyncMock(spec=httpx.AsyncClient)
+
+        result = await _check_single_dep("bge_m3", config, client)
+
+        assert result is False
+        client.get.assert_not_awaited()
+        client.post.assert_not_awaited()
+
+    async def test_check_single_dep_rejects_malformed_localhost_port_before_network(self):
+        config = _make_config(bge_m3_url="http://localhost:abc")
+        client = AsyncMock(spec=httpx.AsyncClient)
+
+        result = await _check_single_dep("bge_m3", config, client)
+
+        assert result is False
+        client.get.assert_not_awaited()
+        client.post.assert_not_awaited()
+
+    async def test_check_single_dep_rejects_out_of_range_localhost_port_before_network(self):
+        config = _make_config(bge_m3_url="http://localhost:99999")
+        client = AsyncMock(spec=httpx.AsyncClient)
+
+        result = await _check_single_dep("bge_m3", config, client)
+
+        assert result is False
+        client.get.assert_not_awaited()
+        client.post.assert_not_awaited()

@@ -320,6 +320,61 @@ async def _ensure_qdrant_collection(qdrant: AsyncQdrantClient, collection_name: 
     )
 
 
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_CANONICAL_BGE_M3_PORT = 8000
+
+
+def _validate_bge_m3_url(url: str) -> tuple[bool, str]:
+    """Validate a BGE-M3 URL before making network calls.
+
+    Guardrail against Docker/compose drift (#2182, #2188, #2185):
+    - Local/native URLs (localhost, 127.0.0.1, ::1) must use port 8000.
+    - Container-internal ``http://bge-m3:8000`` is allowed.
+    - Non-local hosts are not port-enforced.
+    - Malformed or empty URLs are rejected.
+
+    Returns:
+        Tuple of (valid, error_message). When valid, error_message is ''.
+    """
+    if not url or not url.strip():
+        return False, "BGE_M3_URL is empty"
+
+    try:
+        parsed = httpx.URL(url)
+    except httpx.InvalidURL:
+        return False, f"BGE_M3_URL is not a valid URL: {url!r}"
+
+    if not parsed.scheme or not parsed.host:
+        return False, f"BGE_M3_URL is not a valid URL: {url!r}"
+
+    host = parsed.host
+    port = parsed.port
+
+    # Non-local, non-compose hosts are not port-enforced
+    if host != "bge-m3" and host not in _LOCAL_HOSTS:
+        return True, ""
+
+    # Local URLs must use canonical port 8000
+    if port == _CANONICAL_BGE_M3_PORT:
+        return True, ""
+
+    if port is None:
+        return (
+            False,
+            f"BGE_M3_URL {url!r} uses canonical host {host!r} without port 8000. "
+            "Set BGE_M3_URL=http://localhost:8000 for native runs or "
+            "http://bge-m3:8000 for Compose services.",
+        )
+
+    return (
+        False,
+        f"BGE_M3_URL {url!r} uses non-canonical port {port}. "
+        "Only port 8000 is canonical for BGE-M3. "
+        "Set BGE_M3_URL=http://localhost:8000 for native runs or "
+        "http://bge-m3:8000 for Compose services.",
+    )
+
+
 async def _check_single_dep(
     name: str,
     config: BotConfig,
@@ -450,6 +505,11 @@ async def _check_single_dep(
             await qdrant.close()
 
     if name == "bge_m3":
+        url_valid, url_error = _validate_bge_m3_url(config.bge_m3_url)
+        if not url_valid:
+            logger.error("Preflight FAIL: BGE-M3 URL guardrail — %s", url_error)
+            return False
+
         resp = await client.get(f"{config.bge_m3_url}/health")
         if resp.status_code != 200:
             logger.error("Preflight FAIL: BGE-M3 repo-local health contract — %s", resp.status_code)
