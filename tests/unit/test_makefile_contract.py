@@ -188,6 +188,32 @@ def test_validate_traces_fast_runs_postgres_auth_preflight() -> None:
     )
 
 
+def test_trace_validation_targets_use_valid_langfuse_key_fallbacks() -> None:
+    """Trace validation targets must render valid shell env assignments."""
+    text = _makefile_text()
+    for target in ("validate-traces-fast", "validate-voice-traces"):
+        block_match = re.search(
+            rf"^{re.escape(target)}:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+            text,
+            re.MULTILINE | re.DOTALL,
+        )
+        assert block_match, f"{target} target not found in Makefile"
+        block = block_match.group(0)
+
+        assert (
+            'LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)"'
+            in block
+        )
+        assert (
+            'LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)"'
+            in block
+        )
+        assert "[REDACTED-LANGFUSE-KEY]" not in block, (
+            f"{target} must not contain redacted placeholders in shell env "
+            "assignments; they break `make validate-traces-fast` with a shell syntax error."
+        )
+
+
 # --- #1307 core trace gate contract tests ---
 
 
