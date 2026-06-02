@@ -423,6 +423,33 @@ paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml,Makefile,.github/workf
   - НЕ использовать для основной генерации — только через LiteLLM unified routing
   - Прямой вызов Anthropic API = обход трейсинга Langfuse
 
+## opentelemetry-instrumentation (SDK-native auto-instrumentation)
+- **triggers:** otel, traceparent, baggage, w3c-tracecontext, cross-service, propagator, instrumentor, auto-instrumentation, FastAPIInstrumentor, HTTPXClientInstrumentor, OTEL_PROPAGATORS
+- **context7_id:** /open-telemetry/opentelemetry-python-contrib
+- **как_у_нас:**
+  - `src/observability_otel.py` — idempotent `activate_otel_instrumentations()` + `instrument_fastapi_app(app)` (#2225)
+  - `src/observability.py` — calls `activate_otel_instrumentations()` after Langfuse init
+  - `services/bge-m3-api/app.py` — calls `FastAPIInstrumentor.instrument_app(app)` + `LoggingInstrumentor`
+  - `services/user-base/main.py` — calls `FastAPIInstrumentor.instrument_app(app)` + `LoggingInstrumentor`
+  - `src/api/main.py` — calls `instrument_fastapi_app(app)` via the shared helper
+  - `compose.yml` — `OTEL_PROPAGATORS=tracecontext,baggage` on every OTEL-instrumented service (#2246 F3)
+  - `pyproject.toml` — `opentelemetry-instrumentation-{httpx,asyncpg,redis,grpc,aiohttp-client,requests,logging,fastapi}>=0.58b0`
+- **паттерны:**
+  - **Inbound FastAPI:** use `FastAPIInstrumentor.instrument_app(app)` or the shared `instrument_fastapi_app(app)` helper to extract W3C TraceContext + Baggage on every request.
+  - **Outbound HTTP:** ride on `httpx` (sync `Client` or async `AsyncClient`) so the process-wide `HTTPXClientInstrumentor` injects `traceparent`/`baggage` automatically.
+  - **Activation:** call `activate_otel_instrumentations()` once at startup (idempotent; per-instrumentor try/except).
+  - **Propagators:** declare `OTEL_PROPAGATORS=tracecontext,baggage` explicitly in compose (defense-in-depth).
+  - **Log-to-trace correlation:** `LoggingInstrumentor` injects `otelTraceID`/`otelSpanID` into every `LogRecord`.
+  - **Test coverage:** `tests/contract/test_cross_service_trace_instrumentation_contract.py` (inbound FastAPI + outbound HTTPX + activation), `tests/contract/test_otel_propagators_contract.py` (compose OTEL_PROPAGATORS + .env.example doc).
+- **gotchas:**
+  - НЕ добавлять OTLP gRPC exporter — Langfuse v4 SDK handles OTLP export internally.
+  - НЕ писать ручной propagation (`inject()`/`extract()`/`attach()`/`detach()`) поверх SDK-native FastAPIInstrumentor + HTTPXClientInstrumentor. Ручной propagation (#2229) удаляется в #2253/#2266 после runtime-доказательства cross-service continuity.
+  - НЕ использовать raw-thread hops (`threading.Thread`, `ThreadPoolExecutor.submit`) рядом с `@observe` без `contextvars.copy_context()` — raw threads теряют OTEL parent context (#2246 F1).
+  - `OTEL_PROPAGATORS` должен включать и `tracecontext`, и `baggage` — потеря baggage ломает Langfuse user/session/tags propagation через сервисные границы (#2226).
+  - Double-instrumentation guard: `FastAPIInstrumentor.instrument_app` сам ставит флаг `_is_instrumented_by_opentelemetry`; в shared helper читаем его до вызова.
+  - Отсутствующие `opentelemetry-instrumentation-*` пакеты пропускаются silently — это не ошибка, а graceful degradation.
+  - Contracts: `tests/contract/test_cross_service_trace_instrumentation_contract.py`, `tests/contract/test_otel_propagators_contract.py`, `tests/contract/test_end_to_end_trace_flow_contract.py`.
+
 ## prometheus_client
 - **triggers:** prometheus, metrics, histogram, counter, /metrics, make_asgi_app, REGISTRY, scrape
 - **context7_id:** /prometheus/client_python

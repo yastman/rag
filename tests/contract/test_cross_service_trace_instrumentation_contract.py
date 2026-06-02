@@ -46,6 +46,10 @@ OUTBOUND_HTTPX_CLIENTS = [
     "src/services/kommo_client.py",
     "src/voice/rag_api_client.py",
     "src/ingestion/docling_client.py",
+    # Additional clients discovered during #2256 fan-out audit:
+    "src/services/kommo_tokens.py",
+    "src/services/vectorizers.py",
+    "src/runtime/integrations/embeddings.py",
 ]
 
 # Startup site that activates the auto-instrumentations (incl. httpx).
@@ -54,6 +58,24 @@ HTTPX_ACTIVATION_IMPL = "src/observability_otel.py"
 
 # Either the shared helper (Name call) or the raw instrumentor method (attr call).
 _FASTAPI_INSTRUMENT_NAMES = {"instrument_fastapi_app", "instrument_app"}
+
+# Non-httpx HTTP client libraries whose presence in any OUTBOUND_HTTPX_CLIENTS
+# file would silently bypass the process-wide HTTPXClientInstrumentor.
+# Even a single ``import requests`` (or ``from aiohttp import ...``) alongside
+# existing ``import httpx`` can create a trace-context leak: the process-wide
+# instrumentor only injects ``traceparent``/``baggage`` into httpx, not these.
+_NON_HTTPX_HTTP_CLIENT_MODULES: frozenset[str] = frozenset(
+    {
+        "requests",
+        "aiohttp",
+        "urllib3",
+        "http.client",
+    }
+)
+_NON_HTTPX_HTTP_CLIENT_FROM_IMPORTS: dict[str, frozenset[str]] = {
+    "urllib": frozenset({"request"}),
+    "http": frozenset({"client"}),
+}
 
 
 def _source_of(rel: str) -> str | None:
@@ -103,6 +125,31 @@ def _invokes(source: str, name: str) -> bool:
     return name in _called_names(ast.parse(source))
 
 
+def _imports_non_httpx_http_client(source: str) -> list[str]:
+    """Return names of non-httpx HTTP client modules imported in *source*.
+
+    Only modules in ``_NON_HTTPX_HTTP_CLIENT_MODULES`` are considered.
+    An empty list means the source is clean.
+    """
+    tree = ast.parse(source)
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in _NON_HTTPX_HTTP_CLIENT_MODULES or alias.name == "urllib.request":
+                    found.append(alias.name)
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module in _NON_HTTPX_HTTP_CLIENT_MODULES or node.module == "urllib.request":
+                found.append(node.module)
+                continue
+            denied_names = _NON_HTTPX_HTTP_CLIENT_FROM_IMPORTS.get(node.module)
+            if denied_names:
+                for alias in node.names:
+                    if alias.name in denied_names:
+                        found.append(f"{node.module}.{alias.name}")
+    return found
+
+
 # --- inbound -----------------------------------------------------------------
 
 
@@ -143,6 +190,26 @@ class TestOutboundHttpxCoverage:
             f"{rel} must use httpx so the process-wide HTTPXClientInstrumentor "
             f"injects traceparent/baggage automatically (#2256). A different "
             f"HTTP library would silently drop cross-service trace context."
+        )
+
+    @pytest.mark.parametrize("rel", OUTBOUND_HTTPX_CLIENTS)
+    def test_client_rejects_non_httpx_http_library(self, rel: str) -> None:
+        """No outbound client may import a non-httpx HTTP library alongside httpx.
+
+        ``import httpx`` alongside ``import requests`` (or ``aiohttp``,
+        ``urllib``, ``urllib3``, ``http.client``) would silently bypass the
+        process-wide ``HTTPXClientInstrumentor``: only httpx calls get
+        ``traceparent``/``baggage`` injected. A single stray
+        ``requests.get()`` is enough to drop cross-service trace context.
+        """
+        source = _source_of(rel)
+        assert source is not None, f"missing: {rel}"
+        offenders = _imports_non_httpx_http_client(source)
+        assert not offenders, (
+            f"{rel} imports non-httpx HTTP client(s) that would bypass "
+            f"HTTPXClientInstrumentor and silently drop W3C TraceContext "
+            f"(#2256): {sorted(offenders)}. All outbound HTTP must go through "
+            f"httpx so traceparent/baggage injection is automatic."
         )
 
 
@@ -193,6 +260,16 @@ class TestDetectorsCatchRegressions:
     _HTTPX_FROM = "from httpx import AsyncClient\nclient = AsyncClient()\n"
     _NO_HTTPX = "import requests\nrequests.get('http://x')\n"
 
+    # Denylist probes: mixed httpx + non-httpx imports, or pure non-httpx.
+    _MIXED_HTTPX_REQUESTS = "import httpx\nimport requests\nclient = httpx.AsyncClient()\n"
+    _MIXED_HTTPX_AIOHTTP = "from httpx import AsyncClient\nfrom aiohttp import ClientSession\n"
+    _MIXED_HTTPX_URLLIB_SUBMOD = "import httpx\nimport urllib.request\n"
+    _MIXED_HTTPX_URLLIB_FROM = "import httpx\nfrom urllib import request\n"
+    _MIXED_HTTPX_HTTP_FROM = "import httpx\nfrom http import client\n"
+    _PURE_URLLIB_PARSE = "import urllib.parse\nurllib.parse.urlencode({'a': 'b'})\n"
+    _PURE_AIOHTTP = "from aiohttp import ClientSession\n"
+    _PURE_URLLIB3 = "import urllib3\nhttp = urllib3.PoolManager()\n"
+
     def test_fastapi_detector_accepts_helper(self) -> None:
         assert _is_fastapi_instrumented(self._FASTAPI_OK_HELPER)
 
@@ -210,3 +287,55 @@ class TestDetectorsCatchRegressions:
 
     def test_httpx_detector_flags_other_lib(self) -> None:
         assert not _imports_httpx(self._NO_HTTPX)
+
+    # --- denylist self-checks -------------------------------------------------
+
+    def test_denylist_accepts_pure_httpx(self) -> None:
+        """A file that only imports httpx must NOT trigger the denylist."""
+        assert _imports_non_httpx_http_client(self._HTTPX_IMPORT) == []
+
+    def test_denylist_flags_mixed_httpx_requests(self) -> None:
+        """import httpx + import requests: the denylist MUST catch requests."""
+        offenders = _imports_non_httpx_http_client(self._MIXED_HTTPX_REQUESTS)
+        assert offenders, "mixed httpx + requests went undetected — the denylist is broken"
+        assert "requests" in offenders
+
+    def test_denylist_flags_mixed_httpx_aiohttp(self) -> None:
+        """from httpx + from aiohttp: the denylist MUST catch aiohttp."""
+        offenders = _imports_non_httpx_http_client(self._MIXED_HTTPX_AIOHTTP)
+        assert offenders, "mixed httpx + aiohttp went undetected — the denylist is broken"
+        assert "aiohttp" in offenders
+
+    def test_denylist_flags_urllib_submodule(self) -> None:
+        """import urllib.request: the denylist MUST catch the submodule path."""
+        offenders = _imports_non_httpx_http_client(self._MIXED_HTTPX_URLLIB_SUBMOD)
+        assert offenders, "urllib.request went undetected — the denylist is broken"
+        assert "urllib.request" in offenders
+
+    def test_denylist_flags_urllib_request_from_import(self) -> None:
+        """from urllib import request: the denylist MUST catch the HTTP client."""
+        offenders = _imports_non_httpx_http_client(self._MIXED_HTTPX_URLLIB_FROM)
+        assert offenders
+        assert "urllib.request" in offenders
+
+    def test_denylist_flags_http_client_from_import(self) -> None:
+        """from http import client: the denylist MUST catch the HTTP client."""
+        offenders = _imports_non_httpx_http_client(self._MIXED_HTTPX_HTTP_FROM)
+        assert offenders
+        assert "http.client" in offenders
+
+    def test_denylist_accepts_urllib_parse(self) -> None:
+        """urllib.parse is URL manipulation, not an HTTP client."""
+        assert _imports_non_httpx_http_client(self._PURE_URLLIB_PARSE) == []
+
+    def test_denylist_flags_pure_aiohttp(self) -> None:
+        """A file with only aiohttp (no httpx) is also caught — belt + suspenders."""
+        offenders = _imports_non_httpx_http_client(self._PURE_AIOHTTP)
+        assert offenders
+        assert "aiohttp" in offenders
+
+    def test_denylist_flags_pure_urllib3(self) -> None:
+        """A file with only urllib3 (no httpx) is also caught."""
+        offenders = _imports_non_httpx_http_client(self._PURE_URLLIB3)
+        assert offenders
+        assert "urllib3" in offenders
