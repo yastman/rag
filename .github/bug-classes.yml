@@ -62,8 +62,11 @@ bug_classes:
   - name: Docker/compose drift
     guardrail: >
       tests/unit/test_compose_runtime_contract.py pins service profile
-      expectations; tests/unit/test_check_image_drift.py locks the read-only
-      runtime drift checker; make verify-compose-runtime compares running image
+      expectations and BGE-M3 canonical endpoint/port contracts;
+      tests/unit/test_check_image_drift.py locks the read-only
+      runtime drift checker; telegram_bot/preflight.py validates
+      BGE-M3 canonical port 8000 for local/native URLs before any
+      network call; make verify-compose-runtime compares running image
       digests and published host ports against Compose source.
     canonical_issue: "#2185"
     related_issues:
