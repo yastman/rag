@@ -91,6 +91,7 @@ ALLOWLIST_NOT_IN_ENV_EXAMPLE: dict[str, str] = {
     "GITHUB_OUTPUT": "GitHub Actions output channel",
     "GITHUB_ENV": "GitHub Actions env channel",
     "GITHUB_EVENT_PATH": "GitHub Actions event payload path; CI-only",
+    "GITHUB_TOKEN": "GitHub Actions ephemeral API token; CI-only",
     "GITHUB_STEP_SUMMARY": "GitHub Actions step summary channel",
     "RUNNER_OS": "GitHub Actions self-hosted runner detection",
     "RUNNER_TEMP": "GitHub Actions temp dir",
