@@ -40,6 +40,25 @@ _REDIS_AUTH_TOKENS = (
     "authentication required",
     "noauth",
 )
+_EMPTY_EXCEPTION_MESSAGE = "<empty exception message>"
+
+
+def _exception_message_with_type(exc: BaseException) -> str:
+    """Render exception type and message with a non-empty fallback."""
+    exc_type = type(exc).__name__
+    message = str(exc).strip()
+    if message:
+        return f"{exc_type}: {message}"
+    repr_message = repr(exc)
+    if repr_message and repr_message != f"{exc_type}()":
+        return f"{exc_type}: {repr_message}"
+    return f"{exc_type}: {_EMPTY_EXCEPTION_MESSAGE}"
+
+
+def _collect_qdrant_failure(failures: dict[str, str] | None, dep_name: str, reason: str) -> None:
+    if failures is None:
+        return
+    failures[dep_name] = reason
 
 
 def _redact_redis_credentials(text: str) -> str:
@@ -136,7 +155,9 @@ class PreflightError(SystemExit):
         super().__init__(msg)
 
 
-def _build_dependency_report(results: dict[str, bool]) -> StartupReport:
+def _build_dependency_report(
+    results: dict[str, bool], failures: dict[str, str] | None = None
+) -> StartupReport:
     report = StartupReport()
     for dep_name, passed in results.items():
         if passed:
@@ -145,11 +166,17 @@ def _build_dependency_report(results: dict[str, bool]) -> StartupReport:
         severity = (
             StartupSeverity.FAILED if level == DepLevel.CRITICAL else StartupSeverity.DEGRADED
         )
+        detail = ""
+        if failures:
+            detail = failures.get(dep_name, "").strip()
+        summary = f"{level.value} dependency unavailable"
+        if detail:
+            summary = f"{summary}: {detail}"
         report.add(
             StartupSignal(
                 source=dep_name,
                 severity=severity,
-                summary=f"{level.value} dependency unavailable",
+                summary=summary,
                 remediation=_DEP_REMEDIATION.get(dep_name),
             )
         )
@@ -379,6 +406,7 @@ async def _check_single_dep(
     name: str,
     config: BotConfig,
     client: httpx.AsyncClient,
+    failure_reasons: dict[str, str] | None = None,
 ) -> bool:
     """Run a single dependency check. Returns True if healthy."""
     if name == "redis":
@@ -400,43 +428,10 @@ async def _check_single_dep(
         collection = getter() if callable(getter) else config.qdrant_collection
         scheme = urlparse(config.qdrant_url).scheme.lower()
         effective_key = config.qdrant_api_key if scheme == "https" else None
-        qdrant = AsyncQdrantClient(
-            url=config.qdrant_url,
-            api_key=effective_key,
-            timeout=config.qdrant_timeout,
-            prefer_grpc=True,
-        )
-        try:
-            exists = await qdrant.collection_exists(collection)
-            if not exists:
-                logger.warning(
-                    "Preflight WARN: Qdrant collection %s not found via SDK existence check; "
-                    "creating default schema",
-                    collection,
-                )
-                try:
-                    await _ensure_qdrant_collection(qdrant, collection)
-                    logger.info(
-                        "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
-                        collection,
-                    )
-                    return True
-                except Exception as create_exc:
-                    logger.error(
-                        "Preflight FAIL: Qdrant — could not create collection %s: %s",
-                        collection,
-                        create_exc,
-                    )
-                    return False
 
-            info = await qdrant.get_collection(collection)
-            logger.info(
-                "Preflight Qdrant: collection=%s, points=%s",
-                collection,
-                info.points_count,
-            )
-
-            # Validate expected vector configs (#570)
+        def _describe_vectors(
+            info: Any,
+        ) -> tuple[bool, str | None]:
             dense_vectors = info.config.params.vectors
             sparse_vectors = info.config.params.sparse_vectors or {}
             dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
@@ -448,14 +443,55 @@ async def _check_single_dep(
             if "bm42" not in sparse_names:
                 missing_required.add("bm42")
             if missing_required:
+                reason = (
+                    f"collection {collection} missing required vectors: {sorted(missing_required)}"
+                )
+                return False, reason
+            return True, None
+
+        async def _validate_qdrant_collection(
+            qdrant_client: AsyncQdrantClient,
+        ) -> tuple[bool, str | None]:
+            await qdrant_client.info()
+
+            exists = await qdrant_client.collection_exists(collection)
+
+            if not exists:
+                logger.warning(
+                    "Preflight WARN: Qdrant collection %s not found via SDK existence check; "
+                    "creating default schema",
+                    collection,
+                )
+                await _ensure_qdrant_collection(qdrant_client, collection)
+                logger.info(
+                    "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
+                    collection,
+                )
+                return True, None
+
+            info = await qdrant_client.get_collection(collection)
+
+            logger.info(
+                "Preflight Qdrant: collection=%s, points=%s",
+                collection,
+                info.points_count,
+            )
+
+            vectors_ok, vectors_reason = _describe_vectors(info)
+            if not vectors_ok:
                 logger.error(
                     "Preflight FAIL: Qdrant collection %s missing required vectors: %s",
                     collection,
-                    sorted(missing_required),
+                    vectors_reason,
                 )
-                return False
+                return False, vectors_reason
 
-            if "colbert" not in dense_names:
+            dense_vectors = info.config.params.vectors
+            colbert_missing = "colbert" not in (
+                dense_vectors.keys() if isinstance(dense_vectors, dict) else set()
+            )
+
+            if colbert_missing:
                 logger.warning(
                     "Preflight WARN: Qdrant collection %s missing 'colbert' vector "
                     "(server-side ColBERT reranking unavailable, RRF fallback active)",
@@ -463,7 +499,7 @@ async def _check_single_dep(
                 )
             elif info.points_count:
                 try:
-                    with_colbert = await qdrant.count(
+                    with_colbert = await qdrant_client.count(
                         collection_name=collection,
                         count_filter=models.Filter(
                             must=[models.HasVectorCondition(has_vector="colbert")]
@@ -494,15 +530,73 @@ async def _check_single_dep(
                 except Exception as exc:
                     logger.warning(
                         "Preflight WARN: Qdrant colbert coverage check failed: %s",
-                        exc,
+                        _exception_message_with_type(exc),
                     )
+            return True, None
 
-            return True
+        primary_client: AsyncQdrantClient | None = None
+        primary_exception_detail: str | None = None
+        try:
+            primary_client = AsyncQdrantClient(
+                url=config.qdrant_url,
+                api_key=effective_key,
+                timeout=config.qdrant_timeout,
+                prefer_grpc=True,
+            )
+            primary_passed, primary_reason = await _validate_qdrant_collection(primary_client)
+            if primary_passed:
+                return True
+            _collect_qdrant_failure(
+                failure_reasons, "qdrant", primary_reason or "qdrant preflight failed"
+            )
+            logger.error("Preflight FAIL: Qdrant — %s", primary_reason)
+            return False
         except Exception as exc:
-            logger.error("Preflight FAIL: Qdrant — %s", exc)
+            primary_exception_detail = _exception_message_with_type(exc)
+            logger.warning(
+                "Preflight WARN: Qdrant primary gRPC preflight failed: %s",
+                primary_exception_detail,
+            )
+            logger.warning("Preflight WARN: Qdrant attempting SDK REST fallback transport")
+        finally:
+            if primary_client is not None:
+                await primary_client.close()
+
+        if primary_exception_detail is None:
+            return False
+
+        fallback_client: AsyncQdrantClient | None = None
+        try:
+            fallback_client = AsyncQdrantClient(
+                url=config.qdrant_url,
+                api_key=effective_key,
+                timeout=config.qdrant_timeout,
+                prefer_grpc=False,
+            )
+            fallback_passed, fallback_reason = await _validate_qdrant_collection(fallback_client)
+            if fallback_passed:
+                logger.warning(
+                    "Preflight WARN: Qdrant primary gRPC preflight failed: %s; "
+                    "SDK REST fallback transport succeeded",
+                    primary_exception_detail,
+                )
+                return True
+            reason = f"REST fallback transport check failed: {fallback_reason}"
+            _collect_qdrant_failure(failure_reasons, "qdrant", reason)
+            logger.error("Preflight FAIL: Qdrant — %s", reason)
+            return False
+        except Exception as exc:
+            fallback_exception_detail = _exception_message_with_type(exc)
+            reason = (
+                f"primary gRPC failed: {primary_exception_detail}; "
+                f"REST fallback failed: {fallback_exception_detail}"
+            )
+            _collect_qdrant_failure(failure_reasons, "qdrant", reason)
+            logger.error("Preflight FAIL: Qdrant — %s", reason)
             return False
         finally:
-            await qdrant.close()
+            if fallback_client is not None:
+                await fallback_client.close()
 
     if name == "bge_m3":
         url_valid, url_error = _validate_bge_m3_url(config.bge_m3_url)
@@ -576,7 +670,10 @@ async def _check_single_dep(
 
 
 async def _check_critical_with_retry(
-    dep_name: str, config: BotConfig, client: httpx.AsyncClient
+    dep_name: str,
+    config: BotConfig,
+    client: httpx.AsyncClient,
+    failure_reasons: dict[str, str] | None = None,
 ) -> bool:
     """Check a critical dependency with tenacity retry."""
 
@@ -586,7 +683,12 @@ async def _check_critical_with_retry(
         reraise=True,
     )
     async def _attempt() -> bool:
-        result = await _check_single_dep(dep_name, config, client)
+        result = await _check_single_dep(
+            dep_name,
+            config,
+            client,
+            failure_reasons=failure_reasons,
+        )
         if not result:
             msg = f"{dep_name} check returned False"
             raise RuntimeError(msg)
@@ -629,6 +731,8 @@ async def check_dependencies(
     # Order matters: redis_cache depends on redis
     dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "litellm", "langfuse"]
 
+    failure_reasons: dict[str, str] = {}
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         for dep_name in dep_order:
             level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
@@ -640,11 +744,21 @@ async def check_dependencies(
                 continue
 
             if level == DepLevel.CRITICAL:
-                results[dep_name] = await _check_critical_with_retry(dep_name, config, client)
+                results[dep_name] = await _check_critical_with_retry(
+                    dep_name,
+                    config,
+                    client,
+                    failure_reasons=failure_reasons,
+                )
             else:
                 # Single attempt for optional deps
                 try:
-                    results[dep_name] = await _check_single_dep(dep_name, config, client)
+                    results[dep_name] = await _check_single_dep(
+                        dep_name,
+                        config,
+                        client,
+                        failure_reasons=failure_reasons,
+                    )
                 except Exception as e:
                     logger.warning("Preflight WARN: %s [OPTIONAL] — %s", dep_name, e)
                     results[dep_name] = False
@@ -655,7 +769,7 @@ async def check_dependencies(
         status = "OK" if passed else "FAIL"
         logger.info("Preflight %s: %s [%s]", status, dep_name, level.value)
 
-    report = _build_dependency_report(results)
+    report = _build_dependency_report(results, failures=failure_reasons)
     if log_summary:
         if report.final_severity is StartupSeverity.FAILED:
             logger.error(report.render())

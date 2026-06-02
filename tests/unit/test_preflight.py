@@ -9,6 +9,7 @@ from telegram_bot.preflight import (
     CACHE_KEY_PREFIXES,
     CRITICAL_RETRIES,
     PreflightError,
+    _build_dependency_report,
     _check_redis_deep,
     _check_single_dep,
     _read_colbert_coverage_warn_threshold,
@@ -415,6 +416,7 @@ class TestCheckSingleDep:
         client = AsyncMock(spec=httpx.AsyncClient)
 
         mock_qdrant_client = AsyncMock()
+        mock_qdrant_client.collection_exists = AsyncMock(return_value=True)
         mock_qdrant_client.get_collection = AsyncMock(side_effect=Exception("Connection refused"))
         mock_qdrant_client.close = AsyncMock()
 
@@ -552,10 +554,10 @@ class TestCheckDependencies:
     async def test_critical_failure_raises_preflight_error(self):
         config = _make_config()
 
-        async def fake_critical(name, cfg, client):
+        async def fake_critical(name, cfg, client, **_kwargs):
             return name != "redis"
 
-        async def fake_optional(name, cfg, client):
+        async def fake_optional(name, cfg, client, **_kwargs):
             return True
 
         with (
@@ -571,7 +573,7 @@ class TestCheckDependencies:
     async def test_optional_failure_does_not_raise(self):
         config = _make_config()
 
-        async def fake_optional(name, cfg, client):
+        async def fake_optional(name, cfg, client, **_kwargs):
             return name != "langfuse"
 
         with (
@@ -592,7 +594,7 @@ class TestCheckDependencies:
         config = _make_config()
         call_counts: dict[str, int] = {}
 
-        async def fake_check(name, cfg, client):
+        async def fake_check(name, cfg, client, **_kwargs):
             call_counts[name] = call_counts.get(name, 0) + 1
             # qdrant fails first attempt, passes second
             return not (name == "qdrant" and call_counts[name] < 2)
@@ -609,7 +611,7 @@ class TestCheckDependencies:
     async def test_redis_cache_skipped_when_redis_fails(self):
         config = _make_config()
 
-        async def fake_critical(name, cfg, client):
+        async def fake_critical(name, cfg, client, **_kwargs):
             return name != "redis"
 
         with (
@@ -622,7 +624,7 @@ class TestCheckDependencies:
     async def test_critical_dep_exception_treated_as_failure(self):
         config = _make_config()
 
-        async def fake_critical(name, cfg, client):
+        async def fake_critical(name, cfg, client, **_kwargs):
             return name != "bge_m3"
 
         with (
@@ -662,6 +664,7 @@ class TestQdrantVectorValidation:
         mock_collection_info.points_count = 278
         mock_collection_info.config.params.vectors = {"dense": MagicMock()}
         mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.close = AsyncMock()
 
@@ -687,6 +690,7 @@ class TestQdrantVectorValidation:
             "colbert": MagicMock(),
         }
         mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.close = AsyncMock()
 
@@ -712,6 +716,7 @@ class TestQdrantVectorValidation:
             "colbert": MagicMock(),
         }
         mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.count = AsyncMock(return_value=MagicMock(count=180))
         mock_qdrant.close = AsyncMock()
@@ -740,6 +745,7 @@ class TestQdrantVectorValidation:
             "colbert": MagicMock(),
         }
         mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.count = AsyncMock(return_value=MagicMock(count=100))
         mock_qdrant.close = AsyncMock()
@@ -755,6 +761,34 @@ class TestQdrantVectorValidation:
         assert "coverage" in caplog.text.lower()
         assert "100.00%" in caplog.text
 
+    async def test_qdrant_colbert_coverage_failure_warns_without_failing(self, caplog):
+        """ColBERT coverage is advisory; count failures should not fail startup."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 100
+        mock_collection_info.config.params.vectors = {
+            "dense": MagicMock(),
+            "colbert": MagicMock(),
+        }
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.count = AsyncMock(side_effect=RuntimeError("count unavailable"))
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.WARNING),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is True
+        assert "colbert coverage check failed" in caplog.text.lower()
+
     async def test_qdrant_fails_when_dense_missing(self):
         """Missing dense vector causes check to fail."""
         config = _make_config()
@@ -763,6 +797,7 @@ class TestQdrantVectorValidation:
         mock_collection_info.points_count = 278
         mock_collection_info.config.params.vectors = {}
         mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.close = AsyncMock()
 
@@ -779,6 +814,7 @@ class TestQdrantVectorValidation:
         mock_collection_info.points_count = 278
         mock_collection_info.config.params.vectors = {"dense": MagicMock()}
         mock_collection_info.config.params.sparse_vectors = {}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.close = AsyncMock()
 
@@ -804,6 +840,7 @@ class TestQdrantPreflightClient:
         mock_collection_info.points_count = 100
         mock_collection_info.config.params.vectors = {"dense": MagicMock()}
         mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.collection_exists = AsyncMock(return_value=True)
         mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
         mock_qdrant.close = AsyncMock()
 
@@ -816,6 +853,32 @@ class TestQdrantPreflightClient:
             call_kwargs = MockClient.call_args[1]
             assert call_kwargs.get("timeout") == config.qdrant_timeout
             assert call_kwargs.get("prefer_grpc") is True
+
+    async def test_qdrant_failure_report_includes_reason(self):
+        """Failure detail should propagate into startup summary when qdrant checks fail."""
+        config = _make_config()
+        client = AsyncMock(spec=httpx.AsyncClient)
+        failure_reasons: dict[str, str] = {}
+
+        with patch(
+            "telegram_bot.preflight.AsyncQdrantClient", side_effect=[Exception(), Exception()]
+        ):
+            result = await _check_single_dep(
+                "qdrant",
+                config,
+                client,
+                failure_reasons=failure_reasons,
+            )
+
+        assert result is False
+        assert "qdrant" in failure_reasons
+        assert failure_reasons["qdrant"]
+        assert "empty exception message" in failure_reasons["qdrant"].lower()
+
+        report = _build_dependency_report({"qdrant": False}, failures=failure_reasons)
+        rendered = report.render()
+        assert "qdrant: CRITICAL dependency unavailable" in rendered
+        assert "empty exception message" in rendered
 
 
 class TestPostgresPreflight:
@@ -866,7 +929,7 @@ class TestPostgresOptionalBehavior:
         """Postgres failure does not raise PreflightError."""
         config = _make_config(realestate_database_url="postgresql://u:p@localhost/missing")
 
-        async def fake_optional(name, cfg, client):
+        async def fake_optional(name, cfg, client, **_kwargs):
             return False
 
         with (

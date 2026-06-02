@@ -81,7 +81,9 @@ bug_classes:
       tests/unit/test_check_image_drift.py locks the read-only
       runtime drift checker; telegram_bot/preflight.py validates
       BGE-M3 canonical port 8000 for local/native URLs before any
-      network call; make verify-compose-runtime compares running image
+      network call; tests/contract/test_qdrant_preflight_contract.py
+      locks Qdrant SDK transport fallback and non-empty startup
+      diagnostics; make verify-compose-runtime compares running image
       digests and published host ports against Compose source.
     canonical_issue: "#2185"
     related_issues:
