@@ -81,7 +81,8 @@ bug_classes:
   - name: self-hosted runner scheduling drift
     guardrail: >
       tests/unit/test_trusted_heavy_workflow.py pins PR self-hosted jobs to the
-      pr-fast label group and keeps Heavy Contract Tests in shadow mode;
+      pr-fast label group and keeps Fast Tests and Heavy Contract Tests
+      authoritative for trusted risk-path PRs;
       tests/unit/test_ci_deploy_workflow.py pins nightly-heavy label routing,
       read-only permissions, cancellation, and timeouts; scripts/check_self_hosted_runner.sh
       verifies pr-fast and nightly-heavy runner label groups before workflows

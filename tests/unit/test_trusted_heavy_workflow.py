@@ -98,19 +98,19 @@ def test_fast_tests_is_authoritative_for_trusted_risk_paths() -> None:
     assert all(step.get("continue-on-error") is not True for step in run_steps)
 
 
-def test_heavy_contract_tests_remain_shadow_mode_until_baseline_green() -> None:
-    """Heavy contract checks stay non-authoritative until baseline is green."""
+def test_heavy_contract_tests_is_authoritative_for_trusted_risk_paths() -> None:
+    """Heavy Contract Tests must fail the trusted PR gate on contract regressions."""
     data = _load_workflow()
-    job = data["jobs"]["heavy-contract-tests-shadow"]
-    assert job.get("continue-on-error") is True
-    test_steps = [
-        step for step in job.get("steps", []) if str(step.get("name", "")).startswith("Run ")
-    ]
-    assert test_steps, "heavy-contract-tests-shadow must include a test execution step"
+    job = data["jobs"].get("heavy-contract-tests")
+    assert job is not None, "trusted-heavy.yml must define heavy-contract-tests"
+    assert job["name"] == "Heavy Contract Tests"
+    assert job["needs"] == "changes"
+    assert job.get("continue-on-error") is not True
+    test_steps = [step for step in job.get("steps", []) if step.get("run") == "make test-contract"]
+    assert test_steps, "heavy-contract-tests must run `make test-contract`"
     for step in test_steps:
-        assert step.get("continue-on-error") is True, (
-            f"heavy-contract-tests-shadow step {step.get('name')!r} must not "
-            "redline the PR in shadow mode"
+        assert step.get("continue-on-error") is not True, (
+            f"heavy-contract-tests step {step.get('name')!r} must fail on regressions"
         )
 
 
@@ -129,11 +129,12 @@ def test_trusted_heavy_skips_untrusted_fork_prs() -> None:
         )
 
 
-def test_trusted_heavy_contains_contract_shadow_and_fast_gate_jobs() -> None:
+def test_trusted_heavy_contains_contract_and_fast_gate_jobs() -> None:
     """Trusted heavy workflow must cover both contract and fast tests."""
     data = _load_workflow()
     jobs = data["jobs"]
-    assert "heavy-contract-tests-shadow" in jobs
+    assert "heavy-contract-tests" in jobs
+    assert "heavy-contract-tests-shadow" not in jobs
     assert "fast-tests" in jobs
 
     commands = "\n".join(
