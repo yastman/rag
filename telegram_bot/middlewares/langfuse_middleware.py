@@ -29,18 +29,21 @@ def _extract_event_input(event: TelegramObject, action_type: str) -> dict[str, A
             content_type=str(getattr(event, "content_type", "unknown")),
             text=text,
             action=action_type,
+            route=action_type,
         )
     if isinstance(event, CallbackQuery):
         return build_safe_input_payload(
             content_type="callback",
             text=event.data or "",
             action=action_type,
+            route=action_type,
             extra={"callback_data": event.data or ""},
         )
     return build_safe_input_payload(
         content_type="unknown",
         text="",
         action=action_type,
+        route=action_type,
     )
 
 

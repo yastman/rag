@@ -96,6 +96,9 @@ TRACKED_NODE_NAMES = [
     "summarize",
 ]
 _TRACKED_NODE_SET = frozenset(TRACKED_NODE_NAMES)
+LANGFUSE_TRACE_FIELDS_WITHOUT_OBSERVATIONS = "core,io,scores,metrics"
+LANGFUSE_TRACE_FIELDS_WITH_OBSERVATIONS = "core,io,scores,observations,metrics"
+LANGFUSE_OBSERVATIONS_FIELDS = "core,basic"
 REQUIRED_TRACE_NAMES = ["rag-api-query", "voice-session", "ingestion-cli-run"]
 REQUIRED_TELEGRAM_OBSERVATION_FAMILIES = ["telegram-rag-query", "telegram-rag-supervisor"]
 TELEGRAM_ROOT_TRACE_NAME = "telegram-message"
@@ -115,6 +118,7 @@ TELEGRAM_ROOT_CONTEXT_FORBIDDEN_FIELDS = (
     "event_chat",
     "raw_update",
 )
+_OBSERVATIONS_V2_UNAVAILABLE = False
 
 GO_NO_GO_THRESHOLDS_PATH = (
     Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
@@ -155,6 +159,17 @@ def load_trace_coverage_tiers() -> dict[str, list[str]]:
         "required_when_exercised": tiers.get("required_when_exercised", []),
         "opportunistic_for_1307": tiers.get("opportunistic_for_1307", []),
     }
+
+
+def _default_required_direct_trace_names(tiers: dict[str, list[str]]) -> list[str]:
+    """Return direct trace families required by the default fast validation gate.
+
+    ``trace_contract.yaml`` is the source of truth for blocking tiers. Families
+    in ``required_when_exercised`` are checked by the runtime flows that
+    exercise them, not by a graph-only fast run.
+    """
+    required_for_default = set(tiers.get("required_for_1307", []))
+    return [name for name in REQUIRED_TRACE_NAMES if name in required_for_default]
 
 
 class FakeSentMessage:
@@ -279,6 +294,78 @@ def _langfuse_auth_probe() -> None:
     lf = Langfuse()
     if not lf.auth_check():
         raise RuntimeError("Langfuse auth_check returned False")
+
+
+def _next_cursor(response: Any) -> str | None:
+    """Return Langfuse cursor metadata across SDK response variants."""
+    meta = getattr(response, "meta", None)
+    if meta is None:
+        return None
+    cursor = getattr(meta, "next_cursor", None) or getattr(meta, "cursor", None)
+    return str(cursor) if cursor else None
+
+
+def _list_trace_observations(
+    lf: Any,
+    trace_id: str,
+    *,
+    limit: int = 100,
+) -> list[Any]:
+    """Fetch trace observations through the Langfuse SDK-native API.
+
+    Langfuse Cloud v4 exposes observations as a dedicated SDK-native v2
+    endpoint. Langfuse OSS v4 can report that v2 observations are Cloud-only;
+    for that local/self-hosted case, fall back to SDK ``trace.get`` with
+    observations fields instead of adding a custom HTTP client.
+    """
+    global _OBSERVATIONS_V2_UNAVAILABLE
+
+    if _OBSERVATIONS_V2_UNAVAILABLE:
+        return _list_trace_observations_from_trace_get(lf, trace_id)
+
+    observations: list[Any] = []
+    cursor: str | None = None
+    try:
+        while True:
+            page = lf.api.observations.get_many(
+                trace_id=trace_id,
+                fields=LANGFUSE_OBSERVATIONS_FIELDS,
+                limit=limit,
+                cursor=cursor,
+            )
+            observations.extend(list(getattr(page, "data", None) or []))
+            cursor = _next_cursor(page)
+            if not cursor:
+                break
+        return observations
+    except Exception as exc:
+        if _looks_like_observations_v2_unavailable(exc):
+            _OBSERVATIONS_V2_UNAVAILABLE = True
+            logger.info(
+                "Langfuse Observations API v2 unavailable on this host; "
+                "falling back to SDK trace.get observations."
+            )
+            return _list_trace_observations_from_trace_get(lf, trace_id)
+        raise
+
+
+def _looks_like_observations_v2_unavailable(exc: Exception) -> bool:
+    """Detect Langfuse OSS response for Cloud-only observations v2 API."""
+    text = str(exc).lower()
+    return (
+        "v2 apis are currently in beta" in text
+        or "only available on langfuse cloud" in text
+        or "langfusenotfounderror" in text
+    )
+
+
+def _list_trace_observations_from_trace_get(lf: Any, trace_id: str) -> list[Any]:
+    """Fetch observations via SDK trace details for self-hosted Langfuse."""
+    trace = lf.api.trace.get(
+        trace_id,
+        fields=LANGFUSE_TRACE_FIELDS_WITH_OBSERVATIONS,
+    )
+    return list(getattr(trace, "observations", None) or [])
 
 
 def check_worktree_clean(strict: bool = False) -> None:
@@ -750,7 +837,10 @@ async def enrich_results_from_langfuse(
         if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         try:
-            trace = lf.api.trace.get(r.trace_id)
+            trace = lf.api.trace.get(
+                r.trace_id,
+                fields=LANGFUSE_TRACE_FIELDS_WITHOUT_OBSERVATIONS,
+            )
             # Populate scores from Langfuse
             if hasattr(trace, "scores") and trace.scores:
                 for score in trace.scores:
@@ -760,8 +850,9 @@ async def enrich_results_from_langfuse(
                         r.scores[name] = float(value)
             # Populate node span durations and error count from observations
             observation_error_count = 0
-            if hasattr(trace, "observations") and trace.observations:
-                for obs in trace.observations:
+            observations = _list_trace_observations(lf, r.trace_id)
+            if observations:
+                for obs in observations:
                     level = getattr(obs, "level", None)
                     if level and str(level).upper().endswith("ERROR"):
                         observation_error_count += 1
@@ -796,6 +887,8 @@ async def enrich_results_from_langfuse(
                     if start_time and end_time:
                         delta_ms = (end_time - start_time).total_seconds() * 1000
                         r.node_spans_ms[node_name] = delta_ms
+                    elif (latency := getattr(obs, "latency", None)) is not None:
+                        r.node_spans_ms[node_name] = float(latency) * 1000
             r.state["observation_error_count"] = observation_error_count
             enriched += 1
         except Exception as e:
@@ -836,6 +929,7 @@ def check_required_trace_coverage(
     *,
     required_trace_names: list[str] | None = None,
     required_observation_names: list[str] | None = None,
+    coverage_mode: str = "full",
     lookback_hours: int = 24,
 ) -> dict[str, Any]:
     """Check required trace coverage in Langfuse within lookback window.
@@ -845,12 +939,23 @@ def check_required_trace_coverage(
     2) Required observation families nested under telegram-message root traces.
     3) Sanitized root input contract for telegram-message traces.
     """
-    required_direct = REQUIRED_TRACE_NAMES if required_trace_names is None else required_trace_names
-    required_nested = (
-        REQUIRED_TELEGRAM_OBSERVATION_FAMILIES
-        if required_observation_names is None
-        else required_observation_names
-    )
+    tiers = load_trace_coverage_tiers()
+    if coverage_mode not in {"fast", "full"}:
+        raise ValueError(f"Unsupported trace coverage mode: {coverage_mode}")
+
+    if required_trace_names is not None:
+        required_direct = required_trace_names
+    elif coverage_mode == "fast":
+        required_direct = _default_required_direct_trace_names(tiers)
+    else:
+        required_direct = REQUIRED_TRACE_NAMES
+
+    if required_observation_names is not None:
+        required_nested = required_observation_names
+    elif coverage_mode == "fast":
+        required_nested = []
+    else:
+        required_nested = REQUIRED_TELEGRAM_OBSERVATION_FAMILIES
     required = [*required_direct, *required_nested]
     include_root_context_contract = bool(required_nested)
     if include_root_context_contract:
@@ -886,7 +991,6 @@ def check_required_trace_coverage(
             missing.append(trace_name)
 
     # Opportunistic families — tracked but non-blocking
-    tiers = load_trace_coverage_tiers()
     opportunistic = [t for t in tiers.get("opportunistic_for_1307", []) if t not in required_direct]
     opportunistic_present: list[str] = []
     opportunistic_missing: list[str] = []
@@ -928,13 +1032,20 @@ def check_required_trace_coverage(
         if not trace_id:
             continue
         try:
-            trace = lf.api.trace.get(trace_id)
+            trace = lf.api.trace.get(
+                trace_id,
+                fields=LANGFUSE_TRACE_FIELDS_WITHOUT_OBSERVATIONS,
+            )
         except Exception as exc:
             logger.warning("Failed to fetch root trace '%s': %s", trace_id, exc)
             continue
 
         root_traces_checked += 1
-        observations = list(getattr(trace, "observations", None) or [])
+        try:
+            observations = _list_trace_observations(lf, trace_id)
+        except Exception as exc:
+            logger.warning("Failed to fetch root trace observations '%s': %s", trace_id, exc)
+            observations = []
         observation_names: list[str] = []
 
         for obs in observations:
@@ -1010,6 +1121,7 @@ def check_required_trace_coverage(
     lf.flush()
     logger.info("Required trace coverage: present=%s missing=%s", present, missing)
     return {
+        "mode": coverage_mode,
         "required": required,
         "present": present,
         "missing": missing,
@@ -1725,7 +1837,9 @@ async def run_validation(args: argparse.Namespace) -> None:
     orphan_rate = check_orphan_traces(all_results)
 
     logger.info("Checking required trace family coverage...")
-    required_trace_coverage = check_required_trace_coverage()
+    required_trace_coverage = check_required_trace_coverage(
+        coverage_mode=args.trace_coverage_mode,
+    )
 
     # Runtime trace_id continuity across service/thread boundaries (#2252).
     # Proves each canonical flow is one trace tree, not several partial traces.
@@ -1920,6 +2034,16 @@ def main() -> None:
             "Disable the #2244 single-trace continuity check "
             "(by default the run fails if a canonical flow fragments across a "
             "service/thread boundary)."
+        ),
+    )
+    parser.add_argument(
+        "--trace-coverage-mode",
+        choices=("fast", "full"),
+        default="fast",
+        help=(
+            "Trace-family coverage strictness. fast checks only families exercised "
+            "by the local graph validation workload; full also requires all "
+            "canonical runtime families."
         ),
     )
     args = parser.parse_args()
