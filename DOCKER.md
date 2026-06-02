@@ -115,6 +115,8 @@ still need to be throwaway/dev-only:
 | Mini App Frontend | `http://localhost:8091` |
 | LiteLLM | `http://localhost:4000` |
 | Langfuse | `http://localhost:3001` |
+| MinIO API | `http://localhost:${MINIO_API_PORT:-9090}` |
+| MinIO Console | `http://localhost:${MINIO_CONSOLE_PORT:-9091}` |
 | Loki | `http://localhost:3100` |
 | Alertmanager | `http://localhost:9093` |
 | RAG API (voice path) | `http://localhost:8080` |

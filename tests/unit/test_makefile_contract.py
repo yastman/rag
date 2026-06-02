@@ -225,11 +225,30 @@ def test_validate_traces_fast_loads_runtime_dotenv_without_redis_default() -> No
     assert block_match, "validate-traces-fast target not found in Makefile"
     block = block_match.group(0)
 
-    assert 'uv run dotenv -f "$$TRACE_ENV_FILE" run --no-override --' in block
+    assert (
+        "TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)"
+        in text
+    )
+    assert 'uv run dotenv -f "$(TRACE_ENV_FILE)" run --no-override --' in block
     assert 'REDIS_PASSWORD="$(or $(REDIS_PASSWORD),dev_redis_pass)"' not in block, (
         "validate-traces-fast must let python-dotenv load REDIS_PASSWORD from the "
         "same env file Compose uses; a hardcoded default causes auth mismatches."
     )
+
+
+def test_validate_traces_fast_randomizes_minio_host_ports_by_default() -> None:
+    """Trace validation must not depend on fixed optional MinIO host ports."""
+    text = _makefile_text()
+    block_match = re.search(
+        r"^validate-traces-fast:.*?(?=^[A-Za-z0-9_.-]+:|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert block_match, "validate-traces-fast target not found in Makefile"
+    block = block_match.group(0)
+
+    assert 'MINIO_API_PORT="$(or $(MINIO_API_PORT),0)"' in block
+    assert 'MINIO_CONSOLE_PORT="$(or $(MINIO_CONSOLE_PORT),0)"' in block
 
 
 # --- #1307 core trace gate contract tests ---

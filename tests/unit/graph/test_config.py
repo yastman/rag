@@ -282,12 +282,24 @@ class TestGraphConfig:
         cfg = GraphConfig(
             reasoning_effort="high",
             reasoning_format="hidden",
-            disable_reasoning=True,
         )
         assert cfg.get_reasoning_kwargs() == {
             "reasoning_effort": "high",
             "extra_body": {
                 "reasoning_format": "hidden",
+            },
+        }
+
+    def test_disable_reasoning_is_mutually_exclusive_with_reasoning_controls(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig(
+            reasoning_effort="high",
+            reasoning_format="hidden",
+            disable_reasoning=True,
+        )
+        assert cfg.get_reasoning_kwargs() == {
+            "extra_body": {
                 "disable_reasoning": True,
             },
         }
