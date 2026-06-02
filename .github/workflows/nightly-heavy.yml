@@ -5,14 +5,18 @@ on:
     - cron: "30 2 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: nightly-heavy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   nightly-full:
     name: Nightly Full (integration + smoke + baseline)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -46,7 +50,8 @@ jobs:
     # which fail on older runner versions before they reach the test step.
     # If you upgrade the runner, keep this version floor in sync with
     # tests/unit/test_github_workflow_action_versions.py.
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64, nightly-heavy]
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

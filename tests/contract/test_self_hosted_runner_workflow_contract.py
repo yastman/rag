@@ -59,9 +59,7 @@ def test_nightly_heavy_uses_self_hosted_runner() -> None:
         if isinstance(value, str):
             return value.strip() == "self-hosted"
         if isinstance(value, list):
-            return any(
-                isinstance(v, str) and v.strip() == "self-hosted" for v in value
-            )
+            return any(isinstance(v, str) and v.strip() == "self-hosted" for v in value)
         return False
 
     assert any(_is_self_hosted(v) for v in runs_on_values), (
@@ -192,9 +190,62 @@ def test_runbook_documents_disable_procedure() -> None:
     text = RUNBOOK.read_text(encoding="utf-8").lower()
     # Accept any of the standard mute mechanisms.
     assert any(
-        token in text
-        for token in ("workflow_dispatch", "disable", "mute", "comment out")
+        token in text for token in ("workflow_dispatch", "disable", "mute", "comment out")
     ), (
         "runbook must describe how to temporarily mute or disable "
         "nightly-heavy.yml when the runner is down for maintenance."
+    )
+
+
+def test_diagnostic_script_supports_pr_only_flag() -> None:
+    """Script must expose a ``--pr-only`` mode that requires only ``pr-fast``."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "--pr-only" in text, (
+        f"{SCRIPT.relative_to(REPO_ROOT)} must accept a '--pr-only' flag "
+        "for operators who only need the pr-fast runner online."
+    )
+
+
+def test_diagnostic_script_mentions_label_groups() -> None:
+    """Script must document the ``pr-fast`` and ``nightly-heavy`` label groups."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "pr-fast" in text, (
+        f"{SCRIPT.relative_to(REPO_ROOT)} must mention the 'pr-fast' label "
+        "group so operators know which label the PR fast-gate runner needs."
+    )
+    assert "nightly-heavy" in text, (
+        f"{SCRIPT.relative_to(REPO_ROOT)} must mention the 'nightly-heavy' label "
+        "group so operators know which label the nightly runner needs."
+    )
+
+
+def test_runbook_documents_pr_fast_label() -> None:
+    """Runbook must describe the ``pr-fast`` runner label."""
+    text = RUNBOOK.read_text(encoding="utf-8").lower()
+    assert "pr-fast" in text, (
+        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention the 'pr-fast' label "
+        "so operators understand the PR fast-gate runner requirement."
+    )
+
+
+def test_runbook_documents_nightly_heavy_label() -> None:
+    """Runbook must describe the ``nightly-heavy`` runner label."""
+    text = RUNBOOK.read_text(encoding="utf-8").lower()
+    assert "nightly-heavy" in text, (
+        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention the 'nightly-heavy' label "
+        "so operators understand the nightly runner requirement."
+    )
+
+
+def test_runbook_documents_wsl_autostart() -> None:
+    """Runbook must document WSL profile autostart via ``~/bin/start-github-runner-rag.sh``."""
+    text = RUNBOOK.read_text(encoding="utf-8")
+    assert "start-github-runner-rag.sh" in text, (
+        f"{RUNBOOK.relative_to(REPO_ROOT)} must reference the existing "
+        "WSL autostart script '~/bin/start-github-runner-rag.sh' so "
+        "operators know it already exists and should be updated, not created."
+    )
+    assert "both runner dirs" in text or "both runners" in text.lower(), (
+        f"{RUNBOOK.relative_to(REPO_ROOT)} must mention that the autostart "
+        "script should start both runner directories when both are registered."
     )

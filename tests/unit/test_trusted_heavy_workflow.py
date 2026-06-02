@@ -17,15 +17,25 @@ def _load_workflow() -> dict:
 
 
 def test_trusted_heavy_runs_only_on_builtin_linux_self_hosted_labels() -> None:
-    """Self-hosted PR checks must use built-in Linux self-hosted runner labels."""
+    """Self-hosted PR checks must use the pr-fast label group."""
     data = _load_workflow()
     for job_key, job in data["jobs"].items():
         if "self-hosted" not in str(job.get("runs-on", "")):
             continue
         labels = job.get("runs-on")
-        assert labels == ["self-hosted", "Linux", "X64"], (
-            f"{job_key} must run on [self-hosted, Linux, X64], got {labels!r}"
+        assert labels == ["self-hosted", "Linux", "X64", "pr-fast"], (
+            f"{job_key} must run on [self-hosted, Linux, X64, pr-fast], got {labels!r}"
         )
+
+
+def test_trusted_heavy_self_hosted_jobs_have_timeout() -> None:
+    """Every self-hosted job in trusted-heavy must declare timeout-minutes: 20."""
+    data = _load_workflow()
+    for job_key, job in data["jobs"].items():
+        if "self-hosted" not in str(job.get("runs-on", "")):
+            continue
+        timeout = job.get("timeout-minutes")
+        assert timeout == 20, f"{job_key} must set timeout-minutes: 20, got {timeout!r}"
 
 
 def test_trusted_heavy_workflow_runs_for_all_prs() -> None:

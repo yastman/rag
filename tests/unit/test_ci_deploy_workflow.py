@@ -165,7 +165,8 @@ def test_ci_workflow_no_secrets_for_untrusted_pr_jobs() -> None:
 
 
 def test_nightly_heavy_uses_self_hosted_for_heavy_tier() -> None:
-    """Nightly heavy workflow must keep the expensive tier on self-hosted.
+    """Nightly heavy workflow must keep the expensive tier on self-hosted
+    with the nightly-heavy label group.
 
     The self-hosted runner policy: GitHub-hosted for light PR checks,
     self-hosted for expensive heavy/runtime/nightly checks.
@@ -179,9 +180,51 @@ def test_nightly_heavy_uses_self_hosted_for_heavy_tier() -> None:
     heavy_job = jobs.get("heavy-tier")
     assert heavy_job is not None, "nightly-heavy.yml must define heavy-tier"
     runs_on = heavy_job.get("runs-on", "")
-    assert runs_on == "self-hosted", (
-        "Job 'heavy-tier' in nightly-heavy.yml must use 'runs-on: self-hosted' "
-        f"per self-hosted runner policy. Got '{runs_on}'."
+    assert runs_on == ["self-hosted", "Linux", "X64", "nightly-heavy"], (
+        "Job 'heavy-tier' in nightly-heavy.yml must use "
+        "'[self-hosted, Linux, X64, nightly-heavy]' per self-hosted runner policy. "
+        f"Got '{runs_on}'."
+    )
+
+
+def test_nightly_heavy_permissions_are_read_only() -> None:
+    """Nightly heavy must declare top-level ``permissions: contents: read``."""
+    text = Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    permissions = data.get("permissions")
+    assert permissions is not None, "nightly-heavy.yml must have a top-level permissions key"
+    assert permissions.get("contents") == "read", (
+        f"nightly-heavy.yml permissions.contents must be 'read', got {permissions}"
+    )
+
+
+def test_nightly_heavy_cancel_in_progress_is_true() -> None:
+    """Nightly heavy must set ``concurrency.cancel-in-progress: true``."""
+    text = Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    concurrency = data.get("concurrency", {})
+    assert concurrency.get("cancel-in-progress") is True, (
+        f"nightly-heavy.yml concurrency.cancel-in-progress must be true, got {concurrency}"
+    )
+
+
+def test_nightly_heavy_jobs_have_timeouts() -> None:
+    """Nightly-full and heavy-tier must declare appropriate timeout-minutes."""
+    text = Path(".github/workflows/nightly-heavy.yml").read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+
+    jobs = data.get("jobs", {})
+    nightly_full = jobs.get("nightly-full")
+    assert nightly_full is not None, "nightly-heavy.yml must define nightly-full"
+
+    heavy_tier = jobs.get("heavy-tier")
+    assert heavy_tier is not None, "nightly-heavy.yml must define heavy-tier"
+
+    assert nightly_full.get("timeout-minutes") == 45, (
+        f"nightly-full must set timeout-minutes: 45, got {nightly_full.get('timeout-minutes')!r}"
+    )
+    assert heavy_tier.get("timeout-minutes") == 180, (
+        f"heavy-tier must set timeout-minutes: 180, got {heavy_tier.get('timeout-minutes')!r}"
     )
 
 
