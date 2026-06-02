@@ -24,12 +24,12 @@ def test_redis_url_fixture_is_provided(redis_url: str) -> None:
 
 @pytest.mark.smoke
 def test_redis_url_fixture_injects_password(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`redis_url` mirrors `_build_redis_url`: injects REDIS_PASSWORD if not embedded."""
+    """`redis_url` fixture injects REDIS_PASSWORD if not embedded in REDIS_URL."""
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
     monkeypatch.setenv("REDIS_PASSWORD", "topsecret")
 
     # Reimport / recompute by calling the fixture function directly.
-    from tests.smoke.conftest import redis_url as redis_url_fixture
+    from tests.fixtures.config import redis_url as redis_url_fixture
 
     # Module-scoped pytest fixtures are wrapped; reach the underlying function.
     func = getattr(redis_url_fixture, "__wrapped__", redis_url_fixture)
@@ -43,7 +43,7 @@ def test_redis_url_fixture_preserves_explicit_credentials(monkeypatch: pytest.Mo
     monkeypatch.setenv("REDIS_URL", "redis://:already@host:6379")
     monkeypatch.setenv("REDIS_PASSWORD", "ignored")
 
-    from tests.smoke.conftest import redis_url as redis_url_fixture
+    from tests.fixtures.config import redis_url as redis_url_fixture
 
     func = getattr(redis_url_fixture, "__wrapped__", redis_url_fixture)
     url = func() if callable(func) else None
