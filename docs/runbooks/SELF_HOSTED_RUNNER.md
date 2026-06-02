@@ -8,8 +8,8 @@
 > scripts/check_self_hosted_runner.sh
 > ```
 
-Use this runbook when the nightly heavy-tier test job fails to start, queues
-forever, or the operator needs to bring a new self-hosted runner online.
+Use this runbook when PR fast-gate or nightly heavy-tier test jobs fail to start,
+queue forever, or the operator needs to bring new self-hosted runners online.
 
 ## Self-Hosted Runner Policy
 
@@ -19,6 +19,16 @@ The repo follows a two-tier runner policy to balance security and capability:
 |------|--------|-------|----------|
 | **Light (trusted)** | `ubuntu-latest` (GitHub-hosted) | Required PR checks, lint, format | CI.yml |
 | **Heavy (trusted)** | `self-hosted`, `Linux`, `X64` (WSL/Linux host) | Trusted PR fast gate, shadow contract checks, nightly, runtime, benchmarks | `trusted-heavy.yml`, `nightly-heavy.yml` |
+
+The heavy tier uses two **custom label groups** on self-hosted runners:
+
+| Label group | Required labels | Workflow | Purpose |
+|-------------|----------------|----------|---------|
+| **`pr-fast`** | `self-hosted`, `Linux`, `X64`, `pr-fast` | `trusted-heavy.yml` | PR fast-gate (`fast-tests`) and shadow contract checks (`heavy-contract-tests-shadow`) |
+| **`nightly-heavy`** | `self-hosted`, `Linux`, `X64`, `nightly-heavy` | `nightly-heavy.yml` | Scheduled heavy-tier test suite (`requires_extras`, `load`, `chaos`, `e2e`, `benchmark`) |
+
+GitHub remains the authority for runner registration and label assignment; the
+WSL runner host provides compute only.
 
 ### Policy Rules
 
@@ -67,21 +77,18 @@ The repo follows a two-tier runner policy to balance security and capability:
 | Workflow file | Job | `runs-on` | What it runs |
 |---|---|---|---|
 | [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `changes` | `ubuntu-latest` | Always reports a lightweight path-filter result so trusted-heavy checks can be required without disappearing on docs-only PRs |
-| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `fast-tests` | `[self-hosted, Linux, X64]` | `make test` for trusted same-repo PRs that touch code/runtime/test paths |
-| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `heavy-contract-tests-shadow` | `[self-hosted, Linux, X64]` | `make test-contract` in shadow mode for trusted same-repo PRs that touch code/runtime/test paths |
-| [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) | `heavy-tier` | `self-hosted` | `pytest -n auto -m "requires_extras or load or chaos or e2e or benchmark"` |
+| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `fast-tests` | `[self-hosted, Linux, X64, pr-fast]` | `make test` for trusted same-repo PRs that touch code/runtime/test paths |
+| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `heavy-contract-tests-shadow` | `[self-hosted, Linux, X64, pr-fast]` | `make test-contract` in shadow mode for trusted same-repo PRs that touch code/runtime/test paths |
+| [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) | `heavy-tier` | `[self-hosted, Linux, X64, nightly-heavy]` | `pytest -n auto -m "requires_extras or load or chaos or e2e or benchmark"` |
 
-Trusted PR heavy checks use only GitHub built-in labels: `self-hosted`,
-`Linux`, and `X64`. This avoids custom label drift during the first rollout.
-The nightly workflow currently accepts any repository-level `self-hosted`
-runner.
+These jobs now use custom label groups so the diagnostic script (and operators)
+can verify each group independently:
 
-`Fast Tests` is the first self-hosted PR check promoted out of shadow mode.
-It is safe to make it a branch-protection required check after it stays green
-across trusted PRs because `trusted-heavy.yml` runs on every pull request and
-skips the self-hosted job for docs-only or untrusted fork PRs. `Heavy Contract
-Tests (shadow)` remains telemetry until the contract baseline is stable enough
-to promote separately.
+- **PR-label group** (`pr-fast`): required for trusted PR fast-gate jobs. Use
+  `scripts/check_self_hosted_runner.sh --pr-only` to verify just this group.
+- **Nightly label group** (`nightly-heavy`): required for the scheduled
+  nightly heavy-tier suite. Use the default mode (no flags) to verify both
+  groups.
 
 ## Resource Requirements
 
@@ -106,13 +113,22 @@ tier suites` step in [`nightly-heavy.yml`](../../.github/workflows/nightly-heavy
 Run from any checkout with `gh` authenticated against the repo:
 
 ```bash
+# Default: verify both pr-fast AND nightly-heavy label groups are online
 scripts/check_self_hosted_runner.sh
+
+# PR-only: verify only the pr-fast label group (skip nightly-heavy)
+scripts/check_self_hosted_runner.sh --pr-only
 ```
 
 The script:
 - Calls `gh api repos/$OWNER/$REPO/actions/runners` and prints
   `{name, status, os, labels, busy}` per runner.
-- Exits non-zero if no runner is registered or every runner is offline.
+- In default mode, requires at least one online runner with labels
+  `self-hosted, Linux, X64, pr-fast` AND at least one online runner with
+  labels `self-hosted, Linux, X64, nightly-heavy`.
+- In `--pr-only` mode, requires only the `pr-fast` label group.
+- Exits non-zero if a required label group is missing or every runner in that
+  group is offline.
 - Prints a checklist of resource requirements at the end.
 
 Direct API equivalent (read-only):
@@ -131,22 +147,25 @@ GitHub publishes the canonical, token-bearing instructions at
 repository. Follow that flow exactly; the registration token shown there
 is short-lived and must not be committed.
 
-For this repository, register the runner without custom labels for the first rollout.
-The final configure command from GitHub should look like this shape:
+For this repository, the runner needs the following labels after registration:
+
+- **PR runner** (`pr-fast`): `self-hosted, Linux, X64, pr-fast`
+- **Nightly runner** (`nightly-heavy`): `self-hosted, Linux, X64, nightly-heavy`
+
+GitHub automatically adds built-in labels such as `self-hosted`, OS, and
+architecture. Add the custom labels (`pr-fast` or `nightly-heavy`) via
+**Settings -> Actions -> Runners -> select runner -> Labels** in the GitHub
+UI, or pass `--labels` during `config.sh`. The final configure command from
+GitHub should look like this shape (add `--labels pr-fast` or
+`--labels nightly-heavy` as appropriate):
 
 ```bash
 ./config.sh \
   --url https://github.com/yastman/rag \
   --token "$GITHUB_ACTIONS_RUNNER_TOKEN" \
   --name "rag-heavy-$(hostname)" \
+  --labels "pr-fast" \
   --work _work
-```
-
-GitHub automatically adds built-in labels such as `self-hosted`, OS, and
-architecture. The trusted PR workflow selector depends only on GitHub built-in labels:
-
-```yaml
-runs-on: [self-hosted, Linux, X64]
 ```
 
 Do not store the registration token in `.env`, shell history, docs, issue
@@ -180,19 +199,26 @@ setsid ./run.sh > runner.log 2>&1 < /dev/null &
 tail -f runner.log
 ```
 
-For automatic startup when a WSL login shell opens, use an idempotent user
-script and call it from `~/.zprofile`:
+For automatic startup when a WSL login shell opens, use the existing
+`~/bin/start-github-runner-rag.sh` script (called from `~/.zprofile`):
 
 ```bash
 ~/bin/start-github-runner-rag.sh
 ```
 
-The startup script should:
+The startup script should be updated to handle both runner directories
+when both runners (a `pr-fast` and a `nightly-heavy` runner) are registered:
 
-- exit if `~/actions-runner-rag/run.sh` is missing;
-- exit if `Runner.Listener` is already running;
+- exit early if `~/actions-runner-rag/run.sh` is missing;
+- exit if `Runner.Listener` is already running for that directory;
 - wait briefly for `docker ps` to succeed;
-- start `setsid ./run.sh > runner.log 2>&1 < /dev/null &`.
+- for each registered runner dir (e.g., `~/actions-runner-rag` and
+  `~/actions-runner-rag-nightly`), start
+  `setsid ./run.sh > runner.log 2>&1 < /dev/null &`.
+
+If only one runner is registered, the script should start that one without
+error. The script is idempotent -- running it when a Runner.Listener is
+already running is a no-op for that directory.
 
 Verify GitHub sees it:
 
@@ -201,11 +227,21 @@ gh api repos/yastman/rag/actions/runners \
   --jq '.runners[] | {name,status,os,labels:[.labels[].name],busy}'
 ```
 
-Expected labels for this first rollout:
+Expected labels for this rollout:
 
-```text
-self-hosted, Linux, X64
-```
+- **PR fast-gate runner** (`pr-fast`):
+  ```text
+  self-hosted, Linux, X64, pr-fast
+  ```
+- **Nightly heavy-tier runner** (`nightly-heavy`):
+  ```text
+  self-hosted, Linux, X64, nightly-heavy
+  ```
+
+GitHub adds built-in labels (`self-hosted`, `Linux`, `X64`) automatically. The
+custom labels `pr-fast` and `nightly-heavy` must be added during registration
+via the GitHub UI (Settings -> Actions -> Runners -> select runner -> Labels)
+or the `--labels` flag during `config.sh`.
 
 ### Local foreground start
 
@@ -269,7 +305,13 @@ Do not consider the runner "live" until that script exits 0.
    ```bash
    scripts/check_self_hosted_runner.sh
    ```
-   Expect: exit 0 and at least one runner with `"status": "online"`.
+   Expect: exit 0 with both `pr-fast` and `nightly-heavy` label groups online.
+
+   For PR-gate triage only:
+   ```bash
+   scripts/check_self_hosted_runner.sh --pr-only
+   ```
+   Expect: exit 0 with the `pr-fast` label group online.
 
 2. Trigger a manual workflow run as a smoke test (does not wait for the
    2:30 UTC schedule):
@@ -286,7 +328,8 @@ Do not consider the runner "live" until that script exits 0.
 | Symptom | Likely cause | Recovery |
 |---|---|---|
 | Runner shows `Offline` in API/UI | Host rebooted; runner service not enabled | `sudo systemctl enable --now actions.runner.<org-repo>.<name>.service` on the host |
-| Runner is `online` but jobs stay `Queued` | Label drift: workflow asked for a label the runner does not advertise | Re-check `runs-on:` in `nightly-heavy.yml` vs runner labels in the API output; bring them back in sync |
+| Runner is `online` but PR `Fast Tests` stays `Queued` | Label drift: `trusted-heavy.yml` asks for `pr-fast`, but no online runner advertises it | Run `scripts/check_self_hosted_runner.sh --pr-only`; add `pr-fast` to the PR runner |
+| Runner is `online` but nightly `heavy-tier` stays `Queued` | Label drift: `nightly-heavy.yml` asks for `nightly-heavy`, but no online runner advertises it | Run `scripts/check_self_hosted_runner.sh`; add `nightly-heavy` to the nightly runner |
 | Workflow run fails with `No space left on device` | Disk full from accumulated `uv` cache, Docker images, pytest artifacts | Run `scripts/docker-cleanup.sh` on the runner host; consider a tmpfs/ephemeral cache mount |
 | `e2e` tests fail to start Compose stack | Docker daemon down or unprivileged user not in `docker` group | `sudo systemctl status docker`; verify the runner's user can run `docker ps` |
 | `gh api` call fails with 404 in the diagnostic script | Token lacks `actions:read` scope, or operator is not a repo admin | Re-auth `gh` with a scope-bearing token, or run the script as a maintainer |
@@ -322,6 +365,7 @@ re-enable the workflow only once the script exits 0.
 ## See Also
 
 - [`scripts/check_self_hosted_runner.sh`](../../scripts/check_self_hosted_runner.sh) -- diagnostic this runbook is the operator-facing companion of.
-- [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) -- the workflow this runner serves.
+- [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) -- trusted PR self-hosted fast gate and shadow contract workflow.
+- [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) -- nightly heavy-tier self-hosted workflow.
 - [`scripts/docker-cleanup.sh`](../../scripts/docker-cleanup.sh) -- disk pressure remediation on the runner host.
 - [Runbooks index](README.md)
