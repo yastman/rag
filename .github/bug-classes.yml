@@ -109,6 +109,21 @@ bug_classes:
     first_seen: "2026"
     last_confirmed: "2026"
 
+  - name: History-rewrite syntactic corruption
+    guardrail: >
+      make compile-python runs compileall over every repo-tracked Python file
+      to catch unterminated string literals and other syntactic breakage caused
+      by secret-scrub history rewrites; wired into trusted-heavy.yml Fast Tests
+      and nightly-heavy.yml as early gates. make baseline-compile remains a
+      compatibility alias for this repo-wide guardrail.
+    canonical_issue: "#2320"
+    related_issues:
+      - "#2319"
+      - "#1982"
+      - "#1580"
+    first_seen: "2026"
+    last_confirmed: "2026"
+
   - name: RAG quality regression
     guardrail: >
       Evaluation pipeline (make eval-rag, make eval-rag-quick,

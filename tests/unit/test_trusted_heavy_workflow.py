@@ -98,6 +98,24 @@ def test_fast_tests_is_authoritative_for_trusted_risk_paths() -> None:
     assert all(step.get("continue-on-error") is not True for step in run_steps)
 
 
+def test_fast_tests_runs_repo_compile_gate_before_make_test() -> None:
+    """Fast Tests must catch repo-wide Python syntax drift before pytest."""
+    data = _load_workflow()
+    fast = data["jobs"].get("fast-tests")
+    assert fast is not None, "trusted-heavy.yml must define fast-tests"
+
+    run_commands = [
+        step.get("run", "")
+        for step in fast.get("steps", [])
+        if isinstance(step.get("run", ""), str)
+    ]
+    assert "make compile-python" in run_commands, (
+        "Fast Tests must run the repo-wide compile-python guardrail before make test."
+    )
+    assert "make test" in run_commands, "Fast Tests must still run `make test`."
+    assert run_commands.index("make compile-python") < run_commands.index("make test")
+
+
 def test_heavy_contract_tests_is_authoritative_for_trusted_risk_paths() -> None:
     """Heavy Contract Tests must fail the trusted PR gate on contract regressions."""
     data = _load_workflow()

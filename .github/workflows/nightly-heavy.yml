@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      - name: Compile repo Python files (#2320)
+        run: make compile-python
+
       - name: Run integration, smoke, and baseline tests
         run: >
           PYTHONDONTWRITEBYTECODE=1

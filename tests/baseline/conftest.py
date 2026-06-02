@@ -13,8 +13,8 @@ from .manager import BaselineManager
 def langfuse_collector():
     """Create Langfuse metrics collector."""
     return LangfuseMetricsCollector(
-        public_key=os.getenv("LANGFUSE_PUBLIC_KEY", "[REDACTED-LANGFUSE-KEY]
-        secret_key=os.getenv("LANGFUSE_SECRET_KEY", "[REDACTED-LANGFUSE-KEY]
+        public_key=os.getenv("LANGFUSE_PUBLIC_KEY", "[REDACTED-LANGFUSE-KEY]"),
+        secret_key=os.getenv("LANGFUSE_SECRET_KEY", "[REDACTED-LANGFUSE-KEY]"),
         host=os.getenv("LANGFUSE_HOST", "http://localhost:3001"),
     )
 

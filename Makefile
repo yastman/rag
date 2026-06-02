@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-all lint format type-check security test test-full test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security compile-python test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-load-eviction \
 	smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
@@ -177,6 +177,14 @@ dead-code: ## Find dead code with Vulture (alias for security)
 	@echo "$(BLUE)Checking for dead code...$(NC)"
 	uv run vulture $(LINT_PATHS) --min-confidence 80 --exclude "*site-packages*,*dist-info*,__pycache__,.pytest_cache,.ruff_cache,.mypy_cache,*.egg-info,.venv*"
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
+
+compile-python: ## Compile all repo-tracked Python files (#2320)
+	@echo "$(BLUE)Checking repo-tracked Python syntax...$(NC)"
+	@tmp_file="$$(mktemp)"; \
+	trap 'rm -f "$$tmp_file"' EXIT; \
+	git ls-files '*.py' > "$$tmp_file"; \
+	uv run python -m compileall -q -i "$$tmp_file"
+	@echo "$(GREEN)✓ Repo-tracked Python syntax OK$(NC)"
 
 all-checks: lint type-check security ## Run all code quality checks
 	@echo "$(GREEN)✓✓✓ All checks passed! ✓✓✓$(NC)"
@@ -909,7 +917,7 @@ trace-audit-snapshot: ## One-command runtime trace-data audit -> docs/engineerin
 # BASELINE & OBSERVABILITY
 # =============================================================================
 
-.PHONY: baseline-smoke baseline-load baseline-compare baseline-set baseline-report baseline-check
+.PHONY: baseline-smoke baseline-load baseline-compile baseline-compare baseline-set baseline-report baseline-check
 
 # Generate unique session ID from git commit
 BASELINE_SESSION := smoke-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
@@ -935,6 +943,8 @@ baseline-load: ## Run load tests with Langfuse tracing
 	uv run pytest tests/load/ -v --tb=short
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
+
+baseline-compile: compile-python ## Backward-compatible baseline syntax gate (#2320)
 
 baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_SESSION=...)
 ifndef BASELINE_TAG
@@ -975,7 +985,7 @@ endif
 		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
 	@echo "$(GREEN)Report saved to reports/$(NC)"
 
-baseline-check: baseline-smoke ## Quick baseline check (smoke + compare with main)
+baseline-check: baseline-compile baseline-smoke ## Quick baseline check (smoke + compare with main)
 	@echo "$(BLUE)Comparing with main baseline...$(NC)"
 	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
 

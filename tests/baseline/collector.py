@@ -64,8 +64,8 @@ class LangfuseMetricsCollector:
         """Initialize collector with Langfuse credentials.
 
         Args:
-            public_key: Langfuse public key ([REDACTED-LANGFUSE-KEY]
-            secret_key: Langfuse secret key ([REDACTED-LANGFUSE-KEY]
+            public_key: Langfuse public key ([REDACTED-LANGFUSE-KEY])
+            secret_key: Langfuse secret key ([REDACTED-LANGFUSE-KEY])
             host: Langfuse host URL (e.g., http://localhost:3001)
             redis_url: Redis connection URL for infrastructure metrics
             qdrant_url: Qdrant base URL for infrastructure metrics
