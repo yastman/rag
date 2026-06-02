@@ -12,6 +12,8 @@ import json
 import os
 import re
 import subprocess  # nosec B404
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -81,6 +83,53 @@ def _pull_request_from_event(event: dict[str, Any]) -> PullRequest | None:
         labels=labels,
         base_sha=str(base_sha) if base_sha else None,
         head_sha=str(head_sha) if head_sha else None,
+    )
+
+
+def _refresh_pull_request_from_github(
+    event: dict[str, Any],
+    pr: PullRequest | None,
+) -> PullRequest | None:
+    """Return current PR metadata from GitHub when running in Actions.
+
+    Re-running a failed GitHub Actions job reuses the original event payload.
+    PR body edits made after the first run would otherwise remain invisible to
+    this guardrail. Keep the event SHA values because they define the checked
+    merge diff; refresh only human-editable PR metadata.
+    """
+    if pr is None:
+        return None
+    token = os.environ.get("GITHUB_TOKEN")
+    raw_pr = event.get("pull_request")
+    api_url = raw_pr.get("url") if isinstance(raw_pr, dict) else None
+    if not token or not isinstance(api_url, str) or not api_url:
+        return pr
+
+    request = urllib.request.Request(
+        api_url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:  # nosec B310
+            data = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        return pr
+    if not isinstance(data, dict):
+        return pr
+
+    labels = tuple(
+        str(label.get("name", "")) for label in data.get("labels", []) if isinstance(label, dict)
+    )
+    return PullRequest(
+        title=str(data.get("title") or pr.title),
+        body=str(data.get("body") or ""),
+        labels=labels or pr.labels,
+        base_sha=pr.base_sha,
+        head_sha=pr.head_sha,
     )
 
 
@@ -276,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
 
     event = _load_event(args.event_path)
     pr = _pull_request_from_event(event)
+    pr = _refresh_pull_request_from_github(event, pr)
     files = _changed_files(args, pr)
     failures = validate(pr, files, large_threshold=args.large_threshold)
 
