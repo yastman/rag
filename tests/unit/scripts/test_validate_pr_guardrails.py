@@ -110,6 +110,19 @@ def test_workflow_change_with_semgrep_policy_test_passes() -> None:
     assert failures == []
 
 
+def test_workflow_change_with_trusted_heavy_policy_test_passes() -> None:
+    failures = validate(
+        _pr("ci: update trusted heavy workflow", "Checks run: pytest trusted-heavy policy tests"),
+        [
+            ".github/workflows/trusted-heavy.yml",
+            "tests/unit/test_trusted_heavy_workflow.py",
+        ],
+        large_threshold=25,
+    )
+
+    assert failures == []
+
+
 def test_duplicate_work_requires_bug_class() -> None:
     failures = validate(
         _pr("fix: duplicate Langfuse context loss", "Fixes #2302", labels=("bug",)),

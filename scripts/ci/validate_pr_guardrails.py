@@ -37,6 +37,7 @@ WORKFLOW_POLICY_TESTS = {
     "tests/unit/test_ci_deploy_workflow.py",
     "tests/unit/test_codeowners_contract.py",
     "tests/unit/test_semgrep_guardrails.py",
+    "tests/unit/test_trusted_heavy_workflow.py",
 }
 
 BUG_CLASS_REGISTRY = Path(".github/bug-classes.yml")
