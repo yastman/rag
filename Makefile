@@ -1216,6 +1216,7 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 # Local host defaults for native trace validation (issue #1380).
 # Callers can override per-variable: make validate-traces-fast QDRANT_URL=http://custom:6333 REDIS_URL=redis://:x@custom:6379
 LANGFUSE_DEV_KEY_DASH ?= -
+TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)
 
 validate-traces: ## Full rebuild + trace validation + report
 	@echo "$(BLUE)Full rebuild + validation...$(NC)"
@@ -1226,8 +1227,9 @@ validate-traces: ## Full rebuild + trace validation + report
 
 validate-traces-fast: ## No rebuild; trace validation fails if required trace families are missing
 	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
-	TRACE_ENV_FILE="$$( [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env )"; \
-	uv run python scripts/validate_trace_runtime.py --env-file "$$TRACE_ENV_FILE"
+	uv run python scripts/validate_trace_runtime.py --env-file "$(TRACE_ENV_FILE)"
+	MINIO_API_PORT="$(or $(MINIO_API_PORT),0)" \
+	MINIO_CONSOLE_PORT="$(or $(MINIO_CONSOLE_PORT),0)" \
 	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
 	QDRANT_URL="$(or $(QDRANT_URL),http://localhost:6333)" \
 	BGE_M3_URL="$(or $(BGE_M3_URL),http://localhost:8000)" \
@@ -1236,7 +1238,7 @@ validate-traces-fast: ## No rebuild; trace validation fails if required trace fa
 	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
 	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
 	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
-	uv run dotenv -f "$$TRACE_ENV_FILE" run --no-override -- \
+	uv run dotenv -f "$(TRACE_ENV_FILE)" run --no-override -- \
 		uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 

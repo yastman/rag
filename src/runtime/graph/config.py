@@ -107,14 +107,16 @@ class GraphConfig:
         ``extra_body`` so the OpenAI-compatible client does not reject them as
         unexpected top-level kwargs.
         """
+        extra_body: dict[str, Any] = {}
+        if self.disable_reasoning is not None:
+            extra_body["disable_reasoning"] = self.disable_reasoning
+            return {"extra_body": extra_body}
+
         kwargs: dict[str, Any] = {}
         if self.reasoning_effort is not None:
             kwargs["reasoning_effort"] = self.reasoning_effort
-        extra_body: dict[str, Any] = {}
         if self.reasoning_format is not None:
             extra_body["reasoning_format"] = self.reasoning_format
-        if self.disable_reasoning is not None:
-            extra_body["disable_reasoning"] = self.disable_reasoning
         if extra_body:
             kwargs["extra_body"] = extra_body
         return kwargs

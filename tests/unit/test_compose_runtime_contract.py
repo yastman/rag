@@ -25,6 +25,23 @@ def test_minio_base_command_exposes_console_address() -> None:
     assert '--console-address ":9001"' in command
 
 
+def test_minio_dev_host_ports_are_overrideable() -> None:
+    """MinIO host ports must not hard-block local trace validation.
+
+    Docker Desktop can leave host port forwards such as 9090/9091 in a bad
+    state. The host ports are useful for operators, but Langfuse talks to
+    MinIO over the container network; validation must be able to pick different
+    host ports without editing compose.dev.yml.
+    """
+    merged = _merge_compose_dev()
+    ports = merged["services"]["minio"].get("ports", [])
+
+    assert "127.0.0.1:${MINIO_API_PORT:-9090}:9000" in ports
+    assert "127.0.0.1:${MINIO_CONSOLE_PORT:-9091}:9001" in ports
+    assert "127.0.0.1:9090:9000" not in ports
+    assert "127.0.0.1:9091:9001" not in ports
+
+
 def test_voice_agent_uses_env_driven_livekit_url() -> None:
     compose = _load_compose()
     environment = compose["services"]["voice-agent"]["environment"]
