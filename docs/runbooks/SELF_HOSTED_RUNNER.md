@@ -18,13 +18,13 @@ The repo follows a two-tier runner policy to balance security and capability:
 | Tier | Runner | Scope | Examples |
 |------|--------|-------|----------|
 | **Light (trusted)** | `ubuntu-latest` (GitHub-hosted) | Required PR checks, lint, format | CI.yml |
-| **Heavy (trusted)** | `self-hosted`, `Linux`, `X64` (WSL/Linux host) | Trusted PR fast gate, shadow contract checks, nightly, runtime, benchmarks | `trusted-heavy.yml`, `nightly-heavy.yml` |
+| **Heavy (trusted)** | `self-hosted`, `Linux`, `X64` (WSL/Linux host) | Trusted PR fast gate, contract checks, nightly, runtime, benchmarks | `trusted-heavy.yml`, `nightly-heavy.yml` |
 
 The heavy tier uses two **custom label groups** on self-hosted runners:
 
 | Label group | Required labels | Workflow | Purpose |
 |-------------|----------------|----------|---------|
-| **`pr-fast`** | `self-hosted`, `Linux`, `X64`, `pr-fast` | `trusted-heavy.yml` | PR fast-gate (`fast-tests`) and shadow contract checks (`heavy-contract-tests-shadow`) |
+| **`pr-fast`** | `self-hosted`, `Linux`, `X64`, `pr-fast` | `trusted-heavy.yml` | PR fast-gate (`fast-tests`) and contract checks (`heavy-contract-tests`) |
 | **`nightly-heavy`** | `self-hosted`, `Linux`, `X64`, `nightly-heavy` | `nightly-heavy.yml` | Scheduled heavy-tier test suite (`requires_extras`, `load`, `chaos`, `e2e`, `benchmark`) |
 
 GitHub remains the authority for runner registration and label assignment; the
@@ -78,7 +78,7 @@ WSL runner host provides compute only.
 |---|---|---|---|
 | [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `changes` | `ubuntu-latest` | Always reports a lightweight path-filter result so trusted-heavy checks can be required without disappearing on docs-only PRs |
 | [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `fast-tests` | `[self-hosted, Linux, X64, pr-fast]` | `make test` for trusted same-repo PRs that touch code/runtime/test paths |
-| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `heavy-contract-tests-shadow` | `[self-hosted, Linux, X64, pr-fast]` | `make test-contract` in shadow mode for trusted same-repo PRs that touch code/runtime/test paths |
+| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `heavy-contract-tests` | `[self-hosted, Linux, X64, pr-fast]` | `make test-contract` for trusted same-repo PRs that touch code/runtime/test paths |
 | [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) | `heavy-tier` | `[self-hosted, Linux, X64, nightly-heavy]` | `pytest -n auto -m "requires_extras or load or chaos or e2e or benchmark"` |
 
 These jobs now use custom label groups so the diagnostic script (and operators)
@@ -365,7 +365,7 @@ re-enable the workflow only once the script exits 0.
 ## See Also
 
 - [`scripts/check_self_hosted_runner.sh`](../../scripts/check_self_hosted_runner.sh) -- diagnostic this runbook is the operator-facing companion of.
-- [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) -- trusted PR self-hosted fast gate and shadow contract workflow.
+- [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) -- trusted PR self-hosted fast gate and contract workflow.
 - [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) -- nightly heavy-tier self-hosted workflow.
 - [`scripts/docker-cleanup.sh`](../../scripts/docker-cleanup.sh) -- disk pressure remediation on the runner host.
 - [Runbooks index](README.md)

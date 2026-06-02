@@ -41,7 +41,7 @@ and online for this repository.
 Label groups required by default:
   pr-fast:        self-hosted, Linux, X64, pr-fast
                     (used by trusted-heavy.yml fast-tests and
-                     heavy-contract-tests-shadow jobs)
+                     heavy-contract-tests jobs)
   nightly-heavy:  self-hosted, Linux, X64, nightly-heavy
                     (used by nightly-heavy.yml heavy-tier job)
 
@@ -100,7 +100,7 @@ LABEL_GROUP_NAMES[pr-fast]="self-hosted, Linux, X64, pr-fast"
 LABEL_GROUP_NAMES[nightly-heavy]="self-hosted, Linux, X64, nightly-heavy"
 
 declare -A LABEL_GROUP_PURPOSE
-LABEL_GROUP_PURPOSE[pr-fast]="trusted-heavy.yml (fast-tests, heavy-contract-tests-shadow)"
+LABEL_GROUP_PURPOSE[pr-fast]="trusted-heavy.yml (fast-tests, heavy-contract-tests)"
 LABEL_GROUP_PURPOSE[nightly-heavy]="nightly-heavy.yml (heavy-tier)"
 
 # ---------------------------------------------------------------------------

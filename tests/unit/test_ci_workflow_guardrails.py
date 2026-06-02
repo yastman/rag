@@ -246,12 +246,12 @@ def test_pr_guardrails_uses_github_hosted_runner() -> None:
     )
 
 
-def test_contract_tests_not_required_in_light_ci_until_baseline_green() -> None:
-    """Red contract baseline must not be required by the light PR workflow."""
+def test_contract_tests_not_required_in_light_ci() -> None:
+    """Contract tests belong to trusted-heavy, not the light PR workflow."""
     data = _load_workflow()
     assert "contract-tests" not in data["jobs"], (
-        "make test-contract is currently a shadow self-hosted check; do not "
-        "make it a light required CI job until the baseline is green."
+        "make test-contract must stay in trusted-heavy.yml so light CI remains "
+        "safe for fork PRs and cheap GitHub-hosted runners."
     )
 
 
