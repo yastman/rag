@@ -18,7 +18,7 @@ The repo follows a two-tier runner policy to balance security and capability:
 | Tier | Runner | Scope | Examples |
 |------|--------|-------|----------|
 | **Light (trusted)** | `ubuntu-latest` (GitHub-hosted) | Required PR checks, lint, format | CI.yml |
-| **Heavy (trusted)** | `self-hosted`, `Linux`, `X64` (WSL/Linux host) | Trusted PR shadow checks, nightly, runtime, benchmarks, contract | `trusted-heavy.yml`, `nightly-heavy.yml` |
+| **Heavy (trusted)** | `self-hosted`, `Linux`, `X64` (WSL/Linux host) | Trusted PR fast gate, shadow contract checks, nightly, runtime, benchmarks | `trusted-heavy.yml`, `nightly-heavy.yml` |
 
 ### Policy Rules
 
@@ -66,14 +66,22 @@ The repo follows a two-tier runner policy to balance security and capability:
 
 | Workflow file | Job | `runs-on` | What it runs |
 |---|---|---|---|
-| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `heavy-contract-tests-shadow` | `[self-hosted, Linux, X64]` | `make test-contract` in shadow mode for trusted PRs |
-| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `fast-tests-shadow` | `[self-hosted, Linux, X64]` | `make test` in shadow mode for trusted PRs |
+| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `changes` | `ubuntu-latest` | Always reports a lightweight path-filter result so trusted-heavy checks can be required without disappearing on docs-only PRs |
+| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `fast-tests` | `[self-hosted, Linux, X64]` | `make test` for trusted same-repo PRs that touch code/runtime/test paths |
+| [`.github/workflows/trusted-heavy.yml`](../../.github/workflows/trusted-heavy.yml) | `heavy-contract-tests-shadow` | `[self-hosted, Linux, X64]` | `make test-contract` in shadow mode for trusted same-repo PRs that touch code/runtime/test paths |
 | [`.github/workflows/nightly-heavy.yml`](../../.github/workflows/nightly-heavy.yml) | `heavy-tier` | `self-hosted` | `pytest -n auto -m "requires_extras or load or chaos or e2e or benchmark"` |
 
 Trusted PR heavy checks use only GitHub built-in labels: `self-hosted`,
 `Linux`, and `X64`. This avoids custom label drift during the first rollout.
 The nightly workflow currently accepts any repository-level `self-hosted`
 runner.
+
+`Fast Tests` is the first self-hosted PR check promoted out of shadow mode.
+It is safe to make it a branch-protection required check after it stays green
+across trusted PRs because `trusted-heavy.yml` runs on every pull request and
+skips the self-hosted job for docs-only or untrusted fork PRs. `Heavy Contract
+Tests (shadow)` remains telemetry until the contract baseline is stable enough
+to promote separately.
 
 ## Resource Requirements
 
