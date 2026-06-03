@@ -8,6 +8,9 @@ import pytest
 from src.ingestion.chunker import Chunk, ChunkingStrategy, DocumentChunker
 
 
+pytestmark = pytest.mark.no_services
+
+
 # Sample Ukrainian legal text with typical structural markers
 SAMPLE_LEGAL_TEXT = """
 Розділ I. ЗАГАЛЬНІ ПОЛОЖЕННЯ
@@ -136,9 +139,7 @@ class TestChunkingSmoke:
     def test_chunk_ids_are_sequential(self, chunks):
         """Test that chunk IDs are assigned sequentially."""
         ids = [c.chunk_id for c in chunks]
-        assert ids == list(range(len(chunks))), (
-            f"Chunk IDs are not sequential: {ids}"
-        )
+        assert ids == list(range(len(chunks))), f"Chunk IDs are not sequential: {ids}"
 
     def test_chunk_order_matches_ids(self, chunks):
         """Test that chunk order field matches chunk_id."""

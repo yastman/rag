@@ -6,10 +6,13 @@ import os
 import pytest
 
 
-pytestmark = pytest.mark.skipif(
-    os.getenv("USER_BASE_URL") is None,
-    reason="USER_BASE_URL not set (requires running user-base service)",
-)
+pytestmark = [
+    pytest.mark.requires_services,
+    pytest.mark.skipif(
+        os.getenv("USER_BASE_URL") is None,
+        reason="USER_BASE_URL not set (requires running user-base service)",
+    ),
+]
 
 
 class TestUserBaseCacheIntegration:

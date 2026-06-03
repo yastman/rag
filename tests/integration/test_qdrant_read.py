@@ -20,6 +20,8 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 
 
+pytestmark = pytest.mark.requires_services
+
 # Загрузить .env
 load_dotenv()
 

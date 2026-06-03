@@ -30,6 +30,22 @@ E2E naming contract:
   - `make test-unit`
   - `make test`
 
+### Service-Dependency Classification Rule (#2324 Phase 1.1)
+- Every `tests/integration/test_*.py` and `tests/smoke/test_*.py` file **must**
+  carry exactly one file-level service-dependency marker via `pytestmark`:
+  - `pytestmark = pytest.mark.no_services` — local mocks, pure graph routing,
+    local chunking, fixture-shape tests, config-shape tests, and
+    deterministic tests that do not require Docker or external network services.
+  - `pytestmark = pytest.mark.requires_services` — tests using Docker/service
+    fixtures, network ports, Redis, Qdrant, Postgres, LiteLLM, BGE-M3, Kommo,
+    mini-app API, live-service skipif logic, or any test that requires running
+    local services.
+- If a file already uses `pytestmark = [...]` (list), extend the list with
+  the service marker instead of overwriting.
+- If a file lacks `import pytest`, add it when needed for the module marker.
+- When unsure, default to `requires_services`.
+- Contract: `tests/contract/test_service_dependency_markers_contract.py`.
+
 ## CI And Local Gate Contracts
 
 ### Local fast lane

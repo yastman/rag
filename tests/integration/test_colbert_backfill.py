@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
+import pytest
+
+
+pytestmark = pytest.mark.no_services
+
 
 @dataclass
 class _StoredPoint:

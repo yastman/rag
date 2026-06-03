@@ -14,6 +14,9 @@ from qdrant_client import QdrantClient
 from redis.exceptions import AuthenticationError as RedisAuthError
 
 
+pytestmark = pytest.mark.requires_services
+
+
 def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
     """Check if a TCP port is open."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

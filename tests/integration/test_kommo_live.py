@@ -12,6 +12,7 @@ Skip when creds or opt-in missing (CI).
 
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 
@@ -20,6 +21,7 @@ import pytest
 
 # Skip entire module if creds or opt-in missing
 pytestmark = [
+    pytest.mark.requires_services,
     pytest.mark.integration,
     pytest.mark.kommo,
     pytest.mark.skipif(
@@ -201,23 +203,19 @@ class TestKommoLiveCRUD:
         client = _make_client()
         try:
             if self._lead_id:
-                try:
+                with contextlib.suppress(Exception):
                     await client._request(
                         "PATCH",
                         f"/leads/{self._lead_id}",
                         json={"is_deleted": True},
                     )
-                except Exception:  # noqa: BLE001
-                    pass  # best-effort
 
             if self._contact_id:
-                try:
+                with contextlib.suppress(Exception):
                     await client._request(
                         "PATCH",
                         f"/contacts/{self._contact_id}",
                         json={"is_deleted": True},
                     )
-                except Exception:  # noqa: BLE001
-                    pass  # best-effort
         finally:
             await client.close()

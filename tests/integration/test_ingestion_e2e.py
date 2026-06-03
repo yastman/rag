@@ -13,10 +13,13 @@ from pathlib import Path
 import pytest
 
 
-pytestmark = pytest.mark.skipif(
-    not os.getenv("RUN_INTEGRATION_TESTS"),
-    reason="Integration tests disabled (set RUN_INTEGRATION_TESTS=1)",
-)
+pytestmark = [
+    pytest.mark.requires_services,
+    pytest.mark.skipif(
+        not os.getenv("RUN_INTEGRATION_TESTS"),
+        reason="Integration tests disabled (set RUN_INTEGRATION_TESTS=1)",
+    ),
+]
 
 
 @pytest.fixture

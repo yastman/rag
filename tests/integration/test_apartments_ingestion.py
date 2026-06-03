@@ -7,6 +7,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 
+pytestmark = pytest.mark.requires_services
+
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION = "apartments"
 

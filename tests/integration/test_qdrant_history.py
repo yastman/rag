@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 
+pytestmark = pytest.mark.requires_services
+
 pytest.importorskip("qdrant_client", reason="qdrant-client not installed")
 
 from qdrant_client import AsyncQdrantClient

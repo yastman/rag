@@ -9,6 +9,8 @@ from unittest.mock import patch
 import pytest
 
 
+pytestmark = pytest.mark.no_services
+
 # This suite validates real telegram_bot.bot imports; skip cleanly if optional
 # Telegram runtime dependency is not installed in the environment.
 pytest.importorskip("aiogram", reason="aiogram not installed")

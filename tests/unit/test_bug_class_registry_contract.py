@@ -30,6 +30,7 @@ REQUIRED_BUG_CLASSES = {
     "Docker/compose drift",
     "RAG quality regression",
     "Testing hygiene/tautological assertions",
+    "Test service-dependency lane drift",
 }
 
 # Guardrail definitions that must appear in the standards section.
