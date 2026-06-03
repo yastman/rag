@@ -48,6 +48,19 @@ cascade into unrelated skills or workflows on your own.
 - Operational runbooks:
   [`docs/runbooks/README.md`](docs/runbooks/README.md)
 
+## Active Product Simplification
+
+For product simplification, core E2E, Langfuse optionalization, or related
+refactor work, treat these as the source of truth:
+
+- [`docs/designs/product-simplification-e2e-plan.md`](docs/designs/product-simplification-e2e-plan.md)
+- [`docs/designs/yaroslav-simplification-workflow.md`](docs/designs/yaroslav-simplification-workflow.md)
+- [`docs/designs/product-simplification-stage-0-decisions.md`](docs/designs/product-simplification-stage-0-decisions.md)
+
+Do not duplicate the plan here. Follow the plan order: Stage 0 docs first, then
+test/logging infrastructure, then one golden live E2E, then runtime
+simplification.
+
 ## Local Overrides
 
 - [`telegram_bot/AGENTS.override.md`](telegram_bot/AGENTS.override.md)
