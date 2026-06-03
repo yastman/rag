@@ -116,7 +116,7 @@ docling = [
 # Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
 ingest = [
     "pymupdf>=1.26.0",
-    "docling>=2.70.0",
+    "docling>=2.94.0",
     "docling-core>=2.61.0",
     "cocoindex>=0.3.28",
     "fastembed>=0.7.4",
