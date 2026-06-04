@@ -34,6 +34,7 @@ For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/
 
 ## Architecture & Design
 
+- [`designs/README.md`](designs/README.md) — Active product simplification design docs and Stage 0 decisions.
 - [`PROJECT_STACK.md`](PROJECT_STACK.md) — System architecture and subsystem map.
 - [`BOT_ARCHITECTURE.md`](BOT_ARCHITECTURE.md) — Bot layer architecture.
 - [`BOT_INTERNAL_STRUCTURE.md`](BOT_INTERNAL_STRUCTURE.md) — Bot internal component structure.
@@ -93,6 +94,7 @@ find docs -maxdepth 3 -name README.md -o -path 'docs/runbooks/*.md'
 
 | Path | Purpose |
 |---|---|
+| `docs/designs/` | Active product simplification design docs and decision notes |
 | `docs/runbooks/` | Operational troubleshooting and incident response |
 | `docs/engineering/` | Engineering process, standards, and workflow guides |
 | `docs/plans/` | Shared implementation plans and design specs |
