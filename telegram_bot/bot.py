@@ -469,6 +469,7 @@ class PropertyBot:
 
         # History service (initialized in start())
         self._history_service: HistoryService | None = None
+        self._history_rest_client: Any = None
 
         # i18n hub (fluentogram) — initialize early for localized menu filters.
         self._i18n_hub: Any = None
@@ -3871,10 +3872,22 @@ class PropertyBot:
             if history_service_cls is None:
                 from .services.history_service import HistoryService as history_service_cls
 
+            # REST-only client for collection admin ops: the shared retrieval
+            # client is prefer_grpc=True, and gRPC collection calls hit a
+            # grpc.aio + OTel interceptor NotImplementedError (#2346).
+            from qdrant_client import AsyncQdrantClient
+
+            self._history_rest_client: AsyncQdrantClient | None = AsyncQdrantClient(
+                url=self.config.qdrant_url,
+                api_key=self.config.qdrant_api_key,
+                timeout=self.config.qdrant_timeout,
+                prefer_grpc=False,
+            )
             self._history_service = history_service_cls(
                 client=self._qdrant.client,
                 embeddings=self._embeddings,
                 collection_name=self.config.qdrant_history_collection,
+                rest_client=self._history_rest_client,
             )
             await self._history_service.ensure_collection()
             logger.info("History service ready (%s)", self.config.qdrant_history_collection)
@@ -4430,6 +4443,10 @@ class PropertyBot:
         await self._redis_monitor.stop()
         await self._cache.close()
         await self._qdrant.close()
+        if self._history_rest_client is not None:
+            with contextlib.suppress(Exception):
+                await self._history_rest_client.close()
+            self._history_rest_client = None
         if hasattr(self._embeddings, "aclose"):
             await self._embeddings.aclose()
         if hasattr(self._sparse, "aclose"):
