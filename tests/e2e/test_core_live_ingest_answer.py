@@ -6,6 +6,7 @@ import pytest
 
 from src.core.assistant import UserContext, run_assistant_request
 from tests.e2e_core.live_harness import (
+    FailingLLMConfig,
     LiveE2EEnv,
     MockCrmClient,
     build_live_core_harness,
@@ -68,6 +69,55 @@ async def _run_core_live_case(
             assert expected in result.response_text
         for forbidden in case.must_not_contain:
             assert forbidden not in result.response_text
+    finally:
+        if harness is not None:
+            await harness.aclose()
+        cleanup_collection(env, context)
+
+
+@pytest.mark.asyncio
+async def test_core_live_llm_dependency_failure_returns_user_safe_fallback() -> None:
+    """LLM provider failure must return explicit user-safe fallback, not crash."""
+
+    env = LiveE2EEnv.from_env()
+    await require_live_services(env)
+
+    case = load_golden_case("beach_studio_sea_under_120k")
+    context = make_qdrant_context(env)
+    harness = None
+
+    try:
+        recreate_collection(env, context.collection_name)
+        indexed_points = await index_fixture_documents(
+            env,
+            context.collection_name,
+            document_ids=["sunny_beach_studio", "mountain_view_villa"],
+        )
+        assert indexed_points >= 1
+
+        harness = build_live_core_harness(
+            env,
+            context.collection_name,
+            config=FailingLLMConfig(error_message="llm provider timeout"),
+        )
+        result = await run_assistant_request(
+            case.query,
+            collection=context.collection_name,
+            user_context=UserContext(
+                user_id="2336",
+                session_id=f"{context.collection_name}:llm-failure",
+                role="client",
+            ),
+            dependencies=harness.dependencies,
+        )
+
+        assert result.error_type is None, result.error_message
+        assert result.route == "rag_search"
+        assert result.llm_model == "fallback"
+        assert result.llm_call_count == 1
+        assert set(case.must_retrieve).issubset(set(result.retrieved_doc_ids))
+        assert result.response_text
+        assert "сервис временно недоступен" in result.response_text.lower()
     finally:
         if harness is not None:
             await harness.aclose()

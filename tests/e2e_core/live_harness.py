@@ -207,6 +207,27 @@ class FakeLLMConfig:
         return {}
 
 
+@dataclass(frozen=True)
+class FailingLLMConfig:
+    """GraphConfig-compatible config that simulates an LLM provider failure."""
+
+    error_message: str = "llm provider unavailable"
+    domain: str = "недвижимость в Болгарии"
+    llm_model: str = "failing-live-e2e"
+    llm_temperature: float = 0.0
+    generate_max_tokens: int = 600
+    streaming_enabled: bool = False
+    show_sources: bool = False
+    response_style_enabled: bool = False
+    response_style_shadow_mode: bool = False
+
+    def create_llm(self, *, auto_trace: bool = False) -> Any:
+        return _FailingLLM(self.error_message)
+
+    def get_reasoning_kwargs(self) -> dict[str, Any]:
+        return {}
+
+
 @dataclass
 class LiveCoreHarness:
     """Created live dependencies plus async cleanup."""
@@ -391,6 +412,7 @@ def build_live_core_harness(
     collection_name: str,
     *,
     crm: MockCrmClient | None = None,
+    config: Any | None = None,
 ) -> LiveCoreHarness:
     """Build CoreDependencies for ``run_assistant_request`` using live retrieval."""
 
@@ -405,14 +427,14 @@ def build_live_core_harness(
         timeout=30,
         prefer_grpc=False,
     )
-    config = _build_live_llm_config(env)
+    llm_config = config or _build_live_llm_config(env)
     dependencies = CoreDependencies(
         cache=NoopLiveCache(),
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
         reranker=None,
-        config=config,
+        config=llm_config,
     )
     if crm is not None:
         dependencies.crm = crm
@@ -484,6 +506,15 @@ class _FakeLLM:
             usage=SimpleNamespace(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             choices=[SimpleNamespace(message=SimpleNamespace(content=answer))],
         )
+
+
+class _FailingLLM:
+    def __init__(self, error_message: str) -> None:
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self._error_message = error_message
+
+    async def _create(self, **kwargs: Any) -> Any:
+        raise TimeoutError(self._error_message)
 
 
 def _answer_from_context(message: str) -> str:
