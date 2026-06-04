@@ -6,7 +6,7 @@ import contextlib
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -79,6 +79,25 @@ class MarkdownChunk:
     chunk_id: int
     document_name: str
     extra_metadata: dict[str, Any]
+
+
+@dataclass
+class MockCrmClient:
+    """Recording CRM mock for HITL E2E assertions."""
+
+    writes: list[dict[str, Any]] = field(default_factory=list)
+
+    async def create_lead(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.writes.append({"action": "create_lead", "payload": payload})
+        return {"id": len(self.writes), **payload}
+
+    async def schedule_viewing(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.writes.append({"action": "schedule_viewing", "payload": payload})
+        return {"id": len(self.writes), **payload}
+
+    async def request_documents(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.writes.append({"action": "request_documents", "payload": payload})
+        return {"id": len(self.writes), **payload}
 
 
 class NoopLiveCache:
@@ -367,7 +386,12 @@ async def index_fixture_documents(
     return total
 
 
-def build_live_core_harness(env: LiveE2EEnv, collection_name: str) -> LiveCoreHarness:
+def build_live_core_harness(
+    env: LiveE2EEnv,
+    collection_name: str,
+    *,
+    crm: MockCrmClient | None = None,
+) -> LiveCoreHarness:
     """Build CoreDependencies for ``run_assistant_request`` using live retrieval."""
 
     from src.core.assistant import CoreDependencies
@@ -390,6 +414,8 @@ def build_live_core_harness(env: LiveE2EEnv, collection_name: str) -> LiveCoreHa
         reranker=None,
         config=config,
     )
+    if crm is not None:
+        dependencies.crm = crm
 
     async def _cleanup() -> None:
         await embeddings.aclose()
@@ -469,6 +495,11 @@ def _answer_from_context(message: str) -> str:
 
     lines = [line.strip() for line in context.splitlines() if line.strip()]
     sections = _split_context_sections(lines)
+
+    if "просмотр" in question or "подтвержд" in question or "confirmation" in question:
+        selected = _select_section_lines(sections, ("hitl", "confirmation", "confirm"))
+        if selected:
+            return "\n".join(selected)
 
     if "уборк" in question or "cleaning" in question:
         selected = _select_section_lines(sections, ("cleaning", "25 eur", "48 hours"))

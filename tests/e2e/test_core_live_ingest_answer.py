@@ -7,6 +7,7 @@ import pytest
 from src.core.assistant import UserContext, run_assistant_request
 from tests.e2e_core.live_harness import (
     LiveE2EEnv,
+    MockCrmClient,
     build_live_core_harness,
     cleanup_collection,
     index_fixture_documents,
@@ -126,3 +127,50 @@ async def test_core_live_remaining_golden_cases(case_id: str, document_ids: list
         document_ids=document_ids,
         session_suffix=case_id,
     )
+
+
+@pytest.mark.asyncio
+async def test_core_live_crm_hitl_requires_confirmation_before_mock_crm_write() -> None:
+    """CRM/HITL golden case must propose confirmation policy without CRM writes."""
+
+    crm = MockCrmClient()
+    env = LiveE2EEnv.from_env()
+    await require_live_services(env)
+
+    case = load_golden_case("crm_hitl_confirmation_policy")
+    context = make_qdrant_context(env)
+    harness = None
+
+    try:
+        recreate_collection(env, context.collection_name)
+        indexed_points = await index_fixture_documents(
+            env,
+            context.collection_name,
+            document_ids=["rules_hitl", "sunny_beach_studio"],
+        )
+        assert indexed_points >= 1
+
+        harness = build_live_core_harness(env, context.collection_name, crm=crm)
+        result = await run_assistant_request(
+            case.query,
+            collection=context.collection_name,
+            user_context=UserContext(
+                user_id="2336",
+                session_id=f"{context.collection_name}:crm-hitl",
+                role="client",
+            ),
+            dependencies=harness.dependencies,
+        )
+
+        assert result.error_type is None, result.error_message
+        assert result.route == "rag_search"
+        assert set(case.must_retrieve).issubset(set(result.retrieved_doc_ids))
+        assert result.proposed_crm_action is None
+        assert crm.writes == []
+
+        for expected in case.must_contain:
+            assert expected in result.response_text
+    finally:
+        if harness is not None:
+            await harness.aclose()
+        cleanup_collection(env, context)

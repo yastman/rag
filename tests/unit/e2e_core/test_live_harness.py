@@ -131,6 +131,33 @@ def test_build_live_core_harness_uses_graph_config_for_real_llm() -> None:
     assert fake_config.response_style_shadow_mode is False
 
 
+def test_build_live_core_harness_attaches_mock_crm() -> None:
+    from tests.e2e_core.live_harness import LiveE2EEnv, MockCrmClient, build_live_core_harness
+
+    crm = MockCrmClient()
+    env = LiveE2EEnv(qdrant_url="http://qdrant:6333", bge_m3_url="http://bge:8000")
+
+    with (
+        mock.patch("tests.e2e_core.live_harness.LiveBGEEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.LiveBGESparseEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.QdrantService"),
+    ):
+        harness = build_live_core_harness(env, "collection", crm=crm)
+
+    assert harness.dependencies.crm is crm
+
+
+def test_mock_crm_client_records_writes() -> None:
+    from tests.e2e_core.live_harness import MockCrmClient
+
+    crm = MockCrmClient()
+
+    result = asyncio.run(crm.create_lead({"name": "Test Lead"}))
+
+    assert result == {"id": 1, "name": "Test Lead"}
+    assert crm.writes == [{"action": "create_lead", "payload": {"name": "Test Lead"}}]
+
+
 def test_fake_llm_config_builds_grounded_answer_from_context() -> None:
     from tests.e2e_core.live_harness import FakeLLMConfig
 
