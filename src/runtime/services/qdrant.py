@@ -52,6 +52,7 @@ class QdrantService:
         sparse_vector_name: str = "bm42",
         quantization_mode: str = "off",
         timeout: int = 30,
+        prefer_grpc: bool = True,
     ):
         """Initialize Qdrant service.
 
@@ -63,12 +64,13 @@ class QdrantService:
             sparse_vector_name: Name of sparse vector field
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
             timeout: Connection timeout in seconds (default 30)
+            prefer_grpc: Whether the SDK should prefer gRPC transport
         """
         # Strip api_key for http:// to avoid "insecure connection" warning (#570)
         scheme = urlparse(url).scheme.lower()
         effective_api_key = api_key if scheme == "https" else None
         self._client = AsyncQdrantClient(
-            url=url, api_key=effective_api_key, prefer_grpc=True, timeout=timeout
+            url=url, api_key=effective_api_key, prefer_grpc=prefer_grpc, timeout=timeout
         )
         self._base_collection_name = collection_name
         self._quantization_mode = quantization_mode.lower()
