@@ -147,6 +147,31 @@ def test_build_live_core_harness_attaches_mock_crm() -> None:
     assert harness.dependencies.crm is crm
 
 
+def test_build_live_core_harness_accepts_config_override() -> None:
+    from tests.e2e_core.live_harness import FailingLLMConfig, LiveE2EEnv, build_live_core_harness
+
+    config = FailingLLMConfig(error_message="provider down")
+    env = LiveE2EEnv(qdrant_url="http://qdrant:6333", bge_m3_url="http://bge:8000")
+
+    with (
+        mock.patch("tests.e2e_core.live_harness.LiveBGEEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.LiveBGESparseEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.QdrantService"),
+    ):
+        harness = build_live_core_harness(env, "collection", config=config)
+
+    assert harness.dependencies.config is config
+
+
+def test_failing_llm_config_raises_provider_error() -> None:
+    from tests.e2e_core.live_harness import FailingLLMConfig
+
+    llm = FailingLLMConfig(error_message="provider down").create_llm(auto_trace=False)
+
+    with pytest.raises(TimeoutError, match="provider down"):
+        asyncio.run(llm.chat.completions.create(model="fake", messages=[]))
+
+
 def test_mock_crm_client_records_writes() -> None:
     from tests.e2e_core.live_harness import MockCrmClient
 
