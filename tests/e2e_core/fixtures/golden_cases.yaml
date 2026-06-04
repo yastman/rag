@@ -1,0 +1,97 @@
+# golden_cases.yaml — synthetic E2E core fixture gold set
+#
+# Design (per docs/designs/product-simplification-e2e-plan.md):
+#   - 6 cases: happy path, missing-in-corpus, price/location constraint,
+#     conflict source, service policy, CRM/HITL metadata
+#   - Product checks, not exact prose comparisons
+#   - answer_policy values:
+#       grounded_answer      — must cite retrieved sources
+#       no_data_no_claim     — must not fabricate facts
+#       filtered_constraint  — retrieved docs match query constraint
+#       conflict_attribution — correct source wins over similar conflicting source
+#       service_quote        — factual service quote from corpus
+#       hitl_confirmation    — CRM action requires explicit user confirm
+
+- id: "beach_studio_sea_under_120k"
+  query: "Найди квартиру-студию у моря до 120000 евро"
+  must_retrieve:
+    - "sunny_beach_studio"
+  must_contain:
+    - "Sunny Beach"
+    - "110000"
+  must_not_contain:
+    - "Mountain View Villa"
+    - "Bansko"
+  answer_policy: "grounded_answer"
+
+- id: "missing_in_corpus_no_claim"
+  query: "Найди замок в Софии с частным аэропортом и вертолётной площадкой"
+  must_retrieve: []
+  must_contain:
+    - "не найдено"
+  must_not_contain:
+    - "стоимость"
+    - "цена"
+    - "EUR"
+    - "кв.м"
+  answer_policy: "no_data_no_claim"
+
+- id: "price_constraint_cheapest_sunny_beach"
+  query: "Какая самая дешёвая квартира в Sunny Beach?"
+  must_retrieve:
+    - "sunny_beach_2bed"
+  must_contain:
+    - "95000"
+  must_not_contain:
+    - "130000"
+    - "Nessebar"
+  answer_policy: "filtered_constraint"
+
+- id: "sea_side_excludes_mountain"
+  query: "Покажи недвижимость у моря с бассейном"
+  must_retrieve:
+    - "sunny_beach_studio"
+  must_contain:
+    - "Sunny Beach"
+    - "swimming pool"
+  must_not_contain:
+    - "Mountain View Villa"
+    - "Bansko"
+    - "ski"
+    - "mountain"
+  answer_policy: "conflict_attribution"
+
+- id: "garden_apartment_near_burgas"
+  query: "Нужна квартира с собственным садом недалеко от Бургаса"
+  must_retrieve:
+    - "sotirovo_garden"
+  must_contain:
+    - "Sotirovo"
+    - "garden"
+  must_not_contain:
+    - "Sofia"
+    - "Bansko"
+  answer_policy: "filtered_constraint"
+
+- id: "service_cleaning_price_policy"
+  query: "Сколько стоит уборка квартиры и какие условия?"
+  must_retrieve:
+    - "services_cleaning"
+  must_contain:
+    - "25 EUR"
+    - "48 hours"
+  must_not_contain: []
+  answer_policy: "service_quote"
+
+# CRM/HITL metadata case — verifies CRM policy doc is retrievable and the
+# assistant understands confirmation workflow. The answer should reference
+# the HITL policy, not execute a CRM write without confirmation.
+- id: "crm_hitl_confirmation_policy"
+  query: "Хочу записаться на просмотр квартиры. Нужно ли подтверждение?"
+  must_retrieve:
+    - "rules_hitl"
+  must_contain:
+    - "confirm"
+    - "confirmation"
+  must_not_contain: []
+  answer_policy: "hitl_confirmation"
