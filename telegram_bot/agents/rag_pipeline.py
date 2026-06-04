@@ -54,6 +54,36 @@ logger = logging.getLogger(__name__)
 _DEFAULT_RERANK_TOP_K = 7
 _CONFIDENT_TRIM_TOP_K = 3
 _QUERY_PREPROCESSOR = QueryPreprocessor()
+_HARD_EVIDENCE_CONSTRAINTS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("castle", ("замок", "castle", "chateau"), ("замок", "castle", "chateau")),
+    ("airport", ("аэропорт", "airport"), ("аэропорт", "airport")),
+    ("helipad", ("вертол", "helipad", "helicopter"), ("вертол", "helipad", "helicopter")),
+)
+
+
+def _find_missing_evidence_constraints(
+    query: str,
+    documents: list[dict[str, Any]],
+) -> list[str]:
+    """Return hard query constraints that have no evidence in retrieved docs."""
+
+    normalized_query = query.lower()
+    evidence_text = "\n".join(_document_evidence_text(doc) for doc in documents).lower()
+    missing: list[str] = []
+    for name, query_terms, evidence_terms in _HARD_EVIDENCE_CONSTRAINTS:
+        if any(term in normalized_query for term in query_terms) and not any(
+            term in evidence_text for term in evidence_terms
+        ):
+            missing.append(name)
+    return missing
+
+
+def _document_evidence_text(document: dict[str, Any]) -> str:
+    parts = [str(document.get("text", "")), str(document.get("content", ""))]
+    metadata = document.get("metadata")
+    if isinstance(metadata, dict):
+        parts.extend(str(value) for value in metadata.values())
+    return "\n".join(parts)
 
 
 async def _execute_qdrant_retrieval(
@@ -1247,6 +1277,46 @@ async def rag_pipeline(
                 )
                 final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
 
+            missing_evidence = _find_missing_evidence_constraints(query, final_docs)
+            if missing_evidence:
+                result = _assemble_context(
+                    query=current_query,
+                    original_query=query,
+                    documents=[],
+                    latency_stages=latency_stages,
+                    cache_hit=False,
+                    embeddings_cache_hit=embeddings_cache_hit,
+                    search_cache_hit=retrieve_result.get("search_cache_hit", False),
+                    search_results_count=retrieve_result["search_results_count"],
+                    rerank_applied=rerank_applied,
+                    rerank_cache_hit=rerank_cache_hit,
+                    grade_confidence=grade_confidence,
+                    rewrite_count=rewrite_count,
+                    query_type=query_type,
+                    query_embedding=query_embedding,
+                    cache_key_embedding=cache_embedding,
+                    retrieved_context=[],
+                    retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
+                    retrieval_error_type=retrieve_result.get("retrieval_error_type"),
+                    topic_hint=topic_hint,
+                    score_gap_confident=final_gap_confident,
+                    missing_evidence_constraints=missing_evidence,
+                )
+                result["skip_rewrite"] = skip_rewrite
+                result["semantic_cache_already_checked"] = semantic_cache_already_checked
+                lf.update_current_span(
+                    output={
+                        "cache_hit": False,
+                        "documents_count": 0,
+                        "rerank_applied": rerank_applied,
+                        "rewrite_count": rewrite_count,
+                        "fallback": True,
+                        "fallback_reason": "missing_evidence_constraints",
+                        "missing_evidence_constraints": missing_evidence,
+                    }
+                )
+                return result
+
             # Small-to-big context expansion
             await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
 
@@ -1310,77 +1380,41 @@ async def rag_pipeline(
         colbert_query = None  # Force re-encode ColBERT on next retrieve
         query_sparse = None  # Force re-compute sparse on next retrieve (query changed)
 
-    # Fallback: ran out of rewrites, return best docs with rerank
-    rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
-    if rerank_from_retrieve:
-        # Server-side ColBERT already applied — skip separate rerank
-        final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
-            :_DEFAULT_RERANK_TOP_K
-        ]
-        rerank_applied = True
-        rerank_cache_hit = False
-    else:
-        rerank_result = await _rerank(
-            current_query,
-            documents,
-            cache=cache,
-            reranker=reranker,
-            latency_stages=latency_stages,
-        )
-        latency_stages = rerank_result["latency_stages"]
-        final_docs = rerank_result["documents"]
-        rerank_applied = rerank_result["rerank_applied"]
-        rerank_cache_hit = rerank_result["rerank_cache_hit"]
-    final_gap = detect_score_gap(
-        [doc.get("score", 0.0) for doc in final_docs if isinstance(doc, dict)]
-    )
-    final_gap_confident = bool(final_gap["confident"])
-    gap_ratio = final_gap.get("ratio", 0.0)
-    if final_gap_confident and len(final_docs) > _CONFIDENT_TRIM_TOP_K:
-        logger.info(
-            "Score gap confident, trimming final docs (fallback)",
-            extra={
-                "gap_ratio": gap_ratio,
-                "before_count": len(final_docs),
-                "after_count": _CONFIDENT_TRIM_TOP_K,
-            },
-        )
-        final_docs = final_docs[:_CONFIDENT_TRIM_TOP_K]
-
-    # Small-to-big context expansion (fallback path)
-    await _expand_small_to_big(final_docs, qdrant=qdrant, config=config)
-
+    # Fallback: ran out of rewrites with only irrelevant documents.
+    # Do not leak "best available" unrelated context into answer generation.
     result = _assemble_context(
         query=current_query,
         original_query=query,
-        documents=final_docs,
+        documents=[],
         latency_stages=latency_stages,
         cache_hit=False,
         embeddings_cache_hit=embeddings_cache_hit,
         search_cache_hit=retrieve_result.get("search_cache_hit", False),
         search_results_count=retrieve_result["search_results_count"],
-        rerank_applied=rerank_applied,
-        rerank_cache_hit=rerank_cache_hit,
+        rerank_applied=False,
+        rerank_cache_hit=False,
         grade_confidence=grade_confidence,
         rewrite_count=rewrite_count,
         query_type=query_type,
         query_embedding=query_embedding,
         cache_key_embedding=cache_embedding,
-        retrieved_context=retrieve_result.get("retrieved_context", []),
+        retrieved_context=[],
         retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
         retrieval_error_type=retrieve_result.get("retrieval_error_type"),
         topic_hint=topic_hint,
-        score_gap_confident=final_gap_confident,
+        score_gap_confident=False,
+        missing_evidence_constraints=_find_missing_evidence_constraints(query, documents),
     )
     result["skip_rewrite"] = skip_rewrite
     result["semantic_cache_already_checked"] = semantic_cache_already_checked
     lf.update_current_span(
         output={
             "cache_hit": False,
-            "documents_count": len(final_docs),
-            "rerank_applied": rerank_applied,
+            "documents_count": 0,
+            "rerank_applied": False,
             "rewrite_count": rewrite_count,
             "fallback": True,
+            "fallback_reason": "no_relevant_documents",
         }
     )
     return result
@@ -1450,6 +1484,7 @@ def _assemble_context(
     retrieval_error_type: str | None = None,
     topic_hint: str | None = None,
     score_gap_confident: bool | None = None,
+    missing_evidence_constraints: list[str] | None = None,
 ) -> dict[str, Any]:
     """Assemble context dict from pipeline results."""
     return {
@@ -1473,6 +1508,7 @@ def _assemble_context(
         "retrieval_error_type": retrieval_error_type,
         "topic_hint": topic_hint,
         "score_gap_confident": score_gap_confident,
+        "missing_evidence_constraints": missing_evidence_constraints or [],
         "embedding_error": False,
         "embedding_error_type": None,
     }
