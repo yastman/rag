@@ -19,13 +19,19 @@
   фиксация решений и границ Этапа 0: что строим, что не строим, принятые решения
   и открытые вопросы, требующие решения Артёма.
 
+- [`unified-assistant-entrypoint-contract.md`](unified-assistant-entrypoint-contract.md) —
+  контракт единой точки входа ядра ассистента (Этап 2 плана). Определяет форму
+  функции `run_assistant_request()`, тип результата `AssistantResult`, политику
+  CRM/HITL, корреляцию логов и повторное использование существующих модулей.
+
 ## Навигация
 
 - Основной план: [`product-simplification-e2e-plan.md`](product-simplification-e2e-plan.md)
 - Рабочий процесс: [`yaroslav-simplification-workflow.md`](yaroslav-simplification-workflow.md)
 - Решения Этапа 0: [`product-simplification-stage-0-decisions.md`](product-simplification-stage-0-decisions.md)
+- Контракт точки входа: [`unified-assistant-entrypoint-contract.md`](unified-assistant-entrypoint-contract.md)
 
 ## Статус
 
-Все документы в каталоге имеют статус «предлагается» (2026-06-02) и
-предназначены для обсуждения и утверждения с Артёмом.
+Документы в каталоге имеют статус «предлагается» и предназначены для обсуждения
+и утверждения с Артёмом. Дата каждого документа указана в его заголовке.
