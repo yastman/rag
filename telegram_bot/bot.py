@@ -390,6 +390,7 @@ class PropertyBot:
             redis_url=config.redis_url,
             domain=config.domain,
             domain_language=config.domain_language,
+            streaming_enabled=config.streaming_enabled,
         )
 
         # Initialize LangGraph service dependencies
@@ -2643,7 +2644,10 @@ class PropertyBot:
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
                     forum_thread_id=forum_thread_id,
-                    use_streaming=message.chat.type == "private",
+                    use_streaming=(
+                        message.chat.type == "private"
+                        and bool(getattr(self._graph_config, "streaming_enabled", False))
+                    ),
                 )
 
             # Check for HITL interrupt (#443)

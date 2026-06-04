@@ -79,6 +79,24 @@ def _create_bot(mock_config):
     return bot, patches
 
 
+def test_bot_config_reads_streaming_enabled_false(monkeypatch):
+    """STREAMING_ENABLED=false should reach BotConfig."""
+    monkeypatch.setenv("STREAMING_ENABLED", "false")
+
+    config = BotConfig(_env_file=None, telegram_token="test-token")
+
+    assert config.streaming_enabled is False
+
+
+def test_property_bot_passes_streaming_enabled_to_graph_config(mock_config):
+    """PropertyBot must not reset streaming_enabled to GraphConfig default True."""
+    mock_config.streaming_enabled = False
+
+    bot, _ = _create_bot(mock_config)
+
+    assert bot._graph_config.streaming_enabled is False
+
+
 def _make_text_message(text="test", user_id=12345, chat_id=12345):
     """Create a mock text message with typing action support."""
     message = MagicMock()
@@ -3313,6 +3331,39 @@ class TestStreamingCoordination:
         assert bot.bot.send_message_draft.await_count >= 1
         bot.bot.send_message.assert_awaited_once()
         assert bot.bot.send_message.await_args.kwargs["text"] == "Добрый день"
+
+    async def test_handle_query_private_sdk_agent_respects_streaming_disabled(self, mock_config):
+        """Private sdk_agent path must not stream when STREAMING_ENABLED=false."""
+        bot, _ = _create_bot(mock_config)
+        bot._graph_config.streaming_enabled = False
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+
+        async def _agent_stream(*args, **kwargs):
+            raise AssertionError("astream must not be called when streaming is disabled")
+
+        mock_agent = AsyncMock()
+        mock_agent.astream = _agent_stream
+        mock_agent.ainvoke = AsyncMock(
+            return_value=_mock_agent_result(messages=[MagicMock(content="Готовый ответ")])
+        )
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры")
+            message.chat.type = "private"
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                response_text = await bot._handle_query_supervisor(
+                    message=message,
+                    pipeline_start=time.perf_counter(),
+                )
+
+        assert response_text == "Готовый ответ"
+        mock_agent.ainvoke.assert_awaited_once()
+        bot.bot.send_message_draft.assert_not_awaited()
 
     async def test_sdk_agent_draftstreamer_records_langfuse_root_output(self, mock_config):
         """DraftStreamer finalize in private chat must record sanitized root output (#1485)."""
