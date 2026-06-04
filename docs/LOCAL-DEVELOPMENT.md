@@ -286,13 +286,16 @@ before starting a heavy session:
 pgrep -af 'pytest|docker compose'
 ```
 
-Trace coverage gate:
+Optional trace diagnostics:
 
 ```bash
 make validate-traces-fast
 ```
 
-This target runs natively on the host and automatically points to local Docker service endpoints (`localhost:6333`, `localhost:8000`, `localhost:4000`, etc.). You can override individual endpoints if needed: `make validate-traces-fast QDRANT_URL=http://custom:6333`.
+This target is a manual diagnostic, not a product, CI, or release gate. It runs
+natively on the host and automatically points to local Docker service endpoints
+(`localhost:6333`, `localhost:8000`, `localhost:4000`, etc.). You can override
+individual endpoints if needed: `make validate-traces-fast QDRANT_URL=http://custom:6333`.
 
 When `.env` is absent, `validate-traces-fast` runs a preflight guard before `docker compose up`. If fallback uses `tests/fixtures/compose.ci.env` with the local default `POSTGRES_PASSWORD=postgres`, reusing `dev_postgres_data` is allowed. The guard fails fast only when fallback password and existing volume credentials can mismatch, preventing an unhealthy Langfuse/Postgres auth loop.
 
@@ -302,7 +305,39 @@ If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
 lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 ```
 
-## 5. Production Deployment (VPS)
+## 5. Core Product Live E2E
+
+The simplification core product proof is:
+
+```bash
+make local-up
+make e2e-core-live
+```
+
+This runs the live golden set in
+[`tests/e2e/test_core_live_ingest_answer.py`](../tests/e2e/test_core_live_ingest_answer.py)
+against local Qdrant + BGE-M3. It uses deterministic synthetic fixtures and a
+fake LLM by default, so it does not require Telegram, Telethon, Langfuse,
+voice, Mini App, k8s, real CRM credentials, or trace validation.
+
+When real provider credentials and budget are available, run the opt-in real
+LLM check:
+
+```bash
+make e2e-core-live-real-llm
+```
+
+Required env for the real LLM check:
+
+- `LLM_BASE_URL`
+- `LLM_MODEL`
+- `LLM_API_KEY` or `OPENAI_API_KEY`
+
+The real LLM target is a manual confidence check. It is intentionally outside
+fast local gates and CI because it depends on external provider availability
+and spend.
+
+## 6. Production Deployment (VPS)
 
 The recommended production flow is:
 
@@ -318,11 +353,11 @@ and `bot`. Mini app, Docling, ingestion, and self-hosted Langfuse are
 optional/profile-gated. See [`../DOCKER.md`](../DOCKER.md) for details and
 [cleanup commands](../DOCKER.md#vps-cleanup).
 
-## 6. Python Runtime Note
+## 7. Python Runtime Note
 
 Docker images that import `telegram_bot.observability` (and therefore `langfuse`) run on Python 3.13. Local native development via `uv` may use a different Python version (3.11+ supported, 3.12 recommended).
 
-## 7. Running Components Without Docker Wrapper
+## 8. Running Components Without Docker Wrapper
 
 `make bot`, `make run-bot`, and `make preflight-bot` now use
 `uv run --no-sync` to prevent implicit venv updates during runtime loops.
@@ -346,7 +381,7 @@ uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 If your venv is stale and the bot startup fails with a missing import,
 run `uv sync --frozen` before restarting.
 
-## 8. Minimal Stack (Fast Iteration)
+## 9. Minimal Stack (Fast Iteration)
 
 Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
 
@@ -380,9 +415,9 @@ make local-ps
 make local-down
 ```
 
-## 9. E2E Core Trace Gate (#1307)
+## 10. Optional E2E Trace Diagnostics (#1307)
 
-Required core Telethon trace scenarios with Langfuse validation:
+Optional Telethon trace scenarios with Langfuse validation:
 
 ```bash
 make local-up
@@ -391,18 +426,23 @@ make bot
 make e2e-test-traces-core
 ```
 
-Keep `make bot` running in another terminal while the E2E command executes. Use `make run-bot` only when you do not need the tee'd `logs/bot-run.log` evidence.
+Keep `make bot` running in another terminal while the E2E command executes. Use
+`make run-bot` only when you do not need the tee'd `logs/bot-run.log` evidence.
+This is a diagnostic path for transport/tracing investigations; the required
+core product proof is `make e2e-core-live`.
 
-## 10. Runtime env in worktrees
+## 11. Runtime env in worktrees
 
-Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the main checkout's `.env` or Telegram session files. To keep E2E trace gates reproducible without copying secrets into every worktree:
+Swarm worktrees start from a fresh `origin/dev` checkout and do not contain the
+main checkout's `.env` or Telegram session files. To keep optional E2E trace
+diagnostics reproducible without copying secrets into every worktree:
 
 - Compose commands must use `$(LOCAL_COMPOSE_CMD)` (or explicitly `docker compose --env-file tests/fixtures/compose.ci.env ...`) so services start with safe fallback values when `.env` is absent.
 - Telethon/E2E commands must use `uv run --env-file "$RAG_RUNTIME_ENV_FILE" ...` so runner credentials are loaded explicitly.
 - For swarm worktrees, set `RAG_RUNTIME_ENV_FILE=/repo/.env` when local Telegram credentials live only in the main checkout.
 - Do not copy `.env`, Telegram sessions, or provider keys into worker worktrees.
 
-## 11. Common Issues
+## 12. Common Issues
 
 - `docker-bot-up` fails immediately: missing required env variables in `.env`. Run `make preflight-bot` for a diagnostic report.
 - Bot crash-loops with `TokenValidationError`: `.env` is missing and the CI fallback `TELEGRAM_BOT_TOKEN=123456789:ABC...fghi` is not a valid Telegram token. `cp .env.example .env` then set real `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY`, and a provider key.

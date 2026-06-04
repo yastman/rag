@@ -1,8 +1,12 @@
 # Решения Этапа 0: Фиксация Направления Упрощения
 
-Статус: предлагается
+Статус: принято; выполнение идет через ветку `simplification/core`
 Дата: 2026-06-03
 Источник плана: [`product-simplification-e2e-plan.md`](product-simplification-e2e-plan.md)
+
+Текущий основной proof: `make e2e-core-live` против локальных Qdrant + BGE-M3,
+с синтетическим корпусом, мок CRM/HITL и без обязательных Telegram, Langfuse,
+voice, Mini App, k8s или trace validation.
 
 ## Цель Этапа 0
 

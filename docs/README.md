@@ -8,11 +8,30 @@ Project documentation index for humans and agents. Use this page to understand t
 2. **[LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md)** -- day-to-day workflow: commands, profiles, validation ladder.
 3. **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** -- extending the platform: add graph nodes, tools, query types, ingestion sources.
 
+## Core Product Path
+
+For the current simplification work, the primary proof is the assistant core
+live E2E path:
+
+```bash
+make local-up
+make e2e-core-live
+```
+
+This path exercises local Qdrant + BGE-M3, the synthetic fixture corpus, the
+assistant workflow, mocked CRM/HITL, and dependency-failure fallback behavior.
+It intentionally does not require Telegram, Langfuse, voice, Mini App, k8s, or
+trace validation. See [`LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md#5-core-product-live-e2e)
+for the local workflow and
+[`designs/product-simplification-e2e-plan.md`](designs/product-simplification-e2e-plan.md)
+for the staged plan.
+
 ## Task-Oriented Indexes
 
 For fast orientation by goal rather than by subsystem, see [`indexes/`](indexes/):
 
 - [`indexes/fast-search.md`](indexes/fast-search.md) — "I need to find docs about X"
+- [`indexes/core-product-path.md`](indexes/core-product-path.md) — simplified assistant core E2E, real LLM opt-in, optional surfaces
 - [`indexes/runtime-services.md`](indexes/runtime-services.md) — Docker, ingestion, mini app, bot, voice
 - [`indexes/observability-and-storage.md`](indexes/observability-and-storage.md) — Langfuse, Qdrant, Redis, LiteLLM, Postgres
 - [`indexes/local-runtime.md`](indexes/local-runtime.md) — local bot startup, Telegram E2E, Telethon sessions, polling locks
