@@ -2060,6 +2060,7 @@ class TestHistoryServiceLifecycle:
         bot.bot.set_chat_menu_button = AsyncMock()
 
         mock_checkpointer = AsyncMock()
+        mock_rest_client = MagicMock()
         with (
             patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
             patch(
@@ -2067,12 +2068,21 @@ class TestHistoryServiceLifecycle:
                 return_value=mock_checkpointer,
             ),
             patch("telegram_bot.bot.HistoryService") as mock_history_cls,
+            patch("telegram_bot.bot.AsyncQdrantClient") as mock_rest_client_cls,
         ):
             mock_svc = AsyncMock()
             mock_history_cls.return_value = mock_svc
+            mock_rest_client_cls.return_value = mock_rest_client
             await bot.start()
 
         assert bot._history_service is not None
+        mock_rest_client_cls.assert_called_once_with(
+            url=mock_config.qdrant_url,
+            api_key=None,
+            timeout=mock_config.qdrant_timeout,
+            prefer_grpc=False,
+        )
+        assert mock_history_cls.call_args.kwargs["rest_client"] is mock_rest_client
         mock_svc.ensure_collection.assert_awaited_once()
 
     async def test_start_history_failure_does_not_crash(self, mock_config):
