@@ -117,7 +117,7 @@ docling = [
 ingest = [
     "pymupdf>=1.26.0",
     "docling>=2.94.0",
-    "docling-core>=2.61.0",
+    "docling-core>=2.74.1",
     "cocoindex>=0.3.28",
     "fastembed>=0.7.4",
 ]
