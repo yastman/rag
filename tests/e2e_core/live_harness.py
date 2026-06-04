@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -421,16 +422,78 @@ class _FakeLLM:
 
 
 def _answer_from_context(message: str) -> str:
-    context = message.split("Вопрос:", 1)[0].replace("Контекст:", "").strip()
+    context_part, _, question_part = message.partition("Вопрос:")
+    context = context_part.replace("Контекст:", "").strip()
+    question = question_part.lower()
     if not context or "Релевантной информации не найдено" in context:
         return "не найдено"
 
     lines = [line.strip() for line in context.splitlines() if line.strip()]
-    selected = [
-        line.replace(",", "")
-        for line in lines
-        if "Sunny Beach" in line or "110000" in line.replace(",", "")
-    ]
+    sections = _split_context_sections(lines)
+
+    if "уборк" in question or "cleaning" in question:
+        selected = _select_section_lines(sections, ("cleaning", "25 eur", "48 hours"))
+        if selected:
+            return "\n".join(selected)
+
+    if "сад" in question or "garden" in question or "бургас" in question or "burgas" in question:
+        selected = _select_section_lines(sections, ("sotirovo", "garden", "burgas"))
+        if selected:
+            return "\n".join(selected)
+
+    if "мор" in question or "sea" in question or "бассейн" in question or "pool" in question:
+        selected = _select_section_lines(sections, ("sunny beach", "swimming pool", "110000"))
+        if selected:
+            return "\n".join(selected)
+
+    if "деш" in question or "cheapest" in question:
+        selected = _select_cheapest_sunny_beach_section(sections)
+        if selected:
+            return "\n".join(selected)
+
+    selected = _select_section_lines(sections, ("sunny beach", "110000"))
     if selected:
         return "\n".join(selected)
     return "\n".join(lines[:6])
+
+
+def _split_context_sections(lines: list[str]) -> list[list[str]]:
+    sections: list[list[str]] = []
+    current: list[str] = []
+    for line in lines:
+        if line.startswith("# ") and current:
+            sections.append(current)
+            current = []
+        current.append(line.replace(",", ""))
+    if current:
+        sections.append(current)
+    return sections
+
+
+def _select_section_lines(sections: list[list[str]], keywords: tuple[str, ...]) -> list[str]:
+    for section in sections:
+        normalized = "\n".join(section).lower()
+        if any(keyword in normalized for keyword in keywords):
+            return section
+    return []
+
+
+def _select_cheapest_sunny_beach_section(sections: list[list[str]]) -> list[str]:
+    candidates: list[tuple[int, list[str]]] = []
+    for section in sections:
+        normalized = "\n".join(section).lower()
+        if "sunny beach" not in normalized:
+            continue
+        price = _extract_price_eur(normalized)
+        if price is not None:
+            candidates.append((price, section))
+    if not candidates:
+        return []
+    return min(candidates, key=lambda candidate: candidate[0])[1]
+
+
+def _extract_price_eur(text: str) -> int | None:
+    match = re.search(r"price:\*\*\s*([0-9 ]+)\s*eur", text)
+    if not match:
+        return None
+    return int(match.group(1).replace(" ", ""))

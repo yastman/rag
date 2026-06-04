@@ -20,14 +20,17 @@ from tests.e2e_core.live_harness import (
 pytestmark = [pytest.mark.e2e, pytest.mark.requires_services]
 
 
-@pytest.mark.asyncio
-async def test_core_live_ingest_answer_golden_path() -> None:
-    """First product golden case against live Qdrant/BGE services."""
-
+async def _run_core_live_case(
+    case_id: str,
+    *,
+    document_ids: list[str],
+    session_suffix: str,
+    expected_documents_count: int | None = None,
+) -> None:
     env = LiveE2EEnv.from_env()
     await require_live_services(env)
 
-    case = load_golden_case("beach_studio_sea_under_120k")
+    case = load_golden_case(case_id)
     context = make_qdrant_context(env)
     harness = None
 
@@ -36,7 +39,7 @@ async def test_core_live_ingest_answer_golden_path() -> None:
         indexed_points = await index_fixture_documents(
             env,
             context.collection_name,
-            document_ids=["sunny_beach_studio", "mountain_view_villa"],
+            document_ids=document_ids,
         )
         assert indexed_points >= 1
 
@@ -46,7 +49,7 @@ async def test_core_live_ingest_answer_golden_path() -> None:
             collection=context.collection_name,
             user_context=UserContext(
                 user_id="2336",
-                session_id=f"{context.collection_name}:golden",
+                session_id=f"{context.collection_name}:{session_suffix}",
                 role="client",
             ),
             dependencies=harness.dependencies,
@@ -54,7 +57,10 @@ async def test_core_live_ingest_answer_golden_path() -> None:
 
         assert result.error_type is None, result.error_message
         assert result.route == "rag_search"
-        assert result.documents_count > 0
+        if expected_documents_count is None:
+            assert result.documents_count > 0
+        else:
+            assert result.documents_count == expected_documents_count
         assert set(case.must_retrieve).issubset(set(result.retrieved_doc_ids))
 
         for expected in case.must_contain:
@@ -68,47 +74,55 @@ async def test_core_live_ingest_answer_golden_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_core_live_ingest_answer_golden_path() -> None:
+    """First product golden case against live Qdrant/BGE services."""
+
+    await _run_core_live_case(
+        "beach_studio_sea_under_120k",
+        document_ids=["sunny_beach_studio", "mountain_view_villa"],
+        session_suffix="golden",
+    )
+
+
+@pytest.mark.asyncio
 async def test_core_live_missing_corpus_returns_no_claim() -> None:
     """Missing-corpus query must not answer from unrelated retrieved docs."""
 
-    env = LiveE2EEnv.from_env()
-    await require_live_services(env)
+    await _run_core_live_case(
+        "missing_in_corpus_no_claim",
+        document_ids=["sunny_beach_studio", "mountain_view_villa", "city_center_sofia"],
+        session_suffix="missing",
+        expected_documents_count=0,
+    )
 
-    case = load_golden_case("missing_in_corpus_no_claim")
-    context = make_qdrant_context(env)
-    harness = None
 
-    try:
-        recreate_collection(env, context.collection_name)
-        indexed_points = await index_fixture_documents(
-            env,
-            context.collection_name,
-            document_ids=["sunny_beach_studio", "mountain_view_villa", "city_center_sofia"],
-        )
-        assert indexed_points >= 1
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("case_id", "document_ids"),
+    [
+        (
+            "price_constraint_cheapest_sunny_beach",
+            ["sunny_beach_2bed", "sunny_beach_studio", "nessebar_penthouse"],
+        ),
+        (
+            "sea_side_excludes_mountain",
+            ["sunny_beach_studio", "mountain_view_villa"],
+        ),
+        (
+            "garden_apartment_near_burgas",
+            ["sotirovo_garden", "city_center_sofia", "mountain_view_villa"],
+        ),
+        (
+            "service_cleaning_price_policy",
+            ["services_cleaning", "sunny_beach_studio", "rules_hitl"],
+        ),
+    ],
+)
+async def test_core_live_remaining_golden_cases(case_id: str, document_ids: list[str]) -> None:
+    """Remaining product golden cases against live Qdrant/BGE services."""
 
-        harness = build_live_core_harness(env, context.collection_name)
-        result = await run_assistant_request(
-            case.query,
-            collection=context.collection_name,
-            user_context=UserContext(
-                user_id="2336",
-                session_id=f"{context.collection_name}:missing",
-                role="client",
-            ),
-            dependencies=harness.dependencies,
-        )
-
-        assert result.error_type is None, result.error_message
-        assert result.route == "rag_search"
-        assert result.documents_count == 0
-        assert result.retrieved_doc_ids == case.must_retrieve
-
-        for expected in case.must_contain:
-            assert expected in result.response_text
-        for forbidden in case.must_not_contain:
-            assert forbidden not in result.response_text
-    finally:
-        if harness is not None:
-            await harness.aclose()
-        cleanup_collection(env, context)
+    await _run_core_live_case(
+        case_id,
+        document_ids=document_ids,
+        session_suffix=case_id,
+    )
