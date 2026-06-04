@@ -36,18 +36,74 @@ def service(mock_client, mock_embeddings):
     )
 
 
-class TestEnsureCollection:
-    """Test ensure_collection creates collection and indexes if absent."""
+class TestEnsureCollectionUsesRestPath:
+    """Regression tests for #2346: ensure_collection must use REST path (get_collections),
+    not gRPC collection_exists which fails under OTel grpc.aio interceptor."""
 
-    async def test_creates_collection_when_missing(self, service, mock_client):
-        """ensure_collection creates collection if it doesn't exist."""
-        mock_client.collection_exists = AsyncMock(return_value=False)
+    async def test_does_not_call_collection_exists(self, service, mock_client):
+        """ensure_collection must never call collection_exists (gRPC path, #2346)."""
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_collection = AsyncMock()
         mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
 
-        mock_client.collection_exists.assert_awaited_once_with("test_history")
+        mock_client.collection_exists.assert_not_called()
+
+    async def test_uses_get_collections_rest_path(self, service, mock_client):
+        """ensure_collection uses get_collections() (REST path) to check existence."""
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
+        mock_client.create_collection = AsyncMock()
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        mock_client.get_collections.assert_awaited_once()
+
+    async def test_skips_create_when_collection_in_list(self, service, mock_client):
+        """ensure_collection must not create collection when get_collections includes it."""
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        mock_client.create_collection.assert_not_called()
+
+    async def test_creates_collection_when_not_in_list(self, service, mock_client):
+        """ensure_collection creates collection when name absent from get_collections list."""
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
+        mock_client.create_collection = AsyncMock()
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        mock_client.create_collection.assert_awaited_once()
+
+
+class TestEnsureCollection:
+    """Test ensure_collection creates collection and indexes if absent."""
+
+    async def test_creates_collection_when_missing(self, service, mock_client):
+        """ensure_collection creates collection if it doesn't exist."""
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
+        mock_client.create_collection = AsyncMock()
+        mock_client.create_payload_index = AsyncMock()
+
+        await service.ensure_collection()
+
+        mock_client.get_collections.assert_awaited_once()
         mock_client.create_collection.assert_awaited_once()
         # Verify vector config
         call_kwargs = mock_client.create_collection.call_args.kwargs
@@ -55,7 +111,11 @@ class TestEnsureCollection:
 
     async def test_skips_if_collection_exists(self, service, mock_client):
         """ensure_collection skips creation if collection already exists."""
-        mock_client.collection_exists = AsyncMock(return_value=True)
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
@@ -64,18 +124,24 @@ class TestEnsureCollection:
 
     async def test_idempotent_after_first_call(self, service, mock_client):
         """ensure_collection only checks once."""
-        mock_client.collection_exists = AsyncMock(return_value=True)
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
         await service.ensure_collection()
 
         # Only called once due to _ensured flag
-        assert mock_client.collection_exists.await_count == 1
+        assert mock_client.get_collections.await_count == 1
 
     async def test_creates_payload_indexes_when_collection_missing(self, service, mock_client):
         """ensure_collection creates payload indexes for filter fields."""
-        mock_client.collection_exists = AsyncMock(return_value=False)
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_collection = AsyncMock()
         mock_client.create_payload_index = AsyncMock()
 
@@ -88,7 +154,11 @@ class TestEnsureCollection:
 
     async def test_creates_payload_indexes_when_collection_exists(self, service, mock_client):
         """ensure_collection still creates payload indexes if collection already exists."""
-        mock_client.collection_exists = AsyncMock(return_value=True)
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
@@ -102,7 +172,11 @@ class TestEnsureCollection:
         """ensure_collection uses INTEGER for ids and KEYWORD for session_id."""
         from qdrant_client import models
 
-        mock_client.collection_exists = AsyncMock(return_value=True)
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
@@ -117,14 +191,22 @@ class TestEnsureCollection:
 
     async def test_payload_index_errors_are_caught(self, service, mock_client, caplog):
         """ensure_collection must not raise when create_payload_index fails."""
-        mock_client.collection_exists = AsyncMock(return_value=True)
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_payload_index = AsyncMock(side_effect=RuntimeError("already exists"))
 
         await service.ensure_collection()
 
     async def test_payload_indexes_idempotent_after_first_call(self, service, mock_client):
         """ensure_collection only creates payload indexes once."""
-        mock_client.collection_exists = AsyncMock(return_value=True)
+        existing = MagicMock()
+        existing.name = "test_history"
+        mock_collections = MagicMock()
+        mock_collections.collections = [existing]
+        mock_client.get_collections = AsyncMock(return_value=mock_collections)
         mock_client.create_payload_index = AsyncMock()
 
         await service.ensure_collection()
