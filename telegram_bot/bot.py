@@ -3875,11 +3875,16 @@ class PropertyBot:
             # REST-only client for collection admin ops: the shared retrieval
             # client is prefer_grpc=True, and gRPC collection calls hit a
             # grpc.aio + OTel interceptor NotImplementedError (#2346).
+            from urllib.parse import urlparse
+
             from qdrant_client import AsyncQdrantClient
 
+            # Strip api_key for http:// to avoid insecure-connection warning (#570).
+            _hist_scheme = urlparse(self.config.qdrant_url).scheme.lower()
+            _hist_api_key = self.config.qdrant_api_key if _hist_scheme == "https" else None
             self._history_rest_client: AsyncQdrantClient | None = AsyncQdrantClient(
                 url=self.config.qdrant_url,
-                api_key=self.config.qdrant_api_key,
+                api_key=_hist_api_key,
                 timeout=self.config.qdrant_timeout,
                 prefer_grpc=False,
             )
