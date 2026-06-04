@@ -1,8 +1,8 @@
 <div align="center">
 
-# Conversational AI Automation Platform
+# Domain Knowledge Assistant
 
-**Build domain-specific AI assistants that connect chat, voice, knowledge search, CRM workflows, and business automation in one observable runtime.**
+**Answer from a private knowledge base and prepare CRM/workflow actions only after human confirmation.**
 
 [![CI](https://github.com/yastman/rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yastman/rag/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -11,33 +11,33 @@
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 <p align="center">
-  <img src="docs/assets/readme/conversational-ai-platform-hero.svg" alt="Conversational AI Automation Platform: chat, voice, knowledge search, CRM workflows, observability, and Docker runtime" width="880">
+  <img src="docs/assets/readme/conversational-ai-platform-hero.svg" alt="Domain assistant core: knowledge search, answer generation, CRM confirmation, and optional runtime adapters" width="880">
 </p>
 
 </div>
 
 ---
 
-This repository is a production-oriented foundation for AI assistants that answer from private knowledge, search domain catalogs, qualify leads, update CRM/workflow systems with human approval, and operate across Telegram, voice, API, and Mini App surfaces.
+This repository now centers on one product path: user intent enters the assistant core, the core retrieves context from Qdrant, generates a grounded answer, and prepares CRM/workflow actions only behind human confirmation.
 
-The current codebase includes one working sales/catalog automation domain, but the platform is intentionally modular: replace the domain prompts, search tools, and business integrations while keeping the orchestration, retrieval, ingestion, caching, observability, and runtime contracts.
+Telegram remains the production adapter. Voice, Mini App, API, Langfuse, trace validation, k8s, and monitoring surfaces remain useful but optional around the core proof. The current sales/catalog automation domain is the first implementation of the assistant, not a requirement that every deployment become a broad platform.
 
 ## Why It Exists
 
-Most business bots stop at scripted replies. Most AI demos stop at a prompt. This project demonstrates the full operational loop: users ask in natural language, the system retrieves grounded knowledge, routes workflow intent, calls business tools, asks for human approval when needed, and leaves traces operators can inspect.
+Most business bots stop at scripted replies. Most AI demos stop at a prompt. This project demonstrates the full operational loop: users ask in natural language, the system retrieves grounded knowledge, routes workflow intent, prepares business actions, asks for human approval when needed, and leaves structured logs operators can inspect.
 
 | Business need | Platform capability |
 |---|---|
 | Reduce repeated manual answers | RAG over private documents with citation-aware generation |
 | Convert conversations into action | CRM/workflow tools, lead scoring, tasks, notes, and manager handoff |
 | Let users search naturally | Domain-specific extraction plus hybrid vector/search pipelines |
-| Support more than text chat | Telegram bot, Telegram voice input, LiveKit voice-agent path, API, and Mini App surface |
-| Keep AI behavior inspectable | LangGraph state flow, Langfuse traces, structured logs, quality scores, and runbooks |
+| Support the production channel | Telegram text adapter over the assistant core |
+| Keep AI behavior inspectable | Structured product logs, LangGraph state flow, optional Langfuse traces, quality scores, and runbooks |
 | Control latency and cost | Redis-backed semantic, embedding, search, rerank, and extraction caches |
 
 ## Adapt It To Your Domain
 
-The reusable part is the platform: channels, graph orchestration, retrieval, ingestion, cache, observability, and Docker runtime. The replaceable part is the domain layer: prompts, tools, search schema, CRM/workflow integration, and UI copy.
+The reusable part is the core product path: assistant orchestration, retrieval, ingestion, cache, structured logs, and Docker runtime. The replaceable part is the domain layer: prompts, tools, search schema, CRM/workflow integration, and UI copy.
 
 | Domain | Replaceable module examples |
 |---|---|
@@ -47,18 +47,19 @@ The reusable part is the platform: channels, graph orchestration, retrieval, ing
 | Education | Course search, student FAQ, onboarding flows |
 | Internal operations | Knowledge-base assistant, document search, approval workflows |
 
-## Platform Capabilities
+## Core Capabilities
 
 | Capability | What it means in this repo | Evidence |
 |---|---|---|
 | Stateful AI orchestration | LangGraph routes classification, guard, cache, retrieval, grading, reranking, generation, response, and optional summarization | [`telegram_bot/graph/`](telegram_bot/graph/) |
 | Typed workflow state | One state contract tracks query, routing, retrieval, filters, cache, scoring, policy, latency, and response metadata | [`telegram_bot/graph/state.py`](telegram_bot/graph/state.py) |
-| Cross-channel assistant runtime | Telegram text, Telegram voice, LiveKit voice agent, FastAPI RAG API, and Mini App handoff reuse the same core ideas | [`src/voice/`](src/voice/), [`src/api/`](src/api/), [`mini_app/`](mini_app/) |
+| Assistant core entrypoint | Direct Python calls use `run_assistant_request()` and return `AssistantResult` for E2E and adapters | [`src/core/assistant.py`](src/core/assistant.py) |
+| Optional runtime adapters | Telegram is the production adapter; voice, API, and Mini App surfaces are optional around the core proof | [`telegram_bot/`](telegram_bot/), [`src/voice/`](src/voice/), [`src/api/`](src/api/), [`mini_app/`](mini_app/) |
 | Self-hosted retrieval | BGE-M3 + Qdrant support dense, sparse, and ColBERT-style retrieval paths | [`docs/QDRANT_STACK.md`](docs/QDRANT_STACK.md) |
 | Deterministic ingestion | CocoIndex and Docling parse, chunk, embed, upsert/delete, retry, and track DLQ state | [`docs/INGESTION.md`](docs/INGESTION.md) |
 | Business tool actions | CRM/domain tools can create workflow actions with HITL confirmation for sensitive writes | [`telegram_bot/agents/`](telegram_bot/agents/) |
 | Cost and latency controls | Redis caches semantic answers, embeddings, search results, rerank results, and extraction outputs | [`telegram_bot/integrations/cache.py`](telegram_bot/integrations/cache.py) |
-| Observability | Langfuse traces/scores, trace validation, Loki/Promtail/Alertmanager local monitoring, and runbooks | [`docs/PIPELINE_OVERVIEW.md`](docs/PIPELINE_OVERVIEW.md) |
+| Observability | Structured product logs are required; Langfuse traces, trace validation, and local monitoring are optional diagnostics | [`src/utils/product_events.py`](src/utils/product_events.py) |
 | Compose-first runtime | Docker Compose profiles cover core services, bot, ingestion, voice, ML observability, monitoring, and full stack | [`DOCKER.md`](DOCKER.md) |
 
 ## Why This Is More Than A Bot
@@ -156,14 +157,14 @@ Safe review notes:
 - Ingestion reliability: stable file identity, Docling parsing, chunking, Qdrant upsert/delete, PostgreSQL state, retries, and DLQ.
 - Runtime discipline: Compose profiles, pinned images, health checks, preflight checks, remote Docker helpers, and operational docs.
 - Cost controls: Redis semantic answer cache, embedding cache, search cache, rerank cache, and extraction cache.
-- Observability: Langfuse traces/scores, prompt management, trace validation, local monitoring, and runbooks.
+- Observability: structured product logs as the core proof, with Langfuse traces/scores, prompt management, trace validation, local monitoring, and runbooks as optional diagnostics.
 - Quality gates: Ruff, MyPy, pytest tiers, CI guardrails, and documented local validation.
 
 ## Current Domain Module
 
-The repository currently includes a working sales/catalog automation module: catalog-style search, lead workflows, manager handoff, scoring, and Kommo CRM integration. Treat that as the first domain implementation, not the boundary of the platform.
+The repository currently includes a working sales/catalog automation module: catalog-style search, lead workflows, manager handoff, scoring, and Kommo CRM integration. Treat that as the first domain implementation, not the boundary of the product.
 
-To adapt the system, replace the domain prompts, extraction logic, catalog/search tools, CRM/tool integrations, and UI copy while keeping the common runtime: channels, LangGraph orchestration, RAG, ingestion, cache, observability, and Docker profiles.
+To adapt the system, replace the domain prompts, extraction logic, catalog/search tools, CRM/tool integrations, and UI copy while keeping the assistant core, RAG, ingestion, cache, structured logs, and Docker profiles.
 
 ## Quick Start
 
@@ -248,8 +249,10 @@ and budget are available.
 ## Honest Scope
 
 - Docker Compose is the primary local runtime path.
+- The main reliability proof is the assistant core path: `make local-up` then `make e2e-core-live`.
 - k3s manifests exist for core services but are not full parity with Compose.
 - Monitoring services are local/dev unless production evidence is added.
+- Langfuse, OTel, trace validation, voice, Mini App, and k8s are not required for the core proof.
 - HITL confirmation protects CRM/write workflows, not every possible state transition.
 - The Mini App is a lightweight entry surface and not full parity with the Telegram bot.
 - Some UI/i18n strings are still being migrated into Fluent bundles.
