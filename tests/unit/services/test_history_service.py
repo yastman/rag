@@ -90,6 +90,45 @@ class TestEnsureCollectionUsesRestPath:
         mock_client.create_collection.assert_awaited_once()
 
 
+class TestEnsureCollectionUsesRestClient:
+    """#2346 follow-up: ensure_collection must route admin ops through a
+    dedicated REST client when one is provided, so the shared gRPC client
+    (prefer_grpc=True) never hits the grpc.aio + OTel NotImplementedError."""
+
+    @pytest.fixture
+    def rest_client(self):
+        rc = AsyncMock()
+        empty = MagicMock()
+        empty.collections = []
+        rc.get_collections = AsyncMock(return_value=empty)
+        rc.create_collection = AsyncMock()
+        rc.create_payload_index = AsyncMock()
+        return rc
+
+    async def test_ensure_collection_uses_rest_client_when_grpc_fails(
+        self, mock_client, mock_embeddings, rest_client
+    ):
+        """Primary gRPC client raises on get_collections; ensure_collection still
+        succeeds via the REST client and runs every admin op against it."""
+        mock_client.get_collections = AsyncMock(
+            side_effect=NotImplementedError("grpc.aio interceptor")
+        )
+        svc = HistoryService(
+            client=mock_client,
+            embeddings=mock_embeddings,
+            collection_name="test_history",
+            rest_client=rest_client,
+        )
+
+        await svc.ensure_collection()
+
+        rest_client.get_collections.assert_awaited_once()
+        rest_client.create_collection.assert_awaited_once()
+        assert rest_client.create_payload_index.await_count == 3
+        mock_client.get_collections.assert_not_called()
+        mock_client.create_collection.assert_not_called()
+
+
 class TestEnsureCollection:
     """Test ensure_collection creates collection and indexes if absent."""
 

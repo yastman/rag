@@ -31,24 +31,32 @@ class HistoryService:
         client: AsyncQdrantClient,
         embeddings: Any,
         collection_name: str = "conversation_history",
+        rest_client: AsyncQdrantClient | None = None,
     ):
         self._client = client
         self._embeddings = embeddings
         self._collection_name = collection_name
+        # Admin ops (get/create collection, payload index) must avoid the
+        # grpc.aio + OTel interceptor NotImplementedError (#2346). When a
+        # REST-only client is injected, route ensure_collection() through it;
+        # otherwise fall back to the primary client.
+        self._admin_client = rest_client or client
         self._ensured = False
 
     async def ensure_collection(self) -> None:
         """Create history collection and payload indexes if not present.
 
-        Uses get_collections() (REST path) instead of collection_exists() to avoid
-        the grpc.aio + OTel interceptor NotImplementedError (#2346).
+        Routes admin ops through a REST-only client (when injected) to avoid
+        the grpc.aio + OTel interceptor NotImplementedError (#2346). The shared
+        retrieval client stays prefer_grpc=True.
         """
         if self._ensured:
             return
-        resp = await self._client.get_collections()
+        client = self._admin_client
+        resp = await client.get_collections()
         names = {c.name for c in resp.collections}
         if self._collection_name not in names:
-            await self._client.create_collection(
+            await client.create_collection(
                 collection_name=self._collection_name,
                 vectors_config={
                     _DENSE_VECTOR_NAME: models.VectorParams(
@@ -66,7 +74,7 @@ class HistoryService:
             ("metadata.deal_id", models.PayloadSchemaType.INTEGER),
         ):
             try:
-                await self._client.create_payload_index(
+                await client.create_payload_index(
                     collection_name=self._collection_name,
                     field_name=field_name,
                     field_schema=field_schema,
