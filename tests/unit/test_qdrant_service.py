@@ -465,9 +465,17 @@ class TestQdrantServiceTimeout:
             mock_client.assert_called_once_with(
                 url="http://localhost:6333",
                 api_key=None,
-                prefer_grpc=True,
+                prefer_grpc=False,
                 timeout=expected_timeout,
             )
+
+    def test_runtime_transport_can_enable_grpc_explicitly(self):
+        """Runtime Qdrant transport defaults to REST but can opt into gRPC."""
+        import telegram_bot.services.qdrant as qdrant_mod
+
+        with patch.object(qdrant_mod, "AsyncQdrantClient") as mock_client:
+            qdrant_mod.QdrantService(url="http://localhost:6333", prefer_grpc=True)
+            assert mock_client.call_args.kwargs["prefer_grpc"] is True
 
 
 class TestQdrantServiceBuildFilter:

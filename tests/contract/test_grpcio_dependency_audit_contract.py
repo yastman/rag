@@ -99,21 +99,20 @@ def test_qdrant_client_present_where_grpc_used() -> None:
         )
 
 
-def test_qdrant_runtime_still_prefers_grpc() -> None:
-    """The canonical Qdrant service + preflight still use prefer_grpc=True.
+def test_qdrant_preflight_still_exercises_grpc_but_runtime_defaults_rest() -> None:
+    """Preflight may diagnose gRPC, but runtime search defaults to REST.
 
-    If gRPC were ever turned off, grpcio would genuinely become unnecessary
-    and this audit decision would need revisiting — so assert the transport
-    is still gRPC.
+    VPS demo traffic hit grpc.aio + OTel interceptor ``NotImplementedError`` in
+    the bot process. The user-facing QdrantService path must therefore avoid
+    gRPC by default while keeping preflight coverage for explicit diagnostics.
     """
     qdrant_service = REPO / "src" / "runtime" / "services" / "qdrant.py"
     preflight = REPO / "telegram_bot" / "preflight.py"
-    for path in (qdrant_service, preflight):
-        text = path.read_text(encoding="utf-8")
-        assert "prefer_grpc=True" in text, (
-            f"{path.relative_to(REPO)} no longer sets prefer_grpc=True; if gRPC "
-            "is intentionally disabled, revisit the grpcio audit in issue #2241."
-        )
+    qdrant_text = qdrant_service.read_text(encoding="utf-8")
+    preflight_text = preflight.read_text(encoding="utf-8")
+
+    assert "prefer_grpc: bool = False" in qdrant_text
+    assert "prefer_grpc=True" in preflight_text
 
 
 def test_grpcio_transitive_rationale_documented() -> None:
