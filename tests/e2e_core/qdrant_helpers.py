@@ -22,8 +22,8 @@ def generate_collection_name() -> str:
 
 def should_keep_collection() -> bool:
     """Return True when ``E2E_KEEP_COLLECTION=1`` (truthy)."""
-    env = os.getenv("E2E_KEEP_COLLECTION", "")
-    return bool(env) and env != "0"
+    env = os.getenv("E2E_KEEP_COLLECTION", "").strip().lower()
+    return bool(env) and env not in {"0", "false", "no", "off"}
 
 
 @dataclass

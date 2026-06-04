@@ -64,6 +64,12 @@ class TestShouldKeepCollection:
         with mock.patch.dict(os.environ, {"E2E_KEEP_COLLECTION": "0"}, clear=True):
             assert should_keep_collection() is False
 
+    @pytest.mark.parametrize("value", ["false", "False", "no", "NO", "off", "Off"])
+    def test_returns_false_when_e2e_keep_collection_is_false_like(self, value):
+        """Explicit false-like values should preserve default-delete behavior."""
+        with mock.patch.dict(os.environ, {"E2E_KEEP_COLLECTION": value}, clear=True):
+            assert should_keep_collection() is False
+
     def test_returns_false_when_e2e_keep_collection_is_empty(self):
         """E2E_KEEP_COLLECTION='' should be treated as False."""
         with mock.patch.dict(os.environ, {"E2E_KEEP_COLLECTION": ""}, clear=True):
