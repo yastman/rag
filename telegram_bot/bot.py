@@ -142,6 +142,7 @@ else:
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 HistoryService: Any = None  # type: ignore[no-redef]
+AsyncQdrantClient: Any = None
 BotContext: Any = Any
 
 
@@ -3877,12 +3878,14 @@ class PropertyBot:
             # grpc.aio + OTel interceptor NotImplementedError (#2346).
             from urllib.parse import urlparse
 
-            from qdrant_client import AsyncQdrantClient
-
             # Strip api_key for http:// to avoid insecure-connection warning (#570).
+            async_qdrant_client_cls = AsyncQdrantClient
+            if async_qdrant_client_cls is None:
+                from qdrant_client import AsyncQdrantClient as async_qdrant_client_cls
+
             _hist_scheme = urlparse(self.config.qdrant_url).scheme.lower()
             _hist_api_key = self.config.qdrant_api_key if _hist_scheme == "https" else None
-            self._history_rest_client: AsyncQdrantClient | None = AsyncQdrantClient(
+            self._history_rest_client = async_qdrant_client_cls(
                 url=self.config.qdrant_url,
                 api_key=_hist_api_key,
                 timeout=self.config.qdrant_timeout,
