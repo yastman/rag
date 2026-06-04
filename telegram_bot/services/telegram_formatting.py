@@ -14,8 +14,6 @@ from telegram_bot.observability_payloads import build_safe_output_payload
 logger = logging.getLogger(__name__)
 
 _LONG_ANSWER_THRESHOLD = 900
-_QUOTE_THRESHOLD = 120
-_QUOTE_MAX_LEN = 220
 
 
 def _escape_html(text: str) -> str:
@@ -60,33 +58,8 @@ def format_sources_html(documents: list[dict[str, Any]], max_sources: int = 5) -
 
 
 def build_reply_parameters(message: Any, user_text: str) -> Any | None:
-    """Build Telegram reply quote params for long/complex user questions."""
-    if not isinstance(user_text, str):
-        return None
-    original_text = user_text
-    text = user_text.strip()
-    message_id = getattr(message, "message_id", None)
-    if not isinstance(message_id, int):
-        return None
-    if len(text) < _QUOTE_THRESHOLD and "\n" not in text and text.count("?") <= 1:
-        return None
-
-    try:
-        from aiogram.types import ReplyParameters
-    except Exception:
-        return None
-
-    # Telegram requires `quote` to be an exact substring of the original message.
-    # Keep the original whitespace and truncate by prefix only, without adding ellipsis.
-    quote_text = original_text
-    if len(quote_text) > _QUOTE_MAX_LEN:
-        quote_text = quote_text[:_QUOTE_MAX_LEN]
-
-    return ReplyParameters(
-        message_id=message_id,
-        quote=_escape_html(quote_text),
-        quote_parse_mode="HTML",
-    )
+    """Disable Telegram reply quotes for bot answers."""
+    return None
 
 
 def _split_plain_text(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
