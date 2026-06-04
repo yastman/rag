@@ -78,6 +78,26 @@ asserts:
 LLM evaluation uses temperature 0 and fact-based checks to minimize
 non-determinism.
 
+## Live LLM Mode
+
+`make e2e-core-live` uses a deterministic fake LLM so the fast product gate
+does not depend on provider availability or spend.
+
+For release/nightly validation with a real OpenAI-compatible provider, run:
+
+```bash
+make e2e-core-live-real-llm
+```
+
+Required environment:
+
+- `LLM_BASE_URL`
+- `LLM_MODEL`
+- `LLM_API_KEY` or `OPENAI_API_KEY`
+
+The real LLM mode sets temperature to `0`, disables streaming and style
+rewrites, and keeps the same fact-based golden assertions.
+
 ## Related Docs
 
 - Product simplification E2E plan: [`docs/designs/product-simplification-e2e-plan.md`](../../docs/designs/product-simplification-e2e-plan.md)

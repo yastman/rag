@@ -15,6 +15,8 @@ import httpx
 import pytest
 import yaml
 
+from src.runtime.graph.config import GraphConfig
+from src.runtime.services.qdrant import QdrantService
 from tests.e2e_core.qdrant_helpers import (
     QdrantTestContext,
     generate_collection_name,
@@ -47,6 +49,7 @@ class LiveE2EEnv:
     bge_m3_url: str
     qdrant_api_key: str | None = None
     strict: bool = False
+    real_llm: bool = False
 
     @classmethod
     def from_env(cls) -> LiveE2EEnv:
@@ -63,6 +66,7 @@ class LiveE2EEnv:
             ),
             qdrant_api_key=os.getenv("QDRANT_API_KEY") or None,
             strict=_truthy(os.getenv("E2E_CORE_STRICT")),
+            real_llm=_truthy(os.getenv("E2E_CORE_REAL_LLM")),
         )
 
 
@@ -237,6 +241,8 @@ async def require_live_services(env: LiveE2EEnv) -> None:
     except Exception as exc:
         failures.append(f"BGE-M3 unavailable at {env.bge_m3_url}: {type(exc).__name__}")
 
+    failures.extend(real_llm_config_errors(env))
+
     if not failures:
         return
 
@@ -244,6 +250,24 @@ async def require_live_services(env: LiveE2EEnv) -> None:
     if env.strict:
         pytest.fail(message)
     pytest.skip(message)
+
+
+def real_llm_config_errors(env: LiveE2EEnv) -> list[str]:
+    """Return missing real-LLM configuration for opt-in live LLM runs."""
+
+    if not env.real_llm:
+        return []
+
+    errors: list[str] = []
+    if not os.getenv("E2E_CORE_REAL_LLM"):
+        errors.append("E2E_CORE_REAL_LLM=1 is required for real LLM mode")
+    if not os.getenv("LLM_BASE_URL"):
+        errors.append("LLM_BASE_URL is required for real LLM mode")
+    if not os.getenv("LLM_MODEL"):
+        errors.append("LLM_MODEL is required for real LLM mode")
+    if not (os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")):
+        errors.append("LLM_API_KEY or OPENAI_API_KEY is required for real LLM mode")
+    return errors
 
 
 def make_qdrant_context(env: LiveE2EEnv) -> QdrantTestContext:
@@ -347,7 +371,6 @@ def build_live_core_harness(env: LiveE2EEnv, collection_name: str) -> LiveCoreHa
     """Build CoreDependencies for ``run_assistant_request`` using live retrieval."""
 
     from src.core.assistant import CoreDependencies
-    from src.runtime.services.qdrant import QdrantService
 
     embeddings = LiveBGEEmbeddings(env.bge_m3_url)
     sparse_embeddings = LiveBGESparseEmbeddings(env.bge_m3_url)
@@ -358,13 +381,14 @@ def build_live_core_harness(env: LiveE2EEnv, collection_name: str) -> LiveCoreHa
         timeout=30,
         prefer_grpc=False,
     )
+    config = _build_live_llm_config(env)
     dependencies = CoreDependencies(
         cache=NoopLiveCache(),
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
         reranker=None,
-        config=FakeLLMConfig(),
+        config=config,
     )
 
     async def _cleanup() -> None:
@@ -373,6 +397,21 @@ def build_live_core_harness(env: LiveE2EEnv, collection_name: str) -> LiveCoreHa
         await qdrant.close()
 
     return LiveCoreHarness(dependencies=dependencies, cleanup=_cleanup)
+
+
+def _build_live_llm_config(env: LiveE2EEnv) -> Any:
+    if not env.real_llm:
+        return FakeLLMConfig()
+
+    config = GraphConfig.from_env()
+    config.domain = "недвижимость в Болгарии"
+    config.llm_temperature = 0.0
+    config.generate_max_tokens = int(os.getenv("E2E_CORE_REAL_LLM_MAX_TOKENS", "600"))
+    config.streaming_enabled = False
+    config.show_sources = False
+    config.response_style_enabled = False
+    config.response_style_shadow_mode = False
+    return config
 
 
 def cleanup_collection(env: LiveE2EEnv, context: QdrantTestContext) -> None:
