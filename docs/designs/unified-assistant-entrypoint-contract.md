@@ -153,8 +153,14 @@ class AssistantResult:
 
     # ── Retrieval ──
     retrieved_doc_ids: list[str]
-    """Qdrant point IDs of retrieved documents (required by tests:
-    ``must_retrieve`` / ``must_not_retrieve`` checks)."""
+    """Stable corpus/source document IDs for retrieved documents.
+
+    These IDs are the values used by ``golden_cases.yaml`` checks
+    (``must_retrieve`` / ``must_not_retrieve``), such as
+    ``sunny_beach_studio`` or ``rules_hitl``. They are not Qdrant point IDs;
+    adapters that need backend point identifiers should expose them through
+    ``retrieved_sources`` metadata or a future separate field.
+    """
 
     retrieved_sources: list[dict[str, str]]
     """Source metadata for each retrieved document: {'url': ..., 'title': ...}.
@@ -309,8 +315,8 @@ Telegram-адаптер не должен сам запускать `rag_pipelin
 | `assistant_request_started` | Начало обработки запроса | `request_id`, `route` |
 | `search_completed` | Завершение поиска в Qdrant | `request_id`, `retrieved_doc_ids`, `latency_ms`, `error_type` |
 | `llm_completed` | Завершение генерации LLM | `request_id`, `llm_model`, `input_tokens`, `output_tokens`, `latency_ms`, `error_type` |
-| `crm_action_proposed` | Предложено CRM-действие | `request_id`, `action_type` |
-| `crm_action_confirmed` | CRM-действие подтверждено | `request_id`, `action_type` |
+| `crm_action_proposed` | Предложено CRM-действие | `request_id`, `route` |
+| `crm_action_confirmed` | CRM-действие подтверждено | `request_id`, `route` |
 | `dependency_failed` | Отказ зависимости | `request_id`, `error_type`, `route` |
 | `assistant_request_completed` | Завершение всего запроса | `request_id`, `route`, `latency_ms`, `error_type` |
 
@@ -326,6 +332,12 @@ Telegram-адаптер не должен сам запускать `rag_pipelin
 - `error_type` для ошибок;
 - `retrieved_doc_ids` для событий поиска;
 - `llm_model`, `input_tokens`, `output_tokens` для LLM-событий.
+
+`action_type` остаётся полем `CrmAction`, но не является обязательным полем
+`log_event()` Stage 1: текущий helper фильтрует произвольные поля и пропускает
+только перечисленный выше whitelist. Если будущая реализация должна писать
+`action_type` в продуктовые события, сначала нужно расширить контракт
+`src/utils/product_events.py`.
 
 ### Формат
 
