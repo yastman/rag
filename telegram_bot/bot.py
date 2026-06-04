@@ -3642,11 +3642,47 @@ class PropertyBot:
             "search": "Search + Rerank cache",
             "rerank": "Rerank cache",
             "all": "Все кеши",
+            "history": "История диалога",
+            "all_and_history": "Все кеши + История диалога",
         }
         data = (callback_query.data or "").removeprefix("cc:")
         tier_name = _TIER_NAMES.get(data, data)
         try:
-            if data == "all":
+            if data in ("history", "all_and_history"):
+                # Clear agent conversation history (checkpoints) for this user
+                from telegram_bot.services.checkpointer_utils import (
+                    _delete_checkpointer_thread,
+                    _supervisor_thread_id,
+                )
+
+                assert callback_query.from_user is not None
+                user_id = callback_query.from_user.id
+                chat_id = callback_query.message.chat.id if callback_query.message else user_id
+                text_thread_id = _supervisor_thread_id(chat_id)
+                voice_thread_id = str(user_id)
+                seen: set[int] = set()
+                for checkpointer in (self._checkpointer, self._agent_checkpointer):
+                    if checkpointer is None or id(checkpointer) in seen:
+                        continue
+                    seen.add(id(checkpointer))
+                    for thread_id in (text_thread_id, voice_thread_id):
+                        try:
+                            await _delete_checkpointer_thread(checkpointer, thread_id)
+                        except Exception:
+                            logger.warning(
+                                "Failed to clear checkpointer thread %s", thread_id, exc_info=True
+                            )
+                if data == "history":
+                    text = "Очищено: История диалога"
+                else:
+                    # Also clear all caches
+                    result = await self._cache.clear_all_caches()
+                    lines = [
+                        f"Очищено: {_TIER_NAMES.get(t, t)} — {n} ключей" for t, n in result.items()
+                    ]
+                    lines.append("Очищено: История диалога")
+                    text = "\n".join(lines)
+            elif data == "all":
                 result = await self._cache.clear_all_caches()
                 lines = [
                     f"Очищено: {_TIER_NAMES.get(t, t)} — {n} ключей" for t, n in result.items()

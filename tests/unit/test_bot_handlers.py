@@ -5397,8 +5397,8 @@ class TestClearCacheCommand:
         assert call_kwargs is not None
         reply_markup = call_kwargs.kwargs.get("reply_markup") or call_kwargs.args[1]
         assert isinstance(reply_markup, InlineKeyboardMarkup)
-        # 3 rows total, without analysis tier
-        assert len(reply_markup.inline_keyboard) == 3
+        # 5 rows: 2 cache rows + all row + history row + all_and_history row
+        assert len(reply_markup.inline_keyboard) == 5
         all_buttons = [btn for row in reply_markup.inline_keyboard for btn in row]
         callback_data_values = {btn.callback_data for btn in all_buttons}
         assert callback_data_values == {
@@ -5407,6 +5407,8 @@ class TestClearCacheCommand:
             "cc:sparse",
             "cc:search",
             "cc:all",
+            "cc:history",
+            "cc:all_and_history",
         }
 
     async def test_handle_clearcache_semantic(self, mock_config):
@@ -5472,6 +5474,67 @@ class TestClearCacheCommand:
         cq.answer.assert_called_once()
         edited_text = cq.message.edit_text.call_args.args[0]
         assert "Ошибка" in edited_text
+
+    async def test_handle_clearcache_history_clears_checkpoints(self, mock_config):
+        """cc:history deletes agent checkpointer threads for the requesting user."""
+        bot, _ = _create_bot(mock_config)
+        bot._checkpointer = AsyncMock()
+        bot._agent_checkpointer = AsyncMock()
+
+        cq = _make_cc_callback_query("cc:history", user_id=99)
+        cq.message.chat = MagicMock(id=99)
+
+        with (
+            patch(
+                "telegram_bot.services.checkpointer_utils._delete_checkpointer_thread",
+                new_callable=AsyncMock,
+            ) as mock_del,
+            patch(
+                "telegram_bot.services.checkpointer_utils._supervisor_thread_id",
+                return_value="thread:99",
+            ),
+        ):
+            await bot.handle_clearcache_callback(cq)
+
+        mock_del.assert_awaited()
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "История диалога" in edited_text
+        bot._cache.clear_all_caches.assert_not_called()
+        bot._cache.clear_semantic_cache.assert_not_called()
+
+    async def test_handle_clearcache_all_and_history_clears_caches_and_checkpoints(
+        self, mock_config
+    ):
+        """cc:all_and_history clears all cache tiers AND the agent checkpoints."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_all_caches = AsyncMock(
+            return_value={"semantic": 2, "embeddings": 4, "sparse": 1, "search": 3, "rerank": 0}
+        )
+        bot._checkpointer = AsyncMock()
+        bot._agent_checkpointer = AsyncMock()
+
+        cq = _make_cc_callback_query("cc:all_and_history", user_id=42)
+        cq.message.chat = MagicMock(id=42)
+
+        with (
+            patch(
+                "telegram_bot.services.checkpointer_utils._delete_checkpointer_thread",
+                new_callable=AsyncMock,
+            ) as mock_del,
+            patch(
+                "telegram_bot.services.checkpointer_utils._supervisor_thread_id",
+                return_value="thread:42",
+            ),
+        ):
+            await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_all_caches.assert_awaited_once()
+        mock_del.assert_awaited()
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "История диалога" in edited_text
+        assert "2" in edited_text
 
 
 class TestHandleAsk:
