@@ -58,6 +58,79 @@ def test_live_env_falls_back_to_runtime_urls() -> None:
     assert parsed.bge_m3_url == "http://runtime-bge:8000"
 
 
+def test_live_env_reads_real_llm_opt_in() -> None:
+    from tests.e2e_core.live_harness import LiveE2EEnv
+
+    with mock.patch.dict(os.environ, {"E2E_CORE_REAL_LLM": "1"}, clear=True):
+        parsed = LiveE2EEnv.from_env()
+
+    assert parsed.real_llm is True
+
+
+def test_real_llm_preflight_requires_opt_in_and_provider_env() -> None:
+    from tests.e2e_core.live_harness import LiveE2EEnv, real_llm_config_errors
+
+    with mock.patch.dict(os.environ, {}, clear=True):
+        fake_mode_errors = real_llm_config_errors(LiveE2EEnv.from_env())
+
+    assert fake_mode_errors == []
+
+    env = LiveE2EEnv(qdrant_url="http://qdrant:6333", bge_m3_url="http://bge:8000", real_llm=True)
+    with mock.patch.dict(os.environ, {}, clear=True):
+        errors = real_llm_config_errors(env)
+
+    assert errors == [
+        "E2E_CORE_REAL_LLM=1 is required for real LLM mode",
+        "LLM_BASE_URL is required for real LLM mode",
+        "LLM_MODEL is required for real LLM mode",
+        "LLM_API_KEY or OPENAI_API_KEY is required for real LLM mode",
+    ]
+
+    provider_env = {
+        "E2E_CORE_REAL_LLM": "1",
+        "LLM_BASE_URL": "http://localhost:4000/v1",
+        "LLM_MODEL": "gpt-test",
+    }
+    with mock.patch.dict(os.environ, provider_env, clear=True):
+        errors = real_llm_config_errors(env)
+
+    assert errors == ["LLM_API_KEY or OPENAI_API_KEY is required for real LLM mode"]
+
+
+def test_build_live_core_harness_uses_graph_config_for_real_llm() -> None:
+    from tests.e2e_core.live_harness import LiveE2EEnv, build_live_core_harness
+
+    fake_config = mock.MagicMock()
+    fake_config.llm_temperature = 0.7
+    fake_config.generate_max_tokens = 1024
+    fake_config.streaming_enabled = True
+    fake_config.show_sources = True
+    fake_config.response_style_enabled = True
+    fake_config.response_style_shadow_mode = True
+
+    env = LiveE2EEnv(
+        qdrant_url="http://qdrant:6333",
+        bge_m3_url="http://bge:8000",
+        real_llm=True,
+    )
+
+    with (
+        mock.patch("tests.e2e_core.live_harness.LiveBGEEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.LiveBGESparseEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.QdrantService"),
+        mock.patch("tests.e2e_core.live_harness.GraphConfig.from_env", return_value=fake_config),
+    ):
+        harness = build_live_core_harness(env, "collection")
+
+    assert harness.dependencies.config is fake_config
+    assert fake_config.llm_temperature == 0.0
+    assert fake_config.generate_max_tokens == 600
+    assert fake_config.streaming_enabled is False
+    assert fake_config.show_sources is False
+    assert fake_config.response_style_enabled is False
+    assert fake_config.response_style_shadow_mode is False
+
+
 def test_fake_llm_config_builds_grounded_answer_from_context() -> None:
     from tests.e2e_core.live_harness import FakeLLMConfig
 
