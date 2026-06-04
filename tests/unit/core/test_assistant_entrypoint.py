@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+from unittest.mock import AsyncMock, patch
 
 
 # =============================================================================
@@ -79,6 +80,34 @@ class TestUserContext:
         assert is_dataclass(UserContext)
         assert not hasattr(UserContext, "model_validate")
         assert "pydantic" not in UserContext.__module__
+
+
+# =============================================================================
+# CoreDependencies
+# =============================================================================
+
+
+class TestCoreDependencies:
+    """Tests for explicit runtime dependency injection."""
+
+    def test_accepts_required_runtime_dependencies(self) -> None:
+        """CoreDependencies should hold existing RAG runtime collaborators."""
+        from src.core.assistant import CoreDependencies
+
+        deps = CoreDependencies(
+            cache=object(),
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+        )
+
+        assert deps.cache is not None
+        assert deps.embeddings is not None
+        assert deps.sparse_embeddings is not None
+        assert deps.qdrant is not None
+        assert deps.reranker is None
+        assert deps.llm is None
+        assert deps.config is None
 
 
 # =============================================================================
@@ -384,3 +413,211 @@ class TestLogEventIntegration:
         for r in caplog.records:
             if hasattr(r, "event"):
                 assert getattr(r, "request_id", None) == result.request_id
+
+    async def test_started_event_includes_route(self, caplog) -> None:
+        """The started event should include route for contract-compatible logs."""
+        from src.core.assistant import run_assistant_request
+
+        with caplog.at_level(logging.INFO, logger="src.utils.product_events"):
+            await run_assistant_request("q", collection="c", request_id="e2e-route")
+
+        started = next(
+            r
+            for r in caplog.records
+            if hasattr(r, "event") and r.event == "assistant_request_started"
+        )
+        assert getattr(started, "route", None) == "unknown"
+
+
+# =============================================================================
+# run_assistant_request — dependency-backed runtime
+# =============================================================================
+
+
+class TestRunAssistantRequestRuntime:
+    """Tests for the real Stage 2 runtime branch with mocked dependencies."""
+
+    def _deps(self):
+        from src.core.assistant import CoreDependencies
+
+        return CoreDependencies(
+            cache=object(),
+            embeddings=object(),
+            sparse_embeddings=object(),
+            qdrant=object(),
+            reranker=object(),
+            llm=object(),
+            config=object(),
+        )
+
+    async def test_calls_existing_rag_and_generation_pipeline(self) -> None:
+        """Runtime branch must reuse existing rag_pipeline and generate_response."""
+        from src.core.assistant import UserContext, run_assistant_request
+
+        docs = [
+            {
+                "content": "Sunny Beach studio costs 110000 EUR.",
+                "metadata": {
+                    "source_id": "sunny_beach_studio",
+                    "title": "Sunny Beach Studio",
+                    "url": "fixture://sunny_beach_studio",
+                },
+                "score": 0.91,
+            }
+        ]
+        rag = AsyncMock(
+            return_value={
+                "documents": docs,
+                "cache_hit": False,
+                "search_results_count": 1,
+                "rerank_applied": True,
+                "query_type": "GENERAL",
+            }
+        )
+        gen = AsyncMock(
+            return_value={
+                "response": "Sunny Beach Studio is available for 110000 EUR.",
+                "llm_provider_model": "gpt-4o-mini",
+                "usage_details": {"input": 10, "output": 12},
+            }
+        )
+        deps = self._deps()
+
+        with (
+            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("telegram_bot.services.generate_response.generate_response", gen),
+        ):
+            result = await run_assistant_request(
+                "Найди студию у моря до 120000",
+                collection="e2e_core_abc",
+                user_context=UserContext(
+                    user_id="42", session_id="s-1", filters={"city": "Sunny Beach"}
+                ),
+                request_id="e2e-beach",
+                dependencies=deps,
+            )
+
+        rag.assert_awaited_once()
+        rag_kwargs = rag.await_args.kwargs
+        assert rag_kwargs["query"] == "Найди студию у моря до 120000"
+        assert rag_kwargs["user_id"] == 42
+        assert rag_kwargs["session_id"] == "s-1"
+        assert rag_kwargs["query_type"] == "GENERAL"
+        assert rag_kwargs["cache"] is deps.cache
+        assert rag_kwargs["embeddings"] is deps.embeddings
+        assert rag_kwargs["sparse_embeddings"] is deps.sparse_embeddings
+        assert rag_kwargs["qdrant"] is deps.qdrant
+        assert rag_kwargs["reranker"] is deps.reranker
+        assert rag_kwargs["llm"] is deps.llm
+        assert rag_kwargs["state_contract"]["filters"] == {"city": "Sunny Beach"}
+
+        gen.assert_awaited_once()
+        assert gen.await_args.kwargs["query"] == "Найди студию у моря до 120000"
+        assert gen.await_args.kwargs["documents"] == docs
+
+        assert result.route == "rag_search"
+        assert result.error_type is None
+        assert result.response_text == "Sunny Beach Studio is available for 110000 EUR."
+        assert result.request_type == "GENERAL"
+        assert result.retrieved_doc_ids == ["sunny_beach_studio"]
+        assert result.retrieved_sources == [
+            {"title": "Sunny Beach Studio", "url": "fixture://sunny_beach_studio"}
+        ]
+        assert result.documents_count == 1
+        assert result.rerank_applied is True
+        assert result.llm_model == "gpt-4o-mini"
+        assert result.llm_call_count == 1
+
+    async def test_cache_hit_skips_generation(self) -> None:
+        """Semantic cache hits should return cached text without calling LLM generation."""
+        from src.core.assistant import run_assistant_request
+
+        rag = AsyncMock(
+            return_value={
+                "response": "Cached answer",
+                "documents": [],
+                "cache_hit": True,
+                "query_type": "FAQ",
+                "latency_stages": {"cache_check": 0.01},
+            }
+        )
+        gen = AsyncMock()
+
+        with (
+            patch("src.runtime.graph.nodes.classify.classify_query", return_value="FAQ"),
+            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("telegram_bot.services.generate_response.generate_response", gen),
+        ):
+            result = await run_assistant_request(
+                "Какие условия рассрочки?",
+                collection="e2e_core_abc",
+                request_id="e2e-cache",
+                dependencies=self._deps(),
+            )
+
+        gen.assert_not_awaited()
+        assert result.route == "cache_hit"
+        assert result.cache_hit is True
+        assert result.response_text == "Cached answer"
+        assert result.llm_call_count == 0
+        assert result.error_type is None
+
+    async def test_runtime_dependency_failure_returns_recoverable_error(self) -> None:
+        """Dependency failures should be returned as AssistantResult errors, not raised."""
+        from src.core.assistant import run_assistant_request
+
+        rag = AsyncMock(side_effect=TimeoutError("qdrant timed out"))
+
+        with (
+            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+        ):
+            result = await run_assistant_request(
+                "Найди квартиру",
+                collection="e2e_core_abc",
+                request_id="e2e-failure",
+                dependencies=self._deps(),
+            )
+
+        assert result.route == "error"
+        assert result.error_type == "dependency_failed"
+        assert "qdrant timed out" in (result.error_message or "")
+        assert result.request_id == "e2e-failure"
+
+    async def test_runtime_emits_product_events_with_request_id(self, caplog) -> None:
+        """Runtime events should be correlated by caller-provided request_id."""
+        from src.core.assistant import run_assistant_request
+
+        rag = AsyncMock(
+            return_value={
+                "documents": [{"metadata": {"source_id": "doc-1"}, "content": "fact"}],
+                "cache_hit": False,
+                "query_type": "GENERAL",
+            }
+        )
+        gen = AsyncMock(return_value={"response": "answer", "llm_provider_model": "test-model"})
+
+        with (
+            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("telegram_bot.services.generate_response.generate_response", gen),
+            caplog.at_level(logging.INFO, logger="src.utils.product_events"),
+        ):
+            await run_assistant_request(
+                "q",
+                collection="c",
+                request_id="e2e-events",
+                dependencies=self._deps(),
+            )
+
+        events = [r for r in caplog.records if hasattr(r, "event")]
+        event_names = [r.event for r in events]
+        assert event_names == [
+            "assistant_request_started",
+            "search_completed",
+            "llm_completed",
+            "assistant_request_completed",
+        ]
+        for record in events:
+            assert getattr(record, "request_id", None) == "e2e-events"
