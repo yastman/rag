@@ -395,6 +395,10 @@ class BotConfig(BaseSettings):
             "CLIENT_DIRECT_PIPELINE_ENABLED",
         ),
     )
+    streaming_enabled: EmptyStrBool = Field(
+        default=True,
+        validation_alias=AliasChoices("streaming_enabled", "STREAMING_ENABLED"),
+    )
     supervisor_max_tokens: int = Field(
         default=1024,
         validation_alias=AliasChoices(
