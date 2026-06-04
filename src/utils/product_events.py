@@ -88,16 +88,14 @@ class ProductEventsFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
-        # Attach every non-standard LogRecord attribute — this is how
-        # ``extra={...}`` fields reach the formatter.  hasattr + getattr
-        # is used instead of ``record.__dict__`` so that falsy values
-        # (0, False, None) survive; ``record.__dict__.get(k)`` would drop
-        # None for unset optional fields on LogRecord itself.
-        for attr in dir(record):
+        # Attach every non-standard LogRecord instance attribute — this is how
+        # ``extra={...}`` fields reach the formatter.  Iterating
+        # ``record.__dict__`` avoids serialising LogRecord methods such as
+        # ``getMessage`` while still preserving falsy extra values.
+        for attr in record.__dict__:
             if attr in _STANDARD_LOG_ATTRS or attr.startswith("_"):
                 continue
-            if hasattr(record, attr):
-                log_data[attr] = getattr(record, attr)
+            log_data[attr] = getattr(record, attr)
 
         # Include exception info when present.
         if record.exc_info:

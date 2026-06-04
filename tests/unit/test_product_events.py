@@ -173,6 +173,30 @@ def test_json_formatter_absent_fields_not_in_output() -> None:
     assert "llm_model" not in data
 
 
+def test_json_formatter_does_not_serialize_logrecord_methods() -> None:
+    """Formatter must not leak LogRecord methods as product metadata."""
+    from src.utils.product_events import ProductEventsFormatter
+
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname="/app/src/test.py",
+        lineno=0,
+        msg="query_executed",
+        args=None,
+        exc_info=None,
+    )
+    record.event = "query_executed"
+    record.request_id = "req-methods"
+
+    fmt = ProductEventsFormatter()
+    output = fmt.format(record)
+    data = json.loads(output)
+
+    assert "getMessage" not in data
+    assert "get_message" not in data
+
+
 # ---------------------------------------------------------------------------
 # log_event helper tests
 # ---------------------------------------------------------------------------
