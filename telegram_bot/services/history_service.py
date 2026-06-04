@@ -38,11 +38,16 @@ class HistoryService:
         self._ensured = False
 
     async def ensure_collection(self) -> None:
-        """Create history collection and payload indexes if not present."""
+        """Create history collection and payload indexes if not present.
+
+        Uses get_collections() (REST path) instead of collection_exists() to avoid
+        the grpc.aio + OTel interceptor NotImplementedError (#2346).
+        """
         if self._ensured:
             return
-        exists = await self._client.collection_exists(self._collection_name)
-        if not exists:
+        resp = await self._client.get_collections()
+        names = {c.name for c in resp.collections}
+        if self._collection_name not in names:
             await self._client.create_collection(
                 collection_name=self._collection_name,
                 vectors_config={
