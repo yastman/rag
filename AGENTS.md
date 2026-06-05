@@ -56,10 +56,33 @@ refactor work, treat these as the source of truth:
 - [`docs/designs/product-simplification-e2e-plan.md`](docs/designs/product-simplification-e2e-plan.md)
 - [`docs/designs/yaroslav-simplification-workflow.md`](docs/designs/yaroslav-simplification-workflow.md)
 - [`docs/designs/product-simplification-stage-0-decisions.md`](docs/designs/product-simplification-stage-0-decisions.md)
+- [`docs/designs/product-simplification-weekly-acceptance-2026-06-04.md`](docs/designs/product-simplification-weekly-acceptance-2026-06-04.md)
 
-Do not duplicate the plan here. Follow the plan order: Stage 0 docs first, then
-test/logging infrastructure, then one golden live E2E, then runtime
-simplification.
+Do not duplicate the plan here. The current protected proof is
+`make local-up` followed by `make e2e-core-live`. After the 2026-06-04
+acceptance package, simplification/refactor work should preserve that proof and
+continue around Stage 4: keep optional surfaces out of required runtime and
+validation paths unless a GitHub issue, pull request, or Artem decision says
+otherwise.
+
+Do not merge simplification work directly into `dev`. Per
+[`docs/designs/yaroslav-simplification-workflow.md`](docs/designs/yaroslav-simplification-workflow.md),
+`dev` receives the weekly package only after explicit Artem approval. Work may
+move through task branches and `simplification/core` according to the workflow,
+but `dev` remains a protected acceptance boundary.
+
+Use one task branch per task:
+`simplification/<issue-or-task-number>-<short-name>`. Pull requests for
+simplification work target `simplification/core`, not `dev`. Tasks that touch
+CRM/HITL write behavior, runtime surfaces, service/container boundaries,
+Langfuse/OTel requirements, core entrypoint API, dependencies, or CI/release
+gate semantics require explicit Artem approval before merge.
+
+When a task raises an architectural, product, runtime-surface, approval, or
+priority question that requires Artem, do not resolve it ad hoc in code or chat.
+Record it as a GitHub issue or Project TODO, mark that it requires Artem's
+decision, and include it in the next weekly planning or acceptance checkpoint
+from the workflow.
 
 ## Local Overrides
 
