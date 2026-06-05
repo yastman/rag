@@ -4,8 +4,6 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from langfuse import observe
-
 from src.config import APIProvider, Settings
 from src.contextualization import (
     ClaudeContextualizer,
@@ -14,6 +12,7 @@ from src.contextualization import (
 )
 from src.ingestion import DocumentChunker, DocumentIndexer, UniversalDocumentParser
 from src.models import get_sentence_transformer
+from src.observability import observe
 from src.retrieval import create_search_engine
 
 

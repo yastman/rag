@@ -3,10 +3,10 @@
 from typing import Any, cast
 
 from anthropic import Anthropic, APIStatusError, AsyncAnthropic, RateLimitError
-from langfuse import observe
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
+from src.observability import observe
 
 from .base import ContextualizedChunk, ContextualizeProvider
 
