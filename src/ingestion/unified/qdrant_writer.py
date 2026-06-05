@@ -313,6 +313,18 @@ class QdrantHybridWriter:
             ).encode("utf-8")
         )
 
+    @staticmethod
+    def _text_exceeds_single_point_limit(text: str, source_path: str) -> str | None:
+        """Return a request-limit error for text that cannot fit in one Qdrant point."""
+        text_bytes = len(text.encode("utf-8"))
+        if text_bytes <= QDRANT_UPSERT_MAX_REQUEST_BYTES:
+            return None
+        return (
+            f"Single point text payload {text_bytes / 1024 / 1024:.1f}MB exceeds "
+            f"safe Qdrant limit {QDRANT_UPSERT_MAX_REQUEST_BYTES / 1024 / 1024:.0f}MB "
+            f"for {source_path}"
+        )
+
     def _upsert_points_in_batches(
         self,
         *,
@@ -592,6 +604,9 @@ class QdrantHybridWriter:
         try:
             # Step 1: Extract texts
             texts = [chunk.text for chunk in chunks]
+            for text in texts:
+                if error := self._text_exceeds_single_point_limit(text, source_path):
+                    raise ValueError(error)
 
             # Step 2: Generate embeddings — single hybrid call when local BGE-M3.
             # Any failure here exits via `except` BEFORE any destructive call.
