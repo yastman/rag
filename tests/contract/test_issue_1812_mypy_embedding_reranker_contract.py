@@ -43,6 +43,7 @@ TARGET_FILES = [
 ]
 
 FORBIDDEN_SUBSTRINGS = ("Returning Any", "CrossEncoder")
+MYPY_SUBPROCESS_TIMEOUT_SECONDS = 90
 
 
 def _resolve_mypy_command() -> list[str] | None:
@@ -61,6 +62,7 @@ def _resolve_mypy_command() -> list[str] | None:
     return None
 
 
+@pytest.mark.timeout(MYPY_SUBPROCESS_TIMEOUT_SECONDS + 30)
 def test_mypy_clean_on_embedding_model_and_reranker() -> None:
     """mypy must succeed on the two files cited in #1812."""
     mypy_cmd = _resolve_mypy_command()
@@ -75,13 +77,20 @@ def test_mypy_clean_on_embedding_model_and_reranker() -> None:
         "--no-error-summary",
     ]
 
-    proc = subprocess.run(
-        argv,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=MYPY_SUBPROCESS_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(
+            "Issue #1812 regression: mypy subprocess timed out after "
+            f"{MYPY_SUBPROCESS_TIMEOUT_SECONDS}s."
+        ) from exc
 
     combined_output = (proc.stdout or "") + (proc.stderr or "")
 
