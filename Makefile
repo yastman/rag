@@ -750,10 +750,19 @@ qa: all-checks test ## Full quality assurance
 # Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
-.PHONY: local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
+.PHONY: core-up core-down local-up local-up-ingest local-down local-logs local-ps local-build local-redis-recreate run-bot bot
+CORE_SERVICES := qdrant bge-m3
 LOCAL_SERVICES := postgres redis qdrant bge-m3 litellm
 LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
+
+core-up:  ## Start core proof services only (Qdrant + BGE-M3)
+	$(LOCAL_COMPOSE_CMD) up -d $(CORE_SERVICES)
+	@echo "$(GREEN)✓ Core proof services started. Run: make e2e-core-live$(NC)"
+
+core-down:  ## Stop and remove core proof services only
+	$(LOCAL_COMPOSE_CMD) stop $(CORE_SERVICES) || true
+	$(LOCAL_COMPOSE_CMD) rm -f $(CORE_SERVICES) || true
 
 local-up:  ## Start local Docker services (bot runs via make run-bot)
 	$(LOCAL_COMPOSE_CMD) up -d $(LOCAL_SERVICES)

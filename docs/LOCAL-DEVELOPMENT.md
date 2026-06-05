@@ -310,8 +310,9 @@ lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
 The simplification core product proof is:
 
 ```bash
-make local-up
+make core-up
 make e2e-core-live
+make core-down
 ```
 
 This runs the live golden set in
@@ -319,6 +320,10 @@ This runs the live golden set in
 against local Qdrant + BGE-M3. It uses deterministic synthetic fixtures and a
 fake LLM by default, so it does not require Telegram, Telethon, Langfuse,
 voice, Mini App, k8s, real CRM credentials, or trace validation.
+
+`make core-up` starts only Qdrant and BGE-M3 for this proof. `make local-up`
+remains the broader native bot development runtime and also starts Postgres,
+Redis, and LiteLLM.
 
 When real provider credentials and budget are available, run the opt-in real
 LLM check:
@@ -383,7 +388,17 @@ run `uv sync --frozen` before restarting.
 
 ## 9. Minimal Stack (Fast Iteration)
 
-Use the `local-*` shortcuts (they now run a minimal subset from `compose.yml:compose.dev.yml`) when full dev stack is unnecessary:
+Use `core-up` for the assistant-core proof when you only need Qdrant and
+BGE-M3:
+
+```bash
+make core-up
+make e2e-core-live
+make core-down
+```
+
+Use the `local-*` shortcuts for native bot iteration when the broader bot-dev
+runtime is needed:
 
 ```bash
 make local-up

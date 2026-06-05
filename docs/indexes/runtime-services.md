@@ -24,6 +24,8 @@ The canonical source of truth for Compose files, profiles, service names, ports,
 Common commands:
 
 ```bash
+make core-up            # assistant-core proof services only: Qdrant + BGE-M3
+make core-down          # stop/remove assistant-core proof services only
 make docker-up          # default/unprofiled services
 make docker-bot-up      # bot profile
 make docker-ingest-up   # ingestion profile
@@ -32,6 +34,11 @@ make docker-obs-up      # observability profile (Loki, Promtail, Alertmanager)
 make monitoring-up      # observability alias with endpoint hints
 make docker-ps          # list running containers
 ```
+
+For native bot development, use `make local-up` / `make local-down`; that
+broader local runtime starts Postgres, Redis, Qdrant, BGE-M3, and LiteLLM.
+For the simplification core proof, prefer `make core-up` before
+`make e2e-core-live`.
 
 ### Local Service Containers
 

@@ -1,1 +1,7 @@
-{}
+{
+  "src/core/assistant.py": [
+    "telegram_bot.agents.rag_pipeline",
+    "telegram_bot.pipelines.state_contract",
+    "telegram_bot.services.generate_response"
+  ]
+}

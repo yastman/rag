@@ -14,7 +14,7 @@ For the current simplification work, the primary proof is the assistant core
 live E2E path:
 
 ```bash
-make local-up
+make core-up
 make e2e-core-live
 ```
 

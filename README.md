@@ -173,8 +173,8 @@ Choose the path that matches your goal:
 | Goal | Start here |
 |---|---|
 | Review safely before running commands | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) |
-| Run core local services | `make local-up` |
-| Prove the simplified core product path | `make local-up` then `make e2e-core-live` |
+| Run core proof services | `make core-up` |
+| Prove the simplified core product path | `make core-up` then `make e2e-core-live` |
 | Try the core path with a real LLM provider | `make e2e-core-live-real-llm` |
 | Run the bot natively for fast iteration | `make test-bot-health` then `make run-bot` |
 | Run the Compose bot stack | `make docker-bot-up` |
@@ -249,7 +249,7 @@ and budget are available.
 ## Honest Scope
 
 - Docker Compose is the primary local runtime path.
-- The main reliability proof is the assistant core path: `make local-up` then `make e2e-core-live`.
+- The main reliability proof is the assistant core path: `make core-up` then `make e2e-core-live`.
 - k3s manifests exist for core services but are not full parity with Compose.
 - Monitoring services are local/dev unless production evidence is added.
 - Langfuse, OTel, trace validation, voice, Mini App, and k8s are not required for the core proof.

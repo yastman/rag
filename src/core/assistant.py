@@ -192,6 +192,7 @@ async def run_assistant_request(
             generation_result = await generate_response(**generation_kwargs)
             usage = _as_usage_dict(generation_result.get("usage_details"))
             llm_model = _extract_llm_model(generation_result)
+            proposed_crm_action = _extract_crm_action(generation_result)
 
             log_event(
                 "llm_completed",
@@ -215,6 +216,7 @@ async def run_assistant_request(
                 latency_ms=_latency_ms(started),
                 error_type=None,
                 request_id=rid,
+                proposed_crm_action=proposed_crm_action,
                 cache_hit=False,
                 llm_model=llm_model,
                 llm_call_count=1,
@@ -321,6 +323,27 @@ def _extract_llm_model(generation_result: dict[str, Any]) -> str | None:
     """Extract the provider model name from generation metadata."""
     model = generation_result.get("llm_provider_model") or generation_result.get("model")
     return str(model) if model else None
+
+
+def _extract_crm_action(generation_result: dict[str, Any]) -> CrmAction | None:
+    """Return a proposed CRM action without executing the write path."""
+    value = generation_result.get("proposed_crm_action")
+    if isinstance(value, CrmAction):
+        return value
+    if not isinstance(value, dict):
+        return None
+
+    action_type = value.get("action_type")
+    payload = value.get("payload")
+    summary = value.get("summary")
+    if not isinstance(action_type, str) or not isinstance(payload, dict):
+        return None
+
+    return CrmAction(
+        action_type=action_type,
+        payload=payload,
+        summary=str(summary or ""),
+    )
 
 
 __all__ = [

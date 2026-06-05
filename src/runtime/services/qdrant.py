@@ -64,7 +64,9 @@ class QdrantService:
             sparse_vector_name: Name of sparse vector field
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
             timeout: Connection timeout in seconds (default 30)
-            prefer_grpc: Whether the SDK should prefer gRPC transport
+            prefer_grpc: Whether the SDK should prefer gRPC transport.
+                Defaults to prefer_grpc=True so grpcio remains a transitive
+                qdrant-client runtime dependency.
         """
         # Strip api_key for http:// to avoid "insecure connection" warning (#570)
         scheme = urlparse(url).scheme.lower()

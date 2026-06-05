@@ -118,7 +118,7 @@ class TestCoreDependencies:
 class TestAssistantResult:
     """Tests for the AssistantResult dataclass."""
 
-    def test_defaults(self) -> None:
+    def test_assistant_result_defaults(self) -> None:
         """AssistantResult should have sensible defaults for optional fields."""
         from src.core.assistant import AssistantResult
 

@@ -7,13 +7,16 @@ live in [`../designs/product-simplification-stage-0-decisions.md`](../designs/pr
 ## Primary Proof
 
 ```bash
-make local-up
+make core-up
 make e2e-core-live
+make core-down
 ```
 
 `make e2e-core-live` runs the simplification core live golden set against local
 Qdrant + BGE-M3. It uses deterministic synthetic fixtures and a fake LLM by
 default so the product gate is stable and does not depend on provider budget.
+`make core-up` starts only Qdrant and BGE-M3; use `make local-up` for the
+broader native bot development runtime.
 
 ## Optional Real LLM Check
 
@@ -30,7 +33,7 @@ provider credentials and budget are available.
 | Area | Evidence |
 |---|---|
 | Fixture corpus and golden cases | [`../../tests/e2e_core/`](../../tests/e2e_core/) |
-| Live local services | `Qdrant + BGE-M3` via `make local-up` |
+| Live local services | `Qdrant + BGE-M3` via `make core-up` |
 | Assistant classification and retrieval | [`../../tests/e2e/test_core_live_ingest_answer.py`](../../tests/e2e/test_core_live_ingest_answer.py) |
 | CRM/HITL safety | mock CRM in the core live E2E, no real CRM writes |
 | Dependency failure behavior | core live E2E fallback case |
