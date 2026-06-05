@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import shutil
 import subprocess  # nosec B404
 import sys
@@ -57,16 +58,27 @@ WantedBy=default.target
 
 
 def create_codegraph_unit(repo_root: str, npx_bin: str = "npx") -> str:
-    """Generate a systemd user unit for codegraph daemon bootstrap."""
+    """Generate a systemd user unit that keeps the CodeGraph watcher active."""
+    command = " ".join(
+        [
+            "tail -f /dev/null |",
+            shlex.quote(npx_bin),
+            "-y",
+            "@colbymchenry/codegraph",
+            "serve",
+            "--mcp",
+            "--path",
+            shlex.quote(repo_root),
+        ],
+    )
     return f"""[Unit]
 Description=CodeGraph RAG-Fresh Server
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-ExecStart={npx_bin} -y @colbymchenry/codegraph serve --mcp --path {repo_root}
-RemainAfterExit=yes
+Type=simple
+ExecStart=/usr/bin/env bash -lc {shlex.quote(command)}
 Restart=on-failure
 RestartSec=5
 

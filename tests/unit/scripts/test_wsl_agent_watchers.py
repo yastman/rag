@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -78,7 +79,7 @@ def test_create_codeindexer_unit_custom_port() -> None:
 
 
 def test_create_codegraph_unit_defaults() -> None:
-    """codegraph unit must use npx with correct serve arguments."""
+    """codegraph unit must keep MCP stdio alive so the watcher stays active."""
     mod = _load_module()
     unit = mod.create_codegraph_unit(
         repo_root="/home/user/projects/rag-fresh",
@@ -88,18 +89,35 @@ def test_create_codegraph_unit_defaults() -> None:
     assert "[Unit]" in unit
     assert "Description=CodeGraph RAG-Fresh Server" in unit
     assert "[Service]" in unit
-    assert "Type=oneshot" in unit
-    assert "RemainAfterExit=yes" in unit
+    assert "Type=simple" in unit
     assert "ExecStart=" in unit
+    assert "tail -f /dev/null |" in unit
     assert "/home/user/.nvm/versions/node/v24.14.0/bin/npx" in unit
     assert "-y" in unit
     assert "@colbymchenry/codegraph serve" in unit
     assert "--mcp" in unit
     assert "--path" in unit
     assert "/home/user/projects/rag-fresh" in unit
+    assert "--no-watch" not in unit
+    assert "CODEGRAPH_NO_DAEMON" not in unit
     assert "Restart=on-failure" in unit
     assert "[Install]" in unit
     assert "WantedBy=default.target" in unit
+
+
+def test_create_codegraph_unit_quotes_repo_root() -> None:
+    """Repo paths embedded in the shell command must be quoted safely."""
+    mod = _load_module()
+    unit = mod.create_codegraph_unit(
+        repo_root="/home/user/projects/rag fresh",
+        npx_bin="/usr/bin/npx",
+    )
+
+    exec_line = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+    exec_args = shlex.split(exec_line.removeprefix("ExecStart="))
+
+    assert exec_args[:3] == ["/usr/bin/env", "bash", "-lc"]
+    assert "--path '/home/user/projects/rag fresh'" in exec_args[3]
 
 
 def test_create_codegraph_unit_custom_repo_root() -> None:
@@ -399,7 +417,7 @@ def test_install_is_idempotent(tmp_path: Path) -> None:
     assert (unit_dir / "codegraph-rag-fresh.service").exists()
 
 
-def test_cli_help() -> None:
+def test_wsl_agent_watchers_cli_help() -> None:
     """--help must describe available options."""
     cp = _run_cli("--help")
     assert cp.returncode == 0
@@ -445,9 +463,11 @@ def test_installed_unit_has_correct_exec_content(tmp_path: Path) -> None:
     )
 
     cg_content = (unit_dir / "codegraph-rag-fresh.service").read_text()
-    assert "Type=oneshot" in cg_content
-    assert "RemainAfterExit=yes" in cg_content
+    assert "Type=simple" in cg_content
+    assert "tail -f /dev/null |" in cg_content
+    assert "--no-watch" not in cg_content
+    assert "CODEGRAPH_NO_DAEMON" not in cg_content
     assert (
-        "ExecStart=/home/user/.nvm/versions/node/v24.14.0/bin/npx -y "
+        "/home/user/.nvm/versions/node/v24.14.0/bin/npx -y "
         "@colbymchenry/codegraph serve --mcp --path /home/user/projects/rag-fresh" in cg_content
     )

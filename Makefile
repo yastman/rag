@@ -859,7 +859,7 @@ deploy-vps-local:  ## Fallback/manual deploy: manual instructions only (VPS scri
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup langfuse-latest-trace-audit trace-audit-snapshot
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-core-live e2e-core-live-real-llm e2e-test-traces e2e-test-traces-core e2e-test-group e2e-telegram-test e2e-setup langfuse-latest-trace-audit trace-audit-snapshot
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -881,20 +881,39 @@ e2e-test: ## Run pytest E2E suite (Docker/live services)
 	uv run pytest tests/e2e/test_core_flows_live.py -v --tb=short -m "e2e and not legacy_api"
 	@echo "$(GREEN)✓ Pytest E2E suite complete$(NC)"
 
+e2e-core-live: ## Run simplification core live golden path (Qdrant + BGE-M3)
+	@echo "$(BLUE)Running simplification core live E2E golden path...$(NC)"
+	E2E_CORE_STRICT=1 uv run pytest tests/e2e/test_core_live_ingest_answer.py -v --tb=short -m "e2e and requires_services"
+	@echo "$(GREEN)✓ Simplification core live E2E complete$(NC)"
+
+e2e-core-live-real-llm: ## Run simplification core live golden path with real LLM provider
+	@echo "$(BLUE)Running simplification core live E2E with real LLM...$(NC)"
+	@$(ENV_LOAD) \
+	missing=""; \
+	if [ -z "$$LLM_BASE_URL" ]; then missing="$$missing LLM_BASE_URL"; fi; \
+	if [ -z "$$LLM_MODEL" ]; then missing="$$missing LLM_MODEL"; fi; \
+	if [ -z "$$LLM_API_KEY$$OPENAI_API_KEY" ]; then missing="$$missing (LLM_API_KEY|OPENAI_API_KEY)"; fi; \
+	if [ -n "$$missing" ]; then \
+		echo "$(RED)Missing required real LLM env:$$missing$(NC)"; \
+		exit 1; \
+	fi; \
+	E2E_CORE_STRICT=1 E2E_CORE_REAL_LLM=1 uv run pytest tests/e2e/test_core_live_ingest_answer.py -v --tb=short -m "e2e and requires_services"
+	@echo "$(GREEN)✓ Simplification core live real LLM E2E complete$(NC)"
+
 e2e-telegram-test: ## Run Telegram userbot E2E runner (Telethon + judge)
 	@echo "$(BLUE)Running Telegram E2E runner...$(NC)"
 	uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ Telegram E2E runner complete$(NC)"
 
-e2e-test-traces: ## Run E2E tests + validate Langfuse traces
-	@echo "$(BLUE)Running E2E tests with Langfuse trace validation...$(NC)"
+e2e-test-traces: ## Optional diagnostic: run Telegram E2E tests + validate Langfuse traces
+	@echo "$(BLUE)Running optional E2E tests with Langfuse trace validation...$(NC)"
 	E2E_VALIDATE_LANGFUSE=1 uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py
-	@echo "$(GREEN)✓ E2E tests with trace validation complete$(NC)"
+	@echo "$(GREEN)✓ Optional E2E trace validation complete$(NC)"
 
-e2e-test-traces-core: ## Run required #1307 Telethon scenarios with Langfuse validation
-	@echo "$(BLUE)Running #1307 core Telethon trace scenarios...$(NC)"
+e2e-test-traces-core: ## Optional diagnostic: run #1307 Telethon scenarios with Langfuse validation
+	@echo "$(BLUE)Running optional #1307 Telethon trace scenarios...$(NC)"
 	E2E_VALIDATE_LANGFUSE=1 uv run --env-file "$$RAG_RUNTIME_ENV_FILE" python scripts/e2e/runner.py --no-judge --scenario 0.1 --scenario 6.3 --scenario 7.1 --scenario 8.1
-	@echo "$(GREEN)✓ #1307 core trace scenarios complete$(NC)"
+	@echo "$(GREEN)✓ Optional #1307 trace scenarios complete$(NC)"
 
 e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
 	uv run python scripts/e2e/runner.py --group $(GROUP)
@@ -903,7 +922,7 @@ e2e-setup: e2e-install ## Full E2E setup on canonical collection
 	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
 
-langfuse-latest-trace-audit: ## Sanitized post-E2E Langfuse latest-trace audit
+langfuse-latest-trace-audit: ## Optional diagnostic: sanitized post-E2E Langfuse latest-trace audit
 	@echo "$(BLUE)Running sanitized latest-trace audit...$(NC)"
 	uv run python scripts/e2e/langfuse_latest_trace_audit.py --limit 20
 	@echo "$(GREEN)✓ Latest-trace audit complete$(NC)"
@@ -1228,15 +1247,15 @@ qdrant-cleanup: ## Prune Qdrant storage: snapshot then trigger optimiser (#1545)
 LANGFUSE_DEV_KEY_DASH ?= -
 TRACE_ENV_FILE ?= $(shell [ -f .env ] && echo .env || echo tests/fixtures/compose.ci.env)
 
-validate-traces: ## Full rebuild + trace validation + report
-	@echo "$(BLUE)Full rebuild + validation...$(NC)"
+validate-traces: ## Optional diagnostic: full rebuild + trace validation + report
+	@echo "$(BLUE)Optional full rebuild + trace validation...$(NC)"
 	$(LOCAL_COMPOSE_CMD) build --no-cache bot litellm bge-m3
 	$(LOCAL_COMPOSE_CMD) --profile bot --profile ml up -d --wait
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
-validate-traces-fast: ## No rebuild; trace validation fails if required trace families are missing
-	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
+validate-traces-fast: ## Optional diagnostic: no rebuild; validate trace families when requested
+	@echo "$(BLUE)Optional fast trace validation (no rebuild)...$(NC)"
 	uv run python scripts/validate_trace_runtime.py --env-file "$(TRACE_ENV_FILE)"
 	MINIO_API_PORT="$(or $(MINIO_API_PORT),0)" \
 	MINIO_CONSOLE_PORT="$(or $(MINIO_CONSOLE_PORT),0)" \
@@ -1252,11 +1271,11 @@ validate-traces-fast: ## No rebuild; trace validation fails if required trace fa
 		uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
-langfuse-latency-audit: ## #2179: per-stage observation latencies (retrieve/cache/checkpoint/llm) from recent traces
+langfuse-latency-audit: ## Optional diagnostic #2179: per-stage observation latencies from recent traces
 	@uv run python -m scripts.probe.langfuse_latency_audit --limit $${LANGFUSE_LATENCY_LIMIT:-50}
 
-validate-voice-traces: ## Voice trace validation gate (reads Langfuse, validates presence + attribution)
-	@echo "$(BLUE)Voice trace validation gate...$(NC)"
+validate-voice-traces: ## Optional diagnostic: voice trace validation (reads Langfuse)
+	@echo "$(BLUE)Optional voice trace validation...$(NC)"
 	LANGFUSE_HOST="$(or $(LANGFUSE_HOST),http://localhost:3001)" \
 	LANGFUSE_PUBLIC_KEY="$(or $(LANGFUSE_PUBLIC_KEY),pk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \
 	LANGFUSE_SECRET_KEY="$(or $(LANGFUSE_SECRET_KEY),sk$(LANGFUSE_DEV_KEY_DASH)lf-dev)" \

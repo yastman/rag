@@ -1074,6 +1074,71 @@ async def test_pipeline_rewrite_loop(
     assert len(result["documents"]) > 0
 
 
+async def test_pipeline_returns_empty_docs_when_retrieval_is_irrelevant(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
+):
+    """Irrelevant retrieved docs must not leak into answer context."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "unrelated listing with price 110000 EUR", "score": 0.001, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    with patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "0"}):
+        result = await rag_pipeline(
+            "замок с частным аэропортом",
+            user_id=42,
+            session_id="test",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+            reranker=mock_reranker,
+        )
+
+    assert result["documents"] == []
+    assert result["search_results_count"] == 1
+    assert result["grade_confidence"] < 0.005
+
+
+async def test_pipeline_clears_high_score_docs_missing_hard_constraints(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
+):
+    """High RRF score is not enough when hard query constraints are absent."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [
+                {
+                    "text": "Sofia city center apartment. Price 150000 EUR.",
+                    "score": 0.02,
+                    "metadata": {"doc_id": "city_center_sofia"},
+                }
+            ],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    result = await rag_pipeline(
+        "Найди замок в Софии с частным аэропортом",
+        user_id=42,
+        session_id="test",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=mock_reranker,
+    )
+
+    assert result["documents"] == []
+    assert result["search_results_count"] == 1
+    assert result["missing_evidence_constraints"] == ["castle", "airport"]
+
+
 # ---------------------------------------------------------------------------
 # original_query cache key tests (#430)
 # ---------------------------------------------------------------------------

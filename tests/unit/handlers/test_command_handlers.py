@@ -156,3 +156,35 @@ class TestCmdStart:
             await cmd_start(mock_bot, message)
 
             mock_show_menu.assert_called_once_with(message, i18n=None)
+
+
+class TestCmdClearcache:
+    """Test cmd_clearcache keyboard structure."""
+
+    @pytest.mark.asyncio
+    async def test_keyboard_has_five_rows(self, mock_bot):
+        """cmd_clearcache keyboard now has 5 rows (history + all_and_history added)."""
+        from aiogram.types import InlineKeyboardMarkup
+
+        from telegram_bot.handlers.command_handlers import cmd_clearcache
+
+        message = _make_message()
+        await cmd_clearcache(mock_bot, message)
+
+        message.answer.assert_called_once()
+        kb = message.answer.call_args.kwargs.get("reply_markup") or message.answer.call_args.args[1]
+        assert isinstance(kb, InlineKeyboardMarkup)
+        assert len(kb.inline_keyboard) == 5
+
+    @pytest.mark.asyncio
+    async def test_keyboard_contains_history_buttons(self, mock_bot):
+        """cc:history and cc:all_and_history buttons are present."""
+        from telegram_bot.handlers.command_handlers import cmd_clearcache
+
+        message = _make_message()
+        await cmd_clearcache(mock_bot, message)
+
+        kb = message.answer.call_args.kwargs.get("reply_markup") or message.answer.call_args.args[1]
+        all_data = {btn.callback_data for row in kb.inline_keyboard for btn in row}
+        assert "cc:history" in all_data
+        assert "cc:all_and_history" in all_data

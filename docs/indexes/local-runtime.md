@@ -6,15 +6,15 @@ in [`../../DOCKER.md`](../../DOCKER.md).
 
 | Goal / Symptom | Canonical Doc | Focused Check |
 |---|---|---|
-| Bootstrap local services for native bot iteration | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#8-minimal-stack-fast-iteration) | `make local-up && make test-bot-health` |
-| Run the bot natively from `.env` | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#8-minimal-stack-fast-iteration) | `make bot` |
+| Bootstrap local services for native bot iteration | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#9-minimal-stack-fast-iteration) | `make local-up && make test-bot-health` |
+| Run the bot natively from `.env` | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#9-minimal-stack-fast-iteration) | `make bot` |
 | Check the bot username behind the current token | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) | Telegram `getMe` snippet in the local guide |
 | Configure Telegram E2E userbot credentials | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) | `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `E2E_BOT_USERNAME` |
 | Create or refresh the Telethon session | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#1-bootstrap-workspace) and [`../../tests/README.md`](../../tests/README.md#e2e) | `uv run python -m scripts.e2e.auth --phone ... --code ...` |
 | Smoke test Telegram bot response through Telethon | [`../../tests/README.md`](../../tests/README.md#e2e) | `uv run python -m scripts.e2e.quick_test` |
-| Prove `make bot` actually answers a Telegram message | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#11-common-issues) | `make bot-response-smoke` (preflight + Telethon send) |
-| `make bot` fails with polling lock busy | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#11-common-issues) | Stop the Docker bot container or wait for Redis lock TTL |
-| Telethon session file exists but is not authorized | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#11-common-issues) | Refresh with `scripts.e2e.auth` |
+| Prove `make bot` actually answers a Telegram message | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#13-common-issues) | `make bot-response-smoke` (preflight + Telethon send) |
+| `make bot` fails with polling lock busy | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#13-common-issues) | Stop the Docker bot container or wait for Redis lock TTL |
+| Telethon session file exists but is not authorized | [`../LOCAL-DEVELOPMENT.md`](../LOCAL-DEVELOPMENT.md#13-common-issues) | Refresh with `scripts.e2e.auth` |
 
 Runtime reminders:
 
