@@ -1,7 +1,12 @@
 """OpenAI-based contextualization provider."""
 
-from langfuse import observe
-from langfuse.openai import AsyncOpenAI, OpenAI
+from src.observability import observe
+
+
+try:
+    from langfuse.openai import AsyncOpenAI, OpenAI
+except Exception:
+    from openai import AsyncOpenAI, OpenAI  # type: ignore[assignment]
 
 from src.config import Settings
 

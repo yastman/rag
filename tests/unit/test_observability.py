@@ -1018,6 +1018,63 @@ class TestOtelServiceName:
         assert os.environ.get("OTEL_SERVICE_NAME") == "custom-service"
 
 
+class TestLangfuseOptionalImport:
+    """Tests that reserved files use the optional facade, not direct from langfuse.
+
+    Issue #2372: Replace direct ``from langfuse import observe`` with the
+    optional facade ``from src.observability import observe`` so core modules
+    import cleanly when langfuse is not installed.
+
+    Verifies source-code level compliance: each reserved module must import
+    ``observe`` from ``src.observability``, never directly from ``langfuse``.
+    """
+
+    _RESERVED_MODULES = [
+        "src/core/pipeline.py",
+        "src/contextualization/claude.py",
+        "src/contextualization/groq.py",
+        "src/contextualization/openai.py",
+    ]
+
+    def test_no_direct_langfuse_observe_import_in_reserved_files(self):
+        """No reserved file should have ``from langfuse import observe``."""
+        import os
+
+        project_root = os.getcwd()
+        violations: list[str] = []
+        for rel_path in self._RESERVED_MODULES:
+            full_path = os.path.join(project_root, rel_path)
+            with open(full_path) as f:
+                for lineno, line in enumerate(f, 1):
+                    stripped = line.strip()
+                    # Only flag the exact direct import pattern
+                    if stripped == "from langfuse import observe":
+                        violations.append(f"{rel_path}:{lineno}: {stripped}")
+
+        assert not violations, (
+            "Reserved files still use direct 'from langfuse import observe'.\n"
+            "Violations:\n" + "\n".join(violations) + "\n"
+            "Expected: 'from src.observability import observe'"
+        )
+
+    def test_reserved_files_have_facade_observe_import(self):
+        """Each reserved file must import observe from src.observability."""
+        import os
+
+        project_root = os.getcwd()
+        missing: list[str] = []
+        for rel_path in self._RESERVED_MODULES:
+            full_path = os.path.join(project_root, rel_path)
+            with open(full_path) as f:
+                content = f.read()
+            if "from src.observability import observe" not in content:
+                missing.append(rel_path)
+
+        assert not missing, (
+            "Reserved files missing 'from src.observability import observe':\n" + "\n".join(missing)
+        )
+
+
 class TestOtelExportDefaults:
     """Tests for conservative OTEL export defaults (#1408)."""
 
