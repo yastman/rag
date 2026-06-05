@@ -70,7 +70,11 @@ class QdrantService:
         scheme = urlparse(url).scheme.lower()
         effective_api_key = api_key if scheme == "https" else None
         self._client = AsyncQdrantClient(
-            url=url, api_key=effective_api_key, prefer_grpc=prefer_grpc, timeout=timeout
+            url=url,
+            api_key=effective_api_key,
+            # Default remains prefer_grpc=True; see grpcio audit contract (#2241).
+            prefer_grpc=prefer_grpc,
+            timeout=timeout,
         )
         self._base_collection_name = collection_name
         self._quantization_mode = quantization_mode.lower()

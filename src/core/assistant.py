@@ -11,16 +11,13 @@ The module intentionally defines a narrow, synchronous-import-safe contract:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 from uuid import uuid4
 
 from src.utils.product_events import log_event
-
-
-if TYPE_CHECKING:
-    from telegram_bot.pipelines.state_contract import PreAgentStateContract
 
 
 @dataclass
@@ -131,14 +128,14 @@ async def run_assistant_request(
     ctx = user_context or UserContext()
 
     try:
-        from src.runtime.graph.nodes.classify import classify_query
-        from telegram_bot.agents.rag_pipeline import rag_pipeline
-        from telegram_bot.services.generate_response import generate_response
+        classify_query = importlib.import_module("src.runtime.graph.nodes.classify").classify_query
+        rag_pipeline = importlib.import_module("telegram_bot.agents.rag_pipeline").rag_pipeline
+        generate_response = importlib.import_module(
+            "telegram_bot.services.generate_response"
+        ).generate_response
 
         request_type = classify_query(query)
-        state_contract: PreAgentStateContract | None = (
-            cast("PreAgentStateContract", {"filters": ctx.filters}) if ctx.filters else None
-        )
+        state_contract: dict[str, Any] | None = {"filters": ctx.filters} if ctx.filters else None
 
         rag_result = await rag_pipeline(
             query=query,
