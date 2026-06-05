@@ -35,6 +35,8 @@ class GraphConfig:
 
     bge_m3_url: str = "http://bge-m3:8000"
     bge_m3_timeout: float = 120.0
+    retrieval_dense_provider: str = "http_bge_m3"
+    retrieval_sparse_provider: str = "http_bge_m3"
 
     qdrant_url: str = "http://qdrant:6333"
     qdrant_collection: str = "gdrive_documents_bge"
@@ -137,6 +139,8 @@ class GraphConfig:
             generate_max_tokens=int(os.getenv("GENERATE_MAX_TOKENS", "1024")),
             bge_m3_url=os.getenv("BGE_M3_URL", "http://bge-m3:8000"),
             bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
+            retrieval_dense_provider=os.getenv("RETRIEVAL_DENSE_PROVIDER", "http_bge_m3"),
+            retrieval_sparse_provider=os.getenv("RETRIEVAL_SPARSE_PROVIDER", "http_bge_m3"),
             qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),
             qdrant_collection=os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge"),
             search_top_k=int(os.getenv("SEARCH_TOP_K", "40")),
@@ -215,7 +219,10 @@ class GraphConfig:
 
     def create_embeddings(self) -> Any:
         """Create BGEM3Embeddings instance."""
-        from src.runtime.integrations.embeddings import BGEM3Embeddings
+        from src.runtime.integrations.embeddings import BGEM3Embeddings, InProcessBgeM3Provider
+
+        if self.retrieval_dense_provider == "local_bge_m3":
+            return BGEM3Embeddings(client=InProcessBgeM3Provider())
 
         return BGEM3Embeddings(
             base_url=self.bge_m3_url,
@@ -224,7 +231,13 @@ class GraphConfig:
 
     def create_sparse_embeddings(self) -> Any:
         """Create BGEM3SparseEmbeddings instance."""
-        from src.runtime.integrations.embeddings import BGEM3SparseEmbeddings
+        from src.runtime.integrations.embeddings import (
+            BGEM3SparseEmbeddings,
+            InProcessBgeM3Provider,
+        )
+
+        if self.retrieval_sparse_provider == "local_bge_m3":
+            return BGEM3SparseEmbeddings(client=InProcessBgeM3Provider())
 
         return BGEM3SparseEmbeddings(
             base_url=self.bge_m3_url,
@@ -233,7 +246,16 @@ class GraphConfig:
 
     def create_hybrid_embeddings(self) -> Any:
         """Create BGEM3HybridEmbeddings instance."""
-        from src.runtime.integrations.embeddings import BGEM3HybridEmbeddings
+        from src.runtime.integrations.embeddings import (
+            BGEM3HybridEmbeddings,
+            InProcessBgeM3Provider,
+        )
+
+        if (
+            self.retrieval_dense_provider == "local_bge_m3"
+            and self.retrieval_sparse_provider == "local_bge_m3"
+        ):
+            return BGEM3HybridEmbeddings(client=InProcessBgeM3Provider())
 
         return BGEM3HybridEmbeddings(
             base_url=self.bge_m3_url,

@@ -17,16 +17,181 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 from langchain_core.embeddings import Embeddings
 
 from src.observability import observe
-from src.services.bge_m3_client import BGEM3Client
+from src.services.bge_m3_client import (
+    BGEM3Client,
+    ColbertResult,
+    DenseResult,
+    HybridResult,
+    SparseResult,
+)
 
 
 logger = logging.getLogger(__name__)
+
+
+class BgeM3Provider(Protocol):
+    async def encode_dense(self, texts: list[str]) -> DenseResult: ...
+
+    async def encode_sparse(self, texts: list[str]) -> SparseResult: ...
+
+    async def encode_hybrid(self, texts: list[str]) -> HybridResult: ...
+
+    async def encode_colbert(self, texts: list[str]) -> ColbertResult: ...
+
+    async def aclose(self) -> None: ...
+
+
+def _as_list(value: Any) -> Any:
+    """Convert numpy/torch-like outputs into plain JSON-compatible lists."""
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, list):
+        return [_as_list(item) for item in value]
+    if isinstance(value, tuple):
+        return [_as_list(item) for item in value]
+    return value
+
+
+def _normalize_sparse_row(row: dict[Any, Any]) -> dict[str, list[Any]]:
+    if "indices" in row and "values" in row:
+        return {
+            "indices": [int(idx) for idx in row["indices"]],
+            "values": [float(value) for value in row["values"]],
+        }
+    indices: list[int] = []
+    values: list[float] = []
+    for index, value in row.items():
+        indices.append(int(index))
+        values.append(float(value))
+    return {"indices": indices, "values": values}
+
+
+class InProcessBgeM3Provider:
+    """Async-compatible BGE-M3 provider backed by local FlagEmbedding.
+
+    This is an opt-in Stage 4 spike adapter. It preserves the HTTP
+    ``BGEM3Client`` result contracts while leaving the default HTTP runtime
+    unchanged.
+    """
+
+    def __init__(
+        self,
+        *,
+        model_factory: Any | None = None,
+        batch_size: int = 32,
+        max_length: int = 512,
+    ) -> None:
+        self.batch_size = batch_size
+        self.max_length = max_length
+        self._model_factory = model_factory
+
+    def _get_model(self) -> Any:
+        if self._model_factory is not None:
+            return self._model_factory()
+        from src.models.embedding_model import get_bge_m3_model
+
+        return get_bge_m3_model()
+
+    async def _encode(
+        self,
+        texts: list[str],
+        *,
+        return_dense: bool,
+        return_sparse: bool,
+        return_colbert_vecs: bool,
+    ) -> dict[str, Any]:
+        model = self._get_model()
+        return await asyncio.to_thread(
+            model.encode,
+            texts,
+            batch_size=self.batch_size,
+            max_length=self.max_length,
+            return_dense=return_dense,
+            return_sparse=return_sparse,
+            return_colbert_vecs=return_colbert_vecs,
+        )
+
+    @observe(
+        name="bge-m3-local-encode-dense",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    async def encode_dense(self, texts: list[str]) -> DenseResult:
+        if not texts:
+            return DenseResult(vectors=[])
+        data = await self._encode(
+            texts,
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
+        return DenseResult(vectors=_as_list(data["dense_vecs"]))
+
+    @observe(
+        name="bge-m3-local-encode-sparse",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    async def encode_sparse(self, texts: list[str]) -> SparseResult:
+        if not texts:
+            return SparseResult(weights=[])
+        data = await self._encode(
+            texts,
+            return_dense=False,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+        weights = [_normalize_sparse_row(row) for row in data["lexical_weights"]]
+        return SparseResult(weights=weights)
+
+    @observe(
+        name="bge-m3-local-encode-hybrid",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    async def encode_hybrid(self, texts: list[str]) -> HybridResult:
+        if not texts:
+            return HybridResult(dense_vecs=[], lexical_weights=[], colbert_vecs=[])
+        data = await self._encode(
+            texts,
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=True,
+        )
+        return HybridResult(
+            dense_vecs=_as_list(data["dense_vecs"]),
+            lexical_weights=[_normalize_sparse_row(row) for row in data["lexical_weights"]],
+            colbert_vecs=_as_list(data.get("colbert_vecs") or []),
+        )
+
+    @observe(
+        name="bge-m3-local-encode-colbert",
+        as_type="embedding",
+        capture_input=False,
+        capture_output=False,
+    )
+    async def encode_colbert(self, texts: list[str]) -> ColbertResult:
+        if not texts:
+            return ColbertResult(colbert_vecs=[])
+        data = await self._encode(
+            texts,
+            return_dense=False,
+            return_sparse=False,
+            return_colbert_vecs=True,
+        )
+        return ColbertResult(colbert_vecs=_as_list(data["colbert_vecs"]))
+
+    async def aclose(self) -> None:
+        return None
 
 
 class BGEM3Embeddings(Embeddings):
@@ -39,7 +204,7 @@ class BGEM3Embeddings(Embeddings):
         batch_size: int = 32,
         max_length: int = 512,
         *,
-        client: BGEM3Client | None = None,
+        client: BgeM3Provider | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
@@ -77,7 +242,7 @@ class BGEM3SparseEmbeddings:
         timeout: float = 120.0,
         max_length: int = 512,
         *,
-        client: BGEM3Client | None = None,
+        client: BgeM3Provider | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
@@ -114,7 +279,7 @@ class BGEM3HybridEmbeddings(Embeddings):
         timeout: float | httpx.Timeout | None = None,
         max_length: int = 512,
         *,
-        client: BGEM3Client | None = None,
+        client: BgeM3Provider | None = None,
     ) -> None:
         self._client = client or BGEM3Client(
             base_url=base_url,
@@ -195,4 +360,6 @@ __all__ = [
     "BGEM3Embeddings",
     "BGEM3HybridEmbeddings",
     "BGEM3SparseEmbeddings",
+    "BgeM3Provider",
+    "InProcessBgeM3Provider",
 ]
