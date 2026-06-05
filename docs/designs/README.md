@@ -34,6 +34,10 @@
   skeleton, целевой skeleton, provider spikes, runtime cleanup, перенос кода,
   удаление лишнего и недельный пакет для Артёма.
 
+- [`core-test-audit-2026-06-05.md`](core-test-audit-2026-06-05.md) —
+  аудит тестов, которые могут закреплять старую границу `src/core ->
+  telegram_bot`, и порядок PR для переноса покрытия к чистому product core.
+
 ## Навигация
 
 - Основной план: [`product-simplification-e2e-plan.md`](product-simplification-e2e-plan.md)
@@ -42,6 +46,7 @@
 - Контракт точки входа: [`unified-assistant-entrypoint-contract.md`](unified-assistant-entrypoint-contract.md)
 - Аудит и Stage 4 refactor: [`project-audit-and-stage-4-refactor-plan.md`](project-audit-and-stage-4-refactor-plan.md)
 - Roadmap монолита: [`monolith-migration-roadmap.md`](monolith-migration-roadmap.md)
+- Аудит тестов ядра: [`core-test-audit-2026-06-05.md`](core-test-audit-2026-06-05.md)
 
 ## Статус
 
