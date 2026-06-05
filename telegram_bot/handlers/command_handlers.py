@@ -254,7 +254,9 @@ async def cmd_clearcache(bot: PropertyBot, message: Message) -> None:
                 InlineKeyboardButton(text="Sparse", callback_data="cc:sparse"),
                 InlineKeyboardButton(text="Search+Rerank", callback_data="cc:search"),
             ],
-            [InlineKeyboardButton(text="Все", callback_data="cc:all")],
+            [InlineKeyboardButton(text="Все кеши", callback_data="cc:all")],
+            [InlineKeyboardButton(text="История диалога", callback_data="cc:history")],
+            [InlineKeyboardButton(text="Всё (кеши + история)", callback_data="cc:all_and_history")],
         ]
     )
     await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
