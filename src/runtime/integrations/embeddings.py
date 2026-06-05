@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 from langchain_core.embeddings import Embeddings
@@ -33,6 +33,18 @@ from src.services.bge_m3_client import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class BgeM3Provider(Protocol):
+    async def encode_dense(self, texts: list[str]) -> DenseResult: ...
+
+    async def encode_sparse(self, texts: list[str]) -> SparseResult: ...
+
+    async def encode_hybrid(self, texts: list[str]) -> HybridResult: ...
+
+    async def encode_colbert(self, texts: list[str]) -> ColbertResult: ...
+
+    async def aclose(self) -> None: ...
 
 
 def _as_list(value: Any) -> Any:
@@ -192,7 +204,7 @@ class BGEM3Embeddings(Embeddings):
         batch_size: int = 32,
         max_length: int = 512,
         *,
-        client: BGEM3Client | None = None,
+        client: BgeM3Provider | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
@@ -230,7 +242,7 @@ class BGEM3SparseEmbeddings:
         timeout: float = 120.0,
         max_length: int = 512,
         *,
-        client: BGEM3Client | None = None,
+        client: BgeM3Provider | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
@@ -267,7 +279,7 @@ class BGEM3HybridEmbeddings(Embeddings):
         timeout: float | httpx.Timeout | None = None,
         max_length: int = 512,
         *,
-        client: BGEM3Client | None = None,
+        client: BgeM3Provider | None = None,
     ) -> None:
         self._client = client or BGEM3Client(
             base_url=base_url,
@@ -348,5 +360,6 @@ __all__ = [
     "BGEM3Embeddings",
     "BGEM3HybridEmbeddings",
     "BGEM3SparseEmbeddings",
+    "BgeM3Provider",
     "InProcessBgeM3Provider",
 ]
