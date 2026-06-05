@@ -29,6 +29,11 @@
   обязательный core path от опциональных runtime-поверхностей, зафиксировать
   вопросы Артёму и нарезать GitHub Project задачи перед рефакторингом.
 
+- [`monolith-migration-roadmap.md`](monolith-migration-roadmap.md) —
+  крупный roadmap миграции к модульному Python-монолиту: аудит текущего
+  skeleton, целевой skeleton, provider spikes, runtime cleanup, перенос кода,
+  удаление лишнего и недельный пакет для Артёма.
+
 ## Навигация
 
 - Основной план: [`product-simplification-e2e-plan.md`](product-simplification-e2e-plan.md)
@@ -36,6 +41,7 @@
 - Решения Этапа 0: [`product-simplification-stage-0-decisions.md`](product-simplification-stage-0-decisions.md)
 - Контракт точки входа: [`unified-assistant-entrypoint-contract.md`](unified-assistant-entrypoint-contract.md)
 - Аудит и Stage 4 refactor: [`project-audit-and-stage-4-refactor-plan.md`](project-audit-and-stage-4-refactor-plan.md)
+- Roadmap монолита: [`monolith-migration-roadmap.md`](monolith-migration-roadmap.md)
 
 ## Статус
 
