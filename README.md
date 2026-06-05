@@ -173,6 +173,8 @@ Choose the path that matches your goal:
 |---|---|
 | Review safely before running commands | [`docs/review/ACCESS_FOR_REVIEWERS.md`](docs/review/ACCESS_FOR_REVIEWERS.md) |
 | Run core local services | `make local-up` |
+| Prove the simplified core product path | `make local-up` then `make e2e-core-live` |
+| Try the core path with a real LLM provider | `make e2e-core-live-real-llm` |
 | Run the bot natively for fast iteration | `make test-bot-health` then `make run-bot` |
 | Run the Compose bot stack | `make docker-bot-up` |
 | Run the full Compose stack | `make docker-full-up` |
@@ -230,10 +232,18 @@ High-level entry points:
 ```bash
 make check       # Ruff lint + MyPy strict type checking
 make test-unit   # Unit tests (parallel via pytest-xdist)
+make e2e-core-live  # Simplified core product E2E against local Qdrant + BGE-M3
 make test-full   # Full suite: parallel-safe tiers first, live/stateful tiers after
 ```
 
 Local verification is the release authority for this repo. Run focused checks for the touched area before merging to `dev` or deploying. CI is intentionally lightweight: it runs static/lint guardrails, not pytest suites or the authoritative full-suite signal.
+
+`make e2e-core-live` is the main product simplification proof: it indexes the
+synthetic fixture corpus, answers through the assistant core, covers
+classification, retrieval, generation fallback behavior, CRM/HITL with mock
+CRM, and runs without Telegram, Langfuse, voice, Mini App, k8s, or trace
+validation. Use `make e2e-core-live-real-llm` only when real LLM credentials
+and budget are available.
 
 ## Honest Scope
 
