@@ -167,6 +167,10 @@ simplification/<issue-or-task-number>-<short-name>
 - mark `requires Artem decision` when the task touches runtime surfaces,
   service/container boundaries, dependencies, CRM/HITL writes, core entrypoint
   API, or CI/release gate semantics.
+- merge opt-in spikes into `simplification/core` only after focused validation
+  and review; keep the Artem decision open for the weekly package when default
+  behavior, dependency requirements, container fate, schema/reindex, or `dev`
+  integration is still undecided.
 
 Do not merge simplification work into `dev` without explicit Artem approval of
 the weekly package.

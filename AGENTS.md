@@ -73,10 +73,22 @@ but `dev` remains a protected acceptance boundary.
 
 Use one task branch per task:
 `simplification/<issue-or-task-number>-<short-name>`. Pull requests for
-simplification work target `simplification/core`, not `dev`. Tasks that touch
-CRM/HITL write behavior, runtime surfaces, service/container boundaries,
-Langfuse/OTel requirements, core entrypoint API, dependencies, or CI/release
-gate semantics require explicit Artem approval before merge.
+simplification work target `simplification/core`, not `dev`.
+
+`simplification/core` is the staging/integration branch for monolith migration
+work. A task may merge into `simplification/core` without waiting for Artem only
+when the PR is opt-in or spike-scoped, preserves the default runtime path,
+keeps `make local-up && make e2e-core-live` green, has a GitHub issue/Project
+item, and records any Artem decisions as TODOs for the weekly package. This is
+allowed for staging evidence only; it does not approve the change for `dev`.
+
+Tasks still require explicit Artem approval before merge into `dev`, before
+making a change default behavior, or before applying an irreversible migration
+when they change CRM/HITL write behavior, make optional runtime surfaces
+required, remove or demote service/container boundaries, change Langfuse/OTel
+requirements, change the approved core entrypoint API, make new dependencies
+required for default runtime, or change CI/release gate semantics. `dev`
+receives only the weekly package after Artem approval.
 
 When a task raises an architectural, product, runtime-surface, approval, or
 priority question that requires Artem, do not resolve it ad hoc in code or chat.
