@@ -757,7 +757,7 @@ LOCAL_INGEST_SERVICES := docling
 LOCAL_ALL_SERVICES := $(LOCAL_SERVICES) $(LOCAL_INGEST_SERVICES)
 
 core-up:  ## Start core proof services only (Qdrant + BGE-M3)
-	$(LOCAL_COMPOSE_CMD) up -d $(CORE_SERVICES)
+	$(LOCAL_COMPOSE_CMD) up -d --wait $(CORE_SERVICES)
 	@echo "$(GREEN)✓ Core proof services started. Run: make e2e-core-live$(NC)"
 
 core-down:  ## Stop and remove core proof services only

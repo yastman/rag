@@ -593,6 +593,12 @@ async def generate_response(
     format_context: Callable[..., str] = _format_context,
     select_recent_history: Callable[[list[Any], int], list[Any]] = _select_recent_history,
     build_system_prompt: Callable[[str], str] = _build_system_prompt,
+    build_system_prompt_with_config: Callable[
+        [str], tuple[str, dict[str, Any]]
+    ] = _build_system_prompt_with_config,
+    get_linkable_prompt_object: Callable[
+        [str, str, dict[str, str]], Any | None
+    ] = _get_linkable_prompt_object,
     ensure_history_instruction: Callable[[str], str] = _ensure_history_instruction,
     build_fallback_response: Callable[[list[dict[str, Any]]], str] = _build_fallback_response,
     generate_streaming: Callable[..., Any] = _generate_streaming,
@@ -741,10 +747,10 @@ async def generate_response(
             fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
             variables={"domain": config.domain},
         )
-        prompt_obj = _get_linkable_prompt_object(
+        prompt_obj = get_linkable_prompt_object(
             "generate_exhaustive_list",
-            fallback=_EXHAUSTIVE_GENERATE_FALLBACK,
-            variables={"domain": config.domain},
+            _EXHAUSTIVE_GENERATE_FALLBACK,
+            {"domain": config.domain},
         )
         if "max_tokens" in prompt_config:
             max_tokens = min(int(prompt_config["max_tokens"]), legacy_max_tokens)
@@ -773,9 +779,11 @@ async def generate_response(
         # Prompt Management — there is no linkable Prompt object.
         prompt_obj = None
     else:
-        system_prompt, prompt_config = _build_system_prompt_with_config(config.domain)
-        prompt_obj = _get_linkable_prompt_object(
-            "generate", fallback=_GENERATE_FALLBACK, variables={"domain": config.domain}
+        system_prompt, prompt_config = build_system_prompt_with_config(config.domain)
+        prompt_obj = get_linkable_prompt_object(
+            "generate",
+            _GENERATE_FALLBACK,
+            {"domain": config.domain},
         )
         # Langfuse prompt config overrides: temperature, max_tokens editable in UI
         if "max_tokens" in prompt_config:

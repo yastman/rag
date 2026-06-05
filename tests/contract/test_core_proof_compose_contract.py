@@ -66,6 +66,11 @@ def test_core_up_and_down_use_only_core_services() -> None:
         assert not offenders, f"{target} must not mention non-core services: {offenders}"
 
 
+def test_core_up_waits_for_core_service_healthchecks() -> None:
+    body = _target_body(_makefile_text(), "core-up")
+    assert "--wait" in body
+
+
 def test_e2e_core_live_does_not_start_optional_surfaces() -> None:
     body = _target_body(_makefile_text(), "e2e-core-live")
     forbidden = sorted(

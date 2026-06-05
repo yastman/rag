@@ -529,6 +529,40 @@ class TestRunAssistantRequestRuntime:
         assert result.llm_model == "gpt-4o-mini"
         assert result.llm_call_count == 1
 
+    async def test_passes_generation_kwargs_to_response_service(self) -> None:
+        """Runtime callers can override generation hooks without touching global state."""
+        from src.core.assistant import UserContext, run_assistant_request
+
+        def local_prompt_builder(domain: str) -> tuple[str, dict[str, object]]:
+            return f"local prompt for {domain}", {}
+
+        rag = AsyncMock(
+            return_value={
+                "documents": [],
+                "cache_hit": False,
+                "query_type": "GENERAL",
+            }
+        )
+        gen = AsyncMock(return_value={"response": "answer", "model": "fake"})
+        deps = self._deps()
+        deps.generation_kwargs = {"build_system_prompt_with_config": local_prompt_builder}
+
+        with (
+            patch("src.runtime.graph.nodes.classify.classify_query", return_value="GENERAL"),
+            patch("telegram_bot.agents.rag_pipeline.rag_pipeline", rag),
+            patch("telegram_bot.services.generate_response.generate_response", gen),
+        ):
+            result = await run_assistant_request(
+                "q",
+                collection="core",
+                user_context=UserContext(user_id="42", session_id="s-1"),
+                request_id="generation-hooks",
+                dependencies=deps,
+            )
+
+        assert result.response_text == "answer"
+        assert gen.await_args.kwargs["build_system_prompt_with_config"] is local_prompt_builder
+
     async def test_cache_hit_skips_generation(self) -> None:
         """Semantic cache hits should return cached text without calling LLM generation."""
         from src.core.assistant import run_assistant_request

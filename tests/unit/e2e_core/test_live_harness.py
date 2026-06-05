@@ -163,6 +163,27 @@ def test_build_live_core_harness_accepts_config_override() -> None:
     assert harness.dependencies.config is config
 
 
+def test_build_live_core_harness_uses_local_prompt_hooks_for_fake_core_proof() -> None:
+    """Fake core proof must not fetch Langfuse Prompt Management prompts."""
+    from tests.e2e_core.live_harness import LiveE2EEnv, build_live_core_harness
+
+    env = LiveE2EEnv(qdrant_url="http://qdrant:6333", bge_m3_url="http://bge:8000")
+
+    with (
+        mock.patch("tests.e2e_core.live_harness.LiveBGEEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.LiveBGESparseEmbeddings"),
+        mock.patch("tests.e2e_core.live_harness.QdrantService"),
+    ):
+        harness = build_live_core_harness(env, "collection")
+
+    hooks = harness.dependencies.generation_kwargs
+    system_prompt, prompt_config = hooks["build_system_prompt_with_config"]("domain")
+
+    assert "domain" in system_prompt
+    assert prompt_config == {}
+    assert hooks["get_linkable_prompt_object"]("generate", "fallback", {"domain": "domain"}) is None
+
+
 def test_failing_llm_config_raises_provider_error() -> None:
     from tests.e2e_core.live_harness import FailingLLMConfig
 

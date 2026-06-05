@@ -435,6 +435,10 @@ def build_live_core_harness(
         qdrant=qdrant,
         reranker=None,
         config=llm_config,
+        generation_kwargs={
+            "build_system_prompt_with_config": _build_local_system_prompt_with_config,
+            "get_linkable_prompt_object": _no_linkable_prompt_object,
+        },
     )
     if crm is not None:
         dependencies.crm = crm
@@ -491,6 +495,22 @@ def _extract_title(path: Path) -> str:
         if line.startswith("#"):
             return line.lstrip("#").strip()
     return path.stem
+
+
+def _build_local_system_prompt_with_config(domain: str) -> tuple[str, dict[str, Any]]:
+    """Return a local prompt for core-live proof without Langfuse prompt fetches."""
+
+    return (
+        f"Ты — консультант по {domain}. Отвечай только на основе переданного "
+        "контекста. Если релевантной информации нет, скажи: не найдено."
+    ), {}
+
+
+def _no_linkable_prompt_object(name: str, fallback: str, variables: dict[str, str]) -> None:
+    """Disable Langfuse Prompt object linking for optional-surface-free core proof."""
+
+    _ = name, fallback, variables
+    return
 
 
 class _FakeLLM:

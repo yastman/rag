@@ -45,6 +45,7 @@ class CoreDependencies:
     reranker: Any | None = None
     llm: Any | None = None
     config: Any | None = None
+    generation_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -189,6 +190,7 @@ async def run_assistant_request(
             }
             if dependencies.config is not None:
                 generation_kwargs["config"] = dependencies.config
+            generation_kwargs.update(dependencies.generation_kwargs)
             generation_result = await generate_response(**generation_kwargs)
             usage = _as_usage_dict(generation_result.get("usage_details"))
             llm_model = _extract_llm_model(generation_result)
